@@ -127,105 +127,107 @@ const KIND_COLORS: Record<string, string> = {
       <ul class="nodes" role="list">
         @for (node of filteredNodes(); track node.id) {
           <li>
-          <button
-            type="button"
-            class="node-card"
-            [class.selected]="selectedId() === node.id"
-            [attr.aria-expanded]="selectedId() === node.id"
-            [attr.aria-controls]="'signal-detail-' + node.id"
-            (click)="selectNode(node)"
-          >
-            <span class="node-header">
-              <span class="kind-badge" [style.background]="kindColor(node.kind)">{{
-                node.kind
-              }}</span>
-              <span class="node-label">{{ node.label ?? '(unnamed)' }}</span>
-              @if (node.watched) {
-                <span class="watched-badge">watching</span>
+            <button
+              type="button"
+              class="node-card"
+              [class.selected]="selectedId() === node.id"
+              [attr.aria-expanded]="selectedId() === node.id"
+              [attr.aria-controls]="'signal-detail-' + node.id"
+              (click)="selectNode(node)"
+            >
+              <span class="node-header">
+                <span class="kind-badge" [style.background]="kindColor(node.kind)">{{
+                  node.kind
+                }}</span>
+                <span class="node-label">{{ node.label ?? '(unnamed)' }}</span>
+                @if (node.watched) {
+                  <span class="watched-badge">watching</span>
+                }
+                @if (changeCount(node.id); as count) {
+                  <span class="changed-badge"
+                    >{{ count }} {{ count === 1 ? 'change' : 'changes' }}</span
+                  >
+                }
+              </span>
+              @if (node.value !== undefined) {
+                <span class="node-value">{{ node.value | json }}</span>
               }
-              @if (changeCount(node.id); as count) {
-                <span class="changed-badge">{{ count }} {{ count === 1 ? 'change' : 'changes' }}</span>
-              }
-            </span>
-            @if (node.value !== undefined) {
-              <span class="node-value">{{ node.value | json }}</span>
-            }
-            <span class="node-meta">
-              Epoch: {{ node.epoch }}
-              @if (getDependencies(node).length) {
-                · Deps: {{ getDependencies(node).length }}
-              }
-              @if (getConsumers(node).length) {
-                · Consumers: {{ getConsumers(node).length }}
-              }
-            </span>
-          </button>
-          @if (selectedId() === node.id && selectedNode()) {
-            <div class="detail-panel" [id]="'signal-detail-' + node.id">
-          <h3>{{ selectedNode()!.label ?? selectedNode()!.id }}</h3>
-          <dl>
-            <dt>Kind</dt>
-            <dd>{{ selectedNode()!.kind }}</dd>
-            <dt>Epoch</dt>
-            <dd>{{ selectedNode()!.epoch }}</dd>
-            @if (selectedNode()!.value !== undefined) {
-              <dt>Value</dt>
-              <dd>
-                <pre>{{ selectedNode()!.value | json }}</pre>
-              </dd>
-            }
-          </dl>
-          @if (getDependencies(selectedNode()!).length) {
-            <h4>Dependencies (producers)</h4>
-            <ul>
-              @for (dep of getDependencies(selectedNode()!); track dep.id) {
-                <li>
-                  <span class="kind-badge sm" [style.background]="kindColor(dep.kind)">{{
-                    dep.kind
-                  }}</span>
-                  {{ dep.label ?? dep.id }}
-                </li>
-              }
-            </ul>
-          }
-          @if (getConsumers(selectedNode()!).length) {
-            <h4>Consumers</h4>
-            <ul>
-              @for (con of getConsumers(selectedNode()!); track con.id) {
-                <li>
-                  <span class="kind-badge sm" [style.background]="kindColor(con.kind)">{{
-                    con.kind
-                  }}</span>
-                  {{ con.label ?? con.id }}
-                </li>
-              }
-            </ul>
-          }
-          @if (selectedHistory().length) {
-            <h4 id="value-history-heading">Value history</h4>
-            <p class="history-summary" aria-live="polite">
-              {{ changeCount(selectedNode()!.id) }} changes recorded, newest first.
-            </p>
-            <ol class="history" aria-labelledby="value-history-heading">
-              @for (change of selectedHistory(); track change.epoch) {
-                <li>
-                  <span class="history-meta">
-                    <time>{{ change.at | date: 'HH:mm:ss.SSS' }}</time>
-                    <span class="source-tag" [class]="'source-' + change.source">{{
-                      sourceLabel(change.source)
-                    }}</span>
-                    <span>epoch {{ change.epoch }}</span>
-                    @if (change.missed) {
-                      <span class="missed">{{ change.missed }} earlier not captured</span>
+              <span class="node-meta">
+                Epoch: {{ node.epoch }}
+                @if (getDependencies(node).length) {
+                  · Deps: {{ getDependencies(node).length }}
+                }
+                @if (getConsumers(node).length) {
+                  · Consumers: {{ getConsumers(node).length }}
+                }
+              </span>
+            </button>
+            @if (selectedId() === node.id && selectedNode()) {
+              <div class="detail-panel" [id]="'signal-detail-' + node.id">
+                <h3>{{ selectedNode()!.label ?? selectedNode()!.id }}</h3>
+                <dl>
+                  <dt>Kind</dt>
+                  <dd>{{ selectedNode()!.kind }}</dd>
+                  <dt>Epoch</dt>
+                  <dd>{{ selectedNode()!.epoch }}</dd>
+                  @if (selectedNode()!.value !== undefined) {
+                    <dt>Value</dt>
+                    <dd>
+                      <pre>{{ selectedNode()!.value | json }}</pre>
+                    </dd>
+                  }
+                </dl>
+                @if (getDependencies(selectedNode()!).length) {
+                  <h4>Dependencies (producers)</h4>
+                  <ul>
+                    @for (dep of getDependencies(selectedNode()!); track dep.id) {
+                      <li>
+                        <span class="kind-badge sm" [style.background]="kindColor(dep.kind)">{{
+                          dep.kind
+                        }}</span>
+                        {{ dep.label ?? dep.id }}
+                      </li>
                     }
-                  </span>
-                  <pre>{{ change.value | json }}</pre>
-                </li>
-              }
-            </ol>
-          }
-            </div>
-          }
+                  </ul>
+                }
+                @if (getConsumers(selectedNode()!).length) {
+                  <h4>Consumers</h4>
+                  <ul>
+                    @for (con of getConsumers(selectedNode()!); track con.id) {
+                      <li>
+                        <span class="kind-badge sm" [style.background]="kindColor(con.kind)">{{
+                          con.kind
+                        }}</span>
+                        {{ con.label ?? con.id }}
+                      </li>
+                    }
+                  </ul>
+                }
+                @if (selectedHistory().length) {
+                  <h4 id="value-history-heading">Value history</h4>
+                  <p class="history-summary" aria-live="polite">
+                    {{ changeCount(selectedNode()!.id) }} changes recorded, newest first.
+                  </p>
+                  <ol class="history" aria-labelledby="value-history-heading">
+                    @for (change of selectedHistory(); track change.epoch) {
+                      <li>
+                        <span class="history-meta">
+                          <time>{{ change.at | date: 'HH:mm:ss.SSS' }}</time>
+                          <span class="source-tag" [class]="'source-' + change.source">{{
+                            sourceLabel(change.source)
+                          }}</span>
+                          <span>epoch {{ change.epoch }}</span>
+                          @if (change.missed) {
+                            <span class="missed">{{ change.missed }} earlier not captured</span>
+                          }
+                        </span>
+                        <pre>{{ change.value | json }}</pre>
+                      </li>
+                    }
+                  </ol>
+                }
+              </div>
+            }
           </li>
         }
       </ul>
@@ -414,7 +416,7 @@ const KIND_COLORS: Record<string, string> = {
     .node-meta {
       font-size: 11px;
       color: #52525b;
-      margin-top: 4x;
+      margin-top: 4px;
     }
     .detail-panel {
       margin-top: 16px;

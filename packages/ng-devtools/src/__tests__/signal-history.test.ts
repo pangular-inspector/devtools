@@ -78,7 +78,10 @@ describe('createSignalHistory', () => {
   it('skips effects and unnamed writes', () => {
     const h = createSignalHistory(identity);
     h.onWrite({ kind: 'signal', value: 1, version: 1 });
-    const out = h.collect([graphNode('e', 'fx', 1, undefined, 'effect'), graphNode('a', undefined, 1, 1)]);
+    const out = h.collect([
+      graphNode('e', 'fx', 1, undefined, 'effect'),
+      graphNode('a', undefined, 1, 1),
+    ]);
     expect(out['e']).toBeUndefined();
     expect(out['a']).toEqual([expect.objectContaining({ source: 'initial' })]);
   });
@@ -141,9 +144,12 @@ describe('installSignalWriteHook', () => {
 
   it('swallows errors from the recorder', async () => {
     const core = fakeCore();
-    await installSignalWriteHook(() => {
-      throw new Error('boom');
-    }, async () => core);
+    await installSignalWriteHook(
+      () => {
+        throw new Error('boom');
+      },
+      async () => core,
+    );
     expect(() => core.fire({ debugName: 'x' })).not.toThrow();
   });
 

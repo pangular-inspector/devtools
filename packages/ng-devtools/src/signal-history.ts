@@ -38,7 +38,12 @@ export function createSignalHistory(serialize: (value: unknown) => unknown, now 
     let track = id ? tracks.get(id) : undefined;
     if (!track) {
       const newId = `w${++trackSeq}`;
-      track = { ref: new WeakRef(node), label: node.debugName, kind: node.kind ?? 'signal', changes: [] };
+      track = {
+        ref: new WeakRef(node),
+        label: node.debugName,
+        kind: node.kind ?? 'signal',
+        changes: [],
+      };
       trackIds.set(node, newId);
       tracks.set(newId, track);
       if (tracks.size > MAX_TRACKS) tracks.delete(tracks.keys().next().value!);

@@ -6,7 +6,7 @@ import { getBuildMeta } from './rpc/build-meta.ts';
 import { getSignals } from './rpc/get-signals.ts';
 import { getProviders } from './rpc/get-providers.ts';
 import { getNgrxStore } from './rpc/get-ngrx-store.ts';
-import type { NgrxRuntimeAction } from './types.ts';
+import type { NgrxRuntimeAction, SignalGraph } from './types.ts';
 import {
   explainFormsText,
   formsResourceText,
@@ -21,6 +21,8 @@ import {
 } from './rpc/forms-tools.ts';
 
 import pkg from '../package.json' with { type: 'json' };
+
+type PageGraph = SignalGraph & { pageId?: string };
 
 const clientAssets: RemoteAssets = {
   package: pkg.name,
@@ -67,12 +69,12 @@ const ngDevtools = defineDevframe({
 
     const signalGraphState = await my.rpc.sharedState('signal-graph', {
       initialValue: {
-        graph: null as any,
-        pages: {} as Record<string, any>,
+        graph: null as PageGraph | null,
+        pages: {} as Record<string, PageGraph>,
         selectedNodeId: null as string | null,
       },
     });
-    const signalPages = new Map<string, { graph: unknown; reportedAt: number }>();
+    const signalPages = new Map<string, { graph: PageGraph; reportedAt: number }>();
 
     const injectorTreeState = await my.rpc.sharedState('injector-tree', {
       initialValue: {
@@ -117,6 +119,11 @@ const ngDevtools = defineDevframe({
         for (const [id] of stale) signalPages.delete(id);
         signalGraphState.mutate((draft) => {
           for (const [id] of stale) delete draft.pages[id];
+          const ownerId = draft.graph?.pageId;
+          if (ownerId && stale.some(([id]) => id === ownerId)) {
+            const latest = [...signalPages.values()].sort((a, b) => b.reportedAt - a.reportedAt)[0];
+            draft.graph = latest?.graph ?? null;
+          }
         });
       }
       const next = expirePages(formPages);
@@ -179,17 +186,15 @@ const ngDevtools = defineDevframe({
       name: 'push-signal-graph',
       type: 'action',
       jsonSerializable: true,
-      handler: (graph: unknown) => {
-        const pageId = (graph as { pageId?: unknown } | null)?.pageId;
+      handler: (graph: PageGraph) => {
+        const pageId = graph?.pageId;
         if (typeof pageId === 'string' && pageId.length < 50) {
           signalPages.set(pageId, { graph, reportedAt: Date.now() });
         }
         signalGraphState.mutate((draft) => {
-          draft.graph = graph as any;
+          draft.graph = graph;
           // Every open page pushes, so one shared graph would flip between them.
-          draft.pages = Object.fromEntries(
-            [...signalPages].map(([id, page]) => [id, page.graph]),
-          ) as any;
+          draft.pages = Object.fromEntries([...signalPages].map(([id, page]) => [id, page.graph]));
         });
       },
     });
