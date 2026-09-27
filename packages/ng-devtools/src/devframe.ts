@@ -58,6 +58,14 @@ import {
 } from './rpc/router-config-tools.ts';
 import { extractRoutes } from './rpc/get-routes.ts';
 import { scanServerRoutes } from './rpc/server-routes.ts';
+import {
+  MAX_CALLS,
+  httpRegistry,
+  sanitizeRules,
+  type HttpCall,
+  type HttpRule,
+} from './http-rules.ts';
+import type { HttpPage, HttpState } from './types.ts';
 
 import { registerAnalog } from './rpc/analog-register.ts';
 
@@ -281,7 +289,105 @@ const ngDevtools = defineDevframe({
       },
     });
 
+    const httpPages = new Map<string, HttpPage>();
+    const httpState = await my.rpc.sharedState('http', {
+      initialValue: { serverCalls: [], pages: [], rules: [] } as HttpState,
+    });
+    const registry = httpRegistry();
+    registry.rules ??= [];
+    let pendingServerCalls: HttpCall[] = [];
+    let flushTimer: ReturnType<typeof setTimeout> | undefined;
+    const flushServerCalls = () => {
+      flushTimer = undefined;
+      const batch = pendingServerCalls;
+      pendingServerCalls = [];
+      httpState.mutate((draft) => {
+        draft.serverCalls.push(...batch);
+        if (draft.serverCalls.length > MAX_CALLS) {
+          draft.serverCalls.splice(0, draft.serverCalls.length - MAX_CALLS);
+        }
+      });
+    };
+    registry.record = (call) => {
+      pendingServerCalls.push(call);
+      if (pendingServerCalls.length > MAX_CALLS) pendingServerCalls.shift();
+      flushTimer ??= setTimeout(flushServerCalls, 100);
+    };
+    const applyHttpPages = () =>
+      httpState.mutate((draft) => {
+        draft.pages = [...httpPages.values()].sort((a, b) => b.reportedAt - a.reportedAt);
+      });
+    const setHttpRules = (rules: HttpRule[]) => {
+      registry.rules = rules;
+      httpState.mutate((draft) => {
+        draft.rules = rules;
+      });
+      void my.rpc.broadcast({ method: 'http-rules', args: [rules], optional: true });
+      return rules;
+    };
+
+    my.rpc.register({
+      name: 'push-http',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (report: unknown) => {
+        const page = report as Partial<HttpPage> | null;
+        if (!page || typeof page.pageId !== 'string' || typeof page.url !== 'string') return;
+        httpPages.set(page.pageId, {
+          pageId: page.pageId,
+          url: page.url.slice(0, 2000),
+          title: typeof page.title === 'string' ? page.title.slice(0, 200) : '',
+          payload: page.payload ?? { found: false, size: 0, entries: [] },
+          hydration: page.hydration ?? null,
+          calls: Array.isArray(page.calls) ? page.calls.slice(-MAX_CALLS) : [],
+          reportedAt: Date.now(),
+        });
+        applyHttpPages();
+      },
+    });
+
+    my.rpc.register({
+      name: 'forget-http-page',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (pageId: unknown) => {
+        if (typeof pageId === 'string' && httpPages.delete(pageId)) applyHttpPages();
+      },
+    });
+
+    my.rpc.register({
+      name: 'get-http-rules',
+      type: 'query',
+      jsonSerializable: true,
+      handler: () => registry.rules ?? [],
+    });
+
+    my.rpc.register({
+      name: 'set-http-rules',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (rules: unknown) => setHttpRules(sanitizeRules(rules)),
+    });
+
+    my.rpc.register({
+      name: 'clear-http-calls',
+      type: 'action',
+      jsonSerializable: true,
+      handler: () => {
+        pendingServerCalls = [];
+        httpState.mutate((draft) => {
+          draft.serverCalls = [];
+        });
+        void my.rpc.broadcast({ method: 'http-clear', args: [], optional: true });
+      },
+    });
+
     const expiry = setInterval(() => {
+      const staleHttp = [...httpPages].filter(([, p]) => Date.now() - p.reportedAt > 15_000);
+      if (staleHttp.length) {
+        for (const [id] of staleHttp) httpPages.delete(id);
+        applyHttpPages();
+      }
       const stale = [...signalPages].filter(([, p]) => Date.now() - p.reportedAt > 15_000);
       if (stale.length) {
         for (const [id] of stale) signalPages.delete(id);

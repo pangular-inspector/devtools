@@ -1,3 +1,6 @@
+import type { HttpCall, HttpRule } from './http-rules.ts';
+import type { PayloadSummary } from './http-payload.ts';
+
 export interface ComponentNode {
   id: string;
   selector: string;
@@ -143,6 +146,32 @@ export interface NgrxRuntimeState {
   actions: NgrxRuntimeAction[];
 }
 
+export interface HydrationStats {
+  enabled: boolean;
+  hydratedComponents?: number;
+  hydratedNodes?: number;
+  componentsSkippedHydration?: number;
+  deferBlocksWithIncrementalHydration?: number;
+  skipHydrationHosts: string[];
+  warnings: string[];
+}
+
+export interface HttpPage {
+  pageId: string;
+  url: string;
+  title: string;
+  payload: PayloadSummary;
+  hydration: HydrationStats | null;
+  calls: HttpCall[];
+  reportedAt: number;
+}
+
+export interface HttpState {
+  serverCalls: HttpCall[];
+  pages: HttpPage[];
+  rules: HttpRule[];
+}
+
 declare module 'devframe' {
   interface DevframeRpcSharedStates {
     'ng-devtools:component-tree': {
@@ -167,5 +196,6 @@ declare module 'devframe' {
       actions: NgrxRuntimeAction[];
       connected: boolean;
     };
+    'ng-devtools:http': HttpState;
   }
 }

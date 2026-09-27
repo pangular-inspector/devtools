@@ -18,6 +18,7 @@
     "./devframe": "./src/devframe.ts",
     "./overlay": "./src/overlay.ts",
     "./popup": "./src/popup.ts",
+    "./http": "./src/http.ts",
     "./package.json": "./package.json",
     "./vite": "./src/vite.ts"
   },
@@ -27,6 +28,7 @@
       "./devframe": "./dist/devframe.mjs",
       "./overlay": "./dist/overlay.mjs",
       "./popup": "./dist/popup.mjs",
+      "./http": "./dist/http.mjs",
       "./package.json": "./package.json",
       "./vite": "./dist/vite.mjs"
     }
@@ -56,14 +58,25 @@
     "valibot": "^1.5.0"
   },
   "peerDependencies": {
-    "@angular/core": ">=20"
+    "@angular/common": ">=20",
+    "@angular/core": ">=20",
+    "rxjs": ">=7"
   },
   "peerDependenciesMeta": {
+    "@angular/common": {
+      "optional": true
+    },
     "@angular/core": {
+      "optional": true
+    },
+    "rxjs": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@angular/common": "^22.1.0",
+    "@angular/core": "^22.1.0",
+    "rxjs": "~7.8.0",
     "tsdown": "^0.23.0"
   },
   "engines": {

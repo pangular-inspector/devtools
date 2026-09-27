@@ -8,9 +8,18 @@ import { DiInspector } from './pages/di-inspector';
 import { StoreInspector } from './pages/store-inspector';
 import { FormsInspector } from './pages/forms-inspector';
 import { AnalogInspector } from './pages/analog-inspector';
+import { NetworkInspector } from './pages/network-inspector';
 
 type Tab =
-  'dashboard' | 'components' | 'routes' | 'signals' | 'injectors' | 'store' | 'forms' | 'analog';
+  | 'dashboard'
+  | 'components'
+  | 'routes'
+  | 'signals'
+  | 'injectors'
+  | 'store'
+  | 'forms'
+  | 'network'
+  | 'analog';
 
 @Component({
   selector: 'app-root',
@@ -23,6 +32,7 @@ type Tab =
     StoreInspector,
     FormsInspector,
     AnalogInspector,
+    NetworkInspector,
   ],
   template: `
     <header>
@@ -80,6 +90,9 @@ type Tab =
         }
         @case ('store') {
           <app-store-inspector [rpc]="rpc()" />
+        }
+        @case ('network') {
+          <app-network-inspector [rpc]="rpc()" />
         }
         @case ('forms') {
           <app-forms-inspector
@@ -183,6 +196,7 @@ export class App implements OnInit, OnDestroy {
     { id: 'injectors' as Tab, label: 'Injectors' },
     { id: 'store' as Tab, label: 'Store' },
     { id: 'forms' as Tab, label: 'Forms' },
+    { id: 'network' as Tab, label: 'SSR & HTTP' },
   ];
   readonly tabs = computed(() => this.allTabs.filter((t) => t.id !== 'analog' || this.analog()));
 

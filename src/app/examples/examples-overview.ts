@@ -14,7 +14,7 @@ interface ExampleLink {
   template: `
     <section>
       <p class="lead">
-        Five pages, each built to fill one DevTools inspector. Open the popup with the button in the
+        Six pages, each built to fill one DevTools inspector. Open the popup with the button in the
         corner, then work through them.
       </p>
 
@@ -140,6 +140,12 @@ export class ExamplesOverview {
       tab: 'Forms',
       title: 'Every kind of form',
       blurb: 'Signal Forms, reactive and template-driven forms with failing validators.',
+    },
+    {
+      path: 'http',
+      tab: 'SSR & HTTP',
+      title: 'Data from the backend',
+      blurb: 'HttpClient calls made during SSR, the transfer cache and injected faults.',
     },
   ];
 }

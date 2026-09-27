@@ -1,6 +1,7 @@
 import { connectDevframe } from 'devframe/client';
 import { attachAnalog } from './analog-runtime.ts';
 import { attachForms } from './forms-collector.ts';
+import { attachHttp } from './http-overlay.ts';
 import {
   findRouters,
   setGeneration,
@@ -113,6 +114,8 @@ export async function initOverlay(options: { baseURL?: string | string[] } = {})
   const stopAnalog = attachAnalog(my, pageId, getNg);
   const forms = attachForms(my, pageId, getNg, { show: showHighlight, clear: clearHighlight });
   const pushForms = forms.push;
+  const http = attachHttp(my, pageId);
+  const pushHttp = () => void http.push().catch(() => {});
 
   const navigations: NavigationRecord[] = [];
   const preloads: PreloadRecord[] = [];
@@ -209,6 +212,7 @@ export async function initOverlay(options: { baseURL?: string | string[] } = {})
   pushNgrxState();
   pushForms();
   pushRouter();
+  pushHttp();
 
   const interval = setInterval(() => {
     pushTree();
@@ -217,6 +221,7 @@ export async function initOverlay(options: { baseURL?: string | string[] } = {})
     pushNgrxState();
     pushForms();
     pushRouter();
+    pushHttp();
   }, 3000);
 
   my.rpc.register({
@@ -268,6 +273,7 @@ export async function initOverlay(options: { baseURL?: string | string[] } = {})
   const leave = () => {
     void my.rpc.call('forget-forms-page', pageId).catch(() => {});
     void my.rpc.call('forget-router-page', pageId).catch(() => {});
+    http.leave();
   };
   addEventListener('pagehide', leave);
   const resendConfig = () => (sentGeneration = -1);
