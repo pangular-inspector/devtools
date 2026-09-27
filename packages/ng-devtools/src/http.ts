@@ -139,9 +139,11 @@ export const ngDevtoolsHttpInterceptor: HttpInterceptorFn = (req, next) => {
     // The transfer cache replays a hit synchronously, so a response that
     // arrives before subscribe() returns came from the SSR payload.
     let sync = true;
+    let settled = false;
     const inner = source.subscribe({
       next: (event) => {
         if (event instanceof HttpResponse) {
+          settled = true;
           done({
             status: event.status,
             cacheHit: sync && !mocked,
@@ -153,13 +155,20 @@ export const ngDevtoolsHttpInterceptor: HttpInterceptorFn = (req, next) => {
       error: (error: unknown) => {
         const failed = error instanceof HttpErrorResponse;
         const message = failed ? error.message : String(error);
+        settled = true;
         done({ status: failed ? error.status : 0, cacheHit: false, error: message.slice(0, 500) });
         subscriber.error(error);
       },
       complete: () => subscriber.complete(),
     });
     sync = false;
-    return () => inner.unsubscribe();
+    return () => {
+      if (!settled) {
+        settled = true;
+        done({ status: 0, cacheHit: false, error: 'cancelled' });
+      }
+      inner.unsubscribe();
+    };
   });
   return delay ? timer(delay).pipe(switchMap(() => observed)) : observed;
 };

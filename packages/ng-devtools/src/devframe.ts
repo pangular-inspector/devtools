@@ -61,10 +61,12 @@ import { scanServerRoutes } from './rpc/server-routes.ts';
 import {
   MAX_CALLS,
   httpRegistry,
+  sanitizeCalls,
   sanitizeRules,
   type HttpCall,
   type HttpRule,
 } from './http-rules.ts';
+import { sanitizeHydration, sanitizePayload } from './http-payload.ts';
 import type { HttpPage, HttpState } from './types.ts';
 
 import { registerAnalog } from './rpc/analog-register.ts';
@@ -337,9 +339,9 @@ const ngDevtools = defineDevframe({
           pageId: page.pageId,
           url: page.url.slice(0, 2000),
           title: typeof page.title === 'string' ? page.title.slice(0, 200) : '',
-          payload: page.payload ?? { found: false, size: 0, entries: [] },
-          hydration: page.hydration ?? null,
-          calls: Array.isArray(page.calls) ? page.calls.slice(-MAX_CALLS) : [],
+          payload: sanitizePayload(page.payload),
+          hydration: sanitizeHydration(page.hydration),
+          calls: sanitizeCalls(page.calls),
           reportedAt: Date.now(),
         });
         applyHttpPages();

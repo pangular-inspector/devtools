@@ -6,12 +6,14 @@ import {
   RULES_STORAGE_KEY,
   clientRules,
   httpRegistry,
+  MAX_CALLS,
   matchRule,
+  sanitizeCalls,
   sanitizeRules,
   storeRules,
   type HttpRule,
 } from '../http-rules.ts';
-import { decodePayload } from '../http-payload.ts';
+import { decodePayload, sanitizeHydration, sanitizePayload } from '../http-payload.ts';
 
 const rule = (overrides: Partial<HttpRule> = {}): HttpRule => ({
   id: 'r1',
@@ -88,6 +90,31 @@ describe('sanitizeRules', () => {
     expect(sanitizeRules([{ pattern: '/a', method: 'G T' }])[0].method).toBeUndefined();
     const many = Array.from({ length: MAX_RULES + 10 }, (_, i) => ({ pattern: `/p${i}` }));
     expect(sanitizeRules(many)).toHaveLength(MAX_RULES);
+  });
+});
+
+describe('push-http report sanitizers', () => {
+  it('drops malformed calls and caps the count', () => {
+    const ok = { id: 'c1', url: '/a', method: 'GET', status: 200 };
+    expect(sanitizeCalls([null, {}, { id: 'x' }, ok])).toEqual([
+      expect.objectContaining({ ...ok, side: 'client', cacheHit: false, durationMs: 0 }),
+    ]);
+    expect(sanitizeCalls('x')).toEqual([]);
+    const many = Array.from({ length: MAX_CALLS + 5 }, (_, i) => ({ ...ok, id: `c${i}` }));
+    expect(sanitizeCalls(many)).toHaveLength(MAX_CALLS);
+  });
+
+  it('falls back for malformed payloads and hydration stats', () => {
+    expect(sanitizePayload(null)).toEqual({ found: false, size: 0, entries: [] });
+    expect(sanitizePayload({ found: true, entries: [1, { key: 'k', value: 2 }] }).entries).toEqual([
+      { key: 'k', size: 0, value: 2 },
+    ]);
+    expect(sanitizeHydration({})).toBeNull();
+    expect(sanitizeHydration({ enabled: true, warnings: ['w', 3] })).toMatchObject({
+      enabled: true,
+      skipHydrationHosts: [],
+      warnings: ['w'],
+    });
   });
 });
 

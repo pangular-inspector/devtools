@@ -109,6 +109,39 @@ export function matchRule(
 const str = (value: unknown, max: number) =>
   typeof value === 'string' ? value.slice(0, max) : undefined;
 
+const num = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+/** Validates calls reported over RPC; drops anything malformed. */
+export function sanitizeCalls(input: unknown): HttpCall[] {
+  if (!Array.isArray(input)) return [];
+  const calls: HttpCall[] = [];
+  for (const raw of input.slice(-MAX_CALLS)) {
+    if (!raw || typeof raw !== 'object') continue;
+    const c = raw as { [K in keyof HttpCall]?: unknown };
+    const id = str(c.id, 40);
+    const url = str(c.url, 2000);
+    const method = str(c.method, 10);
+    if (!id || url === undefined || !method) continue;
+    calls.push({
+      id,
+      url,
+      method,
+      status: num(c.status) ?? 0,
+      durationMs: num(c.durationMs) ?? 0,
+      side: c.side === 'server' ? 'server' : 'client',
+      cacheHit: c.cacheHit === true,
+      faulted: c.faulted === true,
+      ruleId: str(c.ruleId, 40),
+      pageUrl: str(c.pageUrl, 2000),
+      at: num(c.at) ?? 0,
+      error: str(c.error, 500),
+      preview: str(c.preview, 2001),
+    });
+  }
+  return calls;
+}
+
 /** Validates rules coming over RPC; drops anything malformed. */
 export function sanitizeRules(input: unknown): HttpRule[] {
   if (!Array.isArray(input)) return [];
