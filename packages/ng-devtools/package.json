@@ -39,6 +39,17 @@
     "build": "tsdown && vite build --config ../../app/vite.config.ts --outDir ../packages/ng-devtools/dist/public --emptyOutDir",
     "prepack": "pnpm build"
   },
+  "nx": {
+    "targets": {
+      "build": {
+        "inputs": [
+          "production",
+          "^production",
+          "{workspaceRoot}/app/**/*"
+        ]
+      }
+    }
+  },
   "files": [
     "dist",
     "bin.mjs"

@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: read
+  # nx-set-shas reads previous workflow runs to find the last green main commit
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,6 +21,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v5
 
@@ -29,26 +33,22 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - uses: nrwl/nx-set-shas@v4
+
       - name: Check formatting
         run: pnpm format:check
 
       - name: Type-check
         run: pnpm typecheck
 
-      - name: Test host app
-        run: pnpm test
+      - name: Test and build affected projects
+        run: pnpm exec nx affected -t test build
 
       - name: Test devtools package
         run: pnpm test:devtools
 
-      - name: Build Angular host app (SSR)
-        run: pnpm build
-
       - name: Build Chrome extension
         run: pnpm extension:build
-
-      - name: Build devtools package
-        run: pnpm devtools:build-pkg
 
       - name: Check committed build output is current
         run: |
