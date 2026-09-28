@@ -439,6 +439,23 @@ cp -r dist/devtools-ui/* extension/ui/
 
 The extension panel loads the SPA in static mode by default. To connect it to a live dev server for real-time RPC, the extension's content script or background service worker needs to detect the devframe's `__connection.json` on the inspected page and pass the connection to the panel. This is the same pattern the official Angular DevTools Chrome extension uses — a content script bridges the inspected page and the DevTools panel via `chrome.runtime.connect`.
 
+## Community
+
+Join the conversation, ask questions, and share feedback on [Discord](https://discord.gg/YRTyJd6Qx).
+
+## Sponsors
+
+If Angular DevTools helps your work, please consider [sponsoring the project on GitHub](https://github.com/sponsors/santoshyadavdev). Your support keeps development going.
+
+Thanks to our current sponsors:
+
+<!-- sponsors -->
+
+<a href="https://github.com/coderabbitai"><img src="https://github.com/coderabbitai.png?size=60" width="60" height="60" alt="CodeRabbit" /></a>
+<a href="https://github.com/umairhm"><img src="https://github.com/umairhm.png?size=60" width="60" height="60" alt="umairhm" /></a>
+<a href="https://github.com/Sonichigo"><img src="https://github.com/Sonichigo.png?size=60" width="60" height="60" alt="Sonichigo" /></a>
+<!-- /sponsors -->
+
 ## License
 
 MIT
