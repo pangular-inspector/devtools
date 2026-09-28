@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "singleQuote": true,
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    ".angular",
+    "pnpm-lock.yaml",
+    "extension/ui",
+    "docs/privacy-policy.html"
+  ]
+}

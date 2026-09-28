@@ -37,7 +37,12 @@ export interface RouterSnapshot {
 }
 
 export type NavigationOutcome =
-  'pending' | 'succeeded' | 'redirected' | 'cancelled' | 'failed' | 'skipped';
+  | 'pending'
+  | 'succeeded'
+  | 'redirected'
+  | 'cancelled'
+  | 'failed'
+  | 'skipped';
 
 export interface GuardRun {
   guard: string;

@@ -1,7 +1,14 @@
 type AnyRecord = Record<string, any>;
 
 export type ErrorSource =
-  'parse' | 'own' | 'tree' | 'async' | 'submission' | 'schema' | 'directive' | 'manual';
+  | 'parse'
+  | 'own'
+  | 'tree'
+  | 'async'
+  | 'submission'
+  | 'schema'
+  | 'directive'
+  | 'manual';
 
 export interface ErrorOrigin {
   source: ErrorSource;
