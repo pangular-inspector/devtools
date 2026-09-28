@@ -60,7 +60,8 @@
   "peerDependencies": {
     "@angular/common": ">=20",
     "@angular/core": ">=20",
-    "rxjs": ">=7"
+    "rxjs": ">=7",
+    "vite": ">=5"
   },
   "peerDependenciesMeta": {
     "@angular/common": {
@@ -70,6 +71,9 @@
       "optional": true
     },
     "rxjs": {
+      "optional": true
+    },
+    "vite": {
       "optional": true
     }
   },
@@ -81,13 +85,5 @@
   },
   "engines": {
     "node": ">=22"
-  },
-  "peerDependencies": {
-    "vite": ">=5"
-  },
-  "peerDependenciesMeta": {
-    "vite": {
-      "optional": true
-    }
   }
 }
