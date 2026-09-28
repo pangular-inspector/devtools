@@ -1,4 +1,5 @@
 import { REDACTED, isSensitive, serializeFormValue } from './forms.ts';
+import { clip } from './text.ts';
 
 export interface RouteGuards {
   canActivate?: string[];
@@ -184,9 +185,7 @@ export function read<T>(fn: () => T, fallback: T): T {
   }
 }
 
-export function clip(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}…` : text;
-}
+export { clip };
 
 function now(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();

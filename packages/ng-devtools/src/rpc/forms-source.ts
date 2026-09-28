@@ -1,6 +1,6 @@
-import { lstatSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
-import { IGNORED_DIRS, lineCounter, sourceRoots, stripComments } from './source-scan.ts';
+import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
+import { lineCounter, sourceRoots, stripComments, walkFiles } from './source-scan.ts';
 
 export interface SourceLine {
   file: string;
@@ -35,32 +35,15 @@ let cache: {
 function listFiles(cwd: string): string[] {
   if (cache && cache.cwd === cwd && Date.now() - cache.at < CACHE_MS) return cache.files;
   const files: string[] = [];
-  const walk = (dir: string) => {
-    let entries: string[];
-    try {
-      entries = readdirSync(dir);
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (files.length >= MAX_FILES) return;
-      const full = join(dir, entry);
-      try {
-        const stats = lstatSync(full);
-        if (stats.isSymbolicLink()) continue;
-        if (stats.isDirectory()) {
-          if (!IGNORED_DIRS.has(entry.toLowerCase())) walk(full);
-          continue;
-        }
-      } catch {
-        continue;
-      }
+  for (const root of sourceRoots(cwd)) {
+    if (files.length >= MAX_FILES) break;
+    walkFiles(root, (full, entry) => {
       if (entry.endsWith('.ts') && !entry.endsWith('.spec.ts') && !entry.endsWith('.d.ts')) {
         files.push(full);
       }
-    }
-  };
-  for (const root of sourceRoots(cwd)) walk(root);
+      return files.length < MAX_FILES;
+    });
+  }
   cache = { cwd, at: Date.now(), files, contents: new Map(), found: new Map() };
   return files;
 }

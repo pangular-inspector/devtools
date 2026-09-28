@@ -367,17 +367,6 @@ export interface ComingSoonInfo {
       background: var(--brand);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 20%, transparent);
     }
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      margin: -1px;
-      padding: 0;
-      overflow: hidden;
-      clip: rect(0 0 0 0);
-      white-space: nowrap;
-      border: 0;
-    }
     @media (max-height: 640px) {
       .soon {
         padding-top: 12px;
@@ -427,11 +416,6 @@ export interface ComingSoonInfo {
       to {
         transform: scale(1.6);
         opacity: 0;
-      }
-    }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
       }
     }
     @keyframes shimmer {

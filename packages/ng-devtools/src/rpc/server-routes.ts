@@ -1,6 +1,6 @@
-import { lstatSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
-import { IGNORED_DIRS, sourceRoots, stripComments } from './source-scan.ts';
+import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
+import { sourceRoots, stripComments, walkFiles } from './source-scan.ts';
 
 export interface ServerRouteEntry {
   path: string;
@@ -30,37 +30,25 @@ export function parseServerRoutes(source: string, file: string): ServerRouteEntr
   return out;
 }
 
-function findFiles(dir: string, found: string[], depth: number) {
-  if (depth > 8 || found.length >= MAX_FILES) return;
-  let entries: string[];
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    const full = join(dir, entry);
-    try {
-      const stats = lstatSync(full);
-      if (stats.isSymbolicLink()) continue;
-      if (stats.isDirectory()) {
-        if (!IGNORED_DIRS.has(entry.toLowerCase())) findFiles(full, found, depth + 1);
-      } else if (/\.routes\.server\.ts$/.test(entry) || entry === 'app.routes.server.ts') {
-        found.push(full);
-      }
-    } catch {
-      continue;
-    }
-  }
-}
-
 /**
  * The `ServerRoute[]` entries (path and render mode) declared in the
  * workspace's `*.routes.server.ts` files, read from source.
  */
 export function scanServerRoutes(cwd: string): ServerRouteEntry[] {
   const files: string[] = [];
-  for (const root of sourceRoots(cwd)) findFiles(root, files, 0);
+  for (const root of sourceRoots(cwd)) {
+    if (files.length >= MAX_FILES) break;
+    walkFiles(
+      root,
+      (full, entry) => {
+        if (/\.routes\.server\.ts$/.test(entry) || entry === 'app.routes.server.ts') {
+          files.push(full);
+        }
+        return files.length < MAX_FILES;
+      },
+      8,
+    );
+  }
   return files.flatMap((file) => {
     try {
       return parseServerRoutes(readFileSync(file, 'utf-8'), relative(cwd, file));

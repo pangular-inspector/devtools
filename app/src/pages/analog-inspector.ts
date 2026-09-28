@@ -9,6 +9,8 @@ import {
   untracked,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { time } from '../format';
+import { rpcTry as call } from '../rpc';
 import { Select } from '../ui/select';
 
 interface AnalogRoute {
@@ -234,17 +236,6 @@ const KIND_LABEL: Record<Kind, string> = {
   fn: 'Server fn',
   api: 'API',
 };
-
-function call<T>(client: DevframeRpcClient | null, name: string, arg?: unknown): Promise<T | null> {
-  if (!client) return Promise.resolve(null);
-  const rpc = client.scope('ng-devtools').rpc as unknown as {
-    call: (name: string, ...args: unknown[]) => Promise<unknown>;
-  };
-  return rpc.call(name, ...(arg === undefined ? [] : [arg])).then(
-    (value) => value as T,
-    () => null,
-  );
-}
 
 function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth: number }[] = []) {
   for (const route of routes) {
@@ -924,11 +915,6 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
     }
     @media (prefers-reduced-motion: reduce) {
       .spinner {
@@ -1829,14 +1815,6 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       font-size: 15px;
       font-weight: 600;
     }
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip-path: inset(50%);
-      white-space: nowrap;
-    }
   `,
 })
 export class AnalogInspector {
@@ -2074,9 +2052,7 @@ export class AnalogInspector {
     }
   }
 
-  time(at: number): string {
-    return new Date(at).toLocaleTimeString();
-  }
+  readonly time = time;
 
   tryApi(api: ApiRoute) {
     this.method.set(api.method === 'ANY' ? 'GET' : api.method);

@@ -1,4 +1,5 @@
 import { domFacts, submitDom, type DomFacts, type SubmitDom } from './forms-dom.ts';
+import { clip } from './text.ts';
 import {
   REDACTED,
   SecretSet,
@@ -289,10 +290,6 @@ const CONTROL_SELECTORS = ['ngModel', 'formControl', 'formControlName'];
 
 function isTemplateDirective(selectors: Set<string>): boolean {
   return TEMPLATE_SELECTORS.some((token) => selectors.has(token));
-}
-
-function clip(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 export function detailOf(value: unknown): string {

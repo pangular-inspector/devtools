@@ -506,17 +506,6 @@ function bare(name: string): string {
     .muted {
       color: var(--text-2);
     }
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0 0 0 0);
-      white-space: nowrap;
-      border: 0;
-    }
     .intro {
       max-width: 720px;
       margin: 0 0 12px;
@@ -631,11 +620,6 @@ function bare(name: string): string {
     }
     .refresh.spinning svg {
       animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
     }
     .layout {
       display: grid;

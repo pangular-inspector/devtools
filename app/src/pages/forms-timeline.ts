@@ -1,4 +1,5 @@
 import { Component, computed, input, output, signal } from '@angular/core';
+import { time } from '../format';
 import { FORMS_STYLES, type FormEvent } from './forms-types';
 
 const ORIGINS = ['all', 'user', 'code', 'devtools'] as const;
@@ -351,7 +352,5 @@ export class FormsTimeline {
     return new Date(timestamp).toISOString();
   }
 
-  time(timestamp: number) {
-    return new Date(timestamp).toLocaleTimeString();
-  }
+  readonly time = time;
 }

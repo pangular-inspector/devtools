@@ -1,5 +1,6 @@
 import { Component, computed, input, signal } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { time } from '../format';
 import {
   SHARED_STYLES,
   routerAction,
@@ -511,9 +512,7 @@ export class RouteTimeline {
     return result === 'false' || /^(UrlTree|RedirectCommand|threw)/.test(result);
   }
 
-  time(timestamp: number) {
-    return new Date(timestamp).toLocaleTimeString();
-  }
+  readonly time = time;
 
   async toggleInstrument(event: Event) {
     const on = (event.target as HTMLInputElement).checked;

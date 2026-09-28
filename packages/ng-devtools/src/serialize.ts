@@ -1,4 +1,5 @@
 import { REDACTED, redactMessage, redactReason } from './forms-privacy.ts';
+import { clip as clipText } from './text.ts';
 
 export { REDACTED };
 
@@ -48,10 +49,6 @@ function typeName(value: object): string {
 function isPlain(value: object): boolean {
   const proto = Object.getPrototypeOf(value);
   return proto === null || proto === Object.prototype;
-}
-
-function clipText(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 export function serialize(value: unknown, limits: SerializeLimits = {}): unknown {

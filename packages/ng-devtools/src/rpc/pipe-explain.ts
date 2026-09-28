@@ -1,10 +1,7 @@
 import { scanPipes } from './get-pipes.ts';
 import { lintPipes, type PipeLintFinding } from './pipe-lint.ts';
 import type { PipesState, PipeUsageInfo } from './pipes-tools.ts';
-
-function code(text: string): string {
-  return `\`${text.replace(/`/g, "'").replace(/\s+/g, ' ')}\``;
-}
+import { code } from './forms-tools.ts';
 
 const MAX_VALUE_CHARS = 200;
 

@@ -1,6 +1,8 @@
 import { Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { time } from '../format';
 import { hostPageId } from '../page-id';
+import { rpcCall as call } from '../rpc';
 import { Select, type SelectOption } from '../ui/select';
 import {
   pretty,
@@ -41,14 +43,6 @@ const CLASSIC_KINDS = new Set([
   'feature',
   'store-setup',
 ]);
-
-function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Promise<unknown> {
-  if (!client) return Promise.resolve(null);
-  const rpc = client.scope('ng-devtools').rpc as unknown as {
-    call: (name: string, ...args: unknown[]) => Promise<unknown>;
-  };
-  return rpc.call(name, ...(arg === undefined ? [] : [arg]));
-}
 
 @Component({
   selector: 'app-store-inspector',
@@ -1068,22 +1062,6 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-    .visually-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
     @media (prefers-reduced-motion: reduce) {
       .spinner,
       .status.on .live-dot {
@@ -1350,7 +1328,5 @@ export class StoreInspector {
     return short(value);
   }
 
-  formatTime(ts: number) {
-    return new Date(ts).toLocaleTimeString();
-  }
+  readonly formatTime = time;
 }

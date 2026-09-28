@@ -10,6 +10,7 @@ import {
 } from './forms.ts';
 import { isSecretKey, redactReason } from './forms-privacy.ts';
 import { fieldPath, submitSetup } from './forms-read.ts';
+import { clip } from './text.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -264,7 +265,7 @@ export function coerceToCurrent(
 }
 
 function clipText(text: string): string {
-  return text.length > 40 ? `${text.slice(0, 40)}…` : text;
+  return clip(text, 40);
 }
 
 function fail(error: string): FormActionResult {

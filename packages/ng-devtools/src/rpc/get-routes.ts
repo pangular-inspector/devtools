@@ -2,15 +2,15 @@ import { defineRpcFunction } from 'devframe';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
 import { analogVersion, buildRoutes, flattenRoutes } from './analog-scan.ts';
-import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import {
-  IGNORED_DIRS,
   skipRegex,
   skipString,
   sourceRoots,
   startsRegex,
   stripComments,
+  walkFiles,
 } from './source-scan.ts';
 
 const RouteSchema = v.object({
@@ -48,7 +48,11 @@ export const getRoutes = defineRpcFunction({
 export function extractRoutes(cwd: string): ExtractedRoute[] {
   const routes: ExtractedRoute[] = analogVersion(cwd) ? analogRoutes(cwd) : [];
   const files: string[] = [];
-  for (const root of sourceRoots(cwd)) findRouteFiles(root, files);
+  for (const root of sourceRoots(cwd)) {
+    walkFiles(root, (full, entry) => {
+      if (ROUTE_FILE.test(entry)) files.push(full);
+    });
+  }
   routes.push(...resolveFiles(files, cwd));
   return routes;
 }
@@ -89,31 +93,6 @@ function analogRoutes(cwd: string): ExtractedRoute[] {
 }
 
 const ROUTE_FILE = /\.routes\.ts$|routing\.module\.ts$/;
-
-function findRouteFiles(dir: string, files: string[]) {
-  let entries: string[];
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    const full = join(dir, entry);
-    try {
-      const stats = lstatSync(full);
-      // Not followed: a link can point anywhere, including outside the workspace.
-      if (stats.isSymbolicLink()) continue;
-      if (stats.isDirectory()) {
-        if (!IGNORED_DIRS.has(entry.toLowerCase())) findRouteFiles(full, files);
-        continue;
-      }
-    } catch {
-      continue;
-    }
-    if (ROUTE_FILE.test(entry)) files.push(full);
-  }
-}
 
 interface LazyTarget {
   file: string;

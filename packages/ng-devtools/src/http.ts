@@ -3,10 +3,8 @@ import {
   HttpHeaders,
   HttpResponse,
   withInterceptors,
-  type HttpEvent,
-  type HttpInterceptorFn,
-  type HttpRequest,
 } from '@angular/common/http';
+import type { HttpEvent, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
 import { isPlatformServer } from '@angular/common';
 import {
   ApplicationRef,
@@ -17,7 +15,8 @@ import {
   provideEnvironmentInitializer,
   type EnvironmentProviders,
 } from '@angular/core';
-import { Observable, throwError, timer, of, type Subscription } from 'rxjs';
+import { Observable, throwError, timer, of } from 'rxjs';
+import type { Subscription } from 'rxjs';
 
 import { appIdOf, isHydrationMessage } from './http-hydration.ts';
 

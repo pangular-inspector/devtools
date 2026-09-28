@@ -1,14 +1,14 @@
-import { lstatSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
 import { BUILTIN_PIPES, pipeUsesIn, templatesIn, type TemplateSource } from './get-pipes.ts';
 import {
-  IGNORED_DIRS,
   classScopes,
   lineCounter,
   maskStrings,
   matchDelimiter,
   sourceRoots,
   stripComments,
+  walkFiles,
 } from './source-scan.ts';
 
 export type LintSeverity = 'error' | 'warning' | 'info';
@@ -43,7 +43,20 @@ export function lintPipesText(cwd: string): string {
 
 export function lintPipes(cwd: string): PipeLintFinding[] {
   const files: { content: string; relPath: string; fullPath: string }[] = [];
-  for (const root of sourceRoots(cwd)) walk(root, cwd, files);
+  for (const root of sourceRoots(cwd)) {
+    walkFiles(root, (full, entry) => {
+      if (!entry.endsWith('.ts') || entry.endsWith('.spec.ts')) return;
+      try {
+        files.push({
+          content: readFileSync(full, 'utf-8'),
+          relPath: relative(cwd, full),
+          fullPath: full,
+        });
+      } catch {
+        // skip
+      }
+    });
+  }
 
   const purity: PurityMap = new Map();
   for (const [name, meta] of BUILTIN_PIPES) purity.set(name, meta.isPure);
@@ -64,42 +77,6 @@ export function lintPipes(cwd: string): PipeLintFinding[] {
     findings.push(...signalInPurePipeFindings(content, relPath));
   }
   return findings;
-}
-
-function walk(
-  dir: string,
-  cwd: string,
-  out: { content: string; relPath: string; fullPath: string }[],
-) {
-  let entries: string[];
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    const full = join(dir, entry);
-    try {
-      const stats = lstatSync(full);
-      if (stats.isSymbolicLink()) continue;
-      if (stats.isDirectory()) {
-        if (!IGNORED_DIRS.has(entry.toLowerCase())) walk(full, cwd, out);
-        continue;
-      }
-    } catch {
-      continue;
-    }
-    if (!entry.endsWith('.ts') || entry.endsWith('.spec.ts')) continue;
-    try {
-      out.push({
-        content: readFileSync(full, 'utf-8'),
-        relPath: relative(cwd, full),
-        fullPath: full,
-      });
-    } catch {
-      // skip
-    }
-  }
 }
 
 /** Byte spans of every `@for (...) { ... }` block's body in `text`. */

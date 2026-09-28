@@ -11,6 +11,7 @@ import {
 import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
+import { rpcCall as call } from '../rpc';
 import { Select, type SelectOption } from '../ui/select';
 
 type HttpSide = 'client' | 'server';
@@ -104,14 +105,6 @@ const EMPTY_DRAFT: RuleDraft = {
   delayMs: '',
   body: '',
 };
-
-function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Promise<unknown> {
-  if (!client) return Promise.resolve(null);
-  const rpc = client.scope('ng-devtools').rpc as unknown as {
-    call: (name: string, ...args: unknown[]) => Promise<unknown>;
-  };
-  return rpc.call(name, ...(arg === undefined ? [] : [arg]));
-}
 
 @Component({
   selector: 'app-network-inspector',
@@ -572,11 +565,6 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
     }
     .toolbar {
       position: sticky;

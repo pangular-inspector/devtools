@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync, statSync } from 'node:fs';
+import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 // Helpers shared by the RPC functions that read information out of source
@@ -405,6 +405,43 @@ export const IGNORED_DIRS = new Set([
   '.turbo',
   '.yarn',
 ]);
+
+/**
+ * Calls `visit` with the path and name of every file under `dir`, skipping
+ * `IGNORED_DIRS` and unreadable entries. Symbolic links are not followed: a
+ * link can point anywhere, including outside the workspace. `visit` returns
+ * `false` to end the walk, and `maxDepth` bounds how many directory levels
+ * below `dir` are read.
+ */
+export function walkFiles(
+  dir: string,
+  visit: (full: string, name: string) => boolean | void,
+  maxDepth = Infinity,
+): boolean {
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return true;
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry);
+    try {
+      const stats = lstatSync(full);
+      if (stats.isSymbolicLink()) continue;
+      if (stats.isDirectory()) {
+        if (maxDepth > 0 && !IGNORED_DIRS.has(entry.toLowerCase())) {
+          if (!walkFiles(full, visit, maxDepth - 1)) return false;
+        }
+        continue;
+      }
+    } catch {
+      continue;
+    }
+    if (visit(full, entry) === false) return false;
+  }
+  return true;
+}
 
 /**
  * JSONC as plain JSON: comments gone and trailing commas dropped. The commas

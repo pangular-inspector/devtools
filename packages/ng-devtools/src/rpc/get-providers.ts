@@ -1,17 +1,17 @@
 import { defineRpcFunction } from 'devframe';
 import {
-  IGNORED_DIRS,
   lineCounter,
   maskRegexes,
   maskStrings,
   matchDelimiter,
   sourceRoots,
   stripComments,
+  walkFiles,
 } from './source-scan.ts';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
-import { lstatSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
 
 const ProviderEntrySchema = v.object({
   token: v.string(),
@@ -84,182 +84,161 @@ interface ProviderEntry {
 
 function scanProviders(cwd: string): ProviderEntry[] {
   const entries: ProviderEntry[] = [];
-  for (const root of sourceRoots(cwd)) walk(root, cwd, entries);
+  for (const root of sourceRoots(cwd)) {
+    walkFiles(root, (full, item) => {
+      if (!item.endsWith('.ts') || item.endsWith('.spec.ts') || item.endsWith('.d.ts')) return;
+      scanFile(full, cwd, entries);
+    });
+  }
   return entries;
 }
 
-function walk(dir: string, cwd: string, out: ProviderEntry[]) {
-  let items: string[];
+function scanFile(full: string, cwd: string, out: ProviderEntry[]) {
   try {
-    items = readdirSync(dir);
+    const source = stripComments(readFileSync(full, 'utf-8'));
+    // Identifiers quoted in a string, or spelled out in a pattern, are not
+    // providers, so match against masked source. Masking keeps the length,
+    // so offsets still line up.
+    const code = maskRegexes(maskStrings(source));
+    const relPath = relative(cwd, full);
+    const lineAt = lineCounter(code);
+
+    // @Injectable({ ... }) or @Service, matched in two steps: the decorator
+    // name, then the class that follows it. Walking the argument list with a
+    // bracket matcher keeps a comment or a trailing comma in there from
+    // sending a single pattern into catastrophic backtracking.
+    for (const decorator of code.matchAll(/@(Injectable|Service)\b/g)) {
+      const at = decorator.index;
+      let after = at + decorator[0].length;
+      let args = '';
+
+      const parenAt = code.indexOf('(', after);
+      if (parenAt !== -1 && code.slice(after, parenAt).trim() === '') {
+        const close = matchDelimiter(code, parenAt, '(', ')');
+        // The value of `providedIn` is a string, so it is read from the
+        // source rather than the copy with string contents masked out.
+        args = source.slice(parenAt, close + 1);
+        after = close + 1;
+      }
+
+      DECLARATION.lastIndex = skipDecorators(code, after);
+      const declaration = DECLARATION.exec(code);
+      if (!declaration) continue;
+
+      const isService = decorator[1] === 'Service';
+      out.push({
+        token: declaration[1],
+        source: 'class',
+        file: relPath,
+        line: lineAt(at),
+        // @Service defaults to providedIn: 'root'
+        // `providedIn` takes `'root'`, `'platform'`, `'any'`, or a class
+        // such as `providedIn: FeatureModule`.
+        providedIn:
+          /providedIn\s*:\s*(?:['"`](\w+)['"`]|([A-Za-z_$][\w$]*))/
+            .exec(args)
+            ?.slice(1)
+            .find(Boolean) ?? (isService ? 'root' : undefined),
+        type: 'injectable',
+      });
+    }
+
+    // inject(Token) calls — covers `x = inject(T)`, `readonly x = inject(T)`, `private x = inject<T>()`
+    for (const match of code.matchAll(
+      /(?<![\w$])(?:(?:private|protected|public|readonly)\s+)*(\w+)\s*=\s*inject\s*(?:<[^>]*>)?\s*\(\s*(\w+)/g,
+    )) {
+      out.push({
+        token: match[2],
+        source: match[1],
+        file: relPath,
+        line: lineAt(match.index!),
+        type: 'injection',
+      });
+    }
+
+    // Constructor injection — @Inject(Token) or typed parameter
+    for (const match of code.matchAll(
+      /@Inject\(\s*(\w+)\s*\)\s*(?:private|protected|public|readonly|\s)*(\w+)/g,
+    )) {
+      out.push({
+        token: match[1],
+        source: match[2],
+        file: relPath,
+        line: lineAt(match.index!),
+        type: 'injection',
+      });
+    }
+
+    // provide*() calls in app config — provideHttpClient(), provideRouter(), etc.
+    for (const match of code.matchAll(/\b(provide\w+)\s*\(/g)) {
+      const fnName = match[1];
+      const token = PROVIDE_FN_TO_TOKEN[fnName];
+      if (token) {
+        out.push({
+          token,
+          source: fnName + '()',
+          file: relPath,
+          line: lineAt(match.index!),
+          providedIn: 'root',
+          type: 'root-provider',
+        });
+      }
+    }
+
+    for (const providersMatch of code.matchAll(/\b(?:providers|viewProviders)\s*:\s*\[/g)) {
+      const openAt = providersMatch.index + providersMatch[0].lastIndexOf('[');
+      const close = matchDelimiter(code, openAt, '[', ']');
+      for (const element of topLevelElements(code, openAt + 1, close)) {
+        const token = providedToken(element.text);
+        if (!token || DECORATOR_KEYWORDS.has(token)) continue;
+        out.push({
+          token,
+          source: 'providers array',
+          file: relPath,
+          line: lineAt(element.start),
+          type: 'provider',
+        });
+      }
+    }
+
+    for (const match of code.matchAll(
+      /(?:export\s+)?const\s+([\w$]+)\s*=\s*signalStore\s*(?:<[^>]*>)?\s*\(/g,
+    )) {
+      const open = match.index + match[0].length - 1;
+      const first = /^\s*\{/.exec(code.slice(open + 1));
+      if (!first) continue;
+      const brace = open + 1 + first[0].length - 1;
+      const providedIn = providedInOf(
+        source.slice(brace, matchDelimiter(code, brace, '{', '}') + 1),
+      );
+      if (!providedIn) continue;
+      out.push({
+        token: match[1],
+        source: 'signalStore',
+        file: relPath,
+        line: lineAt(match.index),
+        providedIn,
+        type: 'injectable',
+      });
+    }
+
+    for (const match of code.matchAll(
+      /(?:export\s+)?const\s+([\w$]+)\s*(?::[^=]{0,120})?=\s*new\s+InjectionToken\s*(?:<[^;]*?>)?\s*\(/g,
+    )) {
+      const open = match.index + match[0].length - 1;
+      const providedIn = providedInOf(source.slice(open, matchDelimiter(code, open, '(', ')') + 1));
+      if (!providedIn) continue;
+      out.push({
+        token: match[1],
+        source: 'InjectionToken',
+        file: relPath,
+        line: lineAt(match.index),
+        providedIn,
+        type: 'injectable',
+      });
+    }
   } catch {
-    return;
-  }
-
-  for (const item of items) {
-    const full = join(dir, item);
-    try {
-      const stats = lstatSync(full);
-      // Not followed: a link can point anywhere, including outside the workspace.
-      if (stats.isSymbolicLink()) continue;
-      if (stats.isDirectory()) {
-        if (!IGNORED_DIRS.has(item.toLowerCase())) walk(full, cwd, out);
-        continue;
-      }
-    } catch {
-      continue;
-    }
-
-    if (!item.endsWith('.ts') || item.endsWith('.spec.ts') || item.endsWith('.d.ts')) continue;
-
-    try {
-      const source = stripComments(readFileSync(full, 'utf-8'));
-      // Identifiers quoted in a string, or spelled out in a pattern, are not
-      // providers, so match against masked source. Masking keeps the length,
-      // so offsets still line up.
-      const code = maskRegexes(maskStrings(source));
-      const relPath = relative(cwd, full);
-      const lineAt = lineCounter(code);
-
-      // @Injectable({ ... }) or @Service, matched in two steps: the decorator
-      // name, then the class that follows it. Walking the argument list with a
-      // bracket matcher keeps a comment or a trailing comma in there from
-      // sending a single pattern into catastrophic backtracking.
-      for (const decorator of code.matchAll(/@(Injectable|Service)\b/g)) {
-        const at = decorator.index;
-        let after = at + decorator[0].length;
-        let args = '';
-
-        const parenAt = code.indexOf('(', after);
-        if (parenAt !== -1 && code.slice(after, parenAt).trim() === '') {
-          const close = matchDelimiter(code, parenAt, '(', ')');
-          // The value of `providedIn` is a string, so it is read from the
-          // source rather than the copy with string contents masked out.
-          args = source.slice(parenAt, close + 1);
-          after = close + 1;
-        }
-
-        DECLARATION.lastIndex = skipDecorators(code, after);
-        const declaration = DECLARATION.exec(code);
-        if (!declaration) continue;
-
-        const isService = decorator[1] === 'Service';
-        out.push({
-          token: declaration[1],
-          source: 'class',
-          file: relPath,
-          line: lineAt(at),
-          // @Service defaults to providedIn: 'root'
-          // `providedIn` takes `'root'`, `'platform'`, `'any'`, or a class
-          // such as `providedIn: FeatureModule`.
-          providedIn:
-            /providedIn\s*:\s*(?:['"`](\w+)['"`]|([A-Za-z_$][\w$]*))/
-              .exec(args)
-              ?.slice(1)
-              .find(Boolean) ?? (isService ? 'root' : undefined),
-          type: 'injectable',
-        });
-      }
-
-      // inject(Token) calls — covers `x = inject(T)`, `readonly x = inject(T)`, `private x = inject<T>()`
-      for (const match of code.matchAll(
-        /(?<![\w$])(?:(?:private|protected|public|readonly)\s+)*(\w+)\s*=\s*inject\s*(?:<[^>]*>)?\s*\(\s*(\w+)/g,
-      )) {
-        out.push({
-          token: match[2],
-          source: match[1],
-          file: relPath,
-          line: lineAt(match.index!),
-          type: 'injection',
-        });
-      }
-
-      // Constructor injection — @Inject(Token) or typed parameter
-      for (const match of code.matchAll(
-        /@Inject\(\s*(\w+)\s*\)\s*(?:private|protected|public|readonly|\s)*(\w+)/g,
-      )) {
-        out.push({
-          token: match[1],
-          source: match[2],
-          file: relPath,
-          line: lineAt(match.index!),
-          type: 'injection',
-        });
-      }
-
-      // provide*() calls in app config — provideHttpClient(), provideRouter(), etc.
-      for (const match of code.matchAll(/\b(provide\w+)\s*\(/g)) {
-        const fnName = match[1];
-        const token = PROVIDE_FN_TO_TOKEN[fnName];
-        if (token) {
-          out.push({
-            token,
-            source: fnName + '()',
-            file: relPath,
-            line: lineAt(match.index!),
-            providedIn: 'root',
-            type: 'root-provider',
-          });
-        }
-      }
-
-      for (const providersMatch of code.matchAll(/\b(?:providers|viewProviders)\s*:\s*\[/g)) {
-        const openAt = providersMatch.index + providersMatch[0].lastIndexOf('[');
-        const close = matchDelimiter(code, openAt, '[', ']');
-        for (const element of topLevelElements(code, openAt + 1, close)) {
-          const token = providedToken(element.text);
-          if (!token || DECORATOR_KEYWORDS.has(token)) continue;
-          out.push({
-            token,
-            source: 'providers array',
-            file: relPath,
-            line: lineAt(element.start),
-            type: 'provider',
-          });
-        }
-      }
-
-      for (const match of code.matchAll(
-        /(?:export\s+)?const\s+([\w$]+)\s*=\s*signalStore\s*(?:<[^>]*>)?\s*\(/g,
-      )) {
-        const open = match.index + match[0].length - 1;
-        const first = /^\s*\{/.exec(code.slice(open + 1));
-        if (!first) continue;
-        const brace = open + 1 + first[0].length - 1;
-        const providedIn = providedInOf(
-          source.slice(brace, matchDelimiter(code, brace, '{', '}') + 1),
-        );
-        if (!providedIn) continue;
-        out.push({
-          token: match[1],
-          source: 'signalStore',
-          file: relPath,
-          line: lineAt(match.index),
-          providedIn,
-          type: 'injectable',
-        });
-      }
-
-      for (const match of code.matchAll(
-        /(?:export\s+)?const\s+([\w$]+)\s*(?::[^=]{0,120})?=\s*new\s+InjectionToken\s*(?:<[^;]*?>)?\s*\(/g,
-      )) {
-        const open = match.index + match[0].length - 1;
-        const providedIn = providedInOf(
-          source.slice(open, matchDelimiter(code, open, '(', ')') + 1),
-        );
-        if (!providedIn) continue;
-        out.push({
-          token: match[1],
-          source: 'InjectionToken',
-          file: relPath,
-          line: lineAt(match.index),
-          providedIn,
-          type: 'injectable',
-        });
-      }
-    } catch {
-      // skip
-    }
+    // skip
   }
 }
 

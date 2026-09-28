@@ -1,10 +1,9 @@
 import { defineRpcFunction } from 'devframe';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
-import { lstatSync, readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
-  IGNORED_DIRS,
   classScopes,
   escapes,
   lineCounter,
@@ -14,6 +13,7 @@ import {
   skipString,
   sourceRoots,
   stripComments,
+  walkFiles,
 } from './source-scan.ts';
 
 const UsageSiteSchema = v.object({
@@ -94,7 +94,19 @@ export const PIPE_USE = /(?<!\|)\|(?!\|)[ \t]*([A-Za-z_$][\w$]*)/g;
 export function scanPipes(cwd: string): PipeInfo[] {
   const pipes: PipeInfo[] = [];
   const builtinUsages = new Map<string, UsageSite[]>();
-  for (const root of sourceRoots(cwd)) walk(root, cwd, pipes, builtinUsages);
+  for (const root of sourceRoots(cwd)) {
+    walkFiles(root, (full, entry) => {
+      if (!entry.endsWith('.ts') || entry.endsWith('.spec.ts')) return;
+      try {
+        const content = readFileSync(full, 'utf-8');
+        const relPath = relative(cwd, full);
+        pipes.push(...pipesIn(content, relPath));
+        collectBuiltinUsages(content, relPath, full, cwd, builtinUsages);
+      } catch {
+        // skip
+      }
+    });
+  }
   for (const [name, usages] of builtinUsages) {
     const meta = BUILTIN_PIPES.get(name);
     if (!meta) continue;
@@ -111,41 +123,6 @@ export function scanPipes(cwd: string): PipeInfo[] {
     });
   }
   return pipes;
-}
-
-function walk(dir: string, cwd: string, out: PipeInfo[], builtinUsages: Map<string, UsageSite[]>) {
-  let entries: string[];
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    const full = join(dir, entry);
-    try {
-      const stats = lstatSync(full);
-      // Not followed: a link can point anywhere, including outside the workspace.
-      if (stats.isSymbolicLink()) continue;
-      if (stats.isDirectory()) {
-        if (!IGNORED_DIRS.has(entry.toLowerCase())) walk(full, cwd, out, builtinUsages);
-        continue;
-      }
-    } catch {
-      continue;
-    }
-
-    if (!entry.endsWith('.ts') || entry.endsWith('.spec.ts')) continue;
-
-    try {
-      const content = readFileSync(full, 'utf-8');
-      const relPath = relative(cwd, full);
-      out.push(...pipesIn(content, relPath));
-      collectBuiltinUsages(content, relPath, full, cwd, builtinUsages);
-    } catch {
-      // skip
-    }
-  }
 }
 
 function pipesIn(content: string, relPath: string): PipeInfo[] {

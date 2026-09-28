@@ -1,16 +1,16 @@
 import { defineRpcFunction } from 'devframe';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
-import { lstatSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
 import {
   ANNOTATION,
-  IGNORED_DIRS,
   classScopes,
   lineCounter,
   maskStrings,
   sourceRoots,
   stripComments,
+  walkFiles,
 } from './source-scan.ts';
 
 const SignalEntrySchema = v.object({
@@ -77,40 +77,17 @@ const SIGNAL_CALL = new RegExp(
 
 function scanSignals(cwd: string): SignalEntry[] {
   const entries: SignalEntry[] = [];
-  for (const root of sourceRoots(cwd)) walk(root, cwd, entries);
-  return entries;
-}
-
-function walk(dir: string, cwd: string, out: SignalEntry[]) {
-  let items: string[];
-  try {
-    items = readdirSync(dir);
-  } catch {
-    return;
-  }
-
-  for (const item of items) {
-    const full = join(dir, item);
-    try {
-      const stats = lstatSync(full);
-      // Not followed: a link can point anywhere, including outside the workspace.
-      if (stats.isSymbolicLink()) continue;
-      if (stats.isDirectory()) {
-        if (!IGNORED_DIRS.has(item.toLowerCase())) walk(full, cwd, out);
-        continue;
+  for (const root of sourceRoots(cwd)) {
+    walkFiles(root, (full, item) => {
+      if (!item.endsWith('.ts') || item.endsWith('.spec.ts') || item.endsWith('.d.ts')) return;
+      try {
+        entries.push(...signalsIn(readFileSync(full, 'utf-8'), relative(cwd, full)));
+      } catch {
+        // skip
       }
-    } catch {
-      continue;
-    }
-
-    if (!item.endsWith('.ts') || item.endsWith('.spec.ts') || item.endsWith('.d.ts')) continue;
-
-    try {
-      out.push(...signalsIn(readFileSync(full, 'utf-8'), relative(cwd, full)));
-    } catch {
-      // skip
-    }
+    });
   }
+  return entries;
 }
 
 function signalsIn(content: string, relPath: string): SignalEntry[] {

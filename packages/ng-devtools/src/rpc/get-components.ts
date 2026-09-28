@@ -1,16 +1,16 @@
 import { defineRpcFunction } from 'devframe';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
-import { lstatSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
 import {
   ANNOTATION,
-  IGNORED_DIRS,
   classScopes,
   lineCounter,
   maskStrings,
   sourceRoots,
   stripComments,
+  walkFiles,
 } from './source-scan.ts';
 
 const ComponentSchema = v.object({
@@ -54,40 +54,17 @@ interface ComponentInfo {
 
 function scanComponents(cwd: string): ComponentInfo[] {
   const components: ComponentInfo[] = [];
-  for (const root of sourceRoots(cwd)) walk(root, cwd, components);
-  return components;
-}
-
-function walk(dir: string, cwd: string, out: ComponentInfo[]) {
-  let entries: string[];
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    const full = join(dir, entry);
-    try {
-      const stats = lstatSync(full);
-      // Not followed: a link can point anywhere, including outside the workspace.
-      if (stats.isSymbolicLink()) continue;
-      if (stats.isDirectory()) {
-        if (!IGNORED_DIRS.has(entry.toLowerCase())) walk(full, cwd, out);
-        continue;
+  for (const root of sourceRoots(cwd)) {
+    walkFiles(root, (full, entry) => {
+      if (!entry.endsWith('.ts') || entry.endsWith('.spec.ts')) return;
+      try {
+        components.push(...componentsIn(readFileSync(full, 'utf-8'), relative(cwd, full)));
+      } catch {
+        // skip
       }
-    } catch {
-      continue;
-    }
-
-    if (!entry.endsWith('.ts') || entry.endsWith('.spec.ts')) continue;
-
-    try {
-      out.push(...componentsIn(readFileSync(full, 'utf-8'), relative(cwd, full)));
-    } catch {
-      // skip
-    }
+    });
   }
+  return components;
 }
 
 function componentsIn(content: string, relPath: string): ComponentInfo[] {

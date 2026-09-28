@@ -1,4 +1,5 @@
 import type { DevframeRpcClient } from 'devframe/client';
+import { rpcTry } from '../rpc';
 
 export interface ActiveRoute {
   path: string;
@@ -173,20 +174,7 @@ export interface LintFinding {
   angular: string;
 }
 
-export function routerCall<T>(
-  client: DevframeRpcClient | null,
-  name: string,
-  arg?: unknown,
-): Promise<T | null> {
-  if (!client) return Promise.resolve(null);
-  const rpc = client.scope('ng-devtools').rpc as unknown as {
-    call: (name: string, ...args: unknown[]) => Promise<unknown>;
-  };
-  return rpc.call(name, ...(arg === undefined ? [] : [arg])).then(
-    (value) => value as T,
-    () => null,
-  );
-}
+export const routerCall = rpcTry;
 
 export function routerAction(
   client: DevframeRpcClient | null,
@@ -455,14 +443,6 @@ export const SHARED_STYLES = `
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-  }
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
   @media (max-width: 480px) {
     .facts {

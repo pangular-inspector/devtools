@@ -467,14 +467,6 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
     .mono {
       font-family: var(--font-mono);
     }
-    .visually-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip: rect(0 0 0 0);
-      white-space: nowrap;
-    }
     .intro {
       max-width: 720px;
       margin: 0 0 12px;
@@ -1029,11 +1021,6 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
     }
     @media (prefers-reduced-motion: reduce) {
       .spinner {

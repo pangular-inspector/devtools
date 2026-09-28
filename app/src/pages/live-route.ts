@@ -262,14 +262,6 @@ type TabId = (typeof TABS)[number]['id'];
       text-align: center;
       font-variant-numeric: tabular-nums;
     }
-    .visually-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip-path: inset(50%);
-      white-space: nowrap;
-    }
   `,
 })
 export class LiveRoute {

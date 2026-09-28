@@ -1,16 +1,16 @@
 import { defineRpcFunction } from 'devframe';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
-import { lstatSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
 import {
-  IGNORED_DIRS,
   lineCounter,
   maskRegexes,
   maskStrings,
   matchDelimiter,
   sourceRoots,
   stripComments,
+  walkFiles,
 } from './source-scan.ts';
 
 const NgrxStoreEntrySchema = v.object({
@@ -122,7 +122,12 @@ const NGRX_PATTERNS: { pattern: RegExp; kind: NgrxStoreEntry['kind'] }[] = [
 
 export function scanNgrxStore(cwd: string): NgrxStoreEntry[] {
   const entries: NgrxStoreEntry[] = [];
-  for (const root of sourceRoots(cwd)) walk(root, cwd, entries);
+  for (const root of sourceRoots(cwd)) {
+    walkFiles(root, (full, item) => {
+      if (!item.endsWith('.ts') || item.endsWith('.spec.ts') || item.endsWith('.d.ts')) return;
+      scanFile(full, cwd, entries);
+    });
+  }
   // Deduplicate by name+file+line (guards against overlapping patterns)
   const seen = new Set<string>();
   return entries.filter((e) => {
@@ -133,86 +138,62 @@ export function scanNgrxStore(cwd: string): NgrxStoreEntry[] {
   });
 }
 
-function walk(dir: string, cwd: string, out: NgrxStoreEntry[]) {
-  let items: string[];
+function scanFile(full: string, cwd: string, out: NgrxStoreEntry[]) {
   try {
-    items = readdirSync(dir);
-  } catch {
-    return;
-  }
+    const raw = readFileSync(full, 'utf-8');
+    // The gate runs on the real text: an import specifier is a string, so a
+    // masked copy would hide the very marker it looks for.
 
-  for (const item of items) {
-    const full = join(dir, item);
-    try {
-      const stats = lstatSync(full);
-      // Not followed: a link can point anywhere, including outside the workspace.
-      if (stats.isSymbolicLink()) continue;
-      if (stats.isDirectory()) {
-        if (!IGNORED_DIRS.has(item.toLowerCase())) walk(full, cwd, out);
-        continue;
-      }
-    } catch {
-      continue;
+    // Quick check: skip files that don't reference ngrx
+    if (
+      !raw.includes('@ngrx/') &&
+      !raw.includes('createAction') &&
+      !raw.includes('createReducer') &&
+      !raw.includes('createEffect') &&
+      !raw.includes('createSelector') &&
+      !raw.includes('createFeature') &&
+      !raw.includes('signalStore') &&
+      !raw.includes('signalState') &&
+      !raw.includes('signalMethod')
+    ) {
+      return;
     }
 
-    if (!item.endsWith('.ts') || item.endsWith('.spec.ts') || item.endsWith('.d.ts')) continue;
+    // Comments, strings and regex literals are not code: a commented out
+    // store, or a call quoted in a template or a pattern, is not part of
+    // the app.
+    const content = maskRegexes(maskStrings(stripComments(raw)));
+    const lineAt = lineCounter(content);
+    const relPath = relative(cwd, full);
 
-    try {
-      const raw = readFileSync(full, 'utf-8');
-      // The gate runs on the real text: an import specifier is a string, so a
-      // masked copy would hide the very marker it looks for.
+    for (const { pattern, kind } of NGRX_PATTERNS) {
+      pattern.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = pattern.exec(content)) !== null) {
+        const lineNum = lineAt(match.index);
+        const name = match[1];
 
-      // Quick check: skip files that don't reference ngrx
-      if (
-        !raw.includes('@ngrx/') &&
-        !raw.includes('createAction') &&
-        !raw.includes('createReducer') &&
-        !raw.includes('createEffect') &&
-        !raw.includes('createSelector') &&
-        !raw.includes('createFeature') &&
-        !raw.includes('signalStore') &&
-        !raw.includes('signalState') &&
-        !raw.includes('signalMethod')
-      ) {
-        continue;
-      }
+        // For StoreModule/EffectsModule, use the full match as name
+        const displayName =
+          kind === 'store-setup' &&
+          (match[0].includes('StoreModule') || match[0].includes('EffectsModule'))
+            ? match[0].replace(/\s*\($/, '')
+            : name;
 
-      // Comments, strings and regex literals are not code: a commented out
-      // store, or a call quoted in a template or a pattern, is not part of
-      // the app.
-      const content = maskRegexes(maskStrings(stripComments(raw)));
-      const lineAt = lineCounter(content);
-      const relPath = relative(cwd, full);
-
-      for (const { pattern, kind } of NGRX_PATTERNS) {
-        pattern.lastIndex = 0;
-        let match: RegExpExecArray | null;
-        while ((match = pattern.exec(content)) !== null) {
-          const lineNum = lineAt(match.index);
-          const name = match[1];
-
-          // For StoreModule/EffectsModule, use the full match as name
-          const displayName =
-            kind === 'store-setup' &&
-            (match[0].includes('StoreModule') || match[0].includes('EffectsModule'))
-              ? match[0].replace(/\s*\($/, '')
-              : name;
-
-          const entry: NgrxStoreEntry = { name: displayName, kind, file: relPath, line: lineNum };
-          if (kind === 'signal-store') {
-            const open = content.indexOf('(', match.index + match[0].length - 1);
-            const members = signalStoreMembers(content, raw, open);
-            if (members) {
-              entry.members = members;
-              entry.detail = describeMembers(members);
-            }
+        const entry: NgrxStoreEntry = { name: displayName, kind, file: relPath, line: lineNum };
+        if (kind === 'signal-store') {
+          const open = content.indexOf('(', match.index + match[0].length - 1);
+          const members = signalStoreMembers(content, raw, open);
+          if (members) {
+            entry.members = members;
+            entry.detail = describeMembers(members);
           }
-          out.push(entry);
         }
+        out.push(entry);
       }
-    } catch {
-      // skip unreadable files
     }
+  } catch {
+    // skip unreadable files
   }
 }
 

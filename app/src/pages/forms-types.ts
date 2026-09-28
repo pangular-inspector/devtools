@@ -1,4 +1,5 @@
 import type { DevframeRpcClient } from 'devframe/client';
+import { rpcTry } from '../rpc';
 
 export type FieldStatus = 'VALID' | 'INVALID' | 'PENDING' | 'DISABLED';
 
@@ -116,20 +117,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   manual: 'setErrors',
 };
 
-export function formsCall<T>(
-  client: DevframeRpcClient | null,
-  name: string,
-  arg?: unknown,
-): Promise<T | null> {
-  if (!client) return Promise.resolve(null);
-  const rpc = client.scope('ng-devtools').rpc as unknown as {
-    call: (name: string, ...args: unknown[]) => Promise<unknown>;
-  };
-  return rpc.call(name, ...(arg === undefined ? [] : [arg])).then(
-    (value) => value as T,
-    () => null,
-  );
-}
+export const formsCall = rpcTry;
 
 export async function formAction(
   client: DevframeRpcClient | null,
@@ -157,14 +145,6 @@ export function plain(text: string | null): string {
 export const FORMS_STYLES = `
   .muted {
     color: var(--text-2);
-  }
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
   code {
     font-family: var(--font-mono);
@@ -352,11 +332,6 @@ export const FORMS_STYLES = `
     border: 2px solid var(--border-strong);
     border-top-color: var(--accent);
     border-radius: 50%;
-    animation: forms-spin 0.8s linear infinite;
-  }
-  @keyframes forms-spin {
-    to {
-      transform: rotate(360deg);
-    }
+    animation: spin 0.8s linear infinite;
   }
 `;

@@ -2,7 +2,8 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { createUi } from '@devframes/hub-ui';
-import { DEVFRAMES_HUB_BASE, initHub, type InitHubOptions } from '@devframes/hub/initiate';
+import { DEVFRAMES_HUB_BASE, initHub } from '@devframes/hub/initiate';
+import type { InitHubOptions } from '@devframes/hub/initiate';
 import ngDevtools from './devframe.ts';
 import pkg from '../package.json' with { type: 'json' };
 
