@@ -99,7 +99,7 @@ interface MatchResult {
                 <td class="path" [style.padding-left.px]="12 + row.depth * 16">
                   {{ row.node.fullPath }}
                   @if (isActive(row.node)) {
-                    <span class="tag">active</span>
+                    <span class="tag tag-active">active</span>
                   }
                   @if (row.node.lazy) {
                     <span class="tag">lazy {{ row.node.lazy }}</span>
@@ -196,6 +196,11 @@ interface MatchResult {
     }
     tr.active td {
       background: #1c1917;
+    }
+    .tag-active {
+      background: #14532d;
+      border-color: #14532d;
+      color: #bbf7d0;
     }
     .actions {
       white-space: nowrap;
