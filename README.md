@@ -383,7 +383,7 @@ pnpm extension:build
 
 - **Connection.** The panel looks for the devframe connection on the inspected page's origin, under `/__ng-devtools/`, `/__devframes/ng-devtools/`, `/__devframe/` and `/`, and connects to the first one that answers. When none answers, it lists the URLs it tried.
 - **Inspected tab.** With several tabs open on the same app, the panel shows the page it inspects, not the one that reported last. It reconnects after each navigation.
-- **Elements panel.** Selecting an element in Chrome's Elements panel selects its component in the Components tab.
+- **Elements panel.** While the Components tab is open, selecting an element in Chrome's Elements panel selects its component there. Other tabs stay where they are.
 - **Hosts.** `localhost`, `*.localhost`, `127.0.0.1` and `[::1]` work out of the box. For any other host (a LAN IP, a tunnel), the panel shows an **Allow access** button that grants the extension that host only. The devtools server still only answers requests from your machine.
 
 ## Community

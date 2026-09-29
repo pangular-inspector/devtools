@@ -749,7 +749,11 @@ export class App implements OnInit, OnDestroy {
   }
 
   formFocus = signal<{ id: string } | null>(null);
-  componentFocus = signal<{ id: string } | null>(null);
+  // Belongs to the Components tab that received it, so leaving the tab drops it.
+  readonly componentFocus = linkedSignal<Tab, { id: string } | null>({
+    source: this.tab,
+    computation: () => null,
+  });
 
   showForm(formId: string) {
     this.formFocus.set({ id: formId });
@@ -760,8 +764,10 @@ export class App implements OnInit, OnDestroy {
     if (source !== window.parent || origin !== location.origin) return;
     const message = data as { type?: unknown; id?: unknown } | null;
     if (message?.type !== 'ng-devtools:inspect-component' || typeof message.id !== 'string') return;
+    // Any element inside the app resolves to a component, so following every
+    // Elements selection would pull the user off whichever tab they are on.
+    if (this.tab() !== 'components') return;
     this.componentFocus.set({ id: message.id });
-    this.switchTab('components');
   }
 
   switchTab(id: Tab) {

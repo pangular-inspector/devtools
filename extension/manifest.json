@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Angular DevTools",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Inspect Angular components, signals, dependency injection, and routes.",
   "minimum_chrome_version": "111",
   "devtools_page": "devtools.html",

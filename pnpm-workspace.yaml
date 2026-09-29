@@ -1,12 +1,6 @@
 packages:
   - packages/*
   - examples/*
-allowBuilds:
-  '@parcel/watcher': true
-  esbuild: true
-  lmdb: true
-  msgpackr-extract: true
-  nx: true
 
 packageExtensions:
   '@analogjs/vite-plugin-nitro':

@@ -1242,9 +1242,9 @@ export class ComponentTree {
     });
     effect(() => {
       const focus = this.focus();
-      if (!focus || !this.index().map.has(focus.id)) return;
+      if (!focus || !this.live()) return;
       untracked(() => {
-        this.reveal(focus.id);
+        if (this.index().map.has(focus.id)) this.reveal(focus.id);
         this.focusHandled.emit();
       });
     });
