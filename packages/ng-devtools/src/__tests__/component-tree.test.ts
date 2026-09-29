@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   collectComponentTree,
   componentDetail,
+  componentHostOf,
   componentHosts,
   hostPath,
   type ComponentDebugNg,
@@ -237,6 +238,32 @@ describe('collectComponentTree', () => {
     );
     const tree = collectComponentTree(ng, { selectedId: elementId(card) });
     expect(tree.detail?.changeDetection).toBe('Eager');
+  });
+});
+
+describe('componentHostOf', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('resolves an element to the nearest component host, through shadow roots', () => {
+    document.body.innerHTML = `<app-root ng-version="22.0.0"><app-shadow></app-shadow><p></p></app-root>`;
+    const [root] = document.getElementsByTagName('app-root');
+    const host = document.querySelector('app-shadow')!;
+    const paragraph = document.querySelector('p')!;
+    const button = document.createElement('button');
+    host.attachShadow({ mode: 'open' }).appendChild(button);
+    const { ng } = fakeNg(
+      new Map<Element, object>([
+        [root, new _App()],
+        [host, new Shell()],
+      ]),
+    );
+    expect(componentHostOf(ng, host)).toBe(host);
+    expect(componentHostOf(ng, button)).toBe(host);
+    expect(componentHostOf(ng, paragraph)).toBe(root);
+    expect(componentHostOf(ng, document.body)).toBeNull();
+    expect(componentHostOf(undefined, host)).toBeNull();
   });
 });
 

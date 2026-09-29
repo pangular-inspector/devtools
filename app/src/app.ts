@@ -109,7 +109,10 @@ function readView(): View | null {
 
 @Component({
   selector: 'app-root',
-  host: { '[style.--accent]': 'viewAccent()' },
+  host: {
+    '[style.--accent]': 'viewAccent()',
+    '(window:message)': 'inspectFromPanel($event)',
+  },
   imports: [
     Dashboard,
     ComponentTree,
@@ -253,7 +256,12 @@ function readView(): View | null {
             <app-dashboard [rpc]="rpc()" (navigate)="switchTab($event)" />
           }
           @case ('components') {
-            <app-component-tree [rpc]="rpc()" (showForm)="showForm($event)" />
+            <app-component-tree
+              [rpc]="rpc()"
+              [focus]="componentFocus()"
+              (focusHandled)="componentFocus.set(null)"
+              (showForm)="showForm($event)"
+            />
           }
           @case ('routes') {
             <app-route-inspector [rpc]="rpc()" />
@@ -741,10 +749,19 @@ export class App implements OnInit, OnDestroy {
   }
 
   formFocus = signal<{ id: string } | null>(null);
+  componentFocus = signal<{ id: string } | null>(null);
 
   showForm(formId: string) {
     this.formFocus.set({ id: formId });
     this.switchTab('forms');
+  }
+
+  inspectFromPanel({ source, origin, data }: MessageEvent<unknown>) {
+    if (source !== window.parent || origin !== location.origin) return;
+    const message = data as { type?: unknown; id?: unknown } | null;
+    if (message?.type !== 'ng-devtools:inspect-component' || typeof message.id !== 'string') return;
+    this.componentFocus.set({ id: message.id });
+    this.switchTab('components');
   }
 
   switchTab(id: Tab) {
@@ -812,16 +829,12 @@ function sameOrigin(value: string): boolean {
   }
 }
 
-const LOOPBACK_HOSTS = ['localhost', '127.0.0.1'];
-
-function loopbackFromExtension(value: string): boolean {
+// The extension panel is not web accessible, and it only passes hosts the user granted.
+function fromExtension(value: string): boolean {
   if (location.protocol !== 'chrome-extension:') return false;
   try {
-    const url = new URL(value);
-    return (
-      (url.protocol === 'http:' || url.protocol === 'https:') &&
-      LOOPBACK_HOSTS.includes(url.hostname)
-    );
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
   } catch {
     return false;
   }
@@ -834,7 +847,7 @@ function detectBaseURL(): string | undefined {
   // the panel opens its RPC channel.
   // `new URL` throws on a malformed value, and this runs before the connection
   // is made, so an unhandled throw would leave the panel blank.
-  if (fromQuery && (sameOrigin(fromQuery) || loopbackFromExtension(fromQuery))) {
+  if (fromQuery && (sameOrigin(fromQuery) || fromExtension(fromQuery))) {
     return fromQuery;
   }
 

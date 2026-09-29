@@ -22,22 +22,61 @@
         height: 100%;
         border: none;
       }
-      .connecting {
+      .status {
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 12px;
         height: 100%;
+        padding: 16px;
         color: #a1a1aa;
         font-family: system-ui, sans-serif;
         font-size: 14px;
+        text-align: center;
       }
-      .connecting.hidden {
+      .status.hidden {
         display: none;
+      }
+      .status ul {
+        list-style: none;
+        color: #d4d4d8;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      .status button {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 4px;
+        background: #f5a524;
+        color: #0f0f11;
+        font: inherit;
+        cursor: pointer;
+      }
+      .status a {
+        color: #f5a524;
+      }
+      .status :focus-visible {
+        outline: 2px solid #f5a524;
+        outline-offset: 2px;
       }
     </style>
   </head>
   <body>
-    <div id="status" class="connecting">Detecting Angular app…</div>
+    <div id="status" class="status" role="status">
+      <p id="status-message">Detecting Angular app…</p>
+      <ul id="status-tried" aria-label="URLs tried" hidden></ul>
+      <button id="status-allow" type="button" hidden>Allow access</button>
+      <a
+        id="status-docs"
+        href="https://github.com/santoshyadavdev/angular-devtools#how-to-use"
+        target="_blank"
+        rel="noreferrer"
+        hidden
+        >Set up the devtools server</a
+      >
+    </div>
     <iframe id="devtools-frame" style="display: none"></iframe>
     <script src="panel-bridge.js"></script>
   </body>

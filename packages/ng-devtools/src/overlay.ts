@@ -30,10 +30,16 @@ import {
   type PreloadRecord,
 } from './router-actions.ts';
 import { createSignalHistory, type RawSignalNode } from './signal-history.ts';
-import { collectComponentTree } from './component-tree.ts';
-import { elementById } from './element-id.ts';
+import { collectComponentTree, componentHostOf } from './component-tree.ts';
+import { elementById, elementId } from './element-id.ts';
 import { collectSignalGraph, graphKey, toSignalTarget, type SignalTarget } from './signal-graph.ts';
 import { serializeNamed } from './serialize.ts';
+
+declare global {
+  interface Window {
+    __ngDevtoolsComponentOf?: (el: unknown) => string | null;
+  }
+}
 
 let highlightEl: HTMLElement | null = null;
 let highlightTimer: ReturnType<typeof setTimeout> | undefined;
@@ -375,6 +381,11 @@ export async function initOverlay(options: { baseURL?: string | string[] } = {})
     },
   });
 
+  window.__ngDevtoolsComponentOf = (el) => {
+    const host = el instanceof Element ? componentHostOf(getNg(), el) : null;
+    return host ? elementId(host) : null;
+  };
+
   const leave = () => {
     pipes.pause();
     void my.rpc.call('forget-forms-page', pageId).catch(() => {});
@@ -411,6 +422,7 @@ export async function initOverlay(options: { baseURL?: string | string[] } = {})
     clearTimeout(routerPushTimer);
     releasePageId();
     clearHighlight();
+    delete window.__ngDevtoolsComponentOf;
   };
 }
 

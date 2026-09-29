@@ -41,7 +41,7 @@
   <p>All data processing happens entirely within your browser and your local machine. No information ever leaves your device.</p>
 
   <h2>Host Permissions</h2>
-  <p>The Extension requests host permissions only for <code>localhost</code> and <code>127.0.0.1</code>, to reach the devframe server on the developer's own machine. The <code>detect-angular.js</code> content script runs on every page, including when DevTools is closed. It reads only the <code>ng-version</code> attribute and whether <code>window.ng</code> exists, to detect Angular. It does not modify page content.</p>
+  <p>The Extension requests host permissions for loopback hosts only (<code>localhost</code>, <code>*.localhost</code>, <code>127.0.0.1</code> and <code>[::1]</code>), to reach the devframe server on the developer's own machine. It can reach any other host only after the developer grants that host from the DevTools panel. The <code>detect-angular.js</code> content script runs on every page, including when DevTools is closed. It reads only the <code>ng-version</code> attribute and whether <code>window.ng</code> exists, to detect Angular. It does not modify page content.</p>
 
   <h2>Data Storage</h2>
   <p>The Extension does not persist any data between sessions. All inspection data exists only in memory while the DevTools panel is open and is discarded when the panel is closed.</p>

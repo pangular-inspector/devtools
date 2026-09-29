@@ -365,100 +365,26 @@ pnpm devtools:publish
 
 ## Chrome DevTools Extension
 
-To distribute this as a Chrome DevTools extension, you need a thin Chrome extension shell that opens the devtools UI in a DevTools panel. The built SPA already works standalone — the extension just embeds it.
+The `extension/` directory is a Manifest V3 extension that adds an **Angular DevTools** panel to Chrome DevTools. The panel embeds the same SPA and connects it live to the devtools server of the page you inspect.
 
-### 1. Create the extension scaffold
-
-Create an `extension/` directory:
-
-```
-extension/
-  manifest.json
-  devtools.html
-  devtools.js
-  panel.html
-```
-
-### 2. `extension/manifest.json`
-
-```json
-{
-  "manifest_version": 3,
-  "name": "Angular DevTools",
-  "version": "0.0.1",
-  "description": "Inspect Angular components, signals, DI, and routes.",
-  "devtools_page": "devtools.html",
-  "permissions": ["scripting"],
-  "host_permissions": [
-    "http://localhost/*",
-    "https://localhost/*",
-    "http://127.0.0.1/*",
-    "https://127.0.0.1/*"
-  ],
-  "icons": {
-    "128": "icon-128.png"
-  }
-}
-```
-
-### 3. `extension/devtools.html` and `extension/devtools.js`
-
-```html
-<!-- devtools.html -->
-<!doctype html>
-<script src="devtools.js"></script>
-```
-
-```js
-// devtools.js — creates the panel in Chrome DevTools
-chrome.devtools.panels.create('Angular', 'icon-128.png', 'panel.html');
-```
-
-### 4. `extension/panel.html`
-
-This is where the built SPA loads. Copy the built assets (`dist/devtools-ui/`) into the extension and point `panel.html` at the SPA's `index.html`:
-
-```html
-<!-- panel.html — the devtools SPA loads here -->
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-  </head>
-  <body>
-    <iframe src="ui/index.html" style="width:100%;height:100vh;border:none;"></iframe>
-  </body>
-</html>
-```
-
-### 5. Build the extension
+### Load it unpacked
 
 ```sh
-# Build the devtools SPA
-pnpm devtools:build
-
-# Copy into the extension
-mkdir -p extension/ui
-cp -r dist/devtools-ui/* extension/ui/
+pnpm extension:build
 ```
 
-### 6. Load in Chrome
+1. Go to `chrome://extensions` and enable **Developer mode**
+2. Click **Load unpacked** and select the `extension/` directory
+3. Run your app with the devtools server (see [How to Use](#how-to-use)), open it in Chrome, then open Chrome DevTools: the **Angular DevTools** panel appears once the page renders Angular
 
-1. Go to `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked** → select the `extension/` directory
-4. Open DevTools on any Angular app → the **Angular** panel appears
+`pnpm extension:zip` writes `dist/ng-devtools-extension.zip`, ready to upload to the [Chrome Web Store](https://chrome.google.com/webstore/devconsole).
 
-### 7. Publish to Chrome Web Store
+### How it works
 
-1. Zip the `extension/` directory
-2. Go to the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole)
-3. Click **New item** → upload the zip
-4. Fill in the listing details and submit for review
-
-### Connecting the extension to the running app
-
-The extension panel loads the SPA in static mode by default. To connect it to a live dev server for real-time RPC, the extension's content script or background service worker needs to detect the devframe's `__connection.json` on the inspected page and pass the connection to the panel. This is the same pattern the official Angular DevTools Chrome extension uses — a content script bridges the inspected page and the DevTools panel via `chrome.runtime.connect`.
+- **Connection.** The panel looks for the devframe connection on the inspected page's origin, under `/__ng-devtools/`, `/__devframes/ng-devtools/`, `/__devframe/` and `/`, and connects to the first one that answers. When none answers, it lists the URLs it tried.
+- **Inspected tab.** With several tabs open on the same app, the panel shows the page it inspects, not the one that reported last. It reconnects after each navigation.
+- **Elements panel.** Selecting an element in Chrome's Elements panel selects its component in the Components tab.
+- **Hosts.** `localhost`, `*.localhost`, `127.0.0.1` and `[::1]` work out of the box. For any other host (a LAN IP, a tunnel), the panel shows an **Allow access** button that grants the extension that host only. The devtools server still only answers requests from your machine.
 
 ## Community
 
