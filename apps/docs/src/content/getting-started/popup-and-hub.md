@@ -141,7 +141,7 @@ If the panel cannot reach the server, check that the dev server is running, then
 
 <ngmd-accordion>
   <ngmd-accordion-item title="The button is in the way" open>
-    Drag it somewhere else, or focus it and use the arrow keys. Double-click it to reset its position.
+    Drag it somewhere else, or focus it and use the arrow keys. Double-click it to reset its position. To remove it, stop the overlay with <a href="/getting-started/overlay#stop-the-overlay"><code>disposeOverlay</code></a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Reset the panel layout">
     Remove the <code>ng-devtools-popup</code> key from <code>localStorage</code> and reload.
