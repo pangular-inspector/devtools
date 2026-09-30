@@ -22,7 +22,8 @@ function frontmatter(file) {
 }
 
 function checkLinks(file, body) {
-  for (const [, link] of body.matchAll(/\]\(([^)\s]+)\)/g)) {
+  const prose = body.replace(/^```[\s\S]*?^```/gm, '').replace(/`[^`\n]*`/g, '');
+  for (const [, link] of prose.matchAll(/\]\(([^)\s]+)\)/g)) {
     if (/^(https?:|#|mailto:)/.test(link)) continue;
     const target = normalize(join(dirname(file), link.split('#')[0]));
     if (!existsSync(target)) errors.push(`${file}: broken link ${link}`);
