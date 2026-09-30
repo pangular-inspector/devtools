@@ -99,7 +99,7 @@ If you mount the devtools panel without the hub, at `/__ng-devtools/`, the endpo
 ### Send an Origin header
 
 <ngmd-callout type="warning" title="Requests without an Origin header get 403">
-  The HTTP endpoint only answers requests from this machine that carry a local <code>Origin</code> header, such as <code>http://localhost:4000</code>. Requests without one get <code>403 Forbidden</code>. If your MCP client does not send an <code>Origin</code> header, add it in the client config.
+  The HTTP endpoint only answers requests that carry a local <code>Origin</code> header, such as <code>http://localhost:4000</code>. Requests without one get <code>403 Forbidden</code>. If your MCP client does not send an <code>Origin</code> header, add it in the client config.
 </ngmd-callout>
 
 The header value is the origin of your dev server. Every example below sets it.
