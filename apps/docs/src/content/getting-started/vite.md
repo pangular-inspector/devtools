@@ -106,7 +106,7 @@ ngDevtools({
 | `allowedOrigins` | none                                                          | Extra exact origins allowed to reach the devtools, for example a tunnel. |
 | `auth`           | on if a non-loopback host or origin is allowed, otherwise off | Whether the devtools ask for the one-time code.                          |
 
-The plugin also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](/getting-started/configuration).
+The plugin also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](./configuration.md).
 
 ### `base`
 
@@ -130,7 +130,7 @@ A tunnel forwards other people's requests to your machine, and those requests ar
 | `true`  | The code is always on.                                              |
 | `false` | The code is always off. The loopback and origin checks still apply. |
 
-While the code is on, the HTTP MCP endpoint also asks for a bearer token. See [Send a token](/agents/mcp-server#send-a-token).
+While the code is on, the HTTP MCP endpoint also asks for a bearer token. See [Send a token](../agents/mcp-server.md#send-a-token).
 
 If your tunnel rewrites the `Host` header to `localhost`, you don't list it in `server.allowedHosts`, so the plugin leaves the code off. Pass `auth: true`:
 

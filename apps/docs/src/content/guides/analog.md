@@ -91,7 +91,7 @@ All four are optional.
 | `allowedOrigins` | none                                           | Extra page origins accepted next to localhost.         |
 | `auth`           | on if a non-loopback host or origin is allowed | Whether the devtools ask for the one-time code.        |
 
-The plugin also takes the devtools options. See [Vite and Analog](/getting-started/vite#options) and [Configuration](/getting-started/configuration).
+The plugin also takes the devtools options. See [Vite and Analog](../getting-started/vite.md#options) and [Configuration](../getting-started/configuration.md).
 
 ### Custom hostnames
 

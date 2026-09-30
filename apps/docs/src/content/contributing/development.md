@@ -196,7 +196,7 @@ If a code change needs no docs change, add the `no-docs` label to the pull reque
 
 Add `agent: { description }` to an RPC function, or call `ctx.agent.registerTool()` in the devframe setup. List the tool on the [Tools](../agents/tools.md) page.
 
-Map a registered tool to its inspector in `AGENT_INSPECTOR` in `packages/ng-devtools/src/config.ts`, so `inspectors` and `agent.tools` can hide it. A tool that acts on the page sets `safety: 'action'`, so `agent.readOnly` drops it. See [Configuration](/getting-started/configuration).
+Map a registered tool to its inspector in `AGENT_INSPECTOR` in `packages/ng-devtools/src/config.ts`, so `inspectors` and `agent.tools` can hide it. A tool that acts on the page sets `safety: 'action'`, so `agent.readOnly` drops it. See [Configuration](../getting-started/configuration.md).
 
 <ngmd-callout type="tip" title="Changed app/?">
   Run <code>pnpm extension:build</code> and commit <code>extension/ui</code>. CI fails when it is stale. See <a href="./chrome-extension.md">Build the extension</a>.
