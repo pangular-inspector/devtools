@@ -183,7 +183,8 @@ If a code change needs no docs change, add the `no-docs` label to the pull reque
 
 1. Create the function in `packages/ng-devtools/src/rpc/`.
 2. Register it in `packages/ng-devtools/src/devframe.ts`.
-3. Call it from the UI in `app/src/pages/`.
+3. Map it to its inspector in `RPC_INSPECTOR` in `packages/ng-devtools/src/config.ts`, so turning the inspector off removes it.
+4. Call it from the UI in `app/src/pages/`.
 
 ### Add a tab
 
@@ -194,6 +195,8 @@ If a code change needs no docs change, add the `no-docs` label to the pull reque
 ### Add an agent tool
 
 Add `agent: { description }` to an RPC function, or call `ctx.agent.registerTool()` in the devframe setup. List the tool on the [Tools](/agents/tools) page.
+
+Map a registered tool to its inspector in `AGENT_INSPECTOR` in `packages/ng-devtools/src/config.ts`, so `inspectors` and `agent.tools` can hide it. A tool that acts on the page sets `safety: 'action'`, so `agent.readOnly` drops it. See [Configuration](/getting-started/configuration).
 
 <ngmd-callout type="tip" title="Changed app/?">
   Run <code>pnpm extension:build</code> and commit <code>extension/ui</code>. CI fails when it is stale. See <a href="/contributing/chrome-extension">Build the extension</a>.
