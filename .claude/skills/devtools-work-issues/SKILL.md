@@ -18,7 +18,7 @@ Each issue still goes through the `devtools-fix-issue` skill. This skill is abou
 
 - Create a detached worktree per group, plus one for combining, in a folder git ignores:
   `git worktree add --detach <path> <base>`, then `pnpm install --frozen-lockfile --prefer-offline` in each.
-- Agents only edit files in their own worktree. They don't commit, stage, branch, stash or push. A reviewer can read each group's work with `git diff`.
+- Agents only edit files in their own worktree. They don't commit, stage, branch, stash or push. A reviewer reads each group's work with `git diff` plus the new files, which `git diff` leaves out: list them with `git ls-files --others --exclude-standard`.
 - Each agent returns, per issue: fixed, partly fixed or skipped, the cause and fix in a line, the test it added, and its check results.
 - With many worktrees inside the repository folder, Nx finds duplicate projects. Run it as `NX_WORKSPACE_ROOT_PATH=$PWD NX_DAEMON=false pnpm exec nx test angular-devtools`.
 

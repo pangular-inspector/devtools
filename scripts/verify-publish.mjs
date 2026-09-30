@@ -221,10 +221,28 @@ function publish(tarball) {
   return version;
 }
 
+/** Compares two versions by major, minor and patch, with a prerelease sorting before its release. */
+function compareVersions(a, b) {
+  const parse = (v) => {
+    const [core, pre = ''] = v.split('-', 2);
+    return { parts: core.split('.').map(Number), pre };
+  };
+  const x = parse(a);
+  const y = parse(b);
+  for (let i = 0; i < 3; i++) {
+    const diff = (x.parts[i] ?? 0) - (y.parts[i] ?? 0);
+    if (diff) return diff;
+  }
+  if (x.pre === y.pre) return 0;
+  if (!x.pre) return 1;
+  if (!y.pre) return -1;
+  return x.pre.localeCompare(y.pre, 'en', { numeric: true });
+}
+
 /** The newest version of `name` inside `range`, from npmjs through the registry's proxy. */
 function newest(name, range) {
   const found = JSON.parse(run('npm', ['view', `${name}@${range}`, 'version', '--json'], work));
-  return Array.isArray(found) ? found.at(-1) : found;
+  return Array.isArray(found) ? [...found].sort(compareVersions).at(-1) : found;
 }
 
 const OVERLAY_CLI = `bootstrapApplication(App, appConfig)
@@ -249,12 +267,17 @@ async function checkHub(base, child, logFile) {
   } catch {
     throw new Error(`__connection.json is not JSON:\n${text.slice(0, 500)}`);
   }
-  const panel = await fetch(`${base}/__devframes/ng-devtools/`);
+  const panelUrl = `${base}/__devframes/ng-devtools/`;
+  const panel = await fetch(panelUrl);
   const html = await panel.text();
-  if (!panel.ok || !html.includes('<html')) {
+  if (!panel.ok || !html.includes('<title>Angular DevTools</title>')) {
     throw new Error(`the panel did not load (${panel.status}):\n${html.slice(0, 500)}`);
   }
-  return 'the hub answers __connection.json and serves the panel';
+  const script = /<script[^>]+src="([^"]+\.js)"/.exec(html)?.[1];
+  if (!script) throw new Error(`the panel page names no script:\n${html.slice(0, 500)}`);
+  const asset = await fetch(new URL(script, panelUrl));
+  if (!asset.ok) throw new Error(`the panel script ${script} did not load (${asset.status})`);
+  return 'the hub answers __connection.json and serves the panel and its script';
 }
 
 /** `ng new` with SSR, the Express hub (getting-started/express.md) and a development build. */
