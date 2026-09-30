@@ -123,13 +123,13 @@ Rules:
 
 ## 7. Check claims against the code
 
-| Page               | Source of truth                                                                                   |
-| ------------------ | ------------------------------------------------------------------------------------------------- |
-| inspectors/\*      | `app/src/pages/*.ts` (the tab) and `packages/ng-devtools/src/*` (collectors, actions)             |
-| agents/\*          | `packages/ng-devtools/src/devframe.ts`, `rpc/*.ts`, `rpc/analog-register.ts`, Devframe built-ins  |
-| getting-started/\* | `packages/ng-devtools/package.json` exports, `hub.ts`, `vite.ts`, `overlay.ts`, `popup.ts`, demos |
-| security           | `hub.ts`, `vite.ts`, `forms-privacy.ts`, `forms-actions.ts`, router and Analog redaction          |
-| contributing/\*    | root `package.json`, `nx.json`, `project.json` files, `.github/workflows`, `extension/`           |
+| Page               | Source of truth                                                                                                |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| inspectors/\*      | `app/src/pages/*.ts` (the tab) and `packages/ng-devtools/src/*` (collectors, actions)                          |
+| agents/\*          | `packages/ng-devtools/src/devframe.ts`, `rpc/*.ts`, `rpc/analog-register.ts`, Devframe built-ins               |
+| getting-started/\* | `packages/ng-devtools/package.json` exports, `hub.ts`, `vite.ts`, `config.ts`, `overlay.ts`, `popup.ts`, demos |
+| security           | `hub.ts`, `vite.ts`, `forms-privacy.ts`, `forms-actions.ts`, router and Analog redaction                       |
+| contributing/\*    | root `package.json`, `nx.json`, `project.json` files, `.github/workflows`, `extension/`                        |
 
 Check names exactly. When code changes, update the docs in the same PR. When unsure, say less rather than guess.
 

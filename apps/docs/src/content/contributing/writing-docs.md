@@ -192,13 +192,13 @@ npm install @santoshyadavdev/ng-devtools devframe
 
 The docs describe what the code does today. Before you write a claim, find it in the source.
 
-| Page                      | Source of truth                                                                                          |
-| ------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Inspector pages           | The tab in `app/src/pages/` and its collector in `packages/ng-devtools/src/`                             |
-| Agent tools and resources | `packages/ng-devtools/src/devframe.ts`, `rpc/*.ts` and `rpc/analog-register.ts`                          |
-| Setup pages               | `packages/ng-devtools/package.json` exports, `hub.ts`, `vite.ts`, `overlay.ts`, `popup.ts` and the demos |
-| Security                  | `hub.ts`, `vite.ts` and the redaction code, such as `forms-privacy.ts`                                   |
-| Contributing              | Root `package.json` scripts, `nx.json`, `project.json` files and `.github/workflows`                     |
+| Page                      | Source of truth                                                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Inspector pages           | The tab in `app/src/pages/` and its collector in `packages/ng-devtools/src/`                                          |
+| Agent tools and resources | `packages/ng-devtools/src/devframe.ts`, `rpc/*.ts` and `rpc/analog-register.ts`                                       |
+| Setup pages               | `packages/ng-devtools/package.json` exports, `hub.ts`, `vite.ts`, `config.ts`, `overlay.ts`, `popup.ts` and the demos |
+| Security                  | `hub.ts`, `vite.ts` and the redaction code, such as `forms-privacy.ts`                                                |
+| Contributing              | Root `package.json` scripts, `nx.json`, `project.json` files and `.github/workflows`                                  |
 
 Check names exactly: labels, buttons, tool names, arguments, option names and defaults. When the code changes, update the page in the same pull request.
 
