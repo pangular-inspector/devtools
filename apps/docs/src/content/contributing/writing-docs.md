@@ -29,7 +29,7 @@ Orient every page around what the reader is trying to do. Ask: _what does the de
 
 - Use second person and the imperative: "Open the Router tab", not "We can open the Router tab".
 - Use present tense: "The tab shows", not "The tab will show".
-- Use active voice: "The overlay reads the page every 3 seconds", not "The page is read every 3 seconds".
+- Use active voice: "The overlay reads the page after change detection", not "The page is read after change detection".
 - One idea per sentence. Keep sentences short and plain.
 - Put the condition first: "If the tab is empty, check that the app runs in development mode."
 - Use sentence case for headings. Capitalize only the first word and proper nouns.
