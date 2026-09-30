@@ -19,6 +19,7 @@ The package publishes `dist/` and `bin.mjs`. On publish, `publishConfig.exports`
 | --------------------------------------- | ------------------- |
 | `@santoshyadavdev/ng-devtools`          | `dist/devframe.mjs` |
 | `@santoshyadavdev/ng-devtools/devframe` | `dist/devframe.mjs` |
+| `@santoshyadavdev/ng-devtools/config`   | `dist/config.mjs`   |
 | `@santoshyadavdev/ng-devtools/overlay`  | `dist/overlay.mjs`  |
 | `@santoshyadavdev/ng-devtools/popup`    | `dist/popup.mjs`    |
 | `@santoshyadavdev/ng-devtools/http`     | `dist/http.mjs`     |
