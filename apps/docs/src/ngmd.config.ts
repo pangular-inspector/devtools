@@ -178,7 +178,7 @@ const config: NgmdConfig = {
         {label: 'Standalone CLI', href: '/getting-started/cli'},
         {label: 'Configuration', href: '/getting-started/configuration', status: 'new'},
         {label: 'Popup and hub', href: '/getting-started/popup-and-hub', status: 'new'},
-        {label: 'Browser overlay', href: '/getting-started/overlay'},
+        {label: 'Browser overlay', href: '/getting-started/overlay', status: 'updated'},
         {label: 'Chrome extension', href: '/getting-started/chrome-extension'},
       ],
     },
@@ -200,7 +200,7 @@ const config: NgmdConfig = {
     {
       label: 'Agent Tools',
       items: [
-        {label: 'MCP server', href: '/agents/mcp-server'},
+        {label: 'MCP server', href: '/agents/mcp-server', status: 'updated'},
         {label: 'Tools', href: '/agents/tools'},
         {label: 'Resources', href: '/agents/resources'},
       ],
