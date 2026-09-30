@@ -17,18 +17,18 @@
 </head>
 <body>
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated: September 19, 2026</p>
+  <p class="updated">Last updated: September 30, 2026</p>
 
   <p>Angular DevTools ("the Extension") is a browser extension that helps developers inspect Angular applications. This privacy policy explains what data the Extension accesses and how it is used.</p>
 
   <h2>Data Collection</h2>
-  <p>The Extension does <strong>not</strong> collect, store, transmit, or share any personal data or browsing data. Specifically:</p>
+  <p>The Extension does <strong>not</strong> collect, store, or share any personal data or browsing data. Specifically:</p>
   <ul>
     <li>No personal information is collected</li>
     <li>No browsing history is recorded</li>
     <li>No cookies or tracking mechanisms are used</li>
-    <li>No analytics or telemetry data is sent</li>
-    <li>No data is transmitted to any external server</li>
+    <li>No analytics or telemetry data is sent, to the Extension's authors or to anyone else</li>
+    <li>No data is sent anywhere except the devtools server of the app you are inspecting, described below</li>
   </ul>
 
   <h2>What the Extension Accesses</h2>
@@ -36,12 +36,12 @@
   <ul>
     <li><strong>Angular framework detection</strong> — on every page, checks for the <code>ng-version</code> HTML attribute and the <code>window.ng</code> global to determine if the page uses Angular</li>
     <li><strong>Angular debug APIs</strong> — reads component trees, signal graphs, dependency injection hierarchies, and route configurations using Angular's built-in debug utilities (available only in development builds)</li>
-    <li><strong>Localhost communication</strong> — communicates with a devframe server running on <code>localhost</code> on the developer's own machine for live inspection data</li>
+    <li><strong>Devtools server communication</strong> — communicates with the devframe server of the app you are inspecting, for live inspection data. By default this server runs on the developer's own machine (<code>localhost</code>, <code>*.localhost</code>, <code>127.0.0.1</code> or <code>[::1]</code>)</li>
   </ul>
-  <p>All data processing happens entirely within your browser and your local machine. No information ever leaves your device.</p>
+  <p>By default, all data stays within your browser and your own machine. If you grant access to another host from the DevTools panel, such as a server on your local network or a tunnel, the Extension exchanges inspection data with the devtools server on that host, so that data leaves your device. It goes only to the host you granted (and, for a tunnel, through the tunnel service you chose). It is never sent to the Extension's authors or to any service the Extension picks on its own.</p>
 
   <h2>Host Permissions</h2>
-  <p>The Extension requests host permissions for loopback hosts only (<code>localhost</code>, <code>*.localhost</code>, <code>127.0.0.1</code> and <code>[::1]</code>), to reach the devframe server on the developer's own machine. It can reach any other host only after the developer grants that host from the DevTools panel. The <code>detect-angular.js</code> content script runs on every page, including when DevTools is closed. It reads only the <code>ng-version</code> attribute and whether <code>window.ng</code> exists, to detect Angular. It does not modify page content.</p>
+  <p>The Extension requests host permissions for loopback hosts only (<code>localhost</code>, <code>*.localhost</code>, <code>127.0.0.1</code> and <code>[::1]</code>), to reach the devframe server on the developer's own machine. It can reach any other host only after the developer grants that host from the DevTools panel. Chrome keeps a granted host until the developer removes it from the Extension's site access settings. The <code>detect-angular.js</code> content script runs on every page, including when DevTools is closed. It reads only the <code>ng-version</code> attribute and whether <code>window.ng</code> exists, to detect Angular. It does not modify page content.</p>
 
   <h2>Data Storage</h2>
   <p>The Extension does not persist any data between sessions. All inspection data exists only in memory while the DevTools panel is open and is discarded when the panel is closed.</p>
