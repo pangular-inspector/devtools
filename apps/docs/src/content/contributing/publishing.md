@@ -47,7 +47,7 @@ The package's `build` script runs two steps:
 
 ### 1. Bump the version
 
-Update `version` in `packages/ng-devtools/package.json`. Release commits change only that line, with a message like `chore(release): ng-devtools 0.0.5`.
+Update `version` in `packages/ng-devtools/package.json`. In the same commit, add a section for the version to `packages/ng-devtools/CHANGELOG.md`. The changelog follows [Keep a Changelog](https://keepachangelog.com), with entries grouped as Upgrade notes, Security fixes, Features and Documentation. Use a message like `chore(release): ng-devtools 0.0.5`.
 
 ### 2. Check the build
 
