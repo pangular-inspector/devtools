@@ -43,7 +43,7 @@ export function resolveMdHref(href: string, pageFile: string): string | null {
 
 export function resolveDocLinks(html: string, pageFile: string): string {
   return html.replace(
-    /(\shref=)(["'])([^"']*)\2/g,
+    /(<a\s(?:[^>]*?\s)?href=)(["'])([^"']*)\2/gi,
     (match, attr: string, quote: string, href: string) => {
       const route = resolveMdHref(href, pageFile);
       return route === null ? match : `${attr}${quote}${route}${quote}`;

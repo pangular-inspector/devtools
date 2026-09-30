@@ -41,6 +41,16 @@ describe('resolveDocLinks', () => {
         '<a href="/agents/tools">c</a> <a href="https://github.com/x/README.md">d</a>',
     );
   });
+
+  it('leaves escaped markup in code and non-anchor attributes alone', () => {
+    const html =
+      '<pre><code>&lt;a href="./configuration.md"&gt;</code></pre> ' +
+      '<a data-href="./security.md" href="./security.md">a</a> <link href="./x.md">';
+    expect(resolveDocLinks(html, '/src/content/getting-started/installation')).toBe(
+      '<pre><code>&lt;a href="./configuration.md"&gt;</code></pre> ' +
+        '<a data-href="./security.md" href="/getting-started/security">a</a> <link href="./x.md">',
+    );
+  });
 });
 
 describe('mdLinksPlugin', () => {
