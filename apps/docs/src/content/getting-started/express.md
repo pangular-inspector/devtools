@@ -99,6 +99,8 @@ With `ws: {sidecar: true}`, the WebSocket runs on its own port, picked automatic
 | `allowedOrigins` | loopback origins and the Chrome extension | Extra origins allowed to open the WebSocket. A list replaces the Chrome extension default. `false` turns the origin check off.                                                                                                 |
 | `mcp`            | a bearer token                            | Mounts the MCP endpoint at `<base>__mcp` and asks for a bearer token. With `auth: false` the default is `'auto'`: it mounts once agent tools exist and asks for no token. See [Send a token](/agents/mcp-server#send-a-token). |
 
+The hub also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](/getting-started/configuration).
+
 ### Access control
 
 The hub protects its connection with a one-time code by default. The server prints the code, and a browser can read data only after it exchanges that code. On a machine only you use, pass `auth: false` to turn the gate off.

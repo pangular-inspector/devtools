@@ -212,7 +212,7 @@ The server marks read-only tools as read-only for your client. Five tools act on
 | `fill-form`       | [Act on a form](/agents/tools#act-on-a-form)                          |
 | `analog-call-api` | [Call a server route](/agents/tools#call-a-server-route)              |
 
-Your client can ask you before it runs them.
+Your client can ask you before it runs them. To drop them from the server, set `agent.readOnly`. See [Inspectors and agent tools](/getting-started/configuration#inspectors-and-agent-tools).
 
 ### Pages and tabs
 
