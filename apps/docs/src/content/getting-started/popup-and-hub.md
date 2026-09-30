@@ -15,7 +15,7 @@ When the overlay loads, a floating button appears in the bottom-right corner of 
 
 ### Where it comes from
 
-Importing the [overlay](/getting-started/overlay) adds the button. The overlay first checks whether the page's server mounts the hub at `/__devframes/`. If it does, the button opens the whole hub. If not, it opens the devtools panel on its own.
+Importing the [overlay](./overlay.md) adds the button. The overlay first checks whether the page's server mounts the hub at `/__devframes/`. If it does, the button opens the whole hub. If not, it opens the devtools panel on its own.
 
 ### Create it yourself
 

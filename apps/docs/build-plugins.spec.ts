@@ -85,6 +85,21 @@ describe('internalLinkGuard', () => {
     expect(warning).toContain('"/missing.png" is not a known route or file in public/');
     expect(warning).toContain('"/guide#nope"');
   });
+
+  it('resolves relative .md links from the linking file', () => {
+    expect(
+      check(
+        '[a](./guide/index.md#setup-1) [b](guide/index.md) [c](./some%20page.md) <a href="./hidden.md">d</a> ![e](./logo.png)',
+      ),
+    ).toEqual([]);
+    const [warning] = check(
+      '[a](./missing.md) [b](../README.md) [c](./guide/index.md#nope) [d](./guide/index.md?x=1)',
+    );
+    expect(warning).toContain('"/missing" is not a known route');
+    expect(warning).toContain('"../README.md" is not a page in src/content');
+    expect(warning).toContain('"/guide#nope"');
+    expect(warning).toContain('"./guide/index.md?x=1" is not a page in src/content');
+  });
 });
 
 describe('searchIndexPlugin', () => {

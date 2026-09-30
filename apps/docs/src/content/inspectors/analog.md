@@ -17,7 +17,7 @@ The Analog dock is always in the rail. In other apps it shows a **This app doesn
 
 ### Add the plugin
 
-Add the Vite plugin next to `analog()` and load the overlay. See [Vite and Analog](/getting-started/vite) and the [Analog guide](/guides/analog).
+Add the Vite plugin next to `analog()` and load the overlay. See [Vite and Analog](../getting-started/vite.md) and the [Analog guide](../guides/analog.md).
 
 ```ts {3,7}
 // vite.config.ts
@@ -122,7 +122,7 @@ A page is **Client only** when `routeRules` or the `ssr` option turns SSR off fo
     A warning at the top names the route.
   </ngmd-step>
   <ngmd-step title="Check TransferState">
-    Open the <a href="/inspectors/ssr-http">SSR & HTTP tab</a> and look for the Analog entry in the payload.
+    Open the <a href="./ssr-http.md">SSR & HTTP tab</a> and look for the Analog entry in the payload.
   </ngmd-step>
   <ngmd-step title="Reload and compare">
     After the fix, the browser should not fetch the route's <code>load()</code> again.
@@ -158,7 +158,7 @@ A page is **Client only** when `routeRules` or the `ssr` option turns SSR off fo
 | `ng-devtools:analog-content`        | `filter`                                       | Markdown files with slug, frontmatter, route and parse errors.          |
 | `ng-devtools:analog-lint`           |                                                | The Analog checks.                                                      |
 
-`analog-current-page` is the only place that shows the `load()` data a page received. See [Tools](/agents/tools).
+`analog-current-page` is the only place that shows the `load()` data a page received. See [Tools](../agents/tools.md).
 
 ## Limits and gotchas
 
@@ -168,7 +168,7 @@ It sends a real request to your dev server. Methods other than GET, HEAD and OPT
 
 ### Redaction
 
-Response previews and `load()` data redact secret-looking keys, tokens, `Bearer` values and secret query parameters. See [what the devtools redact](/security).
+Response previews and `load()` data redact secret-looking keys, tokens, `Bearer` values and secret query parameters. See [what the devtools redact](../security.md).
 
 ### Call history size
 

@@ -12,7 +12,7 @@ description: Open the devtools as a panel inside Chrome DevTools.
 The Chrome extension adds a panel named **Angular DevTools** to Chrome DevTools. The panel loads the devtools UI and connects it to the dev server of the page you are inspecting.
 
 <ngmd-callout type="info" title="An extra, not a setup">
-  The page still needs the devtools mounted on its server and the <a href="/getting-started/overlay">overlay</a> loaded. The extension is one more way to open the devtools. It does not replace the setup. Start with <a href="/getting-started/express">Angular CLI and Express</a> or <a href="/getting-started/vite">Vite and Analog</a>.
+  The page still needs the devtools mounted on its server and the <a href="./overlay.md">overlay</a> loaded. The extension is one more way to open the devtools. It does not replace the setup. Start with <a href="./express.md">Angular CLI and Express</a> or <a href="./vite.md">Vite and Analog</a>.
 </ngmd-callout>
 
 ## Before you start
@@ -60,7 +60,7 @@ pnpm install
 pnpm extension:build
 ```
 
-[Build the extension](/contributing/chrome-extension) covers the build and the store package in detail.
+[Build the extension](../contributing/chrome-extension.md) covers the build and the store package in detail.
 
 ## How it works
 
@@ -99,7 +99,7 @@ When the inspected page navigates, the panel shows "Detecting Angular app…", l
 
 ### Elements panel
 
-While the **Components** tab is open, select an element in the Chrome **Elements** panel. The Components tab selects the component that hosts that element (the element itself, or the nearest ancestor that is a component host). It expands the parent rows, clears the filter if it hides the row, and scrolls the row into view. On other tabs, the Elements selection does nothing. It also does nothing when `inspectors.components` is `false` in the [configuration](/getting-started/configuration).
+While the **Components** tab is open, select an element in the Chrome **Elements** panel. The Components tab selects the component that hosts that element (the element itself, or the nearest ancestor that is a component host). It expands the parent rows, clears the filter if it hides the row, and scrolls the row into view. On other tabs, the Elements selection does nothing. It also does nothing when `inspectors.components` is `false` in the [configuration](./configuration.md).
 
 This needs the overlay on the page, since the overlay answers which component hosts the element.
 
@@ -117,7 +117,7 @@ The manifest asks for no `permissions`. Its host permissions cover loopback host
 
 Other hosts are optional host permissions. **Allow access** asks Chrome for the host of the inspected page only, on the scheme of that page (`http` or `https`) and on any port. The extension never asks for all hosts at once.
 
-Granting the extension a host doesn't change what the devtools server accepts. The server still applies its own checks. The Vite plugin, for example, only answers requests from a loopback address. See [Access and redaction](/security).
+Granting the extension a host doesn't change what the devtools server accepts. The server still applies its own checks. The Vite plugin, for example, only answers requests from a loopback address. See [Access and redaction](../security.md).
 
 The Vite plugin and the Express hub accept the extension's `chrome-extension://` origin by default. If your Express hub passes its own `allowedOrigins` list, add `chrome-extension://<id>` to it. The ID is on the extension card in `chrome://extensions`.
 
@@ -135,7 +135,7 @@ The content scripts are wider. Two of them run on every page. They check for an 
     The page is not on a loopback host. Click <strong>Allow access</strong> to let the extension reach that host. Chrome asks you to confirm.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel lists the URLs it tried">
-    None of them served a connection file. Check that the server of the page mounts the devtools and that the server accepts the request. See <a href="/security">Access and redaction</a>.
+    None of them served a connection file. Check that the server of the page mounts the devtools and that the server accepts the request. See <a href="../security.md">Access and redaction</a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Selecting an element does not select a component">
     Open the <strong>Components</strong> tab first, and check that the overlay is loaded. Elements outside any component select nothing.

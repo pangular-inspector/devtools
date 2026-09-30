@@ -31,10 +31,10 @@ export const appConfig: ApplicationConfig = {
 ```
 
 <ngmd-callout type="warning" title="withNgDevtools() first">
-  Put <code>withNgDevtools()</code> before your own interceptors. Then it records requests as the app makes them, and fault rules apply before anything else. The full setup is in the <a href="/guides/ssr-http">SSR & HTTP guide</a>.
+  Put <code>withNgDevtools()</code> before your own interceptors. Then it records requests as the app makes them, and fault rules apply before anything else. The full setup is in the <a href="../guides/ssr-http.md">SSR & HTTP guide</a>.
 </ngmd-callout>
 
-SSR must run in the same Node process as the devtools server, such as the Express server with the hub mounted, or the Vite dev server with the plugin. The [overlay](/getting-started/overlay) must be loaded, because client calls, hydration and the payload reach the tab through it.
+SSR must run in the same Node process as the devtools server, such as the Express server with the hub mounted, or the Vite dev server with the plugin. The [overlay](../getting-started/overlay.md) must be loaded, because client calls, hydration and the payload reach the tab through it.
 
 ## What it shows
 
@@ -144,7 +144,7 @@ The interceptor works in development builds only. In production it passes reques
 
 ## Agent tools
 
-There is no dedicated tool for this tab. Agents read its data with the `devframe_state_read` tool and the `ng-devtools:http` key. See [Resources](/agents/resources).
+There is no dedicated tool for this tab. Agents read its data with the `devframe_state_read` tool and the `ng-devtools:http` key. See [Resources](../agents/resources.md).
 
 Two router tools cover related ground:
 
@@ -156,7 +156,7 @@ Two router tools cover related ground:
 ## Limits and gotchas
 
 <ngmd-callout type="danger" title="Nothing is redacted here">
-  The devtools send response previews and TransferState values to the devtools server as they are. Don't expose the dev server beyond localhost. See <a href="/security">Security</a>.
+  The devtools send response previews and TransferState values to the devtools server as they are. Don't expose the dev server beyond localhost. See <a href="../security.md">Security</a>.
 </ngmd-callout>
 
 ### Prerendered routes make no requests

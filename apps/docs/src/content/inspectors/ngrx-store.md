@@ -120,13 +120,13 @@ The overlay finds stores through Angular's debug API, so the live section needs 
 | `ng-devtools:get-ngrx-store` | tool     | NgRx declarations from source, with the members of each `signalStore`.                   |
 | `ng-devtools:ngrx-store`     | resource | The live stores per page, with state, computeds, methods, references and the change log. |
 
-Agent access is read-only. No tool can restore a state. See [Tools](/agents/tools) and [Resources](/agents/resources).
+Agent access is read-only. No tool can restore a state. See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
 ## Limits and gotchas
 
 ### `watchState` needs `registerNgrxSignals`
 
-Without it, restore writes the state signals directly. Components update, but `watchState` listeners do not run, and the log entry says so. Call `registerNgrxSignals({ patchState })` from `@santoshyadavdev/ng-devtools/overlay` once, and restore goes through `patchState`. This applies to `signalStore` only. A `signalState` restore always writes directly. See [Restore NgRx signal state](/guides/ngrx-signals-restore).
+Without it, restore writes the state signals directly. Components update, but `watchState` listeners do not run, and the log entry says so. Call `registerNgrxSignals({ patchState })` from `@santoshyadavdev/ng-devtools/overlay` once, and restore goes through `patchState`. This applies to `signalStore` only. A `signalState` restore always writes directly. See [Restore NgRx signal state](../guides/ngrx-signals-restore.md).
 
 ### Stores appear when they are created
 
@@ -138,7 +138,7 @@ Use `provideStore()` or `StoreModule.forRoot()`. The overlay stops looking after
 
 ### Redaction
 
-The devtools replace state keys with secret-looking names with `[redacted]`, at any depth. See [what the devtools redact](/security).
+The devtools replace state keys with secret-looking names with `[redacted]`, at any depth. See [what the devtools redact](../security.md).
 
 ### Log size
 

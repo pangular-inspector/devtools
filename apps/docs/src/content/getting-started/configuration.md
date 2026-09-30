@@ -17,13 +17,13 @@ These three functions take the same options:
 
 | Function              | Import                                  | Setup                                                           |
 | --------------------- | --------------------------------------- | --------------------------------------------------------------- |
-| `initNgDevtoolsHub()` | `@santoshyadavdev/ng-devtools/hub`      | [Angular CLI and Express](/getting-started/express)             |
-| `ngDevtools()`        | `@santoshyadavdev/ng-devtools/vite`     | [Vite and Analog](/getting-started/vite)                        |
+| `initNgDevtoolsHub()` | `@santoshyadavdev/ng-devtools/hub`      | [Angular CLI and Express](./express.md)                         |
+| `ngDevtools()`        | `@santoshyadavdev/ng-devtools/vite`     | [Vite and Analog](./vite.md)                                    |
 | `createNgDevtools()`  | `@santoshyadavdev/ng-devtools/devframe` | A custom devframe host, such as `initDevframe()` without a hub. |
 
 ### Express hub
 
-Pass the options next to the [access options](/security#express-hub) `auth`, `allowedOrigins` and `mcp`:
+Pass the options next to the [access options](../security.md#express-hub) `auth`, `allowedOrigins` and `mcp`:
 
 ```ts {8-10}
 // src/server.ts
@@ -42,7 +42,7 @@ app.use(devtools.nodeMiddleware);
 
 ### Vite plugin
 
-Pass them to `ngDevtools()`, next to the [access options](/security#vite-plugin) `auth` and `allowedOrigins`:
+Pass them to `ngDevtools()`, next to the [access options](../security.md#vite-plugin) `auth` and `allowedOrigins`:
 
 ```ts {9-12}
 // vite.config.ts
@@ -124,7 +124,7 @@ interface NgDevtoolsConfig {
 
 `agent.tools` has the same keys as `inspectors`. An inspector that is off has no agent tools, whatever `agent.tools` says.
 
-If you open a tab that is turned off, the panel says so and names the `inspectors` option. With `inspectors.components` set to `false`, the [Chrome extension](/getting-started/chrome-extension) does not follow the **Elements** panel.
+If you open a tab that is turned off, the panel says so and names the `inspectors` option. With `inspectors.components` set to `false`, the [Chrome extension](./chrome-extension.md) does not follow the **Elements** panel.
 
 ### Actions
 
@@ -150,7 +150,7 @@ The server refuses a blocked action. The panel disables its controls and shows a
 | `redaction.secretNames` | `[]`    | Extra field names to treat as secret, on top of the built-in list. They match by words, like the built-in list, so `passport` also covers `passportNumber`. |
 | `redaction.unmask`      | `[]`    | Field names to show even when they look secret. They join the `unmask` list of `window.__NG_DEVTOOLS_FORMS__`.                                              |
 
-Forms, the router, component inputs, signals, NgRx and Analog previews use the extra secret names. Each list keeps up to 100 names. See [Access and redaction](/security#what-is-redacted) for what is redacted and what unmasking allows.
+Forms, the router, component inputs, signals, NgRx and Analog previews use the extra secret names. Each list keeps up to 100 names. See [Access and redaction](../security.md#what-is-redacted) for what is redacted and what unmasking allows.
 
 ### Limits
 
@@ -168,7 +168,7 @@ On Angular 20 and later, the page reports about 250 ms after Angular runs change
 
 ## Check the active configuration
 
-The [Dashboard](/inspectors/dashboard#configuration-block) has a **Configuration** block. It lists the options that differ from the defaults, or says **Defaults** when nothing is changed.
+The [Dashboard](../inspectors/dashboard.md#configuration-block) has a **Configuration** block. It lists the options that differ from the defaults, or says **Defaults** when nothing is changed.
 
 | Row                       | Lists                                          |
 | ------------------------- | ---------------------------------------------- |

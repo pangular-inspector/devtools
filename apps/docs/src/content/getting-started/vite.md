@@ -15,7 +15,7 @@ For *Analog apps, add the *Vite plugin next to `analog()` and load the overlay i
 
 <ngmd-workflow>
   <ngmd-step title="Install the package">
-    Add <code>&#64;santoshyadavdev/ng-devtools</code> and <code>devframe</code>. See <a href="/getting-started/installation">Installation</a>.
+    Add <code>&#64;santoshyadavdev/ng-devtools</code> and <code>devframe</code>. See <a href="./installation.md">Installation</a>.
   </ngmd-step>
   <ngmd-step title="Add the plugin">
     Register <code>ngDevtools()</code> after <code>analog()</code> in <code>vite.config.ts</code>.
@@ -80,13 +80,13 @@ It mounts the devtools hub on the Vite dev server. The WebSocket shares Vite's H
 
 ### Records Analog server activity
 
-It records Analog page renders, `load()` fetches, server functions and API calls for the [Analog inspector](/inspectors/analog). The `apiPrefix` option tells it which requests are API calls.
+It records Analog page renders, `load()` fetches, server functions and API calls for the [Analog inspector](../inspectors/analog.md). The `apiPrefix` option tells it which requests are API calls.
 
 ### Answers only your machine
 
 The plugin only answers requests from a loopback address (any `127.x.x.x` address or `::1`). Other requests to the devtools get `403` with the message "ng-devtools only answers requests from this machine." WebSocket upgrades follow the same rules.
 
-By default the plugin leaves the one-time code off, and the loopback and origin checks take its place. If `server.allowedHosts` or `allowedOrigins` allows a host that is not a loopback host, the plugin also asks for the code. See [`auth`](#auth). [Access and redaction](/security) covers every check.
+By default the plugin leaves the one-time code off, and the loopback and origin checks take its place. If `server.allowedHosts` or `allowedOrigins` allows a host that is not a loopback host, the plugin also asks for the code. See [`auth`](#auth). [Access and redaction](../security.md) covers every check.
 
 ## Options
 
@@ -110,7 +110,7 @@ The plugin also takes the devtools options, such as `inspectors`, `agent`, `acti
 
 ### `base`
 
-Change `base` if `/__devframes/` clashes with a route of your own. The overlay looks for `/__devframes/ng-devtools/` and `/__ng-devtools/` by default, so a custom base also needs a custom overlay path. See [A custom mount path](/getting-started/overlay#a-custom-mount-path).
+Change `base` if `/__devframes/` clashes with a route of your own. The overlay looks for `/__devframes/ng-devtools/` and `/__ng-devtools/` by default, so a custom base also needs a custom overlay path. See [A custom mount path](./overlay.md#a-custom-mount-path).
 
 ### `apiPrefix`
 
@@ -171,7 +171,7 @@ A non-loopback entry in `server.allowedHosts` or `allowedOrigins` turns the one-
 ## Angular CLI apps
 
 <ngmd-alert severity="important">
-  The Angular CLI dev server does not accept Vite plugins. For an Angular CLI app, mount the hub in your Express server instead. See <a href="/getting-started/express">Angular CLI and Express</a>.
+  The Angular CLI dev server does not accept Vite plugins. For an Angular CLI app, mount the hub in your Express server instead. See <a href="./express.md">Angular CLI and Express</a>.
 </ngmd-alert>
 
 ## FAQ
@@ -184,7 +184,7 @@ A non-loopback entry in `server.allowedHosts` or `allowedOrigins` turns the one-
     The request did not come from your machine, or its origin is not trusted. Open the app on <code>localhost</code>, list your hostname in <code>server.allowedHosts</code>, or add the origin to <code>allowedOrigins</code>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The Analog tab shows no server calls">
-    The plugin records server calls made through the Vite dev server. Check that the plugin is registered and that <code>apiPrefix</code> matches your server routes. The <a href="/guides/analog">Analog guide</a> walks through a full setup.
+    The plugin records server calls made through the Vite dev server. Check that the plugin is registered and that <code>apiPrefix</code> matches your server routes. The <a href="../guides/analog.md">Analog guide</a> walks through a full setup.
   </ngmd-accordion-item>
 </ngmd-accordion>
 

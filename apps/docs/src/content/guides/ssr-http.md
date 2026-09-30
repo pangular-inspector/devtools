@@ -9,7 +9,7 @@ description: Add the interceptor and hydration hooks, in the right order, to fil
 
 # Set up SSR & HTTP
 
-The [SSR & HTTP tab](/inspectors/ssr-http) records every `HttpClient` call during server rendering and in the browser. It needs three things: an interceptor, a hydration hook, and SSR running next to the devtools.
+The [SSR & HTTP tab](../inspectors/ssr-http.md) records every `HttpClient` call during server rendering and in the browser. It needs three things: an interceptor, a hydration hook, and SSR running next to the devtools.
 
 ## What you set up
 
@@ -122,7 +122,7 @@ app.use(devtools.nodeMiddleware);
 export const reqHandler = createNodeRequestHandler(app);
 ```
 
-This is adapted from the demo app's `src/server.ts`. It keeps the one-time code and the origin check on, which are the defaults. See [Angular CLI and Express](/getting-started/express) for every option.
+This is adapted from the demo app's `src/server.ts`. It keeps the one-time code and the origin check on, which are the defaults. See [Angular CLI and Express](../getting-started/express.md) for every option.
 
 ## Step 4: Render the pages you test on the server
 
@@ -139,7 +139,7 @@ export const serverRoutes: ServerRoute[] = [
 ```
 
 <ngmd-callout type="tip" title="Check a route's render mode">
-  The <code>explain-render-mode</code> agent tool tells you which <code>ServerRoute</code> and render mode a URL gets. See <a href="/agents/tools">Tools</a>.
+  The <code>explain-render-mode</code> agent tool tells you which <code>ServerRoute</code> and render mode a URL gets. See <a href="../agents/tools.md">Tools</a>.
 </ngmd-callout>
 
 ## Step 5: Inject a fault
@@ -180,7 +180,7 @@ pnpm build --configuration development
 node dist/angular-devtools/server/server.mjs
 ```
 
-Open `http://localhost:4000/examples/http`. See [Demo apps](/contributing/demo-apps) for the rest.
+Open `http://localhost:4000/examples/http`. See [Demo apps](../contributing/demo-apps.md) for the rest.
 
 ## Where to next
 

@@ -68,22 +68,22 @@ npx @santoshyadavdev/ng-devtools dev --port 9999 --open
 | `--mcp`, `--no-mcp`   | Mount the MCP endpoint at `/__mcp`, or not. It is on by default.                    |
 
 <ngmd-callout type="warning" title="Keep it on localhost">
-  The server binds to <code>localhost</code> by default and asks for a one-time code. Changing <code>--host</code> or passing <code>--no-auth</code> widens who can reach it. See <a href="/security">Access and redaction</a>.
+  The server binds to <code>localhost</code> by default and asks for a one-time code. Changing <code>--host</code> or passing <code>--no-auth</code> widens who can reach it. See <a href="../security.md">Access and redaction</a>.
 </ngmd-callout>
 
 ### What it shows
 
 No page is connected to the CLI server. The tabs show what your source declares:
 
-- [Components](/inspectors/components)
-- [Routes](/inspectors/router)
-- [Signals](/inspectors/signals)
-- [Providers](/inspectors/injectors)
-- [NgRx declarations](/inspectors/ngrx-store)
-- [Pipes](/inspectors/pipes)
+- [Components](../inspectors/components.md)
+- [Routes](../inspectors/router.md)
+- [Signals](../inspectors/signals.md)
+- [Providers](../inspectors/injectors.md)
+- [NgRx declarations](../inspectors/ngrx-store.md)
+- [Pipes](../inspectors/pipes.md)
 
 <ngmd-alert severity="helpful">
-  For live data, mount the devtools in your app's own server. See <a href="/getting-started/express">Angular CLI and Express</a> or <a href="/getting-started/vite">Vite and Analog</a>.
+  For live data, mount the devtools in your app's own server. See <a href="./express.md">Angular CLI and Express</a> or <a href="./vite.md">Vite and Analog</a>.
 </ngmd-alert>
 
 ## Static report
@@ -117,7 +117,7 @@ The output is static files. Open it offline or host it on any static file server
 npx @santoshyadavdev/ng-devtools mcp
 ```
 
-Your agent client runs this command for you. [MCP server](/agents/mcp-server) covers client setup.
+Your agent client runs this command for you. [MCP server](../agents/mcp-server.md) covers client setup.
 
 ### Source scan only
 

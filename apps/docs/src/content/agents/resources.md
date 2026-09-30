@@ -15,7 +15,7 @@ Resources hold the live data the connected pages reported. An agent reads them w
 
 ### Connect over HTTP
 
-Resources are empty when no page is connected. Read them through the [HTTP endpoint](/agents/mcp-server#connect-over-http), with the app open in a browser.
+Resources are empty when no page is connected. Read them through the [HTTP endpoint](./mcp-server.md#connect-over-http), with the app open in a browser.
 
 <ngmd-alert severity="warning">
   Over stdio, no page ever connects. Every resource stays empty.

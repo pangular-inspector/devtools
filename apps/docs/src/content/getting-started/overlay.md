@@ -80,11 +80,11 @@ The overlay looks for the devframe connection next to the page first. Then it tr
 1. `/__ng-devtools/`
 2. `/__devframes/ng-devtools/`
 
-It also adds the [floating button](/getting-started/popup-and-hub). With the hub mounted, the button opens the whole hub, with every dock in a side rail.
+It also adds the [floating button](./popup-and-hub.md). With the hub mounted, the button opens the whole hub, with every dock in a side rail.
 
 ### Snapshots and events
 
-On Angular 20 and later, the overlay reads the page about 250 ms after Angular runs change detection. It also reads it every 4 seconds as a heartbeat. On older versions, it reads the page every 3 seconds instead. Change that interval with [`limits.refreshMs`](/getting-started/configuration#limits).
+On Angular 20 and later, the overlay reads the page about 250 ms after Angular runs change detection. It also reads it every 4 seconds as a heartbeat. On older versions, it reads the page every 3 seconds instead. Change that interval with [`limits.refreshMs`](./configuration.md#limits).
 
 Each read skips data that did not change. Router events are sent as they happen.
 
@@ -156,7 +156,7 @@ bootstrapApplication(App, appConfig).then(() => {
 });
 ```
 
-See [Restore NgRx signal state](/guides/ngrx-signals-restore).
+See [Restore NgRx signal state](../guides/ngrx-signals-restore.md).
 
 ## Highlighting
 
@@ -166,13 +166,13 @@ When you hover a component in the devtools, the overlay draws an amber box aroun
 
 <ngmd-accordion>
   <ngmd-accordion-item title="Do I need to call createDevtoolsPopup too?" open>
-    No. The overlay adds the floating button itself. See <a href="/getting-started/popup-and-hub">Popup and hub</a>.
+    No. The overlay adds the floating button itself. See <a href="./popup-and-hub.md">Popup and hub</a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Does it slow down my app?">
     It reads the page after change detection, at most once every 250 ms, plus a heartbeat every 4 seconds. It only sends data that changed. With the dynamic import above, it never loads in production builds.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Which values leave the page?">
-    Live values are sent to the devtools server. Secret-looking values are redacted first. See <a href="/security">Access and redaction</a>.
+    Live values are sent to the devtools server. Secret-looking values are redacted first. See <a href="../security.md">Access and redaction</a>.
   </ngmd-accordion-item>
 </ngmd-accordion>
 

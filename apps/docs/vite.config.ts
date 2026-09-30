@@ -7,6 +7,7 @@ import {readFileSync} from 'node:fs';
 import {getBuildExtensions} from './src/marked-extensions/index.ts';
 import {pageMetaPlugin} from './page-meta.plugin.ts';
 import {internalLinkGuard} from './link-guard.plugin.ts';
+import {mdLinksPlugin} from './md-links.plugin.ts';
 import {sitemapPlugin} from './sitemap.plugin.ts';
 import {searchIndexPlugin} from './search-index.plugin.ts';
 import {rawMdPlugin} from './raw-md.plugin.ts';
@@ -78,6 +79,7 @@ export default defineConfig(async () => ({
     varsPlugin(),
     externalLinkGuard(),
     internalLinkGuard(),
+    mdLinksPlugin(),
     pageMetaPlugin({
       repoUrl: config.site.githubUrl,
       branch: config.site.githubBranch ?? 'main',

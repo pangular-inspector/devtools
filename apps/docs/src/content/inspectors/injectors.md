@@ -113,7 +113,7 @@ Arrow keys, Home and End move the selection through the tree. The right arrow ex
 | `ng-devtools:inspect-providers` | tool     | The injector tree a page reported. `pageId` picks a tab. `selector` only labels the answer. |
 | `ng-devtools:injector-tree`     | resource | The live tree last reported by a page.                                                      |
 
-See [Tools](/agents/tools) and [Resources](/agents/resources).
+See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
 ## Limits and gotchas
 

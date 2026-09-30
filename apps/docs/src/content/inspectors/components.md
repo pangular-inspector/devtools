@@ -28,7 +28,7 @@ The tree shows up to 2000 components, and walks up to 256 levels of DOM nesting.
 
 The header of the selected instance shows the class name, the host tag, and the source file and line. The file and line come from the source scan, matched by class name. They are missing when the scan has no match.
 
-When a form exists in the same source file, a **Show … in Forms** button opens it in the [Forms tab](/inspectors/forms).
+When a form exists in the same source file, a **Show … in Forms** button opens it in the [Forms tab](./forms.md).
 
 ### Facts
 
@@ -48,7 +48,7 @@ A fact shows **Unknown** when Angular does not report it.
 
 ### Injected services
 
-**Injected** lists each token the component class injects, with its flags and the injector that provided it. The block marks a token nobody provides as **not provided**. The block leaves out tokens that host directives inject. Use the [Injectors tab](/inspectors/injectors) for those.
+**Injected** lists each token the component class injects, with its flags and the injector that provided it. The block marks a token nobody provides as **not provided**. The block leaves out tokens that host directives inject. Use the [Injectors tab](./injectors.md) for those.
 
 ### Source mode
 
@@ -103,7 +103,7 @@ On Angular 20 and later, the page reads the tree about 250 ms after Angular runs
 
 ### Start from the Elements panel
 
-If you use the [Chrome extension](/getting-started/chrome-extension), open the **Components** tab in its panel. Then select an element in the Chrome **Elements** panel. The tab selects the component that hosts that element and scrolls its row into view.
+If you use the [Chrome extension](../getting-started/chrome-extension.md), open the **Components** tab in its panel. Then select an element in the Chrome **Elements** panel. The tab selects the component that hosts that element and scrolls its row into view.
 
 ### Check why an output does nothing
 
@@ -142,7 +142,7 @@ Use the arrow keys, Home and End to move through the tree. The right arrow expan
 | `ng-devtools:highlight`      | tool     | Highlights a component in the page. Takes an instance id, class name, host tag or CSS selector. Also retargets the Signals graph. |
 | `ng-devtools:component-tree` | resource | The live tree per page, with the detail of the selected instance.                                                                 |
 
-See [Tools](/agents/tools) and [Resources](/agents/resources).
+See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
 ## Limits and gotchas
 
@@ -156,7 +156,7 @@ Input values stop at 3 levels of nesting, 30 keys or items, and 300 characters. 
 
 ### Secrets are redacted
 
-The devtools replace inputs with secret-looking names with `[redacted]`. They also redact JWTs and `Bearer` values inside strings. See [what the devtools redact](/security).
+The devtools replace inputs with secret-looking names with `[redacted]`. They also redact JWTs and `Bearer` values inside strings. See [what the devtools redact](../security.md).
 
 ### Instance ids change on reload
 

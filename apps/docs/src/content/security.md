@@ -105,13 +105,13 @@ A list keeps loopback origins but replaces the Chrome extension default. If you 
 
 ### Standalone CLI
 
-The CLI server binds to `localhost` and asks for a one-time code. `--host` changes the bind address and `--no-auth` turns the code off. See [Standalone CLI](/getting-started/cli).
+The CLI server binds to `localhost` and asks for a one-time code. `--host` changes the bind address and `--no-auth` turns the code off. See [Standalone CLI](./getting-started/cli.md).
 
 ### MCP endpoint
 
 The HTTP MCP endpoint answers only requests that carry a loopback `Origin` header. In the Vite plugin, the request must also come from a loopback address, like every devtools request.
 
-While the one-time code is on, the endpoint also asks for a bearer token. That is the Express hub by default, and the Vite plugin when its code is on. The hub prints a generated token when it starts. Set `NG_DEVTOOLS_MCP_TOKEN` to choose the token yourself. Requests without the right `Authorization: Bearer <token>` header get `401`. The stdio server needs no token. See [Send a token](/agents/mcp-server#send-a-token).
+While the one-time code is on, the endpoint also asks for a bearer token. That is the Express hub by default, and the Vite plugin when its code is on. The hub prints a generated token when it starts. Set `NG_DEVTOOLS_MCP_TOKEN` to choose the token yourself. Requests without the right `Authorization: Bearer <token>` header get `401`. The stdio server needs no token. See [Send a token](./agents/mcp-server.md#send-a-token).
 
 Without a token, the Express hub answers only requests from a loopback address. With a token, it also answers other addresses that send the right token and a loopback `Origin`. Any client can set that header, so treat the token like a password.
 
@@ -121,7 +121,7 @@ The extension has host permissions for loopback hosts only: `localhost` and its 
 
 On any other host, the panel doesn't send a request until you click **Allow access**. Chrome then asks you to grant the extension that one host, on the scheme of the page and any port. The extension never asks for all hosts at once.
 
-Granting the extension a host doesn't change what the devtools server accepts. The server still applies the checks on this page. Both the Vite plugin and the Express hub accept the extension's `chrome-extension://` origin by default. An Express hub with its own `allowedOrigins` list needs the extension origin in that list. See [Chrome extension](/getting-started/chrome-extension#host-access).
+Granting the extension a host doesn't change what the devtools server accepts. The server still applies the checks on this page. Both the Vite plugin and the Express hub accept the extension's `chrome-extension://` origin by default. An Express hub with its own `allowedOrigins` list needs the extension origin in that list. See [Chrome extension](./getting-started/chrome-extension.md#host-access).
 
 ## What is redacted
 
@@ -153,7 +153,7 @@ window.__NG_DEVTOOLS_FORMS__ = {mask: ['iban'], unmask: ['passport']};
 
 `[data-ng-devtools="unmask"]` opts a field back in. The `window` setting does the same by key.
 
-You can also name secret and unmasked fields on the server, with the `redaction` option. `redaction.secretNames` adds secret names for forms, the router, components, signals, NgRx and Analog, and `redaction.unmask` joins the `window` list. See [Redaction options](/getting-started/configuration#redaction).
+You can also name secret and unmasked fields on the server, with the `redaction` option. `redaction.secretNames` adds secret names for forms, the router, components, signals, NgRx and Analog, and `redaction.unmask` joins the `window` list. See [Redaction options](./getting-started/configuration.md#redaction).
 
 Unmasking also changes what the devtools can write. A key listed in `unmask` on `window` can be written. The element marker only lifts the checks that come from the element (password type, `autocomplete` and mask markers), so a field with a secret-looking name is still not written.
 
@@ -187,7 +187,7 @@ Server call previews and URLs are redacted: secret-looking keys in JSON bodies, 
 
 ### Not redacted
 
-Response previews and TransferState values in the [SSR & HTTP tab](/inspectors/ssr-http) are not redacted. They reach the devtools server unchanged, so don't expose the dev server beyond localhost.
+Response previews and TransferState values in the [SSR & HTTP tab](./inspectors/ssr-http.md) are not redacted. They reach the devtools server unchanged, so don't expose the dev server beyond localhost.
 
 ## Checklist
 
@@ -205,7 +205,7 @@ Response previews and TransferState values in the [SSR & HTTP tab](/inspectors/s
     Use <code>data-ng-devtools="mask"</code>, <code>window.__NG_DEVTOOLS_FORMS__</code> or <code>redaction.secretNames</code> for fields the secret words miss.
   </ngmd-step>
   <ngmd-step title="Block what you don't need">
-    Set <code>agent.readOnly</code> or turn off <code>actions</code> to stop the panel and agents from writing to your app. See <a href="/getting-started/configuration#actions">Configuration</a>.
+    Set <code>agent.readOnly</code> or turn off <code>actions</code> to stop the panel and agents from writing to your app. See <a href="./getting-started/configuration.md#actions">Configuration</a>.
   </ngmd-step>
 </ngmd-workflow>
 

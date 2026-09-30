@@ -120,7 +120,7 @@ The `ng-devtools:highlight` tool also switches the graph to the component it hig
 | `ng-devtools:highlight`       | tool     | Highlights a component and makes it the target of the graph.                                      |
 | `ng-devtools:signal-graph`    | resource | The live graph per page.                                                                          |
 
-`inspect-signals` returns the graph of the chosen component. Call `highlight` first to switch it. See [Tools](/agents/tools).
+`inspect-signals` returns the graph of the chosen component. Call `highlight` first to switch it. See [Tools](../agents/tools.md).
 
 ## Limits and gotchas
 

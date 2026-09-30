@@ -10,13 +10,13 @@ noIndex: true
 
 # Kitchen sink
 
-This page follows the [writing guide](/contributing/writing-docs). Each section shows one feature with its common options.
+This page follows the [writing guide](./writing-docs.md). Each section shows one feature with its common options.
 
 ## Text
 
 ### Inline formatting
 
-Plain text, **bold**, _italic_, `inline code`, ~~strikethrough~~ and a **UI label** like **Record**. A line with a [site link](/inspectors/router), an [anchor link](#tables), an [external link](https://angular.dev) and keyword links: *Angular, *Analog, *Devframe, *NgRx, *MCP and *Vite.
+Plain text, **bold**, _italic_, `inline code`, ~~strikethrough~~ and a **UI label** like **Record**. A line with a [site link](../inspectors/router.md), an [anchor link](#tables), an [external link](https://angular.dev) and keyword links: *Angular, *Analog, *Devframe, *NgRx, *MCP and *Vite.
 
 ### Lists
 
@@ -128,7 +128,7 @@ bun add @santoshyadavdev/ng-devtools devframe
 ## Callouts
 
 <ngmd-callout type="info" title="Info">
-  Context the reader may need, with <code>code</code> and a <a href="/security">link</a>.
+  Context the reader may need, with <code>code</code> and a <a href="../security.md">link</a>.
 </ngmd-callout>
 
 Callouts are never adjacent on real pages. The text between them here keeps that rule.

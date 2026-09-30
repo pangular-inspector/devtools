@@ -142,7 +142,7 @@ The devtools never run async validators. The probe emits no form events, so it d
   </ngmd-step>
 </ngmd-workflow>
 
-You can also open a form from its component in the [Components tab](/inspectors/components).
+You can also open a form from its component in the [Components tab](./components.md).
 
 ## Agent tools
 
@@ -171,12 +171,12 @@ You can also open a form from its component in the [Components tab](/inspectors/
 | `ng-devtools:form-action` | Set, touch, revalidate, reset, submit, focus, snapshot, restore and more.          |
 | `ng-devtools:fill-form`   | Fills several fields through the inputs, like a user would. Can submit afterwards. |
 
-Agents can loop: inspect, act, `wait-for-form`, then `form-diff` from the marker they had. The `ng-devtools:forms` resource holds every form and recent changes. See [Tools](/agents/tools).
+Agents can loop: inspect, act, `wait-for-form`, then `form-diff` from the marker they had. The `ng-devtools:forms` resource holds every form and recent changes. See [Tools](../agents/tools.md).
 
 ## Limits and gotchas
 
 <ngmd-callout type="danger" title="Form values leave the page">
-  The devtools send values to the devtools server, show them in the tab and return them to agents. They replace password fields and fields with secret-looking names with <code>[redacted]</code>. To mask or unmask a field, see <a href="/security">Security</a>.
+  The devtools send values to the devtools server, show them in the tab and return them to agents. They replace password fields and fields with secret-looking names with <code>[redacted]</code>. To mask or unmask a field, see <a href="../security.md">Security</a>.
 </ngmd-callout>
 
 ### Reset, submit and restore ask first
@@ -185,7 +185,7 @@ In the tab, the button turns into **Confirm reset**, **Confirm submit** or **Con
 
 ### Fields that are not written
 
-The actions don't write secret fields unless you unmask them. See [Access and redaction](/security#opt-fields-in-or-out). For Signal Forms, they skip hidden, readonly and rule-disabled fields too. They write disabled reactive fields only with `force`.
+The actions don't write secret fields unless you unmask them. See [Access and redaction](../security.md#opt-fields-in-or-out). For Signal Forms, they skip hidden, readonly and rule-disabled fields too. They write disabled reactive fields only with `force`.
 
 ### Snapshot limits
 

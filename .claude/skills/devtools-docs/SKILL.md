@@ -77,6 +77,8 @@ Short intro.
 - Headings are unique within a page.
 - Before renaming a heading, grep `apps/docs/src/content` for its anchor. Anchors are the slug of the heading text (lowercase, non-alphanumerics to `-`), badges excluded.
 - Add new pages to `nav` in `ngmd.config.ts`.
+- Link to other pages by the relative path of the `.md` file, in markdown links and `<a>` tags: `[Configuration](./configuration.md)`, `<a href="../inspectors/router.md#agent-tools">`. The site resolves them to routes and they also work on GitHub. Never write `/getting-started/...` routes in markdown links or `<a>`.
+- `<ngmd-pill href>`, `<ngmd-card link>` and pages without a `.md` file (`/sponsors`) use the site route.
 - `<ngmd-hero logo="...">` only on pages about one external tool (NgRx, Analog, Vite, Express, Chrome, MCP, Nx).
 
 ## 5. Components

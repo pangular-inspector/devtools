@@ -82,7 +82,7 @@ It listens on port 4000, or on `PORT` when set.
 
 ## Analog demo
 
-`examples/analog` is an *Analog app wired with the [Vite plugin](/getting-started/vite). Its project name is `analog-demo`.
+`examples/analog` is an *Analog app wired with the [Vite plugin](../getting-started/vite.md). Its project name is `analog-demo`.
 
 ### What's in the Analog demo
 

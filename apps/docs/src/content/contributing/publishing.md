@@ -51,7 +51,7 @@ Update `version` in `packages/ng-devtools/package.json`. In the same commit, add
 
 ### 2. Check the build
 
-Run the checks from [Development setup](/contributing/development), then build the package without publishing:
+Run the checks from [Development setup](./development.md), then build the package without publishing:
 
 ```bash
 pnpm devtools:build-pkg
@@ -82,7 +82,7 @@ The extension has its own version, in `extension/manifest.json`. It does not fol
 3. Commit `extension/ui` and the manifest.
 4. Upload `dist/ng-devtools-extension.zip`.
 
-See [Build the extension](/contributing/chrome-extension) for the upload steps.
+See [Build the extension](./chrome-extension.md) for the upload steps.
 
 ## Where to next
 

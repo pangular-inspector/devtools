@@ -28,16 +28,16 @@ The top block shows the project name and a chip for each of these:
 
 Each card counts what one inspector found. Click a card to open its tab. When the hub is mounted, the NgRx card opens the **NgRx** dock.
 
-| Card                                        | Counts                                                                                                       |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| [Components](/inspectors/components)        | Components in source, plus the number of directives.                                                         |
-| [Routes](/inspectors/router)                | Navigable page paths in source, plus the number of redirects.                                                |
-| [Signals](/inspectors/signals)              | Nodes in the live signal graph, plus the declarations in source. Without a page, the declarations in source. |
-| [Injectors](/inspectors/injectors)          | Live injectors on the page, plus their providers. Without a page, the provider declarations in source.       |
-| [NgRx declarations](/inspectors/ngrx-store) | NgRx declarations in source, broken down by kind.                                                            |
-| [Pipes](/inspectors/pipes)                  | Custom pipes in source, plus the built-in pipes in use.                                                      |
+| Card                                 | Counts                                                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| [Components](./components.md)        | Components in source, plus the number of directives.                                                         |
+| [Routes](./router.md)                | Navigable page paths in source, plus the number of redirects.                                                |
+| [Signals](./signals.md)              | Nodes in the live signal graph, plus the declarations in source. Without a page, the declarations in source. |
+| [Injectors](./injectors.md)          | Live injectors on the page, plus their providers. Without a page, the provider declarations in source.       |
+| [NgRx declarations](./ngrx-store.md) | NgRx declarations in source, broken down by kind.                                                            |
+| [Pipes](./pipes.md)                  | Custom pipes in source, plus the built-in pipes in use.                                                      |
 
-Cards of inspectors turned off in the [configuration](/getting-started/configuration) are hidden.
+Cards of inspectors turned off in the [configuration](../getting-started/configuration.md) are hidden.
 
 ### Card states
 
@@ -45,7 +45,7 @@ A card shows **Counting…** while it loads. It shows **Count unavailable** when
 
 ### Configuration block
 
-Below the cards, the **Configuration** block lists the devtools options that differ from the defaults, such as **Inspectors off**, **Blocked actions** and **Limits**. It says **Defaults** when nothing is changed. See [Configuration](/getting-started/configuration#check-the-active-configuration).
+Below the cards, the **Configuration** block lists the devtools options that differ from the defaults, such as **Inspectors off**, **Blocked actions** and **Limits**. It says **Defaults** when nothing is changed. See [Configuration](../getting-started/configuration.md#check-the-active-configuration).
 
 ## Where the data comes from
 
@@ -63,7 +63,7 @@ SSR is **On** when the build options set `ssr` or `server`. For *Analog apps, SS
 
 ### Counts
 
-The Components, Routes, NgRx and Pipes cards count the source scan. The Signals and Injectors cards use the live page when one is connected, and the source scan otherwise. The live Signals count covers the graph of the one component the [Signals tab](/inspectors/signals) shows, and counts its signals, computeds, linked signals and effects.
+The Components, Routes, NgRx and Pipes cards count the source scan. The Signals and Injectors cards use the live page when one is connected, and the source scan otherwise. The live Signals count covers the graph of the one component the [Signals tab](./signals.md) shows, and counts its signals, computeds, linked signals and effects.
 
 ## How to use it
 
@@ -85,7 +85,7 @@ The Components, Routes, NgRx and Pipes cards count the source scan. The Signals 
 | ------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `ng-devtools:build-meta` | Angular and TypeScript versions, the project name, SSR status and, in Analog apps, the Analog version. |
 
-[Static reports](/getting-started/cli) include the same data. See [Tools](/agents/tools) for every tool.
+[Static reports](../getting-started/cli.md) include the same data. See [Tools](../agents/tools.md) for every tool.
 
 ## Limits and gotchas
 

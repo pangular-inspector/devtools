@@ -12,14 +12,14 @@ description: Mount the devtools hub in the Express server of an Angular SSR app.
 In an *Angular app with server-side rendering, the devtools run inside your Express server. You add a middleware on the server and load the overlay in the browser.
 
 <ngmd-callout type="info" title="You need an SSR app">
-  This setup mounts the devtools in the Express <code>server.ts</code> that Angular SSR generates. For an Analog app, follow <a href="/getting-started/vite">Vite and Analog</a> instead.
+  This setup mounts the devtools in the Express <code>server.ts</code> that Angular SSR generates. For an Analog app, follow <a href="./vite.md">Vite and Analog</a> instead.
 </ngmd-callout>
 
 ## Setup at a glance
 
 <ngmd-workflow>
   <ngmd-step title="Install the package">
-    Add <code>&#64;santoshyadavdev/ng-devtools</code> and <code>devframe</code>. See <a href="/getting-started/installation">Installation</a>.
+    Add <code>&#64;santoshyadavdev/ng-devtools</code> and <code>devframe</code>. See <a href="./installation.md">Installation</a>.
   </ngmd-step>
   <ngmd-step title="Mount the hub">
     Add <code>initNgDevtoolsHub()</code> to <code>server.ts</code>, before your other routes.
@@ -91,13 +91,13 @@ With `ws: {sidecar: true}`, the WebSocket runs on its own port, picked automatic
 
 `initNgDevtoolsHub()` accepts the options of `initHub()` from `@devframes/hub`, apart from `devframes` and `ui`. These are the ones you are most likely to set:
 
-| Option           | Default                                   | What it does                                                                                                                                                                                                                   |
-| ---------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `base`           | `'/__devframes/'`                         | Where the hub is mounted. The devtools panel lives at `<base>ng-devtools/`.                                                                                                                                                    |
-| `ws`             |                                           | `false` uses server-sent events only. `{ sidecar: true }` runs the WebSocket on its own port.                                                                                                                                  |
-| `auth`           | on                                        | `false` turns off the one-time code.                                                                                                                                                                                           |
-| `allowedOrigins` | loopback origins and the Chrome extension | Extra origins allowed to open the WebSocket. A list replaces the Chrome extension default. `false` turns the origin check off.                                                                                                 |
-| `mcp`            | a bearer token                            | Mounts the MCP endpoint at `<base>__mcp` and asks for a bearer token. With `auth: false` the default is `'auto'`: it mounts once agent tools exist and asks for no token. See [Send a token](/agents/mcp-server#send-a-token). |
+| Option           | Default                                   | What it does                                                                                                                                                                                                                        |
+| ---------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `base`           | `'/__devframes/'`                         | Where the hub is mounted. The devtools panel lives at `<base>ng-devtools/`.                                                                                                                                                         |
+| `ws`             |                                           | `false` uses server-sent events only. `{ sidecar: true }` runs the WebSocket on its own port.                                                                                                                                       |
+| `auth`           | on                                        | `false` turns off the one-time code.                                                                                                                                                                                                |
+| `allowedOrigins` | loopback origins and the Chrome extension | Extra origins allowed to open the WebSocket. A list replaces the Chrome extension default. `false` turns the origin check off.                                                                                                      |
+| `mcp`            | a bearer token                            | Mounts the MCP endpoint at `<base>__mcp` and asks for a bearer token. With `auth: false` the default is `'auto'`: it mounts once agent tools exist and asks for no token. See [Send a token](../agents/mcp-server.md#send-a-token). |
 
 The hub also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](/getting-started/configuration).
 
@@ -105,7 +105,7 @@ The hub also takes the devtools options, such as `inspectors`, `agent`, `actions
 
 The hub protects its connection with a one-time code by default. The server prints the code, and a browser can read data only after it exchanges that code. On a machine only you use, pass `auth: false` to turn the gate off.
 
-The origin check is on by default too. Only loopback origins and the [Chrome extension](/getting-started/chrome-extension) can open the WebSocket. If you pass your own `allowedOrigins` list, it keeps loopback origins but drops the extension. Add `chrome-extension://<id>` to the list, with the ID from `chrome://extensions`:
+The origin check is on by default too. Only loopback origins and the [Chrome extension](./chrome-extension.md) can open the WebSocket. If you pass your own `allowedOrigins` list, it keeps loopback origins but drops the extension. Add `chrome-extension://<id>` to the list, with the ID from `chrome://extensions`:
 
 ```ts
 // src/server.ts
@@ -116,7 +116,7 @@ const devtools = initNgDevtoolsHub({
 });
 ```
 
-[Access and redaction](/security) covers both checks.
+[Access and redaction](../security.md) covers both checks.
 
 The demo app in this repository mounts the hub like this:
 
@@ -140,7 +140,7 @@ It turns the one-time code off unless `NG_DEVTOOLS_AUTH` is `true`. Don't copy t
 
 ### Import it in development
 
-The [overlay](/getting-started/overlay) collects live data from the page. Import it after bootstrap, in development only:
+The [overlay](./overlay.md) collects live data from the page. Import it after bootstrap, in development only:
 
 ```ts {8-10}
 // src/main.ts
@@ -172,7 +172,7 @@ A floating button appears on your page. It opens the devtools with one dock entr
 | NativeScript | A **Coming Soon** placeholder                                                   |
 | Capacitor    | A **Coming Soon** placeholder                                                   |
 
-[Popup and hub](/getting-started/popup-and-hub) covers the panel, its dock modes and deep links.
+[Popup and hub](./popup-and-hub.md) covers the panel, its dock modes and deep links.
 
 ## Run the app
 
@@ -231,7 +231,7 @@ Register `withNgDevtools()` before your own interceptors, for example `provideHt
 
 SSR and the devtools middleware must run in the same Express process. Otherwise the server-side calls never reach the tab.
 
-The [SSR & HTTP guide](/guides/ssr-http) covers interceptor order and fault injection in detail.
+The [SSR & HTTP guide](../guides/ssr-http.md) covers interceptor order and fault injection in detail.
 
 ## Mount only the panel
 

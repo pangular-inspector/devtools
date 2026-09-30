@@ -121,12 +121,12 @@ Open **Async subscriptions** and look for **duplicate subscription** rows. Subsc
 | `ng-devtools:lint-pipes`   | no     | Runs the lint rules above.                                                                                                             |
 | `ng-devtools:explain-pipe` | partly | One pipe by `name`: where it is declared or used, purity, live counts, last input and output, the stale warning and the lint findings. |
 
-Agents can't turn recording on. To give `explain-pipe` call data, click **Record calls** in the panel first. See [Tools](/agents/tools).
+Agents can't turn recording on. To give `explain-pipe` call data, click **Record calls** in the panel first. See [Tools](../agents/tools.md).
 
 ## Limits and gotchas
 
 <ngmd-callout type="danger" title="Values are not redacted">
-  The devtools send pipe inputs, outputs and async values as they are, cut to 200 characters. Keep the dev server on localhost. See <a href="/security">Security</a>.
+  The devtools send pipe inputs, outputs and async values as they are, cut to 200 characters. Keep the dev server on localhost. See <a href="../security.md">Security</a>.
 </ngmd-callout>
 
 ### The stale warning is experimental

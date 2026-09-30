@@ -82,7 +82,7 @@ Each finding says whether Angular throws, warns or does not warn. The lint skips
 
 The routes declared in your files: `*.routes.ts` and `*routing.module.ts` files, the files they lazy load, and Analog pages. Each row shows the path, the component or target, guards and resolvers, the title and the declaring file. Once the live config is available, the tab collapses this table. **Show table** opens it.
 
-Components rendered by the router show their route and outlet in the [Components tab](/inspectors/components).
+Components rendered by the router show their route and outlet in the [Components tab](./components.md).
 
 ## Where the data comes from
 
@@ -173,7 +173,7 @@ Without that recording, the guards listed for a navigation are candidates: the `
 | `ng-devtools:navigate`            | Acts on the router: `navigate`, `abort`, `replay`, `probe`, `instrument` and `resolve-lazy`.                                                                                       |
 | `ng-devtools:router` (resource)   | The active route tree and recent navigations of each page.                                                                                                                         |
 
-`navigate` only accepts same-origin relative URLs that start with `/`. `resolve-lazy` needs a `routeId`. See [Tools](/agents/tools).
+`navigate` only accepts same-origin relative URLs that start with `/`. `resolve-lazy` needs a `routeId`. See [Tools](../agents/tools.md).
 
 ## Limits and gotchas
 
@@ -191,7 +191,7 @@ The tab lists only the last one, marked **before DevTools connected**, without t
 
 ### Redaction
 
-The devtools replace query, matrix and fragment values with secret-looking keys with `[redacted]`. They also redact tokens, `Bearer` values, and route params with secret-looking names such as `:token`. You can't replay a navigation with a redacted URL. See [what the devtools redact](/security).
+The devtools replace query, matrix and fragment values with secret-looking keys with `[redacted]`. They also redact tokens, `Bearer` values, and route params with secret-looking names such as `:token`. You can't replay a navigation with a redacted URL. See [what the devtools redact](../security.md).
 
 ### History and config caps
 

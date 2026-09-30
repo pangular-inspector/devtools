@@ -86,11 +86,11 @@ When the devtools are embedded in your app's server, the same tools are served o
 
 The path depends on how you mount the devtools. Use the port your server actually runs on.
 
-| Setup                                   | Endpoint                                  |
-| --------------------------------------- | ----------------------------------------- |
-| [Express hub](/getting-started/express) | `http://localhost:4000/__devframes/__mcp` |
-| [Vite plugin](/getting-started/vite)    | `http://localhost:5173/__devframes/__mcp` |
-| [Standalone CLI](/getting-started/cli)  | `http://localhost:9999/__mcp`             |
+| Setup                                        | Endpoint                                  |
+| -------------------------------------------- | ----------------------------------------- |
+| [Express hub](../getting-started/express.md) | `http://localhost:4000/__devframes/__mcp` |
+| [Vite plugin](../getting-started/vite.md)    | `http://localhost:5173/__devframes/__mcp` |
+| [Standalone CLI](../getting-started/cli.md)  | `http://localhost:9999/__mcp`             |
 
 The standalone CLI uses port 9999 by default. If that port is taken and you did not pass `--port`, it picks a free port. Use the URL it prints.
 
@@ -108,10 +108,10 @@ The header value is the origin of your dev server. Every example below sets it.
 
 If the hub asks for the one-time code, the HTTP endpoint also asks for a bearer token. Requests without the right token get `401`.
 
-| Setup                                   | Token required                                                                                   |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [Express hub](/getting-started/express) | Yes, unless you pass `auth: false` or your own `mcp` option.                                     |
-| [Vite plugin](/getting-started/vite)    | Only when the one-time code is on. See the plugin's [`auth` option](/getting-started/vite#auth). |
+| Setup                                        | Token required                                                                                        |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| [Express hub](../getting-started/express.md) | Yes, unless you pass `auth: false` or your own `mcp` option.                                          |
+| [Vite plugin](../getting-started/vite.md)    | Only when the one-time code is on. See the plugin's [`auth` option](../getting-started/vite.md#auth). |
 
 The hub prints a generated token in the terminal when it starts. The token changes on every restart. To keep the same token across restarts, set `NG_DEVTOOLS_MCP_TOKEN` in the environment of the server. The hub then uses that value and prints nothing.
 
@@ -187,7 +187,7 @@ The live tools read what the page reports. Without an open page, they have nothi
     Run the server that mounts the devtools: your Express SSR server, the Vite dev server, or <code>ng-devtools dev</code>.
   </ngmd-step>
   <ngmd-step title="Open it in a browser">
-    Load the app with the <a href="/getting-started/overlay">overlay</a>. The page connects to the devtools and starts reporting.
+    Load the app with the <a href="../getting-started/overlay.md">overlay</a>. The page connects to the devtools and starts reporting.
   </ngmd-step>
   <ngmd-step title="Call a tool">
     Ask your agent something the page knows, like "why is the checkout form invalid?". It calls <code>explain-form-invalid</code> on the connected page.
@@ -204,13 +204,13 @@ The server registers tools with a colon, as `ng-devtools:get-routes`. MCP client
 
 The server marks read-only tools as read-only for your client. Five tools act on the app, so the server does not mark them:
 
-| Tool              | Reference                                                             |
-| ----------------- | --------------------------------------------------------------------- |
-| `highlight`       | [Components, signals and DI](/agents/tools#components-signals-and-di) |
-| `navigate`        | [Act on the router](/agents/tools#act-on-the-router)                  |
-| `form-action`     | [Act on a form](/agents/tools#act-on-a-form)                          |
-| `fill-form`       | [Act on a form](/agents/tools#act-on-a-form)                          |
-| `analog-call-api` | [Call a server route](/agents/tools#call-a-server-route)              |
+| Tool              | Reference                                                          |
+| ----------------- | ------------------------------------------------------------------ |
+| `highlight`       | [Components, signals and DI](./tools.md#components-signals-and-di) |
+| `navigate`        | [Act on the router](./tools.md#act-on-the-router)                  |
+| `form-action`     | [Act on a form](./tools.md#act-on-a-form)                          |
+| `fill-form`       | [Act on a form](./tools.md#act-on-a-form)                          |
+| `analog-call-api` | [Call a server route](./tools.md#call-a-server-route)              |
 
 Your client can ask you before it runs them. To drop them from the server, set `agent.readOnly`. See [Inspectors and agent tools](/getting-started/configuration#inspectors-and-agent-tools).
 

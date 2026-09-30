@@ -14,7 +14,7 @@ The devtools inspect a running *Angular app. They read components, signals, inje
 The same tool runs in several places. It is built with *Devframe, so one definition powers every mode.
 
 <ngmd-callout type="info" title="One package">
-  Everything ships in <code>&#64;santoshyadavdev/ng-devtools</code>: the server side, the browser overlay, the in-page popup, the CLI and the built UI. See <a href="/getting-started/installation">Installation</a>.
+  Everything ships in <code>&#64;santoshyadavdev/ng-devtools</code>: the server side, the browser overlay, the in-page popup, the CLI and the built UI. See <a href="./installation.md">Installation</a>.
 </ngmd-callout>
 
 ## What it inspects
@@ -52,18 +52,18 @@ These tabs read the running page through Angular's debug API. They need a develo
 
 ### Project overview
 
-| Tab                                | What it shows                                                                   |
-| ---------------------------------- | ------------------------------------------------------------------------------- |
-| [Dashboard](/inspectors/dashboard) | The Angular and TypeScript versions, SSR status and a count for each inspector. |
-| [Analog](/inspectors/analog)       | File routes, server calls, render modes, content and lint for *Analog apps.     |
+| Tab                                     | What it shows                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------- |
+| [Dashboard](../inspectors/dashboard.md) | The Angular and TypeScript versions, SSR status and a count for each inspector. |
+| [Analog](../inspectors/analog.md)       | File routes, server calls, render modes, content and lint for *Analog apps.     |
 
 ### Source scan
 
-The devtools also read your source files. Components, routes, signals, providers, NgRx declarations and pipes show up even with no page connected. The [standalone CLI](/getting-started/cli) and the static report run on the source scan alone.
+The devtools also read your source files. Components, routes, signals, providers, NgRx declarations and pipes show up even with no page connected. The [standalone CLI](./cli.md) and the static report run on the source scan alone.
 
 ### Agent tools
 
-The inspectors are exposed as *MCP tools and resources, so a coding agent can read and act on the running app. See [MCP server](/agents/mcp-server).
+The inspectors are exposed as *MCP tools and resources, so a coding agent can read and act on the running app. See [MCP server](../agents/mcp-server.md).
 
 ## Ways to run it
 
@@ -71,11 +71,11 @@ The inspectors are exposed as *MCP tools and resources, so a coding agent can re
 
 Your app's server hosts the devtools, and a script in the page sends live data to it. A floating button on the page opens the panel next to your app.
 
-| Setup                   | Server part                 | Guide                                                 |
-| ----------------------- | --------------------------- | ----------------------------------------------------- |
-| Angular CLI with SSR    | `initNgDevtoolsHub()`       | [Angular CLI and Express](/getting-started/express)   |
-| Analog                  | The Vite plugin             | [Vite and Analog](/getting-started/vite)              |
-| Chrome DevTools (extra) | One of the two setups above | [Chrome extension](/getting-started/chrome-extension) |
+| Setup                   | Server part                 | Guide                                     |
+| ----------------------- | --------------------------- | ----------------------------------------- |
+| Angular CLI with SSR    | `initNgDevtoolsHub()`       | [Angular CLI and Express](./express.md)   |
+| Analog                  | The Vite plugin             | [Vite and Analog](./vite.md)              |
+| Chrome DevTools (extra) | One of the two setups above | [Chrome extension](./chrome-extension.md) |
 
 ### Outside your app
 
@@ -85,7 +85,7 @@ Your app's server hosts the devtools, and a script in the page sends live data t
 | Static report  | An offline HTML build of the source scan.                        |
 | MCP server     | Every inspector exposed to coding agents over stdio.             |
 
-All three come from the `ng-devtools` binary. See [Standalone CLI](/getting-started/cli).
+All three come from the `ng-devtools` binary. See [Standalone CLI](./cli.md).
 
 ## Built on Devframe
 
@@ -130,16 +130,16 @@ The devtools are a <a href="https://devfra.me" target="_blank" rel="noopener nor
 
 <ngmd-accordion>
   <ngmd-accordion-item title="Do I need a browser extension?" open>
-    No. The overlay adds a floating button to your page and opens the devtools in a panel. The <a href="/getting-started/chrome-extension">Chrome extension</a> is optional. It adds the same UI as a panel in Chrome DevTools.
+    No. The overlay adds a floating button to your page and opens the devtools in a panel. The <a href="./chrome-extension.md">Chrome extension</a> is optional. It adds the same UI as a panel in Chrome DevTools.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Does it work without SSR?">
-    The devtools need a server part. An Angular CLI app mounts it in its Express <code>server.ts</code>. An Analog app gets it from the Vite plugin. Without either, the <a href="/getting-started/cli">standalone CLI</a> serves the source scan.
+    The devtools need a server part. An Angular CLI app mounts it in its Express <code>server.ts</code>. An Analog app gets it from the Vite plugin. Without either, the <a href="./cli.md">standalone CLI</a> serves the source scan.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Does it ship in my production bundle?">
     Not if you follow the setup guides. They load the overlay with a dynamic import that only runs in development builds.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Can other people on my network reach it?">
-    By default, no. The Vite plugin only answers requests from your machine, and the Express hub asks for a one-time code. See <a href="/security">Access and redaction</a>.
+    By default, no. The Vite plugin only answers requests from your machine, and the Express hub asks for a one-time code. See <a href="../security.md">Access and redaction</a>.
   </ngmd-accordion-item>
 </ngmd-accordion>
 

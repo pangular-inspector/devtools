@@ -113,6 +113,14 @@ A short intro: what the tab is and when you open it.
 
 Add an entry to `nav` in `apps/docs/src/ngmd.config.ts`. Pages that aren't listed still build, but readers can't find them. Use `status: 'new'` or `status: 'updated'` for a sidebar badge instead of saying "new" in the text.
 
+### Link to other pages
+
+Link to another page by the relative path of its `.md` file, in markdown links and in `<a>` tags: `[Configuration](./configuration.md)`, `<a href="../inspectors/router.md#agent-tools">`. The site turns these into routes, and the same links work when the page is read on GitHub.
+
+- The build fails if the file doesn't exist or the anchor doesn't match a heading.
+- `<ngmd-pill href>` and `<ngmd-card link>` take the site route, such as `/agents/tools`. They only render on the site.
+- Pages without a `.md` file, such as `/sponsors`, use the site route.
+
 ## Components
 
 The site uses NgMd's authoring components. Write them as raw HTML inside the markdown. The full reference is the components page of the [NgMd documentation](https://ngmd.netlify.app/concepts/components).

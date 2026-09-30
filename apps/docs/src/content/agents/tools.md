@@ -9,7 +9,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 
 # Tools
 
-This page lists every tool the [MCP server](/agents/mcp-server) exposes. Each group matches an inspector in the panel.
+This page lists every tool the [MCP server](./mcp-server.md) exposes. Each group matches an inspector in the panel.
 
 ## Before you call a tool
 
@@ -45,7 +45,7 @@ Most page tools take an optional `page` argument to pick a browser tab. It defau
 
 ### Turn tools off
 
-The server decides which tools exist. Set `agent.readOnly` to drop the five action tools. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. See [Inspectors and agent tools](/getting-started/configuration#inspectors-and-agent-tools).
+The server decides which tools exist. Set `agent.readOnly` to drop the five action tools. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ## Source scan
 
@@ -178,7 +178,7 @@ Markers let an agent check its own work: read the marker, act, then call `form-d
 
 ### Act on a form
 
-Both tools are action tools and need a development build. They don't write secret fields unless you unmask them. See [Opt fields in or out](/security#opt-fields-in-or-out). For Signal Forms, they don't write hidden, readonly or disabled fields either.
+Both tools are action tools and need a development build. They don't write secret fields unless you unmask them. See [Opt fields in or out](../security.md#opt-fields-in-or-out). For Signal Forms, they don't write hidden, readonly or disabled fields either.
 
 | Tool          | What it does                                                                                       | Arguments                                                                                                                       |
 | ------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -207,7 +207,7 @@ It finds impure pipes used inside `@for`, `| json` left in templates, and pure p
 | -------- | -------- | ----------------------------------------------- |
 | `name`   | yes      | The pipe name as used after `\|` in a template. |
 
-Live counts, input and output appear when recording is on in the [Pipes inspector](/inspectors/pipes).
+Live counts, input and output appear when recording is on in the [Pipes inspector](../inspectors/pipes.md).
 
 ## Analog
 
@@ -252,14 +252,14 @@ These tools cover *Analog apps. Most read your source. Two read what the Vite pl
 `analog-lint` finds Analog mistakes: two files for one URL, a missing default export, a layout without `router-outlet`, bad API method suffixes, prerender entries that match nothing, and frontmatter errors. It also reports live problems, like a `load()` fetched twice or a restart needed. No arguments.
 
 <ngmd-alert severity="helpful">
-  <code>analog-server-calls</code> and <code>analog-call-api</code> need the <a href="/getting-started/vite">Vite plugin</a>. The plugin records the calls and knows the dev server address.
+  <code>analog-server-calls</code> and <code>analog-call-api</code> need the <a href="../getting-started/vite.md">Vite plugin</a>. The plugin records the calls and knows the dev server address.
 </ngmd-alert>
 
 ## Shared state
 
 `devframe_state_read` reads the devtools' live shared state. Call it without arguments to list the keys, then with `key` to read a value as JSON.
 
-Use it for data that has no dedicated tool, such as the SSR & HTTP timeline (`ng-devtools:http`) or live pipe usage (`ng-devtools:pipe-usage`). See [Resources](/agents/resources) for every key.
+Use it for data that has no dedicated tool, such as the SSR & HTTP timeline (`ng-devtools:http`) or live pipe usage (`ng-devtools:pipe-usage`). See [Resources](./resources.md) for every key.
 
 ## Where to next
 
