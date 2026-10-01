@@ -51,15 +51,16 @@ MCP agent support (`@devframes/agentic`) is included. You don't install it separ
 
 ### Entry points
 
-| Import                                  | Use it for                                                                             |
-| --------------------------------------- | -------------------------------------------------------------------------------------- |
-| `@santoshyadavdev/ng-devtools/hub`      | `initNgDevtoolsHub()`, the server middleware for an Express app.                       |
-| `@santoshyadavdev/ng-devtools/vite`     | The Vite plugin for Analog apps.                                                       |
-| `@santoshyadavdev/ng-devtools/overlay`  | The browser script that collects live data from your page.                             |
-| `@santoshyadavdev/ng-devtools/popup`    | The floating button and panel on your page.                                            |
-| `@santoshyadavdev/ng-devtools/http`     | The HTTP interceptor and hydration hooks for the SSR & HTTP tab.                       |
-| `@santoshyadavdev/ng-devtools/config`   | The `NgDevtoolsConfig` type and its defaults. See [Configuration](./configuration.md). |
-| `@santoshyadavdev/ng-devtools/devframe` | The devframe definition, for custom hosts.                                             |
+| Import                                                | Use it for                                                                             |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `@santoshyadavdev/ng-devtools/hub`                    | `initNgDevtoolsHub()`, the server middleware for an Express app.                       |
+| `@santoshyadavdev/ng-devtools/vite`                   | The Vite plugin for Analog apps.                                                       |
+| `@santoshyadavdev/ng-devtools/overlay`                | The browser script that collects live data from your page.                             |
+| `@santoshyadavdev/ng-devtools/overlay-angular-native` | The overlay for an Angular Native app. See [Angular Native](./angular-native.md).      |
+| `@santoshyadavdev/ng-devtools/popup`                  | The floating button and panel on your page.                                            |
+| `@santoshyadavdev/ng-devtools/http`                   | The HTTP interceptor and hydration hooks for the SSR & HTTP tab.                       |
+| `@santoshyadavdev/ng-devtools/config`                 | The `NgDevtoolsConfig` type and its defaults. See [Configuration](./configuration.md). |
+| `@santoshyadavdev/ng-devtools/devframe`               | The devframe definition, for custom hosts.                                             |
 
 ### The CLI binary
 

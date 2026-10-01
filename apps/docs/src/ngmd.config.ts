@@ -181,6 +181,7 @@ const config: NgmdConfig = {
         {label: 'Popup and hub', href: '/getting-started/popup-and-hub', status: 'new'},
         {label: 'Browser overlay', href: '/getting-started/overlay', status: 'updated'},
         {label: 'Chrome extension', href: '/getting-started/chrome-extension'},
+        {label: 'Angular Native', href: '/getting-started/angular-native', status: 'new'},
       ],
     },
     {
