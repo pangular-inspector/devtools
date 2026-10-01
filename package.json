@@ -29,8 +29,9 @@
     "extension:build": "pnpm devtools:build && rm -rf extension/ui && cp -r dist/devtools-ui extension/ui",
     "extension:zip": "pnpm extension:build && rm -f dist/ng-devtools-extension.zip && cd extension && zip -r ../dist/ng-devtools-extension.zip . -x '*.DS_Store'",
     "analog:dev": "pnpm --filter analog-demo dev",
-    "docs:dev": "pnpm --filter angular-devtools-docs dev",
-    "docs:build": "pnpm --filter angular-devtools-docs build"
+    "docs:dev": "nx serve angular-devtools-docs",
+    "docs:build": "nx build angular-devtools-docs",
+    "docs:test": "nx test angular-devtools-docs"
   },
   "private": true,
   "packageManager": "pnpm@10.33.4",
@@ -64,6 +65,8 @@
     "@devframes/agentic": "^1.1.0",
     "@devframes/vite": "^1.0.0",
     "@nx/angular": "23.2.1",
+    "@nx/vite": "23.2.1",
+    "@nx/vitest": "23.2.1",
     "@nx/workspace": "23.2.1",
     "@schematics/angular": "^22.1.8",
     "@types/express": "^5.0.1",

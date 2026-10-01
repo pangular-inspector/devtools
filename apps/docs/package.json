@@ -9,16 +9,8 @@
     "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
-    "ng": "ng",
-    "dev": "vite",
-    "start": "pnpm run dev",
-    "build": "vite build",
-    "watch": "vite build --watch",
-    "test": "vitest run",
-    "preview": "node dist/analog/server/index.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "test:watch": "vitest"
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@analogjs/content": "^2.7.5",
@@ -63,22 +55,5 @@
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
     "vitest": "^4.0.8"
-  },
-  "nx": {
-    "name": "angular-devtools-docs",
-    "targets": {
-      "build": {
-        "outputs": [
-          "{projectRoot}/dist"
-        ]
-      },
-      "serve": {
-        "command": "vite",
-        "options": {
-          "cwd": "{projectRoot}"
-        },
-        "continuous": true
-      }
-    }
   }
 }

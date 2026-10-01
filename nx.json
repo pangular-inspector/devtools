@@ -9,6 +9,27 @@
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "production": ["default"]
   },
+  "plugins": [
+    {
+      "plugin": "@nx/vite/plugin",
+      "include": ["apps/docs/**/*"],
+      "options": {
+        "buildTargetName": "build",
+        "devTargetName": "serve",
+        "previewTargetName": "preview",
+        "serveStaticTargetName": "serve-static",
+        "typecheckTargetName": "typecheck"
+      }
+    },
+    {
+      "plugin": "@nx/vitest",
+      "include": ["apps/docs/**/*"],
+      "options": {
+        "testTargetName": "test",
+        "testMode": "run"
+      }
+    }
+  ],
   "nxCloudId": "6ababfaa6b3b7cbe16499a58",
   "analytics": true
 }

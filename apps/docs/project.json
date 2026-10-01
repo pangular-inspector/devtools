@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "angular-devtools-docs",
+  "projectType": "application",
+  "sourceRoot": "apps/docs/src",
+  "tags": ["type:app", "scope:docs"],
+  "targets": {
+    "preview": {
+      "dependsOn": ["build"],
+      "command": "node dist/analog/server/index.mjs",
+      "options": {"cwd": "{projectRoot}"},
+      "continuous": true
+    }
+  }
+}
