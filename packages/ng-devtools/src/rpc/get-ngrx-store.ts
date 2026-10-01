@@ -29,6 +29,7 @@ const NgrxStoreEntrySchema = v.object({
   file: v.string(),
   line: v.number(),
   detail: v.optional(v.string()),
+  types: v.optional(v.array(v.string())),
   members: v.optional(
     v.object({
       state: v.optional(v.array(v.string())),
@@ -46,11 +47,12 @@ export const getNgrxStore = defineRpcFunction({
   name: 'get-ngrx-store',
   type: 'query',
   jsonSerializable: true,
+  snapshot: true,
   args: [],
   returns: describable(v.array(NgrxStoreEntrySchema)),
   agent: {
     description:
-      'Scan source files for NgRx declarations: @ngrx/store actions, reducers, effects, selectors, features and store setup, and @ngrx/signals signalStore, signalState and signalMethod. Each entry has name, kind, file and line. A signalStore entry also lists its members (withState keys, withComputed, withMethods, withProps, withHooks, withEntities and rxMethod names) in `members` and `detail`. Read the ng-devtools:ngrx-store resource for the live state and change log.',
+      'Scan source files for NgRx declarations: @ngrx/store actions, reducers, effects, selectors, features and store setup, and @ngrx/signals signalStore, signalState and signalMethod. Each entry has name, kind, file and line. An action entry lists the action type strings of its createAction or createActionGroup call in `types` (for example "[Cart] Add Item"), when they are string literals. A signalStore entry also lists its members (withState keys, withComputed, withMethods, withProps, withHooks, withEntities and rxMethod names) in `members` and `detail`. Read the ng-devtools:ngrx-store resource for the live state and change log.',
     title: 'List NgRx store entries from source',
   },
   setup: (ctx) => ({
@@ -73,6 +75,8 @@ interface NgrxStoreEntry {
   file: string;
   line: number;
   detail?: string;
+  /** Action type strings, for an `action` entry whose types are string literals. */
+  types?: string[];
   members?: SignalStoreMembers;
 }
 
@@ -181,6 +185,16 @@ function scanFile(full: string, cwd: string, out: NgrxStoreEntry[]) {
             : name;
 
         const entry: NgrxStoreEntry = { name: displayName, kind, file: relPath, line: lineNum };
+        if (kind === 'action') {
+          const open = match.index + match[0].length - 1;
+          const types = match[0].includes('createActionGroup')
+            ? actionGroupTypes(content, raw, open)
+            : [stringAt(content, raw, open + 1)].filter((t): t is string => !!t);
+          if (types.length) {
+            entry.types = types;
+            entry.detail = types.join(', ');
+          }
+        }
         if (kind === 'signal-store') {
           const open = content.indexOf('(', match.index + match[0].length - 1);
           const members = signalStoreMembers(content, raw, open);
@@ -221,6 +235,69 @@ function splitTop(text: string): { text: string; start: number }[] {
   }
   if (text.slice(start).trim()) parts.push({ text: text.slice(start), start });
   return parts;
+}
+
+function skipSpace(content: string, at: number): number {
+  while (at < content.length && /\s/.test(content[at])) at++;
+  return at;
+}
+
+function stringAt(content: string, raw: string, at: number): string | undefined {
+  const start = skipSpace(content, at);
+  const quote = content[start];
+  if (quote !== "'" && quote !== '"' && quote !== '`') return undefined;
+  const end = content.indexOf(quote, start + 1);
+  if (end < 0) return undefined;
+  const text = raw.slice(start + 1, end);
+  return quote === '`' && text.includes('${') ? undefined : unescapeLiteral(text);
+}
+
+const ESCAPES: Record<string, string> = {
+  n: '\n',
+  r: '\r',
+  t: '\t',
+  b: '\b',
+  f: '\f',
+  v: '\v',
+  0: '\0',
+};
+
+function unescapeLiteral(text: string): string {
+  return text.replace(
+    /\\(?:u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|(\r\n|[\s\S]))/g,
+    (_, braced: string, hex4: string, hex2: string, ch: string) => {
+      const code = braced ?? hex4 ?? hex2;
+      if (code) return String.fromCodePoint(parseInt(code, 16));
+      if (ch === '\n' || ch === '\r' || ch === '\r\n' || ch === '\u2028' || ch === '\u2029')
+        return '';
+      return ESCAPES[ch] ?? ch;
+    },
+  );
+}
+
+function actionGroupTypes(content: string, raw: string, open: number): string[] {
+  const at = skipSpace(content, open + 1);
+  if (content[at] !== '{') return [];
+  const close = matchDelimiter(content, at, '{', '}');
+  let source: string | undefined;
+  let events = -1;
+  for (const part of splitTop(content.slice(at + 1, close))) {
+    const key = /^\s*(source|events)\s*:\s*/.exec(part.text);
+    if (!key) continue;
+    const value = at + 1 + part.start + key[0].length;
+    if (key[1] === 'source') source = stringAt(content, raw, value);
+    else if (content[value] === '{') events = value;
+  }
+  if (!source || events < 0) return [];
+  const end = matchDelimiter(content, events, '{', '}');
+  const types: string[] = [];
+  for (const part of splitTop(content.slice(events + 1, end))) {
+    const name =
+      stringAt(content, raw, events + 1 + part.start) ??
+      /^\s*([A-Za-z_$][\w$]*)\s*:/.exec(part.text)?.[1];
+    if (name) types.push(`[${source}] ${name}`);
+  }
+  return types;
 }
 
 function objectKeys(content: string, open: number): { key: string; value: string }[] {

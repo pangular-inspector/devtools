@@ -44,21 +44,21 @@ Each one returns JSON.
 
 ### component-tree
 
-The component instances of each page, under `pages[pageId].roots`. Each node has an instance id, class name, host tag and the directives on its host. `detail` holds the live inputs, outputs, listeners, change detection, encapsulation and injected dependencies of the instance selected in the panel. `nodes` repeats the roots of the most recent page.
+The component instances of each page, under `pages[pageId].roots`. Each node has an instance id, class name, host tag and the directives on its host. `detail` holds the live inputs, outputs, other properties, listeners, change detection, encapsulation and injected dependencies of the selected instance. The selection is the one made in the panel, by clicking in the page with **Pick component on page**, or with the `highlight` or `inspect-component` tool. `truncated` is `true` when the page has more instances than it lists, and `truncatedBy` names the limit it hit: `components` (2000 instances) or `depth` (256 levels of DOM nesting). `deferBlocks` lists the page's `@defer` blocks, and is missing when the page has no util to read them. `nodes` repeats the roots of the most recent page.
 
-The instance ids here are what `highlight` accepts.
+The instance ids here are what `highlight` and `inspect-component` accept.
 
 ### signal-graph
 
-The signal graph of each page, under `pages[pageId]`. `graph` is the latest one. It holds the nodes (`signal`, `computed`, `effect`, `linkedSignal`), producer to consumer edges, the component it belongs to, and recent value history per node. Only signals a template or an effect has read appear.
+The signal graph of each page, under `pages[pageId]`. `graph` is the latest one. It holds the nodes (`signal`, `computed`, `effect`, `linkedSignal`), producer to consumer edges, the component or injector it belongs to, the resources folded into one entry each, and recent value history per node and status history per resource. Only signals a template or an effect has read appear.
 
 ### injector-tree
 
-The injector hierarchy the page last reported, with the providers at each level.
+The injector hierarchy the page last reported, with the providers at each level. Each page is under `pages[pageId]`. `roots` and `environment` are the latest. Element injectors list what their components and directives inject in `dependencies`. Environment injectors list what the services they already created inject, with `from` naming the service. `zone` is the change detection mode: `zoneless`, `zone` (zone.js) or `zone-unused` (zoneless, with zone.js still loaded). `truncated` is `true` when the page has more than 2000 element injectors and reported only the first 2000.
 
 ### ngrx-store
 
-Each `@ngrx/signals` store on the page: state, computed values, methods, and the component fields that reference it. It also holds the `@ngrx/store` state and the change log, with a state diff per entry. The log records method calls, `patchState` writes and dispatched actions.
+Each `@ngrx/signals` store on the page: state, computed values, methods, and the component fields that reference it. It also holds the `@ngrx/store` state and the change log, with a state diff per entry. The log records method calls, `patchState` writes, dispatched actions and restores. An `@ngrx/store` action has an `origin`: `dispatch`, `effect` or `reactive`. `classic.paused` is `true` while a restore holds `@ngrx/store` on a past state. An `@ngrx/store` entry with `unrestorable` cannot be restored: `dropped` means Store DevTools no longer holds the action (it was dropped past `maxAge`, or the history was committed, reset or imported), and `not-recorded` means Store DevTools never recorded it. `dropped` counts the older log entries removed at [`limits.changeLog`](../getting-started/configuration.md#limits).
 
 ### forms
 
@@ -80,12 +80,14 @@ The devtools keep their live data in shared-state keys. Every key is also listed
 
 This table covers the data that has no resource of its own.
 
-| Key                      | Content                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------ |
-| `ng-devtools:http`       | The SSR & HTTP timeline, fault rules, hydration data and TransferState payload |
-| `ng-devtools:pipe-usage` | Live pipe instances and recorded calls                                         |
-| `ng-devtools:analog`     | Analog page data and the server call log                                       |
-| `ng-devtools:routes`     | Declared but not filled. Use `get-routes` or `list-routes` instead.            |
+| Key                            | Content                                                             |
+| ------------------------------ | ------------------------------------------------------------------- |
+| `ng-devtools:http`             | The SSR & HTTP timeline, fault rules and hydration data             |
+| `ng-devtools:http-payloads`    | The TransferState payload of each page, by page id                  |
+| `ng-devtools:change-detection` | Change detection recordings, by page id                             |
+| `ng-devtools:pipe-usage`       | Live pipe instances and recorded calls                              |
+| `ng-devtools:analog`           | Analog page data and the server call log                            |
+| `ng-devtools:routes`           | Declared but not filled. Use `get-routes` or `list-routes` instead. |
 
 The list also includes the keys behind the six resources above (`ng-devtools:component-tree`, `ng-devtools:forms`, and so on).
 

@@ -1,6 +1,7 @@
+import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
 // Pages heartbeat every few seconds, so a closed tab whose `forget` message
 // never arrived drops out of the panel (and its `| async` entries with it) fast.
-const PAGE_EXPIRES_MS = 15_000;
+const PAGE_EXPIRES_MS = PAGE_TTL_MS;
 const MAX_MERGED_INSTANCES = 10;
 const MAX_MERGED_TARGETS = 10;
 
@@ -64,6 +65,9 @@ export interface AsyncUsageInfo {
   latestValue?: string;
   /** Another `| async` usage on the page is subscribed to the same source. */
   duplicate: boolean;
+  /** The source changed on several reports in a row, e.g. `getData() | async`
+   * returning a new Observable on every check. */
+  resubscribing?: boolean;
   target?: PipeTarget;
 }
 
@@ -119,6 +123,7 @@ function isAsyncUsageInfo(value: unknown): value is AsyncUsageInfo {
     typeof usage.component === 'string' &&
     typeof usage.hasSource === 'boolean' &&
     typeof usage.duplicate === 'boolean' &&
+    (usage.resubscribing === undefined || typeof usage.resubscribing === 'boolean') &&
     (usage.latestValue === undefined || typeof usage.latestValue === 'string') &&
     (usage.target === undefined || isPipeTarget(usage.target))
   );
@@ -220,10 +225,14 @@ export function currentPipes(pages: Pages): PipesState {
   return stateOf(pages);
 }
 
-export function expirePipePages(pages: Pages, now = Date.now()): PipesState | null {
+export function expirePipePages(
+  pages: Pages,
+  now = Date.now(),
+  ttl: PageTtl = fixedTtl(PAGE_EXPIRES_MS),
+): PipesState | null {
   let expired = false;
   for (const [id, page] of pages) {
-    if (now - page.reportedAt > PAGE_EXPIRES_MS) {
+    if (now - page.reportedAt > ttl(id)) {
       pages.delete(id);
       expired = true;
     }
@@ -235,8 +244,9 @@ export function mergePipePageReport(
   pages: Pages,
   report: PipePageReport,
   now = Date.now(),
+  ttl: PageTtl = fixedTtl(PAGE_EXPIRES_MS),
 ): PipesState {
   pages.set(report.pageId, { ...report, reportedAt: now });
-  expirePipePages(pages, now);
+  expirePipePages(pages, now, ttl);
   return stateOf(pages);
 }

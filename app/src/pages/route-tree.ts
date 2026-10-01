@@ -42,7 +42,15 @@ interface MatchResult {
         (input)="testUrl.set($any($event.target).value)"
       />
       <button type="submit" class="small primary">Predict</button>
-      <button type="button" class="small" (click)="probe()">Probe in app</button>
+      <button
+        type="button"
+        class="small"
+        [disabled]="!navigationAllowed()"
+        [attr.aria-describedby]="navigationAllowed() ? null : 'route-tree-writes-off'"
+        (click)="probe()"
+      >
+        Probe in app
+      </button>
     </form>
     @if (match(); as result) {
       <div class="result" role="status" [attr.data-matched]="result.matched">
@@ -85,6 +93,10 @@ interface MatchResult {
         <p class="muted summary">
           Generation {{ page().generation }} · {{ rows().length }} route(s). Lazy routes show their
           children once loaded.
+          @if (page().configTruncated; as left) {
+            {{ left }} route(s) left out: the page lists at most 200 routes per level and 1000 in
+            total.
+          }
         </p>
       }
     </div>
@@ -127,7 +139,7 @@ interface MatchResult {
           </thead>
           <tbody>
             @for (row of rows(); track row.node.id) {
-              <tr [class.active]="isActive(row.node)">
+              <tr #rowEl [class.active]="isActive(row.node)">
                 <td class="path" [style.padding-left.px]="14 + row.depth * 16">
                   {{ row.node.fullPath }}
                   @if (isActive(row.node)) {
@@ -186,6 +198,10 @@ interface MatchResult {
                           class="field param"
                           type="text"
                           [attr.aria-label]="param + ' for ' + row.node.fullPath"
+                          [attr.aria-invalid]="isInvalid(row.node, param) ? 'true' : null"
+                          [attr.aria-describedby]="
+                            isInvalid(row.node, param) ? 'route-tree-row-result' : null
+                          "
                           [placeholder]="param"
                           (input)="setParam(row.node.id, param, $any($event.target).value)"
                         />
@@ -197,7 +213,7 @@ interface MatchResult {
                         [attr.aria-describedby]="
                           navigationAllowed() ? null : 'route-tree-writes-off'
                         "
-                        (click)="navigate(row.node)"
+                        (click)="navigate(row.node, rowEl)"
                         [attr.aria-label]="'Navigate to ' + row.node.fullPath"
                       >
                         Go
@@ -216,6 +232,13 @@ interface MatchResult {
                   </div>
                 </td>
               </tr>
+              @if (rowResult()?.id === row.node.id) {
+                <tr class="row-result">
+                  <td colspan="5">
+                    <p id="route-tree-row-result" role="status">{{ rowResult()?.text }}</p>
+                  </td>
+                </tr>
+              }
             }
           </tbody>
         </table>
@@ -351,6 +374,19 @@ interface MatchResult {
       font-family: var(--font-mono);
       font-size: 12px;
     }
+    .param[aria-invalid='true'] {
+      border-color: var(--danger);
+    }
+    .row-result td {
+      padding-top: 0;
+      background: transparent;
+    }
+    .row-result p {
+      margin: 0;
+      color: var(--text);
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
     @media (max-width: 480px) {
       .filter {
         flex-basis: 100%;
@@ -369,7 +405,9 @@ export class RouteTree {
   readonly testUrl = signal('');
   readonly match = signal<MatchResult | null>(null);
   readonly message = signal('');
-  private readonly paramValues = new Map<string, Record<string, string>>();
+  readonly rowResult = signal<{ id: string; text: string } | null>(null);
+  private readonly paramValues = signal<Record<string, Record<string, string>>>({});
+  private readonly checkedRow = signal<string | null>(null);
 
   readonly active = computed(() => new Set(this.page().activeIds ?? []));
 
@@ -424,7 +462,16 @@ export class RouteTree {
   }
 
   setParam(id: string, name: string, value: string) {
-    this.paramValues.set(id, { ...this.paramValues.get(id), [name]: value });
+    this.paramValues.update((all) => ({ ...all, [id]: { ...all[id], [name]: value } }));
+  }
+
+  missingParams(node: RouteNode) {
+    const values = this.paramValues()[node.id] ?? {};
+    return this.params(node).filter((param) => !values[param]);
+  }
+
+  isInvalid(node: RouteNode, param: string) {
+    return this.checkedRow() === node.id && !this.paramValues()[node.id]?.[param];
   }
 
   chainText(result: MatchResult) {
@@ -447,30 +494,45 @@ export class RouteTree {
     if (!url) return;
     this.message.set('Running the real matcher in the app…');
     const result = await routerAction(this.rpc(), this.page().pageId, { action: 'probe', url });
-    if (!result || result['error']) {
-      this.message.set(String(result?.['error'] ?? 'Probe failed.'));
+    if (result['error']) {
+      this.message.set(String(result['error']));
       return;
     }
     this.message.set(
       result['matched']
         ? `The app recognized ${url} and its canMatch guards passed. The probe stopped before canActivate guards and resolvers, so those did not run. See the probe entry in Navigations.`
-        : `The app could not recognize ${url}: ${String(result['reason'] ?? '')}`,
+        : typeof result['redirectedTo'] === 'string'
+          ? `A canMatch guard or the navigation error handler redirected ${url} to ${result['redirectedTo']}. The probe stopped that navigation before it rendered anything.`
+          : `The app could not recognize ${url}: ${String(result['reason'] ?? '')}`,
     );
   }
 
-  async navigate(node: RouteNode) {
-    const values = this.paramValues.get(node.id) ?? {};
-    this.message.set(`Navigating to ${node.fullPath}…`);
+  async navigate(node: RouteNode, row?: HTMLElement) {
+    const missing = this.missingParams(node);
+    if (missing.length) {
+      this.checkedRow.set(node.id);
+      this.rowResult.set({
+        id: node.id,
+        text: `Fill in ${missing.map((param) => `:${param}`).join(', ')} to navigate.`,
+      });
+      Array.from(row?.querySelectorAll<HTMLInputElement>('input.param') ?? [])
+        .find((field) => !field.value)
+        ?.focus();
+      return;
+    }
+    this.checkedRow.set(null);
+    this.rowResult.set({ id: node.id, text: `Navigating to ${node.fullPath}…` });
     const result = await routerAction(this.rpc(), this.page().pageId, {
       action: 'navigate',
       pattern: node.fullPath,
-      params: values,
+      params: this.paramValues()[node.id] ?? {},
     });
-    this.message.set(
-      !result || result['error']
-        ? String(result?.['error'] ?? 'Navigation failed.')
+    this.rowResult.set({
+      id: node.id,
+      text: result['error']
+        ? String(result['error'])
         : `Navigation #${result['id']}: ${result['outcome']}${result['finalUrl'] ? ` at ${result['finalUrl']}` : ''}.`,
-    );
+    });
   }
 
   async resolveLazy(node: RouteNode) {
@@ -478,13 +540,14 @@ export class RouteTree {
       action: 'resolve-lazy',
       id: node.id,
     });
-    if (!result || result['error']) {
-      this.message.set(String(result?.['error'] ?? 'Could not read the lazy routes.'));
+    if (result['error']) {
+      this.rowResult.set({ id: node.id, text: String(result['error']) });
       return;
     }
     const routes = (result['routes'] as { path: string }[]) ?? [];
-    this.message.set(
-      `${node.fullPath} declares ${routes.length} route(s): ${routes.map((r) => `/${r.path}`).join(', ')}. The router loads them for real on the first navigation that needs them.`,
-    );
+    this.rowResult.set({
+      id: node.id,
+      text: `${node.fullPath} declares ${routes.length} route(s): ${routes.map((r) => `/${r.path}`).join(', ')}. The router loads them for real on the first navigation that needs them.`,
+    });
   }
 }

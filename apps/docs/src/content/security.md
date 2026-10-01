@@ -133,8 +133,11 @@ A field's value is replaced with `[redacted]` when the field:
 
 - is a password field,
 - has a password, one-time-code or credit-card `autocomplete`,
-- sits inside `.sentry-mask`, `.rr-mask`, `[data-private]` or `[data-ng-devtools="mask"]`, or
-- has a name that contains a secret word (password, token, card, cvv, apiKey and similar).
+- sits inside `.sentry-mask`, `.rr-mask`, `[data-private]` or `[data-ng-devtools="mask"]`,
+- has a name that contains a secret word (password, token, card, cvv, apiKey and similar), or a name listed in `mask`, or
+- sits inside a group or array whose name contains a secret word.
+
+The Fields view says why a field is redacted: **name looks secret**, **password input**, **autocomplete is a secret kind**, **marked as mask**, **inside a secret group** or **listed in mask**. The field details say the same where the Set editor is hidden, with a link to this section.
 
 Those values are also removed from error messages. The devtools don't write secret fields unless you unmask them (see [Opt fields in or out](#opt-fields-in-or-out)). Other values are sent as they are, so keep real credentials out of forms you inspect.
 
@@ -153,13 +156,17 @@ window.__NG_DEVTOOLS_FORMS__ = {mask: ['iban'], unmask: ['passport']};
 
 `[data-ng-devtools="unmask"]` opts a field back in. The `window` setting does the same by key.
 
-You can also name secret and unmasked fields on the server, with the `redaction` option. `redaction.secretNames` adds secret names for forms, the router, components, signals, NgRx and Analog, and `redaction.unmask` joins the `window` list. See [Redaction options](./getting-started/configuration.md#redaction).
+The `mask` and `unmask` lists apply to every inspector on the page, not only forms: nested keys of an object-valued control, Signal Forms fields, form writes and restores, component inputs, signals, NgRx state, pipes and the Analog `load()` preview all follow them. Analog server call previews are recorded on the server, so they follow `redaction.secretNames` and `redaction.unmask` only.
+
+You can also name secret and unmasked fields on the server, with the `redaction` option. `redaction.secretNames` adds secret names for forms, the router, components, signals, NgRx, pipes, Analog and SSR & HTTP URLs, and `redaction.unmask` joins the `window` list. See [Redaction options](./getting-started/configuration.md#redaction).
 
 Unmasking also changes what the devtools can write. A key listed in `unmask` on `window` can be written. The element marker only lifts the checks that come from the element (password type, `autocomplete` and mask markers), so a field with a secret-looking name is still not written.
 
+A refused write names the reason and the unmask that lifts it. The panel, `form-action` and `fill-form` show the same message.
+
 <ngmd-accordion>
   <ngmd-accordion-item title="The full list of secret words">
-    password, passwd, passphrase, passcode, pass, pwd, secret, token, otp, totp, pin, cvv, cvc, csc, ssn, iban, card, cc, credential and credentials. Names are split on camelCase and punctuation, so <code>userPassword</code> and <code>card_number</code> both match. The pairs apiKey, privateKey, secretKey, accessKey, ccNum, ccNumber and securityCode match as well.
+    password, passwd, passphrase, passcode, pass, pwd, secret, token, otp, totp, pin, cvv, cvc, csc, ssn, iban, card, cc, credential, credentials, cookie, authorization and jwt. Names are split on camelCase and punctuation, so <code>userPassword</code> and <code>card_number</code> both match. The pairs apiKey, privateKey, secretKey, accessKey, ccNum, ccNumber, securityCode, sessionId and sessionKey match as well. Every inspector uses this list.
   </ngmd-accordion-item>
 </ngmd-accordion>
 
@@ -177,13 +184,17 @@ A secret route param is only known once the route is recognized or found in the 
   A navigation whose URL was redacted cannot be replayed.
 </ngmd-alert>
 
-### Components, signals and NgRx
+### Components, signals, NgRx and pipes
 
-Component inputs, signal values and NgRx state use the same secret names as forms. A value whose name looks secret is replaced with `[redacted]`. JWTs and bearer tokens inside strings and error messages are replaced too.
+Component inputs, signal values, NgRx state, and pipe inputs, outputs and async values use the same secret names and the same `mask` and `unmask` lists as forms. A value whose name looks secret is replaced with `[redacted]`. JWTs and bearer tokens inside strings and error messages are replaced too, NgRx strings and errors included.
 
 ### Analog
 
-Server call previews and URLs are redacted: secret-looking keys in JSON bodies, secret query parameters, JWTs and bearer tokens. Only JSON and plain text responses get a preview, and it is cut at 1000 characters. The `load()` data preview on the open page redacts secret-looking keys too.
+Server call previews and URLs are redacted: keys in JSON bodies that the forms rules treat as secret, secret query parameters, JWTs and bearer tokens. This covers form action validation errors and redirect targets too. Only JSON and plain text responses get a preview, and it is cut at 1000 characters. The devtools keep the first 16 KB of a body, and a cut JSON body still has its secret-looking keys redacted. The `load()` data preview on the open page redacts the same keys. Keys are matched by whole words, so `sessionId` and `apiKey` are redacted while `author` and `passengers` stay visible. JSON nested deeper than the preview reads is shown as `[Truncated]`.
+
+### SSR & HTTP
+
+Request URLs, page URLs and error messages in the [SSR & HTTP tab](./inspectors/ssr-http.md) are redacted like router URLs, in the page and again on the devtools server. This covers SSR and client calls, and `devframe_state_read`.
 
 ### Not redacted
 

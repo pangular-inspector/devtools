@@ -186,6 +186,8 @@ export function captureDiagnostics(router: AnyRecord, navigations: NavigationRec
         redirect
           ? `error handler redirected to ${read(() => String(router['serializeUrl'](redirect)), '?')}`
           : `error handler returned ${result === undefined ? 'nothing (error rethrown to the navigation promise)' : typeof result}`,
+        error,
+        !!redirect,
       );
       return result;
     };
@@ -375,17 +377,64 @@ interface Wrapping {
   restore: (() => void)[];
 }
 
+const routePaths = new WeakMap<object, string>();
+
+function declares(config: unknown, kind: string, entry: unknown): boolean {
+  return read(() => ((config as AnyRecord)[kind] as unknown[]).includes(entry), false);
+}
+
+/**
+ * The route config a shared class guard or resolver runs for. canMatch and
+ * canLoad get the Route; the others get an ActivatedRouteSnapshot, and
+ * canActivateChild gets the child's, so walk up to the route that declares it.
+ */
+function configOfRun(kind: string, entry: unknown, args: unknown[]): AnyRecord | null {
+  if (kind === 'canMatch' || kind === 'canLoad') return (args[0] as AnyRecord) ?? null;
+  let snapshot = read(() => (kind === 'canDeactivate' ? args[1] : args[0]) as AnyRecord, null);
+  if (kind === 'canActivateChild') {
+    snapshot = read(() => snapshot!['parent'] as AnyRecord, null);
+    for (let depth = 0; snapshot && depth <= MAX_DEPTH; depth++) {
+      if (declares(snapshot['routeConfig'], kind, entry)) break;
+      snapshot = read(() => snapshot!['parent'] as AnyRecord, null);
+    }
+  }
+  return read(() => (snapshot?.['routeConfig'] as AnyRecord) ?? null, null);
+}
+
+function guardLabelAt(kind: string, entry: unknown) {
+  return (args: unknown[]) => {
+    const config = configOfRun(kind, entry, args);
+    return { route: config ? routePaths.get(config) : undefined };
+  };
+}
+
+function resolverLabelAt(entry: unknown) {
+  return (args: unknown[]) => {
+    const config = configOfRun('resolve', entry, args);
+    const resolve = read(() => config?.['resolve'] as AnyRecord, null);
+    const key = resolveKeys(resolve).find((k) => (resolve as AnyRecord)[k as string] === entry);
+    return {
+      route: config ? routePaths.get(config) : undefined,
+      guard: key === undefined ? undefined : `${keyName(key)}: ${nameOf(entry)}`,
+    };
+  };
+}
+
 function wrapFunction(
   original: AnyRecord,
   label: { guard: string; kind: string; route: string },
   router: AnyRecord,
   navigations: NavigationRecord[],
+  labelAt?: (args: unknown[]) => { guard?: string; route?: string },
 ): AnyRecord {
   const wrapped = function (this: unknown, ...args: unknown[]) {
     const started = performance.now();
+    const at = (labelAt && read(() => labelAt(args), null)) ?? {};
     const record: Recorder = (value, threw, outcome) =>
       noteRun(navigations, {
         ...label,
+        guard: at.guard ?? label.guard,
+        route: at.route ?? label.route,
         result: threw
           ? `threw ${redactMessage(String((threw as AnyRecord)?.['message'] ?? threw))}`
           : (outcome ?? describeResult(value, router)),
@@ -418,6 +467,7 @@ function instrumentRoutes(
   if (!Array.isArray(routes) || depth > MAX_DEPTH) return;
   for (const route of routes) {
     const path = `${parent}/${read(() => String(route['path'] ?? ''), '')}`.replace(/\/+/g, '/');
+    read(() => routePaths.set(route, path), undefined);
     for (const kind of GUARD_KINDS) {
       const list = read(() => route[kind] as unknown[], null);
       if (!Array.isArray(list)) continue;
@@ -432,6 +482,7 @@ function instrumentRoutes(
             { guard: nameOf(entry), kind, route: path },
             router,
             navigations,
+            guardLabelAt(kind, entry),
           );
           wrapping.restore.push(() => (proto[method] = original));
         } else if (typeof entry === 'function' && !(entry as AnyRecord)[WRAPPED]) {
@@ -455,7 +506,13 @@ function instrumentRoutes(
         const proto = entry['prototype'];
         const original = proto['resolve'];
         if (original[WRAPPED]) continue;
-        proto['resolve'] = wrapFunction(original, label, router, navigations);
+        proto['resolve'] = wrapFunction(
+          original,
+          label,
+          router,
+          navigations,
+          resolverLabelAt(entry),
+        );
         wrapping.restore.push(() => (proto['resolve'] = original));
       } else if (typeof entry === 'function' && !entry[WRAPPED]) {
         (resolve as AnyRecord)[key as string] = wrapFunction(entry, label, router, navigations);
@@ -528,21 +585,49 @@ export function fillPattern(pattern: string, params: Record<string, string> = {}
 function waitForNavigation(
   navigations: NavigationRecord[],
   id: number,
-  stable: boolean,
 ): Promise<NavigationRecord | undefined> {
   return new Promise((resolve) => {
     const started = Date.now();
     const tick = () => {
       const record = navigations.find((n) => n.id === id);
-      if (record && record.outcome !== 'pending') {
-        if (stable) setTimeout(() => resolve(record), 300);
-        else resolve(record);
-        return;
-      }
+      if (record && record.outcome !== 'pending') return resolve(record);
       if (Date.now() - started > WAIT_MS) return resolve(record);
       setTimeout(tick, 50);
     };
     tick();
+  });
+}
+
+/**
+ * Waits until the app has no pending tasks, the same signal as
+ * `ApplicationRef.whenStable()`: both read the root `PendingTasksInternal`,
+ * which the Router holds as `pendingTasks`.
+ */
+export function waitForStable(router: AnyRecord, ms: number): Promise<boolean | null> {
+  const pending = read(
+    () => router['pendingTasks']['hasPendingTasksObservable'] as AnyRecord,
+    null,
+  );
+  if (typeof pending?.['subscribe'] !== 'function') return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let done = false;
+    let subscription: { unsubscribe(): void } | null = null;
+    const finish = (stable: boolean) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      queueMicrotask(() => subscription?.unsubscribe());
+      resolve(stable);
+    };
+    const timer = setTimeout(() => finish(false), Math.max(0, ms));
+    subscription = read(
+      () =>
+        pending['subscribe']((busy: unknown) => {
+          if (!busy) finish(true);
+        }) as { unsubscribe(): void },
+      null,
+    );
+    if (!subscription) finish(false);
   });
 }
 
@@ -591,29 +676,59 @@ function probe(router: AnyRecord, navigations: NavigationRecord[], url: string):
   return new Promise((resolve) => {
     let targetId = -1;
     let matched: ActiveRoute | null = null;
+    let redirecting = false;
+    let redirectedTo: string | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const markProbe = (id: number) => {
+      const record = navigations.find((n) => n.id === id);
+      if (record) record.probe = true;
+      return record;
+    };
+    const abortCurrent = () => read(() => router['currentNavigation']()?.['abort']?.(), undefined);
+    const finish = (value: unknown) => {
+      clearTimeout(timer);
+      subscription.unsubscribe();
+      resolve(value);
+    };
     const subscription = events['subscribe']((event: AnyRecord) => {
-      if (event['id'] !== targetId) return;
-      if (event['type'] === 4) {
+      const id = event['id'];
+      if (redirecting && typeof id === 'number' && id > targetId) {
+        redirecting = false;
+        markProbe(targetId);
+        targetId = id;
+        redirectedTo = read(() => redactUrl(String(event['url'])), undefined);
+        abortCurrent();
+      }
+      if (id !== targetId) return;
+      if (event['type'] === 4 && redirectedTo === undefined) {
         matched = read(() => serializeRoute(event['state']['root']), null);
-        read(() => router['currentNavigation']()?.['abort']?.(), undefined);
+        abortCurrent();
+      }
+      if (event['type'] === 2 && event['code'] === 0 && redirectedTo === undefined && !matched) {
+        redirecting = true;
+        return;
       }
       if ([1, 2, 3, 16].includes(event['type'])) {
-        subscription.unsubscribe();
-        const record = navigations.find((n) => n.id === targetId);
-        if (record) record.probe = true;
-        resolve(
-          matched
+        const record = markProbe(targetId);
+        finish(
+          redirectedTo !== undefined
             ? {
-                matched: true,
-                route: matched,
-                note: 'The URL was recognized and canMatch guards ran. The probe stopped there, so canActivate, canActivateChild, canDeactivate and resolvers did not run.',
-              }
-            : {
                 matched: false,
-                reason:
-                  record?.reason ??
-                  read(() => String(event['error']?.['message'] ?? event['reason'] ?? ''), ''),
-              },
+                redirectedTo,
+                note: `A canMatch guard or the navigation error handler redirected the probe to ${redirectedTo}. The probe stopped that navigation before it matched, ran guards or resolvers, or rendered anything.`,
+              }
+            : matched
+              ? {
+                  matched: true,
+                  route: matched,
+                  note: 'The URL was recognized and canMatch guards ran. The probe stopped there, so canActivate, canActivateChild, canDeactivate and resolvers did not run.',
+                }
+              : {
+                  matched: false,
+                  reason:
+                    record?.reason ??
+                    read(() => String(event['error']?.['message'] ?? event['reason'] ?? ''), ''),
+                },
         );
       }
     });
@@ -624,7 +739,7 @@ function probe(router: AnyRecord, navigations: NavigationRecord[], url: string):
     );
     targetId = navigationIdOf(router);
     promise?.catch?.(() => {});
-    setTimeout(() => {
+    timer = setTimeout(() => {
       subscription.unsubscribe();
       resolve({ error: 'The probe did not finish within 10s.' });
     }, WAIT_MS);
@@ -691,7 +806,23 @@ export async function runAction(
       const promise = read(() => router['navigateByUrl'](url, extras) as Promise<unknown>, null);
       promise?.catch?.(() => {});
       const id = navigationIdOf(router);
-      return summarize(await waitForNavigation(navigations, id, request.waitFor === 'stable'));
+      const started = Date.now();
+      const result = summarize(await waitForNavigation(navigations, id));
+      if (request.waitFor !== 'stable') return result;
+      const stable = await waitForStable(router, WAIT_MS - (Date.now() - started));
+      if (stable === null)
+        return {
+          ...result,
+          stable: 'unknown',
+          note: 'This Angular version does not expose pending tasks, so only the navigation was awaited.',
+        };
+      return stable
+        ? { ...result, stable: true }
+        : {
+            ...result,
+            stable: false,
+            note: 'The app still had pending tasks (such as HTTP requests or timers) when the 10s wait ran out, so the page may be half-rendered.',
+          };
     }
     case 'abort': {
       const current = read(() => router['currentNavigation']?.() as AnyRecord, null);
@@ -718,7 +849,7 @@ export async function runAction(
       );
       promise?.catch?.(() => {});
       const id = navigationIdOf(router);
-      const result = await waitForNavigation(navigations, id, false);
+      const result = await waitForNavigation(navigations, id);
       return {
         original: summarize(record),
         replay: summarize(result),

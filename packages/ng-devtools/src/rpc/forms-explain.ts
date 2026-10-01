@@ -5,6 +5,7 @@ import {
   type FormEvent,
   type FormFieldNode,
 } from '../forms.ts';
+import { REDACT_LABELS } from '../forms-privacy.ts';
 import { lintForm, lintSetupErrors, type FormLintFinding } from './forms-lint.ts';
 import {
   UNTRUSTED,
@@ -17,6 +18,7 @@ import {
   subtreeAt,
   type FormsState,
 } from './forms-tools.ts';
+import { droppedNote } from '../timeline-limits.ts';
 
 export interface FieldArgs {
   form?: string;
@@ -114,7 +116,7 @@ export function explainFieldText(
   const lines = [`${where} in ${code(form.label)} (${form.kind}, ${form.id}): ${flags(node)}.`];
   if (node.type === 'control') {
     lines.push(
-      `Value: ${detailOf(node.value)}${node.redacted ? ` (redacted: ${node.redacted})` : ''}.`,
+      `Value: ${detailOf(node.value)}${node.redacted ? ` (redacted: ${REDACT_LABELS[node.redacted] ?? node.redacted})` : ''}.`,
     );
   }
   if (node.uncommitted !== undefined) {
@@ -387,12 +389,17 @@ export function formHistoryText(state: FormsState, args: HistoryArgs): string {
       (args.since === undefined || (e.seq ?? 0) > args.since),
   );
   const marker = latestMarker(state);
-  if (!events.length) return `No matching form events. Marker: ${marker}.`;
+  const pages = new Set(forms.map((f) => f.id.split('@')[1] ?? ''));
+  const dropped = Object.entries(state.dropped ?? {})
+    .filter(([pageId]) => (!args.form && !args.page) || pages.has(pageId))
+    .reduce((sum, [, count]) => sum + count, 0);
+  const note = droppedNote(dropped, 'form events', 'formTimeline');
+  if (!events.length) return `No matching form events. Marker: ${marker}.${note}`;
   const byForm = new Map(state.forms.map((f) => [f.id, f.label]));
   const lines = events
     .slice(-limit)
     .map((e) => `${eventLine(e)} in ${code(byForm.get(e.formId) ?? e.formId)}`);
-  return `${UNTRUSTED}\n\n${lines.join('\n')}\n\nMarker: ${marker} (pass as \`since\` to form-diff or form-history).`;
+  return `${UNTRUSTED}\n\n${lines.join('\n')}\n\nMarker: ${marker} (pass as \`since\` to form-diff or form-history).${note}`;
 }
 
 export function formDiffText(state: FormsState, args: FieldArgs & { since?: number }): string {
@@ -424,7 +431,7 @@ export function formDiffText(state: FormsState, args: FieldArgs & { since?: numb
   }
   const marker = latestMarker(state);
   if (!net.size) return `Nothing changed since marker ${since}. Marker now: ${marker}.`;
-  const oldest = state.events[0]?.seq ?? 0;
+  const oldest = Math.min(...state.events.map((event) => event.seq ?? 0));
   const lines = Array.from(net.values())
     .map((entry) => {
       const to = entry.type === 'status' ? entry.to?.split('→').pop()?.trim() : entry.to;

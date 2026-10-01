@@ -9,7 +9,7 @@ description: Run the devtools from the command line, build a static report, or s
 
 # Standalone CLI
 
-The package installs an `ng-devtools` binary. Run it from the root of your Angular workspace. It scans the source files in the current directory, so it works without starting your app.
+The package installs an `ng-devtools` binary. Run it from the root of your Angular workspace, or point it there with `--root`. It scans the source files in that folder, so it works without starting your app.
 
 ## Commands
 
@@ -18,6 +18,33 @@ The package installs an `ng-devtools` binary. Run it from the root of your Angul
 | `dev`   | Starts a local server with the devtools UI.         |
 | `build` | Writes a static copy of the devtools with the scan. |
 | `mcp`   | Starts an MCP server over stdio for coding agents.  |
+
+`ng-devtools --version` prints the package version. An unknown command or flag prints one error line and exits with code 1. `ng-devtools --help` lists the commands and flags.
+
+### Flags for every command
+
+| Flag              | What it does                                                                                                                                                          |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--root <dir>`    | The project folder to scan. The default is `NG_DEVTOOLS_ROOT`, then the working directory.                                                                            |
+| `--config <file>` | A JSON file with the [devtools options](./configuration.md). The default is `NG_DEVTOOLS_CONFIG`, then `ng-devtools.config.json` in the project folder, if it exists. |
+| `--read-only`     | Sets `agent.readOnly`: drops the agent tools that act on the page or the server. See [Inspectors and agent tools](./configuration.md#inspectors-and-agent-tools).     |
+
+If the project folder has no `angular.json` and no `package.json` that depends on `@angular/core`, the CLI prints a warning on stderr, because the scans find nothing there.
+
+### Config file
+
+The file holds the same options as `createNgDevtools()`, as JSON:
+
+```json
+// ng-devtools.config.json
+{
+  "inspectors": {"analog": false},
+  "agent": {"readOnly": true},
+  "redaction": {"secretNames": ["passport"]}
+}
+```
+
+A missing `--config` file or invalid JSON stops the command with an error.
 
 ### Run it without installing
 
@@ -57,6 +84,16 @@ The default command starts a local server with the devtools UI. `dev` is optiona
 npx @santoshyadavdev/ng-devtools dev --port 9999 --open
 ```
 
+When the server is ready, it prints the version, the panel URL and the MCP endpoint:
+
+```text
+  ng-devtools v0.0.5
+  Panel: http://localhost:9999/
+  MCP:   http://localhost:9999/__mcp
+```
+
+If you pass no `--port` and port 9999 is taken, it also prints the port it uses instead.
+
 ### Dev server flags
 
 | Flag                  | What it does                                                                        |
@@ -90,7 +127,7 @@ No page is connected to the CLI server. The tabs show what your source declares:
 
 ### Build it
 
-`build` writes a self-contained static copy of the devtools with the source scan baked in.
+`build` writes a self-contained static copy of the devtools with the source scan baked in: components, routes, signals, providers, pipes, NgRx declarations and build metadata.
 
 ```bash
 npx @santoshyadavdev/ng-devtools build --outDir dist-report
@@ -98,10 +135,18 @@ npx @santoshyadavdev/ng-devtools build --outDir dist-report
 
 ### Report flags
 
-| Flag             | What it does                                          |
-| ---------------- | ----------------------------------------------------- |
-| `--outDir <dir>` | Output directory. The default is `dist-static`.       |
-| `--pretty`       | Pretty-print the data files. They get larger on disk. |
+| Flag             | What it does                                                              |
+| ---------------- | ------------------------------------------------------------------------- |
+| `--outDir <dir>` | Output directory. The default is `dist-static`. It is emptied first.      |
+| `--pretty`       | Pretty-print the data files. They get larger on disk.                     |
+| `--force`        | Empty `--outDir` even when it holds files that are not a previous report. |
+
+### Output folder checks
+
+The build deletes everything in `--outDir` before it writes the report. To protect your files, it stops with an error when `--outDir` is:
+
+- the working directory or one of its parents, even with `--force`. With `--root`, this covers both the folder you ran the command from and the `--root` folder,
+- a file, or a folder that is not empty and has no `__connection.json` (so it is not a previous report), unless you pass `--force`.
 
 ### Open or host it
 
@@ -121,7 +166,7 @@ Your agent client runs this command for you. [MCP server](../agents/mcp-server.m
 
 ### Source scan only
 
-The stdio server has no page connected, so only the source scan tools return data. For live data, point your agent at the HTTP endpoint of a running app instead. On a hub it lives at `/__devframes/__mcp`.
+The stdio server has no page connected, so it registers only the tools that read your source files. The tools that need a page, such as `highlight`, `navigate`, `form-action` and the forms and router tools, are left out. For live data, point your agent at the HTTP endpoint of a running app instead. On a hub it lives at `/__devframes/__mcp`.
 
 ## FAQ
 
@@ -130,10 +175,10 @@ The stdio server has no page connected, so only the source scan tools return dat
     No. All three commands read your source files. Only live data needs a running app with the overlay loaded.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Which directory should I run it from?">
-    The root of your Angular workspace. The scan starts from the current directory.
+    The root of your Angular workspace. The scan starts from the current directory, or from the folder you pass with <code>--root</code>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Port 9999 is taken">
-    Without <code>--port</code>, the server picks a random free port. Pass <code>--port</code> to choose one yourself.
+    Without <code>--port</code>, the server picks a random free port and prints it. Pass <code>--port</code> to choose one yourself.
   </ngmd-accordion-item>
 </ngmd-accordion>
 

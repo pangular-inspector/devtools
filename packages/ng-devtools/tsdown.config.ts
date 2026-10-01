@@ -9,6 +9,7 @@ export default defineConfig({
     'src/vite.ts',
     'src/http.ts',
     'src/hub.ts',
+    'src/cli.ts',
   ],
   external: [/^@angular\//, /^rxjs/],
   format: 'esm',

@@ -730,6 +730,33 @@ describe('secret parents and disabled children', () => {
     expect(JSON.stringify(seen)).not.toMatch(/new-secret|sk-2/);
   });
 
+  it('flags children of a secret-named group as redacted by their parent', () => {
+    const form = new FormGroup({
+      passwords: new FormGroup({ first: new FormControl('a1') }),
+      apiKeys: new FormArray([new FormControl('sk-1')]),
+    });
+    const [passwords, apiKeys] = serializeControl(form).children!;
+    expect(passwords.redacted).toBe('key');
+    expect(passwords.children![0]).toMatchObject({ value: '[redacted]', redacted: 'parent' });
+    expect(apiKeys.children![0]).toMatchObject({ value: '[redacted]', redacted: 'parent' });
+  });
+
+  it('flags Signal Forms children of a secret-named field, created or not', () => {
+    const first = fakeField({ value: 'a1' });
+    const passwords = fakeField({ value: { first: 'a1', second: 'a2' }, children: { first } });
+    const root = fakeField({
+      value: { passwords: { first: 'a1', second: 'a2' }, token: 't' },
+      children: { passwords },
+    });
+    const [group, token] = serializeField(root.node).children!;
+    expect(group.redacted).toBe('key');
+    expect(group.children!.map((c) => [c.key, c.value, c.redacted])).toEqual([
+      ['first', '[redacted]', 'parent'],
+      ['second', '[redacted]', 'parent'],
+    ]);
+    expect(token).toMatchObject({ materialized: false, value: '[redacted]', redacted: 'key' });
+  });
+
   it('leaves disabled children out of a group value event, like form.value', () => {
     const form = new FormGroup({ a: new FormControl('x'), b: new FormControl('y') });
     form.controls.b.disable();

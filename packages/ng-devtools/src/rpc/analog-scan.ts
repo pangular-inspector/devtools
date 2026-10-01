@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { IGNORED_DIRS, maskStrings, stripComments } from './source-scan.ts';
 
 export type AnalogRouteKind = 'page' | 'layout' | 'markdown' | 'group' | 'implicit';
@@ -28,11 +29,29 @@ export interface AnalogApiRoute {
   params: string[];
 }
 
+export interface AnalogServerFn {
+  name: string;
+  file: string;
+  id: string;
+  method: string;
+}
+
 export interface AnalogContentFile {
   file: string;
   slug: string;
   attributes: Record<string, string>;
   error?: string;
+}
+
+export interface AnalogRouteRule {
+  path: string;
+  ssr?: boolean;
+  prerender?: boolean;
+  isr?: string;
+  swr?: string;
+  cache?: boolean;
+  redirect?: string;
+  cacheControl?: string;
 }
 
 export interface AnalogConfig {
@@ -42,6 +61,7 @@ export interface AnalogConfig {
   prerenderDynamic?: boolean;
   apiPrefix: string;
   noSsrRoutes: string[];
+  routeRules: AnalogRouteRule[];
   configFile?: string;
 }
 
@@ -55,6 +75,7 @@ export interface AnalogProject {
   api: AnalogApiRoute[];
   middleware: string[];
   content: AnalogContentFile[];
+  serverFns: AnalogServerFn[];
   config: AnalogConfig;
   prerendered: string[];
   scanErrors?: string[];
@@ -351,6 +372,60 @@ export function apiRoutes(root: string): AnalogApiRoute[] {
   });
 }
 
+/** The id Analog derives for a server function (see derive-server-fn-id in @analogjs/vite-plugin-nitro). */
+export function serverFnId(file: string, name: string): string {
+  return createHash('sha256')
+    .update(`${file.replace(/^\//, '')}#${name}`)
+    .digest('hex')
+    .slice(0, 16);
+}
+
+function serverFnMethod(source: string, argsAt: number): string {
+  const rest = source.slice(argsAt).trimStart();
+  if (/^(?:async\b|function\b|\(|\w+\s*=>)/.test(rest)) return 'GET';
+  if (!rest.startsWith('{')) return 'POST';
+  const config = rest.slice(0, blockEnd(rest, 0) + 1);
+  const method = config.match(/\bmethod\s*:\s*['"`](\w+)['"`]/);
+  if (method) return method[1].toUpperCase();
+  return /\binput\s*:/.test(config) ? 'POST' : 'GET';
+}
+
+export function serverFnsOf(file: string, source: string): AnalogServerFn[] {
+  if (!source.includes('serverFn')) return [];
+  const code = stripComments(source);
+  const masked = maskStrings(code);
+  const locals = new Set<string>();
+  for (const match of masked.matchAll(/\bimport\s*\{([^}]*)\}\s*from\s*(['"`])/g)) {
+    const from = code.slice(match.index + match[0].length).match(/^([^'"`]*)/)?.[1];
+    if (from !== '@analogjs/router/server') continue;
+    for (const spec of match[1].split(',')) {
+      const alias = spec.trim().match(/^serverFn(?:\s+as\s+(\w+))?$/);
+      if (alias) locals.add(alias[1] ?? 'serverFn');
+    }
+  }
+  if (!locals.size) locals.add('serverFn');
+  const out: AnalogServerFn[] = [];
+  for (const match of masked.matchAll(
+    /\bexport\s+(?:const|let|var)\s+(\w+)\s*(?::[^=]+)?=\s*(\w+)\s*\(/g,
+  )) {
+    if (!locals.has(match[2])) continue;
+    out.push({
+      name: match[1],
+      file,
+      id: serverFnId(file, match[1]),
+      method: serverFnMethod(code, match.index + match[0].length),
+    });
+  }
+  return out;
+}
+
+export function serverFunctions(root: string): AnalogServerFn[] {
+  const src = join(root, 'src');
+  return walk(src, (n) => n.endsWith('.server.ts') && n !== 'app.config.server.ts')
+    .filter((full) => relative(src, full).split('\\').join('/').includes('/'))
+    .flatMap((full) => serverFnsOf(rel(root, full), read(full)));
+}
+
 export function frontmatter(source: string): {
   attributes: Record<string, string>;
   error?: string;
@@ -392,6 +467,67 @@ function configFile(root: string): string | undefined {
   );
 }
 
+function blockEnd(source: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}' && --depth === 0) return i;
+  }
+  return source.length;
+}
+
+function ruleTiming(body: string, key: string): string | undefined {
+  const match = body.match(new RegExp(`\\b${key}\\s*:\\s*(true|false|\\d+|\\{)`));
+  if (!match || match[1] === 'false') return undefined;
+  return match[1] === '{' ? 'true' : match[1];
+}
+
+export function routeRuleOf(path: string, body: string): AnalogRouteRule {
+  const rule: AnalogRouteRule = { path };
+  const flag = (key: string) => body.match(new RegExp(`\\b${key}\\s*:\\s*(true|false)\\b`))?.[1];
+  const ssr = flag('ssr');
+  if (ssr) rule.ssr = ssr === 'true';
+  const prerender = flag('prerender');
+  if (prerender) rule.prerender = prerender === 'true';
+  const isr = ruleTiming(body, 'isr');
+  if (isr) rule.isr = isr;
+  const swr = ruleTiming(body, 'swr');
+  if (swr) rule.swr = swr;
+  const cache = body.match(/\bcache\s*:\s*(false|\{)/)?.[1];
+  if (cache) rule.cache = cache === '{';
+  const redirect =
+    body.match(/\bredirect\s*:\s*['"`]([^'"`]+)['"`]/) ??
+    body.match(/\bredirect\s*:\s*\{[^}]*\bto\s*:\s*['"`]([^'"`]+)['"`]/);
+  if (redirect) rule.redirect = redirect[1];
+  const cacheControl = body.match(/['"`]?cache-control['"`]?\s*:\s*['"`]([^'"`]+)['"`]/i);
+  if (cacheControl) rule.cacheControl = cacheControl[1];
+  return rule;
+}
+
+export function routeRulesOf(source: string): AnalogRouteRule[] {
+  const rules: AnalogRouteRule[] = [];
+  const blocks = /\brouteRules\s*:\s*\{/g;
+  for (let block = blocks.exec(source); block; block = blocks.exec(source)) {
+    const open = block.index + block[0].length - 1;
+    const end = blockEnd(source, open);
+    const entry = /['"`](\/[^'"`]*)['"`]\s*:\s*\{/y;
+    for (let i = open + 1; i < end;) {
+      entry.lastIndex = i;
+      const match = entry.exec(source);
+      if (!match) {
+        i++;
+        continue;
+      }
+      const bodyOpen = match.index + match[0].length - 1;
+      const bodyEnd = blockEnd(source, bodyOpen);
+      rules.push(routeRuleOf(match[1], source.slice(bodyOpen + 1, bodyEnd)));
+      i = bodyEnd + 1;
+    }
+    blocks.lastIndex = end;
+  }
+  return rules;
+}
+
 function stripBlocks(source: string, keys: string[]): string {
   let out = source;
   for (const key of keys) {
@@ -412,7 +548,7 @@ function stripBlocks(source: string, keys: string[]): string {
 
 export function analogConfig(root: string): AnalogConfig {
   const file = configFile(root);
-  const config: AnalogConfig = { apiPrefix: 'api', noSsrRoutes: [] };
+  const config: AnalogConfig = { apiPrefix: 'api', noSsrRoutes: [], routeRules: [] };
   if (!file) return config;
   config.configFile = file;
   const source = stripComments(read(join(root, file)));
@@ -444,15 +580,14 @@ export function analogConfig(root: string): AnalogConfig {
       config.prerender = Array.from(prerender[1].matchAll(/['"`](\/[^'"`]*)['"`]/g), (m) => m[1]);
     } else config.prerenderDynamic = true;
   }
-  for (const match of options.matchAll(/['"`](\/[^'"`]*)['"`]\s*:\s*\{[^}]*\bssr\s*:\s*false/g)) {
-    config.noSsrRoutes.push(match[1]);
-  }
+  config.routeRules = routeRulesOf(options);
+  config.noSsrRoutes = config.routeRules.filter((r) => r.ssr === false).map((r) => r.path);
   return config;
 }
 
-export function analogVersion(root: string): string | undefined {
+function packageVersion(dir: string): string | undefined {
   try {
-    const pkg = JSON.parse(read(join(root, 'package.json')));
+    const pkg = JSON.parse(read(join(dir, 'package.json')));
     const deps = { ...pkg.dependencies, ...pkg.devDependencies };
     return deps['@analogjs/platform'] ?? deps['@analogjs/router'];
   } catch {
@@ -460,8 +595,64 @@ export function analogVersion(root: string): string | undefined {
   }
 }
 
-export function prerenderedPages(root: string): string[] {
-  const dir = join(root, 'dist/analog/public');
+function isWorkspaceBoundary(dir: string): boolean {
+  return dirname(dir) === dir || existsSync(join(dir, '.git')) || existsSync(join(dir, 'nx.json'));
+}
+
+function analogPackage(root: string): { dir: string; version: string } | undefined {
+  const own = packageVersion(root);
+  if (own) return { dir: root, version: own };
+  if (isWorkspaceBoundary(root) || !hasAnalogConfig(root)) return undefined;
+  for (let dir = dirname(root); ; dir = dirname(dir)) {
+    const version = packageVersion(dir);
+    if (version) return { dir, version };
+    if (isWorkspaceBoundary(dir)) return undefined;
+  }
+}
+
+function nxWorkspace(root: string): string | undefined {
+  for (let dir = root; ; dir = dirname(dir)) {
+    if (existsSync(join(dir, 'nx.json'))) return dir;
+    if (isWorkspaceBoundary(dir)) return undefined;
+  }
+}
+
+export function analogVersion(root: string): string | undefined {
+  return analogPackage(root)?.version;
+}
+
+function hasAnalogConfig(dir: string): boolean {
+  const file = configFile(dir);
+  return !!file && /\banalog\s*\(/.test(stripComments(read(join(dir, file))));
+}
+
+let viteRoot: string | undefined;
+
+export function setAnalogRoot(root: string | undefined) {
+  viteRoot = root;
+}
+
+export function servedAnalogRoot(cwd: string): string {
+  return analogRoot(viteRoot ?? cwd);
+}
+
+export function analogRoot(cwd: string): string {
+  if (existsSync(join(cwd, 'src/app/pages')) || hasAnalogConfig(cwd)) return cwd;
+  let names: string[];
+  try {
+    names = readdirSync(join(cwd, 'apps')).sort();
+  } catch {
+    return cwd;
+  }
+  return names.map((name) => join(cwd, 'apps', name)).find(hasAnalogConfig) ?? cwd;
+}
+
+export function prerenderedPages(root: string, workspace = root): string[] {
+  const dir = [
+    join(root, 'dist/analog/public'),
+    join(workspace, 'dist', relative(workspace, root), 'analog/public'),
+  ].find((candidate) => existsSync(candidate));
+  if (!dir) return [];
   return walk(dir, (n) => n === 'index.html').map((full) => {
     const path = relative(dir, full)
       .split('\\')
@@ -471,8 +662,9 @@ export function prerenderedPages(root: string): string[] {
   });
 }
 
-export function scanAnalog(root: string): AnalogProject {
+export function scanAnalog(cwd: string): AnalogProject {
   walkErrors = new Map();
+  const root = analogRoot(cwd);
   try {
     const project = scanProject(root);
     if (walkErrors.size) {
@@ -485,7 +677,8 @@ export function scanAnalog(root: string): AnalogProject {
 }
 
 function scanProject(root: string): AnalogProject {
-  const version = analogVersion(root);
+  const pkg = analogPackage(root);
+  const version = pkg?.version;
   const files = routeFiles(root);
   return {
     analog: !!version,
@@ -503,8 +696,9 @@ function scanProject(root: string): AnalogProject {
         )
       : [],
     content: version ? contentFiles(root) : [],
+    serverFns: version ? serverFunctions(root) : [],
     config: analogConfig(root),
-    prerendered: version ? prerenderedPages(root) : [],
+    prerendered: pkg ? prerenderedPages(root, nxWorkspace(root) ?? pkg.dir) : [],
   };
 }
 
@@ -606,6 +800,10 @@ export function explainUrl(routes: AnalogRoute[], url: string): UrlMatch {
   return { matched: chain.length > 0, chain, params, rejected: rejected.slice(0, 20) };
 }
 
+function hasPageExports(source: string): boolean {
+  return exportsOf(maskStrings(stripComments(source))).some((e) => e === 'load' || e === 'action');
+}
+
 export function lintAnalog(project: AnalogProject): AnalogLintFinding[] {
   const out: AnalogLintFinding[] = [];
   for (const error of project.scanErrors ?? []) {
@@ -618,6 +816,7 @@ export function lintAnalog(project: AnalogProject): AnalogLintFinding[] {
     });
   }
   const all = flattenRoutes(project.routes);
+  const fnFiles = new Set((project.serverFns ?? []).map((fn) => fn.file));
   const byPath = new Map<string, AnalogRoute[]>();
   for (const route of all) {
     if (!route.file || route.kind === 'layout' || route.kind === 'group') continue;
@@ -700,7 +899,11 @@ export function lintAnalog(project: AnalogProject): AnalogLintFinding[] {
         fix: 'Add <router-outlet /> to the layout template.',
       });
     }
-    if (route.serverFile && !route.serverExports?.some((e) => e === 'load' || e === 'action')) {
+    if (
+      route.serverFile &&
+      !route.serverExports?.some((e) => e === 'load' || e === 'action') &&
+      !fnFiles.has(route.serverFile)
+    ) {
       out.push({
         rule: 'server-without-load',
         severity: 'warning',
@@ -713,6 +916,7 @@ export function lintAnalog(project: AnalogProject): AnalogLintFinding[] {
   }
   const pages = new Set(project.files);
   for (const file of project.serverFiles) {
+    if (fnFiles.has(file) && !hasPageExports(read(join(project.root, file)))) continue;
     if (!pages.has(file.replace('.server.ts', '.page.ts'))) {
       out.push({
         rule: 'orphan-server-file',

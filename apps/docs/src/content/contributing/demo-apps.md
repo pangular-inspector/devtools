@@ -26,26 +26,44 @@ The repository has two demo apps. Use them to try a change against a real app be
 
 ### What's inside
 
-| Area                              | What it covers                                                                                                                                               |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Destinations**                  | Search, region filter and sort kept in the URL, backed by an `@ngrx/signals` store (`withState`, `withComputed`, `withMethods`).                             |
-| **Trip pages**                    | Loaded by a resolver that redirects unknown trips, with a route title resolver.                                                                              |
-| **Booking**                       | A Signal Forms checkout with a departure date rule, a seat limit and an unsaved-changes guard.                                                               |
-| **My Trips**                      | Behind a sign-in guard that redirects to a reactive form and back.                                                                                           |
-| **DevTools Lab** (`/examples`)    | Small, focused pages for signals, components, DI, routes, forms, pipes and HTTP.                                                                             |
-| **SSR & HTTP** (`/examples/http`) | A product list fetched from `/api/products` during SSR and replayed from the transfer cache. The endpoint accepts `?delay=` and `?fail=` for backend errors. |
+| Area                              | What it covers                                                                                                                                                 |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Destinations**                  | Search, region filter and sort kept in the URL, backed by an `@ngrx/signals` store (`withState`, `withComputed`, `withMethods`).                               |
+| **Trip pages**                    | Loaded by a resolver that redirects unknown trips, with a route title resolver.                                                                                |
+| **Booking**                       | A Signal Forms checkout with a departure date rule, a seat limit and an unsaved-changes guard.                                                                 |
+| **My Trips**                      | Behind a sign-in guard that redirects to a reactive form and back.                                                                                             |
+| **DevTools Lab** (`/examples`)    | Small, focused pages for signals, components, DI, routes, forms, pipes, HTTP, NgRx and defer blocks.                                                           |
+| **SSR & HTTP** (`/examples/http`) | A product list fetched from `/api/products` during SSR and replayed from the transfer cache. The endpoint accepts `?delay=` and `?fail=` for backend errors.   |
+| **Defer** (`/examples/defer`)     | `@defer` blocks on viewport, on interaction and on a condition, with `@loading` and `@error` blocks, plus `hydrate on interaction` and `hydrate never` blocks. |
 
 Destination photos are from Unsplash, credited in `public/destinations/CREDITS.md`.
+
+### Routes lab
+
+`/examples/routes` has one link per router case, so the Router tab has something to show:
+
+| Link                     | What it does                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Summary**              | Target of the empty-path redirect.                                                                                                          |
+| **Details**              | A plain child route.                                                                                                                        |
+| **User 7**               | A `:id` param with a slow resolver.                                                                                                         |
+| **Admin**                | A guard that redirects to **Summary**.                                                                                                      |
+| **Locked**               | A guard that returns `false`.                                                                                                               |
+| **Broken**               | A resolver that throws.                                                                                                                     |
+| **Guard loop**           | `loop-a` and `loop-b` guards that redirect to each other five times, then to **Summary**. The Navigations view flags it as a redirect loop. |
+| **Navigation ping-pong** | A button whose code navigates between **Details** and **Summary** six times in a row. The Navigations view flags it as a navigation loop.   |
+
+Keep `redirectTo` cycles (`NG04016`) in the unit tests: Angular stops them before any guard runs.
 
 ### Where the devtools are wired
 
 The demo shows the full setup in three files:
 
-| File                    | What it adds                                                            |
-| ----------------------- | ----------------------------------------------------------------------- |
-| `src/server.ts`         | The hub, with `initNgDevtoolsHub()` mounted as Express middleware       |
-| `src/main.ts`           | The overlay and `registerNgrxSignals`, loaded in development only       |
-| `src/app/app.config.ts` | `withNgDevtools()` and `provideNgDevtoolsHttp()` for the SSR & HTTP tab |
+| File                    | What it adds                                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `src/server.ts`         | The hub, with `initNgDevtoolsHub()` mounted as Express middleware                                                              |
+| `src/main.ts`           | The overlay and `registerNgrxSignals`, loaded in development only                                                              |
+| `src/app/app.config.ts` | `withNgDevtools()` and `provideNgDevtoolsHttp()` for the SSR & HTTP tab, and `withIncrementalHydration()` for the defer blocks |
 
 ### Run in development
 
@@ -99,6 +117,10 @@ pnpm analog:dev
 ```
 
 The script builds the devtools package, then starts the Vite dev server. That dev server also serves the devtools and the MCP endpoint.
+
+### Type-check the Analog demo
+
+`pnpm typecheck` runs `ngc -p examples/analog/tsconfig.app.json --noEmit`, so CI type-checks the demo's pages, templates, loaders, API routes and middleware. The demo resolves `@santoshyadavdev/ng-devtools` to the package source, which imports with `.ts` extensions, so `tsconfig.app.json` sets `rewriteRelativeImportExtensions`.
 
 ### Build and preview
 

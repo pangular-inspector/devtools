@@ -47,4 +47,4 @@ The overlay runs inside the user's app, so it must be correct, cheap and invisib
 - Every behavior change comes with a test in `packages/ng-devtools/src/__tests__` or `packages/ng-devtools/src/rpc/__tests__`.
 - Page-side collectors are tested in jsdom with a fake `ng` object; see `injector-tree.test.ts` and `component-tree.test.ts`.
 - Test names read as sentences: `it('keeps ids stable between collections')`.
-- Run `pnpm test:devtools` and `pnpm test` before you push.
+- Run `pnpm test:devtools`, `pnpm test:panel` and `pnpm test` before you push.

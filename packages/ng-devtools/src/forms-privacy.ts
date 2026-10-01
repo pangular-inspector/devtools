@@ -2,6 +2,23 @@ export const REDACTED = '[redacted]';
 
 export type RedactReason = 'key' | 'input-type' | 'autocomplete' | 'marker' | 'parent' | 'config';
 
+export const REDACT_LABELS: Record<RedactReason, string> = {
+  key: 'name looks secret',
+  'input-type': 'password input',
+  autocomplete: 'autocomplete is a secret kind',
+  marker: 'marked as mask',
+  parent: 'inside a secret group',
+  config: 'listed in mask',
+};
+
+/** How to let DevTools write a field redacted for `reason`; `key` is the name that matched. */
+export function unmaskHint(reason: RedactReason, key: string): string {
+  const byKey = `add "${key}" to unmask on window.__NG_DEVTOOLS_FORMS__ or to redaction.unmask`;
+  return reason === 'key' || reason === 'parent' || reason === 'config'
+    ? byKey
+    : `add data-ng-devtools="unmask" to the field, or ${byKey}`;
+}
+
 const SECRET_WORDS = new Set([
   'password',
   'passwd',
@@ -23,6 +40,9 @@ const SECRET_WORDS = new Set([
   'cc',
   'credential',
   'credentials',
+  'cookie',
+  'authorization',
+  'jwt',
 ]);
 
 const SECRET_PAIRS = new Set([
@@ -33,6 +53,8 @@ const SECRET_PAIRS = new Set([
   'ccnum',
   'ccnumber',
   'securitycode',
+  'sessionid',
+  'sessionkey',
 ]);
 
 const SECRET_AUTOCOMPLETE = /password|one-time-code|cc-/i;
@@ -96,19 +118,20 @@ function containsName(words: string[], name: string): boolean {
   return false;
 }
 
-/** Whether a key matches one of the `redaction.secretNames` from the devtools config. */
-export function isCustomSecretKey(key: string): boolean {
-  if (!secretNames.length) return false;
-  const words = wordsOf(key).map(singular);
-  return secretNames.some((name) => containsName(words, name));
-}
-
 export function isSecretKey(key: string): boolean {
   const words = wordsOf(key).map(singular);
   if (words.some((word) => SECRET_WORDS.has(word))) return true;
   if (SECRET_PAIRS.has(words.join(''))) return true;
   if (words.some((word, i) => i > 0 && SECRET_PAIRS.has(words[i - 1] + word))) return true;
   return secretNames.some((name) => containsName(words, name));
+}
+
+/**
+ * The one key check for values leaving the page: the built-in words,
+ * `redaction.secretNames`, and the `mask` and `unmask` lists.
+ */
+export function isRedactedKey(key: string): boolean {
+  return redactReason(key) !== null;
 }
 
 function listed(list: string[] | undefined, key: string): boolean {

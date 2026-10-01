@@ -9,9 +9,14 @@ import {
   frontmatter,
   lintAnalog,
   scanAnalog,
+  servedAnalogRoot,
+  setAnalogRoot,
   toRawPath,
   toSegment,
 } from '../rpc/analog-scan.ts';
+import { getBuildMeta } from '../rpc/build-meta.ts';
+import { extractRoutes } from '../rpc/get-routes.ts';
+import { scan } from '../rpc/__tests__/scan.ts';
 import { BASE_FILES, BROKEN_FILES, makeProject } from './analog-fixture.ts';
 
 describe('Analog route rules', () => {
@@ -190,6 +195,89 @@ describe('Analog route rules', () => {
       expect.objectContaining({ rule: 'scan-error', file: '/src/server/middleware' }),
     );
     expect(scanAnalog(makeProject(BASE_FILES)).scanErrors).toBeUndefined();
+  });
+
+  it('finds the app in an Nx workspace from the workspace or the app folder', () => {
+    const { 'package.json': pkg, ...app } = BASE_FILES;
+    const ws = makeProject(
+      { 'package.json': pkg, 'nx.json': '{}', 'apps/docs-site/project.json': '{}' },
+      Object.fromEntries(Object.entries(app).map(([file, text]) => [`apps/shop/${file}`, text])),
+    );
+    const shop = join(ws, 'apps/shop');
+    for (const page of ['', 'pricing']) {
+      mkdirSync(join(ws, 'dist/apps/shop/analog/public', page), { recursive: true });
+      writeFileSync(join(ws, 'dist/apps/shop/analog/public', page, 'index.html'), '<html></html>');
+    }
+    const fromApp = scanAnalog(shop);
+    const fromWorkspace = scanAnalog(ws);
+    for (const project of [fromApp, fromWorkspace]) {
+      expect(project).toMatchObject({ analog: true, version: '2.7.5', root: shop });
+      expect(project.routes.length).toBeGreaterThan(0);
+      expect(project.api.length).toBeGreaterThan(0);
+      expect(project.config.prerender).toContain('/pricing');
+      expect(project.prerendered.sort()).toEqual(['/', '/pricing']);
+    }
+    expect(fromWorkspace.files).toEqual(fromApp.files);
+    expect(extractRoutes(ws).map((r) => r.file)).toContain(
+      'apps/shop/src/app/pages/(marketing)/pricing.page.ts',
+    );
+  });
+
+  it('uses the Vite root for every surface when an Nx workspace has several Analog apps', async () => {
+    const { 'package.json': pkg, ...app } = BASE_FILES;
+    const inApp = (name: string) =>
+      Object.fromEntries(Object.entries(app).map(([file, text]) => [`apps/${name}/${file}`, text]));
+    const ws = makeProject(
+      {
+        'package.json': pkg,
+        'nx.json': '{}',
+        'apps/blog/src/app/pages/blog-only.page.ts': app['src/app/pages/index.page.ts']!,
+        'apps/blog/vite.config.ts': `import analog from '@analogjs/platform';\nexport default { plugins: [analog({ ssr: false })] };\n`,
+      },
+      inApp('shop'),
+    );
+    const shop = join(ws, 'apps/shop');
+    setAnalogRoot(shop);
+    try {
+      expect(servedAnalogRoot(ws)).toBe(shop);
+      const files = extractRoutes(ws).map((r) => r.file);
+      expect(files).toContain('apps/shop/src/app/pages/(marketing)/pricing.page.ts');
+      expect(files.some((file) => file.startsWith('apps/blog/'))).toBe(false);
+      expect(await scan(getBuildMeta, ws)).toMatchObject({ ssr: true, analog: '2.7.5' });
+    } finally {
+      setAnalogRoot(undefined);
+    }
+    expect(servedAnalogRoot(ws)).toBe(join(ws, 'apps/blog'));
+  });
+
+  it('does not treat a plain Angular app as Analog because the workspace root installs Analog', () => {
+    const { 'package.json': pkg, ...app } = BASE_FILES;
+    const ws = makeProject(
+      {
+        'package.json': pkg,
+        'nx.json': '{}',
+        'apps/admin/project.json': '{}',
+        'apps/admin/src/main.ts': '',
+      },
+      Object.fromEntries(Object.entries(app).map(([file, text]) => [`apps/shop/${file}`, text])),
+    );
+    expect(scanAnalog(join(ws, 'apps/admin'))).toMatchObject({ analog: false, routes: [] });
+    expect(scanAnalog(join(ws, 'apps/shop'))).toMatchObject({ analog: true, version: '2.7.5' });
+  });
+
+  it('finds workspace build output when the app declares Analog in its own package.json', () => {
+    const { 'package.json': pkg, ...app } = BASE_FILES;
+    const ws = makeProject(
+      { 'package.json': '{"name":"workspace"}', 'nx.json': '{}', 'apps/shop/package.json': pkg },
+      Object.fromEntries(Object.entries(app).map(([file, text]) => [`apps/shop/${file}`, text])),
+    );
+    for (const page of ['', 'pricing']) {
+      mkdirSync(join(ws, 'dist/apps/shop/analog/public', page), { recursive: true });
+      writeFileSync(join(ws, 'dist/apps/shop/analog/public', page, 'index.html'), '<html></html>');
+    }
+    const project = scanAnalog(join(ws, 'apps/shop'));
+    expect(project).toMatchObject({ analog: true, version: '2.7.5' });
+    expect(project.prerendered.sort()).toEqual(['/', '/pricing']);
   });
 
   it('reports a non-Analog project as such', () => {

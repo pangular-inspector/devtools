@@ -96,6 +96,7 @@ describe('instrumentation', () => {
   });
 
   it('counts template updates per component through a chained profiler', () => {
+    document.body.innerHTML = '<app-root ng-version="22.1.0"></app-root>';
     let profiler: ((event: number, instance: unknown) => void) | null = null;
     let removed = false;
     const ng = {
@@ -124,6 +125,9 @@ describe('instrumentation', () => {
     counter.stop();
     expect(removed).toBe(true);
     expect(countRenders({})).toBeNull();
+    document.body.innerHTML = '<app-root ng-version="19.2.0"></app-root>';
+    expect(countRenders(ng)).toBeNull();
+    document.body.innerHTML = '';
   });
 });
 

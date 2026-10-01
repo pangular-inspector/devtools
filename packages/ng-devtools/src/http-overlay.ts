@@ -1,7 +1,10 @@
+import { keepaliveDue } from './change-detection.ts';
 import { appIdOf, scanHydration } from './http-hydration.ts';
 import { decodePayload, type PayloadSummary } from './http-payload.ts';
-import { httpRegistry, sanitizeRules, storeRules } from './http-rules.ts';
-import type { HttpPage, HydrationStats } from './types.ts';
+import { redactCall } from './http-redact.ts';
+import { httpRegistry, sanitizeRules, storeRules, type HttpCall } from './http-rules.ts';
+import { redactUrl } from './router.ts';
+import type { HttpReport, HydrationStats } from './types.ts';
 
 interface RpcScope {
   rpc: {
@@ -63,36 +66,57 @@ function hydrationStats(
   };
 }
 
-/** Reports payload, hydration and client calls, and keeps fault rules in sync. */
-export function attachHttp(my: RpcScope, pageId: string) {
+/**
+ * Reports payload, hydration and client calls, and keeps fault rules in sync.
+ * The payload and the full call list go out once; later pushes carry only new
+ * calls, and a ping keeps the page alive while nothing changes.
+ */
+export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = () => 0) {
   const payload = decodePayload(document, appIdOf(document));
-  const initialUrl = location.pathname + location.search;
+  const initialUrl = redactUrl(location.pathname + location.search);
   const scanner = createHydrationScanner();
   let payloadSent = false;
-  let lastSent = '';
+  let lastCall: HttpCall | undefined;
+  let lastMeta = '';
   let lastSentAt = 0;
+  let queue = Promise.resolve();
 
-  const push = async () => {
-    const report: Omit<HttpPage, 'reportedAt' | 'firstSeenAt' | 'payload'> = {
+  const newCalls = (calls: HttpCall[]) => {
+    const at = lastCall ? calls.lastIndexOf(lastCall) : -1;
+    return at === -1 ? [...calls] : calls.slice(at + 1);
+  };
+
+  const pushOnce = async () => {
+    const registry = httpRegistry();
+    const all = registry.calls ?? [];
+    const meta = {
       pageId,
-      url: location.pathname + location.search,
+      url: redactUrl(location.pathname + location.search),
       initialUrl,
       title: document.title,
       hydration: hydrationStats(payload, scanner),
-      calls: [...(httpRegistry().calls ?? [])],
+      dropped: registry.dropped ?? 0,
     };
-    const body = JSON.stringify(report);
-    if (payloadSent && body === lastSent && Date.now() - lastSentAt < 8000) return;
-    lastSent = body;
+    const metaJson = JSON.stringify(meta);
+    const full = !payloadSent;
+    const calls = full ? [...all] : newCalls(all);
+    if (!full && !calls.length && metaJson === lastMeta) {
+      if (!keepaliveDue(lastSentAt, tickMs())) return;
+      lastSentAt = Date.now();
+      const ping = (await my.rpc.call('ping-http', pageId)) as { known?: boolean } | undefined;
+      if (ping?.known === false) payloadSent = false;
+      return;
+    }
+    const report: HttpReport = { ...meta, calls: calls.map(redactCall), full };
+    const answer = (await my.rpc.call('push-http', full ? { ...report, payload } : report)) as
+      { needPayload?: boolean } | null | undefined;
+    lastMeta = metaJson;
     lastSentAt = Date.now();
-    const withPayload = !payloadSent;
-    const answer = (await my.rpc.call(
-      'push-http',
-      withPayload ? { ...report, payload } : report,
-    )) as { needPayload?: boolean } | null | undefined;
-    payloadSent = withPayload || payloadSent;
-    if (answer?.needPayload) payloadSent = false;
+    lastCall = all.at(-1) ?? lastCall;
+    payloadSent = !answer?.needPayload;
   };
+
+  const push = () => (queue = queue.then(pushOnce, pushOnce));
 
   my.rpc.register({
     name: 'http-rules',
@@ -105,7 +129,9 @@ export function attachHttp(my: RpcScope, pageId: string) {
     type: 'event',
     jsonSerializable: true,
     handler: () => {
-      httpRegistry().calls = [];
+      const registry = httpRegistry();
+      registry.calls = [];
+      registry.dropped = 0;
       void push();
     },
   });

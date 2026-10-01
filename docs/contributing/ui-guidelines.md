@@ -1,8 +1,10 @@
 # UI guidelines
 
-The devtools panel (`app/`) is a dark, dense tool that people keep open next to their app. Every page should look like it belongs to the same product, work with the keyboard, and pass axe with WCAG AA contrast.
+The devtools panel (`app/`) is a dark-only, dense tool that people keep open next to their app. Every page should look like it belongs to the same product, work with the keyboard, and pass axe with WCAG AA contrast.
 
 ## Theme
+
+The panel is dark only. A light theme is tracked in [#192](https://github.com/santoshyadavdev/angular-devtools/issues/192).
 
 The palette lives in `app/src/styles/_palette.scss` and becomes CSS variables in `_theme.scss`. Change the brand in one place, `app/src/styles/main.scss`:
 

@@ -124,7 +124,7 @@ export const appConfig: ApplicationConfig = {
 ```
 
 <ngmd-alert severity="warning">
-  Without <code>provideStoreDevtools()</code>, the action log is read-only.
+  Without <code>provideStoreDevtools()</code>, action log entries cannot be restored.
 </ngmd-alert>
 
 ## Where to next

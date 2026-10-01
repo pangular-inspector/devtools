@@ -371,13 +371,8 @@ export class Select<T extends string = string> {
   }
 
   private move(step: 1 | -1) {
-    const opts = this.options();
-    let i = this.active();
-    for (let n = 0; n < opts.length; n++) {
-      i = Math.min(Math.max(i + step, 0), opts.length - 1);
-      if (!opts[i].disabled) break;
-    }
-    this.setActive(i);
+    const next = this.firstEnabled(this.active() + step, step);
+    if (next >= 0) this.setActive(next);
   }
 
   private firstEnabled(from: number, step: 1 | -1) {

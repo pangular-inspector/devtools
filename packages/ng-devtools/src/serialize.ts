@@ -21,8 +21,10 @@ export function redactText(text: string): string {
   return redactMessage(text);
 }
 
-function head(text: string, max: number): string {
-  return text.length > max * 4 ? text.slice(0, max * 4) : text;
+const REDACT_WINDOW = 65536;
+
+function head(text: string): string {
+  return text.length > REDACT_WINDOW ? text.slice(0, REDACT_WINDOW) : text;
 }
 
 function keepsUnderSecret(value: unknown): boolean {
@@ -66,7 +68,10 @@ export function serialize(value: unknown, limits: SerializeLimits = {}): unknown
     if (--budget < 0) return TRUNCATED;
     if (v === null || v === undefined || typeof v === 'boolean') return v;
     if (typeof v === 'number') return Number.isFinite(v) ? v : String(v);
-    if (typeof v === 'string') return clipText(redactMessage(head(v, maxText)), maxText);
+    if (typeof v === 'string') {
+      const text = redactMessage(head(v));
+      return clipText(v.length > REDACT_WINDOW ? `${text}…` : text, maxText);
+    }
     if (typeof v === 'bigint') return `${v}n`;
     if (typeof v === 'symbol') return SENTINELS[v.description ?? ''] ?? v.toString();
     if (typeof v === 'function') return `[Function ${v.name || 'anonymous'}]`;

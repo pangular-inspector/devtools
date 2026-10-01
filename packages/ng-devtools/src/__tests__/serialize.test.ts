@@ -28,6 +28,11 @@ describe('serialize', () => {
     expect(serialize('abcdef', { text: 3 })).toBe('abc…');
   });
 
+  it('marks text cut by the redaction window when the text limit is larger', () => {
+    const out = serialize('a'.repeat(70000), { text: 100000 }) as string;
+    expect(out).toBe(`${'a'.repeat(65536)}…`);
+  });
+
   it('turns non-JSON values into readable text', () => {
     expect(serialize(Symbol('ERRORED'))).toBe('(threw an error)');
     expect(serialize(Symbol('UNSET'))).toBe('(not computed yet)');

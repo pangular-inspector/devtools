@@ -1,5 +1,13 @@
-import { computed } from '@angular/core';
-import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
+import { isPlatformBrowser } from '@angular/common';
+import { PLATFORM_ID, computed, effect, inject } from '@angular/core';
+import {
+  patchState,
+  signalStore,
+  withComputed,
+  withHooks,
+  withMethods,
+  withState,
+} from '@ngrx/signals';
 import { DESTINATIONS, type Destination, type Region } from './destination';
 
 export type SortOrder = 'popular' | 'price' | 'rating';
@@ -35,6 +43,17 @@ const initialState: TravelState = {
   bookings: [],
   nextBookingNumber: 1041,
 };
+
+const SAVED_KEY = 'travel.saved';
+
+function readSaved(): string[] {
+  try {
+    const saved: unknown = JSON.parse(sessionStorage.getItem(SAVED_KEY) ?? '[]');
+    return Array.isArray(saved) ? saved.filter((id) => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 export const TravelStore = signalStore(
   { providedIn: 'root' },
@@ -107,4 +126,20 @@ export const TravelStore = signalStore(
       }));
     },
   })),
+  withHooks({
+    onInit(store) {
+      if (!isPlatformBrowser(inject(PLATFORM_ID))) return;
+      patchState(store, { saved: readSaved() });
+      effect(
+        () => {
+          try {
+            sessionStorage.setItem(SAVED_KEY, JSON.stringify(store.saved()));
+          } catch {
+            return;
+          }
+        },
+        { debugName: 'persistSaved' },
+      );
+    },
+  }),
 );

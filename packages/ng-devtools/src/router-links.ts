@@ -8,6 +8,7 @@ import {
   type RouterDebugApi,
 } from './router.ts';
 import { elementId } from './element-id.ts';
+import { serialize } from './serialize.ts';
 
 export interface OutletInfo {
   outlet: string;
@@ -18,6 +19,7 @@ export interface OutletInfo {
   activated: boolean;
   detached?: boolean;
   inputs?: { input: string; source: string }[];
+  data?: string;
   children?: OutletInfo[];
 }
 
@@ -34,6 +36,17 @@ export interface LinkInfo {
 
 const MAX_OUTLETS = 100;
 const MAX_LINKS = 100;
+const MAX_DATA_PREVIEW = 300;
+
+function outletData(outlet: AnyRecord | null): string | undefined {
+  const value = read(() => {
+    const data = outlet?.['routerOutletData'];
+    return typeof data === 'function' ? (data as () => unknown)() : undefined;
+  }, undefined);
+  if (value === undefined) return undefined;
+  const preview = serialize(value, { depth: 3, keys: 20, items: 20, text: 200, budget: 200 });
+  return clip(JSON.stringify(preview) ?? String(preview), MAX_DATA_PREVIEW);
+}
 
 function elementOf(outlet: AnyRecord | null): Element | null {
   return read(
@@ -91,6 +104,8 @@ export function outletsOf(router: AnyRecord): OutletInfo[] {
           if (inputs) info.inputs = inputs;
         }
       }
+      const data = outletData(outlet);
+      if (data !== undefined) info.data = data;
       if (read(() => !!context['attachRef'], false)) info.detached = true;
       const children = visit(
         read(() => context['children'] as AnyRecord, null),

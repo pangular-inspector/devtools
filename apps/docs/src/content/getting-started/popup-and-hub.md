@@ -15,7 +15,12 @@ When the overlay loads, a floating button appears in the bottom-right corner of 
 
 ### Where it comes from
 
-Importing the [overlay](./overlay.md) adds the button. The overlay first checks whether the page's server mounts the hub at `/__devframes/`. If it does, the button opens the whole hub. If not, it opens the devtools panel on its own.
+Importing the [overlay](./overlay.md) adds the button. The first time the panel opens, it looks for the devtools server:
+
+1. If the overlay connected, it uses that path. When the path is `<base>ng-devtools/` and a hub answers at `<base>`, it opens the hub.
+2. Otherwise it checks for the hub at `/__devframes/`, then for the devtools alone at `/__ng-devtools/` and `/__devframes/ng-devtools/`.
+
+A path counts only when it answers with JSON. If nothing answers, the panel says **No devtools server found** and looks again the next time it opens.
 
 ### Create it yourself
 
@@ -28,7 +33,18 @@ import {createDevtoolsPopup} from '@santoshyadavdev/ng-devtools/popup';
 createDevtoolsPopup();
 ```
 
-It adds the button and opens the full devtools UI in an iframe. Calling it again returns the same popup. Importing the popup module in the browser also adds the button on its own.
+It adds the button and returns a handle with `toggle()` and `destroy()`. The panel finds the devtools server as described above. Importing the popup module in the browser also adds the button on its own, so calling it again returns the same handle.
+
+To open a fixed page instead, pass `src`:
+
+```ts
+// src/main.ts
+import {createDevtoolsPopup} from '@santoshyadavdev/ng-devtools/popup';
+
+createDevtoolsPopup({src: '/__my-devtools/'});
+```
+
+A `src` given to a later call replaces the one before. `showDevtools()` adds the button when it is missing, and `hideDevtools()` removes it.
 
 <ngmd-alert severity="helpful">
   The popup alone sends no live data. Load the overlay for that.
@@ -55,7 +71,7 @@ The values above are the defaults.
 
 <ngmd-card-grid columns="3">
   <ngmd-card icon="layers" title="Float">
-    A free panel on top of your app. Drag it by the toolbar and resize it from the corner.
+    A free panel on top of your app. Drag it by the toolbar with a mouse, finger or pen, and resize it from the corner.
   </ngmd-card>
   <ngmd-card icon="box" title="Bottom">
     Full width, 40% of the viewport height. Resize it vertically.
@@ -65,16 +81,22 @@ The values above are the defaults.
   </ngmd-card>
 </ngmd-card-grid>
 
-You can drag only the floating panel. Switch modes from the buttons in the panel toolbar.
+You can drag only the floating panel. Switch modes from the buttons in the panel toolbar. The floating panel always stays inside the window: when the window shrinks, the panel moves and shrinks to fit, and grows back to its saved size when there is room again.
+
+The button and the panel sit in the browser top layer, like a `<dialog>`, a popover or a CDK overlay (MatDialog, MatMenu, MatSelect). When one of those opens, the button and the panel move back above it. A modal `<dialog>` makes the rest of the page inert, so they stay under it until it closes.
 
 ### Keyboard and mouse
 
-| Action                    | How                                         |
-| ------------------------- | ------------------------------------------- |
-| Close the panel           | <kbd>Escape</kbd>                           |
-| Move the button           | Drag it, or focus it and use the arrow keys |
-| Move the button further   | Hold <kbd>Shift</kbd> with the arrow keys   |
-| Reset the button position | Double-click it                             |
+| Action                    | How                                               |
+| ------------------------- | ------------------------------------------------- |
+| Close the panel           | <kbd>Escape</kbd>, outside a search box with text |
+| Move the floating panel   | Drag its toolbar                                  |
+| Reset the panel position  | Double-click its toolbar                          |
+| Move the button           | Drag it, or focus it and use the arrow keys       |
+| Move the button further   | Hold <kbd>Shift</kbd> with the arrow keys         |
+| Reset the button position | Double-click it                                   |
+
+In a search box that has text, <kbd>Escape</kbd> clears the box and leaves the panel open. Press it again to close the panel.
 
 ### Saved layout
 
@@ -121,9 +143,13 @@ The URL hash selects a tab. Open `/__devframes/ng-devtools/#tab=signals` to land
 | SSR & HTTP | `#tab=network`    |
 | Analog     | `#tab=analog`     |
 
+### Last tab
+
+Without a hash, the panel opens the tab you used last in this browser tab. The Chrome extension and the popup reload the panel on every navigation, and the panel keeps its tab across those reloads. It saves the tab in `sessionStorage`, so another browser tab starts on the Dashboard. A hash wins over the saved tab, and a tab that is turned off falls back to the Dashboard.
+
 ### Limits
 
-A hash only works for a tab that exists when the panel opens. The Analog tab appears after the server confirms the app is an Analog app, so `#tab=analog` does not select it on load. Inside the Angular dock, the Store and Analog tabs live in their own docks.
+A hash or a saved tab only works for a tab that exists when the panel opens. The Analog tab appears after the server confirms the app is an Analog app, so `#tab=analog` does not select it on load. Inside the Angular dock, the Store and Analog tabs live in their own docks.
 
 ## Connection status
 
@@ -137,6 +163,10 @@ The panel header shows the state of the connection:
 
 If the panel cannot reach the server, check that the dev server is running, then reload.
 
+### Tabs in the background
+
+A browser tab in the background runs its timers about once a minute. The app page stops reading itself while its tab is hidden and tells the server, and the server keeps its last data instead of dropping it. The panel then says **Tab in background, showing the last data.** When you switch back, the page sends fresh data. If a hidden tab stops answering for 5 minutes, the server drops it.
+
 ## Troubleshooting
 
 <ngmd-accordion>
@@ -147,7 +177,10 @@ If the panel cannot reach the server, check that the dev server is running, then
     Remove the <code>ng-devtools-popup</code> key from <code>localStorage</code> and reload.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The button opens the panel, not the hub">
-    The overlay did not find the hub at <code>/__devframes/</code>. Check that your server mounts <code>initNgDevtoolsHub()</code> or the Vite plugin on the default base.
+    The overlay did not find the hub at <code>/__devframes/</code>. Check that your server mounts <code>initNgDevtoolsHub()</code> or the Vite plugin on the default base. On a custom base, pass <code>&lt;base&gt;ng-devtools/</code> to <a href="./overlay.md#a-custom-mount-path"><code>initOverlay</code></a>.
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="The panel says No devtools server found">
+    No devtools path answered with JSON. Mount the hub or the Vite plugin, before the SSR handler. See <a href="./overlay.md#no-devtools-server-found">No devtools server found</a>.
   </ngmd-accordion-item>
 </ngmd-accordion>
 

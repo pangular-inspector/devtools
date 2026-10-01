@@ -17,7 +17,7 @@ When a component asks for a token, Angular walks up the element injectors, then 
 
 A switch at the top picks the view:
 
-- **Elements**: one node per host element that has a component or a directive.
+- **Elements**: one node per host element that has a component or a directive, including elements inside a shadow root and `<ng-container>` elements with a directive.
 - **Environment**: the environment injectors, such as the root and platform injectors.
 
 Each row shows a kind letter (`C`, `D` or `E`), the tag or injector name, the component or directive classes, and icons with the number of injected and provided tokens.
@@ -35,7 +35,11 @@ Select an injector to see the **Lookup path**: the injectors Angular asks, in or
 
 ### Injected here
 
-For element injectors, **Injected here** lists each token requested at this level and the injector that answered. The block marks a token that nobody provides as **not provided anywhere**. When the element has more than one class, each row says which class asked.
+For element injectors, **Injected here** lists each token requested at this level and the injector that answered. The block marks a token that nobody provides as **not provided anywhere**, and an optional token that nobody provides as **optional, not provided**. A provider with a `null` value, such as `useValue: null`, still counts as provided. When the element has more than one class, each row says which class asked.
+
+### Injected by its services
+
+For environment injectors, **Injected by its services** lists what the services this injector created inject, and which injector answered. Each row says which service asked. Services that Angular has not created yet are left out, because reading their dependencies would create them. A `providedIn: 'root'` service shows on the root injector once something injects it.
 
 ### Provides
 
@@ -49,7 +53,7 @@ Without a live tree, the tab lists DI found in your source files, in four groups
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
 | **Root Providers (provide\*)** | Calls to known Angular `provide*()` functions, such as `provideRouter()` and `provideHttpClient()`.           |
 | **Injectable Services**        | `@Injectable` and `@Service` classes, plus `signalStore` and `InjectionToken` declarations with `providedIn`. |
-| **inject() Calls**             | `x = inject(T)` assignments and `@Inject(T)` parameters.                                                      |
+| **inject() Calls**             | `inject(T)` calls and constructor parameters of decorated classes, typed or with `@Inject(T)`.                |
 | **Component Providers**        | Any `providers` or `viewProviders` array, in components, routes, app config or NgModules.                     |
 
 ## Where the data comes from
@@ -72,7 +76,7 @@ The live tree needs a development build. It uses `ng.getInjector`, `ng.getCompon
 - `ɵgetInjectorResolutionPath` gives the lookup path.
 - `ɵgetDependenciesFromInjectable` gives the tokens each class injects.
 
-The source-mode notice says to connect the overlay on Angular 17 or later for the live tree.
+The source-mode notice says to connect the overlay on Angular 20 or later for the live tree.
 
 ## How to use it
 
@@ -107,11 +111,11 @@ Arrow keys, Home and End move the selection through the tree. The right arrow ex
 
 ## Agent tools
 
-| Tool or resource                | Kind     | What it does                                                                                |
-| ------------------------------- | -------- | ------------------------------------------------------------------------------------------- |
-| `ng-devtools:get-providers`     | tool     | DI providers from source: `@Injectable` services, `inject()` calls and `providers` arrays.  |
-| `ng-devtools:inspect-providers` | tool     | The injector tree a page reported. `pageId` picks a tab. `selector` only labels the answer. |
-| `ng-devtools:injector-tree`     | resource | The live tree last reported by a page.                                                      |
+| Tool or resource                | Kind     | What it does                                                                                                                                                                                 |
+| ------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ng-devtools:get-providers`     | tool     | DI providers from source: `@Injectable` services, `inject()` calls, constructor parameters and `providers` arrays.                                                                           |
+| `ng-devtools:inspect-providers` | tool     | The injector tree a page reported, with what components and created services inject. `selector` narrows it to matching element injectors, `token` to where a token is provided and injected. |
+| `ng-devtools:injector-tree`     | resource | The live tree last reported by a page.                                                                                                                                                       |
 
 See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
@@ -119,7 +123,11 @@ See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
 ### Up to 2000 element injectors
 
-The **Elements** view stops at 2000 injectors, without a notice. Environment injectors have no cap.
+The page reports at most 2000 element injectors. Past that, a notice above the tree says so, and a lookup path or a provider can point to an injector that isn't listed. `inspect-providers` says it too. Environment injectors have no cap.
+
+### Some injectors can't be highlighted
+
+Hover highlights need a CSS selector for the element. Elements inside a shadow root and `<ng-container>` elements have none, so hovering them highlights nothing.
 
 ### Source mode only knows some provide functions
 
@@ -129,10 +137,10 @@ The **Root Providers** group matches a fixed list of Angular `provide*()` functi
 
 <ngmd-accordion>
   <ngmd-accordion-item title="Why is a constructor-injected service missing from source mode?">
-    The source scan doesn't find constructor parameters without <code>&#64;Inject()</code>. The live tree has them.
+    The source scan reads constructor parameters only in classes with an Angular decorator, such as <code>&#64;Component</code> or <code>&#64;Injectable</code>. A parameter typed as a primitive, without <code>&#64;Inject()</code>, has no token to list. The live tree has every injection.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why does the tab show source mode instead of the live tree?">
-    No live tree has reached the tab. The live tree needs the overlay, a development build and Angular 17 or later.
+    No live tree has reached the tab. The live tree needs the overlay, a development build and Angular 20 or later.
   </ngmd-accordion-item>
 </ngmd-accordion>
 

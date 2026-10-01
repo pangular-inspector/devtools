@@ -12,7 +12,7 @@ description: Mount the devtools hub in the Express server of an Angular SSR app.
 In an *Angular app with server-side rendering, the devtools run inside your Express server. You add a middleware on the server and load the overlay in the browser.
 
 <ngmd-callout type="info" title="You need an SSR app">
-  This setup mounts the devtools in the Express <code>server.ts</code> that Angular SSR generates. For an Analog app, follow <a href="./vite.md">Vite and Analog</a> instead.
+  This setup mounts the devtools in the Express <code>server.ts</code> that Angular SSR generates. For an Analog app, follow <a href="./vite.md">Vite and Analog</a> instead. For a server on Hono, h3 or Fastify, follow <a href="./other-servers.md">Hono, h3 and Fastify</a>.
 </ngmd-callout>
 
 ## Setup at a glance
@@ -86,6 +86,10 @@ const devtools = initNgDevtoolsHub({ws: {sidecar: true}});
 With `ws: false` there is no WebSocket, and the browser connects over SSE on the same port. It is the simplest choice: every request goes through your Express server, including under `ng serve`.
 
 With `ws: {sidecar: true}`, the WebSocket runs on its own port, picked automatically.
+
+### Rebuilds under `ng serve`
+
+`ng serve` runs `server.ts` again after a rebuild that changes the server output. The process keeps one hub per `base`, so each new `initNgDevtoolsHub()` call closes the hub from the run before, along with its side-car port. A generated MCP token stays the same until the process exits.
 
 ### Hub options
 
@@ -253,6 +257,9 @@ The overlay looks for `/__ng-devtools/` too. Without the hub, every tab sits in 
 <ngmd-accordion>
   <ngmd-accordion-item title="The button does not appear" open>
     The app is probably a production build. Run <code>ng serve</code>, or build with <code>--configuration development</code>. Then check that <code>main.ts</code> imports the overlay.
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="The panel says No devtools server found">
+    The page could not reach the hub. Check that the hub middleware is mounted before <code>express.static</code> and the SSR handler, and that <code>base</code> matches the path the overlay uses. See <a href="./overlay.md#no-devtools-server-found">No devtools server found</a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel says Disconnected">
     Check that the server is running and that the hub middleware is mounted before <code>express.static</code> and the SSR handler. Then reload the page.

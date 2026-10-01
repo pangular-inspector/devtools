@@ -17,7 +17,7 @@ There are two ways to connect. Pick one based on the data your agent needs.
 
 <ngmd-card-grid columns="2">
   <ngmd-card icon="terminal" title="stdio" cta="Source only">
-    Your client starts <code>ng-devtools mcp</code> in the project folder. The server scans your source. No page ever connects to it.
+    Your client starts <code>ng-devtools mcp</code> for your project folder. The server scans your source. No page ever connects to it.
   </ngmd-card>
   <ngmd-card icon="zap" title="HTTP" cta="Source and live page">
     Your client calls <code>/__devframes/__mcp</code> on the server that runs your app. Pages open in a browser report to it, so the live tools work.
@@ -36,7 +36,7 @@ The package ships an `ng-devtools` binary. Its `mcp` command starts an MCP serve
 ### Add the stdio server to your client
 
 ```bash group="stdio" name="Claude Code" active
-claude mcp add ng-devtools -- npx @santoshyadavdev/ng-devtools mcp
+claude mcp add ng-devtools -- npx @santoshyadavdev/ng-devtools mcp --root /path/to/your-app
 ```
 
 ```json group="stdio" name="Cursor"
@@ -45,7 +45,7 @@ claude mcp add ng-devtools -- npx @santoshyadavdev/ng-devtools mcp
   "mcpServers": {
     "ng-devtools": {
       "command": "npx",
-      "args": ["@santoshyadavdev/ng-devtools", "mcp"]
+      "args": ["@santoshyadavdev/ng-devtools", "mcp", "--root", "${workspaceFolder}"]
     }
   }
 }
@@ -58,15 +58,21 @@ claude mcp add ng-devtools -- npx @santoshyadavdev/ng-devtools mcp
     "ng-devtools": {
       "type": "stdio",
       "command": "npx",
-      "args": ["@santoshyadavdev/ng-devtools", "mcp"]
+      "args": ["@santoshyadavdev/ng-devtools", "mcp", "--root", "${workspaceFolder}"]
     }
   }
 }
 ```
 
-### Start it in the project folder
+### Point it at the project folder
 
-The server scans the folder it starts in. Start it from the root of your Angular or Analog project, next to `package.json` and `angular.json`.
+The server scans the folder it starts in, and your client picks that folder. Some clients start servers in `/`. Pass `--root` with the root of your Angular or Analog project, the folder with `package.json` and `angular.json`, or set `NG_DEVTOOLS_ROOT`. Cursor and VS Code expand `${workspaceFolder}` to the open folder.
+
+If the folder has no `angular.json` and no `package.json` that depends on `@angular/core`, the server prints a warning on stderr. Your client shows it in the MCP server log.
+
+### Configure the stdio server
+
+The stdio server reads the [devtools options](../getting-started/configuration.md) from `ng-devtools.config.json` in the project folder, from the file you pass with `--config`, or from `NG_DEVTOOLS_CONFIG`. `--read-only` sets `agent.readOnly`. See [Flags for every command](../getting-started/cli.md#flags-for-every-command).
 
 <ngmd-alert severity="helpful">
   Inside this repository, <code>pnpm devtools:mcp</code> runs the same server against the demo app.
@@ -74,9 +80,9 @@ The server scans the folder it starts in. Start it from the root of your Angular
 
 ### What stdio can answer
 
-Over stdio, the source scan tools work: `get-routes`, `get-components`, `get-signals`, `get-providers`, `get-ngrx-store`, `get-pipes` and `build-meta`. So do the tools that read files only, like `lint-pipes`, `analog-routes` and `analog-lint`.
+Over stdio, the source scan tools work: `get-routes`, `get-components`, `get-signals`, `get-providers`, `get-ngrx-store`, `get-pipes` and `build-meta`. So do the tools that read files only, like `lint-pipes`, `explain-pipe`, `explain-render-mode`, `analog-routes` and `analog-lint`.
 
-Tools that need the running app reply that no page is attached. Resources stay empty. Use HTTP for those.
+The stdio server leaves out the tools and resources that need the running app, such as `highlight`, `navigate`, `form-action`, `fill-form`, the forms and router tools, `analog-current-page`, `analog-server-calls` and `analog-call-api`. Use HTTP for those.
 
 ## Connect over HTTP
 
@@ -113,7 +119,7 @@ If the hub asks for the one-time code, the HTTP endpoint also asks for a bearer 
 | [Express hub](../getting-started/express.md) | Yes, unless you pass `auth: false` or your own `mcp` option.                                          |
 | [Vite plugin](../getting-started/vite.md)    | Only when the one-time code is on. See the plugin's [`auth` option](../getting-started/vite.md#auth). |
 
-The hub prints a generated token in the terminal when it starts. The token changes on every restart. To keep the same token across restarts, set `NG_DEVTOOLS_MCP_TOKEN` in the environment of the server. The hub then uses that value and prints nothing.
+The hub prints a generated token in the terminal when it starts. The token changes when the server process restarts, but not when `ng serve` rebuilds `server.ts`. To keep the same token across restarts, set `NG_DEVTOOLS_MCP_TOKEN` in the environment of the server. The hub then uses that value and prints nothing.
 
 Send the token in an `Authorization: Bearer <token>` header, next to the `Origin` header. If your setup needs no token, leave the `Authorization` header out.
 
@@ -202,21 +208,22 @@ The server registers tools with a colon, as `ng-devtools:get-routes`. MCP client
 
 ### Read and action tools
 
-The server marks read-only tools as read-only for your client. Five tools act on the app, so the server does not mark them:
+The server marks read-only tools as read-only for your client. Six tools act on the app, so the server does not mark them:
 
-| Tool              | Reference                                                          |
-| ----------------- | ------------------------------------------------------------------ |
-| `highlight`       | [Components, signals and DI](./tools.md#components-signals-and-di) |
-| `navigate`        | [Act on the router](./tools.md#act-on-the-router)                  |
-| `form-action`     | [Act on a form](./tools.md#act-on-a-form)                          |
-| `fill-form`       | [Act on a form](./tools.md#act-on-a-form)                          |
-| `analog-call-api` | [Call a server route](./tools.md#call-a-server-route)              |
+| Tool                   | Reference                                                          |
+| ---------------------- | ------------------------------------------------------------------ |
+| `highlight`            | [Components, signals and DI](./tools.md#components-signals-and-di) |
+| `navigate`             | [Act on the router](./tools.md#act-on-the-router)                  |
+| `dispatch-ngrx-action` | [Dispatch an action](./tools.md#dispatch-an-action)                |
+| `form-action`          | [Act on a form](./tools.md#act-on-a-form)                          |
+| `fill-form`            | [Act on a form](./tools.md#act-on-a-form)                          |
+| `analog-call-api`      | [Call a server route](./tools.md#call-a-server-route)              |
 
 Your client can ask you before it runs them. To drop them from the server, set `agent.readOnly`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ### Pages and tabs
 
-Each browser tab reports on its own and gets a page id. Tools that read live data use the most recent page by default. Pass `page` (or `pageId` for `inspect-providers`) to pick another tab. The server drops pages that stop reporting after a short time.
+Each browser tab reports on its own and gets a page id. `list-pages` lists them. Tools that read live data use the most recent page by default. Pass `page` to pick another tab (`inspect-providers`, `highlight`, `inspect-component` and `defer-blocks` also accept `pageId`). An id that no tab reports gets an answer that lists the tabs that do, instead of data from another tab. The server drops pages that stop reporting after a short time.
 
 ## Where to next
 

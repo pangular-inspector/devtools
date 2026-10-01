@@ -10,12 +10,14 @@ const clients: FakeClient[] = [];
 let connectGate: Promise<void> = Promise.resolve();
 
 vi.mock('devframe/client', () => ({
-  connectDevframe: vi.fn(async () => {
+  connectDevframe: vi.fn(async (options: { baseURL: string | string[] }) => {
     const client: FakeClient = { close: vi.fn(), calls: [] };
     clients.push(client);
     await connectGate;
+    const base = [options.baseURL].flat()[0];
     return {
       close: client.close,
+      connection: { metaBaseUrl: new URL(`${base}__connection.json`, location.href).href },
       scope: () => ({
         rpc: {
           call: vi.fn(async (name: string) => {
@@ -207,6 +209,70 @@ describe.sequential('overlay dispose', () => {
     expect(vi.getTimerCount()).toBe(0);
     expect(window.__ngDevtoolsComponentOf).toBeUndefined();
     dispose();
+  });
+
+  it('does not report a failed connect from an overlay it replaced', async () => {
+    const { initOverlay } = await loadOverlay();
+    let fail = (_error: Error) => {};
+    connectGate = new Promise((_resolve, reject) => (fail = reject));
+    const first = initOverlay();
+    await flush();
+    connectGate = Promise.resolve();
+    const second = await initOverlay({ baseURL: '/__tools/ng-devtools/' });
+    fail(new Error('Failed to get connection meta'));
+
+    await expect(first).resolves.toBeTypeOf('function');
+    second();
+  });
+
+  it('explains a failed connect and lists the paths it tried', async () => {
+    const { initOverlay } = await loadOverlay();
+    connectGate = Promise.reject(new Error('Failed to get connection meta'));
+    connectGate.catch(() => {});
+
+    await expect(initOverlay({ baseURL: ['/__a/', '/__b/'] })).rejects.toThrow(
+      /^\[ng-devtools\] No devtools server found \(tried \/__a\/, \/__b\/\)\. .*initOverlay\(\{baseURL\}\)/,
+    );
+  });
+
+  it('points the floating button at the base initOverlay connected to', async () => {
+    vi.stubEnv('VITEST', '');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url === `${location.origin}/__tools/__connection.json`
+          ? new Response('{}', { headers: { 'content-type': 'application/json' } })
+          : new Response('', { status: 404 }),
+      ),
+    );
+    const { initOverlay, disposeOverlay } = await loadOverlay();
+    await vi.waitFor(() =>
+      expect(document.getElementById('ng-devtools-popup-root')).not.toBeNull(),
+    );
+    await initOverlay({ baseURL: '/__tools/ng-devtools/' });
+    await flush();
+    const shadow = document.getElementById('ng-devtools-popup-root')!.shadowRoot!;
+    (shadow.querySelector('.fab') as HTMLButtonElement).click();
+    await vi.waitFor(() =>
+      expect(shadow.querySelector('iframe')!.src).toBe(`${location.origin}/__tools/`),
+    );
+    await disposeOverlay();
+  });
+
+  it('does not start inside the devtools panel frame', async () => {
+    vi.stubEnv('VITEST', '');
+    const host = document.createElement('div');
+    host.id = 'ng-devtools-popup-root';
+    const panelFrame = document.createElement('iframe');
+    host.attachShadow({ mode: 'open' }).append(panelFrame);
+    vi.spyOn(window, 'frameElement', 'get').mockReturnValue(panelFrame);
+    await loadOverlay();
+    await vi.advanceTimersByTimeAsync(0);
+    await flush();
+
+    expect(clients).toHaveLength(0);
+    expect(document.getElementById('ng-devtools-popup-root')).toBeNull();
+    vi.restoreAllMocks();
   });
 
   it('stops the auto-started overlay and removes the floating button', async () => {

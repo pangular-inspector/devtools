@@ -14,8 +14,8 @@ interface ExampleLink {
   template: `
     <section>
       <p class="lead">
-        Six pages, each built to fill one DevTools inspector. Open the popup with the button in the
-        corner, then work through them.
+        Eight pages, each built to fill one DevTools inspector. Open the popup with the button in
+        the corner, then work through them.
       </p>
 
       <ul class="grid">
@@ -194,6 +194,18 @@ export class ExamplesOverview {
       tab: 'SSR & HTTP',
       title: 'Data from the backend',
       blurb: 'HttpClient calls made during SSR, the transfer cache and injected faults.',
+    },
+    {
+      path: 'store',
+      tab: 'Store',
+      title: 'Scoped signal state',
+      blurb: 'A signalStore provided by a component and a signalState kept in a component field.',
+    },
+    {
+      path: 'defer',
+      tab: 'Components',
+      title: 'Defer blocks',
+      blurb: 'Defer triggers, loading and error blocks, and incremental hydration.',
     },
   ];
 }

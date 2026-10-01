@@ -2,8 +2,11 @@
 import { describe, expect, it } from 'vitest';
 import { elementId } from '../element-id.ts';
 import {
+  MAX_NODES,
   collectSignalGraph,
   graphKey,
+  injectorMatches,
+  isEnvironmentRequest,
   routedComponent,
   toSignalTarget,
   type SignalDebugNg,
@@ -143,6 +146,8 @@ describe('collectSignalGraph values', () => {
     (selection as unknown as Record<symbol, unknown>)[SIGNAL] = {
       kind: 'linkedSignal',
       debugName: 'selection',
+      version: 2,
+      value: 'Paris',
     };
     const other = () => 'nope';
     (other as unknown as Record<symbol, unknown>)[SIGNAL] = { kind: 'signal', debugName: 'other' };
@@ -171,6 +176,8 @@ describe('collectSignalGraph values', () => {
     (password as unknown as Record<symbol, unknown>)[SIGNAL] = {
       kind: 'linkedSignal',
       debugName: 'password',
+      version: 1,
+      value: 'hunter2',
     };
     const root = Object.assign(new Root(), { password });
     const ng = fakeNg({ 'APP-ROOT': root }, () => ({
@@ -209,6 +216,185 @@ describe('collectSignalGraph values', () => {
   });
 });
 
+function linked(debugName: string, version: number, value: unknown, extra: object = {}) {
+  const getter = () => {
+    throw new Error('the overlay must not call the signal');
+  };
+  (getter as unknown as Record<symbol, unknown>)[SIGNAL] = {
+    kind: 'linkedSignal',
+    debugName,
+    version,
+    value,
+    ...extra,
+  };
+  return getter;
+}
+
+describe('collectSignalGraph linkedSignal values', () => {
+  const graphWith = (root: object, nodes: { id: string; label: string; epoch: number }[]) => {
+    document.body.innerHTML = `<app-root ng-version="22.0.0"></app-root>`;
+    return collectSignalGraph(
+      fakeNg({ 'APP-ROOT': root }, () => ({
+        nodes: nodes.map((n) => ({ ...n, kind: 'linkedSignal' })),
+        edges: [],
+      })),
+    )!;
+  };
+
+  it('gives a same-named store node no value instead of the component one', () => {
+    const root = Object.assign(new Root(), { selectedId: linked('selectedId', 3, 'local') });
+    const graph = graphWith(root, [
+      { id: '1', label: 'selectedId', epoch: 3 },
+      { id: '2', label: 'selectedId', epoch: 7 },
+    ]);
+    expect(graph.nodes[0].value).toBe('local');
+    expect('value' in graph.nodes[1]).toBe(false);
+  });
+
+  it('shows nothing when two same-named nodes share the version of the field', () => {
+    const root = Object.assign(new Root(), { selectedId: linked('selectedId', 1, 'local') });
+    const graph = graphWith(root, [
+      { id: '1', label: 'selectedId', epoch: 1 },
+      { id: '2', label: 'selectedId', epoch: 1 },
+    ]);
+    expect(graph.nodes.some((n) => 'value' in n)).toBe(false);
+  });
+
+  it('shows nothing when two fields match the same name and version', () => {
+    const root = Object.assign(new Root(), {
+      a: linked('selectedId', 3, 'one'),
+      b: linked('selectedId', 3, 'two'),
+    });
+    const graph = graphWith(root, [{ id: '1', label: 'selectedId', epoch: 3 }]);
+    expect('value' in graph.nodes[0]).toBe(false);
+  });
+
+  it('skips a dirty node and never runs the computation', () => {
+    const root = Object.assign(new Root(), {
+      selectedId: linked('selectedId', 3, 'stale', { dirty: true }),
+    });
+    const graph = graphWith(root, [{ id: '1', label: 'selectedId', epoch: 3 }]);
+    expect('value' in graph.nodes[0]).toBe(false);
+  });
+});
+
+describe('collectSignalGraph limits and versions', () => {
+  it('marks a graph whose nodes have no ids (Angular before 20.1) as unsupported', () => {
+    document.body.innerHTML = `<app-root ng-version="20.0.0"></app-root>`;
+    const ng = fakeNg(standard, () => ({
+      nodes: [
+        { kind: 'signal', label: 'count', value: 1 },
+        { kind: 'template', label: 'app-root' },
+      ] as never,
+      edges: [{ consumer: 1, producer: 0 }],
+    }));
+    const graph = collectSignalGraph(ng)!;
+    expect(graph).toEqual({ nodes: [], edges: [], unsupported: true });
+    expect(graphKey(graph)).toBe(graphKey(collectSignalGraph(ng)!));
+  });
+
+  it('reports the full node count when it keeps only the first nodes', () => {
+    document.body.innerHTML = `<app-root ng-version="22.0.0"></app-root>`;
+    const total = MAX_NODES + 25;
+    const ng = fakeNg(standard, () => ({
+      nodes: Array.from({ length: total }, (_, i) => ({
+        id: String(i + 1),
+        kind: 'signal',
+        label: `s${i}`,
+        epoch: 0,
+        value: i,
+      })),
+      edges: [{ consumer: 0, producer: total - 1 }],
+    }));
+    const graph = collectSignalGraph(ng)!;
+    expect(graph.nodes).toHaveLength(MAX_NODES);
+    expect(graph.nodeCount).toBe(total);
+    expect(graph.edges).toEqual([]);
+  });
+
+  it('sets no node count when nothing was cut', () => {
+    document.body.innerHTML = `<app-root ng-version="22.0.0"></app-root>`;
+    expect('nodeCount' in collectSignalGraph(fakeNg(standard))!).toBe(false);
+  });
+});
+
+describe('collectSignalGraph environment injectors', () => {
+  const platform = { scopes: new Set(['platform']) };
+  const root = { scopes: new Set(['environment', 'root']) };
+  const route = { scopes: new Set(['environment']), source: 'Route: admin' };
+  const environment = new Set<object>([platform, root, route]);
+
+  function envNg(): SignalDebugNg {
+    return {
+      ...fakeNg(standard, (injector) => {
+        if (injector === (root as unknown)) {
+          return {
+            nodes: [
+              { id: '10', kind: 'effect', label: 'persistTrips', epoch: 2 },
+              { id: '11', kind: 'signal', label: 'trips', epoch: 2, value: 3 },
+            ],
+            edges: [{ consumer: 0, producer: 1 }],
+          };
+        }
+        if (injector === (route as unknown)) {
+          return { nodes: [{ id: '20', kind: 'effect', label: 'audit', epoch: 1 }], edges: [] };
+        }
+        return fakeNg(standard).ɵgetSignalGraph!(injector);
+      }),
+      ɵgetInjectorResolutionPath: (injector) =>
+        (injector as Element).tagName === 'APP-PAGE'
+          ? [injector, route, root, platform]
+          : [injector, root, platform],
+      ɵgetInjectorMetadata: (injector) =>
+        environment.has(injector as object)
+          ? { type: 'environment', source: (injector as { source?: string }).source ?? null }
+          : { type: 'element', source: injector },
+    };
+  }
+
+  const page = `
+    <app-root ng-version="22.0.0">
+      <router-outlet></router-outlet><app-page></app-page>
+    </app-root>`;
+
+  it('lists root and route injectors next to a component graph, without the platform', () => {
+    document.body.innerHTML = page;
+    const graph = collectSignalGraph(envNg())!;
+    expect(graph.componentSelector).toBe('app-page');
+    expect(graph.environments?.map((e) => e.name)).toEqual(['Root', 'Route: admin']);
+  });
+
+  it('reports the effects of the root injector for the root target', () => {
+    document.body.innerHTML = page;
+    const graph = collectSignalGraph(envNg(), { env: 'root' })!;
+    expect(graph.component).toBeUndefined();
+    expect(graph.injector?.name).toBe('Root');
+    expect(graph.source).toBe('selected');
+    expect(graph.nodes.map((n) => n.label)).toEqual(['persistTrips', 'trips']);
+    expect(graphKey(graph)).not.toBe(graphKey(collectSignalGraph(envNg())!));
+  });
+
+  it('targets a route injector by path or id, and falls back when none matches', () => {
+    document.body.innerHTML = page;
+    const byPath = collectSignalGraph(envNg(), { env: '/admin' })!;
+    expect(byPath.injector?.name).toBe('Route: admin');
+    const byId = collectSignalGraph(envNg(), { env: byPath.injector!.id })!;
+    expect(byId.nodes[0].label).toBe('audit');
+    expect(collectSignalGraph(envNg(), { env: '/nope' })?.componentSelector).toBe('app-page');
+  });
+
+  it('matches injector requests by id, root and route path', () => {
+    const admin = { id: 'inj-4', name: 'Route: admin' };
+    expect(injectorMatches(admin, 'inj-4')).toBe(true);
+    expect(injectorMatches(admin, '/admin/')).toBe(true);
+    expect(injectorMatches(admin, 'Route: admin')).toBe(true);
+    expect(injectorMatches(admin, 'root')).toBe(false);
+    expect(injectorMatches({ id: 'inj-1', name: 'Root' }, 'ROOT')).toBe(true);
+    expect(isEnvironmentRequest('/admin')).toBe(true);
+    expect(isEnvironmentRequest('app-root')).toBe(false);
+  });
+});
+
 describe('toSignalTarget', () => {
   it('ignores requests for another page and accepts agent selectors', () => {
     expect(toSignalTarget({ pageId: 'b', id: 'c1' }, 'a')).toBeUndefined();
@@ -216,5 +402,15 @@ describe('toSignalTarget', () => {
     expect(toSignalTarget({ id: null }, 'a')).toBeNull();
     expect(toSignalTarget('app-card', 'a')).toEqual({ selector: 'app-card' });
     expect(toSignalTarget(null, 'a')).toBeNull();
+    expect(toSignalTarget({ pageId: 'a', env: 'root' }, 'a')).toEqual({ env: 'root' });
+  });
+});
+
+describe('toSignalTarget with a page', () => {
+  it('accepts a CSS selector sent to one page', () => {
+    expect(toSignalTarget({ pageId: 'a', selector: '.promo' }, 'a')).toEqual({
+      selector: '.promo',
+    });
+    expect(toSignalTarget({ pageId: 'b', selector: '.promo' }, 'a')).toBeUndefined();
   });
 });

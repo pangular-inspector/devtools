@@ -30,6 +30,10 @@ import { TabIcon } from './pages/tab-icon';
 import { styleHubRail } from './hub-rail-style';
 import { followHubDocks, selectHubDock } from './hub-dock-sync';
 import { panelConfig, tabEnabled } from './devtools-config';
+import { hostPageId } from './page-id';
+import { initialTab, storeTab, storedTab } from './tab-memory';
+import { detectBaseURL } from './base-url';
+import { clearHighlightsOnHide } from './rpc';
 
 const HUB_VIEWS = ['angular', 'ngrx', 'analog', 'nativescript', 'capacitor'] as const;
 
@@ -220,7 +224,7 @@ function readView(): View | null {
         [class.fade-end]="navFade().end"
         (scroll)="measureNav()"
       >
-        @if (tabs().length > 1) {
+        @if (availableTabs().length > 1) {
           @for (t of tabs(); track t.id) {
             <button
               type="button"
@@ -245,6 +249,7 @@ function readView(): View | null {
       </span>
     </header>
     <main #main tabindex="-1">
+      <p class="background-note" role="status">{{ backgroundNote() }}</p>
       @if (connectionFailed()) {
         <p class="connection-error" role="alert">
           Can't reach the devtools server. Check that the dev server is running, then reload.
@@ -564,6 +569,14 @@ function readView(): View | null {
     main > * {
       animation: enter 0.28s var(--ease) both;
     }
+    .background-note {
+      margin: 0 0 12px;
+      color: var(--text-2);
+      font-size: 12px;
+      &:empty {
+        display: none;
+      }
+    }
     .turned-off {
       max-width: 60ch;
       margin: 0;
@@ -640,7 +653,7 @@ export class App implements OnInit, OnDestroy {
   });
   readonly config = computed(() => panelConfig(this.rpc()));
   protected readonly tabEnabled = tabEnabled;
-  readonly tabs = computed(() => {
+  protected readonly availableTabs = computed(() => {
     if (this.comingSoon()) return [];
     const view = this.view();
     const only = view ? VIEW_TAB[view] : undefined;
@@ -650,6 +663,12 @@ export class App implements OnInit, OnDestroy {
       (t) => (t.id !== 'analog' || this.analog()) && !(view === 'angular' && TAB_VIEW[t.id]),
     );
   });
+  readonly tabs = computed(() => {
+    const tabs = this.availableTabs();
+    if (this.rpc()) return tabs;
+    const tab = this.tab();
+    return tabs.filter((t) => t.id === 'dashboard' || t.id === tab);
+  });
 
   tab = linkedSignal<Tab>(() => {
     const view = this.view();
@@ -658,8 +677,22 @@ export class App implements OnInit, OnDestroy {
   rpc = signal<DevframeRpcClient | null>(null);
   connected = signal(false);
   readonly connectionFailed = signal(false);
+  private readonly hiddenPages = signal<string[]>([]);
+  private readonly pageId = hostPageId();
+  readonly backgroundNote = computed(() => {
+    const hidden = this.hiddenPages();
+    if (this.pageId) {
+      return hidden.includes(this.pageId) ? 'Tab in background, showing the last data.' : '';
+    }
+    if (!hidden.length) return '';
+    return hidden.length === 1
+      ? 'A tab is in the background, showing its last data.'
+      : `${hidden.length} tabs are in the background, showing their last data.`;
+  });
+  private stopVisibility = () => {};
 
   private stopFollowing = () => {};
+  private stopHighlights = () => {};
   private readonly nav = viewChild<ElementRef<HTMLElement>>('nav');
   private readonly main = viewChild<ElementRef<HTMLElement>>('main');
   private readonly injector = inject(Injector);
@@ -713,18 +746,20 @@ export class App implements OnInit, OnDestroy {
     } catch {
       // a cross origin parent cannot be styled
     }
-    // Deep link: read tab from hash
-    const params = new URLSearchParams(location.hash.replace(/^#/, ''));
-    const hashTab = params.get('tab');
-    if (hashTab && this.tabs().some((t) => t.id === hashTab)) {
-      this.tab.set(hashTab as Tab);
-    }
+    const restored = initialTab(
+      location.hash,
+      storedTab(this.tabScope()),
+      this.availableTabs().map((t) => t.id),
+    );
+    if (restored) this.tab.set(restored);
 
+    this.stopHighlights = clearHighlightsOnHide(() => this.rpc());
     const baseURL = detectBaseURL();
     connectDevframe(baseURL ? { baseURL } : {}).then(
       (client) => {
         this.rpc.set(client);
         this.connected.set(true);
+        void this.watchVisibility(client);
         const scoped = client.scope('ng-devtools').rpc as unknown as {
           call: (name: string) => Promise<unknown>;
         };
@@ -753,6 +788,8 @@ export class App implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.stopFollowing();
+    this.stopVisibility();
+    this.stopHighlights();
     this.navObserver?.disconnect();
   }
 
@@ -800,6 +837,28 @@ export class App implements OnInit, OnDestroy {
   private setTab(id: Tab) {
     this.keepFocus();
     this.tab.set(id);
+    storeTab(this.tabScope(), id);
+  }
+
+  private tabScope() {
+    return this.view() ?? 'panel';
+  }
+
+  private async watchVisibility(client: DevframeRpcClient) {
+    try {
+      const state = await client.scope('ng-devtools').rpc.sharedState('page-visibility');
+      const apply = (value: unknown) => {
+        const hidden = (value as { hidden?: unknown } | undefined)?.hidden;
+        this.hiddenPages.set(
+          Array.isArray(hidden) ? hidden.filter((id) => typeof id === 'string') : [],
+        );
+      };
+      apply(state.value());
+      this.stopVisibility();
+      this.stopVisibility = state.on('updated', apply);
+    } catch {
+      // an older server has no visibility state, and no note is shown
+    }
   }
 
   private keepFocus() {
@@ -841,41 +900,4 @@ export class App implements OnInit, OnDestroy {
       this.setTab(fallback);
     }
   }
-}
-
-// Chrome extension passes ?baseURL=...; embedded uses /__ng-devtools/; standalone uses default
-function sameOrigin(value: string): boolean {
-  try {
-    return new URL(value, location.href).origin === location.origin;
-  } catch {
-    return false;
-  }
-}
-
-// The extension panel is not web accessible, and it only passes hosts the user granted.
-function fromExtension(value: string): boolean {
-  if (location.protocol !== 'chrome-extension:') return false;
-  try {
-    const { protocol } = new URL(value);
-    return protocol === 'http:' || protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-function detectBaseURL(): string | undefined {
-  const params = new URLSearchParams(location.search);
-  const fromQuery = params.get('baseURL');
-  // Same origin only: any page can open this URL, and this value decides where
-  // the panel opens its RPC channel.
-  // `new URL` throws on a malformed value, and this runs before the connection
-  // is made, so an unhandled throw would leave the panel blank.
-  if (fromQuery && (sameOrigin(fromQuery) || fromExtension(fromQuery))) {
-    return fromQuery;
-  }
-
-  if (location.pathname.includes('__ng-devtools') || location.pathname.includes('__devframes/')) {
-    return undefined;
-  }
-  return '/__ng-devtools/';
 }

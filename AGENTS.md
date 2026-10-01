@@ -1,62 +1,42 @@
-You are an expert in TypeScript, Angular, and scalable web application development. You write functional, maintainable, performant, and accessible code following Angular and TypeScript best practices.
+Follow the Angular, TypeScript and accessibility rules in `.claude/rules/angular.md` (Claude Code loads it on its own).
 
-## TypeScript Best Practices
+## This repository
 
-- Use strict type checking
-- Prefer type inference when the type is obvious
-- Avoid the `any` type; use `unknown` when type is uncertain
+Angular DevTools inspects a running Angular app and serves what it finds to a panel and to AI agents over MCP. It is an Nx and pnpm workspace:
 
-## Angular Best Practices
+| Path                        | What it is                                                                                                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/ng-devtools`      | The published package: the page overlay and collectors, the devframe server (`src/devframe.ts`), the Express hub, the Vite plugin, the CLI and the agent tools |
+| `app`                       | The panel UI, an Angular app served by the hub and bundled into the Chrome extension                                                                           |
+| `extension`                 | The Chrome extension; `extension/ui` is a committed build of `app`                                                                                             |
+| `apps/docs`                 | The documentation site                                                                                                                                         |
+| `src` and `examples/analog` | The demo apps used for manual checks and docs samples                                                                                                          |
 
-- Always use standalone components over NgModules
-- Must NOT set `standalone: true` inside Angular decorators. It's the default in Angular v20+.
-- Do NOT set `changeDetection: ChangeDetectionStrategy.OnPush` explicitly. `OnPush` is the default in Angular v22+.
-- Use signals for state management
-- Implement lazy loading for feature routes
-- Do NOT use the `@HostBinding` and `@HostListener` decorators. Put host bindings inside the `host` object of the `@Component` or `@Directive` decorator instead
-- Use `NgOptimizedImage` for all static images.
-  - `NgOptimizedImage` does not work for inline base64 images.
+### Commands
 
-## Accessibility Requirements
+| Command                | What it runs                                            |
+| ---------------------- | ------------------------------------------------------- |
+| `pnpm test:devtools`   | Package tests                                           |
+| `pnpm test:panel`      | Panel tests                                             |
+| `pnpm test:axe`        | Builds a static report and runs axe on every panel view |
+| `pnpm typecheck`       | TypeScript and template checks for every project        |
+| `pnpm format:check`    | Prettier, including the docs markdown                   |
+| `pnpm skills:check`    | Checks the skills and roles in `.claude`                |
+| `pnpm docs:build`      | Builds the docs site with its link guards               |
+| `pnpm extension:build` | Rebuilds `extension/ui` from `app`                      |
+| `pnpm commit:check`    | Checks the commit messages on the branch                |
 
-- It MUST pass all AXE checks.
-- It MUST follow all WCAG AA minimums, including focus management, color contrast, and ARIA attributes.
+The words this project uses for its own concepts (overlay, collector, hub, devframe, agent tool and so on) are defined in `docs/CONTEXT.md`. Use them the same way in code, docs and issues.
 
-### Components
+### Rules that fail quietly
 
-- Keep components small and focused on a single responsibility
-- Use `input()` and `output()` functions instead of decorators
-- Use `model()` for two-way bound properties with `[(prop)]` syntax instead of pairing `input()` with `output()`
-- Use `computed()` for derived state
-- Use `linkedSignal()` for state derived from multiple reactive sources that must stay synchronized
-- Prefer inline templates for small components
-- Prefer Signal Forms (`@angular/forms/signals`) for new forms. They are stable in Angular v22+ and provide signal-based state, type-safe field access, and schema-based validation
-- When not using Signal Forms, prefer Reactive forms instead of Template-driven ones
-- Do NOT use `ngClass`, use `class` bindings instead
-- Do NOT use `ngStyle`, use `style` bindings instead
-- Do NOT import `CommonModule`, import only the directives and pipes the template uses, such as `AsyncPipe` or `DatePipe`
-- When using external templates/styles, use paths relative to the component TS file.
-
-## State Management
-
-- Use signals for local component state
-- Use `computed()` for derived state
-- Keep state transformations pure and predictable
-- Do NOT use `mutate` on signals, use `update` or `set` instead
-
-## Templates
-
-- Keep templates simple and avoid complex logic
-- Use native control flow (`@if`, `@for`, `@switch`) instead of `*ngIf`, `*ngFor`, `*ngSwitch`
-- Use the async pipe to handle observables
-- Do not assume globals like (`new Date()`) are available.
-
-## Services
-
-- Design services around a single responsibility
-- Use the `providedIn: 'root'` option for singleton services
-- Prefer the `@Service` decorator over `@Injectable({providedIn: 'root'})` for new singleton services (Angular v22+)
-- Use the `inject()` function instead of constructor injection
+- After any change in `app`, run `pnpm extension:build` and commit `extension/ui`. CI fails when the committed bundle is stale.
+- Commit messages and pull request titles use `type(scope): summary` with the scopes in `docs/contributing/commit-message-guidelines.md`. Pull requests are squash merged.
+- A new agent tool or RPC must be listed in `packages/ng-devtools/src/config.ts` (`AGENT_INSPECTOR`, `RPC_INSPECTOR`, and `ACTION_TOOLS` for anything that writes), or turning its inspector off won't hide it.
+- Values sent to the panel or to agents go through `serialize` or the redaction helpers, so `redaction.secretNames`, JWTs and bearer tokens are masked everywhere.
+- Data from the page carries a `pageId` and expires, so one tab never overwrites another.
+- Docs links are relative `.md` links, which the build checks. `*Angular` style words are keyword links on purpose.
+- Behaviour, option, label or tool changes update the matching docs page in the same pull request.
 
 ## Project guidelines, skills and roles
 
@@ -73,6 +53,9 @@ Use the matching skill for the task:
 - `.claude/skills/devtools-docs` for the docs site (`apps/docs`) and `README.md`.
 - `.claude/skills/devtools-verify` before calling a change done.
 - `.claude/skills/devtools-commit` for commits and pull requests.
+- `.claude/skills/devtools-fix-issue` to take one issue to a pull request.
+- `.claude/skills/devtools-work-issues` to work through a batch of issues with parallel agents.
+- `.claude/skills/grilling` to settle an open decision one question at a time before any work starts.
 
 Roles for delegating work live in `.claude/agents/`: `ui-engineer`, `inspector-engineer`, `a11y-reviewer` and `devtools-reviewer`.
 

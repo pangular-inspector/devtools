@@ -8,6 +8,7 @@
   --muted: #52525b;
   --card: #ffffff;
   --soft: #f4f4f5;
+  --error: #b91c1c;
   font-family:
     Inter,
     system-ui,
@@ -26,6 +27,7 @@
     --muted: #a1a1aa;
     --card: #18181b;
     --soft: #111113;
+    --error: #f87171;
   }
 }
 
@@ -262,8 +264,17 @@ h2 {
 
 .error {
   margin: 0;
-  color: #dc2626;
+  color: var(--error);
   font-size: 14px;
+}
+
+.error:empty,
+.errors:empty {
+  display: none;
+}
+
+input[aria-invalid='true'] {
+  border-color: var(--error);
 }
 
 .list {

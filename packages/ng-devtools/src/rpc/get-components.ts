@@ -34,6 +34,7 @@ export const getComponents = defineRpcFunction({
   name: 'get-components',
   type: 'query',
   jsonSerializable: true,
+  snapshot: true,
   args: [],
   returns: describable(v.array(ComponentSchema)),
   agent: {

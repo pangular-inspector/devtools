@@ -119,6 +119,22 @@ export const SOURCE_LABELS: Record<string, string> = {
 
 export const formsCall = rpcTry;
 
+const REDACT_LABELS: Record<string, string> = {
+  key: 'name looks secret',
+  'input-type': 'password input',
+  autocomplete: 'autocomplete is a secret kind',
+  marker: 'marked as mask',
+  parent: 'inside a secret group',
+  config: 'listed in mask',
+};
+
+export function redactLabel(reason: string): string {
+  return REDACT_LABELS[reason] ?? reason;
+}
+
+export const UNMASK_DOCS_URL =
+  'https://github.com/santoshyadavdev/angular-devtools/blob/main/apps/docs/src/content/security.md#opt-fields-in-or-out';
+
 export async function formAction(
   client: DevframeRpcClient | null,
   request: Record<string, unknown>,

@@ -84,7 +84,7 @@ It also adds the [floating button](./popup-and-hub.md). With the hub mounted, th
 
 ### Snapshots and events
 
-On Angular 20 and later, the overlay reads the page about 250 ms after Angular runs change detection. It also reads it every 4 seconds as a heartbeat. On older versions, it reads the page every 3 seconds instead. Change that interval with [`limits.refreshMs`](./configuration.md#limits).
+On Angular 20 and later, the overlay reads the page about 250 ms after Angular runs change detection. It also reads it every 4 seconds as a heartbeat. Until the app bootstraps, it reads the page every 3 seconds instead. Change that interval with [`limits.refreshMs`](./configuration.md#limits).
 
 Each read skips data that did not change. Router events are sent as they happen.
 
@@ -114,9 +114,13 @@ bootstrapApplication(App, appConfig).then(async () => {
 
 `baseURL` takes one path or a list of paths to try in order. `initOverlay` resolves to a function that stops the overlay it started and removes its hooks.
 
+The floating button follows the path the overlay connected to. If that path is `<base>ng-devtools/` and a hub answers at `<base>`, the button opens the hub. Otherwise it opens the devtools panel at that path.
+
 ### One overlay per page
 
 Only one overlay runs on a page. Importing the module already starts one on the default URLs. When you call `initOverlay`, it stops the running overlay first, the auto-started one included, and then starts yours. The page never ends up with two connections.
+
+An overlay that was stopped or replaced before it connected does not report its connection error.
 
 ## Stop the overlay
 
@@ -158,9 +162,29 @@ bootstrapApplication(App, appConfig).then(() => {
 
 See [Restore NgRx signal state](../guides/ngrx-signals-restore.md).
 
+## No devtools server found
+
+If no path answers, the overlay logs an error that starts with `[ng-devtools] No devtools server found` and lists the paths it tried. The floating button still appears, and its panel says **No devtools server found** with a link to the setup guide.
+
+Common causes:
+
+- No server part is mounted, for example plain `ng serve` without `initNgDevtoolsHub()` in `server.ts`.
+- The hub is mounted after `express.static` or the SSR handler, so the app answers first.
+- The hub runs on a custom `base`, and the overlay still uses the default paths. Pass the path to [`initOverlay`](#a-custom-mount-path).
+
+The overlay and the button do not start inside the devtools panel frame, so a misconfigured panel never shows a second button.
+
 ## Highlighting
 
-When you hover a component in the devtools, the overlay draws an amber box around its element in the page. The box follows the element and clears after 2 seconds.
+When you hover or focus a row in the devtools, the overlay draws an amber box around its element in the page. The box follows the element and stays until the pointer or focus leaves the row. The box also clears when the panel closes, reloads or loses its connection to the dev server. If that clear never reaches the page, the box clears after 60 seconds. A box drawn by the [`highlight` agent tool](../agents/tools.md) clears after 2 seconds.
+
+While you pick an element on the page, the box follows the pointer and clears when the pointer leaves the page or picking ends.
+
+- The box also works for SVG hosts, like `g[app-bar]` in a chart.
+- A host with `display: contents` has no box of its own, so the box goes around its children.
+- A hidden host (`display: none`, an inactive tab panel) gets no box.
+- The box is shown in the browser top layer, so it stays visible over an open `<dialog>`, a popover or a CDK overlay.
+- The `highlight` agent tool and a click on a component chip in the Pipes tab also scroll the element into view.
 
 ## FAQ
 
@@ -169,7 +193,7 @@ When you hover a component in the devtools, the overlay draws an amber box aroun
     No. The overlay adds the floating button itself. See <a href="./popup-and-hub.md">Popup and hub</a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Does it slow down my app?">
-    It reads the page after change detection, at most once every 250 ms, plus a heartbeat every 4 seconds. It only sends data that changed. With the dynamic import above, it never loads in production builds.
+    It reads the page after change detection, at most once every 250 ms, plus a heartbeat every 4 seconds. It sends an inspector's data only when it changed. The HTTP inspector sends only the calls made since its last report. When the data of the components, signals, injectors, router or HTTP inspector stays the same for 5 to 8 seconds, the page sends a short ping instead, so the server keeps the page. With the dynamic import above, it never loads in production builds.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Which values leave the page?">
     Live values are sent to the devtools server. Secret-looking values are redacted first. See <a href="../security.md">Access and redaction</a>.

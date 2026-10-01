@@ -52,6 +52,24 @@ describe('lintPipes', () => {
       expect(finding).toMatchObject({ pipe: 'appLive', severity: 'warning' });
     });
 
+    it('flags an impure pipe inside @let within @for', () => {
+      const findings = lintFor(`
+        @Component({
+          selector: 'app-list',
+          imports: [SlicePipe],
+          template: \`
+            @for (item of items; track item.id) {
+              @let tail = item.tail | slice:1;
+              <p>{{ tail }}</p>
+            }
+          \`,
+        })
+        export class ListView {}
+      `);
+      const finding = findings.find((f) => f.rule === 'impure-pipe-in-for');
+      expect(finding).toMatchObject({ pipe: 'slice', severity: 'warning' });
+    });
+
     it('does not flag a pure pipe inside @for', () => {
       const findings = lintFor(`
         @Component({
@@ -108,6 +126,58 @@ describe('lintPipes', () => {
     });
   });
 
+  describe('async-on-call', () => {
+    it('flags a method call piped to async', () => {
+      const findings = lintFor(`
+        @Component({
+          selector: 'app-users',
+          imports: [AsyncPipe],
+          template: \`
+            @for (u of getUsers() | async; track u.id) {
+              <p>{{ u.name }}</p>
+            }
+            @let details = api.load(id) | async;
+          \`,
+        })
+        export class Users {
+          getUsers() { return this.http.get('/users'); }
+        }
+      `);
+      const matches = findings.filter((f) => f.rule === 'async-on-call');
+      expect(matches.map((f) => f.message.slice(0, 20))).toEqual([
+        '`getUsers(…) | async',
+        '`api.load(…) | async',
+      ]);
+      expect(matches[0]).toMatchObject({ pipe: 'async', severity: 'info', line: 6 });
+    });
+
+    it('skips signal fields, observable fields and casts', () => {
+      const findings = lintFor(`
+        @Component({
+          selector: 'app-users',
+          imports: [AsyncPipe],
+          template: \`
+            <p>{{ users$ | async }}</p>
+            <p>{{ source() | async }}</p>
+            <p>{{ fromInput() | async }}</p>
+            <p>{{ derived() | async }}</p>
+            <p>{{ bridged() | async }}</p>
+            <p>{{ $any(x) | async }}</p>
+            <p>{{ (users$ | async)?.length }}</p>
+          \`,
+        })
+        export class Users {
+          users$ = of([]);
+          source = signal(of(1));
+          fromInput = input.required<Observable<number>>();
+          derived = computed(() => of(1));
+          bridged = toSignal(of(of(1)));
+        }
+      `);
+      expect(findings.filter((f) => f.rule === 'async-on-call')).toEqual([]);
+    });
+  });
+
   describe('signal-read-in-pure-pipe', () => {
     it('flags a pure pipe reading a signal field in transform()', () => {
       const findings = lintFor(`
@@ -121,6 +191,68 @@ describe('lintPipes', () => {
       `);
       const finding = findings.find((f) => f.rule === 'signal-read-in-pure-pipe');
       expect(finding).toMatchObject({ pipe: 'appScaled' });
+    });
+
+    it.each([
+      ['linkedSignal', 'factor = linkedSignal(() => 2);'],
+      ['toSignal', 'factor = toSignal(of(2), { initialValue: 2 });'],
+      ['model', 'factor = model(2);'],
+      ['input.required', 'factor = input.required<number>();'],
+    ])('flags a pure pipe reading a %s field in transform()', (_kind, field) => {
+      const findings = lintFor(`
+        @Pipe({ name: 'appScaled' })
+        export class ScaledPipe implements PipeTransform {
+          ${field}
+          transform(value: number) {
+            return value * this.factor();
+          }
+        }
+      `);
+      const finding = findings.find((f) => f.rule === 'signal-read-in-pure-pipe');
+      expect(finding).toMatchObject({ pipe: 'appScaled', severity: 'warning' });
+    });
+
+    it('flags a zero-argument call on an inject() field as info', () => {
+      const findings = lintFor(`
+        @Pipe({ name: 'appRate' })
+        export class RatePipe implements PipeTransform {
+          private readonly rates = inject(RatesService);
+          transform(value: number) {
+            return value * this.rates.current() + this.rates.convert(value);
+          }
+        }
+      `);
+      const matches = findings.filter((f) => f.rule === 'signal-read-in-pure-pipe');
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({ pipe: 'appRate', severity: 'info' });
+      expect(matches[0].message).toContain('this.rates.current()');
+    });
+
+    it('flags a zero-argument call on a constructor-injected field as info', () => {
+      const findings = lintFor(`
+        @Pipe({ name: 'appRate' })
+        export class RatePipe implements PipeTransform {
+          constructor(private readonly rates: RatesService, other: Other) {}
+          transform(value: number) {
+            return value * this.rates.current();
+          }
+        }
+      `);
+      const finding = findings.find((f) => f.rule === 'signal-read-in-pure-pipe');
+      expect(finding).toMatchObject({ pipe: 'appRate', severity: 'info' });
+    });
+
+    it('does not flag calls on fields that are not injected', () => {
+      const findings = lintFor(`
+        @Pipe({ name: 'appPlain' })
+        export class PlainPipe implements PipeTransform {
+          private readonly helper = new Helper();
+          transform(value: number) {
+            return this.helper.scale() * value;
+          }
+        }
+      `);
+      expect(findings.filter((f) => f.rule === 'signal-read-in-pure-pipe')).toEqual([]);
     });
 
     it('does not flag an impure pipe reading a signal field', () => {

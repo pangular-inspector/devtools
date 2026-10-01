@@ -184,6 +184,30 @@ async function withForms() {
 }
 
 describe('forms MCP tools', () => {
+  it('names the reporting pages for an unknown page instead of listing every form', async () => {
+    const { call } = await withForms();
+    for (const tool of [
+      'inspect-forms',
+      'explain-form-invalid',
+      'explain-field',
+      'explain-submit',
+      'form-payload',
+      'form-history',
+      'form-diff',
+      'lint-forms',
+      'explain-custom-control',
+      'export-form',
+      'wait-for-form',
+    ]) {
+      const text = await call(tool, { page: 'gone', form: 'Signup' });
+      expect(text, tool).toMatch(/^No page `gone` is reporting forms\. Pages that report forms: /);
+      expect(text, tool).toContain('`pg1`');
+      expect(text, tool).toContain('`pg2`');
+      expect(text, tool).not.toContain('No form matches');
+    }
+    expect(await call('inspect-forms', { page: 'pg1' })).toContain('Signup.form');
+  });
+
   it('every tool says so when no page reported forms', async () => {
     const { call } = await boot();
     for (const tool of [
@@ -233,6 +257,9 @@ describe('forms MCP tools', () => {
     const age = await call('explain-field', { form: 'form-1', path: 'age' });
     expect(age).toContain('Uncommitted: the input holds 30, which reaches the model on blur.');
     expect(age).toContain('Stale:');
+    expect(await call('explain-field', { form: 'form-1', path: 'password' })).toContain(
+      'Value: "[redacted]" (redacted: name looks secret).',
+    );
     const card = await call('explain-field', { form: 'Profile', path: 'card' });
     expect(card).toContain('Validation is skipped because the field is hidden.');
     expect(await call('explain-field', { form: 'Profile', path: 'nope' })).toContain(
@@ -420,6 +447,60 @@ describe('forms MCP tools', () => {
       ],
     });
     expect(await waiting).toContain('Marker: 5');
+  });
+
+  it('keeps markers valid across pages whose own counters differ, and across a reload', async () => {
+    const { call, push } = await boot();
+    const busy = Array.from({ length: 300 }, (_, i) => ({
+      formId: 'form-1@pg1',
+      path: 'email',
+      type: 'status',
+      detail: i % 2 ? 'VALID' : 'INVALID',
+      timestamp: 1000 + i,
+      seq: i + 1,
+    }));
+    await push('push-forms', { pageId: 'pg1', forms: [signup], events: busy });
+    await push('push-forms', { pageId: 'pg2', forms: [profile], events: [] });
+    const marker = Number((await call('form-history', {})).match(/Marker: (\d+)/)![1]);
+    expect(marker).toBeGreaterThan(0);
+
+    const waiting = call('wait-for-form', {
+      form: 'Profile',
+      until: 'submitted',
+      since: marker,
+      timeoutMs: 3000,
+    });
+    const filled = [
+      {
+        formId: 'form-2@pg2',
+        path: 'name',
+        type: 'value',
+        detail: '"Kam"',
+        prev: '""',
+        timestamp: 5000,
+        seq: 1,
+      },
+      { formId: 'form-2@pg2', path: '', type: 'submit', outcome: 'ran', timestamp: 5001, seq: 2 },
+    ];
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    await push('push-forms', { pageId: 'pg2', forms: [profile], events: filled });
+    expect(await waiting).toMatch(/holds after/);
+    expect(await call('form-diff', { form: 'Profile', since: marker })).toContain(
+      '- `name` value: "" → "Kam"',
+    );
+    const history = await call('form-history', { form: 'Profile', since: marker });
+    expect(history).toContain('`name` value');
+    expect(history).toContain('submit');
+
+    const after = Number(history.match(/Marker: (\d+)/)![1]);
+    await push('push-forms', {
+      pageId: 'pg2',
+      forms: [profile],
+      events: [{ ...filled[0], detail: '"Ada"', prev: '""', timestamp: 9000, seq: 1 }],
+    });
+    expect(await call('form-diff', { form: 'Profile', since: after })).toContain(
+      '- `name` value: "" → "Ada"',
+    );
   });
 
   it('form-action and fill-form ask the right page and report refusals', async () => {

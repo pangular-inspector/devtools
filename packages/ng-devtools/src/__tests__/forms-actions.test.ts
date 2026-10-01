@@ -87,6 +87,79 @@ Component({
   template: `<form [formRoot]="form"><input id="pname" [formField]="form.name" /><button>Go</button></form>`,
 })(Profile);
 
+const SIZES = [
+  { id: 1, label: 'Small' },
+  { id: 2, label: 'Large' },
+];
+
+class Order {
+  form = new FormGroup({
+    size: new FormControl<number | null>(1),
+    tags: new FormControl<string[]>([]),
+    plan: new FormControl<{ id: number; label: string } | null>(null),
+    color: new FormControl('red'),
+  });
+  sizes = SIZES;
+}
+Component({
+  selector: 'order-form',
+  imports: [ReactiveFormsModule],
+  template: `
+    <form [formGroup]="form">
+      <select id="size" formControlName="size">
+        <option [ngValue]="1">Small</option>
+        <option [ngValue]="2">Large</option>
+      </select>
+      <select id="tags" multiple formControlName="tags">
+        <option [ngValue]="'a'">A</option>
+        <option [ngValue]="'b'">B</option>
+        <option [ngValue]="'c'">C</option>
+      </select>
+      <select id="plan" formControlName="plan">
+        @for (s of sizes; track s.id) {
+          <option [ngValue]="s">{{ s.label }}</option>
+        }
+      </select>
+      <select id="color" formControlName="color">
+        <option value="red">Red</option>
+        <option value="blue">Blue</option>
+      </select>
+    </form>
+  `,
+})(Order);
+
+class Delivery {
+  form = new FormGroup({
+    speed: new FormControl('slow', { updateOn: 'submit' }),
+  });
+}
+Component({
+  selector: 'delivery-form',
+  imports: [ReactiveFormsModule],
+  template: `
+    <form [formGroup]="form">
+      <select id="speed" formControlName="speed">
+        <option value="slow">Slow</option>
+        <option value="fast">Fast</option>
+      </select>
+    </form>
+  `,
+})(Delivery);
+
+class Shirt {
+  size = 1;
+}
+Component({
+  selector: 'shirt-form',
+  imports: [FormsModule],
+  template: `<form>
+    <select id="shirt" name="size" [(ngModel)]="size">
+      <option [ngValue]="1">Small</option>
+      <option [ngValue]="2">Large</option>
+    </select>
+  </form>`,
+})(Shirt);
+
 async function render<T>(type: new () => T) {
   const fixture = TestBed.createComponent(type);
   fixture.detectChanges();
@@ -119,7 +192,8 @@ describe('form actions on reactive forms', () => {
       value: 'x',
     });
     expect(result).toMatchObject({ ok: false });
-    expect(result.error).toContain('looks secret');
+    expect(result.error).toContain('is redacted (name looks secret)');
+    expect(result.error).toContain('to unmask on window.__NG_DEVTOOLS_FORMS__');
     expect(form.controls.password.value).toBe('');
 
     result = await runFormAction(ctx, {
@@ -214,6 +288,112 @@ describe('form actions on reactive forms', () => {
   });
 });
 
+describe('form actions on native selects', () => {
+  it('selects the option whose ngValue matches in a reactive form', async () => {
+    const fixture = await render(Order);
+    const ctx = contextFor(fixture.nativeElement);
+    const form = fixture.componentInstance.form;
+    const set = (path: string, value: unknown) =>
+      runFormAction(ctx, { action: 'set-value', formId: 'form-1', path, value, mode: 'user' });
+
+    expect(await set('size', 2)).toMatchObject({ ok: true });
+    expect(form.controls.size.value).toBe(2);
+
+    expect(await set('plan', { id: 2, label: 'Large' })).toMatchObject({ ok: true });
+    expect(form.controls.plan.value).toBe(SIZES[1]);
+    expect(await set('plan', { id: 1, label: 'Small' })).toMatchObject({ ok: true });
+    expect(form.controls.plan.value).toBe(SIZES[0]);
+    const unmatched = await set('plan', { id: 9, label: 'Huge' });
+    expect(unmatched.ok).toBe(false);
+    expect(unmatched.error).toContain('no option with the value');
+    expect(form.controls.plan.value).toBe(SIZES[0]);
+
+    expect(await set('color', 'blue')).toMatchObject({ ok: true });
+    expect(form.controls.color.value).toBe('blue');
+
+    const missing = await set('size', 3);
+    expect(missing.ok).toBe(false);
+    expect(missing.error).toContain('no option with the value 3');
+    expect(form.controls.size.value).toBe(2);
+  });
+
+  it('selects every matching option of a multiple select', async () => {
+    const fixture = await render(Order);
+    const ctx = contextFor(fixture.nativeElement);
+    const form = fixture.componentInstance.form;
+    const set = (value: unknown) =>
+      runFormAction(ctx, {
+        action: 'set-value',
+        formId: 'form-1',
+        path: 'tags',
+        value,
+        mode: 'user',
+      });
+    expect(await set(['a', 'c'])).toMatchObject({ ok: true });
+    expect(form.controls.tags.value).toEqual(['a', 'c']);
+    expect(await set(['c', 'b'])).toMatchObject({ ok: true });
+    expect(form.controls.tags.value).toEqual(['b', 'c']);
+    expect(await set(['c', 'a'])).toMatchObject({ ok: true });
+    expect(form.controls.tags.value).toEqual(['a', 'c']);
+    expect((await set(['a', 'z'])).error).toContain('no option with the value "z"');
+    expect((await set('a')).ok).toBe(false);
+    expect(form.controls.tags.value).toEqual(['a', 'c']);
+  });
+
+  it('accepts a pending select value on a control that updates on submit', async () => {
+    const fixture = await render(Delivery);
+    const ctx = contextFor(fixture.nativeElement);
+    const control = fixture.componentInstance.form.controls.speed;
+    const set = (value: unknown) =>
+      runFormAction(ctx, {
+        action: 'set-value',
+        formId: 'form-1',
+        path: 'speed',
+        value,
+        mode: 'user',
+      });
+    expect(await set('fast')).toMatchObject({ ok: true });
+    expect(control.value).toBe('slow');
+    expect((await set('turbo')).error).toContain('no option with the value "turbo"');
+  });
+
+  it('writes an ngModel select and fills selects in user mode', async () => {
+    const shirt = await render(Shirt);
+    const shirtCtx = contextFor(shirt.nativeElement);
+    const result = await runFormAction(shirtCtx, {
+      action: 'set-value',
+      formId: 'form-1',
+      path: 'size',
+      value: 2,
+    });
+    expect(result).toMatchObject({ ok: true });
+    expect(shirt.componentInstance.size).toBe(2);
+    expect(
+      (
+        await runFormAction(shirtCtx, {
+          action: 'set-value',
+          formId: 'form-1',
+          path: 'size',
+          value: 5,
+        })
+      ).ok,
+    ).toBe(false);
+    expect(shirt.componentInstance.size).toBe(2);
+
+    const order = await render(Order);
+    const ctx = contextFor(order.nativeElement);
+    const filled = await runFormAction(ctx, {
+      action: 'fill',
+      formId: 'form-1',
+      values: { size: 2, color: 'green' },
+    });
+    expect(filled.skipped).toEqual([
+      { path: 'color', reason: 'has no option with the value "green"' },
+    ]);
+    expect(order.componentInstance.form.value).toMatchObject({ size: 2, color: 'red' });
+  });
+});
+
 describe('form actions on template-driven and Signal Forms', () => {
   it('writes ngModel through the input so the component property updates', async () => {
     const fixture = await render(Notes);
@@ -261,6 +441,51 @@ describe('form actions on template-driven and Signal Forms', () => {
   });
 });
 
+class Vault {
+  form = new FormGroup({
+    pin: new FormControl(''),
+    code: new FormControl(''),
+    shown: new FormControl(''),
+    tokens: new FormGroup({ label: new FormControl('') }),
+  });
+}
+Component({
+  selector: 'vault-form',
+  imports: [ReactiveFormsModule],
+  template: `
+    <form [formGroup]="form">
+      <input id="pin" formControlName="pin" data-ng-devtools="unmask" />
+      <input id="code" type="password" formControlName="code" />
+      <input id="shown" type="password" formControlName="shown" data-ng-devtools="unmask" />
+      <div formGroupName="tokens"><input id="label" formControlName="label" /></div>
+    </form>
+  `,
+})(Vault);
+
+describe('secret refusals', () => {
+  it('names the reason and the unmask that lifts it', async () => {
+    const fixture = await render(Vault);
+    const ctx = contextFor(fixture.nativeElement);
+    const write = (path: string) =>
+      runFormAction(ctx, { action: 'set-value', formId: 'form-1', path, value: '1' });
+
+    const pin = await write('pin');
+    expect(pin.error).toContain('is redacted (name looks secret)');
+    expect(pin.error).toContain('add "pin" to unmask on window.__NG_DEVTOOLS_FORMS__');
+    expect(pin.error).not.toContain('data-ng-devtools');
+
+    const code = await write('code');
+    expect(code.error).toContain('is redacted (password input)');
+    expect(code.error).toContain('add data-ng-devtools="unmask" to the field, or add "code"');
+
+    const label = await write('tokens.label');
+    expect(label.error).toContain('is redacted (inside a secret group)');
+    expect(label.error).toContain('add "tokens" to unmask');
+
+    expect((await write('shown')).ok).toBe(true);
+  });
+});
+
 describe('secret safety for group writes', () => {
   it('refuses a group write that would touch a secret field', async () => {
     const fixture = await render(Signup);
@@ -275,7 +500,8 @@ describe('secret safety for group writes', () => {
       path: 'account',
       value: { name: 'b', apiKey: 'stolen' },
     });
-    expect(result.error).toContain('secret field "apiKey"');
+    expect(result.error).toContain('secret field "apiKey" (name looks secret)');
+    expect(result.error).toContain('add "apiKey" to unmask');
     expect(account.controls.account.controls.apiKey.value).toBe('k');
     const allowed = await runFormAction(ctx, {
       action: 'set-value',

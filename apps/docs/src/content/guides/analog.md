@@ -128,9 +128,11 @@ Open the **Analog** dock to see file routes, server calls, render modes, content
   Point your MCP client at <code>http://localhost:5173/__devframes/__mcp</code> with an <code>Origin</code> header. See <a href="../agents/mcp-server.md">MCP server</a>. The <code>analog-server-calls</code> and <code>analog-call-api</code> tools only work through the Vite plugin.
 </ngmd-callout>
 
-## Optional: record HttpClient calls
+## Catch hydration errors from the first load
 
-Analog's own `load()` fetches and API calls show in the Analog dock without extra setup. To also record `HttpClient` calls in the **SSR & HTTP** tab, add the devtools providers to your app config:
+The overlay loads after the first render, so it misses hydration errors (`NG0500` to `NG0506`) logged during the first load. `provideNgDevtoolsHttp()` starts listening for them when the app starts. The Analog dock lists them under **Hydration error** in **Lint**, and the `analog-current-page` tool returns them.
+
+Analog's own `load()` fetches and API calls show in the Analog dock without extra setup. `withNgDevtools()` also records `HttpClient` calls in the **SSR & HTTP** tab.
 
 ```ts {5,10-11}
 // src/app/app.config.ts
@@ -148,7 +150,7 @@ export const appConfig: ApplicationConfig = {
 };
 ```
 
-See [Set up SSR & HTTP](./ssr-http.md) for the interceptor order.
+`provideNgDevtoolsHttp()` and `withNgDevtools()` do nothing in production builds. See [Set up SSR & HTTP](./ssr-http.md) for the interceptor order.
 
 ## Try the demo
 

@@ -1,7 +1,12 @@
 name: Bug report
 description: Something in the devtools shows wrong data, breaks, or looks wrong
+title: '<area>: '
 labels: [bug, needs triage]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Title the issue `area: what is wrong`, in lowercase, for example `router: a failed lazy navigation is only logged`. The area is one of the [commit scopes](https://github.com/santoshyadavdev/angular-devtools/blob/main/docs/contributing/commit-message-guidelines.md#scope), such as `components`, `router`, `forms`, `http`, `mcp`, `extension` or `docs`.
   - type: dropdown
     id: area
     attributes:

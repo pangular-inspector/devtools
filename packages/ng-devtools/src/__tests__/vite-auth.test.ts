@@ -87,3 +87,59 @@ describe('ngDevtoolsVite hub auth', () => {
     });
   });
 });
+
+describe('ngDevtoolsVite allowedOrigins', () => {
+  function plugin(allowedOrigins: string[]) {
+    hubOptions.length = 0;
+    const warn = vi.fn();
+    const use = vi.fn();
+    const server = {
+      config: { root: process.cwd(), server: {}, logger: { warn } },
+      middlewares: { use },
+      httpServer: null,
+    };
+    (ngDevtoolsVite({ apiPrefix: 'api', allowedOrigins }).configureServer as (s: unknown) => void)(
+      server,
+    );
+    const gate = use.mock.calls[0][0] as (req: unknown, res: unknown, next: () => void) => void;
+    const status = (origin: string) => {
+      const res = { statusCode: 200, end: vi.fn() };
+      const next = vi.fn();
+      gate(
+        { url: '/__devframes/__sse', headers: { origin }, socket: { remoteAddress: '127.0.0.1' } },
+        res,
+        next,
+      );
+      return next.mock.calls.length ? 'next' : res.statusCode;
+    };
+    return { auth: hubOptions[0]?.auth, warn, status };
+  }
+
+  it('matches entries with a trailing slash, a path or an uppercase host', () => {
+    for (const entry of [
+      'https://abc.trycloudflare.com/',
+      'https://abc.trycloudflare.com/app',
+      'https://ABC.trycloudflare.com',
+    ]) {
+      const { auth, warn, status } = plugin([entry]);
+      expect(auth).toBe(true);
+      expect(status('https://abc.trycloudflare.com')).toBe('next');
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('"https://abc.trycloudflare.com"'));
+    }
+  });
+
+  it('drops an entry that is not an origin and says so, without turning the code on', () => {
+    const { auth, warn } = plugin(['abc.trycloudflare.com']);
+    expect(auth).toBe(false);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Ignoring allowedOrigins entry'));
+  });
+
+  it('keeps an exact origin quiet and warns once per refused origin', () => {
+    const { warn, status } = plugin(['https://tunnel.example']);
+    expect(warn).not.toHaveBeenCalled();
+    expect(status('https://evil.example')).toBe(403);
+    expect(status('https://evil.example')).toBe(403);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('https://evil.example'));
+  });
+});

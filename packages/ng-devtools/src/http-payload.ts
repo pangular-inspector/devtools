@@ -8,6 +8,8 @@ export interface PayloadEntry {
   /** Present when the entry is an HttpClient transfer-cache response. */
   http?: { url?: string; status?: number; statusText?: string; responseType?: string };
   source?: PayloadSource;
+  /** Present when the entry is an Analog server function result seeded during SSR. */
+  fn?: { id: string; name?: string; file?: string };
   size: number;
   value: unknown;
 }
@@ -56,11 +58,14 @@ export function sanitizePayload(input: unknown): PayloadSummary {
       e.source === 'http' || e.source === 'analog' || e.source === 'hydration'
         ? e.source
         : undefined;
+    const f = e.fn && typeof e.fn === 'object' ? (e.fn as Record<string, unknown>) : null;
+    const fnId = str(f?.['id'], 16);
     entries.push({
       key,
       size: num(e.size) ?? 0,
       value: clip(e.value),
       ...(source && { source }),
+      ...(fnId && /^[0-9a-f]{16}$/.test(fnId) && { fn: { id: fnId } }),
       ...(h && {
         http: {
           url: str(h['url'], 2000),
@@ -119,6 +124,7 @@ export function sanitizeHydration(input: unknown): HydrationStats | null {
 }
 
 const HYDRATION_KEYS = new Set(['__nghData__', '__nghDeferData__']);
+const SERVER_FN_KEY = /^__analog_fn_([0-9a-f]{16})_/;
 
 /** Reads the TransferState script (`<script id="{appId}-state">`) that SSR embeds. */
 export function decodePayload(doc: Document, appId = 'ng'): PayloadSummary {
@@ -136,8 +142,12 @@ export function decodePayload(doc: Document, appId = 'ng'): PayloadSummary {
   if (!data || typeof data !== 'object') return { found: true, size: text.length, entries: [] };
   const entries = Object.entries(data as Record<string, unknown>).map(([key, raw]) => {
     const entry: PayloadEntry = { key, size: JSON.stringify(raw)?.length ?? 0, value: raw };
+    const fnId = key.match(SERVER_FN_KEY)?.[1];
     if (HYDRATION_KEYS.has(key)) {
       entry.source = 'hydration';
+    } else if (fnId) {
+      entry.source = 'analog';
+      entry.fn = { id: fnId };
     } else if (
       key.startsWith('analog_') &&
       raw &&

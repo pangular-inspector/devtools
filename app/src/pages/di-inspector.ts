@@ -137,6 +137,20 @@ function isTree(value: unknown): value is InjectorNode[] {
         </label>
       </div>
 
+      @if (truncated()) {
+        <p class="notice">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 11v5M12 8h.01" />
+          </svg>
+          <span>
+            <strong>This page has more than 2000 element injectors.</strong>
+            Only the first 2000 are shown, so a lookup path or a provider can point to one that is
+            not listed.
+          </span>
+        </p>
+      }
+
       @if (providedBy().length) {
         <div class="where" role="status">
           <span class="where-label">Provided by</span>
@@ -213,6 +227,7 @@ function isTree(value: unknown): value is InjectorNode[] {
                 aria-hidden="true"
                 >{{ kind(row.node)[0].toUpperCase() }}</span
               >
+              <span class="sr-only">{{ kind(row.node) }}</span>
               <span class="name mono">{{ label(row.node) }}</span>
               @if (row.node.injector.component) {
                 <span class="sub">{{ row.node.injector.component }}</span>
@@ -225,6 +240,7 @@ function isTree(value: unknown): value is InjectorNode[] {
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M12 5v14M5 12l7 7 7-7" />
                     </svg>
+                    <span class="sr-only">injects</span>
                     {{ row.node.dependencies!.length }}
                   </span>
                 }
@@ -236,6 +252,7 @@ function isTree(value: unknown): value is InjectorNode[] {
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M21 8 12 3 3 8v8l9 5 9-5z" />
                     </svg>
+                    <span class="sr-only">provides</span>
                     {{ row.node.injector.providerCount }}
                   </span>
                 }
@@ -283,7 +300,12 @@ function isTree(value: unknown): value is InjectorNode[] {
                         ></span>
                         <span class="mono">{{ step.label }}</span>
                         @if (step.providers) {
-                          <span class="step-count">{{ step.providers }}</span>
+                          <span class="step-count">
+                            {{ step.providers }}
+                            <span class="sr-only">{{
+                              step.providers === 1 ? 'provider' : 'providers'
+                            }}</span>
+                          </span>
                         }
                       </button>
                     }
@@ -292,11 +314,17 @@ function isTree(value: unknown): value is InjectorNode[] {
               </ol>
             </div>
 
-            @if (sel.injector.type === 'element') {
+            @if (sel.injector.type === 'element' || sel.dependencies) {
               <div class="block">
                 <h3>
-                  Injected here <span class="pill">{{ sel.dependencies?.length ?? 0 }}</span>
+                  {{
+                    sel.injector.type === 'element' ? 'Injected here' : 'Injected by its services'
+                  }}
+                  <span class="pill">{{ sel.dependencies?.length ?? 0 }}</span>
                 </h3>
+                @if (sel.injector.type !== 'element') {
+                  <p class="hint">Only services this injector has already created are listed.</p>
+                }
                 @if (sel.dependencies?.length) {
                   <ul class="deps">
                     @for (dep of sel.dependencies; track dep.from + dep.token + $index) {
@@ -308,7 +336,10 @@ function isTree(value: unknown): value is InjectorNode[] {
                           }
                         </div>
                         <div class="dep-meta">
-                          @if (sel.injector.directives && sel.injector.directives.length > 1) {
+                          @if (
+                            sel.injector.type !== 'element' ||
+                            (sel.injector.directives && sel.injector.directives.length > 1)
+                          ) {
                             <span>for {{ dep.from }}</span>
                           }
                           @if (dep.providedBy; as by) {
@@ -320,6 +351,8 @@ function isTree(value: unknown): value is InjectorNode[] {
                               ></span>
                               from <span class="mono">{{ labelById(by) }}</span>
                             </button>
+                          } @else if (dep.flags.includes('optional')) {
+                            <span class="from absent">optional, not provided</span>
                           } @else {
                             <span class="from missing">not provided anywhere</span>
                           }
@@ -327,8 +360,10 @@ function isTree(value: unknown): value is InjectorNode[] {
                       </li>
                     }
                   </ul>
-                } @else {
+                } @else if (sel.injector.type === 'element') {
                   <p class="empty-line">Nothing is injected through the constructor or inject().</p>
+                } @else {
+                  <p class="empty-line">No service created here has injected anything yet.</p>
                 }
               </div>
             }
@@ -415,7 +450,7 @@ function isTree(value: unknown): value is InjectorNode[] {
         </svg>
         <span>
           <strong>DI from source scan (static analysis).</strong>
-          Connect the overlay on Angular 17+ to see the live injector tree.
+          Connect the overlay on Angular 20 or later to see the live injector tree.
         </span>
       </p>
       @if (groupedProviders().length === 0) {
@@ -1020,6 +1055,10 @@ function isTree(value: unknown): value is InjectorNode[] {
     .from .mono {
       color: var(--text);
     }
+    .from.absent {
+      cursor: default;
+      background: none;
+    }
     .from.missing {
       cursor: default;
       border-color: color-mix(in srgb, var(--warn) 40%, transparent);
@@ -1203,6 +1242,7 @@ export class DiInspector {
   readonly environment = signal<InjectorNode[]>([]);
   readonly sourceProviders = signal<SourceProvider[]>([]);
   readonly loaded = signal(false);
+  readonly truncated = signal(false);
   readonly view = signal<TreeView>('element');
   readonly query = signal('');
   readonly onlyProviding = signal(false);
@@ -1286,7 +1326,7 @@ export class DiInspector {
       const node = map.get(id);
       return {
         id,
-        label: node ? labelOf(node) : 'Null injector',
+        label: node ? labelOf(node) : id === NULL_ID ? 'Null injector' : 'Not listed',
         kind: node ? kindOf(node) : 'null',
         providers: node?.providers.length ?? 0,
       };
@@ -1368,7 +1408,7 @@ export class DiInspector {
 
   labelById(id: string) {
     const node = this.index().map.get(id);
-    return node ? labelOf(node) : 'Null injector';
+    return node ? labelOf(node) : id === NULL_ID ? 'Null injector' : 'not listed';
   }
 
   capital(text: string) {
@@ -1506,11 +1546,13 @@ export class DiInspector {
       const shared = value as {
         roots?: unknown;
         environment?: unknown;
-        pages?: Record<string, { roots?: unknown; environment?: unknown }>;
+        truncated?: unknown;
+        pages?: Record<string, { roots?: unknown; environment?: unknown; truncated?: unknown }>;
       } | null;
       const next = (pageId ? shared?.pages?.[pageId] : undefined) ?? shared;
       if (isTree(next?.roots)) this.roots.set(next.roots);
       if (isTree(next?.environment)) this.environment.set(next.environment);
+      this.truncated.set(next?.truncated === true);
     };
     apply(state.value());
     this.stopTree = state.on('updated', apply);

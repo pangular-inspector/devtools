@@ -66,7 +66,7 @@ pnpm extension:build
 
 ### Angular detection
 
-A content script checks each page for Angular: an `ng-version` attribute or a `window.ng` global. It checks once, then retries for a few seconds for apps that bootstrap late. The extension creates the panel only on Angular pages.
+A content script checks each page for Angular: an `ng-version` attribute or a `window.ng` global. It checks once, then retries for a few seconds for apps that bootstrap late. When DevTools opens, the extension also runs the same check in the inspected page, and again after each navigation. The extension creates the panel only on Angular pages.
 
 ### Finding the server
 
@@ -129,7 +129,7 @@ The content scripts are wider. Two of them run on every page. They check for an 
 
 <ngmd-accordion>
   <ngmd-accordion-item title="The panel does not appear" open>
-    The page did not look like an Angular app. Check that it renders an <code>ng-version</code> attribute or exposes <code>window.ng</code>, which development builds do. Then close and reopen DevTools.
+    The page did not look like an Angular app within about five seconds of opening DevTools. Check that it renders an <code>ng-version</code> attribute or exposes <code>window.ng</code>, which development builds do. Then close and reopen DevTools, or reload the page.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel asks me to allow access">
     The page is not on a loopback host. Click <strong>Allow access</strong> to let the extension reach that host. Chrome asks you to confirm.

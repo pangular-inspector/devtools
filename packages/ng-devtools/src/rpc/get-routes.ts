@@ -1,7 +1,7 @@
 import { defineRpcFunction } from 'devframe';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
-import { analogVersion, buildRoutes, flattenRoutes } from './analog-scan.ts';
+import { analogVersion, buildRoutes, flattenRoutes, servedAnalogRoot } from './analog-scan.ts';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import {
@@ -33,6 +33,7 @@ export const getRoutes = defineRpcFunction({
   name: 'get-routes',
   type: 'query',
   jsonSerializable: true,
+  snapshot: true,
   args: [],
   returns: describable(v.array(RouteSchema)),
   agent: {
@@ -46,7 +47,8 @@ export const getRoutes = defineRpcFunction({
 });
 
 export function extractRoutes(cwd: string): ExtractedRoute[] {
-  const routes: ExtractedRoute[] = analogVersion(cwd) ? analogRoutes(cwd) : [];
+  const app = servedAnalogRoot(cwd);
+  const routes: ExtractedRoute[] = analogVersion(app) ? analogRoutes(app, cwd) : [];
   const files: string[] = [];
   for (const root of sourceRoots(cwd)) {
     walkFiles(root, (full, entry) => {
@@ -74,8 +76,9 @@ function kindOf(
   return 'page';
 }
 
-function analogRoutes(cwd: string): ExtractedRoute[] {
-  return flattenRoutes(buildRoutes(cwd))
+function analogRoutes(app: string, cwd: string): ExtractedRoute[] {
+  const prefix = relative(cwd, app).split('\\').join('/');
+  return flattenRoutes(buildRoutes(app))
     .filter((route) => route.file)
     .map((route) => {
       const path = route.fullPath.replace(/^\//, '');
@@ -85,7 +88,7 @@ function analogRoutes(cwd: string): ExtractedRoute[] {
         kind: path.split('/').includes('**') ? 'wildcard' : 'page',
         component: route.file!.split('/').pop()!,
         hasChildren: route.children.length > 0,
-        file: route.file!.replace(/^\//, ''),
+        file: [prefix, route.file!.replace(/^\//, '')].filter(Boolean).join('/'),
       };
       if (route.title) out.title = route.title;
       return out;

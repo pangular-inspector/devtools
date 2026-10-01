@@ -1,4 +1,6 @@
 import { elementId } from './element-id.ts';
+import { serialize } from './serialize.ts';
+import { clip } from './text.ts';
 import {
   instrumentPipes,
   readBoundArg,
@@ -54,19 +56,57 @@ function componentName(component: unknown): string {
 }
 
 const MAX_DESCRIBE_CHARS = 200;
+const DESCRIBE_LIMITS = { depth: 4, keys: 20, items: 20, text: MAX_DESCRIBE_CHARS, budget: 200 };
+
+function parsedJson(text: string): unknown {
+  if (!/^\s*[[{]/.test(text)) return text;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
 
 function describeValue(value: unknown): string {
   if (value === undefined) return 'undefined';
-  if (typeof value === 'string') {
-    return value.length > MAX_DESCRIBE_CHARS ? `${value.slice(0, MAX_DESCRIBE_CHARS)}…` : value;
-  }
+  const safe = serialize(typeof value === 'string' ? parsedJson(value) : value, DESCRIBE_LIMITS);
+  if (typeof safe === 'string') return clip(safe, MAX_DESCRIBE_CHARS);
   try {
-    const json = JSON.stringify(value);
-    if (json === undefined) return String(value);
-    return json.length > MAX_DESCRIBE_CHARS ? `${json.slice(0, MAX_DESCRIBE_CHARS)}…` : json;
+    return clip(JSON.stringify(safe) ?? String(safe), MAX_DESCRIBE_CHARS);
   } catch {
-    return String(value);
+    return '[Unreadable]';
   }
+}
+
+const RESUBSCRIBE_STREAK = 3;
+
+interface AsyncSourceHistory {
+  source: unknown;
+  streak: number;
+  resubscribing: boolean;
+}
+
+/** Marks an `AsyncPipe` whose source changed on `RESUBSCRIBE_STREAK` reports
+ * in a row, e.g. `getData() | async` building a new Observable per check. */
+function resubscribingOf(
+  history: WeakMap<AnyRecord, AsyncSourceHistory>,
+  instance: AnyRecord,
+  source: unknown,
+): boolean {
+  if (source === undefined || source === null) return history.get(instance)?.resubscribing ?? false;
+  const prev = history.get(instance);
+  if (!prev) {
+    history.set(instance, { source, streak: 0, resubscribing: false });
+    return false;
+  }
+  if (prev.source !== source) {
+    prev.source = source;
+    prev.streak++;
+    if (prev.streak >= RESUBSCRIBE_STREAK) prev.resubscribing = true;
+  } else {
+    prev.streak = 0;
+  }
+  return prev.resubscribing;
 }
 
 /** `AsyncPipe` keeps its subscribed source and latest value on plain (not
@@ -75,6 +115,7 @@ function describeValue(value: unknown): string {
 function asyncReportFor(
   usages: PipeUsage[],
   targetOf: (component: unknown) => PipeTarget | undefined,
+  history: WeakMap<AnyRecord, AsyncSourceHistory>,
 ): AsyncUsageInfo[] {
   const asyncUsages = usages.filter((u) => u.name === 'async');
   const bySource = new Map<unknown, number>();
@@ -82,6 +123,11 @@ function asyncReportFor(
     const source = read(() => (usage.instance as { _obj?: unknown })._obj, undefined);
     if (source === undefined || source === null) continue;
     bySource.set(source, (bySource.get(source) ?? 0) + 1);
+  }
+  const resubscribing = new Map<AnyRecord, boolean>();
+  for (const usage of asyncUsages) {
+    const source = read(() => (usage.instance as { _obj?: unknown })._obj, undefined);
+    resubscribing.set(usage.instance, resubscribingOf(history, usage.instance, source));
   }
   return asyncUsages.slice(0, MAX_ASYNC_USAGES).map((usage) => {
     const source = read(() => (usage.instance as { _obj?: unknown })._obj, undefined);
@@ -95,6 +141,7 @@ function asyncReportFor(
       hasSource,
       latestValue: latestValue === undefined ? undefined : describeValue(latestValue),
       duplicate: hasSource && (bySource.get(source) ?? 0) > 1,
+      ...(resubscribing.get(usage.instance) ? { resubscribing: true } : {}),
       ...(target ? { target } : {}),
     };
   });
@@ -119,11 +166,24 @@ const MAX_HASH_ITEMS = 50;
 function shapeHash(value: unknown, depth = 0): string {
   if (value === null) return 'null';
   if (typeof value !== 'object') return `${typeof value}:${String(value)}`;
-  if (depth >= MAX_HASH_DEPTH) return '…';
   return read(() => {
+    if (value instanceof Date) return `date:${value.getTime()}`;
+    if (depth >= MAX_HASH_DEPTH) return '…';
     if (Array.isArray(value)) {
       const items = value.slice(0, MAX_HASH_ITEMS).map((v) => shapeHash(v, depth + 1));
       return `[${items.join(',')}${value.length > MAX_HASH_ITEMS ? ',…' : ''}]`;
+    }
+    if (value instanceof Map || value instanceof Set) {
+      const entries: string[] = [];
+      for (const [k, v] of value.entries()) {
+        if (entries.length >= MAX_HASH_ITEMS) break;
+        entries.push(
+          value instanceof Map
+            ? `${shapeHash(k, depth + 1)}:${shapeHash(v, depth + 1)}`
+            : shapeHash(v, depth + 1),
+        );
+      }
+      return `${value instanceof Map ? 'map' : 'set'}:${value.size}{${entries.join(',')}}`;
     }
     const keys = Object.keys(value as object).slice(0, MAX_HASH_ITEMS);
     const entries = keys.map((k) => `${k}:${shapeHash((value as AnyRecord)[k], depth + 1)}`);
@@ -144,6 +204,7 @@ function describeCall(s: InstanceStats) {
 interface StaleSnapshot {
   ref: unknown;
   hash: string;
+  calls: number;
 }
 
 /** EXPERIMENTAL: per-pipe-instance state for the stale-pure-pipe check.
@@ -154,24 +215,31 @@ class StaleTracker {
   private readonly snapshots = new WeakMap<AnyRecord, StaleSnapshot>();
   private readonly detected = new WeakMap<AnyRecord, number>();
 
+  constructor(private readonly callsOf: (instance: AnyRecord) => number) {}
+
   /** When the instance was first seen stale, kept until its argument changes
-   * reference (Angular then recomputes, so the value is fresh again). */
+   * reference or `transform` runs again (the value is fresh again). */
   staleSince(usage: PipeUsage): number | undefined {
     const prev = this.snapshots.get(usage.instance);
     const stale = this.isStale(usage);
     const current = this.snapshots.get(usage.instance);
     if (stale) {
       if (!this.detected.has(usage.instance)) this.detected.set(usage.instance, Date.now());
-    } else if (!prev || !current || !Object.is(prev.ref, current.ref)) {
+    } else if (
+      !prev ||
+      !current ||
+      !Object.is(prev.ref, current.ref) ||
+      prev.calls !== current.calls
+    ) {
       this.detected.delete(usage.instance);
     }
     return this.detected.get(usage.instance);
   }
 
   /** Returns true the moment a pure pipe's bound argument is found unchanged
-   * by reference but different in shape from last time — i.e. Angular's own
-   * memoization is about to (or already did) skip a re-render that a mutated
-   * argument arguably deserved. */
+   * by reference but different in shape from last time, and `transform` has
+   * not run since, i.e. Angular's own memoization skipped a re-render that a
+   * mutated argument arguably deserved. */
   isStale(usage: PipeUsage): boolean {
     if (!usage.isPure) return false;
     let check = this.checks.get(usage.instance);
@@ -184,9 +252,11 @@ class StaleTracker {
     const isObj = current !== null && typeof current === 'object';
     const prev = this.snapshots.get(usage.instance);
     const hash = isObj ? shapeHash(current) : '';
-    this.snapshots.set(usage.instance, { ref: current, hash });
+    const calls = this.callsOf(usage.instance);
+    this.snapshots.set(usage.instance, { ref: current, hash, calls });
     if (!prev) return false;
     if (!Object.is(prev.ref, current)) return false;
+    if (calls !== prev.calls) return false;
     return isObj && hash !== prev.hash;
   }
 }
@@ -210,8 +280,10 @@ export function attachPipes(
 ): PipesCollector {
   let instrumented = false;
   let instrumentation: PipeInstrumentation | null = null;
-  const stats = new WeakMap<AnyRecord, InstanceStats>();
-  const staleTracker = new StaleTracker();
+  let stats = new WeakMap<AnyRecord, InstanceStats>();
+  const callsOf = (instance: AnyRecord) => stats.get(instance)?.callCount ?? 0;
+  let staleTracker = new StaleTracker(callsOf);
+  const asyncHistory = new WeakMap<AnyRecord, AsyncSourceHistory>();
   const ownerNames = new Set<string>();
   let lastPayload = '';
   let lastPushAt = 0;
@@ -399,7 +471,7 @@ export function attachPipes(
       const report: PipePageReport = {
         pageId,
         pipes: reportFor(usages, targets),
-        async: asyncReportFor(usages, targets),
+        async: asyncReportFor(usages, targets, asyncHistory),
         instrumented,
       };
       const payload = JSON.stringify(report);
@@ -416,6 +488,8 @@ export function attachPipes(
 
   function setInstrumented(on: boolean): { ok: true; message: string } {
     if (on && !instrumentation) {
+      stats = new WeakMap();
+      staleTracker = new StaleTracker(callsOf);
       instrumentation = instrumentPipes(onPipeCall, ownerNames);
       instrumented = true;
       void pushPipes();

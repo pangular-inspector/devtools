@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { time } from '../format';
-import { rpcTry as call } from '../rpc';
+import { rpcCall, rpcTry as call } from '../rpc';
 import { actionAllowed, actionBlockedMessage } from '../devtools-config';
 import { Select } from '../ui/select';
 
@@ -41,6 +41,13 @@ interface ContentFile {
   error?: string;
 }
 
+interface ServerFn {
+  name: string;
+  file: string;
+  id: string;
+  method: string;
+}
+
 interface AnalogProject {
   analog: boolean;
   version?: string;
@@ -48,19 +55,26 @@ interface AnalogProject {
   api: ApiRoute[];
   middleware: string[];
   content: ContentFile[];
+  serverFns?: ServerFn[];
 }
+
+type ActionOutcome = 'success' | 'redirect' | 'invalid' | 'error';
 
 interface AnalogCall {
   id: number;
   at: number;
-  kind: 'page' | 'load' | 'fn' | 'api';
+  kind: 'page' | 'load' | 'action' | 'fn' | 'api';
   method: string;
   url: string;
+  route?: string;
   status: number;
   ms: number;
   bytes?: number;
   from: string;
   render?: 'ssr' | 'client';
+  outcome?: ActionOutcome;
+  location?: string;
+  seeded?: boolean;
   preview?: string;
 }
 
@@ -80,10 +94,17 @@ interface DuplicateLoad {
   browserAt: number;
 }
 
+interface ServerFnRefetch {
+  id: string;
+  ssrAt: number;
+  browserAt: number;
+}
+
 interface AnalogState {
   pages?: AnalogPage[];
   calls?: AnalogCall[];
   duplicates?: DuplicateLoad[];
+  refetches?: ServerFnRefetch[];
 }
 
 interface Finding {
@@ -105,7 +126,7 @@ interface UrlMatch {
 interface RenderRow {
   path: string;
   file?: string;
-  mode: 'ssr' | 'ssg' | 'client';
+  mode: 'ssr' | 'ssg' | 'client' | 'cached' | 'redirect';
   reason: string;
   last?: { render?: 'ssr' | 'client'; status: number; ms: number; at: number };
 }
@@ -113,6 +134,7 @@ interface RenderRow {
 interface PrerenderPlan {
   dynamicConfig: boolean;
   listed: string[] | null;
+  fromRules?: string[];
   staticMissing: string[];
   dynamic: string[];
   built: string[];
@@ -136,7 +158,7 @@ interface LintCard {
   title: string;
   summary: string;
   fix: string;
-  items: { file?: string; path?: string }[];
+  items: { file?: string; path?: string; message?: string }[];
 }
 
 const LINT_TEXT: Record<string, { title: string; summary: string }> = {
@@ -170,7 +192,7 @@ const LINT_TEXT: Record<string, { title: string; summary: string }> = {
   },
   'server-without-load': {
     title: '.server.ts without load or action',
-    summary: 'The server file exports nothing Analog calls.',
+    summary: 'The server file exports no load, action or server function, so Analog calls nothing.',
   },
   'orphan-server-file': {
     title: '.server.ts without a page',
@@ -214,6 +236,11 @@ const LINT_TEXT: Record<string, { title: string; summary: string }> = {
     summary:
       'These pages fetched their data while rendering on the server and again in the browser.',
   },
+  'fn-fetched-twice': {
+    title: 'Server function read runs twice',
+    summary:
+      'These reads ran while rendering on the server and again in the browser right after hydration.',
+  },
   'restart-needed': {
     title: 'New pages need a restart',
     summary: 'These page files exist, but the running router does not know them yet.',
@@ -229,13 +256,44 @@ const LINT_TEXT: Record<string, { title: string; summary: string }> = {
 };
 type Kind = 'all' | AnalogCall['kind'];
 
-const MODE_LABEL = { ssr: 'SSR', ssg: 'Prerendered', client: 'Client only' } as const;
+const STATIC_MESSAGES = new Set([
+  'missing-default-export',
+  'redirect-with-component',
+  'redirect-path-match',
+  'layout-without-outlet',
+  'server-without-load',
+  'orphan-server-file',
+  'load-fetched-twice',
+  'restart-needed',
+  'prerender-missing-root',
+]);
+
+const MODE_LABEL = {
+  ssr: 'SSR',
+  ssg: 'Prerendered',
+  client: 'Client only',
+  cached: 'Cached',
+  redirect: 'Redirect',
+} as const;
 const KIND_LABEL: Record<Kind, string> = {
   all: 'All',
   page: 'Pages',
   load: 'load()',
+  action: 'Actions',
   fn: 'Server fn',
   api: 'API',
+};
+const OUTCOME_LABEL: Record<ActionOutcome, string> = {
+  success: 'succeeded',
+  redirect: 'redirected',
+  invalid: 'validation errors',
+  error: 'failed',
+};
+const OUTCOME_TONE: Record<ActionOutcome, string> = {
+  success: 'good',
+  redirect: 'info',
+  invalid: 'warn',
+  error: 'bad',
 };
 
 function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth: number }[] = []) {
@@ -329,7 +387,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   [value]="testUrl()"
                   (input)="testUrl.set($any($event.target).value)"
                 />
-                <button type="submit" class="btn primary">Explain</button>
+                <button type="submit" class="btn primary" [disabled]="explaining()">
+                  {{ explaining() ? 'Explaining…' : 'Explain' }}
+                </button>
               </form>
               <label class="sr-only" for="route-filter">Filter routes</label>
               <input
@@ -341,41 +401,45 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                 (input)="filter.set($any($event.target).value)"
               />
             </div>
-            @if (match(); as m) {
-              <div class="callout" [attr.data-tone]="m.matched ? 'good' : 'bad'" role="status">
-                @if (m.matched) {
-                  <strong class="mono">{{ testUrl() }}</strong> renders
-                  <ol class="chain">
-                    @for (r of m.chain; track r.id) {
-                      <li>
-                        <span class="mono">{{ short(r.file) ?? r.fullPath }}</span>
-                        <span class="pill" [attr.data-kind]="r.kind">{{ r.kind }}</span>
-                      </li>
-                    }
-                  </ol>
-                  @if (paramList(m.params).length) {
-                    <div class="chips">
-                      @for (p of paramList(m.params); track p[0]) {
-                        <span class="chip mono">{{ p[0] }} = {{ p[1] }}</span>
-                      }
-                    </div>
-                  }
-                } @else {
-                  <strong class="mono">{{ testUrl() }}</strong> matches no file route. Angular
-                  throws NG04002 "Cannot match any routes".
-                  @if (m.rejected.length) {
-                    <ul class="plain">
-                      @for (r of m.rejected.slice(0, 5); track $index) {
+            <div class="explain-result" role="status">
+              @if (explainError(); as error) {
+                <div class="callout" data-tone="bad">{{ error }}</div>
+              } @else if (explained(); as e) {
+                <div class="callout" [attr.data-tone]="e.match.matched ? 'good' : 'bad'">
+                  @if (e.match.matched) {
+                    <strong class="mono">{{ e.url }}</strong> renders
+                    <ol class="chain">
+                      @for (r of e.match.chain; track r.id) {
                         <li>
-                          <span class="mono">{{ short(r.file) ?? r.path }}</span>
-                          <span class="muted">{{ r.reason }}</span>
+                          <span class="mono">{{ short(r.file) ?? r.fullPath }}</span>
+                          <span class="pill" [attr.data-kind]="r.kind">{{ r.kind }}</span>
                         </li>
                       }
-                    </ul>
+                    </ol>
+                    @if (paramList(e.match.params).length) {
+                      <div class="chips">
+                        @for (p of paramList(e.match.params); track p[0]) {
+                          <span class="chip mono">{{ p[0] }} = {{ p[1] }}</span>
+                        }
+                      </div>
+                    }
+                  } @else {
+                    <strong class="mono">{{ e.url }}</strong> matches no file route. Angular throws
+                    NG04002 "Cannot match any routes".
+                    @if (e.match.rejected.length) {
+                      <ul class="plain">
+                        @for (r of e.match.rejected.slice(0, 5); track $index) {
+                          <li>
+                            <span class="mono">{{ short(r.file) ?? r.path }}</span>
+                            <span class="muted">{{ r.reason }}</span>
+                          </li>
+                        }
+                      </ul>
+                    }
                   }
-                }
-              </div>
-            }
+                </div>
+              }
+            </div>
             <div class="table-wrap" role="region" aria-label="File routes" tabindex="0">
               <table>
                 <thead>
@@ -462,6 +526,17 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                 server result.
               </div>
             }
+            @if (refetchedFns().length) {
+              <div class="callout" data-tone="warn" role="note">
+                <strong>Server function read ran twice</strong>:
+                @for (name of refetchedFns(); track name; let last = $last) {
+                  <span class="mono">{{ name }}</span
+                  >{{ last ? '' : ', ' }}
+                }
+                ran while server rendering, then again in the browser. The browser did not use the
+                TransferState seed.
+              </div>
+            }
             <div class="calls-bar">
               <fieldset class="segmented">
                 <legend class="sr-only">Show calls of kind</legend>
@@ -512,7 +587,23 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                         <td class="request">
                           <div class="meta">
                             <span class="method" [attr.data-method]="c.method">{{ c.method }}</span>
-                            <span class="mono url">{{ c.url }}</span>
+                            @if (fnOf(c); as fn) {
+                              <strong class="mono url">{{ fn.name }}</strong>
+                              <span class="mono muted">{{ short(fn.file) }}</span>
+                            } @else {
+                              <span class="mono url">{{ c.url }}</span>
+                            }
+                            @if (c.seeded) {
+                              <span class="pill">ran during server rendering</span>
+                            }
+                            @if (c.outcome) {
+                              <span class="pill" [attr.data-tone]="outcomeTone(c.outcome)"
+                                >{{ outcomeLabel(c.outcome) }}
+                                @if (c.location) {
+                                  to {{ c.location }}
+                                }
+                              </span>
+                            }
                             @if (c.render) {
                               <span
                                 class="pill"
@@ -533,7 +624,13 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                             c.status
                           }}</span>
                         </td>
-                        <td class="num nowrap">{{ c.ms }} ms</td>
+                        <td class="num nowrap">
+                          @if (c.seeded) {
+                            <span class="muted">in process</span>
+                          } @else {
+                            {{ c.ms }} ms
+                          }
+                        </td>
                         <td class="muted">{{ c.from }}</td>
                       </tr>
                     }
@@ -550,7 +647,8 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   }
                 </p>
                 <p class="muted">
-                  Navigate in the app to see page renders, load() fetches and API calls.
+                  Navigate in the app to see page renders, load() fetches, form actions, server
+                  functions and API calls.
                 </p>
               </div>
             }
@@ -601,6 +699,39 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
               </table>
             </div>
 
+            @if (serverFns().length) {
+              <h2>Server functions</h2>
+              <div class="table-wrap" role="region" aria-label="Server functions" tabindex="0">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Method</th>
+                      <th scope="col">Name</th>
+                      <th scope="col">File</th>
+                      <th scope="col" class="num">Calls</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (fn of serverFns(); track fn.id) {
+                      <tr>
+                        <td>
+                          <span class="method" [attr.data-method]="fn.method">{{ fn.method }}</span>
+                        </td>
+                        <td class="mono">{{ fn.name }}</td>
+                        <td>
+                          <span class="file"
+                            ><span class="dir">{{ dir(fn.file) }}</span
+                            >{{ base(fn.file) }}</span
+                          >
+                        </td>
+                        <td class="num tnum">{{ fnCalls(fn.id) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+
             <form class="card playground" (submit)="$event.preventDefault(); send()">
               <h2>Request playground</h2>
               <div class="row">
@@ -623,14 +754,19 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                 <button
                   type="submit"
                   class="btn primary"
-                  [disabled]="!canCall()"
-                  [attr.aria-describedby]="canCall() ? null : 'analog-calls-off'"
+                  [disabled]="!canSend()"
+                  [attr.aria-describedby]="sendHintId()"
                 >
-                  Send
+                  {{ sending() ? 'Sending…' : 'Send' }}
                 </button>
               </div>
               @if (!canCall()) {
                 <p id="analog-calls-off" class="muted">{{ callsOff }}</p>
+              } @else if (needsConfirm()) {
+                <p id="analog-confirm-hint" class="muted">
+                  Tick "This request can change data on the dev server" below to send a
+                  {{ method() }} request.
+                </p>
               }
               @if (method() !== 'GET') {
                 <label for="api-body">JSON body</label>
@@ -651,7 +787,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   This request can change data on the dev server</label
                 >
               }
-              @if (response(); as r) {
+              @if (sending()) {
+                <p class="muted" role="status">Sending {{ method() }} {{ apiPath().trim() }}…</p>
+              } @else if (response(); as r) {
                 <div class="response" role="status">
                   @if (r.error) {
                     <div class="row">
@@ -757,6 +895,14 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                         <span class="muted small">default, nothing configured</span>
                       }
                     </dd>
+                    @if (p.fromRules?.length) {
+                      <dt>From routeRules</dt>
+                      <dd>
+                        @for (r of p.fromRules; track r) {
+                          <span class="chip mono">{{ r }}</span>
+                        }
+                      </dd>
+                    }
                     @if (p.staticMissing.length) {
                       <dt>Static, not listed</dt>
                       <dd>
@@ -876,6 +1022,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                           }
                           @if (item.path && item.path !== item.file) {
                             <span class="mono path">{{ item.path }}</span>
+                          }
+                          @if (item.message) {
+                            <p class="detail">{{ item.message }}</p>
                           }
                         </li>
                       }
@@ -1475,6 +1624,14 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       border-color: #eab308;
       color: #fef08a;
     }
+    .pill[data-mode='cached'] {
+      border-color: #a855f7;
+      color: #e9d5ff;
+    }
+    .pill[data-mode='redirect'] {
+      border-color: #94a3b8;
+      color: #e2e8f0;
+    }
     .pill[data-call='page'] {
       border-color: #3b82f6;
       color: #bfdbfe;
@@ -1490,6 +1647,15 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
     .pill[data-call='api'] {
       border-color: #f97316;
       color: #fed7aa;
+    }
+    .pill[data-call='action'] {
+      border-color: #ec4899;
+      color: #fbcfe8;
+    }
+    [data-tone='good'].pill {
+      border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+      background: color-mix(in srgb, var(--ok) 12%, transparent);
+      color: var(--ok);
     }
     [data-tone='warn'].pill,
     [data-tone='warn'].chip {
@@ -1781,7 +1947,13 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
     .where li {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 4px 12px;
+    }
+    .where .detail {
+      flex-basis: 100%;
+      margin: 0;
+      color: var(--text-2);
+      overflow-wrap: anywhere;
     }
     .fix {
       margin-top: 12px;
@@ -1833,7 +2005,7 @@ export class AnalogInspector {
   readonly canCall = computed(() => actionAllowed(this.rpc(), 'analog'));
   protected readonly callsOff = actionBlockedMessage('analog');
 
-  readonly kinds: Kind[] = ['all', 'page', 'load', 'fn', 'api'];
+  readonly kinds: Kind[] = ['all', 'page', 'load', 'action', 'fn', 'api'];
   readonly methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
   readonly methodOptions = this.methods.map((m) => ({ value: m, label: m }));
   readonly view = signal<View>('routes');
@@ -1844,13 +2016,21 @@ export class AnalogInspector {
   readonly plan = signal<PrerenderPlan | null>(null);
   readonly filter = signal('');
   readonly testUrl = signal('');
-  readonly match = signal<UrlMatch | null>(null);
+  readonly explained = signal<{ url: string; match: UrlMatch } | null>(null);
+  readonly explainError = signal('');
+  readonly explaining = signal(false);
   readonly kind = signal<Kind>('all');
   readonly method = signal('GET');
   readonly apiPath = signal('');
   readonly apiBody = signal('');
   readonly confirmSend = signal(false);
   readonly response = signal<ApiResult | null>(null);
+  readonly sending = signal(false);
+  readonly needsConfirm = computed(() => this.method() !== 'GET' && !this.confirmSend());
+  readonly canSend = computed(() => this.canCall() && !this.sending() && !this.needsConfirm());
+  readonly sendHintId = computed(() =>
+    !this.canCall() ? 'analog-calls-off' : this.needsConfirm() ? 'analog-confirm-hint' : null,
+  );
 
   private unsubscribe: (() => void) | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1880,11 +2060,18 @@ export class AnalogInspector {
         !!r.route.file?.toLowerCase().includes(needle),
     );
   });
+  readonly serverFns = computed(() => this.project()?.serverFns ?? []);
+  private readonly fnById = computed(() => new Map(this.serverFns().map((fn) => [fn.id, fn])));
+  readonly refetchedFns = computed(() =>
+    Array.from(
+      new Set((this.state().refetches ?? []).map((r) => this.fnById().get(r.id)?.name ?? r.id)),
+    ),
+  );
   readonly duplicates = computed(() =>
     Array.from(new Set((this.state().duplicates ?? []).map((d) => d.route))),
   );
   readonly modeCounts = computed(() =>
-    (['ssr', 'ssg', 'client'] as const)
+    (['ssr', 'ssg', 'cached', 'client', 'redirect'] as const)
       .map((mode) => ({
         mode,
         label: MODE_LABEL[mode],
@@ -1909,7 +2096,14 @@ export class AnalogInspector {
         };
         cards.set(finding.rule, card);
       }
-      card.items.push({ file: finding.file, path: finding.path });
+      const message =
+        STATIC_MESSAGES.has(finding.rule) || finding.message === card.summary
+          ? undefined
+          : finding.message;
+      const same = (item: LintCard['items'][number]) =>
+        item.file === finding.file && item.path === finding.path && item.message === message;
+      if (!card.items.some(same))
+        card.items.push({ file: finding.file, path: finding.path, message });
     }
     return Array.from(cards.values()).sort((a, b) => order[a.severity] - order[b.severity]);
   });
@@ -2032,8 +2226,24 @@ export class AnalogInspector {
   }
 
   mismatch(row: RenderRow): boolean {
-    if (!row.last?.render) return false;
+    if (!row.last?.render || row.mode === 'redirect') return false;
     return row.mode === 'client' ? row.last.render !== 'client' : row.last.render === 'client';
+  }
+
+  fnOf(call: AnalogCall): ServerFn | undefined {
+    return call.kind === 'fn' && call.route ? this.fnById().get(call.route) : undefined;
+  }
+
+  fnCalls(id: string): number {
+    return this.allCalls().filter((c) => c.kind === 'fn' && c.route === id).length;
+  }
+
+  outcomeLabel(outcome: ActionOutcome): string {
+    return OUTCOME_LABEL[outcome];
+  }
+
+  outcomeTone(outcome: ActionOutcome): string {
+    return OUTCOME_TONE[outcome];
   }
 
   statusClass(status: number): 'good' | 'warn' | 'bad' {
@@ -2080,13 +2290,29 @@ export class AnalogInspector {
 
   async explain() {
     const url = this.testUrl().trim();
-    if (!url) return;
-    this.match.set(await call<UrlMatch>(this.rpc(), 'analog-explain-url', url));
+    if (!url) {
+      this.explained.set(null);
+      this.explainError.set('Type a URL to explain, for example /products/42.');
+      return;
+    }
+    this.explaining.set(true);
+    this.explainError.set('');
+    try {
+      const match = (await rpcCall(this.rpc(), 'analog-explain-url', url)) as UrlMatch | null;
+      if (!match) throw new Error('The devtools server did not answer');
+      this.explained.set({ url, match });
+    } catch (error) {
+      const reason = String((error as Error)?.message || 'The devtools server did not answer');
+      this.explained.set(null);
+      this.explainError.set(`Could not explain ${url}. ${reason.replace(/\.?$/, '.')}`);
+    } finally {
+      this.explaining.set(false);
+    }
   }
 
   async send() {
     const path = this.apiPath().trim();
-    if (!path) return;
+    if (!path || this.sending() || this.needsConfirm()) return;
     let body: unknown;
     if (this.method() !== 'GET' && this.apiBody().trim()) {
       try {
@@ -2096,13 +2322,19 @@ export class AnalogInspector {
         return;
       }
     }
-    const result = await call<ApiResult>(this.rpc(), 'analog-call-api', {
-      method: this.method(),
-      path,
-      body,
-      confirm: this.confirmSend(),
-    });
-    this.response.set(result ?? { error: 'No answer from the devtools server.' });
+    this.response.set(null);
+    this.sending.set(true);
+    try {
+      const result = await call<ApiResult>(this.rpc(), 'analog-call-api', {
+        method: this.method(),
+        path,
+        body,
+        confirm: this.confirmSend(),
+      });
+      this.response.set(result ?? { error: 'No answer from the devtools server.' });
+    } finally {
+      this.sending.set(false);
+    }
   }
 
   onKey(event: KeyboardEvent) {

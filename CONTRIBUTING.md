@@ -12,7 +12,9 @@ By taking part you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). Report 
 | [Coding standards](docs/contributing/coding-standards.md)                   | TypeScript and Angular rules, how collectors read the page, tests |
 | [UI guidelines](docs/contributing/ui-guidelines.md)                         | Theme tokens, the brand palette, page anatomy, accessibility      |
 | [Writing guide](apps/docs/src/content/contributing/writing-docs.md)         | Voice, style and structure for the docs site and the README       |
-| [`AGENTS.md`](AGENTS.md)                                                    | Angular best practices for people and AI agents                   |
+| [`AGENTS.md`](AGENTS.md)                                                    | The repository map and rules for people and AI agents             |
+| [Angular rules](.claude/rules/angular.md)                                   | Angular, TypeScript and accessibility rules for the code          |
+| [Glossary](docs/CONTEXT.md)                                                 | The words this project uses, and the ones it avoids               |
 
 ## Set up the git hooks
 
@@ -28,6 +30,10 @@ By taking part you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). Report 
 - **UI changes:** follow the [UI guidelines](docs/contributing/ui-guidelines.md). Use the theme variables, the SCSS mixins and the shared dropdown.
 - **Docs changes:** follow the [writing guide](./apps/docs/src/content/contributing/writing-docs.md). Run the docs site with `pnpm docs:dev`.
 - **Keep the docs in step with the code:** when a pull request changes behaviour, an option, a UI label or an agent tool, update the matching page in `apps/docs` in the same pull request. If no docs change is needed, add the `no-docs` label and say why in the description. The Docs check workflow warns when code changes without docs.
+
+## Open an issue
+
+Use the bug report or feature request form. Title the issue `area: what is wrong`, in lowercase, for example `router: a failed lazy navigation is only logged`. For a feature, say what is missing: `signals: the detail panel can't jump to a dependency or consumer`. The area is one of the [commit scopes](docs/contributing/commit-message-guidelines.md#scope), so an issue title and the fix's commit read the same way. The triage workflow adds an `area:` label from the bug report's **Area** field when the choice names one part of the repository.
 
 ## Labels
 
@@ -56,7 +62,7 @@ pnpm skills:check                             # agent skills and roles
 pnpm exec ngc -p app/tsconfig.json --noEmit   # panel template check
 ```
 
-For UI changes, also check the pages in a browser with axe, in dark and light themes and at a narrow width. The [devtools-verify skill](.claude/skills/devtools-verify/SKILL.md) lists the exact steps.
+For UI changes, also check the pages in a browser with axe, at a wide and a narrow width (the panel is dark only). The [devtools-verify skill](.claude/skills/devtools-verify/SKILL.md) lists the exact steps.
 
 ## Submit a pull request
 
@@ -74,13 +80,16 @@ The repository ships skills and roles for AI coding agents, so changes made with
 
 ### Skills (`.claude/skills/`)
 
-| Skill                                                              | Use it when                                                                |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| [`devtools-ui`](.claude/skills/devtools-ui/SKILL.md)               | Building or restyling anything in the panel                                |
-| [`devtools-inspector`](.claude/skills/devtools-inspector/SKILL.md) | Adding an inspector or fixing the data it shows, including agent tools     |
-| [`devtools-docs`](.claude/skills/devtools-docs/SKILL.md)           | Writing or reviewing the docs site and the README                          |
-| [`devtools-verify`](.claude/skills/devtools-verify/SKILL.md)       | Checking a change like CI and a reviewer would, including axe in a browser |
-| [`devtools-commit`](.claude/skills/devtools-commit/SKILL.md)       | Writing commits, pull request titles and descriptions                      |
+| Skill                                                                  | Use it when                                                                |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [`devtools-ui`](.claude/skills/devtools-ui/SKILL.md)                   | Building or restyling anything in the panel                                |
+| [`devtools-inspector`](.claude/skills/devtools-inspector/SKILL.md)     | Adding an inspector or fixing the data it shows, including agent tools     |
+| [`devtools-docs`](.claude/skills/devtools-docs/SKILL.md)               | Writing or reviewing the docs site and the README                          |
+| [`devtools-verify`](.claude/skills/devtools-verify/SKILL.md)           | Checking a change like CI and a reviewer would, including axe in a browser |
+| [`devtools-commit`](.claude/skills/devtools-commit/SKILL.md)           | Writing commits, pull request titles and descriptions                      |
+| [`devtools-fix-issue`](.claude/skills/devtools-fix-issue/SKILL.md)     | Taking one issue to a pull request                                         |
+| [`devtools-work-issues`](.claude/skills/devtools-work-issues/SKILL.md) | Working through a batch of issues with parallel agents                     |
+| [`grilling`](.claude/skills/grilling/SKILL.md)                         | Settling an open decision one question at a time before any work starts    |
 
 ### Roles (`.claude/agents/`)
 

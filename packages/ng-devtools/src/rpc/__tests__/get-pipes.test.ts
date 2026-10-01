@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { fixtureDir } from './fixture-dir.ts';
 import { scan } from './scan.ts';
 import { describe, expect, it } from 'vitest';
-import { getPipes } from '../get-pipes.ts';
+import { getPipes, pipeUsesIn } from '../get-pipes.ts';
 
 async function pipesFor(source: string) {
   const dir = fixtureDir('ng-devtools-pipes-');
@@ -176,6 +176,32 @@ describe('get-pipes', () => {
           usageCount: 1,
         }),
       ]);
+    });
+
+    it('finds pipes in @let, @else if and @defer triggers', () => {
+      const template = `
+        @let user = user$ | async;
+        @if (a) {
+          <p>a</p>
+        } @else if (flag$ | async) {
+          <p>{{ d | date }}</p>
+        }
+        @defer (on viewport; when ready$ | async; prefetch when soon$ | async) {
+          <p>{{ map | keyvalue }}</p>
+        }
+        @let label = 'a;b' | uppercase;
+        <p>not | lowercase</p>
+      `;
+      const names = pipeUsesIn(template).map((u) => u.name);
+      expect(names.sort()).toEqual(
+        ['async', 'async', 'async', 'async', 'date', 'keyvalue', 'uppercase'].sort(),
+      );
+    });
+
+    it('reports the offset of a pipe inside @let', () => {
+      const template = '@let user = user$ | async;';
+      const [use] = pipeUsesIn(template);
+      expect(template.slice(use.index, use.index + 5)).toBe('async');
     });
 
     it('marks AsyncPipe as impure', async () => {

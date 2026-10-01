@@ -25,6 +25,7 @@ export const getSignals = defineRpcFunction({
   name: 'get-signals',
   type: 'query',
   jsonSerializable: true,
+  snapshot: true,
   args: [],
   returns: describable(v.array(SignalEntrySchema)),
   agent: {

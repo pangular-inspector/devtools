@@ -1,7 +1,15 @@
 import { CurrencyPipe } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
-import { FormField, FormRoot, email, form, minLength, required } from '@angular/forms/signals';
+import {
+  FormField,
+  FormRoot,
+  email,
+  form,
+  minLength,
+  required,
+  type FieldTree,
+} from '@angular/forms/signals';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import type { RouteMeta } from '@analogjs/router';
@@ -29,20 +37,51 @@ interface CheckoutModel {
     } @else {
       <form [formRoot]="checkout" class="form" novalidate>
         <label for="name">Name</label>
-        <input id="name" [formField]="checkout.name" autocomplete="name" />
-        @for (error of checkout.name().errors(); track error.kind) {
-          <p class="error">{{ error.message }}</p>
-        }
+        <input
+          id="name"
+          [formField]="checkout.name"
+          autocomplete="name"
+          [attr.aria-invalid]="shown(checkout.name)"
+          aria-describedby="name-error"
+        />
+        <div id="name-error">
+          @if (shown(checkout.name)) {
+            @for (error of checkout.name().errors(); track error.kind) {
+              <p class="error">{{ error.message }}</p>
+            }
+          }
+        </div>
         <label for="email">Email</label>
-        <input id="email" type="email" [formField]="checkout.email" autocomplete="email" />
-        @for (error of checkout.email().errors(); track error.kind) {
-          <p class="error">{{ error.message }}</p>
-        }
+        <input
+          id="email"
+          type="email"
+          [formField]="checkout.email"
+          autocomplete="email"
+          [attr.aria-invalid]="shown(checkout.email)"
+          aria-describedby="email-error"
+        />
+        <div id="email-error">
+          @if (shown(checkout.email)) {
+            @for (error of checkout.email().errors(); track error.kind) {
+              <p class="error">{{ error.message }}</p>
+            }
+          }
+        </div>
         <label for="address">Address</label>
-        <input id="address" [formField]="checkout.address" autocomplete="street-address" />
-        @for (error of checkout.address().errors(); track error.kind) {
-          <p class="error">{{ error.message }}</p>
-        }
+        <input
+          id="address"
+          [formField]="checkout.address"
+          autocomplete="street-address"
+          [attr.aria-invalid]="shown(checkout.address)"
+          aria-describedby="address-error"
+        />
+        <div id="address-error">
+          @if (shown(checkout.address)) {
+            @for (error of checkout.address().errors(); track error.kind) {
+              <p class="error">{{ error.message }}</p>
+            }
+          }
+        </div>
         <label for="card">Card number (demo only, nothing is charged)</label>
         <input
           id="card"
@@ -76,6 +115,11 @@ export default class Checkout {
     address: '',
     cardNumber: '',
   });
+
+  protected shown(field: FieldTree<string>): boolean {
+    const state = field();
+    return state.touched() && state.invalid();
+  }
 
   protected readonly checkout = form(
     this.model,

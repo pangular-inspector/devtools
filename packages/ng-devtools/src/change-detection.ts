@@ -1,4 +1,4 @@
-type Profiler = (event: number, instance?: unknown, hook?: unknown) => void;
+export type Profiler = (event: number, instance?: unknown, hook?: unknown) => void;
 
 interface ProfilerApi {
   ɵsetProfiler?: (profiler: Profiler | null) => unknown;
@@ -15,6 +15,16 @@ const TEMPLATE_UPDATE_START = 2;
 export const REFRESH_DEBOUNCE_MS = 250;
 export const POLL_MS = 3000;
 export const HEARTBEAT_MS = 4000;
+/** An unchanged report is sent again this often, well inside the server's 15 s TTL. */
+export const KEEPALIVE_MS = 8000;
+
+/**
+ * Whether an unchanged report must be sent on this tick: waiting for the next
+ * one, `tickMs` away, would leave more than `KEEPALIVE_MS` since the last send.
+ */
+export function keepaliveDue(sentAt: number, tickMs: number, now = Date.now()): boolean {
+  return now - sentAt + tickMs > KEEPALIVE_MS;
+}
 
 export interface RefreshOptions {
   getNg: () => unknown;
@@ -27,6 +37,8 @@ export interface RefreshOptions {
 
 export interface RefreshScheduler {
   readonly mode: 'change-detection' | 'poll';
+  /** The longest gap between two refreshes. */
+  readonly intervalMs: number;
   stop(): void;
 }
 
@@ -44,6 +56,58 @@ export function angularMajor(doc: Document = document): number {
   const version = doc.querySelector('[ng-version]')?.getAttribute('ng-version') ?? '';
   const major = Number.parseInt(version, 10);
   return Number.isFinite(major) ? major : 0;
+}
+
+interface ProfilerHub {
+  listeners: Set<Profiler>;
+  remove: () => void;
+}
+
+const hubs = new WeakMap<object, ProfilerHub>();
+
+/**
+ * Adds `listener` to the one profiler this package registers with Angular, and
+ * returns its remover. Returns null before Angular 20: there is a single
+ * profiler slot there, and taking it would evict the Angular DevTools
+ * extension with no remover to give it back.
+ */
+export function addProfilerListener(
+  ng: unknown,
+  listener: Profiler,
+  doc: Document = document,
+): (() => void) | null {
+  const setProfiler = (ng as ProfilerApi | undefined)?.ɵsetProfiler;
+  if (!ng || typeof setProfiler !== 'function' || angularMajor(doc) < 20) return null;
+  let hub = hubs.get(ng as object);
+  if (!hub) {
+    const listeners = new Set<Profiler>();
+    const dispatch: Profiler = (event, instance, hook) => {
+      for (const each of listeners) {
+        try {
+          each(event, instance, hook);
+        } catch {
+          continue;
+        }
+      }
+    };
+    let remove: unknown;
+    try {
+      remove = setProfiler(dispatch);
+    } catch {
+      return null;
+    }
+    if (typeof remove !== 'function') return null;
+    hub = { listeners, remove: remove as () => void };
+    hubs.set(ng as object, hub);
+  }
+  const owner = hub;
+  owner.listeners.add(listener);
+  return () => {
+    if (!owner.listeners.delete(listener) || owner.listeners.size) return;
+    // Never `setProfiler(null)`: that clears every registered profiler.
+    owner.remove();
+    if (hubs.get(ng as object) === owner) hubs.delete(ng as object);
+  };
 }
 
 /**
@@ -82,20 +146,8 @@ export function watchChangeDetection(options: RefreshOptions): RefreshScheduler 
   };
 
   const attach = () => {
-    const ng = options.getNg() as ProfilerApi | undefined;
-    const setProfiler = ng?.ɵsetProfiler;
-    // Before v20 there is a single profiler slot: taking it would evict the
-    // Angular DevTools extension, and there is no remover to give it back.
-    if (typeof setProfiler !== 'function' || angularMajor(doc) < 20) return false;
-    let remove: unknown;
-    try {
-      remove = setProfiler(profiler);
-    } catch {
-      return false;
-    }
-    if (typeof remove !== 'function') return false;
-    removeProfiler = remove as () => void;
-    return true;
+    removeProfiler = addProfilerListener(options.getNg(), profiler, doc);
+    return removeProfiler !== null;
   };
 
   const every = (ms: number, fn: () => void) => {
@@ -105,12 +157,12 @@ export function watchChangeDetection(options: RefreshOptions): RefreshScheduler 
 
   const scheduler = {
     mode: 'poll' as RefreshScheduler['mode'],
+    intervalMs: pollMs,
     stop() {
       stopped = true;
       clearTimeout(pending);
       clearInterval(interval);
       pending = undefined;
-      // Never `setProfiler(null)`: that clears every registered profiler.
       removeProfiler?.();
       removeProfiler = null;
     },
@@ -118,6 +170,7 @@ export function watchChangeDetection(options: RefreshOptions): RefreshScheduler 
 
   const hooked = () => {
     scheduler.mode = 'change-detection';
+    scheduler.intervalMs = heartbeatMs;
     every(heartbeatMs, run);
   };
 

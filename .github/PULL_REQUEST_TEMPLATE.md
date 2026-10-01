@@ -12,8 +12,8 @@ See docs/contributing/commit-message-guidelines.md
 
 - [ ] `pnpm commit:check` (commit messages follow the guidelines)
 - [ ] `pnpm format:check`
-- [ ] `pnpm typecheck` and the `ngc` template check (`pnpm exec ngc -p app/tsconfig.json --noEmit`)
-- [ ] `pnpm test` and `pnpm test:devtools`
+- [ ] `pnpm typecheck` (includes the `ngc` template checks)
+- [ ] `pnpm test`, `pnpm test:devtools` and `pnpm test:panel`
 - [ ] `pnpm skills:check` (when `.claude/` changed)
 - [ ] Docs in `apps/docs` updated and `pnpm docs:build` passes (when behavior, options, UI labels or agent tools changed), or the `no-docs` label added with the reason below
 - [ ] `pnpm extension:build` and `extension/ui` committed (when `app/` changed)

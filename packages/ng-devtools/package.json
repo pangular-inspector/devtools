@@ -19,6 +19,7 @@
     "./config": "./src/config.ts",
     "./overlay": "./src/overlay.ts",
     "./popup": "./src/popup.ts",
+    "./cli": "./src/cli.ts",
     "./http": "./src/http.ts",
     "./hub": "./src/hub.ts",
     "./package.json": "./package.json",
@@ -31,6 +32,7 @@
       "./config": "./dist/config.mjs",
       "./overlay": "./dist/overlay.mjs",
       "./popup": "./dist/popup.mjs",
+      "./cli": "./dist/cli.mjs",
       "./http": "./dist/http.mjs",
       "./hub": "./dist/hub.mjs",
       "./package.json": "./package.json",
@@ -97,6 +99,7 @@
   "devDependencies": {
     "@angular/common": "^22.1.0",
     "@angular/core": "^22.1.0",
+    "hono": "4.13.8",
     "rxjs": "~7.8.0",
     "tsdown": "^0.23.0"
   },

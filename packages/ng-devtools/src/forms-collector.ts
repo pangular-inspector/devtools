@@ -133,12 +133,13 @@ export function attachForms(
   let lastPayload = '';
   let lastPushAt = 0;
   const formEvents: FormEvent[] = [];
+  let droppedEvents = 0;
   const watched = new Map<object, { formId: string; stop: () => void }>();
   const lastStatus = new Map<string, string>();
   const lastValue = new Map<string, string>();
   const pendingSince = new Map<string, number>();
   const wrappedSubmits = new WeakSet<object>();
-  const unwrapSubmits: (() => void)[] = [];
+  const signalRoots = new Map<object, { formId: string; unwrap: (() => void)[] }>();
   const setupErrors: string[] = [];
   let foundById = new Map<string, FoundForm>();
   let fieldElements = new WeakMap<object, Element>();
@@ -201,6 +202,7 @@ export function attachForms(
     }
     formEvents.push(event);
     if (formEvents.length > maxEvents) {
+      droppedEvents += formEvents.length - maxEvents;
       formEvents.splice(0, formEvents.length - maxEvents);
     }
   }
@@ -211,14 +213,30 @@ export function attachForms(
     for (const child of node.children ?? []) seedStatuses(formId, child);
   }
 
+  function forgetKeys(formId: string) {
+    for (const map of [lastStatus, lastValue, pendingSince]) {
+      for (const key of map.keys()) {
+        if (key.startsWith(`${formId}:`)) map.delete(key);
+      }
+    }
+  }
+
+  function unwrapSignalRoot(root: object) {
+    const entry = signalRoots.get(root);
+    if (!entry) return;
+    signalRoots.delete(root);
+    for (const unwrap of entry.unwrap.splice(0)) unwrap();
+    instrumentation?.forgetSignalRoot(root);
+  }
+
   function watchRoots(found: FoundForm[]) {
     const live = new Set<object>();
     for (const form of found) {
+      live.add(form.root);
       if (form.kind === 'signal') {
         wrapSignalSubmit(form);
         continue;
       }
-      live.add(form.root);
       const formId = idOf(form.root);
       const existing = watched.get(form.root);
       if (existing?.formId === formId) continue;
@@ -249,17 +267,22 @@ export function attachForms(
       if (live.has(root)) continue;
       stop();
       watched.delete(root);
-      for (const map of [lastStatus, lastValue, pendingSince]) {
-        for (const key of map.keys()) {
-          if (key.startsWith(`${formId}:`)) map.delete(key);
-        }
-      }
+      forgetKeys(formId);
+    }
+    for (const [root, { formId }] of signalRoots) {
+      if (live.has(root)) continue;
+      unwrapSignalRoot(root);
+      forgetKeys(formId);
     }
   }
 
   function wrapSignalSubmit(form: FoundForm) {
+    let entry = signalRoots.get(form.root);
+    if (!entry) signalRoots.set(form.root, (entry = { formId: '', unwrap: [] }));
+    entry.formId = idOf(form.root);
+    const unwrap = entry.unwrap;
     const visit = (node: AnyRecord, depth: number) => {
-      wrapSubmitFlag(form.root, node);
+      wrapSubmitFlag(form.root, node, unwrap);
       if (depth >= 8) return;
       const children = read(() => node['structure'].materializedChildren() as AnyRecord[], []);
       for (const child of children.slice(0, 200)) visit(child, depth + 1);
@@ -267,13 +290,13 @@ export function attachForms(
     visit(form.root, 0);
   }
 
-  function wrapSubmitFlag(root: AnyRecord, node: AnyRecord) {
+  function wrapSubmitFlag(root: AnyRecord, node: AnyRecord, unwrap: (() => void)[]) {
     const flag = read(() => node['submitState']['selfSubmitting'] as AnyRecord, null);
     if (!flag || wrappedSubmits.has(flag) || typeof flag['set'] !== 'function') return;
     wrappedSubmits.add(flag);
     const path = node === root ? '' : read(() => fieldPath(node), '');
     const original = flag['set'];
-    unwrapSubmits.push(() => {
+    unwrap.push(() => {
       flag['set'] = original;
       wrappedSubmits.delete(flag);
     });
@@ -374,6 +397,7 @@ export function attachForms(
         events: formEvents,
         setupErrors,
         instrumented: !!instrumentation,
+        ...(droppedEvents ? { dropped: droppedEvents } : {}),
       };
       const payload = JSON.stringify(report);
       if (payload === lastPayload && now - lastPushAt < HEARTBEAT_MS) return;
@@ -474,6 +498,7 @@ export function attachForms(
       const finish = (result: FormActionResult) => {
         document.removeEventListener('click', onClick, true);
         document.removeEventListener('mouseover', onHover, true);
+        document.removeEventListener('mouseout', onLeave, true);
         document.removeEventListener('keydown', onKey, true);
         clearTimeout(timer);
         highlight.clear();
@@ -482,6 +507,9 @@ export function attachForms(
       };
       const onHover = (event: Event) => {
         if (event.target instanceof HTMLElement) highlight.show(event.target);
+      };
+      const onLeave = (event: MouseEvent) => {
+        if (!event.relatedTarget) highlight.clear();
       };
       const onClick = (event: Event) => {
         event.preventDefault();
@@ -501,6 +529,7 @@ export function attachForms(
       cancelPick = () => finish(failed('Picking cancelled.'));
       document.addEventListener('click', onClick, true);
       document.addEventListener('mouseover', onHover, true);
+      document.addEventListener('mouseout', onLeave, true);
       document.addEventListener('keydown', onKey, true);
     });
   }
@@ -639,6 +668,11 @@ export function attachForms(
         void pick(ctx).then(respond);
         return;
       }
+      if (request.action === 'cancel-pick') {
+        const active = cancelPick;
+        active?.();
+        return respond({ ok: true, message: active ? 'Picking cancelled.' : 'No pick to cancel.' });
+      }
       devtoolsSincePush = true;
       runFormAction(ctx, request).then(
         (result) => {
@@ -662,7 +696,7 @@ export function attachForms(
       if (console.error === patchedError) console.error = originalError;
       for (const { stop } of watched.values()) stop();
       watched.clear();
-      for (const unwrap of unwrapSubmits.splice(0)) unwrap();
+      for (const root of [...signalRoots.keys()]) unwrapSignalRoot(root);
       cancelPick?.();
       instrumentation?.stop();
       renders?.stop();

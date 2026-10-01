@@ -23,6 +23,7 @@ export const NG_DEVTOOLS_LIMITS = {
   formTimeline: { default: 200, min: 10, max: 2000 },
   httpCalls: { default: 200, min: 10, max: 2000 },
   changeLog: { default: 200, min: 10, max: 2000 },
+  cdCycles: { default: 200, min: 10, max: 2000 },
 } as const;
 
 export type NgDevtoolsLimit = keyof typeof NG_DEVTOOLS_LIMITS;
@@ -54,7 +55,7 @@ export interface NgDevtoolsConfig {
   limits?: {
     /**
      * How often the page polls for changes, in ms, when it can't follow change
-     * detection: before Angular 20, or before the app bootstraps. Also sets the
+     * detection, such as before the app bootstraps. Also sets the
      * Analog runtime refresh. Default 3000, from 500 to 8000.
      */
     refreshMs?: number;
@@ -66,6 +67,8 @@ export interface NgDevtoolsConfig {
     httpCalls?: number;
     /** NgRx change log entries kept per page. Default 200. */
     changeLog?: number;
+    /** Change detection cycles kept per page while recording. Default 200. */
+    cdCycles?: number;
   };
 }
 
@@ -148,6 +151,134 @@ export function resolveNgDevtoolsConfig(config?: unknown): ResolvedNgDevtoolsCon
   };
 }
 
+function distance(a: string, b: string): number {
+  let row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i];
+    for (let j = 1; j <= b.length; j++) {
+      next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    row = next;
+  }
+  return row[b.length];
+}
+
+function suggest(key: string, known: readonly string[]): string {
+  const lower = key.toLowerCase();
+  const best = known
+    .map((name) => ({ name, cost: distance(lower, name.toLowerCase()) }))
+    .sort((a, b) => a.cost - b.cost)[0];
+  return best && best.cost <= Math.max(1, Math.floor(best.name.length / 3))
+    ? ` Did you mean \`${best.name}\`?`
+    : '';
+}
+
+function describe(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'an array';
+  return typeof value === 'string' ? `the string ${JSON.stringify(value)}` : `a ${typeof value}`;
+}
+
+const CONFIG_KEYS = ['inspectors', 'agent', 'actions', 'redaction', 'limits'] as const;
+
+/**
+ * Lists what `resolveNgDevtoolsConfig()` ignores or changes in `config`:
+ * unknown keys, values of the wrong type and limits outside their range.
+ */
+export function ngDevtoolsConfigProblems(config: unknown): string[] {
+  const problems: string[] = [];
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    !!value && typeof value === 'object' && !Array.isArray(value);
+  const object = (path: string, value: unknown, known: readonly string[]) => {
+    if (value === undefined) return {};
+    if (!isRecord(value)) {
+      problems.push(`\`${path}\` should be an object, got ${describe(value)}. It was ignored.`);
+      return {};
+    }
+    for (const key of Object.keys(value)) {
+      if (!known.includes(key)) {
+        const name = path ? `${path}.${key}` : key;
+        problems.push(`Unknown option \`${name}\` was ignored.${suggest(key, known)}`);
+      }
+    }
+    return value;
+  };
+  const boolean = (path: string, value: unknown, fallback: string) => {
+    if (value !== undefined && typeof value !== 'boolean') {
+      problems.push(
+        `\`${path}\` should be true or false, got ${describe(value)}. It was ignored, so it is ${fallback}.`,
+      );
+    }
+  };
+  const booleans = (path: string, value: unknown, known: readonly string[], fallback: string) => {
+    const entries = object(path, value, known);
+    for (const key of known) boolean(`${path}.${key}`, entries[key], fallback);
+  };
+
+  if (config === undefined || config === null) return problems;
+  const input = object('', config, CONFIG_KEYS);
+  booleans('inspectors', input['inspectors'], NG_DEVTOOLS_INSPECTORS, 'on');
+  const agent = object('agent', input['agent'], ['readOnly', 'tools']);
+  boolean('agent.readOnly', agent['readOnly'], 'off');
+  booleans('agent.tools', agent['tools'], NG_DEVTOOLS_INSPECTORS, 'on');
+  const actions = input['actions'];
+  if (typeof actions !== 'boolean') {
+    if (actions !== undefined && !isRecord(actions)) {
+      problems.push(
+        `\`actions\` should be true, false or an object, got ${describe(actions)}. It was ignored, so every action is allowed.`,
+      );
+    } else {
+      booleans('actions', actions, NG_DEVTOOLS_ACTIONS, 'allowed');
+    }
+  }
+  const redaction = object('redaction', input['redaction'], ['secretNames', 'unmask']);
+  for (const key of ['secretNames', 'unmask'] as const) {
+    const value = redaction[key];
+    if (value === undefined) continue;
+    if (!Array.isArray(value)) {
+      problems.push(
+        `\`redaction.${key}\` should be an array of names, got ${describe(value)}. It was ignored.`,
+      );
+      continue;
+    }
+    const dropped = value.filter(
+      (name) => typeof name !== 'string' || !name.trim() || name.trim().length > MAX_NAME_LENGTH,
+    );
+    if (dropped.length) {
+      problems.push(
+        `\`redaction.${key}\` has ${dropped.length} entries that are not names of 1 to ${MAX_NAME_LENGTH} characters. They were ignored.`,
+      );
+    }
+    if (value.length - dropped.length > MAX_NAMES) {
+      problems.push(`\`redaction.${key}\` keeps the first ${MAX_NAMES} names only.`);
+    }
+  }
+  const limits = object('limits', input['limits'], Object.keys(NG_DEVTOOLS_LIMITS));
+  for (const key of Object.keys(NG_DEVTOOLS_LIMITS) as NgDevtoolsLimit[]) {
+    const value = limits[key];
+    if (value === undefined) continue;
+    const used = limit(value, key);
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      problems.push(
+        `\`limits.${key}\` should be a number, got ${describe(value)}. It was ignored, so it is ${used}.`,
+      );
+    } else if (used !== value) {
+      const { min, max } = NG_DEVTOOLS_LIMITS[key];
+      problems.push(
+        `\`limits.${key}\` is ${value}, which is outside ${min} to ${max} or not whole. It was set to ${used}.`,
+      );
+    }
+  }
+  return problems;
+}
+
+/** The startup warning for `ngDevtoolsConfigProblems()`, or `undefined` when there are none. */
+export function ngDevtoolsConfigWarning(config: unknown): string | undefined {
+  const problems = ngDevtoolsConfigProblems(config);
+  if (!problems.length) return undefined;
+  return `[ng-devtools] The devtools config has ${problems.length === 1 ? 'a problem' : `${problems.length} problems`}:\n${problems.map((problem) => `  - ${problem}`).join('\n')}`;
+}
+
 /** Reads the config a server published in its connection info (`connectionMeta.configs`). */
 export function configFromConnection(
   meta: { configs?: object } | undefined,
@@ -181,14 +312,14 @@ export const FORM_WRITE_ACTIONS: readonly string[] = [
   'restore',
 ];
 
-/** Router actions that start, stop or repeat a navigation. */
-export const ROUTER_WRITE_ACTIONS: readonly string[] = ['navigate', 'abort', 'replay'];
+/** Router actions that start, stop, repeat or probe a navigation. */
+export const ROUTER_WRITE_ACTIONS: readonly string[] = ['navigate', 'abort', 'replay', 'probe'];
 
 /** Agent tools that perform an action's writes; blocking the action drops them. */
 export const ACTION_TOOLS: Record<NgDevtoolsAction, readonly string[]> = {
   forms: ['form-action', 'fill-form'],
-  router: ['navigate'],
-  ngrx: [],
+  router: [],
+  ngrx: ['dispatch-ngrx-action'],
   http: [],
   analog: ['analog-call-api'],
 };
@@ -197,7 +328,7 @@ export function actionBlockedMessage(action: NgDevtoolsAction): string {
   const what = {
     forms: 'Writing to forms',
     router: 'Navigating',
-    ngrx: 'Restoring NgRx state',
+    ngrx: 'Restoring NgRx state and dispatching actions',
     http: 'Changing HTTP mock rules and clearing HTTP calls',
     analog: 'Calling API routes',
   }[action];
@@ -211,14 +342,25 @@ export function actionBlockedMessage(action: NgDevtoolsAction): string {
 export const RPC_INSPECTOR: Record<string, NgDevtoolsInspector> = {
   'get-components': 'components',
   'push-component-tree': 'components',
+  'push-change-detection': 'components',
+  'ping-change-detection': 'components',
+  'forget-change-detection-page': 'components',
+  'request-change-detection-record': 'components',
+  'ping-component-tree': 'components',
   'forget-component-page': 'components',
   'select-component': 'components',
+  'request-component-pick': 'components',
+  'cancel-component-pick': 'components',
+  'component-pick-result': 'components',
   'request-page-highlight': 'components',
   'get-signals': 'signals',
   'push-signal-graph': 'signals',
+  'ping-signal-graph': 'signals',
+  'forget-signal-page': 'signals',
   'select-signal-target': 'signals',
   'get-providers': 'injectors',
   'push-injector-tree': 'injectors',
+  'ping-injector-tree': 'injectors',
   'forget-injector-page': 'injectors',
   'get-ngrx-store': 'ngrx',
   'push-ngrx-state': 'ngrx',
@@ -248,6 +390,7 @@ export const RPC_INSPECTOR: Record<string, NgDevtoolsInspector> = {
   'request-instrument-pipes': 'pipes',
   'pipe-lint': 'pipes',
   'push-http': 'http',
+  'ping-http': 'http',
   'forget-http-page': 'http',
   'get-http-rules': 'http',
   'set-http-rules': 'http',
@@ -261,11 +404,15 @@ export const RPC_INSPECTOR: Record<string, NgDevtoolsInspector> = {
 export const AGENT_INSPECTOR: Record<string, NgDevtoolsInspector> = {
   'component-tree': 'components',
   highlight: 'components',
+  'inspect-component': 'components',
+  'defer-blocks': 'components',
+  'change-detection': 'components',
   'signal-graph': 'signals',
   'inspect-signals': 'signals',
   'injector-tree': 'injectors',
   'inspect-providers': 'injectors',
   'ngrx-store': 'ngrx',
+  'dispatch-ngrx-action': 'ngrx',
   forms: 'forms',
   'inspect-forms': 'forms',
   'explain-form-invalid': 'forms',
@@ -292,6 +439,54 @@ export const AGENT_INSPECTOR: Record<string, NgDevtoolsInspector> = {
   'lint-pipes': 'pipes',
   'explain-pipe': 'pipes',
 };
+
+/**
+ * Agent tools and resources that answer only while a page reports to the
+ * server, or that call the app's dev server. The stdio MCP server has neither.
+ */
+export const PAGE_AGENT_ENTRIES: readonly string[] = [
+  'list-pages',
+  'component-tree',
+  'highlight',
+  'inspect-component',
+  'defer-blocks',
+  'change-detection',
+  'signal-graph',
+  'inspect-signals',
+  'injector-tree',
+  'inspect-providers',
+  'ngrx-store',
+  'dispatch-ngrx-action',
+  'forms',
+  'inspect-forms',
+  'explain-form-invalid',
+  'explain-field',
+  'explain-submit',
+  'form-payload',
+  'form-history',
+  'form-diff',
+  'lint-forms',
+  'explain-custom-control',
+  'export-form',
+  'wait-for-form',
+  'form-action',
+  'fill-form',
+  'router',
+  'inspect-route',
+  'explain-navigation',
+  'list-routes',
+  'lint-routes',
+  'router-config',
+  'export-navigation',
+  'navigate',
+  'analog-current-page',
+  'analog-server-calls',
+  'analog-call-api',
+];
+
+export function isPageAgentEntry(id: string): boolean {
+  return PAGE_AGENT_ENTRIES.includes(agentName(id));
+}
 
 function agentName(id: string): string {
   return id.replace(/^ng-devtools:/, '');
@@ -339,7 +534,7 @@ const INSPECTOR_LABEL: Record<NgDevtoolsInspector, string> = {
 const ACTION_LABEL: Record<NgDevtoolsAction, string> = {
   forms: 'Form writes',
   router: 'Navigation',
-  ngrx: 'NgRx restore',
+  ngrx: 'NgRx restore and dispatch',
   http: 'HTTP mocking',
   analog: 'Analog API calls',
 };
@@ -350,6 +545,7 @@ const LIMIT_LABEL: Record<NgDevtoolsLimit, (value: number) => string> = {
   formTimeline: (value) => `${value} form events`,
   httpCalls: (value) => `${value} HTTP calls`,
   changeLog: (value) => `${value} NgRx changes`,
+  cdCycles: (value) => `${value} change detection cycles`,
 };
 
 /** The options that differ from the defaults, as label and value pairs. Empty when nothing is changed. */

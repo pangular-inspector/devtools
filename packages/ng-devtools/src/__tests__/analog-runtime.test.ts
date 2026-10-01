@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ANALOG_META_DESCRIPTION,
+  attachAnalog,
   analogMetaOf,
   chainOf,
   collectAnalog,
@@ -10,7 +11,9 @@ import {
   hasAnalogMeta,
   hydrationErrorOf,
   loadSummary,
+  mergeHydrationErrors,
 } from '../analog-runtime.ts';
+import { httpRegistry } from '../http-rules.ts';
 
 const META = Symbol(ANALOG_META_DESCRIPTION);
 
@@ -58,6 +61,37 @@ describe('Analog runtime reader', () => {
     const summary = loadSummary(data)!;
     expect(summary.keys).toEqual(['id', 'token']);
     expect(summary.preview).toBe('{"id":"1","token":"[redacted]"}');
+  });
+
+  it('redacts load data by whole words, not substrings', () => {
+    const visible = {
+      author: 'Ada',
+      authorId: 3,
+      compassHeading: 'N',
+      passengers: 2,
+      footprint: 'x',
+      discardReason: 'y',
+      cardinality: 1,
+      title: 't',
+    };
+    const hidden = { token: 'a', password: 'b', sessionId: 'c', apiKey: 'd', cardNumber: 'e' };
+    const preview = JSON.parse(loadSummary({ ...visible, ...hidden })!.preview);
+    expect(preview).toEqual({
+      ...visible,
+      token: '[redacted]',
+      password: '[redacted]',
+      sessionId: '[redacted]',
+      apiKey: '[redacted]',
+      cardNumber: '[redacted]',
+    });
+  });
+
+  it('replaces load data nested past the depth limit instead of keeping it raw', () => {
+    const summary = loadSummary({
+      a: { b: { c: { d: { e: { f: { g: { password: 'hunter2' } } } } } } },
+    })!;
+    expect(summary.preview).not.toContain('hunter2');
+    expect(summary.preview).toContain('[Truncated]');
   });
 
   it('lists router paths including loaded children', () => {
@@ -140,5 +174,49 @@ describe('Analog runtime reader', () => {
     expect(
       hasAnalogMeta([{ path: 'x', _loadedRoutes: [analogRoute('', '/src/app/pages/x.page.ts')] }]),
     ).toBe(true);
+  });
+
+  it('reports hydration errors logged before it attached and through console.warn', () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<app-root ng-version="22"></app-root>';
+    const router = {
+      url: '/',
+      config: [analogRoute('', '/src/app/pages/index.page.ts')],
+      routerState: { snapshot: { root: { routeConfig: null, data: {}, firstChild: null } } },
+    };
+    const ng = { getInjector: () => ({}), ɵgetRouterInstance: () => router };
+    const registry = httpRegistry();
+    const saved = registry.warnings;
+    registry.warnings = [
+      'Error: NG0500: During hydration Angular expected <div> but found <span>.',
+      'NG0503: During serialization, Angular detected DOM nodes created outside of Angular.',
+    ];
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const reports: { hydrationErrors: string[] }[] = [];
+    const call = async (_name: string, report: unknown) =>
+      void reports.push(report as { hydrationErrors: string[] });
+    const detach = attachAnalog({ rpc: { call } } as never, 'p1', () => ng, 1000);
+    try {
+      expect(reports.at(-1)?.hydrationErrors).toEqual([
+        'NG0500: During hydration Angular expected <div> but found <span>.',
+        'NG0503: During serialization, Angular detected DOM nodes created outside of Angular.',
+      ]);
+      console.warn('NG0505: Angular hydration was requested on the client, but there was no info.');
+      console.error(new Error('NG0500: During hydration Angular expected <div> but found <span>.'));
+      vi.advanceTimersByTime(1000);
+      expect(reports.at(-1)?.hydrationErrors).toEqual([
+        'NG0500: During hydration Angular expected <div> but found <span>.',
+        'NG0503: During serialization, Angular detected DOM nodes created outside of Angular.',
+        'NG0505: Angular hydration was requested on the client, but there was no info.',
+      ]);
+    } finally {
+      detach();
+      registry.warnings = saved;
+      warn.mockRestore();
+      error.mockRestore();
+      vi.useRealTimers();
+    }
+    expect(mergeHydrationErrors(undefined, ['NG0501: x', 'NG0501: x'])).toEqual(['NG0501: x']);
   });
 });

@@ -1,3 +1,5 @@
+import { connect } from 'node:net';
+import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hubDefaultOrigins, initNgDevtoolsHub, type NgDevtoolsHubOptions } from '../hub.ts';
 import { makeProject } from './analog-fixture.ts';
@@ -45,6 +47,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
   for (const hub of hubs.splice(0)) await hub.close();
+  delete (globalThis as { __NG_DEVTOOLS_HUB__?: unknown }).__NG_DEVTOOLS_HUB__;
 });
 
 describe('ng-devtools hub', () => {
@@ -99,6 +102,36 @@ async function sseStatus(
   await res.body?.cancel();
   return res.status;
 }
+
+describe('ng-devtools hub behind a web router', () => {
+  it('answers under its base and lets other routes reach the app', async () => {
+    const cwd = makeProject({ 'package.json': '{}' });
+    const devtools = initNgDevtoolsHub({ cwd, ws: false, auth: false });
+    hubs.push(devtools);
+    await devtools.ready;
+    const app = new Hono();
+    app.all(`${devtools.base}*`, (c) => devtools.handler(c.req.raw));
+    app.get('*', (c) => c.text('angular app'));
+    const get = (path: string) => app.request(`http://localhost${path}`);
+
+    const meta = await get('/__devframes/__connection.json');
+    expect(meta.status).toBe(200);
+    expect(await meta.json()).toHaveProperty('backend');
+    expect((await get('/__devframes/ng-devtools/__connection.json')).status).toBe(200);
+    expect((await get('/__devframes/')).status).toBe(200);
+    const page = await get('/trips/42');
+    expect(page.status).toBe(200);
+    expect(await page.text()).toBe('angular app');
+  });
+
+  it('answers 404 outside its base instead of falling through', async () => {
+    const cwd = makeProject({ 'package.json': '{}' });
+    const devtools = initNgDevtoolsHub({ cwd, ws: false, auth: false });
+    hubs.push(devtools);
+    await devtools.ready;
+    expect((await devtools.handler(new Request('http://localhost/trips/42'))).status).toBe(404);
+  });
+});
 
 describe('ng-devtools hub origins', () => {
   it('accepts loopback pages and the Chrome extension by default, and nothing else', () => {
@@ -182,5 +215,59 @@ describe('ng-devtools hub MCP route', () => {
     const mcp = await bootMcp({ auth: true, mcp: { authorization: 'own-secret' } });
     expect((await mcp()).status).toBe(401);
     expect((await mcp('own-secret')).status).toBe(200);
+  });
+});
+
+function listening(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect({ port, host: 'localhost' });
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once('error', () => resolve(false));
+  });
+}
+
+describe('ng-devtools hub on a server that reloads server.ts', () => {
+  it('keeps the generated token and closes the previous hub', async () => {
+    vi.stubEnv('NG_DEVTOOLS_MCP_TOKEN', '');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const boot = async () => {
+      const hub = initNgDevtoolsHub({
+        cwd: makeProject({ 'package.json': '{}' }),
+        ws: { sidecar: true },
+        auth: true,
+        allowedOrigins: false,
+      });
+      hubs.push(hub);
+      await hub.ready;
+      const meta = hub.connectionMeta() as { websocket: { port: number } };
+      return { hub, port: meta.websocket.port };
+    };
+    const first = await boot();
+    const second = await boot();
+    await first.hub.close();
+    const tokens = log.mock.calls
+      .flat()
+      .join('\n')
+      .match(/MCP token: \S+/g);
+    expect(tokens).toHaveLength(1);
+    const token = tokens![0].slice('MCP token: '.length);
+    const mcp = await second.hub.handler(
+      new Request('http://localhost/__devframes/__mcp', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          origin: 'http://localhost:4000',
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      }),
+    );
+    expect(mcp.status).toBe(200);
+    expect(await listening(second.port)).toBe(true);
+    if (first.port !== second.port) expect(await listening(first.port)).toBe(false);
   });
 });

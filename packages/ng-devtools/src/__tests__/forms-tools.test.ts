@@ -11,6 +11,7 @@ import {
   isPageReport,
   mergePageReport,
 } from '../rpc/forms-tools.ts';
+import { formHistoryText } from '../rpc/forms-explain.ts';
 
 function control(path: string, overrides: Partial<FormFieldNode> = {}): FormFieldNode {
   return {
@@ -200,6 +201,41 @@ describe('mergePageReport', () => {
     ).toEqual([20, 21, 22, 23, 24, 25, 26, 27, 28, 29]);
   });
 
+  it('numbers events across pages, keeps numbers stable on re-push, and renumbers after a reload', () => {
+    const pages = new Map();
+    const a = form(group([control('x')], 'VALID'), { id: 'form-1@aaaa' });
+    const b = form(group([control('x')], 'VALID'), { id: 'form-1@bbbb' });
+    const event = (formId: string, seq: number, timestamp: number) => ({
+      formId,
+      path: 'x',
+      type: 'value' as const,
+      timestamp,
+      seq,
+    });
+    const seqs = (state: { events: { formId: string; seq?: number }[] }) =>
+      state.events.map((e) => `${e.formId.split('@')[1]}:${e.seq}`);
+    const one = [event(a.id, 1, 1), event(a.id, 2, 2)];
+    mergePageReport(pages, { pageId: 'aaaa', forms: [a], events: one }, 1_000);
+    const both = mergePageReport(
+      pages,
+      { pageId: 'bbbb', forms: [b], events: [event(b.id, 1, 3)] },
+      1_000,
+    );
+    expect(seqs(both)).toEqual(['aaaa:1', 'aaaa:2', 'bbbb:3']);
+    const again = mergePageReport(
+      pages,
+      { pageId: 'aaaa', forms: [a], events: [...one, event(a.id, 3, 4)] },
+      1_000,
+    );
+    expect(seqs(again)).toEqual(['aaaa:1', 'aaaa:2', 'bbbb:3', 'aaaa:4']);
+    const reloaded = mergePageReport(
+      pages,
+      { pageId: 'aaaa', forms: [a], events: [event(a.id, 1, 10)] },
+      1_000,
+    );
+    expect(seqs(reloaded)).toEqual(['bbbb:3', 'aaaa:5']);
+  });
+
   it('keeps each open page, drops pages that stopped reporting, and orders events', () => {
     const pages = new Map();
     const a = form(group([control('x')], 'VALID'), { id: 'form-1@aaaa' });
@@ -232,7 +268,40 @@ describe('mergePageReport', () => {
       reportedAt: 0,
       setupErrors: [],
       instrumented: [],
+      dropped: {},
     });
+  });
+
+  it('counts dropped events per page, from the page and from the combined limit', () => {
+    const a = form(group([control('x')], 'VALID'), { id: 'form-1@aaaa' });
+    const b = form(group([control('y')], 'VALID'), { id: 'form-1@bbbb' });
+    const events = (formId: string, from: number) =>
+      Array.from({ length: 6 }, (_, i) => ({
+        formId,
+        path: 'x',
+        type: 'value' as const,
+        timestamp: from + i,
+      }));
+    const pages = new Map();
+    mergePageReport(
+      pages,
+      { pageId: 'aaaa', forms: [a], events: events(a.id, 0), dropped: 4 },
+      1_000,
+      10,
+    );
+    const state = mergePageReport(
+      pages,
+      { pageId: 'bbbb', forms: [b], events: events(b.id, 100) },
+      1_000,
+      10,
+    );
+    expect(state.events).toHaveLength(10);
+    expect(state.dropped).toEqual({ aaaa: 6 });
+    expect(formHistoryText(state, { form: 'form-1@aaaa' })).toContain(
+      '6 older form events were dropped',
+    );
+    expect(formHistoryText(state, { form: 'form-1@bbbb' })).not.toContain('dropped');
+    expect(isPageReport({ pageId: 'p', forms: [], events: [], dropped: 'x' })).toBe(false);
   });
 });
 

@@ -71,11 +71,12 @@ The inspectors are exposed as *MCP tools and resources, so a coding agent can re
 
 Your app's server hosts the devtools, and a script in the page sends live data to it. A floating button on the page opens the panel next to your app.
 
-| Setup                   | Server part                 | Guide                                     |
-| ----------------------- | --------------------------- | ----------------------------------------- |
-| Angular CLI with SSR    | `initNgDevtoolsHub()`       | [Angular CLI and Express](./express.md)   |
-| Analog                  | The Vite plugin             | [Vite and Analog](./vite.md)              |
-| Chrome DevTools (extra) | One of the two setups above | [Chrome extension](./chrome-extension.md) |
+| Setup                      | Server part             | Guide                                      |
+| -------------------------- | ----------------------- | ------------------------------------------ |
+| Angular CLI with SSR       | `initNgDevtoolsHub()`   | [Angular CLI and Express](./express.md)    |
+| SSR on Hono, h3 or Fastify | `initNgDevtoolsHub()`   | [Hono, h3 and Fastify](./other-servers.md) |
+| Analog                     | The Vite plugin         | [Vite and Analog](./vite.md)               |
+| Chrome DevTools (extra)    | One of the setups above | [Chrome extension](./chrome-extension.md)  |
 
 ### Outside your app
 

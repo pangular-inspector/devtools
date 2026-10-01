@@ -13,6 +13,9 @@ export default defineConfig(() => ({
       '@santoshyadavdev/ng-devtools/overlay': fileURLToPath(
         new URL('../../packages/ng-devtools/dist/overlay.mjs', import.meta.url),
       ),
+      '@santoshyadavdev/ng-devtools/http': fileURLToPath(
+        new URL('../../packages/ng-devtools/dist/http.mjs', import.meta.url),
+      ),
     },
   },
   plugins: [

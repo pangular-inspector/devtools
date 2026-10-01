@@ -1,19 +1,25 @@
 import { Component, computed, effect, input, signal, untracked } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
-import { SHARED_STYLES, routerCall, type LintFinding, type RouterPage } from './router-types';
+import {
+  SHARED_STYLES,
+  routerCall,
+  type LintFinding,
+  type LintResult,
+  type RouterPage,
+} from './router-types';
 
 @Component({
   selector: 'app-route-lint',
   template: `
     <div class="toolbar">
-      <button type="button" class="small" [attr.aria-busy]="loading()" (click)="run()">
-        {{ loading() ? 'Checking…' : 'Check again' }}
+      <button type="button" class="small" [attr.aria-busy]="checking()" (click)="run()">
+        {{ checking() ? 'Checking…' : 'Check again' }}
       </button>
       <span class="muted"
         >Checks the live config, links and recent navigations. Lazy routes that have not loaded are
         skipped.</span
       >
-      @if (!loading() && findings().length) {
+      @if (result()?.checked && findings().length) {
         <span class="summary">
           @if (counts().error) {
             <span class="badge" data-tone="bad">{{ counts().error }} error(s)</span>
@@ -27,10 +33,35 @@ import { SHARED_STYLES, routerCall, type LintFinding, type RouterPage } from './
         </span>
       }
     </div>
-    @if (loading()) {
+    @if (failed()) {
+      <div class="empty" role="alert">
+        <p class="empty-title">The route checks could not run.</p>
+        <p class="muted">The DevTools server did not answer. Check that it is still running.</p>
+        <button type="button" class="small" (click)="run()">Retry</button>
+      </div>
+    } @else if (!result()) {
       <p class="muted empty" role="status">Checking…</p>
+    } @else if (notChecked(); as reason) {
+      <div class="empty">
+        <p class="empty-title">No checks ran.</p>
+        <p class="muted">
+          @switch (reason) {
+            @case ('events-only') {
+              This page runs in events-only mode: it has no debug utils (a production build or an
+              unusual setup), so it cannot report its route config.
+            }
+            @case ('no-config') {
+              The page has not reported its route config yet. It appears after the app finishes
+              bootstrapping.
+            }
+            @default {
+              No page with a router is connected.
+            }
+          }
+        </p>
+      </div>
     } @else if (findings().length) {
-      <ul class="findings">
+      <ul class="findings" [attr.aria-busy]="checking()">
         @for (finding of findings(); track $index) {
           <li [attr.data-severity]="finding.severity">
             <div class="head">
@@ -195,16 +226,29 @@ export class RouteLint {
   page = input.required<RouterPage>();
   rpc = input<DevframeRpcClient | null>(null);
 
-  readonly findings = signal<LintFinding[]>([]);
-  readonly loading = signal(false);
+  readonly result = signal<LintResult | null>(null);
+  readonly failed = signal(false);
+  readonly checking = signal(false);
+  readonly findings = computed(() => {
+    const result = this.result();
+    return result?.checked ? result.findings : [];
+  });
+  readonly notChecked = computed(() => {
+    const result = this.result();
+    return result && !result.checked ? result.reason : null;
+  });
   readonly counts = computed(() => {
     const counts = { error: 0, warning: 0, info: 0 };
     for (const finding of this.findings()) counts[finding.severity]++;
     return counts;
   });
-  private readonly key = computed(
-    () => `${this.page().pageId}:${this.page().generation}:${this.page().navigations.length}`,
-  );
+  private readonly key = computed(() => {
+    const page = this.page();
+    const last = page.navigations[page.navigations.length - 1];
+    return `${page.pageId}:${page.generation}:${last?.id}:${last?.outcome}`;
+  });
+  private seq = 0;
+  private checkedPage: string | null = null;
 
   constructor() {
     effect(() => {
@@ -218,10 +262,17 @@ export class RouteLint {
   }
 
   async run() {
-    this.loading.set(true);
-    this.findings.set(
-      (await routerCall<LintFinding[]>(this.rpc(), 'router-lint', this.page().pageId)) ?? [],
-    );
-    this.loading.set(false);
+    const seq = ++this.seq;
+    const pageId = this.page().pageId;
+    if (pageId !== this.checkedPage) this.result.set(null);
+    this.checking.set(true);
+    const result = await routerCall<LintResult>(this.rpc(), 'router-lint', pageId);
+    if (seq !== this.seq) return;
+    this.checking.set(false);
+    this.failed.set(!result);
+    if (result) {
+      this.result.set(result);
+      this.checkedPage = pageId;
+    }
   }
 }

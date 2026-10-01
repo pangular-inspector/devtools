@@ -158,6 +158,7 @@ interface NavState {
   startedPerf: number;
   checkedResolvers: string[];
   lazyConfigs: object[];
+  handled?: { reason: string; redirected: boolean };
 }
 
 const navState = new WeakMap<NavigationRecord, NavState>();
@@ -767,9 +768,25 @@ export function noteWarning(navigations: NavigationRecord[], message: string) {
   nav.warnings = [...(nav.warnings ?? []), redactMessage(message, stateOf(nav).secrets)].slice(-5);
 }
 
-export function noteErrorHandler(navigations: NavigationRecord[], text: string) {
-  const nav = findPending(navigations) ?? navigations[navigations.length - 1];
-  if (nav) nav.errorHandler = redactMessage(text, stateOf(nav).secrets);
+export function noteErrorHandler(
+  navigations: NavigationRecord[],
+  text: string,
+  navigationError?: unknown,
+  redirected = false,
+) {
+  const id = read(() => (navigationError as AnyRecord)?.['id'] as number | undefined, undefined);
+  const nav =
+    (id === undefined ? undefined : navigations.find((n) => n.id === id)) ??
+    findPending(navigations) ??
+    navigations[navigations.length - 1];
+  if (!nav) return;
+  const state = stateOf(nav);
+  nav.errorHandler = redactMessage(text, state.secrets);
+  if (navigationError === undefined) return;
+  const error = read(() => (navigationError as AnyRecord)?.['error'], undefined);
+  state.handled = { reason: errorText(error, state.secrets), redirected };
+  const code = errorCodeOf(error);
+  if (code) nav.errorCode = code;
 }
 
 export function noteRun(navigations: NavigationRecord[], run: GuardRun) {
@@ -798,9 +815,22 @@ export function noteFailedCall(
     caller: pendingCaller?.text,
     generation: configGeneration,
   });
-  if (navigations.length > navigationLimit) {
-    navigations.splice(0, navigations.length - navigationLimit);
-  }
+  trimNavigations(navigations, navigationLimit);
+}
+
+const droppedNavigationCounts = new WeakMap<NavigationRecord[], number>();
+
+/** Removes the oldest navigations past `max` and counts them. */
+export function trimNavigations(navigations: NavigationRecord[], max: number) {
+  const extra = navigations.length - max;
+  if (extra <= 0) return;
+  navigations.splice(0, extra);
+  droppedNavigationCounts.set(navigations, droppedNavigations(navigations) + extra);
+}
+
+/** How many navigations `trimNavigations` removed from this list. */
+export function droppedNavigations(navigations: NavigationRecord[]): number {
+  return droppedNavigationCounts.get(navigations) ?? 0;
 }
 
 /**
@@ -831,7 +861,10 @@ export function applyRouterEvent(
       if (!source) return false;
       const target = read(() => String(router?.['serializeUrl'](event['url']) ?? event['url']), '');
       source.redirectTo = redactUrl(target, stateOf(source).secrets);
-      source.redirectKind = source.outcome === 'failed' ? 'error handler' : redirectKindOf(source);
+      source.redirectKind =
+        source.outcome === 'failed' || stateOf(source).handled?.redirected
+          ? 'error handler'
+          : redirectKindOf(source);
       const follower = navigations.find(
         (nav) =>
           nav.id > source!.id && nav.outcome === 'pending' && nav.redirectedFrom === undefined,
@@ -1013,10 +1046,13 @@ export function applyRouterEvent(
           ms: state.guardsAt === undefined ? undefined : Math.round(end - state.guardsAt),
         };
       }
-      nav.reason = errorText(
-        String(event['reason'] ?? '').replace(/^NavigationCancelingError: /, ''),
-        state.secrets,
-      );
+      nav.reason =
+        nav.code === 'Redirect' && state.handled?.redirected
+          ? state.handled.reason
+          : errorText(
+              String(event['reason'] ?? '').replace(/^NavigationCancelingError: /, ''),
+              state.secrets,
+            );
       finish(nav, at, router);
       return true;
     }
@@ -1136,7 +1172,7 @@ export function watchRouter(
     () =>
       events['subscribe']((event: AnyRecord) => {
         if (!applyRouterEvent(navigations, event, Date.now(), router)) return;
-        if (navigations.length > max) navigations.splice(0, navigations.length - max);
+        trimNavigations(navigations, max);
         onChange();
       }) as { unsubscribe(): void },
     null,

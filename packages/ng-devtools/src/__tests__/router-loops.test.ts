@@ -3,10 +3,16 @@ import '@angular/compiler';
 import { Component, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { Router, provideRouter, type Routes } from '@angular/router';
+import {
+  RedirectCommand,
+  Router,
+  provideRouter,
+  withNavigationErrorHandler,
+  type Routes,
+} from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { watchRouter, type NavigationRecord } from '../router.ts';
-import { instrument } from '../router-actions.ts';
+import { captureDiagnostics, instrument } from '../router-actions.ts';
 import type { RouteNode } from '../router-config.ts';
 import { lintRoutes } from '../rpc/router-config-tools.ts';
 import { detectLoops, redirectCycles } from '../rpc/router-loops.ts';
@@ -284,5 +290,66 @@ describe('detectLoops on a real Router', () => {
     expect(router.url).toBe('/step/4');
     expect(navigations.filter((n) => n.redirectedFrom !== undefined)).toHaveLength(3);
     expect(detectLoops(navigations)).toEqual([]);
+  });
+});
+
+let failures = 0;
+function flakyResolver() {
+  if (++failures <= 2) throw new Error('report service down');
+  return 'ok';
+}
+const backToReport = () => inject(Router).parseUrl('/report');
+
+describe('detectLoops through the navigation error handler', () => {
+  let router: Router;
+  let navigations: NavigationRecord[];
+  let cleanup: (() => void)[];
+
+  beforeEach(async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(
+          [
+            { path: '', component: Page },
+            { path: 'report', component: Page, resolve: { x: flakyResolver } },
+            { path: 'retry', component: Page, canActivate: [backToReport] },
+          ],
+          withNavigationErrorHandler(() => new RedirectCommand(inject(Router).parseUrl('/retry'))),
+        ),
+      ],
+    });
+    router = TestBed.inject(Router);
+    navigations = [];
+    cleanup = [];
+    const stop = watchRouter(router as never, navigations, () => {});
+    if (stop) cleanup.push(stop);
+    cleanup.push(captureDiagnostics(router as never, navigations));
+    await router.navigateByUrl('/');
+    failures = 0;
+  });
+
+  afterEach(() => {
+    for (const fn of cleanup) fn();
+  });
+
+  it('names the error handler as the cause of its hops', async () => {
+    await router.navigateByUrl('/report');
+    expect(router.url).toBe('/report');
+    const [loop] = detectLoops(navigations);
+    expect(loop).toMatchObject({
+      kind: 'redirect',
+      cycle: ['/report', '/retry', '/report'],
+      end: 'settled on /report',
+    });
+    expect(loop.hops[0]).toMatchObject({
+      from: '/report',
+      to: '/retry',
+      via: 'error handler',
+      by: 'the navigation error handler',
+    });
+    expect(describeNavigation(navigations.find((n) => n.id === loop.hops[0].id)!)).toContain(
+      'The navigation error handler redirected to `/retry`.',
+    );
   });
 });

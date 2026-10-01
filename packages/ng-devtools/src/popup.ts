@@ -1,4 +1,5 @@
 export { registerNgrxSignals } from './ngrx-register.ts';
+import { POPUP_ROOT_ID, SETUP_URL, insideDevtoolsPanel } from './panel-frame.ts';
 // In-page floating devtools popup. Renders an iframe pointing at the devtools SPA.
 
 let popupRoot: HTMLElement | null = null;
@@ -55,21 +56,89 @@ function saveState(state: PopupState) {
 }
 
 const HUB_BASE = '/__devframes/';
+const PANEL_BASES = ['/__ng-devtools/', '/__devframes/ng-devtools/', '/__devframe/', '/'];
 
-async function hubAvailable(): Promise<boolean> {
+/** The devtools URL the overlay connected to, which beats the default paths. */
+let frameBase: string | undefined;
+/** A `src` given to `createDevtoolsPopup`, which beats everything else. */
+let explicitSrc: string | undefined;
+/** What the panel loads: a hub or panel URL, or `null` when no server answered. */
+let target: Promise<string | null> | undefined;
+let retarget: (() => void) | undefined;
+
+async function servesJson(url: string): Promise<boolean> {
   try {
-    const response = await fetch(`${HUB_BASE}__connection.json`, { cache: 'no-store' });
+    const response = await fetch(url, { cache: 'no-store' });
     return response.ok && (response.headers.get('content-type') ?? '').includes('json');
   } catch {
     return false;
   }
 }
 
+function panelUrl(base: string): string {
+  let pageId = '';
+  try {
+    pageId = sessionStorage.getItem('ng-devtools-page-id') ?? '';
+  } catch {
+    // Storage can be blocked; the panel then shows the latest page.
+  }
+  return `${base}?baseURL=${encodeURIComponent(base)}&pageId=${encodeURIComponent(pageId)}`;
+}
+
+/** The hub that serves a devtools frame, when the frame sits at `<hub>ng-devtools/`. */
+function hubOf(base: string): string | undefined {
+  const url = new URL(base, location.href);
+  return url.pathname.endsWith('/ng-devtools/') ? new URL('../', url).href : undefined;
+}
+
+async function findTarget(): Promise<string | null> {
+  if (explicitSrc !== undefined) return new URL(explicitSrc, location.origin).href;
+  if (frameBase) {
+    const hub = hubOf(frameBase);
+    if (hub && (await servesJson(`${hub}__connection.json`))) return hub;
+    return panelUrl(frameBase);
+  }
+  const origin = location.origin;
+  if (await servesJson(`${origin}${HUB_BASE}__connection.json`)) return `${origin}${HUB_BASE}`;
+  for (const base of PANEL_BASES) {
+    for (const file of ['__devframe/__connection.json', '__connection.json']) {
+      if (await servesJson(`${origin}${base}${file}`)) return panelUrl(`${origin}${base}`);
+    }
+  }
+  return null;
+}
+
+function resolveTarget(): Promise<string | null> {
+  const found = (target ??= findTarget());
+  // Nothing answered yet; look again on the next open, the server may be up by then.
+  void found.then((src) => {
+    if (src === null && target === found) target = undefined;
+  });
+  return found;
+}
+
+function changeTarget() {
+  target = undefined;
+  retarget?.();
+}
+
+/**
+ * Points the panel at the devtools the overlay connected to. `initOverlay`
+ * calls it, so a custom `baseURL` also reaches the floating button.
+ */
+export function useDevtoolsBase(base: string) {
+  const absolute = new URL(base, location.href).href;
+  if (absolute === frameBase) return;
+  frameBase = absolute;
+  changeTarget();
+}
+
 let shown: Promise<void> | undefined;
 
+/** Adds the floating button. The panel finds the devtools server when it first opens. */
 export function showDevtools(): Promise<void> {
-  shown ??= hubAvailable().then((hub) => {
-    createDevtoolsPopup(hub ? { src: HUB_BASE } : {});
+  shown ??= Promise.resolve().then(() => {
+    createDevtoolsPopup();
   });
   return shown;
 }
@@ -81,32 +150,22 @@ export async function hideDevtools(): Promise<void> {
   shown = undefined;
 }
 
-function getBaseURL(): string {
-  const paths = ['/__ng-devtools/', '/__devframes/ng-devtools/', '/__devframe/', '/'];
-  for (const base of paths) {
-    try {
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', base + '__devframe/__connection.json', false);
-      xhr.send();
-      if (xhr.status === 200) return base;
-    } catch {}
-    try {
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', base + '__connection.json', false);
-      xhr.send();
-      if (xhr.status === 200) return base;
-    } catch {}
-  }
-  return '/__ng-devtools/';
-}
-
+/**
+ * Adds the floating button and returns its handle. `src` is the page the panel
+ * loads; without it the panel looks for the hub, then for the devtools alone.
+ * A later call returns the same handle and applies a new `src`.
+ */
 export function createDevtoolsPopup(options: { src?: string } = {}) {
+  if (options.src !== undefined && options.src !== explicitSrc) {
+    explicitSrc = options.src;
+    changeTarget();
+  }
   if (popupRoot) return handle;
 
   const state = loadState();
 
   popupRoot = document.createElement('div');
-  popupRoot.id = 'ng-devtools-popup-root';
+  popupRoot.id = POPUP_ROOT_ID;
 
   const shadow = popupRoot.attachShadow({ mode: 'open' });
 
@@ -169,6 +228,7 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
   closeBtn.setAttribute('aria-label', 'Close Angular DevTools');
   closeBtn.addEventListener('click', togglePanel);
 
+  toolbar.title = 'Drag to move. Double click to reset the position.';
   toolbar.append(title, dockGroup, closeBtn);
 
   // Iframe
@@ -176,7 +236,34 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
   iframe.classList.add('frame');
   iframe.title = 'Angular DevTools';
 
-  panel.append(toolbar, iframe);
+  const missingStatus = document.createElement('span');
+  missingStatus.classList.add('sr-only');
+  missingStatus.setAttribute('role', 'status');
+  const missing = document.createElement('div');
+  missing.classList.add('missing');
+  missing.setAttribute('role', 'region');
+  missing.setAttribute('aria-labelledby', 'ng-devtools-missing-title');
+  missing.hidden = true;
+  const missingTitle = document.createElement('h2');
+  missingTitle.id = 'ng-devtools-missing-title';
+  missingTitle.classList.add('missing-title');
+  missingTitle.textContent = 'No devtools server found';
+  const missingHint = document.createElement('p');
+  missingHint.textContent =
+    'Mount the ng-devtools hub or the Vite plugin in your dev server, before the SSR handler. ' +
+    'If it is mounted on a custom path, pass that path to initOverlay({baseURL}).';
+  const setupLink = document.createElement('a');
+  setupLink.href = SETUP_URL;
+  setupLink.target = '_blank';
+  setupLink.rel = 'noopener noreferrer';
+  setupLink.textContent = 'How to set up ng-devtools';
+  const newTab = document.createElement('span');
+  newTab.classList.add('sr-only');
+  newTab.textContent = ' (opens in a new tab)';
+  setupLink.append(newTab);
+  missing.append(missingTitle, missingHint, setupLink);
+
+  panel.append(toolbar, iframe, missing, missingStatus);
 
   // Styles
   const style = document.createElement('style');
@@ -186,6 +273,9 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
       position: fixed;
       z-index: 2147483646;
       inset: auto 16px 16px auto;
+      margin: 0;
+      padding: 0;
+      overflow: visible;
       width: 44px;
       height: 44px;
       border-radius: 50%;
@@ -222,6 +312,9 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
     .panel {
       position: fixed;
       z-index: 2147483647;
+      inset: auto;
+      margin: 0;
+      padding: 0;
       display: flex;
       flex-direction: column;
       opacity: 0;
@@ -244,11 +337,17 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
       transform: none;
       transition: opacity 160ms ease, transform 160ms ease, visibility 0s;
     }
+    :host([data-picking]) .panel.open {
+      opacity: 0.2;
+      pointer-events: none;
+    }
     @media (prefers-reduced-motion: reduce) {
       .panel, .panel.open, .fab { transition: none; }
     }
     .panel.dock-float {
       border-radius: 10px;
+      max-width: calc(100vw - 16px);
+      max-height: calc(100vh - 16px);
     }
     .panel.dock-bottom {
       left: 0 !important;
@@ -279,6 +378,7 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
       background: #18181b;
       border-bottom: 1px solid #27272a;
       user-select: none;
+      touch-action: none;
       min-height: 36px;
     }
     .toolbar:active { cursor: grabbing; }
@@ -313,51 +413,141 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
       height: 100%;
       background: #0f0f11;
     }
+    .frame[hidden], .missing[hidden] { display: none; }
+    .missing {
+      flex: 1;
+      overflow: auto;
+      padding: 24px;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #d4d4d8;
+    }
+    .missing p, .missing h2 { margin: 0 0 12px; max-width: 60ch; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .missing .missing-title { font-size: 15px; font-weight: 600; color: #fafafa; }
+    .missing a { color: var(--ng-devtools-title, #f5a524); }
+    .missing a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   `;
 
   fab.classList.add('fab');
+  // Dialogs, popovers and CDK overlays sit in the top layer, above any
+  // z-index, so the launcher and panel join it and stay reachable.
+  const topLayer = typeof fab.showPopover === 'function';
+  if (topLayer) {
+    fab.setAttribute('popover', 'manual');
+    panel.setAttribute('popover', 'manual');
+  }
   shadow.append(style, fab, panel);
   document.body.appendChild(popupRoot);
 
-  // Drag support for floating mode
-  let dragging = false;
-  let dragOffsetX = 0;
-  let dragOffsetY = 0;
+  /** Shows the launcher and panel again, which puts them on top of the top layer. */
+  function raise() {
+    if (!topLayer) return;
+    for (const el of [fab, panel]) {
+      try {
+        el.hidePopover();
+        el.showPopover();
+      } catch {
+        // detached; the z-index still applies
+      }
+    }
+  }
+  raise();
 
-  toolbar.addEventListener('mousedown', (e) => {
-    if (state.docked !== 'float') return;
-    dragging = true;
-    dragOffsetX = e.clientX - panel.offsetLeft;
-    dragOffsetY = e.clientY - panel.offsetTop;
+  // A modal dialog makes the rest of the page inert, so the launcher could be
+  // seen but not used above it; only popovers and overlays raise it.
+  const onTopLayerOpen = (event: Event) => {
+    if ((event as Event & { newState?: string }).newState !== 'open') return;
+    const target = event.target as Element | null;
+    if (!target || target === popupRoot) return;
+    try {
+      if (target.matches(':modal')) return;
+    } catch {
+      // `:modal` is unknown here, so it cannot be a modal dialog either
+    }
+    raise();
+  };
+  if (topLayer) document.addEventListener('toggle', onTopLayerOpen, true);
+
+  // Drag support for floating mode. Pointer events with capture, so touch and
+  // pen can move it too, and the drag survives the pointer leaving the toolbar.
+  let drag: { id: number; offsetX: number; offsetY: number } | null = null;
+
+  toolbar.addEventListener('pointerdown', (e) => {
+    if (state.docked !== 'float' || drag) return;
+    if ((e.target as Element | null)?.closest?.('button')) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    drag = {
+      id: e.pointerId,
+      offsetX: e.clientX - panel.offsetLeft,
+      offsetY: e.clientY - panel.offsetTop,
+    };
+    try {
+      toolbar.setPointerCapture(e.pointerId);
+    } catch {
+      // the pointer is already gone; the move events still reach the toolbar
+    }
     e.preventDefault();
   });
 
-  const onMouseMove = (e: MouseEvent) => {
-    if (!dragging) return;
+  toolbar.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
     // Clamped at both ends: dragging the toolbar off the right or bottom edge
     // would leave the panel with no reachable handle.
     const maxX = Math.max(0, window.innerWidth - panel.offsetWidth);
     const maxY = Math.max(0, window.innerHeight - panel.offsetHeight);
-    state.x = Math.min(Math.max(0, e.clientX - dragOffsetX), maxX);
-    state.y = Math.min(Math.max(0, e.clientY - dragOffsetY), maxY);
+    state.x = Math.min(Math.max(0, e.clientX - drag.offsetX), maxX);
+    state.y = Math.min(Math.max(0, e.clientY - drag.offsetY), maxY);
     panel.style.left = state.x + 'px';
     panel.style.top = state.y + 'px';
-  };
+  });
 
-  const onMouseUp = () => {
-    if (dragging) {
-      dragging = false;
-      saveState(state);
-    }
+  const endDrag = (e: PointerEvent) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    drag = null;
+    saveState(state);
   };
+  toolbar.addEventListener('pointerup', endDrag);
+  toolbar.addEventListener('pointercancel', endDrag);
+  toolbar.addEventListener('lostpointercapture', endDrag);
 
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('mouseup', onMouseUp);
+  // Dragging is not the only way to move it: a double click on the toolbar
+  // puts the floating panel back in its default place.
+  toolbar.addEventListener('dblclick', (e) => {
+    if (state.docked !== 'float' || (e.target as Element | null)?.closest?.('button')) return;
+    state.x = DEFAULT_STATE.x;
+    state.y = DEFAULT_STATE.y;
+    applyDock();
+    saveState(state);
+  });
 
   // Scoped to the popup's own chrome: a listener on the window would take
   // Escape away from the host application.
+  // A search box with text clears itself on Escape, which is that key's whole
+  // job there. By the time the event bubbles up the text is already gone, so
+  // the box is looked at on the way down.
+  const clearsField = new WeakSet<Event>();
+  const noteSearchField = (event: Event) => {
+    if ((event as KeyboardEvent).key !== 'Escape') return;
+    const field = event.composedPath()[0] as Partial<HTMLInputElement> | undefined;
+    if (field?.nodeName === 'INPUT' && field.type === 'search' && field.value) {
+      clearsField.add(event);
+    }
+  };
+
   const onEscape = (event: Event) => {
-    if (event.defaultPrevented) return;
+    if (event.defaultPrevented || clearsField.has(event)) return;
     if ((event as KeyboardEvent).key === 'Escape' && isOpen) togglePanel();
   };
   popupRoot.addEventListener('keydown', onEscape);
@@ -375,6 +565,7 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
         const doc = frame.contentDocument;
         if (!doc || hookedDocs.has(doc)) return;
         hookedDocs.add(doc);
+        doc.addEventListener('keydown', noteSearchField, true);
         doc.addEventListener('keydown', onEscape);
         doc.querySelectorAll('iframe').forEach(hookFrame);
         new MutationObserver((records) => {
@@ -399,8 +590,10 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
   function applyDock() {
     panel.className = `panel${isOpen ? ' open' : ''} dock-${state.docked}`;
     if (state.docked === 'float') {
-      panel.style.left = state.x + 'px';
-      panel.style.top = state.y + 'px';
+      const width = Math.min(state.width, window.innerWidth - 16);
+      const height = Math.min(state.height, window.innerHeight - 16);
+      panel.style.left = Math.max(0, Math.min(state.x, window.innerWidth - width)) + 'px';
+      panel.style.top = Math.max(0, Math.min(state.y, window.innerHeight - height)) + 'px';
       panel.style.width = state.width + 'px';
       panel.style.height = state.height + 'px';
     } else {
@@ -420,20 +613,28 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
     // Closing hides the panel, so focus would fall to the body. Only take it
     // back when it was inside the popup: the host page may own it.
     if (!isOpen && popupRoot?.contains(document.activeElement)) fab.focus();
-    if (isOpen && !iframe.src && options.src) {
-      iframe.src = `${location.origin}${options.src}`;
-    } else if (isOpen && !iframe.src) {
-      const base = getBaseURL();
-      const origin = location.origin;
-      let pageId = '';
-      try {
-        pageId = sessionStorage.getItem('ng-devtools-page-id') ?? '';
-      } catch {
-        // Storage can be blocked; the panel then shows the latest page.
-      }
-      iframe.src = `${origin}${base}?baseURL=${encodeURIComponent(origin + base)}&pageId=${encodeURIComponent(pageId)}`;
-    }
+    if (isOpen && !loaded) load();
   }
+
+  let loaded = false;
+  let loads = 0;
+  function load() {
+    loaded = true;
+    const run = ++loads;
+    void resolveTarget().then((src) => {
+      if (run !== loads) return;
+      iframe.hidden = src === null;
+      missing.hidden = src !== null;
+      missingStatus.textContent = src === null ? 'No devtools server found' : '';
+      if (src === null) loaded = false;
+      else if (iframe.src !== src) iframe.src = src;
+    });
+  }
+  retarget = () => {
+    loaded = false;
+    loads++;
+    if (isOpen) load();
+  };
 
   // Dragging the launcher, so it can be left anywhere rather than only in a
   // corner. A press that does not move is a click, which still opens the panel.
@@ -559,6 +760,7 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
   applyLauncher();
   // Keep it reachable when the window changes size.
   window.addEventListener('resize', applyLauncher);
+  window.addEventListener('resize', applyDock);
   // Track resize for float mode. Not every environment that has a document
   // also has ResizeObserver, so the panel still works without it.
   const resizeObserver =
@@ -566,8 +768,8 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
       ? undefined
       : new ResizeObserver(() => {
           if (state.docked === 'float' && isOpen) {
-            state.width = panel.offsetWidth;
-            state.height = panel.offsetHeight;
+            if (panel.offsetWidth < window.innerWidth - 16) state.width = panel.offsetWidth;
+            if (panel.offsetHeight < window.innerHeight - 16) state.height = panel.offsetHeight;
             saveState(state);
           }
         });
@@ -578,13 +780,14 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
   handle = {
     toggle: togglePanel,
     destroy: () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
       window.removeEventListener('resize', applyLauncher);
+      window.removeEventListener('resize', applyDock);
+      document.removeEventListener('toggle', onTopLayerOpen, true);
       resizeObserver?.disconnect();
       popupRoot?.remove();
       popupRoot = null;
       handle = undefined;
+      retarget = undefined;
       shown = undefined;
       isOpen = false;
     },
@@ -593,6 +796,6 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
 }
 
 // Auto-create when loaded as script
-if (typeof document !== 'undefined') {
+if (typeof document !== 'undefined' && !insideDevtoolsPanel()) {
   void showDevtools();
 }

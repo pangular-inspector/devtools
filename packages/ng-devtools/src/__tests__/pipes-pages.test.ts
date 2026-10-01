@@ -131,3 +131,12 @@ describe('pipe page targets', () => {
     );
   });
 });
+
+describe('pipe recording requests', () => {
+  it('says how many pages the request reached', async () => {
+    const { invoke } = await boot();
+    expect(await invoke('request-instrument-pipes', true)).toEqual({ pages: 0 });
+    await invoke('push-pipes', page('tab-1'));
+    expect(await invoke('request-instrument-pipes', true)).toEqual({ pages: 1 });
+  });
+});

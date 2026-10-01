@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyRouterEvent,
+  droppedNavigations,
   findRouter,
   nameOf,
   redactText,
   serializeRoute,
+  trimNavigations,
   type ActiveRoute,
   type NavigationRecord,
 } from '../router.ts';
@@ -260,7 +262,56 @@ describe('router reports', () => {
   });
 });
 
+describe('dropped navigations', () => {
+  it('counts what the limit removes and notes it in explain-navigation', () => {
+    const navigations = Array.from({ length: 8 }, (_, i) => nav(i + 1));
+    trimNavigations(navigations, 5);
+    trimNavigations(navigations, 5);
+    navigations.push(nav(9));
+    trimNavigations(navigations, 5);
+    expect(navigations.map((n) => n.id)).toEqual([5, 6, 7, 8, 9]);
+    expect(droppedNavigations(navigations)).toBe(4);
+    expect(droppedNavigations([])).toBe(0);
+
+    const report = { pageId: 'a', snapshot: null, navigations, dropped: 4 };
+    expect(isRouterReport(report)).toBe(true);
+    expect(isRouterReport({ ...report, dropped: 'x' })).toBe(false);
+    expect(explainNavigationText(state({ navigations, dropped: 4 }), {}, 1_000)).toContain(
+      '4 older navigations were dropped at the limit',
+    );
+    expect(explainNavigationText(state({ navigations }), {}, 1_000)).not.toContain('dropped');
+  });
+});
+
 describe('router tool text', () => {
+  it('lists the routerOutletData each outlet passes', () => {
+    const outlets = [
+      {
+        outlet: 'primary',
+        activated: true,
+        component: 'Shell',
+        route: '/shell',
+        data: '{"user":"Ada"}',
+        children: [
+          { outlet: 'side', activated: true, component: 'Filters', route: '/side', data: '"x"' },
+          { outlet: 'primary', activated: true, component: 'List', route: '/shell' },
+        ],
+      },
+    ];
+    const text = inspectRouteText(state({ outlets }), {}, 1_000);
+    expect(text).toContain(
+      '- outlet `primary`: `Shell` for `/shell`\n  - routerOutletData (ROUTER_OUTLET_DATA): `{"user":"Ada"}`',
+    );
+    expect(text).toContain(
+      '  - outlet `side`: `Filters` for `/side`\n    - routerOutletData (ROUTER_OUTLET_DATA): `"x"`',
+    );
+    expect(text.match(/routerOutletData/g)).toHaveLength(2);
+    expect(inspectRouteText(state({ outlets }), { selector: 'Filters' }, 1_000)).toContain(
+      'routerOutletData (ROUTER_OUTLET_DATA): `"x"`',
+    );
+    expect(isRouterReport({ pageId: 'a', snapshot: null, navigations: [], outlets })).toBe(true);
+  });
+
   it('describes the active route tree', () => {
     const text = inspectRouteText(state(), {}, 1_000);
     expect(text).toContain('come from the running page');

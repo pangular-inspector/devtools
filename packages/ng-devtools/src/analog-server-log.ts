@@ -1,20 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { isCustomSecretKey } from './forms-privacy.ts';
+import { isRedactedKey } from './forms-privacy.ts';
 
-const SECRET_WORDS =
-  /^(password|passwd|passphrase|passcode|pass|pwd|secret|token|otp|pin|cvv|cvc|ssn|iban|card|credential|cookie|session|authorization|auth|apikey|jwt)s?$/;
 const JWT = /\beyJ[\w-]{5,}\.[\w-]{5,}\.[\w-]{5,}/g;
 const BEARER = /\bBearer\s+[\w.~+/=-]+/gi;
 const SECRET_QUERY = /([?&][^=&#]*(?:token|secret|password|key|code|session)[^=&#]*=)[^&#]*/gi;
-
-export function isSecretKey(key: string): boolean {
-  const words = key
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-  return words.some((word) => SECRET_WORDS.test(word)) || SECRET_WORDS.test(words.join(''));
-}
 
 export function redactMessage(text: string): string {
   return text
@@ -23,7 +12,9 @@ export function redactMessage(text: string): string {
     .replace(SECRET_QUERY, '$1[redacted]');
 }
 
-export type AnalogCallKind = 'load' | 'fn' | 'api' | 'page';
+export type AnalogCallKind = 'load' | 'action' | 'fn' | 'api' | 'page';
+
+export type AnalogActionOutcome = 'success' | 'redirect' | 'invalid' | 'error';
 
 export interface AnalogCall {
   id: number;
@@ -37,6 +28,9 @@ export interface AnalogCall {
   bytes?: number;
   from: 'ssr' | 'browser' | 'devtools';
   render?: 'ssr' | 'client';
+  outcome?: AnalogActionOutcome;
+  location?: string;
+  seeded?: boolean;
   preview?: string;
 }
 
@@ -91,13 +85,71 @@ export function devOrigin(): string | undefined {
   return origin;
 }
 
+function isSecretJsonKey(key: string): boolean {
+  return isRedactedKey(key);
+}
+
 function redactJson(value: unknown, depth = 0): unknown {
-  if (depth > 6 || value === null || typeof value !== 'object') return value;
+  if (value === null || typeof value !== 'object') return value;
+  if (depth > 6) return '[Truncated]';
   if (Array.isArray(value)) return value.slice(0, 50).map((item) => redactJson(item, depth + 1));
   const out: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 50)) {
-    out[key] =
-      isSecretKey(key) || isCustomSecretKey(key) ? '[redacted]' : redactJson(item, depth + 1);
+    out[key] = isSecretJsonKey(key) ? '[redacted]' : redactJson(item, depth + 1);
+  }
+  return out;
+}
+
+function stringEnd(text: string, start: number): number {
+  for (let i = start + 1; i < text.length; i++) {
+    if (text[i] === '\\') i++;
+    else if (text[i] === '"') return i + 1;
+  }
+  return text.length;
+}
+
+function valueEnd(text: string, start: number): number {
+  const first = text[start];
+  if (first === '"') return stringEnd(text, start);
+  if (first !== '{' && first !== '[') {
+    const stop = text.slice(start).search(/[,}\]]/);
+    return stop < 0 ? text.length : start + stop;
+  }
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') i = stringEnd(text, i) - 1;
+    else if (ch === '{' || ch === '[') depth++;
+    else if ((ch === '}' || ch === ']') && --depth === 0) return i + 1;
+  }
+  return text.length;
+}
+
+function redactJsonText(text: string): string {
+  const colon = /\s*:\s*/y;
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] !== '"') {
+      out += text[i++];
+      continue;
+    }
+    const end = stringEnd(text, i);
+    const token = text.slice(i, end);
+    out += token;
+    i = end;
+    colon.lastIndex = i;
+    const sep = colon.exec(text);
+    if (!sep) continue;
+    let key: string;
+    try {
+      key = String(JSON.parse(token));
+    } catch {
+      key = token.slice(1, -1);
+    }
+    if (!isSecretJsonKey(key)) continue;
+    out += `${sep[0]}"[redacted]"`;
+    i = valueEnd(text, i + sep[0].length);
   }
   return out;
 }
@@ -109,7 +161,7 @@ export function previewOf(body: string, type: string | undefined): string | unde
   try {
     text = JSON.stringify(redactJson(JSON.parse(body)));
   } catch {
-    text = body;
+    text = redactJsonText(body);
   }
   text = redactMessage(text);
   return text.length > MAX_PREVIEW ? `${text.slice(0, MAX_PREVIEW)}…` : text;
@@ -135,7 +187,8 @@ export function classify(
   const prefix = apiPrefix ? `/${apiPrefix}` : '';
   for (const base of [`${prefix}/_analog/pages`, '/_analog/pages']) {
     if (path.startsWith(`${base}/`) || path === base) {
-      return { kind: 'load', route: loadRoute(path.slice(base.length)) };
+      const read = method === 'GET' || method === 'HEAD';
+      return { kind: read ? 'load' : 'action', route: loadRoute(path.slice(base.length)) };
     }
   }
   for (const base of [`${prefix}/_analog/fn`, '/_analog/fn']) {
@@ -157,6 +210,15 @@ export function classify(
 
 export const DEVTOOLS_HEADER = 'x-ng-devtools';
 
+const SEED = /__analog_fn_([0-9a-f]{16})_/g;
+const SEED_TAIL = 40;
+
+export function actionOutcome(status: number, validationErrors: boolean): AnalogActionOutcome {
+  if (validationErrors) return 'invalid';
+  if (status >= 300 && status < 400) return 'redirect';
+  return status >= 200 && status < 300 ? 'success' : 'error';
+}
+
 function fromOf(req: IncomingMessage): AnalogCall['from'] {
   if (req.headers[DEVTOOLS_HEADER]) return 'devtools';
   const agent = String(req.headers['user-agent'] ?? '');
@@ -177,6 +239,8 @@ export function analogMiddleware(apiPrefix = 'api') {
     let captured = 0;
     let bytes = 0;
     let serverRendered = false;
+    let tail = '';
+    const seeds = new Set<string>();
     const capture = match.kind !== 'page';
     const keep = (chunk: unknown, encoding?: unknown) => {
       if (chunk === undefined || chunk === null || typeof chunk === 'function') return;
@@ -189,6 +253,11 @@ export function analogMiddleware(apiPrefix = 'api') {
       bytes += buffer.length;
       if (!capture && !serverRendered && buffer.includes('ng-server-context'))
         serverRendered = true;
+      if (!capture) {
+        const text = tail + buffer.toString('utf8');
+        for (const seed of text.matchAll(SEED)) seeds.add(seed[1]);
+        tail = text.slice(-SEED_TAIL);
+      }
       if (capture && captured < MAX_CAPTURE) {
         chunks.push(buffer.subarray(0, MAX_CAPTURE - captured));
         captured += Math.min(buffer.length, MAX_CAPTURE - captured);
@@ -219,7 +288,26 @@ export function analogMiddleware(apiPrefix = 'api') {
       if (match.kind === 'page') {
         call.render =
           serverRendered && res.getHeader('x-analog-no-ssr') !== 'true' ? 'ssr' : 'client';
+        for (const id of seeds) {
+          recordCall({
+            at: call.at,
+            kind: 'fn',
+            method: 'SSR',
+            url: `/_analog/fn/${id}`,
+            route: id,
+            status: 200,
+            ms: 0,
+            from: 'ssr',
+            seeded: true,
+          });
+        }
       } else {
+        if (match.kind === 'action') {
+          call.outcome = actionOutcome(res.statusCode, !!res.getHeader('x-analog-errors'));
+          const location = res.getHeader('location');
+          if (call.outcome === 'redirect' && location)
+            call.location = redactMessage(String(location));
+        }
         const preview = previewOf(
           Buffer.concat(chunks).toString('utf8'),
           String(res.getHeader('content-type') ?? ''),
@@ -271,6 +359,38 @@ export function duplicateLoads(list: AnalogCall[], windowMs = 10_000): Duplicate
         armed.delete(call.route);
       } else {
         armed = new Map();
+      }
+    }
+  }
+  return out;
+}
+
+export interface ServerFnRefetch {
+  id: string;
+  ssrAt: number;
+  browserAt: number;
+}
+
+/**
+ * Pairs a server function read that server rendering seeded into TransferState
+ * with the first browser call of the same function right after that render.
+ */
+export function refetchedServerFns(list: AnalogCall[], windowMs = 10_000): ServerFnRefetch[] {
+  const out: ServerFnRefetch[] = [];
+  let seeds = new Map<string, number>();
+  let armed = new Map<string, number>();
+  let armedAt = 0;
+  for (const call of list) {
+    if (call.from === 'devtools' || !call.route) continue;
+    if (call.kind === 'page') {
+      armed = call.from === 'browser' && call.render === 'ssr' ? seeds : new Map();
+      armedAt = call.at;
+      seeds = new Map();
+    } else if (call.kind === 'fn') {
+      if (call.seeded) seeds.set(call.route, call.at);
+      else if (call.from === 'browser' && armed.has(call.route) && call.at - armedAt <= windowMs) {
+        out.push({ id: call.route, ssrAt: armed.get(call.route)!, browserAt: call.at });
+        armed.delete(call.route);
       }
     }
   }

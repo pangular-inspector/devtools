@@ -1,5 +1,6 @@
 import { defineRpcFunction } from 'devframe';
 import {
+  classScopes,
   lineCounter,
   maskRegexes,
   maskStrings,
@@ -26,11 +27,12 @@ export const getProviders = defineRpcFunction({
   name: 'get-providers',
   type: 'query',
   jsonSerializable: true,
+  snapshot: true,
   args: [],
   returns: describable(v.array(ProviderEntrySchema)),
   agent: {
     description:
-      'Scan source files for DI providers: @Injectable services, inject() calls, and providers arrays. Returns token, file, and where it is provided. Call this to understand the DI architecture.',
+      'Scan source files for DI providers: @Injectable services, inject() calls, constructor parameters of decorated classes, and providers arrays. Returns token, file, and where it is provided. Call this to understand the DI architecture.',
     title: 'List Angular DI providers from source',
   },
   setup: (ctx) => ({
@@ -134,37 +136,33 @@ function scanFile(full: string, cwd: string, out: ProviderEntry[]) {
         // @Service defaults to providedIn: 'root'
         // `providedIn` takes `'root'`, `'platform'`, `'any'`, or a class
         // such as `providedIn: FeatureModule`.
-        providedIn:
-          /providedIn\s*:\s*(?:['"`](\w+)['"`]|([A-Za-z_$][\w$]*))/
-            .exec(args)
-            ?.slice(1)
-            .find(Boolean) ?? (isService ? 'root' : undefined),
+        providedIn: /providedIn\s*:/.test(args)
+          ? providedInOf(args)
+          : isService
+            ? 'root'
+            : undefined,
         type: 'injectable',
       });
     }
 
-    // inject(Token) calls — covers `x = inject(T)`, `readonly x = inject(T)`, `private x = inject<T>()`
-    for (const match of code.matchAll(
-      /(?<![\w$])(?:(?:private|protected|public|readonly)\s+)*(\w+)\s*=\s*inject\s*(?:<[^>]*>)?\s*\(\s*(\w+)/g,
-    )) {
+    const scopes = functionScopes(code);
+    for (const call of injectCalls(code)) {
       out.push({
-        token: match[2],
-        source: match[1],
+        token: call.token,
+        source:
+          assignedName(code, call.start) ?? enclosingName(scopes, call.start) ?? '(top level)',
         file: relPath,
-        line: lineAt(match.index!),
+        line: lineAt(call.start),
         type: 'injection',
       });
     }
 
-    // Constructor injection — @Inject(Token) or typed parameter
-    for (const match of code.matchAll(
-      /@Inject\(\s*(\w+)\s*\)\s*(?:private|protected|public|readonly|\s)*(\w+)/g,
-    )) {
+    for (const param of constructorParams(code)) {
       out.push({
-        token: match[1],
-        source: match[2],
+        token: param.token,
+        source: param.name,
         file: relPath,
-        line: lineAt(match.index!),
+        line: lineAt(param.start),
         type: 'injection',
       });
     }
@@ -243,10 +241,11 @@ function scanFile(full: string, cwd: string, out: ProviderEntry[]) {
 }
 
 function providedInOf(args: string): string | undefined {
-  return /providedIn\s*:\s*(?:['"`](\w+)['"`]|([A-Za-z_$][\w$]*))/
+  const value = /providedIn\s*:\s*(?:['"`](\w+)['"`]|([A-Za-z_$][\w$]*))/
     .exec(args)
     ?.slice(1)
     .find(Boolean);
+  return value === 'null' || value === 'undefined' ? undefined : value;
 }
 
 export function topLevelElements(
@@ -315,3 +314,176 @@ function skipDecorators(code: string, from: number): number {
 
 /** Sticky, so the class after a decorator is found however far it sits. */
 const DECLARATION = /\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+(\w+)/y;
+
+const DECORATED = /@(Component|Directive|Injectable|Service|Pipe|NgModule)\b/g;
+const KEYWORD_AHEAD = /^\s*(?:export|import|const|let|var|function|class|@)\b/;
+
+function closeAngle(code: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < code.length; i++) {
+    const ch = code[i];
+    if (ch === '<') depth++;
+    else if (ch === '>' && code[i - 1] !== '=' && --depth === 0) return i;
+    else if (ch === ';' || ch === '{') return -1;
+  }
+  return -1;
+}
+
+/** Every `inject(Token)` call, generic arguments of any depth included. */
+function injectCalls(code: string): { token: string; start: number }[] {
+  const out: { token: string; start: number }[] = [];
+  for (const match of code.matchAll(/(?<![\w$.])inject\s*(?=[<(])/g)) {
+    let at = match.index + match[0].length;
+    if (code[at] === '<') {
+      const close = closeAngle(code, at);
+      if (close === -1) continue;
+      at = close + 1;
+    }
+    const token = /^\s*\(\s*([A-Za-z_$][\w$]*)/.exec(code.slice(at, at + 200));
+    if (token) out.push({ token: token[1], start: match.index });
+  }
+  return out;
+}
+
+/** The field or variable an `inject()` call is assigned to, as in `x = inject(T)`. */
+function assignedName(code: string, at: number): string | undefined {
+  const before = code.slice(Math.max(0, at - 200), at);
+  return /([\w$]+)\s*!?(?::[^=;{}()]*)?(?<![=!<>])=\s*$/.exec(before)?.[1];
+}
+
+interface FunctionScope {
+  name: string;
+  start: number;
+  end: number;
+}
+
+function expressionEnd(code: string, from: number): number {
+  const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
+  for (let i = from; i < code.length; i++) {
+    const ch = code[i];
+    if (pairs[ch]) i = matchDelimiter(code, i, ch, pairs[ch]);
+    else if (ch === ';' || ch === ')' || ch === ']' || ch === '}') return i;
+    else if (ch === '\n' && KEYWORD_AHEAD.test(code.slice(i, i + 40))) return i;
+  }
+  return code.length;
+}
+
+function bodyEnd(code: string, from: number): number {
+  const brace = /^\s*\{/.exec(code.slice(from));
+  return brace
+    ? matchDelimiter(code, from + brace[0].length - 1, '{', '}')
+    : expressionEnd(code, from);
+}
+
+/**
+ * The classes, function declarations and functions assigned to a variable in
+ * a file, so a bare `inject()` call can be credited to the one around it.
+ */
+function functionScopes(code: string): FunctionScope[] {
+  const scopes: FunctionScope[] = classScopes(code, code).map((scope) => ({
+    name: scope.className ?? 'anonymous class',
+    start: scope.start,
+    end: scope.end,
+  }));
+  for (const match of code.matchAll(/\bfunction\s*\*?\s*([\w$]+)\s*(?:<[^>]*>)?\s*\(/g)) {
+    const open = match.index + match[0].length - 1;
+    const brace = code.indexOf('{', matchDelimiter(code, open, '(', ')'));
+    if (brace === -1) continue;
+    scopes.push({
+      name: match[1],
+      start: match.index,
+      end: matchDelimiter(code, brace, '{', '}'),
+    });
+  }
+  for (const match of code.matchAll(
+    /\b(?:const|let|var)\s+([\w$]+)\s*(?::[^=;]*?)?=\s*(?:async\s+)?(?=\(|function\b|[\w$]+\s*=>)/g,
+  )) {
+    let at = match.index + match[0].length;
+    if (code.startsWith('function', at)) {
+      const open = code.indexOf('(', at);
+      if (open === -1) continue;
+      at = matchDelimiter(code, open, '(', ')') + 1;
+    } else {
+      if (code[at] === '(') at = matchDelimiter(code, at, '(', ')') + 1;
+      const arrow = /^\s*(?::[^=;{]*?)?=>|^[\w$]+\s*=>/.exec(code.slice(at));
+      if (!arrow) continue;
+      at += arrow[0].length;
+    }
+    scopes.push({ name: match[1], start: match.index, end: bodyEnd(code, at) });
+  }
+  return scopes;
+}
+
+function enclosingName(scopes: FunctionScope[], at: number): string | undefined {
+  let best: FunctionScope | undefined;
+  for (const scope of scopes) {
+    if (scope.start <= at && at <= scope.end && (!best || scope.start >= best.start)) best = scope;
+  }
+  return best?.name;
+}
+
+/** The start of each class that carries an Angular decorator. */
+function decoratedClasses(code: string): Set<number> {
+  const out = new Set<number>();
+  for (const decorator of code.matchAll(DECORATED)) {
+    let after = decorator.index + decorator[0].length;
+    const paren = /^\s*\(/.exec(code.slice(after));
+    if (paren) after = matchDelimiter(code, after + paren[0].length - 1, '(', ')') + 1;
+    DECLARATION.lastIndex = skipDecorators(code, after);
+    const declaration = DECLARATION.exec(code);
+    if (declaration) out.add(declaration.index + declaration[0].search(/\bclass\b/));
+  }
+  return out;
+}
+
+/**
+ * The parameters of the constructor of each decorated class, with the token
+ * Angular injects for them: the `@Inject(Token)` argument, or else the type.
+ */
+function constructorParams(code: string): { token: string; name: string; start: number }[] {
+  const decorated = decoratedClasses(code);
+  const out: { token: string; name: string; start: number }[] = [];
+  for (const scope of classScopes(code, code)) {
+    if (!decorated.has(scope.start)) continue;
+    const ctor = /\bconstructor\s*\(/g;
+    ctor.lastIndex = scope.start;
+    const match = ctor.exec(code);
+    if (!match || match.index > scope.end) continue;
+    const open = match.index + match[0].length - 1;
+    const close = matchDelimiter(code, open, '(', ')');
+    for (const element of topLevelElements(code, open + 1, close)) {
+      const param = injectedParam(element.text);
+      if (param) out.push({ ...param, start: element.start });
+    }
+  }
+  return out;
+}
+
+function injectedParam(text: string): { token: string; name: string } | null {
+  let rest = text;
+  let token: string | undefined;
+  for (
+    let decorator = /^@([\w$]+)\s*/.exec(rest);
+    decorator;
+    decorator = /^@([\w$]+)\s*/.exec(rest)
+  ) {
+    rest = rest.slice(decorator[0].length);
+    if (!rest.startsWith('(')) continue;
+    const close = matchDelimiter(rest, 0, '(', ')');
+    if (decorator[1] === 'Inject') {
+      const arg = rest.slice(1, close).trim();
+      token =
+        /^forwardRef\s*\(\s*\(\s*\)\s*=>\s*([\w$.]+)/.exec(arg)?.[1] ??
+        /^[A-Za-z_$][\w$.]*$/.exec(arg)?.[0];
+    }
+    rest = rest.slice(close + 1).trimStart();
+  }
+  const param =
+    /^(?:(?:private|protected|public|readonly|override)\s+)*([\w$]+)\s*\??\s*(?::\s*([A-Za-z_$][\w$.]*))?/.exec(
+      rest,
+    );
+  if (!param) return null;
+  const type = param[2];
+  token ??= type && /^[A-Z]/.test(type) ? type : undefined;
+  return token ? { token, name: param[1] } : null;
+}

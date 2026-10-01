@@ -18,6 +18,7 @@ import {
 import { Observable, throwError, timer, of } from 'rxjs';
 import type { Subscription } from 'rxjs';
 
+import { transferCacheKeys } from './http-cache-key.ts';
 import { appIdOf, isHydrationMessage } from './http-hydration.ts';
 
 import {
@@ -26,6 +27,7 @@ import {
   clientRules,
   httpRegistry,
   matchRule,
+  ruleStatus,
   type HttpCall,
   type HttpSide,
 } from './http-rules.ts';
@@ -36,8 +38,17 @@ export { decodePayload, type PayloadEntry, type PayloadSummary } from './http-pa
 const MAX_WARNINGS = 50;
 const PREVIEW_CHARS = 2000;
 
+function mockContentType(responseType = 'json'): string {
+  if (responseType === 'text') return 'text/plain';
+  if (responseType === 'blob' || responseType === 'arraybuffer') return 'application/octet-stream';
+  return 'application/json';
+}
+
 export function parseBody(body: string | undefined, responseType = 'json'): unknown {
   if (responseType === 'text') return body ?? '';
+  if (responseType === 'blob') return new Blob([body ?? ''], { type: mockContentType('blob') });
+  if (responseType === 'arraybuffer')
+    return Uint8Array.from(new TextEncoder().encode(body ?? '')).buffer;
   if (body === undefined || body === '') return null;
   try {
     return JSON.parse(body);
@@ -61,8 +72,11 @@ function record(call: HttpCall) {
   if (registry.record) return registry.record(call);
   const calls = (registry.calls ??= []);
   calls.push(call);
-  const max = registry.maxCalls ?? MAX_CALLS;
-  if (calls.length > max) calls.splice(0, calls.length - max);
+  const extra = calls.length - (registry.maxCalls ?? MAX_CALLS);
+  if (extra > 0) {
+    calls.splice(0, extra);
+    registry.dropped = (registry.dropped ?? 0) + extra;
+  }
 }
 
 let seq = 0;
@@ -76,18 +90,23 @@ function pathOf(url: string): string {
   }
 }
 
-let transferUrls: string[] | null = null;
+interface TransferEntry {
+  key: string;
+  url?: string;
+}
+
+let transferEntries: TransferEntry[] | null = null;
 const claimedTransfer = new Set<number>();
 
-function readTransferUrls(doc: Document): string[] {
+function readTransferEntries(doc: Document): TransferEntry[] {
   const script = doc.getElementById(`${appIdOf(doc)}-state`);
   try {
     const data = JSON.parse(script?.textContent || '{}') as Record<string, unknown>;
     return Object.entries(data).flatMap(([key, raw]) => {
       if (!raw || typeof raw !== 'object') return [];
-      const r = raw as Record<string, unknown>;
-      const url = key.startsWith('analog_') ? r['url'] : r['u'];
-      return typeof url === 'string' ? [pathOf(url)] : [];
+      if (!key.startsWith('analog_')) return [{ key }];
+      const url = (raw as Record<string, unknown>)['url'];
+      return typeof url === 'string' ? [{ key, url: pathOf(url) }] : [];
     });
   } catch {
     return [];
@@ -97,21 +116,27 @@ function readTransferUrls(doc: Document): string[] {
 /**
  * True the first time a GET or HEAD response matches a TransferState entry,
  * so hits are detected even when another interceptor sits between this one
- * and the transfer cache.
+ * and the transfer cache. HttpClient entries match on Angular's cache key
+ * (method, response type, URL, body and params); Analog entries on the URL.
  */
-export function claimTransferEntry(url: string, urlWithParams: string, method: string): boolean {
-  if (method !== 'GET' && method !== 'HEAD') return false;
+export function claimTransferEntry(req: HttpRequest<unknown>): boolean {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
   if (typeof document === 'undefined') return false;
-  transferUrls ??= readTransferUrls(document);
-  const wanted = new Set([pathOf(url), pathOf(urlWithParams)]);
-  const index = transferUrls.findIndex((u, i) => !claimedTransfer.has(i) && wanted.has(u));
+  transferEntries ??= readTransferEntries(document);
+  const keys = new Set(transferCacheKeys(req));
+  const urls = new Set([pathOf(req.url), pathOf(req.urlWithParams)]);
+  const index = transferEntries.findIndex(
+    (entry, i) =>
+      !claimedTransfer.has(i) &&
+      (entry.url === undefined ? keys.has(entry.key) : urls.has(entry.url)),
+  );
   if (index < 0) return false;
   claimedTransfer.add(index);
   return true;
 }
 
 export function resetTransferEntries() {
-  transferUrls = null;
+  transferEntries = null;
   claimedTransfer.clear();
 }
 
@@ -167,13 +192,18 @@ export const ngDevtoolsHttpInterceptor: HttpInterceptorFn = (req, next) => {
   const rules = side === 'client' ? clientRules() : httpRegistry().rules;
   const rule = matchRule(url, req.method, rules, side);
   const started = Date.now();
+  const delay = Math.min(Math.max(rule?.delayMs ?? 0, 0), MAX_DELAY_MS);
+  const status = rule ? ruleStatus(rule) : undefined;
+  const mocked = status !== undefined;
   const base = {
     url,
     method: req.method,
     side,
     pageUrl,
-    faulted: !!rule,
-    ruleId: rule?.id,
+    faulted: mocked && status >= 400,
+    ...(mocked && status < 400 ? { mocked: true } : {}),
+    ...(delay ? { delayMs: delay } : {}),
+    ...(rule ? { ruleId: rule.id, rulePattern: rule.pattern } : {}),
   };
   const done = (fields: Pick<HttpCall, 'status' | 'cacheHit'> & Partial<HttpCall>) =>
     record({
@@ -185,10 +215,9 @@ export const ngDevtoolsHttpInterceptor: HttpInterceptorFn = (req, next) => {
     });
 
   let source: Observable<HttpEvent<unknown>>;
-  const delay = Math.min(Math.max(rule?.delayMs ?? 0, 0), MAX_DELAY_MS);
-  const status = rule?.status;
   if (status !== undefined) {
     const body = parseBody(rule?.body, req.responseType);
+    const headers = new HttpHeaders({ 'content-type': mockContentType(req.responseType) });
     source =
       status >= 400
         ? throwError(
@@ -198,6 +227,7 @@ export const ngDevtoolsHttpInterceptor: HttpInterceptorFn = (req, next) => {
                 statusText: 'Injected by Angular DevTools',
                 url,
                 error: body,
+                headers,
               }),
           )
         : of(
@@ -206,13 +236,12 @@ export const ngDevtoolsHttpInterceptor: HttpInterceptorFn = (req, next) => {
               statusText: 'Mocked by Angular DevTools',
               url,
               body,
-              headers: new HttpHeaders({ 'content-type': 'application/json' }),
+              headers,
             }),
           );
   } else {
     source = next(req);
   }
-  const mocked = status !== undefined;
   const cacheable = side === 'client' && !mocked && transferWindowOpen();
   const claimable = cacheable && transferCacheEligible(req);
   const observed = new Observable<HttpEvent<unknown>>((subscriber) => {
@@ -224,11 +253,11 @@ export const ngDevtoolsHttpInterceptor: HttpInterceptorFn = (req, next) => {
       next: (event) => {
         if (event instanceof HttpResponse) {
           settled = true;
-          const fromPayload = claimable && claimTransferEntry(req.url, url, req.method);
+          const fromPayload = claimable && claimTransferEntry(req);
           done({
             status: event.status,
             cacheHit: side === 'client' ? cacheable && (sync || fromPayload) : !mocked && sync,
-            preview: preview(event.body),
+            preview: preview(mocked ? rule?.body : event.body),
           });
         }
         subscriber.next(event);
@@ -246,7 +275,7 @@ export const ngDevtoolsHttpInterceptor: HttpInterceptorFn = (req, next) => {
     return () => {
       if (!settled) {
         settled = true;
-        done({ status: 0, cacheHit: false, error: 'cancelled' });
+        done({ status: 0, cacheHit: false, cancelled: true, error: 'cancelled' });
       }
       inner.unsubscribe();
     };
@@ -262,10 +291,20 @@ export const ngDevtoolsHttpInterceptor: HttpInterceptorFn = (req, next) => {
     return () => {
       wait.unsubscribe();
       if (started) inner?.unsubscribe();
-      else done({ status: 0, cacheHit: false, error: 'cancelled during the delay' });
+      else {
+        done({ status: 0, cacheHit: false, cancelled: true, error: 'cancelled during the delay' });
+      }
     };
   });
 };
+
+function textOf(value: unknown): string {
+  try {
+    return value instanceof Error ? value.message : String(value);
+  } catch {
+    return '';
+  }
+}
 
 function captureHydrationWarnings() {
   if (typeof document === 'undefined' || !devMode()) return;
@@ -275,12 +314,14 @@ function captureHydrationWarnings() {
   for (const level of ['warn', 'error'] as const) {
     const original = console[level];
     console[level] = (...args: unknown[]) => {
-      const text = args.map((a) => (a instanceof Error ? a.message : String(a))).join(' ');
-      const warning = text.slice(0, 1000);
-      if (isHydrationMessage(text) && !warnings.includes(warning)) {
-        warnings.push(warning);
-        if (warnings.length > MAX_WARNINGS) warnings.shift();
-      }
+      try {
+        const text = args.map(textOf).join(' ');
+        const warning = text.slice(0, 1000);
+        if (isHydrationMessage(text) && !warnings.includes(warning)) {
+          warnings.push(warning);
+          if (warnings.length > MAX_WARNINGS) warnings.shift();
+        }
+      } catch {}
       original.apply(console, args);
     };
   }

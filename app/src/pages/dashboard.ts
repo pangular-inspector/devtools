@@ -14,6 +14,8 @@ import {
   type ResolvedNgDevtoolsConfig,
 } from '@santoshyadavdev/ng-devtools/config';
 import { hostPageId } from '../page-id';
+import { injectorTreeFor, signalGraphFor } from '../live-pages';
+import { isStaticReport } from '../rpc';
 import { panelConfig, tabEnabled } from '../devtools-config';
 import { TabIcon } from './tab-icon';
 
@@ -60,6 +62,18 @@ interface InjectorNode {
 interface InjectorSnapshot {
   roots?: InjectorNode[];
   environment?: InjectorNode[];
+  zone?: string | null;
+  pages?: Record<string, InjectorSnapshot>;
+}
+
+const ZONE_LABELS: Record<string, string> = {
+  zoneless: 'Zoneless',
+  zone: 'zone.js',
+  'zone-unused': 'Zoneless, zone.js loaded',
+};
+
+export function zoneLabel(mode: string | null | undefined): string | null {
+  return mode && Object.hasOwn(ZONE_LABELS, mode) ? ZONE_LABELS[mode] : null;
 }
 
 interface GraphSnapshot {
@@ -151,7 +165,13 @@ export function storeCard(rows: Row[]): Card {
           }
         </h2>
         @if (metaState() === 'error') {
-          <p class="hint">Check that the dev server is running, then reload the panel.</p>
+          <p class="hint">
+            @if (staticReport()) {
+              Run <code>ng-devtools build</code> again to rebuild the report.
+            } @else {
+              Check that the dev server is running, then reload the panel.
+            }
+          </p>
         }
       </div>
       <ul class="chips" [class.pending]="metaState() === 'loading'">
@@ -160,6 +180,9 @@ export function storeCard(rows: Row[]): Card {
         <li><span>SSR</span>{{ meta() ? (meta()?.ssr ? 'On' : 'Off') : '…' }}</li>
         @if (meta()?.analog; as analog) {
           <li class="analog"><span>Analog</span>{{ analog }}</li>
+        }
+        @if (zone(); as zone) {
+          <li><span>Change detection</span>{{ zone }}</li>
         }
       </ul>
     </section>
@@ -197,9 +220,11 @@ export function storeCard(rows: Row[]): Card {
       }
     </div>
 
-    <section class="config" aria-labelledby="config-title">
+    <section class="config" aria-labelledby="config-title" [attr.aria-busy]="!rpc()">
       <h2 id="config-title">Configuration</h2>
-      @if (configItems().length) {
+      @if (!rpc()) {
+        <p>Loading…</p>
+      } @else if (configItems().length) {
         <dl>
           @for (item of configItems(); track item.label) {
             <div>
@@ -482,11 +507,12 @@ export function storeCard(rows: Row[]): Card {
 export class Dashboard {
   rpc = input<DevframeRpcClient | null>(null);
   navigate = output<StatTab>();
+  staticReport = computed(() => isStaticReport(this.rpc()));
 
   meta = signal<BuildMeta | null>(null);
   private readonly config = computed(() => panelConfig(this.rpc()));
   protected readonly stats = computed(() =>
-    STATS.filter((stat) => tabEnabled(stat.tab, this.config())),
+    this.rpc() ? STATS.filter((stat) => tabEnabled(stat.tab, this.config())) : [],
   );
   protected readonly configItems = computed(() => summarizeNgDevtoolsConfig(this.config()));
   protected readonly metaState = signal<LoadState>('loading');
@@ -498,8 +524,12 @@ export class Dashboard {
   private readonly destroyRef = inject(DestroyRef);
   private stopLive: (() => void)[] = [];
 
+  protected readonly zone = computed(() =>
+    zoneLabel(injectorTreeFor(this.injectorTree(), this.pageId)?.zone),
+  );
+
   private readonly liveInjectors = computed(() => {
-    const tree = this.injectorTree();
+    const tree = injectorTreeFor(this.injectorTree(), this.pageId);
     if (!tree?.roots?.length) return null;
     let injectors = 0;
     let providers = 0;
@@ -513,8 +543,7 @@ export class Dashboard {
   });
 
   private readonly liveSignals = computed(() => {
-    const state = this.signalGraph();
-    const graph = (this.pageId && state?.pages?.[this.pageId]) || state?.graph;
+    const graph = signalGraphFor(this.signalGraph(), this.pageId);
     if (!graph?.nodes?.length) return null;
     return graph.nodes.filter((node) => LIVE_SIGNAL_KINDS.has(node.kind ?? '')).length;
   });

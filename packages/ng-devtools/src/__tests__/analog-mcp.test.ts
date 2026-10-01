@@ -6,7 +6,10 @@ import { clearCalls, recordCall, setDevOrigin } from '../analog-server-log.ts';
 import {
   analogEndpoint,
   loadEndpointUrl,
+  prerenderPlan,
+  renderRows,
   resolveAnalogReport,
+  ruleMatches,
   type AnalogState,
 } from '../rpc/analog-tools.ts';
 import { scanAnalog } from '../rpc/analog-scan.ts';
@@ -90,6 +93,7 @@ describe('Analog MCP tools', () => {
     for (const tool of [
       'analog-routes',
       'analog-api-routes',
+      'analog-server-functions',
       'analog-render-modes',
       'analog-prerender-plan',
       'analog-content',
@@ -181,6 +185,37 @@ describe('Analog MCP tools', () => {
     expect(lint).toContain('api-not-found');
   });
 
+  it('analog-server-calls lists form actions with their outcome and filters them', async () => {
+    const { call } = await boot(makeProject(BASE_FILES));
+    const base = {
+      method: 'POST',
+      ms: 4,
+      kind: 'action' as const,
+      url: '/api/_analog/pages/login',
+      route: '/login',
+      from: 'browser' as const,
+    };
+    recordCall({ ...base, at: 1, status: 200, outcome: 'success' });
+    recordCall({
+      ...base,
+      at: 2,
+      status: 422,
+      outcome: 'invalid',
+      preview: '{"email":"Email is required"}',
+    });
+    recordCall({ ...base, at: 3, status: 302, outcome: 'redirect', location: '/dashboard' });
+    recordCall({ ...base, at: 4, kind: 'load', method: 'GET', status: 200 });
+    const actions = await call('analog-server-calls', { kind: 'action' });
+    expect(actions).toContain(
+      'action POST `/api/_analog/pages/login` 200 in 4ms (browser, action succeeded)',
+    );
+    expect(actions).toContain('422 in 4ms (browser, validation errors (fail()))');
+    expect(actions).toContain('{"email":"Email is required"}');
+    expect(actions).toContain('302 in 4ms (browser, action redirected, to `/dashboard`)');
+    expect(actions).not.toContain('load GET');
+    expect(await call('analog-server-calls', { kind: 'load' })).not.toContain('action POST');
+  });
+
   it('analog-api-routes and analog-call-api reach the dev server with a confirm gate', async () => {
     const { call } = await boot(makeProject(BASE_FILES));
     const api = await call('analog-api-routes');
@@ -232,7 +267,7 @@ describe('Analog MCP tools', () => {
     });
     const modes = await call('analog-render-modes');
     expect(modes).toContain(
-      '`/dashboard`: client only (routeRules ssr: false); last request: client only',
+      "`/dashboard`: client only (routeRules['/dashboard'] ssr: false); last request: client only",
     );
     expect(modes).toContain('`/pricing`: prerendered (SSG)');
     expect(modes).toContain('`/login`: server rendered on each request (SSR)');
@@ -240,6 +275,95 @@ describe('Analog MCP tools', () => {
     expect(plan).toContain('prerender.routes: `/`, `/pricing`, `/missing`');
     expect(plan).toContain('Dynamic pages need explicit entries');
     expect(plan).toContain('`/products/:id`');
+  });
+
+  it('matches route rules the way Nitro does', () => {
+    expect(ruleMatches('/dash/**', '/dash')).toBe(true);
+    expect(ruleMatches('/dash/**', '/dash/a/b')).toBe(true);
+    expect(ruleMatches('/dash/**', '/dashboard')).toBe(false);
+    expect(ruleMatches('/blog/*', '/blog/:slug')).toBe(true);
+    expect(ruleMatches('/blog/*', '/blog/a/b')).toBe(false);
+    expect(ruleMatches('/about/', '/about')).toBe(true);
+    expect(ruleMatches('/**', '/')).toBe(true);
+  });
+
+  it('reads every route rule kind and matches requests to dynamic and catch-all pages', () => {
+    const root = makeProject(BASE_FILES, {
+      'vite.config.ts': `import analog from '@analogjs/platform';
+export default {
+  plugins: [
+    analog({
+      nitro: {
+        routeRules: {
+          '/dash/**': { ssr: false },
+          '/login': { redirect: { to: '/', statusCode: 301 } },
+          '/pricing': { prerender: true },
+          '/products/**': { isr: 60 },
+          '/docs/**': { swr: true },
+          '/shop/**': { cache: { maxAge: 30 } },
+          '/about': { headers: { 'Cache-Control': 's-maxage=600' } },
+          '/': { headers: { 'cache-control': 'no-store' } },
+        },
+      },
+    }),
+  ],
+};
+`,
+    });
+    const project = scanAnalog(root);
+    expect(project.config.routeRules).toHaveLength(8);
+    expect(project.config.noSsrRoutes).toEqual(['/dash/**']);
+    const page = (url: string, at: number) => ({
+      id: at,
+      at,
+      kind: 'page' as const,
+      method: 'GET',
+      url,
+      route: url,
+      status: 200,
+      ms: 7,
+      from: 'browser' as const,
+      render: 'ssr' as const,
+    });
+    const state: AnalogState = {
+      pages: [],
+      duplicates: [],
+      reportedAt: 0,
+      calls: [page('/products/42', 1), page('/docs/a/b', 2), page('/login/', 3)],
+    };
+    const rows = Object.fromEntries(renderRows(project, state).map((r) => [r.path, r]));
+    expect(rows['/dashboard']).toMatchObject({ mode: 'ssr' });
+    expect(rows['/login']).toMatchObject({
+      mode: 'redirect',
+      reason: "routeRules['/login'] redirect to /",
+      last: { status: 200, ms: 7 },
+    });
+    expect(rows['/pricing']).toMatchObject({
+      mode: 'ssg',
+      reason: "routeRules['/pricing'] prerender: true",
+    });
+    expect(rows['/products/:id']).toMatchObject({
+      mode: 'cached',
+      reason: "routeRules['/products/**'] isr: 60",
+      last: { at: 1 },
+    });
+    expect(rows['/products']).toMatchObject({ mode: 'cached' });
+    expect(rows['/products']?.last).toBeUndefined();
+    expect(rows['/docs/**']).toMatchObject({
+      mode: 'cached',
+      reason: "routeRules['/docs/**'] swr: true",
+      last: { at: 2 },
+    });
+    expect(rows['/shop']).toMatchObject({ mode: 'cached', reason: "routeRules['/shop/**'] cache" });
+    expect(rows['/about']).toMatchObject({
+      mode: 'cached',
+      reason: "routeRules['/about'] Cache-Control: s-maxage=600",
+    });
+    expect(rows['/']).toMatchObject({ mode: 'ssr' });
+    const plan = prerenderPlan(project);
+    expect(plan.fromRules).toEqual(['/pricing']);
+    expect(plan.staticMissing).not.toContain('/pricing');
+    expect(plan.staticMissing).not.toContain('/login');
   });
 
   it('analog-content and analog-lint cover content and static mistakes', async () => {

@@ -7,6 +7,7 @@ import {
   PreloadAllModules,
   RedirectCommand,
   Router,
+  RouterOutlet,
   RouterPreloader,
   provideRouter,
   withNavigationErrorHandler,
@@ -46,6 +47,9 @@ const slowResolver = () => new Promise((resolve) => setTimeout(() => resolve('la
 function throwingResolver(): never {
   throw new Error('db down');
 }
+function codedResolver(): never {
+  throw new Error('NG04002: db down');
+}
 
 const routes: Routes = [
   { path: '', component: Page, title: 'Home' },
@@ -72,6 +76,7 @@ const routes: Routes = [
         { path: 'deep', component: Page },
       ]),
   },
+  { path: 'coded', component: Page, resolve: { x: codedResolver } },
   { path: '**', component: Page },
 ];
 
@@ -170,6 +175,26 @@ describe('router features on a real Router', () => {
     await router.navigateByUrl('/broken').catch(() => {});
     const broken = navigations.find((n) => n.url === '/broken')!;
     expect(broken.errorHandler).toMatch(/redirected to \/login/);
+    expect(broken).toMatchObject({
+      outcome: 'redirected',
+      code: 'Redirect',
+      redirectTo: '/login',
+      redirectKind: 'error handler',
+      reason: 'Error: db down',
+    });
+    expect(broken.errorCode).toBeUndefined();
+    expect(last()).toMatchObject({ url: '/login', redirectedFrom: broken.id });
+  });
+
+  it('keeps the error code of an error the handler redirected away from', async () => {
+    await router.navigateByUrl('/coded').catch(() => {});
+    const coded = navigations.find((n) => n.url === '/coded')!;
+    expect(coded).toMatchObject({
+      outcome: 'redirected',
+      redirectKind: 'error handler',
+      reason: 'Error: NG04002: db down',
+      errorCode: 'NG04002',
+    });
   });
 
   it('records calls that throw before a navigation starts', () => {
@@ -291,6 +316,63 @@ describe('router features on a real Router', () => {
       { input: 'id', source: 'param' },
       { input: 'user', source: 'data' },
     ]);
+  });
+});
+
+describe('routerOutletData', () => {
+  class Shell {}
+  Component({
+    selector: 'app-shell',
+    imports: [RouterOutlet],
+    template: `<router-outlet />
+      <router-outlet name="side" [routerOutletData]="{ panel: 'filters', apiToken: 'abc123' }" />`,
+  })(Shell);
+
+  it('previews the data the primary and a named outlet pass, redacted', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([
+          {
+            path: 'shell',
+            component: Shell,
+            children: [
+              { path: '', component: Page },
+              { path: 'side', component: Page, outlet: 'side' },
+            ],
+          },
+        ]),
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+    harness.fixture.componentInstance.routerOutletData.set({ user: 'Ada', ids: [1, 2] });
+    await harness.navigateByUrl('/shell/(side:side)');
+    harness.detectChanges();
+    const outlets = outletsOf(TestBed.inject(Router) as never);
+    expect(outlets[0]).toMatchObject({
+      outlet: 'primary',
+      component: 'Shell',
+      data: '{"user":"Ada","ids":[1,2]}',
+    });
+    const side = outlets[0].children?.find((outlet) => outlet.outlet === 'side');
+    expect(side).toMatchObject({ activated: true, component: 'Page' });
+    expect(side?.data).toContain('"panel":"filters"');
+    expect(side?.data).not.toContain('abc123');
+    const primary = outlets[0].children?.find((outlet) => outlet.outlet === 'primary');
+    expect(primary?.data).toBeUndefined();
+  });
+
+  it('caps a large preview', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideRouter([{ path: '', component: Page }])] });
+    const harness = await RouterTestingHarness.create();
+    harness.fixture.componentInstance.routerOutletData.set(
+      Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`key${i}`, 'x'.repeat(100)])),
+    );
+    await harness.navigateByUrl('/');
+    const data = outletsOf(TestBed.inject(Router) as never)[0].data ?? '';
+    expect(data.length).toBeLessThanOrEqual(301);
+    expect(data.endsWith('…')).toBe(true);
   });
 });
 

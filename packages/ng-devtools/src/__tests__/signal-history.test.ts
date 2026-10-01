@@ -71,6 +71,36 @@ describe('createSignalHistory', () => {
     expect(list.at(-1)?.value).toBe('last');
   });
 
+  it('keeps counting changes past the list cap', () => {
+    const h = createSignalHistory(identity);
+    const raw: RawSignalNode = { debugName: 'count', kind: 'signal', value: 0, version: 0 };
+    h.collect([graphNode('a', 'count', 0, 0)]);
+    for (let i = 1; i <= 500; i++) write(h.onWrite, raw, i);
+    const list = h.collect([graphNode('a', 'count', 500, 500)])['a'];
+    expect(list).toHaveLength(MAX_CHANGES);
+    expect(h.changesOf('a')).toBe(500);
+    h.collect([graphNode('a', 'count', 510, 510)]);
+    expect(h.changesOf('a')).toBe(510);
+  });
+
+  it('counts no change for the initial value', () => {
+    const h = createSignalHistory(identity);
+    h.collect([graphNode('a', 'x', 3, 'v')]);
+    expect(h.changesOf('a')).toBe(0);
+    expect(h.changesOf('unknown')).toBe(0);
+  });
+
+  it('records resource status changes', () => {
+    const h = createSignalHistory(identity);
+    h.collect([graphNode('resource:1', 'trips', 1, 'loading', 'resource')]);
+    const out = h.collect([graphNode('resource:1', 'trips', 3, 'resolved', 'resource')]);
+    expect(out['resource:1'].map((c) => [c.value, c.source, c.missed])).toEqual([
+      ['loading', 'initial', undefined],
+      ['resolved', 'sample', 1],
+    ]);
+    expect(h.changesOf('resource:1')).toBe(2);
+  });
+
   it('keeps history of nodes that left the graph, so switching components back keeps it', () => {
     const h = createSignalHistory(identity);
     h.collect([graphNode('a', 'x', 1, 1)]);
@@ -105,10 +135,85 @@ describe('createSignalHistory', () => {
     const one: RawSignalNode = { debugName: 'n', kind: 'signal', version: 0 };
     const two: RawSignalNode = { debugName: 'n', kind: 'signal', version: 0 };
     write(h.onWrite, one, 'a');
+    write(h.onWrite, two, 'a');
+    const out = h.collect([graphNode('x', 'n', 1, 'a'), graphNode('y', 'n', 1, 'a')]);
+    expect(out['x']).toEqual([expect.objectContaining({ source: 'initial', value: 'a' })]);
+    expect(out['y']).toEqual([expect.objectContaining({ source: 'initial', value: 'a' })]);
+  });
+
+  it('tells same-name signals apart by value', () => {
+    const h = createSignalHistory(identity);
+    const one: RawSignalNode = { debugName: 'n', kind: 'signal', version: 0 };
+    const two: RawSignalNode = { debugName: 'n', kind: 'signal', version: 0 };
+    write(h.onWrite, one, 'a');
     write(h.onWrite, two, 'b');
     const out = h.collect([graphNode('x', 'n', 1, 'a'), graphNode('y', 'n', 1, 'b')]);
-    expect(out['x']).toEqual([expect.objectContaining({ source: 'initial', value: 'a' })]);
-    expect(out['y']).toEqual([expect.objectContaining({ source: 'initial', value: 'b' })]);
+    expect(out['x']).toEqual([expect.objectContaining({ source: 'write', value: 'a' })]);
+    expect(out['y']).toEqual([expect.objectContaining({ source: 'write', value: 'b' })]);
+  });
+
+  it("does not attach another signal's writes to a node without its own track", () => {
+    const h = createSignalHistory(identity, () => 1);
+    const rowB: RawSignalNode = { debugName: 'count', kind: 'signal', value: 'Beta', version: 1 };
+    h.onWrite(rowB);
+    const a = graphNode('A', 'count', 1, 'Alpha');
+    expect(h.collect([a])['A']).toEqual([{ epoch: 1, value: 'Alpha', at: 1, source: 'initial' }]);
+    write(h.onWrite, rowB, 'Gamma');
+    expect(h.collect([a])['A'].map((c) => c.value)).toEqual(['Alpha']);
+  });
+
+  it('drops a binding once the track no longer matches the node', () => {
+    const h = createSignalHistory(identity, () => 1);
+    const rowB: RawSignalNode = { debugName: 'count', kind: 'signal', value: 'Alpha', version: 1 };
+    h.onWrite(rowB);
+    h.collect([graphNode('A', 'count', 1, 'Alpha')]);
+    write(h.onWrite, rowB, 'Gamma');
+    write(h.onWrite, rowB, 'Delta');
+    const out = h.collect([graphNode('A', 'count', 1, 'Alpha')])['A'];
+    expect(out.map((c) => [c.epoch, c.value])).toEqual([[1, 'Alpha']]);
+    const later = h.collect([graphNode('A', 'count', 5, 'Omega')])['A'];
+    expect(later.map((c) => [c.epoch, c.value, c.source])).toEqual([
+      [1, 'Alpha', 'write'],
+      [5, 'Omega', 'sample'],
+    ]);
+  });
+
+  it('drops a binding when the bound track reaches the same epoch with another value', () => {
+    const h = createSignalHistory(identity, () => 1);
+    const rowB: RawSignalNode = { debugName: 'count', kind: 'signal', value: 'Alpha', version: 1 };
+    h.onWrite(rowB);
+    h.collect([graphNode('A', 'count', 1, 'Alpha')]);
+    write(h.onWrite, rowB, 'Beta');
+    const out = h.collect([graphNode('A', 'count', 2, 'Gamma')])['A'];
+    expect(out.map((c) => c.value)).not.toContain('Beta');
+    expect(out.at(-1)).toMatchObject({ epoch: 2, value: 'Gamma', source: 'sample' });
+  });
+
+  it('never appends a write newer than the node epoch', () => {
+    const h = createSignalHistory(identity);
+    const raw: RawSignalNode = { debugName: 'n', kind: 'signal', value: 0, version: 0 };
+    h.collect([graphNode('a', 'n', 0, 0)]);
+    write(h.onWrite, raw, 1);
+    h.collect([graphNode('a', 'n', 1, 1)]);
+    write(h.onWrite, raw, 2);
+    raw.version = 1;
+    const out = h.collect([graphNode('a', 'n', 1, 1)])['a'];
+    expect(out.map((c) => c.epoch)).toEqual([0, 1]);
+  });
+
+  it('matches values with the snapshot serializer', () => {
+    const h = createSignalHistory(
+      (v) => `h:${String(v)}`,
+      Date.now,
+      (v) => `g:${String(v)}`,
+    );
+    const raw: RawSignalNode = { debugName: 'n', kind: 'signal', version: 0 };
+    h.collect([graphNode('a', 'n', 0, 'g:undefined')]);
+    write(h.onWrite, raw, 5);
+    expect(h.collect([graphNode('a', 'n', 1, 'g:5')])['a'][1]).toMatchObject({
+      value: 'h:5',
+      source: 'write',
+    });
   });
 
   it('serializes written values', () => {
@@ -166,7 +271,7 @@ describe('installSignalWriteHook', () => {
     core.fire({ debugName: 'x' });
     expect(prev).toHaveBeenCalledTimes(1);
     expect(onWrite).toHaveBeenCalledTimes(1);
-    restore();
+    restore!();
     expect(core.get()).toBe(prev);
   });
 
@@ -176,7 +281,7 @@ describe('installSignalWriteHook', () => {
     const restore = await installSignalWriteHook(onWrite, async () => core);
     const later = vi.fn();
     core.setPostSignalSetFn(later);
-    restore();
+    restore!();
     expect(core.get()).toBe(later);
     core.fire({ debugName: 'x' });
     expect(onWrite).not.toHaveBeenCalled();
@@ -193,10 +298,18 @@ describe('installSignalWriteHook', () => {
     expect(() => core.fire({ debugName: 'x' })).not.toThrow();
   });
 
-  it('returns a no-op when the primitives cannot load', async () => {
+  it('returns null when the primitives cannot load', async () => {
     const restore = await installSignalWriteHook(vi.fn(), async () => {
       throw new Error('missing');
     });
-    expect(() => restore()).not.toThrow();
+    expect(restore).toBeNull();
+  });
+
+  it('returns null when the primitives lack the write hook', async () => {
+    expect(await installSignalWriteHook(vi.fn(), async () => ({}) as never)).toBeNull();
+  });
+
+  it('returns a restore function when the hook installs', async () => {
+    expect(await installSignalWriteHook(vi.fn(), async () => fakeCore())).toBeTypeOf('function');
   });
 });

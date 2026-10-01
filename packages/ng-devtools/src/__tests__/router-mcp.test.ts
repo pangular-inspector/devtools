@@ -1,17 +1,18 @@
 import { createHostContext } from 'devframe/node';
 import { describe, expect, it, vi } from 'vitest';
-import ngDevtools from '../devframe.ts';
+import ngDevtools, { createNgDevtools } from '../devframe.ts';
+import type { NgDevtoolsConfig } from '../config.ts';
 import type { NavigationRecord } from '../router.ts';
 import type { RouteNode } from '../router-config.ts';
 
-async function boot() {
+async function boot(options?: NgDevtoolsConfig) {
   const host = {
     mountStatic: () => {},
     resolveOrigin: () => 'http://localhost',
     getStorageDir: () => '',
   };
   const ctx = await createHostContext({ cwd: process.cwd(), mode: 'dev', host: host as never });
-  await ngDevtools.setup(ctx as never);
+  await (options ? createNgDevtools(options) : ngDevtools).setup(ctx as never);
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`ng-devtools:${name}` as never, ...([payload] as never));
   const call = async (tool: string, args: Record<string, unknown> = {}) =>
@@ -265,6 +266,35 @@ describe('router MCP tools', () => {
     expect(text).toContain('`link-aria-current`');
   });
 
+  it('router-lint says when it could not check instead of returning no findings', async () => {
+    const { push } = await boot();
+    expect(await push('router-lint', 'p1')).toEqual({ checked: false, reason: 'no-page' });
+    await push('push-router', report({ config: undefined }));
+    expect(await push('router-lint', 'p1')).toEqual({ checked: false, reason: 'no-config' });
+    await push(
+      'push-router',
+      report({
+        pageId: 'p2',
+        config: undefined,
+        setup: { ...report().setup, mode: 'events-only' },
+      }),
+    );
+    expect(await push('router-lint', 'p2')).toEqual({ checked: false, reason: 'events-only' });
+    await push('push-router', report());
+    const result = (await push('router-lint', 'p1')) as { checked: boolean; findings: unknown[] };
+    expect(result.checked).toBe(true);
+    expect(result.findings.length).toBeGreaterThan(0);
+  });
+
+  it('lint-routes says an events-only page was not checked', async () => {
+    const { push, call } = await boot();
+    await push(
+      'push-router',
+      report({ config: undefined, setup: { ...report().setup, mode: 'events-only' } }),
+    );
+    expect(await call('lint-routes')).toMatch(/No checks ran: page `p1` runs in events-only mode/);
+  });
+
   it('explains a redirect loop in explain-navigation, export-navigation and lint-routes', async () => {
     const { push, call } = await boot();
     const hop = (id: number, url: string, to: string, guard: string, from?: number) => ({
@@ -392,10 +422,41 @@ describe('router MCP tools', () => {
     await push('push-router', { ...report(), pageId: 'bare', snapshot: null });
     const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
     expect(await call('navigate', { action: 'probe', url: '/', page: 'bare' })).toMatch(
-      /no router state/i,
+      /Page `bare` reports no Router/,
     );
+    const unknown = await call('navigate', { action: 'probe', url: '/', page: 'gone' });
+    expect(unknown).toMatch(/^No page `gone` is reporting router state\. Pages that report/);
+    expect(unknown).toContain('`bare`');
+    expect(unknown).not.toMatch(/stdio/);
     expect(await call('navigate', { action: 'resolve-lazy' })).toContain('routeId is required');
     expect(broadcast).not.toHaveBeenCalled();
+  });
+
+  it('blocks navigate, abort, replay and probe with actions.router off but keeps instrument and resolve-lazy', async () => {
+    const { ctx, push, call } = await boot({ actions: { router: false } });
+    expect(ctx.agent.list().tools.map((tool) => tool.id)).toContain('ng-devtools:navigate');
+    await push('push-router', report());
+    const sent: unknown[] = [];
+    vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: never) => {
+      const { requestId, request } = (
+        options as { args: [{ requestId: string; request: unknown }] }
+      ).args[0];
+      sent.push(request);
+      await push('router-action-result', { requestId, result: { ok: true } });
+    }) as never);
+    for (const action of ['navigate', 'abort', 'replay', 'probe']) {
+      expect(await call('navigate', { action, url: '/users/9', id: 3 })).toBe(
+        'Navigating is turned off in the devtools config (actions.router).',
+      );
+    }
+    expect(await call('navigate', { action: 'instrument', on: true })).toContain('"ok": true');
+    expect(await call('navigate', { action: 'resolve-lazy', routeId: '2' })).toContain(
+      '"ok": true',
+    );
+    expect(sent).toEqual([
+      { action: 'instrument', on: true },
+      { action: 'resolve-lazy', id: '2' },
+    ]);
   });
 
   it('tells the page whether its route config is stored', async () => {

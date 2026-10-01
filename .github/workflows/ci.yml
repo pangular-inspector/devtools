@@ -25,14 +25,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v5
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - uses: nrwl/nx-set-shas@v4
 
@@ -51,6 +44,9 @@ jobs:
       - name: Test devtools package
         run: pnpm test:devtools
 
+      - name: Test devtools panel
+        run: pnpm test:panel
+
       - name: Build Chrome extension
         run: pnpm extension:build
 
@@ -65,3 +61,19 @@ jobs:
 
       - name: Smoke-test the CLI
         run: node bin.mjs --help
+
+  axe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Check the panel with axe
+        run: pnpm test:axe

@@ -39,6 +39,7 @@ export const getPipes = defineRpcFunction({
   name: 'get-pipes',
   type: 'query',
   jsonSerializable: true,
+  snapshot: true,
   args: [],
   returns: describable(v.array(PipeSchema)),
   agent: {
@@ -279,8 +280,8 @@ function recordUsages(
 /**
  * Byte spans of every real Angular expression in a template: `{{ }}`
  * interpolations, bound attribute/event/structural-directive values
- * (`[x]="…"`, `(x)="…"`, `*x="…"`), and `@if`/`@for`/`@switch`/`@case`
- * conditions. Plain markup and text nodes — where `| word` is prose, not a
+ * (`[x]="…"`, `(x)="…"`, `*x="…"`), `@if`/`@else if`/`@for`/`@switch`/`@case`
+ * conditions, `@defer` triggers and `@let` values. Plain markup and text nodes — where `| word` is prose, not a
  * pipe — fall outside every span.
  */
 function expressionRegionsIn(text: string): { start: number; end: number }[] {
@@ -317,7 +318,7 @@ function expressionRegionsIn(text: string): { start: number; end: number }[] {
     boundAttr.lastIndex = end + 1;
   }
 
-  const control = /@(?:if|for|switch|case)\s*\(/g;
+  const control = /@(?:if|else\s+if|for|switch|case|defer)\s*\(/g;
   while ((m = control.exec(text)) !== null) {
     const open = m.index + m[0].length - 1;
     const close = matchDelimiter(text, open, '(', ')');
@@ -325,7 +326,32 @@ function expressionRegionsIn(text: string): { start: number; end: number }[] {
     control.lastIndex = close + 1;
   }
 
+  const letDecl = /@let\s+[\w$]+\s*=/g;
+  while ((m = letDecl.exec(text)) !== null) {
+    const start = m.index + m[0].length;
+    const end = letEnd(text, start);
+    regions.push({ start, end });
+    letDecl.lastIndex = end + 1;
+  }
+
   return regions;
+}
+
+/** The `;` that ends a `@let` value, skipping strings and nested brackets. */
+function letEnd(text: string, start: number): number {
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"' || ch === "'" || ch === '`') {
+      i = skipString(text, i);
+      continue;
+    }
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') {
+      if (--depth < 0) return i;
+    } else if (ch === ';' && depth === 0) return i;
+  }
+  return text.length;
 }
 
 /**

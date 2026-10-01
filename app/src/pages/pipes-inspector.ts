@@ -73,6 +73,7 @@ interface AsyncUsageInfo {
   hasSource: boolean;
   latestValue?: string;
   duplicate: boolean;
+  resubscribing?: boolean;
   target?: PipeTarget;
 }
 
@@ -91,6 +92,8 @@ interface PipesSnapshot {
   async: AsyncUsageInfo[];
   instrumented: string[];
 }
+
+const RECORD_CONFIRM_MS = 5000;
 
 type PipeKind = 'all' | 'custom' | 'builtin' | 'impure' | 'live';
 
@@ -138,13 +141,25 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
           class="record"
           [class.on]="instrumenting()"
           [attr.aria-pressed]="instrumenting()"
+          [attr.aria-busy]="pendingRecord() !== null"
+          [attr.aria-disabled]="pendingRecord() !== null"
           (click)="toggleInstrument()"
         >
           <span class="rec-dot" aria-hidden="true"></span>
-          {{ instrumenting() ? 'Stop recording' : 'Record calls' }}
+          {{ recordLabel() }}
         </button>
       </div>
     </div>
+
+    @if (recordMessage(); as message) {
+      <p class="notice" role="status">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 11v5M12 8h.01" />
+        </svg>
+        <span>{{ message }}</span>
+      </p>
+    }
 
     @if (instrumenting()) {
       <p class="notice" role="status">
@@ -317,7 +332,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                               type="button"
                               class="component"
                               [attr.aria-label]="'Highlight ' + c.name + ' on the page'"
-                              (click)="highlight(target)"
+                              (click)="highlight(target, true)"
                               (mouseenter)="highlight(target)"
                               (mouseleave)="highlight(null)"
                               (focus)="highlight(target)"
@@ -394,7 +409,8 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
         </h2>
         <p class="hint">
           Each <span class="mono">| async</span> subscribes on its own. Two on the same source mean
-          the work runs twice.
+          the work runs twice. A source that changes on every check, like
+          <span class="mono">getData() | async</span>, resubscribes each time.
         </p>
         <ul class="async-list">
           @for (a of async(); track $index) {
@@ -418,6 +434,9 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
               }
               @if (a.duplicate) {
                 <span class="chip warn">duplicate subscription</span>
+              }
+              @if (a.resubscribing) {
+                <span class="chip warn">resubscribing</span>
               }
               <span class="mono value latest">{{ a.latestValue ?? 'no value yet' }}</span>
             </li>
@@ -573,6 +592,9 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
     button:disabled {
       cursor: default;
       opacity: 0.6;
+    }
+    .record[aria-busy='true'] {
+      cursor: progress;
     }
     .rec-dot {
       width: 8px;
@@ -1049,7 +1071,15 @@ export class PipesInspector {
   lint = signal<PipeLintFinding[] | null>(null);
   lintFailed = signal(false);
   instrumentedPages = signal<string[]>([]);
-  instrumenting = signal(false);
+  instrumenting = computed(() => this.instrumentedPages().length > 0);
+  pendingRecord = signal<boolean | null>(null);
+  recordMessage = signal<string | null>(null);
+  recordLabel = computed(() => {
+    const pending = this.pendingRecord();
+    if (pending !== null) return pending ? 'Starting…' : 'Stopping…';
+    return this.instrumenting() ? 'Stop recording' : 'Record calls';
+  });
+  private pendingTimer?: ReturnType<typeof setTimeout>;
 
   private readonly liveByName = computed(() => new Map(this.live().map((p) => [p.name, p])));
 
@@ -1084,6 +1114,7 @@ export class PipesInspector {
 
     this.destroyRef.onDestroy(() => {
       this.unsubscribe?.();
+      clearTimeout(this.pendingTimer);
       this.highlight(null);
     });
   }
@@ -1132,7 +1163,7 @@ export class PipesInspector {
         this.async.set(snapshot?.async ?? []);
         const pages = snapshot?.instrumented ?? [];
         this.instrumentedPages.set(pages);
-        this.instrumenting.set(pages.length > 0);
+        if (this.pendingRecord() === pages.length > 0) this.settleRecord(null);
       };
       apply(state.value());
       this.unsubscribe?.();
@@ -1144,14 +1175,40 @@ export class PipesInspector {
 
   async toggleInstrument() {
     const client = this.rpc();
-    if (!client) return;
+    if (!client || this.pendingRecord() !== null) return;
     const on = !this.instrumenting();
-    this.instrumenting.set(on);
+    this.recordMessage.set(null);
+    this.pendingRecord.set(on);
+    let result: { pages?: number } | undefined;
     try {
-      await client.scope('ng-devtools').rpc.call('request-instrument-pipes', on);
+      result = (await client.scope('ng-devtools').rpc.call('request-instrument-pipes', on)) as
+        { pages?: number } | undefined;
     } catch {
-      this.instrumenting.set(!on);
+      this.settleRecord("Couldn't reach the devtools server. Try again.");
+      return;
     }
+    if (this.pendingRecord() !== on) return;
+    if (result?.pages === 0) {
+      this.settleRecord(
+        'No page is connected. Open your app in the browser with the devtools running, then record again.',
+      );
+      return;
+    }
+    clearTimeout(this.pendingTimer);
+    this.pendingTimer = setTimeout(() => {
+      if (this.pendingRecord() !== on) return;
+      this.settleRecord(
+        on
+          ? 'No page confirmed recording. Reload the app and try again.'
+          : 'No page confirmed it stopped recording. Reload the app to stop it.',
+      );
+    }, RECORD_CONFIRM_MS);
+  }
+
+  private settleRecord(message: string | null) {
+    clearTimeout(this.pendingTimer);
+    this.pendingRecord.set(null);
+    if (message !== null) this.recordMessage.set(message);
   }
 
   liveFor(name: string): LivePipeInfo | undefined {
@@ -1187,12 +1244,15 @@ export class PipesInspector {
     this.highlight(live?.components.find((c) => c.targets?.length)?.targets?.[0]);
   }
 
-  highlight(target: PipeTarget | null | undefined) {
+  highlight(target: PipeTarget | null | undefined, reveal = false) {
     const client = this.rpc();
     if (!client) return;
     void client
       .scope('ng-devtools')
-      .rpc.call('request-page-highlight', target ?? null)
+      .rpc.call(
+        'request-page-highlight',
+        target ? { ...target, ...(reveal ? { reveal } : {}) } : null,
+      )
       .catch(() => {});
   }
 

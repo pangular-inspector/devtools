@@ -17,12 +17,13 @@ The Dashboard opens by default. The top block describes your workspace. The card
 
 The top block shows the project name and a chip for each of these:
 
-| Chip           | Shows                                          |
-| -------------- | ---------------------------------------------- |
-| **Angular**    | The installed Angular version.                 |
-| **TypeScript** | The installed TypeScript version.              |
-| **SSR**        | **On** or **Off**.                             |
-| **Analog**     | The Analog version. Shown in Analog apps only. |
+| Chip                 | Shows                                                                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Angular**          | The installed Angular version.                                                                                                                        |
+| **TypeScript**       | The installed TypeScript version.                                                                                                                     |
+| **SSR**              | **On** or **Off**.                                                                                                                                    |
+| **Analog**           | The Analog version. Shown in Analog apps only.                                                                                                        |
+| **Change detection** | **Zoneless**, **zone.js**, or **Zoneless, zone.js loaded** when the app is zoneless but still loads zone.js. Shown once a page reports its injectors. |
 
 ### Inspector cards
 
@@ -45,7 +46,7 @@ A card shows **Counting…** while it loads. It shows **Count unavailable** when
 
 ### Configuration block
 
-Below the cards, the **Configuration** block lists the devtools options that differ from the defaults, such as **Inspectors off**, **Blocked actions** and **Limits**. It says **Defaults** when nothing is changed. See [Configuration](../getting-started/configuration.md#check-the-active-configuration).
+Below the cards, the **Configuration** block lists the devtools options that differ from the defaults, such as **Inspectors off**, **Blocked actions** and **Limits**. It says **Defaults** when nothing is changed. Until the panel connects, the block says **Loading…**, the stat cards stay hidden and the tab strip shows only **Dashboard** and the open tab, since the panel doesn't know yet which inspectors are on. See [Configuration](../getting-started/configuration.md#check-the-active-configuration).
 
 ## Where the data comes from
 
@@ -55,15 +56,19 @@ Most of the Dashboard reads your workspace, not the running page. It works befor
 
 The server reads versions from the installed packages in `node_modules`. When a package is not installed, it falls back to the range in `package.json`.
 
-The project name comes from `angular.json`. When there is no `angular.json`, it comes from `package.json`.
+The project name comes from `angular.json`. The devtools pick `defaultProject` when it is set, then the project whose `root` is the workspace folder, then the first `application` project. In an Nx workspace without `angular.json`, the name comes from `project.json`. When neither file names a project, it comes from `package.json`.
 
 ### SSR status
 
-SSR is **On** when the build options set `ssr` or `server`. For *Analog apps, SSR follows the `ssr` option of `analog()`.
+SSR is **On** when the build options of that project set `ssr` or `server`, or when it has a `server` target (Angular Universal). The devtools read `architect` in `angular.json` and `targets` in `project.json`. For *Analog apps, SSR follows the `ssr` option of `analog()`.
+
+### Change detection mode
+
+The **Change detection** chip reads the running page, not the workspace. The page checks the `NgZone` its root injector created: Angular provides a no-op zone for zoneless apps and a real one with `provideZoneChangeDetection`. It also checks whether `Zone` is defined on the page. The chip comes from the [Injectors](./injectors.md) inspector, so it is hidden when that inspector is off. See [Zoneless](https://angular.dev/guide/zoneless) on angular.dev.
 
 ### Counts
 
-The Components, Routes, NgRx and Pipes cards count the source scan. The Signals and Injectors cards use the live page when one is connected, and the source scan otherwise. The live Signals count covers the graph of the one component the [Signals tab](./signals.md) shows, and counts its signals, computeds, linked signals and effects.
+The Components, Routes, NgRx and Pipes cards count the source scan. The Signals and Injectors cards use the live page when one is connected, and the source scan otherwise. Opened from the popup or the Chrome extension, they count the page the Dashboard belongs to, like the Signals and Injectors tabs. Opened on its own, they count the page that reported last. The live Signals count covers the graph of the one component the [Signals tab](./signals.md) shows, and counts its signals, computeds, linked signals and effects.
 
 ## How to use it
 

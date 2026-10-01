@@ -15,10 +15,10 @@ The devtools ship as one npm package, `@santoshyadavdev/ng-devtools`. It contain
 
 <ngmd-card-grid columns="3">
   <ngmd-card icon="terminal" title="Node.js 22 or later">
-    The package declares <code>node &gt;=22</code> in its <code>engines</code> field.
+    The package declares <code>node &gt;=22</code> in its <code>engines</code> field. CI runs on Node.js 24.
   </ngmd-card>
   <ngmd-card icon="code" title="Angular 20 or later">
-    <code>&#64;angular/core</code> and <code>&#64;angular/common</code> 20 and newer are supported.
+    <code>&#64;angular/core</code> and <code>&#64;angular/common</code> 20 and newer are supported. CI runs the tests on Angular 22.
   </ngmd-card>
   <ngmd-card icon="box" title="Package manager">
     pnpm, npm, yarn or bun. Any of the four.

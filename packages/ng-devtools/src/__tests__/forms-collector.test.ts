@@ -57,17 +57,12 @@ function harness(maxEvents?: number) {
       },
     },
   };
-  const collector = attachForms(
-    my,
-    'pg',
-    () => (globalThis as any).ng,
-    { show: () => {}, clear: () => {} },
-    maxEvents,
-  );
+  const highlight = { show: vi.fn(), clear: vi.fn() };
+  const collector = attachForms(my, 'pg', () => (globalThis as any).ng, highlight, maxEvents);
   stops.push(collector.stop);
   const reports = () => calls.filter((c) => c.name === 'push-forms').map((c) => c.args[0]);
   const lastEvents = (): FormEvent[] => reports().at(-1)?.events ?? [];
-  return { calls, handlers, collector, reports, lastEvents };
+  return { calls, handlers, collector, reports, lastEvents, highlight };
 }
 
 const tick = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -121,6 +116,8 @@ describe('forms collector', () => {
     expect(events).toHaveLength(10);
     expect(events.map((e) => e.detail)).toContain('"v14@x.io"');
     expect(events.map((e) => e.detail)).not.toContain('"v0@x.io"');
+    expect(h.reports().at(-1).dropped).toBeGreaterThanOrEqual(5);
+    expect(h.reports()[0].dropped).toBeUndefined();
   });
 
   it('records Signal Forms submits as blocked or ran', async () => {
@@ -136,6 +133,59 @@ describe('forms collector', () => {
     await tick();
     const submits = h.lastEvents().filter((e) => e.type === 'submit');
     expect(submits.map((e) => e.outcome)).toEqual(['blocked', 'ran']);
+  });
+
+  it('lets go of a Signal Form once it leaves the page', async () => {
+    const fixture = await mount(Profile);
+    const root = fixture.componentInstance.form() as any;
+    const flag = root.submitState.selfSubmitting;
+    const model = root.structure.value;
+    const original = { flag: flag.set, set: model.set, update: model.update };
+    const h = harness();
+    h.collector.push();
+    await tick();
+    const formId = h.reports().at(-1).forms[0].id;
+    h.handlers.get('form-action')!({
+      requestId: 'i1',
+      request: { action: 'instrument', formId, value: true },
+    });
+    await tick();
+    expect(flag.set).not.toBe(original.flag);
+    expect(model.set).not.toBe(original.set);
+
+    fixture.destroy();
+    fixture.nativeElement.remove();
+    await tick();
+    h.collector.push();
+    await tick();
+    expect(h.reports().at(-1).forms).toEqual([]);
+    expect(flag.set).toBe(original.flag);
+    expect(model.set).toBe(original.set);
+    expect(model.update).toBe(original.update);
+  });
+
+  it('wraps a Signal Form again when a new one appears after the old one left', async () => {
+    const first = await mount(Profile);
+    const h = harness();
+    h.collector.push();
+    await tick();
+    first.destroy();
+    first.nativeElement.remove();
+    await tick();
+    h.collector.push();
+    await tick();
+    const second = await mount(Profile);
+    h.collector.push();
+    await tick();
+    const formEl = second.nativeElement.querySelector('form') as HTMLFormElement;
+    formEl.requestSubmit();
+    await tick();
+    expect(
+      h
+        .lastEvents()
+        .filter((e) => e.type === 'submit')
+        .map((e) => e.outcome),
+    ).toEqual(['blocked']);
   });
 
   it('tags Signal Forms changes found by diffing as user or unknown', async () => {
@@ -234,6 +284,15 @@ describe('forms collector', () => {
     h.handlers.get('form-action')!({ requestId: 'p1', request: { action: 'pick', formId } });
     await tick(20);
     const clicked = document.getElementById('email')!;
+    clicked.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(h.highlight.show).toHaveBeenLastCalledWith(clicked);
+    h.highlight.clear.mockClear();
+    clicked.dispatchEvent(
+      new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }),
+    );
+    expect(h.highlight.clear).not.toHaveBeenCalled();
+    clicked.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: null }));
+    expect(h.highlight.clear).toHaveBeenCalledTimes(1);
     let reachedApp = false;
     clicked.addEventListener('click', () => (reachedApp = true));
     clicked.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -241,6 +300,29 @@ describe('forms collector', () => {
     const answer = h.calls.find((c) => c.name === 'form-action-result')!.args[0];
     expect(answer.result).toMatchObject({ ok: true, formId, path: 'email' });
     expect(reachedApp).toBe(false);
+  });
+
+  it('cancels a pick from the panel', async () => {
+    await mount(Login);
+    const h = harness();
+    h.collector.push();
+    await tick();
+    const formId = h.reports().at(-1).forms[0].id;
+    h.handlers.get('form-action')!({ requestId: 'p1', request: { action: 'pick', formId } });
+    await tick(20);
+    h.handlers.get('form-action')!({ requestId: 'c1', request: { action: 'cancel-pick', formId } });
+    await tick(20);
+    const answers = h.calls.filter((c) => c.name === 'form-action-result').map((c) => c.args[0]);
+    expect(answers.find((a) => a.requestId === 'p1').result).toMatchObject({
+      ok: false,
+      error: 'Picking cancelled.',
+    });
+    expect(answers.find((a) => a.requestId === 'c1').result).toMatchObject({ ok: true });
+    let reachedApp = false;
+    const clicked = document.getElementById('email')!;
+    clicked.addEventListener('click', () => (reachedApp = true));
+    clicked.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(reachedApp).toBe(true);
   });
 
   it('captures NG01xxx setup errors from console.error without leaking tokens', async () => {

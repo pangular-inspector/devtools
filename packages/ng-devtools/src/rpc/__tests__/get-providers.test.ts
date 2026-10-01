@@ -175,4 +175,78 @@ class Settings {}`,
     expect(providers.filter((p) => p.type !== 'injection').map((p) => p.token)).toEqual(['Api']);
     expect(providers.filter((p) => p.type === 'injection')).toHaveLength(2);
   });
+
+  it('reads typed constructor parameters of decorated classes', async () => {
+    const providers = await providersFor(`
+      @Injectable()
+      export class Repo {
+        constructor(
+          private http: HttpClient,
+          private store: Store<AppState>,
+          @Optional() @Inject(API_URL) readonly url: string,
+          name: string,
+        ) {}
+      }
+      export class Plain {
+        constructor(private http: HttpClient) {}
+      }
+    `);
+    expect(providers.filter((p) => p.type === 'injection').map((p) => [p.token, p.source])).toEqual(
+      [
+        ['HttpClient', 'http'],
+        ['Store', 'store'],
+        ['API_URL', 'url'],
+      ],
+    );
+  });
+
+  it('reads inject() with nested generic arguments', async () => {
+    const providers = await providersFor(`
+      class Panel {
+        private readonly cache = inject<Map<string, Foo>>(CACHE);
+        private http: HttpClient = inject(HttpClient);
+      }
+    `);
+    expect(providers.map((p) => [p.token, p.source])).toEqual([
+      ['CACHE', 'cache'],
+      ['HttpClient', 'http'],
+    ]);
+  });
+
+  it('credits bare inject() calls to the function or class around them', async () => {
+    const providers = await providersFor(`
+      export const authGuard: CanActivateFn = () => inject(Auth).ok();
+      export const redirect = (route) => {
+        return inject(Router).parseUrl('/');
+      };
+      export function resolveUser() {
+        return inject(Users).current();
+      }
+      class Panel {
+        go() {
+          inject(Router).navigate([]);
+        }
+      }
+      const other = TestBed.inject(Ignored);
+    `);
+    expect(providers.map((p) => [p.token, p.source])).toEqual([
+      ['Auth', 'authGuard'],
+      ['Router', 'redirect'],
+      ['Users', 'resolveUser'],
+      ['Router', 'Panel'],
+    ]);
+  });
+
+  it('leaves out providedIn when it is null', async () => {
+    const providers = await providersFor(`
+      @Injectable({ providedIn: null })
+      class Local {}
+      @Service({ providedIn: null })
+      class AlsoLocal {}
+    `);
+    expect(providers.map((p) => [p.token, p.providedIn])).toEqual([
+      ['Local', undefined],
+      ['AlsoLocal', undefined],
+    ]);
+  });
 });

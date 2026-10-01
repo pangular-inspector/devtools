@@ -1,4 +1,17 @@
-import { Component, computed, effect, input, linkedSignal, signal, untracked } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  afterRenderEffect,
+  computed,
+  effect,
+  inject,
+  input,
+  linkedSignal,
+  output,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import {
   FORMS_STYLES,
@@ -6,6 +19,8 @@ import {
   formAction,
   formsCall,
   plain,
+  redactLabel,
+  UNMASK_DOCS_URL,
   type CollectedForm,
   type FormFieldNode,
 } from './forms-types';
@@ -13,13 +28,31 @@ import { actionAllowed, actionBlockedMessage } from '../devtools-config';
 
 @Component({
   selector: 'app-forms-field-detail',
+  host: { role: 'region', 'aria-labelledby': 'forms-field-heading' },
   template: `
     <div class="head">
       <span class="section-label">Field</span>
-      <h3>{{ node().path || '(form)' }}</h3>
+      <h3 id="forms-field-heading" #heading tabindex="-1">{{ node().path || '(form)' }}</h3>
       <span class="tag">{{ node().type }}</span>
+      <button
+        type="button"
+        class="small close"
+        [attr.aria-label]="'Close details for ' + (node().path || 'the form')"
+        (click)="closed.emit()"
+      >
+        Close
+      </button>
     </div>
-    <pre class="explain" [attr.aria-busy]="text() ? null : 'true'">{{ text() || 'Loading…' }}</pre>
+    @if (failed()) {
+      <div class="failed" role="alert">
+        <p class="muted">Could not explain this field. The devtools server did not answer.</p>
+        <button type="button" class="small" (click)="retry()">Try again</button>
+      </div>
+    } @else {
+      <pre class="explain" [attr.aria-busy]="text() === null ? 'true' : null">{{
+        text() ?? 'Loading…'
+      }}</pre>
+    }
     @if (node().type === 'control' && !node().redacted) {
       <div class="editor">
         <label class="sr-only" for="field-value">New value for {{ node().path }}</label>
@@ -44,6 +77,11 @@ import { actionAllowed, actionBlockedMessage } from '../devtools-config';
           Set
         </button>
       </div>
+    } @else if (node().type === 'control') {
+      <p class="muted">
+        No Set editor: this field is redacted ({{ redactLabel(node().redacted!) }}).
+        <a [href]="unmaskDocsUrl" target="_blank" rel="noopener noreferrer">How to unmask it</a>
+      </p>
     }
     <div class="row" role="group" aria-label="Field actions">
       <button type="button" class="small" (click)="act('focus')">Focus</button>
@@ -96,6 +134,7 @@ import { actionAllowed, actionBlockedMessage } from '../devtools-config';
       flex-basis: 100%;
     }
     h3 {
+      flex: 1 1 0;
       min-width: 0;
       margin: 0;
       color: var(--text-strong);
@@ -104,6 +143,32 @@ import { actionAllowed, actionBlockedMessage } from '../devtools-config';
       font-weight: 600;
       line-height: 1.4;
       overflow-wrap: anywhere;
+      border-radius: 4px;
+    }
+    h3:focus {
+      outline: none;
+    }
+    a {
+      color: var(--accent);
+      border-radius: 2px;
+    }
+    a:focus-visible,
+    h3:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .close {
+      margin-left: auto;
+    }
+    .failed {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: center;
+    }
+    .failed p {
+      margin: 0;
+      font-size: 12.5px;
     }
     .editor {
       display: flex;
@@ -133,11 +198,21 @@ export class FormsFieldDetail {
   node = input.required<FormFieldNode>();
   version = input(0);
   rpc = input<DevframeRpcClient | null>(null);
+  readonly closed = output<void>();
 
   readonly canWrite = computed(() => actionAllowed(this.rpc(), 'forms'));
   protected readonly writesOff = actionBlockedMessage('forms');
-  readonly text = signal('');
+  protected readonly redactLabel = redactLabel;
+  protected readonly unmaskDocsUrl = UNMASK_DOCS_URL;
   private readonly target = computed(() => `${this.form().id}|${this.node().path}`);
+  readonly text = linkedSignal<string, string | null>({
+    source: this.target,
+    computation: () => null,
+  });
+  readonly failed = linkedSignal({ source: this.target, computation: () => false });
+  private readonly attempt = signal(0);
+  private readonly heading = viewChild.required<ElementRef<HTMLElement>>('heading');
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly draft = linkedSignal({ source: this.target, computation: () => '' });
   readonly message = linkedSignal({ source: this.target, computation: () => '' });
 
@@ -146,14 +221,33 @@ export class FormsFieldDetail {
       const form = this.form().id;
       const path = this.node().path;
       this.version();
+      this.attempt();
       const client = this.rpc();
       untracked(() => this.load(client, form, path));
+    });
+    afterRenderEffect(() => {
+      this.target();
+      const heading = untracked(this.heading).nativeElement;
+      this.host.nativeElement.scrollIntoView?.({ block: 'nearest' });
+      heading.focus({ preventScroll: true });
     });
   }
 
   private async load(client: DevframeRpcClient | null, form: string, path: string) {
+    if (!client) return;
     const text = await formsCall<string>(client, 'forms-explain', { kind: 'field', form, path });
-    if (this.form().id === form && this.node().path === path) this.text.set(plain(text));
+    if (this.form().id !== form || this.node().path !== path) return;
+    if (text === null) {
+      this.failed.set(true);
+      return;
+    }
+    this.failed.set(false);
+    this.text.set(plain(text));
+  }
+
+  retry() {
+    this.failed.set(false);
+    this.attempt.update((n) => n + 1);
   }
 
   async act(action: string) {

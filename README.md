@@ -22,8 +22,16 @@ The docs live in [`apps/docs`](./apps/docs). Run them locally with `pnpm docs:de
 
 ## Maintainers
 
-- [Santosh Yadav](https://github.com/santoshyadavdev)
-- [Erkam Yaman](https://github.com/erkamyaman)
+<!-- prettier-ignore-start -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/santoshyadavdev"><img src="https://avatars.githubusercontent.com/u/11923975?v=4&s=100" width="100px;" alt="Santosh Yadav"/><br /><sub><b>Santosh Yadav</b></sub></a><br /><sub>Maintainer</sub></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/erkamyaman"><img src="https://avatars.githubusercontent.com/u/88717125?v=4&s=100" width="100px;" alt="Erkam Yaman"/><br /><sub><b>Erkam Yaman</b></sub></a><br /><sub>Maintainer</sub></td>
+    </tr>
+  </tbody>
+</table>
+<!-- prettier-ignore-end -->
 
 ## Community
 
@@ -52,8 +60,8 @@ Thanks to everyone who has contributed:
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://santoshyadav.dev"><img src="https://avatars.githubusercontent.com/u/11923975?v=4?s=100" width="100px;" alt="Santosh Yadav"/><br /><sub><b>Santosh Yadav</b></sub></a><br /><a href="https://github.com/santoshyadavdev/angular-devtools/commits?author=santoshyadavdev" title="Code">💻</a> <a href="#maintenance-santoshyadavdev" title="Maintenance">🚧</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://erkamyaman.dev"><img src="https://avatars.githubusercontent.com/u/88717125?v=4?s=100" width="100px;" alt="erKam"/><br /><sub><b>erKam</b></sub></a><br /><a href="https://github.com/santoshyadavdev/angular-devtools/commits?author=erkamyaman" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://santoshyadav.dev"><img src="https://avatars.githubusercontent.com/u/11923975?v=4?s=100" width="100px;" alt="Santosh Yadav"/><br /><sub><b>Santosh Yadav</b></sub></a><br /><a href="https://github.com/santoshyadavdev/angular-devtools/commits?author=santoshyadavdev" title="Code">💻</a> <a href="#maintenance-santoshyadavdev" title="Maintenance">🚧</a> <a href="https://github.com/santoshyadavdev/angular-devtools/pulls?q=is%3Apr+reviewed-by%3Asantoshyadavdev" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/santoshyadavdev/angular-devtools/commits?author=santoshyadavdev" title="Documentation">📖</a> <a href="#infra-santoshyadavdev" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://erkamyaman.dev"><img src="https://avatars.githubusercontent.com/u/88717125?v=4?s=100" width="100px;" alt="erKam"/><br /><sub><b>erKam</b></sub></a><br /><a href="https://github.com/santoshyadavdev/angular-devtools/commits?author=erkamyaman" title="Code">💻</a> <a href="#maintenance-erkamyaman" title="Maintenance">🚧</a> <a href="https://github.com/santoshyadavdev/angular-devtools/pulls?q=is%3Apr+reviewed-by%3Aerkamyaman" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/santoshyadavdev/angular-devtools/commits?author=erkamyaman" title="Documentation">📖</a> <a href="#infra-erkamyaman" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://www.abikb.xyz/"><img src="https://avatars.githubusercontent.com/u/131433061?v=4?s=100" width="100px;" alt="Abiram"/><br /><sub><b>Abiram</b></sub></a><br /><a href="https://github.com/santoshyadavdev/angular-devtools/commits?author=abiramcodes" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://kaap10.github.io/portfolio"><img src="https://avatars.githubusercontent.com/u/112063624?v=4?s=100" width="100px;" alt="Vardhman Gupta"/><br /><sub><b>Vardhman Gupta</b></sub></a><br /><a href="https://github.com/santoshyadavdev/angular-devtools/commits?author=Kaap10" title="Code">💻</a></td>
     </tr>

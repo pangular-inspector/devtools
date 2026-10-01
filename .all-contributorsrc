@@ -10,14 +10,14 @@
       "name": "Santosh Yadav",
       "avatar_url": "https://avatars.githubusercontent.com/u/11923975?v=4",
       "profile": "https://santoshyadav.dev",
-      "contributions": ["code", "maintenance"]
+      "contributions": ["code", "maintenance", "review", "doc", "infra"]
     },
     {
       "login": "erkamyaman",
       "name": "erKam",
       "avatar_url": "https://avatars.githubusercontent.com/u/88717125?v=4",
       "profile": "https://erkamyaman.dev",
-      "contributions": ["code"]
+      "contributions": ["code", "maintenance", "review", "doc", "infra"]
     },
     {
       "login": "abiramcodes",

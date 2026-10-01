@@ -174,6 +174,7 @@ const config: NgmdConfig = {
         {label: 'Introduction', href: '/getting-started/introduction'},
         {label: 'Installation', href: '/getting-started/installation'},
         {label: 'Angular CLI and Express', href: '/getting-started/express'},
+        {label: 'Hono, h3 and Fastify', href: '/getting-started/other-servers', status: 'new'},
         {label: 'Vite and Analog', href: '/getting-started/vite'},
         {label: 'Standalone CLI', href: '/getting-started/cli'},
         {label: 'Configuration', href: '/getting-started/configuration', status: 'new'},

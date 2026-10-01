@@ -4,7 +4,7 @@ import {
   REDACTED,
   SecretSet,
   redactMessage,
-  isSecretKey,
+  isRedactedKey,
   redactReason,
   type RedactReason,
 } from './forms-privacy.ts';
@@ -329,7 +329,7 @@ export function serializeFormValue(value: unknown, depth = 0): unknown {
   const out: Record<string, unknown> = {};
   const keys = Object.keys(value as object).filter((key) => !key.startsWith('__ng'));
   for (const key of keys.slice(0, MAX_VALUE_ITEMS)) {
-    out[key] = isSecretKey(key)
+    out[key] = isRedactedKey(key)
       ? REDACTED
       : serializeFormValue(
           read(() => (value as AnyRecord)[key], undefined),
@@ -483,7 +483,7 @@ export function serializeControl(
     errors: controlErrors(control, type, secret).map((e) => withOrigin(e, facts.origins[e.kind])),
     uid: uidOf(control),
   };
-  if (reason && !parentSecret) node.redacted = reason;
+  if (reason) node.redacted = reason;
   if (updateOn === 'blur' || updateOn === 'submit') node.updateOn = updateOn;
   const sync = !!read(() => control['validator'], null);
   const async = !!read(() => control['asyncValidator'], null);
@@ -609,7 +609,7 @@ export function errorSummaryOf(root: AnyRecord): FormErrorSummary[] {
   return errors.slice(0, 50).map((error) => {
     const target = read(() => error['fieldTree']() as AnyRecord, null);
     const path = target ? fieldPath(target) : '';
-    const secret = path.split('.').some((key) => isSecretKey(key));
+    const secret = path.split('.').some((key) => isRedactedKey(key));
     const { kind, message } = signalError(error, 'control', secret);
     return { path, kind, message };
   });
@@ -627,7 +627,8 @@ function unmaterializedField(
   path: string,
   parentSecret: boolean,
 ): FormFieldNode {
-  return {
+  const reason: RedactReason | null = parentSecret ? 'parent' : redactReason(key);
+  const node: FormFieldNode = {
     key,
     path,
     type: valueType(value),
@@ -636,9 +637,11 @@ function unmaterializedField(
     dirty: false,
     bound: false,
     materialized: false,
-    value: parentSecret || isSecretKey(key) ? REDACTED : serializeFormValue(value),
+    value: reason ? REDACTED : serializeFormValue(value),
     errors: [],
   };
+  if (reason) node.redacted = reason;
+  return node;
 }
 
 const CONSTRAINTS = ['min', 'max', 'minLength', 'maxLength'];
@@ -696,7 +699,7 @@ export function serializeField(
     uid: uidOf(state),
     ...read(() => signalFacts(state), {}),
   };
-  if (reason && !parentSecret) node.redacted = reason;
+  if (reason) node.redacted = reason;
   if (element) node.binding = read(() => fieldBinding(state), { kind: 'none' as const });
   const name = read(() => state['name']() as unknown, undefined);
   if (typeof name === 'string' && name) node.name = name;
@@ -1216,7 +1219,7 @@ export function controlEventOf(
   if ('value' in event) {
     const keys = [rootKey, ...(path ? path.split('.') : [])];
     const key = keys[keys.length - 1];
-    const secret = keys.slice(0, -1).some((k) => isSecretKey(k));
+    const secret = keys.slice(0, -1).some((k) => isRedactedKey(k));
     const value = isAbstractControl(source)
       ? valueOf(serializeControl(source, elements, key, path, 0, secret))
       : serializeFormValue(of('value'));

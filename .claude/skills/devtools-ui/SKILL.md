@@ -33,4 +33,4 @@ Edit `app/src/styles/main.scss` (`$accent`) or the maps in `_palette.scss`. Neve
 
 ## Verify
 
-Use the `devtools-verify` skill: template check with `ngc`, rebuild `extension/ui`, then the axe and 360px overflow audit on every page you touched, in the popup and at `/__devframes/`.
+Add component tests in `app/src/__tests__` as `*.test.ts` (see `app/src/__tests__/forms-panels.test.ts`); `pnpm test:panel` runs them. Then use the `devtools-verify` skill: template check with `ngc`, rebuild `extension/ui`, then the axe and 360px overflow audit on every page you touched, in the popup and at `/__devframes/`.

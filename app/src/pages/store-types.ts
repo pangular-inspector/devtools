@@ -15,6 +15,7 @@ export interface NgrxStoreEntry {
   file: string;
   line: number;
   detail?: string;
+  types?: string[];
 }
 
 export interface NgrxSignalStoreInfo {
@@ -36,6 +37,7 @@ export interface NgrxClassicStoreInfo {
   state: unknown;
   devtools: boolean;
   scope: string;
+  paused?: boolean;
 }
 
 export interface NgrxDiffEntry {
@@ -45,6 +47,8 @@ export interface NgrxDiffEntry {
   after?: unknown;
 }
 
+export type NgrxActionOrigin = 'dispatch' | 'effect' | 'reactive';
+
 export interface NgrxLogEntry {
   seq: number;
   source: 'signal-store' | 'store';
@@ -52,9 +56,11 @@ export interface NgrxLogEntry {
   type: string;
   args?: unknown[];
   action?: unknown;
+  origin?: NgrxActionOrigin;
   timestamp: number;
   diff: NgrxDiffEntry[];
   restorable: boolean;
+  unrestorable?: 'dropped' | 'not-recorded';
 }
 
 export interface NgrxPage {
@@ -64,6 +70,7 @@ export interface NgrxPage {
   stores: NgrxSignalStoreInfo[];
   classic: NgrxClassicStoreInfo | null;
   log: NgrxLogEntry[];
+  dropped?: number;
   reportedAt: number;
 }
 

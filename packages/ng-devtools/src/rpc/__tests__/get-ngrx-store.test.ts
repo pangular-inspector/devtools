@@ -51,6 +51,58 @@ describe('get-ngrx-store', () => {
   });
 });
 
+describe('get-ngrx-store action types', () => {
+  it('reads the type strings of createAction and createActionGroup', async () => {
+    const entries = await storeFor(
+      [
+        "import { createAction, createActionGroup, emptyProps, props } from '@ngrx/store';",
+        "export const addItem = createAction('[Cart] Add Item', props<{ id: number }>());",
+        'export const clear = createAction(`[Cart] Clear`);',
+        'export const dynamic = createAction(`[${source}] Dynamic`);',
+        'export const CartActions = createActionGroup({',
+        "  source: 'Cart Page',",
+        '  events: {',
+        "    'Remove Item': props<{ id: number }>(),",
+        '    opened: emptyProps(),',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    const actions = entries.filter((e) => e.kind === 'action');
+    expect(actions.map((e) => [e.name, e.types, e.detail])).toEqual([
+      ['addItem', ['[Cart] Add Item'], '[Cart] Add Item'],
+      ['clear', ['[Cart] Clear'], '[Cart] Clear'],
+      ['dynamic', undefined, undefined],
+      [
+        'CartActions',
+        ['[Cart Page] Remove Item', '[Cart Page] opened'],
+        '[Cart Page] Remove Item, [Cart Page] opened',
+      ],
+    ]);
+  });
+
+  it('unescapes the quotes and backslashes in an action type', async () => {
+    const entries = await storeFor(
+      [
+        'export const add = createAction("[Cart] Don\'t \\"Add\\"");',
+        "export const profile = createAction('[Auth] User\\'s Profile');",
+        'export const path = createAction(`[Files] C:\\\\tmp \\u0041`);',
+        'export const Group = createActionGroup({',
+        "  source: 'Team\\'s',",
+        "  events: { 'It\\'s Open': emptyProps() },",
+        '});',
+      ].join('\n'),
+    );
+    const actions = entries.filter((e) => e.kind === 'action');
+    expect(actions.map((e) => e.types)).toEqual([
+      ['[Cart] Don\'t "Add"'],
+      ["[Auth] User's Profile"],
+      ['[Files] C:\\tmp A'],
+      ["[Team's] It's Open"],
+    ]);
+  });
+});
+
 describe('get-ngrx-store members', () => {
   it('lists the members of a signal store', async () => {
     const entries = await storeFor(

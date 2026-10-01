@@ -1,7 +1,12 @@
 name: Feature request
 description: Suggest an inspector, a view or an agent tool
+title: '<area>: '
 labels: [feature, needs triage]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Title the issue `area: what is missing`, in lowercase, for example `signals: the detail panel can't jump to a dependency or consumer`. The area is one of the [commit scopes](https://github.com/santoshyadavdev/angular-devtools/blob/main/docs/contributing/commit-message-guidelines.md#scope), such as `components`, `router`, `forms`, `http`, `mcp`, `extension` or `docs`.
   - type: textarea
     id: problem
     attributes:

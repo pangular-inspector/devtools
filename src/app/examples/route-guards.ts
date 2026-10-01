@@ -14,3 +14,20 @@ export const userResolver: ResolveFn<{ id: string; name: string }> = (route) =>
 export const brokenResolver: ResolveFn<never> = () => {
   throw new Error('report service is down');
 };
+
+const LOOP_HOPS = 6;
+let loopHops = 0;
+
+function bouncingGuard(to: string): CanActivateFn {
+  return () => {
+    const router = inject(Router);
+    if (++loopHops >= LOOP_HOPS) {
+      loopHops = 0;
+      return router.parseUrl('/examples/routes/summary?from=loop');
+    }
+    return router.parseUrl(to);
+  };
+}
+
+export const loopAGuard = bouncingGuard('/examples/routes/loop-b');
+export const loopBGuard = bouncingGuard('/examples/routes/loop-a');

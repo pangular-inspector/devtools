@@ -7,7 +7,7 @@ export interface HttpRule {
   method?: string;
   enabled: boolean;
   target: HttpSide | 'both';
-  /** A status >= 400 fails the request; below that it returns `body`. */
+  /** A status >= 400 fails the request; below that it returns `body`. A body alone returns 200. */
   status?: number;
   delayMs?: number;
   /** JSON text, returned as the response body. */
@@ -22,8 +22,16 @@ export interface HttpCall {
   durationMs: number;
   side: HttpSide;
   cacheHit: boolean;
+  /** A rule failed the request with a status >= 400. */
   faulted: boolean;
+  /** A rule answered with a status below 400. */
+  mocked?: boolean;
+  /** A rule held the request back this long. */
+  delayMs?: number;
+  /** Unsubscribed before a response, such as by `switchMap` or a destroy. */
+  cancelled?: boolean;
   ruleId?: string;
+  rulePattern?: string;
   pageUrl?: string;
   at: number;
   error?: string;
@@ -38,7 +46,11 @@ export interface HttpRegistry {
   record?: (call: HttpCall) => void;
   /** How many calls to keep (`limits.httpCalls`). */
   maxCalls?: number;
+  /** Calls removed from `calls` at `maxCalls` since the last clear. */
+  dropped?: number;
   dispose?: () => void;
+  /** The hub context whose setup installed `record` and `dispose`. */
+  owner?: unknown;
 }
 
 export const MAX_CALLS = 200;
@@ -93,6 +105,16 @@ function globMatch(text: string, pattern: string): boolean {
   return true;
 }
 
+/** The status a rule answers with, or undefined when it lets the request through. */
+export function ruleStatus(rule: HttpRule): number | undefined {
+  return rule.status ?? (rule.body ? 200 : undefined);
+}
+
+/** False for a rule that neither answers nor delays, so it changes nothing. */
+export function ruleHasEffect(rule: HttpRule): boolean {
+  return ruleStatus(rule) !== undefined || !!rule.delayMs;
+}
+
 export function matchRule(
   url: string,
   method: string,
@@ -103,6 +125,7 @@ export function matchRule(
     (rule) =>
       rule.enabled &&
       !!rule.pattern &&
+      ruleHasEffect(rule) &&
       (rule.target === 'both' || rule.target === side) &&
       (!rule.method || rule.method.toUpperCase() === method.toUpperCase()) &&
       globMatch(url, rule.pattern),
@@ -135,7 +158,11 @@ export function sanitizeCalls(input: unknown, max = MAX_CALLS): HttpCall[] {
       side: c.side === 'server' ? 'server' : 'client',
       cacheHit: c.cacheHit === true,
       faulted: c.faulted === true,
+      ...(c.mocked === true ? { mocked: true } : {}),
+      ...(num(c.delayMs) ? { delayMs: num(c.delayMs) } : {}),
+      ...(c.cancelled === true ? { cancelled: true } : {}),
       ruleId: str(c.ruleId, 40),
+      rulePattern: str(c.rulePattern, 500),
       pageUrl: str(c.pageUrl, 2000),
       at: num(c.at) ?? 0,
       error: str(c.error, 500),
@@ -167,16 +194,18 @@ export function sanitizeRules(input: unknown): HttpRule[] {
         ? Math.min(Math.max(Math.round(r.delayMs), 0), MAX_DELAY_MS)
         : undefined;
     const method = str(r.method, 10)?.trim().toUpperCase();
-    rules.push({
+    const body = str(r.body, 100_000)?.trim() || undefined;
+    const rule: HttpRule = {
       id: str(r.id, 40) || `r${rules.length + 1}`,
       pattern,
       method: method && /^[A-Z]+$/.test(method) ? method : undefined,
       enabled: r.enabled !== false,
       target,
-      status,
+      status: status ?? (body !== undefined ? 200 : undefined),
       delayMs: delayMs || undefined,
-      body: str(r.body, 100_000),
-    });
+      body,
+    };
+    if (ruleHasEffect(rule)) rules.push(rule);
   }
   return rules;
 }

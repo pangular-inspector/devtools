@@ -178,6 +178,11 @@ interface OutletRow {
               @for (bound of boundInputs(row.outlet); track bound.input) {
                 <span class="tag">input {{ bound.input }} ← {{ bound.source }}</span>
               }
+              @if (row.outlet.data !== undefined) {
+                <span class="outlet-data"
+                  >routerOutletData <code>{{ row.outlet.data }}</code></span
+                >
+              }
             </li>
           }
         </ul>
@@ -303,6 +308,11 @@ interface OutletRow {
     .outlets li:hover {
       background: var(--surface-2);
     }
+    .outlet-data {
+      display: block;
+      color: var(--text-2);
+      font-size: 12px;
+    }
   `,
 })
 export class RouteCurrent {
@@ -357,7 +367,7 @@ export class RouteCurrent {
   async abort() {
     const result = await routerAction(this.rpc(), this.page().pageId, { action: 'abort' });
     this.message.set(
-      result?.['error'] ? String(result['error']) : `Aborted navigation #${result?.['aborted']}`,
+      result['error'] ? String(result['error']) : `Aborted navigation #${result['aborted']}.`,
     );
   }
 }

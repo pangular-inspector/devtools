@@ -66,10 +66,24 @@ export const hubDefaultOrigins: WsOriginRegistry = {
     (origin !== undefined && isExtensionOrigin(origin)) || isAllowedOrigin(origin, []),
 };
 
+type NgDevtoolsHub = ReturnType<typeof initHub>;
+
+interface HubRegistry {
+  token?: string;
+  hubs?: Map<string, NgDevtoolsHub>;
+}
+
+function hubRegistry(): HubRegistry {
+  const g = globalThis as { __NG_DEVTOOLS_HUB__?: HubRegistry };
+  return (g.__NG_DEVTOOLS_HUB__ ??= {});
+}
+
 function mcpToken(): string {
   const fromEnv = process.env[NG_DEVTOOLS_MCP_TOKEN_ENV];
   if (fromEnv) return fromEnv;
-  const token = randomBytes(24).toString('base64url');
+  const registry = hubRegistry();
+  if (registry.token) return registry.token;
+  const token = (registry.token = randomBytes(24).toString('base64url'));
   console.log(
     `\n  ng-devtools MCP token: ${token}\n` +
       `  HTTP MCP clients send it as "Authorization: Bearer <token>".\n` +
@@ -83,9 +97,13 @@ function hubMcpFor(options: NgDevtoolsHubOptions): InitHubOptions['mcp'] {
   return { authorization: mcpToken() };
 }
 
-export function initNgDevtoolsHub(options: NgDevtoolsHubOptions = {}) {
+/**
+ * Keeps one hub per base in the process. A dev server that runs `server.ts`
+ * again after a rebuild gets a fresh hub, and the previous one is closed.
+ */
+export function initNgDevtoolsHub(options: NgDevtoolsHubOptions = {}): NgDevtoolsHub {
   const { config, rest } = pickNgDevtoolsConfig(options);
-  return initHub({
+  const hub = initHub({
     name: 'ng-devtools',
     version: pkg.version,
     base: NG_DEVTOOLS_HUB_BASE,
@@ -95,4 +113,17 @@ export function initNgDevtoolsHub(options: NgDevtoolsHubOptions = {}) {
     devframes: [createNgDevtools(config)],
     ui: hubUi(),
   });
+  const hubs = (hubRegistry().hubs ??= new Map());
+  let closing: Promise<void> | undefined;
+  const own: NgDevtoolsHub = {
+    ...hub,
+    close: () => {
+      if (hubs.get(hub.base) === own) hubs.delete(hub.base);
+      return (closing ??= hub.close());
+    },
+  };
+  const previous = hubs.get(hub.base);
+  hubs.set(hub.base, own);
+  void previous?.close();
+  return own;
 }

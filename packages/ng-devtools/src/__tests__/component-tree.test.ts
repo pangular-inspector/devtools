@@ -115,6 +115,73 @@ describe('collectComponentTree', () => {
     expect(hostPath(ng, inner)).toBe('app-root > app-shadow > app-widget');
   });
 
+  it('indexes hosts wrapped in list items under their nearest component', () => {
+    document.body.innerHTML = `
+      <app-root ng-version="22.0.0"><app-list><ul>
+        <li><app-card></app-card></li><li><app-card></app-card></li>
+      </ul></app-list></app-root>`;
+    const [root] = document.getElementsByTagName('app-root');
+    const list = document.querySelector('app-list')!;
+    const [first, second] = Array.from(document.querySelectorAll('app-card'));
+    const { ng } = fakeNg(
+      new Map<Element, object>([
+        [root, new _App()],
+        [list, new Shell()],
+        [first, new Card()],
+        [second, new Card()],
+      ]),
+    );
+    expect(hostPath(ng, first)).toBe('app-root > app-list > app-card[1]');
+    expect(hostPath(ng, second)).toBe('app-root > app-list > app-card[2]');
+    expect(hostPath(ng, list)).toBe('app-root > app-list');
+  });
+
+  it('indexes hosts inside shadow roots and ignores hosts of nested components', () => {
+    document.body.innerHTML = `<app-root ng-version="22.0.0"><app-shadow></app-shadow></app-root>`;
+    const [root] = document.getElementsByTagName('app-root');
+    const host = document.querySelector('app-shadow')!;
+    const shadow = host.attachShadow({ mode: 'open' });
+    shadow.innerHTML = `<div><app-widget></app-widget></div><div><app-widget></app-widget></div>
+      <app-card><app-widget></app-widget></app-card>`;
+    const [first, second, nested] = Array.from(shadow.querySelectorAll('app-widget'));
+    const card = shadow.querySelector('app-card')!;
+    const { ng } = fakeNg(
+      new Map<Element, object>([
+        [root, new _App()],
+        [host, new Shell()],
+        [first, new Widget()],
+        [second, new Widget()],
+        [card, new Card()],
+        [nested, new Widget()],
+      ]),
+    );
+    expect(hostPath(ng, first)).toBe('app-root > app-shadow > app-widget[1]');
+    expect(hostPath(ng, second)).toBe('app-root > app-shadow > app-widget[2]');
+    expect(hostPath(ng, nested)).toBe('app-root > app-shadow > app-card > app-widget');
+  });
+
+  it('reports which cap stopped the tree', () => {
+    document.body.innerHTML = `<app-root ng-version="22.0.0"></app-root>`;
+    const [root] = document.getElementsByTagName('app-root');
+    const instances = new Map<Element, object>([[root, new _App()]]);
+    for (let i = 0; i < 2000; i++) {
+      const card = document.createElement('app-card');
+      root.appendChild(card);
+      instances.set(card, new Card());
+    }
+    const { ng } = fakeNg(instances);
+    const wide = collectComponentTree(ng);
+    expect(wide).toMatchObject({ count: 2000, truncated: true, truncatedBy: { components: 2000 } });
+    expect(wide.truncatedBy?.depth).toBeUndefined();
+
+    root.innerHTML = '';
+    let parent: Element = root;
+    for (let i = 0; i < 300; i++) parent = parent.appendChild(document.createElement('div'));
+    const deep = collectComponentTree(fakeNg(new Map([[root, new _App()]])).ng);
+    expect(deep).toMatchObject({ count: 1, truncated: true, truncatedBy: { depth: 256 } });
+    expect(deep.truncatedBy?.components).toBeUndefined();
+  }, 20_000);
+
   it('reports nothing without the debug API instead of guessing from tag names', () => {
     document.body.innerHTML = `<custom-widget><nested-item></nested-item></custom-widget>`;
     expect(collectComponentTree(undefined)).toEqual({ roots: [], count: 0, detail: null });
@@ -338,6 +405,77 @@ describe('componentDetail', () => {
       getDirectiveMetadata: () => ({ inputs: { title: 'title' }, outputs: {} }),
     });
     expect(componentDetail(ng, card)!.inputs.map((i) => i.name)).toEqual(['title']);
+  });
+});
+
+describe('component properties', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  class TripList {
+    trips = signalOf(['Rome', 'Lisbon']);
+    loading = false;
+    filters = { city: 'Rome', sessionToken: 'abc' };
+    password = 'hunter2';
+    title = signalOf('Trips');
+    picked = { emit: () => {} };
+    http = new Store();
+    __ngContext__ = 7;
+    select() {}
+    reload = () => {};
+  }
+
+  function detailFor(instance: object, extra: Partial<ComponentDebugNg> = {}) {
+    document.body.innerHTML = `<app-trip-list></app-trip-list>`;
+    const host = document.querySelector('app-trip-list')!;
+    const { ng } = fakeNg(new Map<Element, object>([[host, instance]]), {
+      getDirectiveMetadata: () => ({ inputs: { heading: 'title' }, outputs: { picked: 'picked' } }),
+      getInjector: () => ({}),
+      ɵgetInjectorMetadata: () => ({ type: 'element', source: host }),
+      ...extra,
+    });
+    return componentDetail(ng, host)!;
+  }
+
+  it('lists own fields that are not inputs, outputs, services or methods, with signals unwrapped', () => {
+    const list = new TripList();
+    const detail = detailFor(list, {
+      ɵgetDependenciesFromInjectable: () => ({
+        dependencies: [{ token: Store, value: list.http, flags: {} }],
+      }),
+    });
+    expect(detail.properties).toEqual([
+      { name: 'trips', prop: 'trips', value: ['Rome', 'Lisbon'], kind: 'signal' },
+      { name: 'loading', prop: 'loading', value: false },
+      { name: 'filters', prop: 'filters', value: { city: 'Rome', sessionToken: '[redacted]' } },
+      { name: 'password', prop: 'password', value: '[redacted]' },
+    ]);
+  });
+
+  it('shows the status, value and error of a resource', () => {
+    const status = signalOf('error');
+    const value = signalOf(undefined);
+    const error = signalOf(new Error('Offline'));
+    const detail = detailFor({ trips: { status, value, error, hasValue: () => false } });
+    expect(detail.properties).toEqual([
+      {
+        name: 'trips',
+        prop: 'trips',
+        kind: 'resource',
+        value: { status: 'error', error: 'Error: Offline' },
+      },
+    ]);
+  });
+
+  it('caps the number of properties and the size of each value', () => {
+    const many: Record<string, unknown> = {};
+    for (let i = 0; i < 80; i++) many[`field${i}`] = i;
+    many['field0'] = { list: Array.from({ length: 100 }, (_, i) => i) };
+    const detail = detailFor(many);
+    expect(detail.properties).toHaveLength(60);
+    const list = (detail.properties[0].value as { list: unknown[] }).list;
+    expect(list.length).toBeLessThanOrEqual(31);
   });
 });
 

@@ -1,14 +1,27 @@
-import { Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  afterRenderEffect,
+  Component,
+  DestroyRef,
+  ElementRef,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+  viewChild,
+} from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { time } from '../format';
 import { hostPageId } from '../page-id';
 import { rpcCall as call } from '../rpc';
-import { actionAllowed, actionBlockedMessage } from '../devtools-config';
+import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
+import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 import {
   pretty,
   short,
   type LiveStore,
+  type NgrxActionOrigin,
   type NgrxLogEntry,
   type NgrxPage,
   type NgrxState,
@@ -36,6 +49,31 @@ const KIND_LABELS: Record<string, string> = {
   store: '@ngrx/store',
 };
 
+const ORIGIN_TEXT: Record<NgrxActionOrigin, string> = {
+  dispatch: 'store.dispatch(action)',
+  effect: 'NgRx effect (Store.next)',
+  reactive: 'store.dispatch(() => action)',
+};
+
+function parsePayload(text: string): { payload?: Record<string, unknown>; error?: string } {
+  if (!text.trim()) return {};
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { error: 'The payload is not valid JSON.' };
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { error: 'The payload must be a JSON object, like {"id": 7}.' };
+  }
+  if (Object.prototype.hasOwnProperty.call(value, 'type')) {
+    return {
+      error: 'The payload cannot have a "type" key. Put the action type in the Type field.',
+    };
+  }
+  return { payload: value as Record<string, unknown> };
+}
+
 const CLASSIC_KINDS = new Set([
   'action',
   'reducer',
@@ -47,7 +85,7 @@ const CLASSIC_KINDS = new Set([
 
 @Component({
   selector: 'app-store-inspector',
-  imports: [Select],
+  imports: [LimitNote, Select],
   template: `
     <div class="toolbar">
       <input
@@ -160,7 +198,7 @@ const CLASSIC_KINDS = new Set([
                   }
                   @if (current.classic) {
                     <span class="chip">{{
-                      current.classic.devtools ? 'Store DevTools on' : 'read-only'
+                      current.classic.devtools ? 'Store DevTools on' : 'Store DevTools off'
                     }}</span>
                   }
                 </div>
@@ -175,10 +213,32 @@ const CLASSIC_KINDS = new Set([
                 }
               </div>
 
+              @if (current.classic?.paused) {
+                <div class="paused">
+                  <p>
+                    <strong>Viewing a past state.</strong> New actions are logged but do not change
+                    the state until you go back to the latest state.
+                  </p>
+                  <button
+                    type="button"
+                    class="btn primary"
+                    [disabled]="busy() || !canRestore()"
+                    [attr.aria-describedby]="canRestore() ? null : 'store-latest-off'"
+                    (click)="backToLatest()"
+                    #latestButton
+                  >
+                    Back to latest
+                  </button>
+                  @if (!canRestore()) {
+                    <p id="store-latest-off" class="hint small">{{ restoreOff }}</p>
+                  }
+                </div>
+              }
+
               <div class="facts">
                 <section class="fact" aria-labelledby="ngrx-state-heading">
                   <h4 id="ngrx-state-heading">State</h4>
-                  <pre class="tree" tabindex="0" aria-labelledby="ngrx-state-heading">{{
+                  <pre #stateTree class="tree" tabindex="0" aria-labelledby="ngrx-state-heading">{{
                     stateText()
                   }}</pre>
                 </section>
@@ -224,6 +284,12 @@ const CLASSIC_KINDS = new Set([
                   {{ current.classic ? 'Action log' : 'Change log' }}
                   <span class="pill">{{ storeLog().length }}</span>
                 </h4>
+                <app-limit-note
+                  [dropped]="page()?.dropped ?? 0"
+                  [max]="maxLog()"
+                  what="changes on this page"
+                  limit="changeLog"
+                />
                 <div class="log-layout">
                   <ul class="log-list" [attr.aria-label]="current.classic ? 'Actions' : 'Changes'">
                     @for (entry of storeLog(); track entry.seq) {
@@ -237,8 +303,11 @@ const CLASSIC_KINDS = new Set([
                         >
                           <span class="seq">#{{ entry.seq }}</span>
                           <span class="log-type" [title]="entry.type">{{ entry.type }}</span>
-                          <span class="log-meta"
-                            >{{
+                          <span class="log-meta">
+                            @if (entry.origin) {
+                              <span class="tag">{{ entry.origin }}</span>
+                            }
+                            {{
                               entry.diff.length === 0
                                 ? 'no change'
                                 : entry.diff.length +
@@ -269,6 +338,10 @@ const CLASSIC_KINDS = new Set([
                       <dl class="kv">
                         <dt>Time</dt>
                         <dd>{{ formatTime(selected.timestamp) }}</dd>
+                        @if (selected.origin) {
+                          <dt>Origin</dt>
+                          <dd>{{ originText(selected.origin) }}</dd>
+                        }
                         @if (selected.action !== undefined) {
                           <dt>Action</dt>
                           <dd>
@@ -308,57 +381,150 @@ const CLASSIC_KINDS = new Set([
                         <p class="muted">The state did not change.</p>
                       }
 
-                      @if (selected.restorable) {
-                        @if (confirmSeq() === selected.seq) {
-                          <div class="confirm" role="group" aria-labelledby="ngrx-confirm-text">
-                            <p id="ngrx-confirm-text">
-                              @if (selected.source === 'store') {
-                                Store DevTools jumps the app state to the state right after action
-                                #{{ selected.seq }}. New actions continue from there.
-                              } @else {
-                                This sets every state key of {{ current.label }} back to its value
-                                right after change #{{ selected.seq }}. Components that read the
-                                store update at once, and a new "Restore" entry is added to the log.
-                              }
-                            </p>
-                            <div class="actions">
-                              <button
-                                type="button"
-                                class="btn primary"
-                                [disabled]="busy()"
-                                (click)="restore(selected.seq)"
-                              >
-                                Restore
-                              </button>
-                              <button type="button" class="btn" (click)="confirmSeq.set(null)">
-                                Cancel
-                              </button>
-                            </div>
+                      @if (selected.restorable && confirmSeq() === selected.seq) {
+                        <div
+                          class="confirm"
+                          role="group"
+                          aria-labelledby="ngrx-confirm-text"
+                          (keydown.escape)="cancelRestore($event)"
+                        >
+                          <p id="ngrx-confirm-text">
+                            @if (selected.source === 'store') {
+                              Store DevTools jumps the app state to the state right after action #{{
+                                selected.seq
+                              }}. Until you go back to the latest state, new actions are logged but
+                              do not change the state.
+                            } @else {
+                              This sets every state key of {{ current.label }} back to its value
+                              right after change #{{ selected.seq }}. Components that read the store
+                              update at once, and a new "Restore" entry is added to the log.
+                            }
+                          </p>
+                          <div class="actions">
+                            <button
+                              type="button"
+                              class="btn primary"
+                              [disabled]="busy()"
+                              (click)="restore(selected.seq, selected.source === 'store')"
+                            >
+                              Restore
+                            </button>
+                            <button
+                              type="button"
+                              class="btn"
+                              (click)="cancelRestore()"
+                              #cancelButton
+                            >
+                              Cancel
+                            </button>
                           </div>
-                        } @else {
-                          <button
-                            type="button"
-                            class="btn restore"
-                            [disabled]="!canRestore()"
-                            [attr.aria-describedby]="canRestore() ? null : 'store-writes-off'"
-                            (click)="confirmSeq.set(selected.seq)"
-                          >
-                            Restore this state
-                          </button>
-                          @if (!canRestore()) {
-                            <p id="store-writes-off" class="hint small">{{ restoreOff }}</p>
+                        </div>
+                      }
+                      @if (
+                        confirmSeq() !== selected.seq && (selected.restorable || canAgain(selected))
+                      ) {
+                        <div class="entry-actions">
+                          @if (selected.restorable) {
+                            <button
+                              type="button"
+                              class="btn restore"
+                              [disabled]="!canRestore()"
+                              [attr.aria-describedby]="canRestore() ? null : 'store-writes-off'"
+                              (click)="askRestore(selected.seq)"
+                              #restoreButton
+                            >
+                              Restore this state
+                            </button>
                           }
+                          @if (canAgain(selected)) {
+                            <button
+                              type="button"
+                              class="btn"
+                              [disabled]="busy() || !canRestore()"
+                              [attr.aria-describedby]="canRestore() ? null : 'store-writes-off'"
+                              (click)="dispatchAgain(selected.seq)"
+                            >
+                              Dispatch again
+                            </button>
+                          }
+                        </div>
+                        @if (!canRestore()) {
+                          <p id="store-writes-off" class="hint small">{{ restoreOff }}</p>
                         }
-                      } @else if (selected.source === 'store') {
+                      }
+                      @if (!selected.restorable && selected.source === 'store') {
                         <p class="hint small">
-                          Time travel for &#64;ngrx/store needs <code>provideStoreDevtools()</code>.
-                          Without it this log is read-only.
+                          @if (selected.unrestorable === 'dropped') {
+                            Store DevTools no longer holds this action, so this state cannot be
+                            restored. It was dropped past <code>maxAge</code>, or the Store DevTools
+                            history was committed, reset or imported.
+                          } @else if (selected.unrestorable === 'not-recorded') {
+                            Store DevTools never recorded this action, so this state cannot be
+                            restored. An <code>actionsBlocklist</code>,
+                            <code>actionsSafelist</code> or <code>predicate</code> option filtered
+                            it out, or recording was paused.
+                          } @else {
+                            Time travel for &#64;ngrx/store needs
+                            <code>provideStoreDevtools()</code>. Without it, entries cannot be
+                            restored.
+                          }
                         </p>
                       }
                     </section>
                   }
                 </div>
               </section>
+
+              @if (current.classic) {
+                <section class="dispatch" aria-labelledby="ngrx-dispatch-heading">
+                  <h4 id="ngrx-dispatch-heading">Dispatch an action</h4>
+                  <form class="dispatch-form" (submit)="dispatchAction($event)">
+                    <label>
+                      <span>Type</span>
+                      <input
+                        required
+                        spellcheck="false"
+                        autocomplete="off"
+                        list="ngrx-action-types"
+                        placeholder="e.g. [Cart] Add Item"
+                        [value]="dispatchType()"
+                        (input)="dispatchType.set($any($event.target).value)"
+                      />
+                    </label>
+                    <datalist id="ngrx-action-types">
+                      @for (type of actionTypes(); track type) {
+                        <option [value]="type"></option>
+                      }
+                    </datalist>
+                    <label>
+                      <span>Payload <span class="optional">(JSON object, optional)</span></span>
+                      <textarea
+                        rows="3"
+                        spellcheck="false"
+                        placeholder='e.g. {"id": 7}'
+                        [value]="dispatchPayload()"
+                        (input)="dispatchPayload.set($any($event.target).value)"
+                        [attr.aria-invalid]="payloadError() ? 'true' : null"
+                        aria-describedby="ngrx-payload-error"
+                      ></textarea>
+                    </label>
+                    <p id="ngrx-payload-error" class="field-error">{{ payloadError() }}</p>
+                    <div class="actions">
+                      <button
+                        type="submit"
+                        class="btn primary"
+                        [disabled]="busy() || !canRestore() || !dispatchRequest()"
+                        [attr.aria-describedby]="canRestore() ? null : 'store-dispatch-off'"
+                      >
+                        Dispatch
+                      </button>
+                    </div>
+                    @if (!canRestore()) {
+                      <p id="store-dispatch-off" class="hint small">{{ restoreOff }}</p>
+                    }
+                  </form>
+                </section>
+              }
             </div>
           }
         </div>
@@ -953,9 +1119,96 @@ const CLASSIC_KINDS = new Set([
       margin: 0 0 10px;
       line-height: 1.5;
     }
-    .actions {
+    .actions,
+    .entry-actions {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
+    }
+    .entry-actions {
+      margin-top: 14px;
+    }
+    .entry-actions .btn.restore {
+      margin-top: 0;
+    }
+    .dispatch {
+      min-width: 0;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .dispatch-form {
+      display: grid;
+      gap: 10px;
+      max-width: 560px;
+    }
+    .dispatch-form label {
+      display: grid;
+      gap: 6px;
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .optional {
+      color: var(--text-3);
+      font-weight: 400;
+    }
+    .dispatch-form input {
+      width: 100%;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+    }
+    textarea {
+      width: 100%;
+      min-width: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      resize: vertical;
+      transition:
+        border-color 0.15s var(--ease),
+        box-shadow 0.15s var(--ease);
+    }
+    textarea::placeholder {
+      color: var(--text-3);
+    }
+    textarea:focus-visible {
+      @include m.field-focus;
+    }
+    textarea[aria-invalid='true'] {
+      border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+    }
+    .field-error {
+      margin: -4px 0 0;
+      color: var(--danger);
+      font-size: 12px;
+    }
+    .field-error:empty {
+      display: none;
+    }
+    .paused {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 14px;
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+      border-radius: var(--radius-sm);
+      background: color-mix(in srgb, var(--warn) 10%, transparent);
+    }
+    .paused p {
+      flex: 1 1 240px;
+      margin: 0;
+      line-height: 1.5;
+    }
+    .paused .hint.small {
+      flex-basis: 100%;
+      margin-top: 0;
     }
     .message:empty {
       display: none;
@@ -1114,10 +1367,17 @@ export class StoreInspector {
   readonly failed = signal(false);
   readonly selectedPageId = signal<string | null>(null);
   private readonly hostPageId = hostPageId();
+  readonly maxLog = computed(() => panelConfig(this.rpc()).limits.changeLog);
   readonly selectedStoreId = signal<string | null>(null);
   readonly selectedSeq = signal<number | null>(null);
   readonly confirmSeq = signal<number | null>(null);
   readonly busy = signal(false);
+  private readonly focusLatest = signal(false);
+  private readonly focusConfirm = signal<'cancel' | 'restore' | null>(null);
+  private readonly cancelButton = viewChild<ElementRef<HTMLButtonElement>>('cancelButton');
+  private readonly restoreButton = viewChild<ElementRef<HTMLButtonElement>>('restoreButton');
+  private readonly stateTree = viewChild<ElementRef<HTMLElement>>('stateTree');
+  private readonly latestButton = viewChild<ElementRef<HTMLButtonElement>>('latestButton');
   readonly message = signal('');
 
   private readonly destroyRef = inject(DestroyRef);
@@ -1206,6 +1466,27 @@ export class StoreInspector {
     () => this.storeLog().find((e) => e.seq === this.selectedSeq()) ?? null,
   );
 
+  readonly dispatchType = signal('');
+  readonly dispatchPayload = signal('');
+
+  readonly actionTypes = computed(() => {
+    const types = new Set<string>();
+    for (const entry of this.sourceEntries()) for (const type of entry.types ?? []) types.add(type);
+    for (const entry of this.page()?.log ?? []) {
+      if (entry.source === 'store' && entry.action !== undefined) types.add(entry.type);
+    }
+    return [...types].sort().slice(0, 200);
+  });
+
+  readonly payloadError = computed(() => parsePayload(this.dispatchPayload()).error ?? '');
+
+  readonly dispatchRequest = computed(() => {
+    const type = this.dispatchType().trim();
+    const { payload, error } = parsePayload(this.dispatchPayload());
+    if (!type || error) return null;
+    return { type: 'dispatch' as const, action: type, ...(payload ? { payload } : {}) };
+  });
+
   readonly usesSignals = computed(() =>
     this.sourceEntries().some((e) => e.kind === 'signal-store' || e.kind === 'signal-state'),
   );
@@ -1236,6 +1517,19 @@ export class StoreInspector {
     effect(() => {
       const client = this.rpc();
       if (client) void this.load(client);
+    });
+    afterRenderEffect(() => {
+      const button = this.latestButton();
+      if (!button || !this.focusLatest() || this.busy()) return;
+      this.focusLatest.set(false);
+      button.nativeElement.focus();
+    });
+    effect(() => {
+      const target = this.focusConfirm();
+      const button = target === 'cancel' ? this.cancelButton() : this.restoreButton();
+      if (!target || !button) return;
+      this.focusConfirm.set(null);
+      button.nativeElement.focus();
     });
     this.destroyRef.onDestroy(() => this.unsubscribe?.());
   }
@@ -1276,34 +1570,110 @@ export class StoreInspector {
     this.selectedStoreId.set(null);
     this.selectedSeq.set(null);
     this.confirmSeq.set(null);
+    this.message.set('');
   }
 
   selectStore(id: string) {
     this.selectedStoreId.set(id);
     this.selectedSeq.set(null);
     this.confirmSeq.set(null);
+    this.message.set('');
   }
 
   selectEntry(seq: number) {
     this.selectedSeq.set(this.selectedSeq() === seq ? null : seq);
     this.confirmSeq.set(null);
+    this.message.set('');
   }
 
-  async restore(seq: number) {
+  askRestore(seq: number) {
+    this.confirmSeq.set(seq);
+    this.focusConfirm.set('cancel');
+  }
+
+  cancelRestore(event?: Event) {
+    event?.preventDefault();
+    this.confirmSeq.set(null);
+    this.focusConfirm.set('restore');
+  }
+
+  async restore(seq: number, pauses: boolean) {
+    const page = this.page();
+    if (!page) return;
+    this.busy.set(true);
+    this.focusLatest.set(false);
+    let paused = false;
+    try {
+      const result = (await call(this.rpc(), 'request-ngrx-action', {
+        pageId: page.pageId,
+        request: { type: 'restore', seq },
+      })) as { ok?: boolean; message?: string; error?: string; paused?: boolean } | null;
+      this.message.set(result?.error ?? result?.message ?? 'Restored.');
+      paused = pauses && !result?.error && !!result?.paused;
+    } catch {
+      this.message.set('Could not reach the page to restore the state.');
+    } finally {
+      this.busy.set(false);
+      this.confirmSeq.set(null);
+      this.focusLatest.set(paused);
+      if (!paused) this.stateTree()?.nativeElement.focus();
+    }
+  }
+
+  async backToLatest() {
     const page = this.page();
     if (!page) return;
     this.busy.set(true);
     try {
       const result = (await call(this.rpc(), 'request-ngrx-action', {
         pageId: page.pageId,
-        request: { type: 'restore', seq },
+        request: { type: 'latest' },
       })) as { ok?: boolean; message?: string; error?: string } | null;
-      this.message.set(result?.error ?? result?.message ?? 'Restored.');
+      this.focusLatest.set(false);
+      this.stateTree()?.nativeElement.focus();
+      this.message.set(result?.error ?? result?.message ?? 'Back on the latest state.');
     } catch {
-      this.message.set('Could not reach the page to restore the state.');
+      this.message.set('Could not reach the page to go back to the latest state.');
     } finally {
       this.busy.set(false);
-      this.confirmSeq.set(null);
+    }
+  }
+
+  canAgain(entry: NgrxLogEntry): boolean {
+    return entry.source === 'store' && entry.action !== undefined;
+  }
+
+  async dispatchAction(event: Event) {
+    event.preventDefault();
+    const request = this.dispatchRequest();
+    if (request) await this.send(request, 'Could not reach the page to dispatch the action.');
+  }
+
+  dispatchAgain(seq: number) {
+    return this.send(
+      { type: 'dispatch-again', seq },
+      'Could not reach the page to dispatch the action again.',
+    );
+  }
+
+  private async send(request: Record<string, unknown>, offline: string) {
+    const page = this.page();
+    if (!page || this.busy()) return;
+    this.busy.set(true);
+    try {
+      const result = (await call(this.rpc(), 'request-ngrx-action', {
+        pageId: page.pageId,
+        request,
+      })) as { ok?: boolean; message?: string; error?: string; entry?: NgrxLogEntry } | null;
+      this.message.set(result?.error ?? result?.message ?? 'Dispatched.');
+      if (result?.entry) {
+        this.selectedStoreId.set('store');
+        this.selectedSeq.set(result.entry.seq);
+      }
+    } catch {
+      this.message.set(offline);
+    } finally {
+      this.busy.set(false);
     }
   }
 
@@ -1322,6 +1692,10 @@ export class StoreInspector {
 
   kindLabel(kind: string) {
     return KIND_LABELS[kind] ?? kind;
+  }
+
+  originText(origin: NgrxActionOrigin) {
+    return ORIGIN_TEXT[origin] ?? origin;
   }
 
   opLabel(op: string) {

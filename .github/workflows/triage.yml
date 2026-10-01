@@ -1,0 +1,38 @@
+name: Triage
+
+# Labels a new issue from what its form says. The bug report's Area dropdown maps to an `area:`
+# label where the choice names one part of the repository. The inspector choices (Components,
+# Router, Forms and so on) can be a panel or a package bug, so a maintainer labels those.
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          # Through the environment, never interpolated into the script: the body is anyone's text.
+          BODY: ${{ github.event.issue.body }}
+          NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # An issue form renders each answer as `### <label>`, a blank line, then the answer.
+          area=$(tr -d '\r' <<< "$BODY" | awk '/^### Area$/{getline; getline; print; exit}')
+          case "$area" in
+            'Dashboard or panel shell') label='area: panel' ;;
+            'Chrome extension') label='area: extension' ;;
+            'Agent tools (MCP)') label='area: agents' ;;
+            'Vite plugin or setup') label='area: package' ;;
+            'Demo app') label='area: demo' ;;
+            'Documentation site') label='area: docs' ;;
+            *) label='' ;;
+          esac
+          if [ -n "$label" ]; then
+            gh issue edit "$NUMBER" --repo "$REPO" --add-label "$label"
+          fi

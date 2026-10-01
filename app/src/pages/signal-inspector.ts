@@ -1,5 +1,16 @@
-import { Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
-import { DatePipe, JsonPipe } from '@angular/common';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
+import { DatePipe, JsonPipe, NgTemplateOutlet } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
@@ -10,6 +21,7 @@ interface SignalNode {
   label?: string;
   epoch: number;
   value?: unknown;
+  changes?: number;
 }
 
 interface SignalEdge {
@@ -25,11 +37,37 @@ interface SignalChange {
   missed?: number;
 }
 
+interface SignalResource {
+  id: string;
+  name: string;
+  named: boolean;
+  status?: string;
+  isLoading?: boolean;
+  params?: unknown;
+  value?: unknown;
+  error?: unknown;
+  statusCode?: number;
+  epoch: number;
+  changes?: number;
+  nodeIds: string[];
+}
+
+interface GraphInjector {
+  id: string;
+  name: string;
+}
+
 interface SignalGraph {
   nodes: SignalNode[];
   edges: SignalEdge[];
   componentSelector?: string;
   component?: { id: string; name: string; tag: string; path: string };
+  injector?: GraphInjector;
+  environments?: GraphInjector[];
+  resources?: SignalResource[];
+  nodeCount?: number;
+  unsupported?: boolean;
+  writeHook?: false;
   source?: 'selected' | 'routed' | 'root';
   pageId?: string;
   history?: Record<string, SignalChange[]>;
@@ -43,6 +81,8 @@ interface LiveNode {
 }
 
 const FOLLOW = 'follow';
+const ENV = 'env:';
+const MAX_HISTORY = 50;
 
 const SOURCE_NOTES: Record<NonNullable<SignalGraph['source']>, string> = {
   selected: 'picked',
@@ -54,6 +94,14 @@ const SOURCE_LABELS: Record<SignalChange['source'], string> = {
   write: 'set',
   sample: 'sampled',
   initial: 'initial',
+};
+
+const RESOURCE_STATUS_TONES: Record<string, string> = {
+  resolved: 'ok',
+  local: 'ok',
+  loading: 'warn',
+  reloading: 'warn',
+  error: 'danger',
 };
 
 interface SourceSignal {
@@ -89,7 +137,7 @@ const KIND_COLORS: Record<string, string> = {
 
 @Component({
   selector: 'app-signal-inspector',
-  imports: [DatePipe, JsonPipe, Select],
+  imports: [DatePipe, JsonPipe, NgTemplateOutlet, Select],
   template: `
     <div class="toolbar">
       <input
@@ -101,7 +149,7 @@ const KIND_COLORS: Record<string, string> = {
       />
       @if (componentOptions().length) {
         <div class="picker">
-          <span class="label-key" id="signals-component-label">Component</span>
+          <span class="label-key" id="signals-component-label">Graph of</span>
           <app-select
             labelledBy="signals-component-label"
             [options]="componentOptions()"
@@ -120,21 +168,46 @@ const KIND_COLORS: Record<string, string> = {
           <span class="source-note">{{ sourceNote(graph()!.source!) }}</span>
         }
       </p>
-      @if (picked() && graph()!.source !== 'selected') {
-        <p class="fallback" role="status">
-          The picked component is gone or has no signal graph, so this shows another one.
-        </p>
-      }
+    } @else if (graph()?.injector; as injector) {
+      <p class="showing">
+        <span class="showing-name">{{ injectorLabel(injector) }}</span>
+        <span class="source-note">environment injector</span>
+      </p>
+    }
+    @if (graph() && picked() && graph()!.source !== 'selected') {
+      <p class="fallback" role="status">
+        The picked component or injector is gone or has no signal graph, so this shows another one.
+      </p>
     }
 
     <p class="intro">
-      @if (graph()) {
+      @if (graph()?.injector) {
+        The effects registered on this injector and the signals they read. A signal that no effect
+        reads is not part of the graph. Pick a kind to filter.
+      } @else if (graph()) {
         The live signal graph of one component. Only signals that its template or an effect has read
         appear here; a signal nothing has read yet is not part of the graph. Pick a kind to filter.
       } @else {
         Every signal, computed and effect found in your source. Pick a kind to filter.
       }
     </p>
+    @if (unsupported()) {
+      <p class="fallback" role="status">
+        The live signal graph needs Angular 20.1 or later. This list comes from a source scan.
+      </p>
+    }
+    @if (graph()?.writeHook === false) {
+      <p class="fallback" role="status">
+        The signal write hook did not load. Value history shows sampled values only, with no exact
+        set entries.
+      </p>
+    }
+    @if (graph()?.nodeCount; as total) {
+      <p class="fallback" role="status">
+        Showing {{ graph()!.nodes.length }} of {{ total }} signals. The rest and their edges are
+        left out.
+      </p>
+    }
     @if (kindCounts().length) {
       <div class="kinds" role="group" aria-label="Filter by kind">
         <button
@@ -174,8 +247,8 @@ const KIND_COLORS: Record<string, string> = {
         <p class="empty-title">No signals found.</p>
         <p class="hint">
           No <code>signal()</code>, <code>computed()</code> or <code>effect()</code> calls were
-          found in your source. To see the live graph, run Angular 19+ with the overlay connected
-          and select a component.
+          found in your source. To see the live graph, run Angular 20.1 or later with the overlay
+          connected and select a component.
         </p>
       </div>
     }
@@ -211,7 +284,161 @@ const KIND_COLORS: Record<string, string> = {
       </div>
     }
 
-    @if (graph()) {
+    <ng-template #historyTpl let-id="id" let-label="label">
+      @if (selectedHistory().length) {
+        <h4 [id]="'history-heading-' + id">{{ label }}</h4>
+        <p class="history-summary">{{ historySummary(id) }}</p>
+        <ol
+          class="history scroll-box"
+          tabindex="0"
+          [attr.aria-labelledby]="'history-heading-' + id"
+        >
+          @for (change of selectedHistory(); track change.epoch) {
+            <li>
+              <span class="history-meta">
+                <time>{{ change.at | date: 'HH:mm:ss.SSS' }}</time>
+                <span class="source-tag" [class]="'source-' + change.source">{{
+                  sourceLabel(change.source)
+                }}</span>
+                <span>epoch {{ change.epoch }}</span>
+                @if (change.missed) {
+                  <span class="missed">{{ change.missed }} earlier not captured</span>
+                }
+              </span>
+              <pre>{{ change.value | json }}</pre>
+            </li>
+          }
+        </ol>
+      }
+    </ng-template>
+
+    <p class="jump-note" role="status">{{ jumpNote() }}</p>
+
+    @if (graph() && filteredResources().length) {
+      <h2 class="list-heading">Resources</h2>
+      <ul class="nodes resources" role="list">
+        @for (res of filteredResources(); track res.id) {
+          <li>
+            <button
+              type="button"
+              class="node-card"
+              [class.selected]="selectedId() === res.id"
+              [attr.aria-expanded]="selectedId() === res.id"
+              [attr.aria-controls]="'signal-detail-' + res.id"
+              [attr.data-card]="res.id"
+              (click)="select(res.id)"
+            >
+              <span class="node-header">
+                <span class="kind-badge" [style.background]="kindColor('resource')">resource</span>
+                <span class="node-label">{{ res.name }}</span>
+                @if (res.status) {
+                  <span class="status-tag" [class]="'tone-' + statusTone(res.status)">{{
+                    res.status
+                  }}</span>
+                }
+                @if (res.changes; as count) {
+                  <span class="changed-badge"
+                    >{{ count }} {{ count === 1 ? 'change' : 'changes' }}</span
+                  >
+                }
+                <span class="chevron" aria-hidden="true"></span>
+              </span>
+              @if (res.error !== undefined) {
+                <span class="node-value">{{ res.error | json }}</span>
+              } @else if (res.value !== undefined) {
+                <span class="node-value">{{ res.value | json }}</span>
+              }
+            </button>
+            @if (selectedId() === res.id) {
+              <div class="detail-panel" [id]="'signal-detail-' + res.id">
+                <h3 class="detail-title">{{ res.name }}</h3>
+                @if (!res.named) {
+                  <p class="hint">
+                    This resource has no name. Pass <code>debugName</code> to
+                    <code>resource()</code> or <code>httpResource()</code> to name it here.
+                  </p>
+                }
+                <dl>
+                  <dt>Status</dt>
+                  <dd>{{ res.status ?? 'unknown' }}</dd>
+                  @if (res.isLoading !== undefined) {
+                    <dt>Loading</dt>
+                    <dd>{{ res.isLoading ? 'yes' : 'no' }}</dd>
+                  }
+                  @if (res.statusCode !== undefined) {
+                    <dt>HTTP status</dt>
+                    <dd>{{ res.statusCode }}</dd>
+                  }
+                  @if (res.params !== undefined) {
+                    <dt>Params</dt>
+                    <dd>
+                      <pre
+                        class="scroll-box"
+                        role="region"
+                        tabindex="0"
+                        [attr.aria-label]="'Params of ' + res.name"
+                        >{{ res.params | json }}</pre>
+                    </dd>
+                  }
+                  @if (res.value !== undefined) {
+                    <dt>Value</dt>
+                    <dd>
+                      <pre
+                        class="scroll-box"
+                        role="region"
+                        tabindex="0"
+                        [attr.aria-label]="'Value of ' + res.name"
+                        >{{ res.value | json }}</pre>
+                    </dd>
+                  }
+                  @if (res.error !== undefined) {
+                    <dt>Error</dt>
+                    <dd>
+                      <pre
+                        class="scroll-box"
+                        role="region"
+                        tabindex="0"
+                        [attr.aria-label]="'Error of ' + res.name"
+                        >{{ res.error | json }}</pre>
+                    </dd>
+                  }
+                </dl>
+                <ng-container
+                  [ngTemplateOutlet]="historyTpl"
+                  [ngTemplateOutletContext]="{ id: res.id, label: 'Status history' }"
+                />
+                <button
+                  type="button"
+                  class="reset internals-toggle"
+                  [attr.aria-expanded]="showInternals()"
+                  [attr.aria-controls]="'resource-internals-' + res.id"
+                  (click)="showInternals.set(!showInternals())"
+                >
+                  {{ showInternals() ? 'Hide' : 'Show' }} internal signals ({{
+                    res.nodeIds.length
+                  }})
+                </button>
+                @if (showInternals()) {
+                  <ul [id]="'resource-internals-' + res.id">
+                    @for (inner of internalsOf(res); track inner.id) {
+                      <li>
+                        <span class="kind-badge sm" [style.background]="kindColor(inner.kind)">{{
+                          inner.kind
+                        }}</span>
+                        <span class="rel-label">{{ inner.label ?? inner.id }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    }
+
+    @if (graph() && (visibleNodes().length || !filteredResources().length)) {
+      <h2 class="list-heading">Signals</h2>
       <ul class="nodes" role="list">
         @for (node of filteredNodes(); track node.id) {
           <li>
@@ -221,7 +448,8 @@ const KIND_COLORS: Record<string, string> = {
               [class.selected]="selectedId() === node.id"
               [attr.aria-expanded]="selectedId() === node.id"
               [attr.aria-controls]="'signal-detail-' + node.id"
-              (click)="selectNode(node)"
+              [attr.data-card]="node.id"
+              (click)="select(node.id)"
             >
               <span class="node-header">
                 <span class="kind-badge" [style.background]="kindColor(node.kind)">{{
@@ -252,7 +480,7 @@ const KIND_COLORS: Record<string, string> = {
             </button>
             @if (selectedId() === node.id && selectedNode()) {
               <div class="detail-panel" [id]="'signal-detail-' + node.id">
-                <h2>{{ selectedNode()!.label ?? selectedNode()!.id }}</h2>
+                <h3 class="detail-title">{{ selectedNode()!.label ?? selectedNode()!.id }}</h3>
                 <dl>
                   <dt>Kind</dt>
                   <dd>{{ selectedNode()!.kind }}</dd>
@@ -261,75 +489,75 @@ const KIND_COLORS: Record<string, string> = {
                   @if (selectedNode()!.value !== undefined) {
                     <dt>Value</dt>
                     <dd>
-                      <pre>{{ selectedNode()!.value | json }}</pre>
+                      <pre
+                        class="scroll-box"
+                        role="region"
+                        tabindex="0"
+                        [attr.aria-label]="'Value of ' + (selectedNode()!.label ?? 'signal')"
+                        >{{ selectedNode()!.value | json }}</pre>
                     </dd>
                   }
                 </dl>
                 @if (getDependencies(selectedNode()!).length) {
-                  <h3>Dependencies (producers)</h3>
+                  <h4>Dependencies (producers)</h4>
                   <ul>
                     @for (dep of getDependencies(selectedNode()!); track dep.id) {
                       <li>
-                        <span class="kind-badge sm" [style.background]="kindColor(dep.kind)">{{
-                          dep.kind
-                        }}</span>
-                        <span class="rel-label">{{ dep.label ?? dep.id }}</span>
+                        <button
+                          type="button"
+                          class="rel-link"
+                          [attr.aria-label]="'Go to ' + dep.kind + ' ' + (dep.label ?? dep.id)"
+                          (click)="jumpTo(dep)"
+                        >
+                          <span class="kind-badge sm" [style.background]="kindColor(dep.kind)">{{
+                            dep.kind
+                          }}</span>
+                          <span class="rel-label">{{ dep.label ?? dep.id }}</span>
+                        </button>
                       </li>
                     }
                   </ul>
                 }
                 @if (getConsumers(selectedNode()!).length) {
-                  <h3>Consumers</h3>
+                  <h4>Consumers</h4>
                   <ul>
                     @for (con of getConsumers(selectedNode()!); track con.id) {
                       <li>
-                        <span class="kind-badge sm" [style.background]="kindColor(con.kind)">{{
-                          con.kind
-                        }}</span>
-                        <span class="rel-label">{{ con.label ?? con.id }}</span>
+                        <button
+                          type="button"
+                          class="rel-link"
+                          [attr.aria-label]="'Go to ' + con.kind + ' ' + (con.label ?? con.id)"
+                          (click)="jumpTo(con)"
+                        >
+                          <span class="kind-badge sm" [style.background]="kindColor(con.kind)">{{
+                            con.kind
+                          }}</span>
+                          <span class="rel-label">{{ con.label ?? con.id }}</span>
+                        </button>
                       </li>
                     }
                   </ul>
                 }
-                @if (selectedHistory().length) {
-                  <h3 id="value-history-heading">Value history</h3>
-                  <p class="history-summary" aria-live="polite">
-                    {{ changeCount(selectedNode()!.id) }} changes recorded, newest first.
-                  </p>
-                  <ol class="history" aria-labelledby="value-history-heading">
-                    @for (change of selectedHistory(); track change.epoch) {
-                      <li>
-                        <span class="history-meta">
-                          <time>{{ change.at | date: 'HH:mm:ss.SSS' }}</time>
-                          <span class="source-tag" [class]="'source-' + change.source">{{
-                            sourceLabel(change.source)
-                          }}</span>
-                          <span>epoch {{ change.epoch }}</span>
-                          @if (change.missed) {
-                            <span class="missed">{{ change.missed }} earlier not captured</span>
-                          }
-                        </span>
-                        <pre>{{ change.value | json }}</pre>
-                      </li>
-                    }
-                  </ol>
-                }
+                <ng-container
+                  [ngTemplateOutlet]="historyTpl"
+                  [ngTemplateOutletContext]="{ id: node.id, label: 'Value history' }"
+                />
               </div>
             }
           </li>
         } @empty {
           <li class="empty compact">
             <p class="empty-title">
-              {{ graph()!.nodes.length ? 'No signals match.' : 'No signals in this component.' }}
+              {{ visibleNodes().length ? 'No signals match.' : 'No signals in this graph.' }}
             </p>
             <p class="hint">
               {{
-                graph()!.nodes.length
+                visibleNodes().length
                   ? 'Try a different name or kind.'
                   : 'Select a component that reads signals, or interact with the page to create some.'
               }}
             </p>
-            @if (graph()!.nodes.length) {
+            @if (visibleNodes().length) {
               <button type="button" class="reset" (click)="clearFilters()">Clear filters</button>
             }
           </li>
@@ -772,7 +1000,7 @@ const KIND_COLORS: Record<string, string> = {
       box-shadow: var(--shadow);
       @include m.enter(0.25s);
     }
-    .detail-panel h2 {
+    .detail-title {
       margin: 0 0 16px;
       font-family: var(--font-mono);
       font-size: 14px;
@@ -780,7 +1008,7 @@ const KIND_COLORS: Record<string, string> = {
       color: var(--accent);
       overflow-wrap: anywhere;
     }
-    .detail-panel h3 {
+    .detail-panel h4 {
       @include m.label;
       margin: 20px 0 8px;
     }
@@ -792,6 +1020,47 @@ const KIND_COLORS: Record<string, string> = {
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
     }
+    .scroll-box:focus-visible {
+      @include m.focus-ring(-2px);
+    }
+    .list-heading {
+      @include m.label;
+      margin: 16px 0 8px;
+    }
+    .resources {
+      margin-bottom: 8px;
+    }
+    .status-tag {
+      flex: none;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 16px;
+      padding: 0 8px;
+      border: 1px solid;
+      border-radius: 99px;
+    }
+    .tone-ok {
+      @include m.soft(var(--ok));
+    }
+    .tone-warn {
+      @include m.soft(var(--warn));
+    }
+    .tone-danger {
+      @include m.soft(var(--danger));
+    }
+    .tone-neutral {
+      color: var(--text-2);
+      border-color: var(--border-strong);
+    }
+    .detail-panel .hint {
+      margin: 0 0 12px;
+    }
+    .internals-toggle {
+      margin-top: 16px;
+    }
+    .detail-panel .internals-toggle + ul {
+      margin-top: 8px;
+    }
     .detail-panel ul {
       display: flex;
       flex-direction: column;
@@ -801,7 +1070,8 @@ const KIND_COLORS: Record<string, string> = {
       margin: 0;
       font-size: 13px;
     }
-    .detail-panel ul li {
+    .detail-panel ul li,
+    .rel-link {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -810,11 +1080,35 @@ const KIND_COLORS: Record<string, string> = {
       padding: 4px 8px;
       color: var(--text-2);
       border-radius: 6px;
-      transition: background-color 0.15s var(--ease);
     }
-    .detail-panel ul li:hover {
+    .detail-panel ul li:has(> .rel-link) {
+      padding: 0;
+    }
+    .rel-link {
+      width: 100%;
+      font: inherit;
+      text-align: left;
+      background: none;
+      border: 0;
+      cursor: pointer;
+      transition:
+        background-color 0.15s var(--ease),
+        color 0.15s var(--ease);
+    }
+    .rel-link:hover {
       background: var(--surface-2);
       color: var(--text);
+    }
+    .rel-link:focus-visible {
+      @include m.focus-ring;
+    }
+    .jump-note {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .jump-note:not(:empty) {
+      margin-bottom: 8px;
     }
     .rel-label {
       min-width: 0;
@@ -906,6 +1200,8 @@ export class SignalInspector {
   rpc = input<DevframeRpcClient | null>(null);
 
   private readonly destroyRef = inject(DestroyRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   private readonly pageId = hostPageId();
   private readonly cleanups: (() => void)[] = [];
   private readonly treePages = signal<Record<string, { roots?: LiveNode[]; reportedAt?: number }>>(
@@ -914,13 +1210,23 @@ export class SignalInspector {
   readonly picked = signal<string | null>(null);
 
   graph = signal<SignalGraph | null>(null);
+  readonly unsupported = signal(false);
+  readonly showInternals = signal(false);
   sourceSignals = signal<SourceSignal[]>([]);
   sourceLoaded = signal(false);
   filter = signal('');
   kind = signal<string | null>(null);
+  readonly resources = computed(() => this.graph()?.resources ?? []);
+  private readonly internalIds = computed(
+    () => new Set(this.resources().flatMap((r) => r.nodeIds)),
+  );
+  readonly visibleNodes = computed(() => {
+    const internal = this.internalIds();
+    return (this.graph()?.nodes ?? []).filter((n) => !internal.has(n.id));
+  });
   kindCounts = computed(() => {
     const kinds: string[] = this.graph()
-      ? (this.graph()?.nodes ?? []).map((n) => n.kind)
+      ? [...this.visibleNodes().map((n) => n.kind), ...this.resources().map(() => 'resource')]
       : this.sourceSignals().map((s) => s.kind);
     const counts = new Map<string, number>();
     for (const k of kinds) counts.set(k, (counts.get(k) ?? 0) + 1);
@@ -931,6 +1237,12 @@ export class SignalInspector {
   selectedNode = computed(
     () => this.graph()?.nodes.find((n) => n.id === this.selectedId()) ?? null,
   );
+  private readonly jumpedPast = signal<{ id: string; label: string } | null>(null);
+  readonly jumpNote = computed(() => {
+    const jumped = this.jumpedPast();
+    if (!jumped || this.filter() || this.kind() || this.selectedId() !== jumped.id) return '';
+    return `Cleared the filters to show ${jumped.label}.`;
+  });
   selectedHistory = computed(() => {
     const id = this.selectedId();
     return id ? [...(this.graph()?.history?.[id] ?? [])].reverse() : [];
@@ -938,12 +1250,19 @@ export class SignalInspector {
 
   readonly kindLegend = Object.entries(KIND_COLORS).map(([kind, color]) => ({ kind, color }));
 
-  filteredNodes = computed(() => {
-    const g = this.graph();
-    if (!g) return [];
+  filteredResources = computed(() => {
     const q = this.filter().toLowerCase();
     const kind = this.kind();
-    const nodes = g.nodes.filter(
+    if (kind && kind !== 'resource') return [];
+    return this.resources().filter(
+      (r) => !q || r.name.toLowerCase().includes(q) || 'resource'.includes(q),
+    );
+  });
+
+  filteredNodes = computed(() => {
+    const q = this.filter().toLowerCase();
+    const kind = this.kind();
+    const nodes = this.visibleNodes().filter(
       (n) =>
         (!kind || n.kind === kind) &&
         (!q || (n.label ?? '').toLowerCase().includes(q) || n.kind.toLowerCase().includes(q)),
@@ -989,12 +1308,18 @@ export class SignalInspector {
       }
     };
     walk(roots);
-    if (!flat.length) return [];
+    const environments = this.graph()?.environments ?? [];
+    if (!flat.length && !environments.length) return [];
     const totals = new Map<string, number>();
     for (const node of flat) totals.set(node.name, (totals.get(node.name) ?? 0) + 1);
     const seen = new Map<string, number>();
     const options: SelectOption[] = [
       { value: FOLLOW, label: 'Follow the routed component', hint: 'automatic' },
+      ...environments.map((env) => ({
+        value: ENV + env.id,
+        label: this.injectorLabel(env),
+        hint: 'injector',
+      })),
     ];
     for (const node of flat) {
       const n = (seen.get(node.name) ?? 0) + 1;
@@ -1033,8 +1358,11 @@ export class SignalInspector {
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         const next = value as { graph?: SignalGraph | null; pages?: Record<string, SignalGraph> };
-        const graph = (this.pageId ? next?.pages?.[this.pageId] : next?.graph) ?? null;
-        if (graph?.component?.id !== this.graph()?.component?.id) this.selectedId.set(null);
+        const reported = (this.pageId ? next?.pages?.[this.pageId] : next?.graph) ?? null;
+        this.unsupported.set(!!reported?.unsupported);
+        const graph = reported?.unsupported ? null : reported;
+        const owner = (g: SignalGraph | null) => g?.component?.id ?? g?.injector?.id;
+        if (owner(graph) !== owner(this.graph())) this.selectedId.set(null);
         this.graph.set(graph);
       };
       apply(state.value());
@@ -1057,14 +1385,22 @@ export class SignalInspector {
   }
 
   pickComponent(value: string | null) {
-    const id = value && value !== FOLLOW ? value : null;
-    this.picked.set(id);
+    const picked = value && value !== FOLLOW ? value : null;
+    this.picked.set(picked);
     const client = this.rpc();
     if (!client) return;
+    const pageId = this.targetPageId() ?? undefined;
+    const target = picked?.startsWith(ENV)
+      ? { pageId, env: picked.slice(ENV.length) }
+      : { pageId, id: picked };
     void client
       .scope('ng-devtools')
-      .rpc.call('select-signal-target', { pageId: this.targetPageId() ?? undefined, id })
+      .rpc.call('select-signal-target', target)
       .catch(() => {});
+  }
+
+  injectorLabel(injector: GraphInjector) {
+    return injector.name === 'Root' ? 'Root services' : injector.name;
   }
 
   sourceNote(source: NonNullable<SignalGraph['source']>) {
@@ -1088,14 +1424,59 @@ export class SignalInspector {
     this.kind.set(null);
   }
 
-  selectNode(node: SignalNode) {
-    this.selectedId.set(this.selectedId() === node.id ? null : node.id);
+  select(id: string) {
+    this.selectedId.set(this.selectedId() === id ? null : id);
+    this.showInternals.set(false);
   }
 
-  // The first entry is the value seen on connect, not a change.
+  jumpTo(node: SignalNode) {
+    const resource = this.resources().find((r) => r.nodeIds.includes(node.id));
+    const id = resource?.id ?? node.id;
+    const hidden = resource
+      ? !this.filteredResources().some((r) => r.id === id)
+      : !this.filteredNodes().some((n) => n.id === id);
+    if (hidden) this.clearFilters();
+    this.jumpedPast.set(hidden ? { id, label: resource?.name ?? node.label ?? node.id } : null);
+    this.selectedId.set(id);
+    this.showInternals.set(!!resource);
+    afterNextRender(
+      () => {
+        const card = [
+          ...this.host.nativeElement.querySelectorAll<HTMLElement>('.node-card[data-card]'),
+        ].find((el) => el.dataset['card'] === id);
+        card?.scrollIntoView?.({ block: 'nearest' });
+        card?.focus({ preventScroll: true });
+      },
+      { injector: this.injector },
+    );
+  }
+
+  // The page counts past the kept history; older pages only send the list.
   changeCount(id: string): number {
-    const list = this.graph()?.history?.[id] ?? [];
+    const g = this.graph();
+    const counted =
+      g?.nodes.find((n) => n.id === id)?.changes ?? g?.resources?.find((r) => r.id === id)?.changes;
+    if (counted !== undefined) return counted;
+    const list = g?.history?.[id] ?? [];
     return list.reduce((n, c) => n + (c.source === 'initial' ? 0 : 1 + (c.missed ?? 0)), 0);
+  }
+
+  historySummary(id: string): string {
+    const count = this.changeCount(id);
+    const kept = this.graph()?.history?.[id]?.length ?? 0;
+    if (!count) return 'No changes recorded yet. The entry below is the value seen first.';
+    const changes = `${count} ${count === 1 ? 'change' : 'changes'} recorded`;
+    const shown = kept >= MAX_HISTORY && count >= kept ? `, showing the last ${kept}` : '';
+    return `${changes}${shown}, newest first.`;
+  }
+
+  statusTone(status: string) {
+    return RESOURCE_STATUS_TONES[status] ?? 'neutral';
+  }
+
+  internalsOf(resource: SignalResource): SignalNode[] {
+    const ids = new Set(resource.nodeIds);
+    return (this.graph()?.nodes ?? []).filter((n) => ids.has(n.id));
   }
 
   sourceLabel(source: SignalChange['source']) {

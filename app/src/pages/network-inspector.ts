@@ -1,6 +1,9 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -12,7 +15,8 @@ import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
 import { rpcCall as call } from '../rpc';
-import { actionAllowed, actionBlockedMessage } from '../devtools-config';
+import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
+import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 
 type HttpSide = 'client' | 'server';
@@ -37,7 +41,11 @@ interface HttpCall {
   side: HttpSide;
   cacheHit: boolean;
   faulted: boolean;
+  mocked?: boolean;
+  delayMs?: number;
+  cancelled?: boolean;
   ruleId?: string;
+  rulePattern?: string;
   pageUrl?: string;
   at: number;
   error?: string;
@@ -48,6 +56,7 @@ interface PayloadEntry {
   key: string;
   http?: { url?: string; status?: number; statusText?: string; responseType?: string };
   source?: 'http' | 'analog' | 'hydration';
+  fn?: { id: string; name?: string; file?: string };
   size: number;
   value: unknown;
 }
@@ -71,20 +80,28 @@ interface HydrationStats {
   warningsCaptured?: boolean;
 }
 
+interface HttpPayload {
+  found: boolean;
+  size: number;
+  entries: PayloadEntry[];
+  error?: string;
+}
+
 interface HttpPage {
   pageId: string;
   url: string;
   initialUrl?: string;
   title: string;
-  payload: { found: boolean; size: number; entries: PayloadEntry[]; error?: string };
   hydration: HydrationStats | null;
   calls: HttpCall[];
+  dropped?: number;
   firstSeenAt?: number;
   reportedAt: number;
 }
 
 interface HttpState {
   serverCalls: HttpCall[];
+  serverDropped?: number;
   pages: HttpPage[];
   rules: HttpRule[];
 }
@@ -99,17 +116,19 @@ interface RuleDraft {
 }
 
 const EMPTY_DRAFT: RuleDraft = {
-  pattern: '/api/products',
+  pattern: '',
   method: '',
   target: 'both',
-  status: '500',
+  status: '',
   delayMs: '',
   body: '',
 };
 
+const MAX_RULES = 50;
+
 @Component({
   selector: 'app-network-inspector',
-  imports: [JsonPipe, Select],
+  imports: [JsonPipe, LimitNote, Select],
   template: `
     @if (loading()) {
       <div class="state" role="status">
@@ -152,6 +171,12 @@ const EMPTY_DRAFT: RuleDraft = {
     <div class="grid">
       <section class="panel wide" aria-labelledby="timeline-heading">
         <h2 id="timeline-heading">HTTP timeline ({{ timeline().length }})</h2>
+        <app-limit-note
+          [dropped]="droppedCalls()"
+          [max]="maxCalls()"
+          what="HTTP calls"
+          limit="httpCalls"
+        />
         @if (timeline().length) {
           <div class="table-wrap">
             <table>
@@ -170,7 +195,7 @@ const EMPTY_DRAFT: RuleDraft = {
                 @for (entry of timeline(); track entry.side + entry.id) {
                   <tr
                     [class.selected]="selectedCall()?.id === entry.id"
-                    (click)="selectedCallId.set(entry.id)"
+                    (click)="openCall(entry.id)"
                   >
                     <td>
                       <span class="tag" [class.server]="entry.side === 'server'">{{
@@ -183,8 +208,9 @@ const EMPTY_DRAFT: RuleDraft = {
                         type="button"
                         class="link"
                         [title]="entry.url"
+                        [attr.data-call-id]="entry.id"
                         [attr.aria-pressed]="selectedCall()?.id === entry.id"
-                        (click)="selectedCallId.set(entry.id)"
+                        [attr.aria-controls]="selectedCall() ? 'call-preview' : null"
                       >
                         {{ entry.url }}
                       </button>
@@ -194,11 +220,11 @@ const EMPTY_DRAFT: RuleDraft = {
                     </td>
                     <td
                       class="status"
-                      [class.ok]="statusTone(entry.status) === 'ok'"
-                      [class.redirect]="statusTone(entry.status) === 'redirect'"
-                      [class.bad]="statusTone(entry.status) === 'bad'"
+                      [class.ok]="callTone(entry) === 'ok'"
+                      [class.redirect]="callTone(entry) === 'redirect'"
+                      [class.bad]="callTone(entry) === 'bad'"
                     >
-                      <span class="dot" aria-hidden="true"></span>{{ entry.status || 'ERR' }}
+                      <span class="dot" aria-hidden="true"></span>{{ statusLabel(entry) }}
                     </td>
                     <td class="num">{{ entry.durationMs }} ms</td>
                     <td>
@@ -206,8 +232,19 @@ const EMPTY_DRAFT: RuleDraft = {
                         @if (entry.cacheHit) {
                           <span class="tag">transfer cache</span>
                         }
+                        @if (entry.delayMs) {
+                          <span class="tag">delayed {{ entry.delayMs }} ms</span>
+                        }
+                        @if (entry.mocked) {
+                          <span class="tag mock">mocked</span>
+                        }
                         @if (entry.faulted) {
                           <span class="tag fault">faulted</span>
+                        }
+                        @if (rulePatternOf(entry); as pattern) {
+                          <span class="tag rule-ref" [title]="'Matched rule: ' + pattern"
+                            >rule <code>{{ pattern }}</code></span
+                          >
                         }
                       </div>
                     </td>
@@ -226,23 +263,34 @@ const EMPTY_DRAFT: RuleDraft = {
           </div>
         }
         @if (selectedCall(); as detail) {
-          <div class="preview">
+          <div
+            id="call-preview"
+            class="preview"
+            role="region"
+            aria-labelledby="preview-heading"
+            (keydown.escape)="closePreview()"
+          >
             <div class="preview-head">
-              <h3>Response preview</h3>
-              <button type="button" class="ghost" (click)="selectedCallId.set(null)">Close</button>
+              <h3 id="preview-heading" tabindex="-1">Response preview</h3>
+              <button type="button" class="ghost" (click)="closePreview()">Close</button>
             </div>
             <p class="preview-meta">
               <span class="method">{{ detail.method }}</span>
               <span
                 class="status"
-                [class.ok]="statusTone(detail.status) === 'ok'"
-                [class.redirect]="statusTone(detail.status) === 'redirect'"
-                [class.bad]="statusTone(detail.status) === 'bad'"
-                >{{ detail.status || 'ERR' }}</span
+                [class.ok]="callTone(detail) === 'ok'"
+                [class.redirect]="callTone(detail) === 'redirect'"
+                [class.bad]="callTone(detail) === 'bad'"
+                >{{ statusLabel(detail) }}</span
               >
               <span class="preview-url" [title]="detail.url">{{ detail.url }}</span>
             </p>
-            <pre [class.error]="!!detail.error">{{
+            @if (rulePatternOf(detail); as pattern) {
+              <p class="preview-rule">
+                Matched rule <code>{{ pattern }}</code>
+              </p>
+            }
+            <pre [class.error]="!!detail.error && !detail.cancelled">{{
               detail.error ?? detail.preview ?? '(no body)'
             }}</pre>
           </div>
@@ -258,12 +306,13 @@ const EMPTY_DRAFT: RuleDraft = {
           <label>
             <span>URL pattern <span class="hint">(substring or * glob)</span></span>
             <input
+              id="rule-pattern"
               required
               spellcheck="false"
               autocomplete="off"
               [value]="draft().pattern"
               (input)="patch('pattern', $event)"
-              placeholder="/api/products"
+              placeholder="e.g. /api/products"
             />
           </label>
           <div class="row">
@@ -294,8 +343,11 @@ const EMPTY_DRAFT: RuleDraft = {
                 inputmode="numeric"
                 min="100"
                 max="599"
+                placeholder="e.g. 500"
                 [value]="draft().status"
                 (input)="patch('status', $event)"
+                [attr.aria-invalid]="statusError() ? 'true' : null"
+                aria-describedby="rule-hint"
               />
             </label>
             <label>
@@ -330,11 +382,12 @@ const EMPTY_DRAFT: RuleDraft = {
               gets the real response unless the rule also applies on the client.
             </p>
           }
+          <p id="rule-hint" class="muted small">{{ draftHint() }}</p>
           <div class="form-actions">
             <button
               type="submit"
-              [disabled]="!canWrite() || !draft().pattern.trim() || !!bodyError()"
-              [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
+              [disabled]="!canWrite() || !draftRule()"
+              [attr.aria-describedby]="canWrite() ? 'rule-hint' : 'http-writes-off'"
             >
               Add rule
             </button>
@@ -499,7 +552,7 @@ const EMPTY_DRAFT: RuleDraft = {
 
       <section class="panel wide" aria-labelledby="payload-heading">
         <h2 id="payload-heading">TransferState payload</h2>
-        @if (selected()?.payload; as payload) {
+        @if (selectedPayload(); as payload) {
           @if (!payload.found) {
             <div class="empty">
               <p>No TransferState script: this page was not server rendered.</p>
@@ -833,9 +886,19 @@ const EMPTY_DRAFT: RuleDraft = {
       line-height: 1.5;
     }
     .table-wrap {
-      overflow-x: auto;
+      max-height: min(420px, 60vh);
+      overflow: auto;
       margin: 0 -16px;
       padding: 0 16px;
+    }
+    .table-wrap :focus-visible {
+      @include m.focus-ring(-2px);
+    }
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--surface);
     }
     table {
       width: 100%;
@@ -988,6 +1051,17 @@ const EMPTY_DRAFT: RuleDraft = {
     .tag.fault {
       @include m.soft(var(--danger));
     }
+    .tag.mock {
+      @include m.soft(var(--accent));
+    }
+    .tag.rule-ref {
+      gap: 4px;
+      max-width: 220px;
+    }
+    .tag.rule-ref code {
+      @include m.truncate;
+      font-family: var(--font-mono);
+    }
     .tag.on {
       @include m.soft(var(--ok));
     }
@@ -1038,6 +1112,11 @@ const EMPTY_DRAFT: RuleDraft = {
       gap: 8px;
       min-width: 0;
       margin-bottom: 8px;
+    }
+    .preview-rule {
+      margin-bottom: 8px;
+      color: var(--text-2);
+      font-size: 12px;
     }
     .preview-url {
       min-width: 0;
@@ -1279,6 +1358,8 @@ export class NetworkInspector {
   readonly failed = signal(false);
   readonly serverCalls = signal<HttpCall[]>([]);
   readonly pages = signal<HttpPage[]>([]);
+  readonly payloads = signal<Record<string, HttpPayload>>({});
+  readonly serverDropped = signal(0);
   readonly rules = signal<HttpRule[]>([]);
   private readonly hostPageId = hostPageId();
   readonly selectedPageId = linkedSignal<HttpPage[], string | null>({
@@ -1293,12 +1374,23 @@ export class NetworkInspector {
   readonly message = signal('');
   readonly bodyPlaceholder = '{ "error": "Service unavailable" }';
 
-  private unsubscribe: (() => void) | null = null;
+  private unsubscribe: (() => void)[] = [];
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly selected = computed(
     () => this.pages().find((p) => p.pageId === this.selectedPageId()) ?? null,
   );
+
+  readonly selectedPayload = computed(() => {
+    const pageId = this.selectedPageId();
+    return pageId ? (this.payloads()[pageId] ?? null) : null;
+  });
+
+  readonly maxCalls = computed(() => panelConfig(this.rpc()).limits.httpCalls);
+
+  readonly droppedCalls = computed(() => (this.selected()?.dropped ?? 0) + this.serverDropped());
 
   readonly pageServerCalls = computed(() => {
     const initialUrl = this.selected()?.initialUrl;
@@ -1315,13 +1407,51 @@ export class NetworkInspector {
   );
 
   readonly draftMocksOnServer = computed(() => {
+    const rule = this.draftRule();
+    return !!rule && this.mocksOnServer(rule);
+  });
+
+  readonly statusError = computed(() => {
+    const raw = this.draft().status.trim();
+    if (!raw) return '';
+    const status = Number(raw);
+    return Number.isInteger(status) && status >= 100 && status <= 599
+      ? ''
+      : 'Set a status from 100 to 599.';
+  });
+
+  readonly draftRule = computed<Omit<HttpRule, 'id'> | null>(() => {
     const draft = this.draft();
-    const status = Number(draft.status);
-    return (
-      !!draft.status &&
-      Number.isFinite(status) &&
-      this.mocksOnServer({ target: draft.target, status })
-    );
+    const pattern = draft.pattern.trim();
+    if (!pattern || this.bodyError() || this.statusError()) return null;
+    if (this.rules().length >= MAX_RULES) return null;
+    const body = draft.body.trim();
+    const delayMs = Math.min(Math.max(Math.round(Number(draft.delayMs)) || 0, 0), 10_000);
+    const status = draft.status.trim() ? Number(draft.status) : body ? 200 : undefined;
+    if (status === undefined && !delayMs) return null;
+    return {
+      pattern,
+      enabled: true,
+      target: draft.target,
+      ...(draft.method ? { method: draft.method } : {}),
+      ...(status !== undefined ? { status } : {}),
+      ...(delayMs ? { delayMs } : {}),
+      ...(body ? { body } : {}),
+    };
+  });
+
+  readonly draftHint = computed(() => {
+    const draft = this.draft();
+    if (this.rules().length >= MAX_RULES) {
+      return `You can add up to ${MAX_RULES} rules. Remove one to add another.`;
+    }
+    if (!draft.pattern.trim()) return 'Enter a URL pattern to add a rule.';
+    if (this.statusError()) return this.statusError();
+    if (this.bodyError()) return '';
+    if (!this.draftRule()) return 'Set a status, a delay or a mock body.';
+    if (!draft.status.trim() && draft.body.trim())
+      return 'With no status, the mock body returns 200.';
+    return '';
   });
 
   readonly bodyError = computed(() => {
@@ -1340,29 +1470,74 @@ export class NetworkInspector {
       const client = this.rpc();
       if (client) this.load(client);
     });
-    this.destroyRef.onDestroy(() => this.unsubscribe?.());
+    this.destroyRef.onDestroy(() => this.stopListening());
   }
 
   async load(client: DevframeRpcClient) {
     this.loading.set(true);
     this.failed.set(false);
     try {
-      const state = await client.scope('ng-devtools').rpc.sharedState('http');
+      const rpc = client.scope('ng-devtools').rpc;
+      const [state, payloads] = await Promise.all([
+        rpc.sharedState('http'),
+        rpc.sharedState('http-payloads'),
+      ]);
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         const snapshot = value as HttpState | undefined;
         this.serverCalls.set(snapshot?.serverCalls ?? []);
+        this.serverDropped.set(snapshot?.serverDropped ?? 0);
         this.pages.set(snapshot?.pages ?? []);
         this.rules.set(snapshot?.rules ?? []);
       };
+      const applyPayloads = (value: unknown) =>
+        this.payloads.set(
+          (value as { pages?: Record<string, HttpPayload> } | undefined)?.pages ?? {},
+        );
       apply(state.value());
-      this.unsubscribe?.();
-      this.unsubscribe = state.on('updated', apply);
+      applyPayloads(payloads.value());
+      this.stopListening();
+      this.unsubscribe = [state.on('updated', apply), payloads.on('updated', applyPayloads)];
     } catch {
       this.failed.set(true);
     } finally {
       this.loading.set(false);
     }
+  }
+
+  statusLabel(call: HttpCall): string {
+    if (call.cancelled) return 'cancelled';
+    return call.status ? String(call.status) : 'ERR';
+  }
+
+  callTone(call: HttpCall): 'ok' | 'redirect' | 'bad' | 'neutral' {
+    return call.cancelled ? 'neutral' : this.statusTone(call.status);
+  }
+
+  rulePatternOf(call: HttpCall): string | null {
+    if (call.rulePattern) return call.rulePattern;
+    if (!call.ruleId) return null;
+    return this.rules().find((rule) => rule.id === call.ruleId)?.pattern ?? null;
+  }
+
+  openCall(id: string) {
+    this.selectedCallId.set(id);
+    afterNextRender(
+      () => this.host.nativeElement.querySelector<HTMLElement>('#preview-heading')?.focus(),
+      { injector: this.injector },
+    );
+  }
+
+  closePreview() {
+    const id = this.selectedCallId();
+    this.selectedCallId.set(null);
+    if (!id) return;
+    const buttons = this.host.nativeElement.querySelectorAll<HTMLElement>('button[data-call-id]');
+    [...buttons].find((button) => button.dataset['callId'] === id)?.focus();
+  }
+
+  private stopListening() {
+    for (const stop of this.unsubscribe.splice(0)) stop();
   }
 
   statusTone(status: number | undefined): 'ok' | 'redirect' | 'bad' | 'neutral' {
@@ -1379,6 +1554,7 @@ export class NetworkInspector {
 
   payloadLabel(entry: PayloadEntry): string | null {
     if (entry.source === 'hydration') return 'hydration annotations';
+    if (entry.fn) return `Analog server function ${entry.fn.name ?? entry.fn.id}`;
     if (entry.source === 'analog') return 'Analog';
     return null;
   }
@@ -1416,36 +1592,37 @@ export class NetworkInspector {
     this.draft.update((draft) => ({ ...draft, [key]: value }));
   }
 
-  addRule(event: Event) {
+  async addRule(event: Event) {
     event.preventDefault();
-    const draft = this.draft();
-    if (!draft.pattern.trim() || this.bodyError()) return;
-    const status = Number(draft.status);
-    const delayMs = Number(draft.delayMs);
+    const draft = this.draftRule();
+    if (!draft) return;
     const rule: HttpRule = {
       id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-      pattern: draft.pattern.trim(),
-      enabled: true,
-      target: draft.target,
-      ...(draft.method ? { method: draft.method } : {}),
-      ...(draft.status && Number.isFinite(status) ? { status } : {}),
-      ...(draft.delayMs && Number.isFinite(delayMs) ? { delayMs } : {}),
-      ...(draft.body.trim() ? { body: draft.body.trim() } : {}),
+      ...draft,
     };
-    void this.saveRules([...this.rules(), rule], 'Rule added.');
+    if (await this.saveRules([...this.rules(), rule], 'Rule added.', rule)) {
+      this.draft.set({ ...EMPTY_DRAFT });
+      this.host.nativeElement.querySelector<HTMLInputElement>('#rule-pattern')?.focus();
+    }
   }
 
   toggleRule(id: string) {
+    const rule = this.rules().find((r) => r.id === id);
+    if (!rule) return;
     void this.saveRules(
-      this.rules().map((rule) => (rule.id === id ? { ...rule, enabled: !rule.enabled } : rule)),
+      this.rules().map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)),
       'Rule updated.',
+      rule,
     );
   }
 
   removeRule(id: string) {
+    const rule = this.rules().find((r) => r.id === id);
+    if (!rule) return;
     void this.saveRules(
-      this.rules().filter((rule) => rule.id !== id),
+      this.rules().filter((r) => r.id !== id),
       'Rule removed.',
+      rule,
     );
   }
 
@@ -1459,13 +1636,17 @@ export class NetworkInspector {
     }
   }
 
-  private async saveRules(rules: HttpRule[], done: string) {
+  private async saveRules(rules: HttpRule[], done: string, changed: HttpRule): Promise<boolean> {
     try {
-      await call(this.rpc(), 'set-http-rules', rules);
-      this.rules.set(rules);
-      this.message.set(`${done} Reload the page to apply SSR rules.`);
+      const saved = await call(this.rpc(), 'set-http-rules', rules);
+      this.rules.set(Array.isArray(saved) ? (saved as HttpRule[]) : rules);
+      this.message.set(
+        changed.target === 'client' ? done : `${done} Reload the page to apply it to SSR.`,
+      );
+      return true;
     } catch {
       this.message.set('Could not save the rules.');
+      return false;
     }
   }
 }

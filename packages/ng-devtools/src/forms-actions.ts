@@ -8,7 +8,13 @@ import {
   type FormsDebugApi,
   type FoundForm,
 } from './forms.ts';
-import { isSecretKey, redactReason } from './forms-privacy.ts';
+import {
+  REDACT_LABELS,
+  isRedactedKey,
+  redactReason,
+  unmaskHint,
+  type RedactReason,
+} from './forms-privacy.ts';
 import { fieldPath, submitSetup } from './forms-read.ts';
 import { clip } from './text.ts';
 
@@ -35,6 +41,7 @@ export const FORM_ACTIONS = [
   'locate',
   'instrument',
   'pick',
+  'cancel-pick',
 ] as const;
 
 export type FormActionName = (typeof FORM_ACTIONS)[number];
@@ -103,7 +110,7 @@ export function secretInside(
   seen.add(value);
   for (const [key, child] of Object.entries(value as AnyRecord)) {
     const path = prefix ? `${prefix}.${key}` : key;
-    if (!/^\d+$/.test(key) && isSecretKey(key)) return path;
+    if (!/^\d+$/.test(key) && isRedactedKey(key)) return path;
     const nested = secretInside(child, path, seen);
     if (nested) return nested;
   }
@@ -121,7 +128,7 @@ export function keepSecrets(
   const out: AnyRecord = Array.isArray(saved) ? [...saved] : { ...(saved as AnyRecord) };
   for (const key of Object.keys(out)) {
     const now = (current as AnyRecord)[key];
-    out[key] = !/^\d+$/.test(key) && isSecretKey(key) ? now : keepSecrets(out[key], now, seen);
+    out[key] = !/^\d+$/.test(key) && isRedactedKey(key) ? now : keepSecrets(out[key], now, seen);
   }
   return out;
 }
@@ -291,12 +298,22 @@ function rawValue(found: FoundForm, node: AnyRecord): unknown {
   );
 }
 
-function lastKey(path: string, found: FoundForm): string {
-  return path ? path.split('.').pop()! : '';
+function secretOf(
+  path: string,
+  element: Element | null,
+): { key: string; reason: RedactReason } | null {
+  const keys = path.split('.');
+  for (const [i, key] of keys.entries()) {
+    const reason = redactReason(key);
+    if (reason) return { key, reason: i < keys.length - 1 ? 'parent' : reason };
+  }
+  const key = keys.at(-1)!;
+  const reason = element && redactReason(key, element);
+  return reason ? { key, reason } : null;
 }
 
-function isSecretPath(path: string): boolean {
-  return path.split('.').some((key) => !!redactReason(key));
+function secretRefusal(key: string, reason: RedactReason): string {
+  return `is redacted (${REDACT_LABELS[reason]}). DevTools never writes secret fields; to write it, ${unmaskHint(reason, key)}`;
 }
 
 function elementFor(ctx: ActionContext, found: FoundForm, path: string): Element | null {
@@ -310,10 +327,8 @@ function refusal(
   path: string,
   force = false,
 ): string | null {
-  const element = elementFor(ctx, found, path);
-  if (isSecretPath(path) || (element && redactReason(lastKey(path, found), element))) {
-    return 'looks secret (password, token, card…); DevTools never writes secret fields';
-  }
+  const secret = secretOf(path, elementFor(ctx, found, path));
+  if (secret) return secretRefusal(secret.key, secret.reason);
   if (found.kind === 'signal') {
     if (read(() => node['hidden'](), false)) return 'is hidden';
     if (read(() => node['readonly'](), false)) return 'is readonly';
@@ -408,12 +423,68 @@ function nativeWrite(element: Element, value: unknown): boolean {
     element.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
   }
-  if (element instanceof HTMLSelectElement) {
-    element.value = value == null ? '' : String(value);
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-    return true;
-  }
   return false;
+}
+
+function label(value: unknown): string {
+  const text = read(() => JSON.stringify(value), undefined) ?? String(value);
+  return text.length > 60 ? `${text.slice(0, 57)}...` : text;
+}
+
+function selectWrite(
+  ctx: ActionContext,
+  select: HTMLSelectElement,
+  value: unknown,
+): { problem: string } | { expected: unknown } {
+  const accessor = directiveWith(ctx, select, '_getOptionValue');
+  const compare =
+    typeof accessor?.['_compareWith'] === 'function' ? accessor['_compareWith'] : Object.is;
+  const options = Array.from(select.options).map((option) => ({
+    option,
+    value: accessor
+      ? read(() => accessor['_getOptionValue'](option.value) as unknown, option.value)
+      : option.value,
+  }));
+  const matches = (candidate: unknown, wanted: unknown) =>
+    read(() => !!compare(candidate, wanted), false) ||
+    sameValue(candidate, wanted) ||
+    (typeof candidate === 'string' && wanted != null && candidate === String(wanted));
+  let expected: unknown;
+  if (select.multiple) {
+    if (!Array.isArray(value)) return { problem: 'is a multiple select; pass an array' };
+    const missing = value.find((wanted) => !options.some((o) => matches(o.value, wanted)));
+    if (missing !== undefined) return { problem: `has no option with the value ${label(missing)}` };
+    const chosen = options.filter((o) => value.some((wanted) => matches(o.value, wanted)));
+    for (const o of options) o.option.selected = chosen.includes(o);
+    expected = chosen.map((o) => o.value);
+  } else {
+    const index = options.findIndex((o) => matches(o.value, value));
+    if (index < 0) return { problem: `has no option with the value ${label(value)}` };
+    select.selectedIndex = index;
+    expected = options[index].value;
+  }
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  return { expected };
+}
+
+function sameOption(stored: unknown, expected: unknown): boolean {
+  return (
+    sameValue(stored, expected) ||
+    (stored != null &&
+      expected != null &&
+      typeof stored !== 'object' &&
+      typeof expected !== 'object' &&
+      String(stored) === String(expected))
+  );
+}
+
+function sameSelection(stored: unknown, expected: unknown): boolean {
+  if (!Array.isArray(expected)) return sameOption(stored, expected);
+  return (
+    Array.isArray(stored) &&
+    stored.length === expected.length &&
+    expected.every((item, index) => sameOption(stored[index], item))
+  );
 }
 
 function writeValue(
@@ -431,7 +502,9 @@ function writeValue(
   const current = rawValue(found, node);
   const secret = secretInside(value);
   if (secret) {
-    return `contains the secret field "${secret}"; DevTools never writes secret fields`;
+    const key = secret.split('.').pop()!;
+    const reason = redactReason(key) ?? 'key';
+    return `contains the secret field "${secret}" (${REDACT_LABELS[reason]}). DevTools never writes secret fields; to write it, ${unmaskHint(reason, key)}`;
   }
   if (current && typeof current === 'object' && !(current instanceof Date)) {
     const guarded = guardedFields(ctx, found, node, path, force);
@@ -448,8 +521,19 @@ function writeValue(
     if (!value || typeof value !== 'object') return 'is a group or array; pass an object or array';
   }
   const leaf = !current || typeof current !== 'object' || current instanceof Date;
-  const element = leaf ? elementFor(ctx, found, path) : null;
-  const viaDom = element && (mode === 'user' || found.kind === 'template');
+  const element = elementFor(ctx, found, path);
+  const select = element instanceof HTMLSelectElement;
+  const viaDom = element && (leaf || select) && (mode === 'user' || found.kind === 'template');
+  if (viaDom && element instanceof HTMLSelectElement) {
+    const outcome = selectWrite(ctx, element, value);
+    if ('problem' in outcome) return outcome.problem;
+    if (mode === 'user') element.dispatchEvent(new Event('blur'));
+    const deferred = found.kind !== 'signal' && read(() => node['updateOn'], 'change') !== 'change';
+    const stored = deferred ? node['_pendingValue'] : rawValue(found, node);
+    return sameSelection(stored, outcome.expected)
+      ? null
+      : `holds ${label(stored)} after the write`;
+  }
   if (viaDom && nativeWrite(element, value)) {
     if (mode === 'user') element.dispatchEvent(new Event('blur'));
     return null;

@@ -31,3 +31,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   angularTabs.delete(tabId);
 });
+
+// A new document starts undetected; detect-angular.js reports it again once it loads.
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === 'loading') angularTabs.delete(tabId);
+});

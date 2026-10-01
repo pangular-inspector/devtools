@@ -1,5 +1,6 @@
 import { Component, computed, effect, input, linkedSignal, signal, viewChild } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { isStaticReport } from '../rpc';
 import { LiveRoute } from './live-route';
 import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types';
 
@@ -49,7 +50,13 @@ import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types'
         @if (error()) {
           <div class="empty" role="alert">
             <p class="empty-title">Could not scan the route files.</p>
-            <p class="muted">Check that the dev server is running, then refresh.</p>
+            <p class="muted">
+              @if (staticReport()) {
+                Run <code>ng-devtools build</code> again to rebuild the report.
+              } @else {
+                Check that the dev server is running, then refresh.
+              }
+            </p>
           </div>
         } @else if (loading() && routes().length === 0) {
           <p class="muted empty" role="status">Scanning routes…</p>
@@ -76,7 +83,12 @@ import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types'
             {{ filtered().length }} of {{ routes().length }} route entries,
             {{ navigable() }} navigable
           </p>
-          <div class="table-scroll" role="region" aria-label="Source route config" tabindex="0">
+          <div
+            class="table-scroll"
+            role="region"
+            aria-label="Source route config table"
+            tabindex="0"
+          >
             <table>
               <thead>
                 <tr>
@@ -211,6 +223,7 @@ import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types'
 })
 export class RouteInspector {
   rpc = input<DevframeRpcClient | null>(null);
+  staticReport = computed(() => isStaticReport(this.rpc()));
 
   routes = signal<SourceRoute[]>([]);
   filter = signal('');

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { createCac } from 'devframe/adapters/cac';
-import ngDevtools from '@santoshyadavdev/ng-devtools/devframe';
+import { createNgDevtoolsCli } from '@santoshyadavdev/ng-devtools/cli';
 
-createCac(ngDevtools, { mcp: true }).parse();
+await createNgDevtoolsCli().parse();

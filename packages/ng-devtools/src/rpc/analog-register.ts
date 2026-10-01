@@ -5,9 +5,17 @@ import {
   duplicateLoads,
   onCalls,
   recentCalls,
+  refetchedServerFns,
   type AnalogCall,
 } from '../analog-server-log.ts';
-import { explainUrl, scanAnalog, type AnalogProject } from './analog-scan.ts';
+import type { PayloadSummary } from '../http-payload.ts';
+import {
+  explainUrl,
+  scanAnalog,
+  servedAnalogRoot,
+  type AnalogProject,
+  type AnalogServerFn,
+} from './analog-scan.ts';
 import {
   analogApiRoutesText,
   analogContentText,
@@ -19,6 +27,7 @@ import {
   analogRenderModesText,
   analogRoutesText,
   analogServerCallsText,
+  analogServerFnsText,
   isAnalogReport,
   mergeAnalogReport,
   prerenderPlan,
@@ -26,15 +35,27 @@ import {
   resolveAnalogReport,
   type AnalogState,
 } from './analog-tools.ts';
+import { fixedTtl, PAGE_TTL_MS, type PageTtl } from './page-ttl.ts';
 
 type AnyRecord = Record<string, any>;
 
 const SCAN_CACHE_MS = 2000;
 const CALL_TIMEOUT_MS = 10_000;
 const MAX_BODY = 2000;
-const PAGE_TTL_MS = 15_000;
 
 let disposeAnalog: (() => void) | undefined;
+let analogOwner: unknown;
+let findServerFn: ((id: string) => AnalogServerFn | undefined) | undefined;
+
+/** Adds the name and file of each Analog server function seeded into a TransferState payload. */
+export function nameServerFns(payload: PayloadSummary): PayloadSummary {
+  if (!findServerFn || !payload.entries.some((e) => e.fn)) return payload;
+  const entries = payload.entries.map((entry) => {
+    const fn = entry.fn && findServerFn?.(entry.fn.id);
+    return fn ? { ...entry, fn: { id: fn.id, name: fn.name, file: fn.file } } : entry;
+  });
+  return { ...payload, entries };
+}
 
 interface Scoped {
   rpc: {
@@ -103,21 +124,31 @@ export async function callApi(request: ApiRequest, origin = devOrigin()): Promis
   }
 }
 
-export function stopAnalog() {
+export function stopAnalog(owner?: unknown) {
+  if (owner !== undefined && owner !== analogOwner) return;
   disposeAnalog?.();
   disposeAnalog = undefined;
+  analogOwner = undefined;
 }
 
 export async function registerAnalog(
   my: Scoped,
   ctx: AgentHost,
-  options: { blockCalls?: string } = {},
+  options: { blockCalls?: string; owner?: unknown; ttl?: PageTtl } = {},
 ) {
   disposeAnalog?.();
+  const ttl = options.ttl ?? fixedTtl(PAGE_TTL_MS);
+  analogOwner = options.owner;
   const sendApi = (request: ApiRequest): Promise<AnyRecord> =>
     options.blockCalls ? Promise.resolve({ error: options.blockCalls }) : callApi(request);
   const state = await my.rpc.sharedState('analog', {
-    initialValue: { pages: [], calls: [], duplicates: [], reportedAt: 0 } as AnalogState,
+    initialValue: {
+      pages: [],
+      calls: [],
+      duplicates: [],
+      refetches: [],
+      reportedAt: 0,
+    } as AnalogState,
   });
   const current = () => state['value']() as AnalogState;
   const apply = (next: AnalogState) =>
@@ -125,10 +156,16 @@ export async function registerAnalog(
       draft.pages = next.pages;
       draft.calls = next.calls;
       draft.duplicates = next.duplicates;
+      draft.refetches = next.refetches ?? [];
       draft.reportedAt = next.reportedAt;
     });
   const withCalls = (calls: AnalogCall[]) =>
-    apply({ ...current(), calls, duplicates: duplicateLoads(calls) });
+    apply({
+      ...current(),
+      calls,
+      duplicates: duplicateLoads(calls),
+      refetches: refetchedServerFns(calls),
+    });
   withCalls(recentCalls());
   const stopCalls = onCalls(withCalls);
 
@@ -144,22 +181,24 @@ export async function registerAnalog(
     dropPages(
       current()
         .pages.map((p) => p.pageId)
-        .filter((id) => now - (seenAt.get(id) ?? 0) > PAGE_TTL_MS),
+        .filter((id) => now - (seenAt.get(id) ?? 0) > ttl(id)),
     );
   }, 5000);
   expiry.unref?.();
   disposeAnalog = () => {
     clearInterval(expiry);
     stopCalls();
+    findServerFn = undefined;
   };
 
   let cache: { at: number; project: AnalogProject } | null = null;
   const project = () => {
     if (!cache || Date.now() - cache.at > SCAN_CACHE_MS) {
-      cache = { at: Date.now(), project: scanAnalog(ctx.cwd) };
+      cache = { at: Date.now(), project: scanAnalog(servedAnalogRoot(ctx.cwd)) };
     }
     return cache.project;
   };
+  findServerFn = (id) => project().serverFns.find((fn) => fn.id === id);
 
   my.rpc.register({
     name: 'push-analog',
@@ -268,18 +307,26 @@ export async function registerAnalog(
   ctx.agent.registerTool({
     id: 'ng-devtools:analog-server-calls',
     description:
-      'Recent server calls seen by the dev server: page renders (with render mode), load() fetches (/_analog/pages), server functions and API routes, with status, time, size, who called (ssr or browser) and a redacted response preview. Flags load() fetched twice.',
+      'Recent server calls seen by the dev server: page renders (with render mode), load() fetches (GET /_analog/pages), form action submissions (other methods on /_analog/pages, with success, redirect or validation error outcome), server functions by name (including reads that ran during server rendering, seen through their TransferState seed) and API routes, with status, time, size, who called (ssr or browser) and a redacted response preview. Flags load() fetched twice and seeded server function reads called again in the browser.',
     safety: 'read',
     inputSchema: {
       type: 'object',
       properties: {
-        kind: { type: 'string', enum: ['page', 'load', 'fn', 'api'] },
+        kind: { type: 'string', enum: ['page', 'load', 'action', 'fn', 'api'] },
         route: { type: 'string' },
         limit: { type: 'number' },
       },
     },
     handler: async (args: { kind?: string; route?: string; limit?: number }) =>
-      text(analogServerCallsText(current(), args ?? {})),
+      text(analogServerCallsText(current(), args ?? {}, project().serverFns)),
+  });
+  ctx.agent.registerTool({
+    id: 'ng-devtools:analog-server-functions',
+    description:
+      'List Analog server functions (serverFn exports in src/**/*.server.ts) with name, HTTP method, file and the id Analog routes them under (/_analog/fn/<id>), how often each was called over HTTP and during server rendering, and reads called again in the browser right after hydration. Empty when no .server.ts file exports serverFn.',
+    safety: 'read',
+    inputSchema: { type: 'object', properties: {} },
+    handler: async () => text(analogServerFnsText(project(), current())),
   });
   ctx.agent.registerTool({
     id: 'ng-devtools:analog-api-routes',
@@ -318,7 +365,7 @@ export async function registerAnalog(
   ctx.agent.registerTool({
     id: 'ng-devtools:analog-render-modes',
     description:
-      'For each Analog page: how it is rendered (server rendered per request, prerendered, or client only from routeRules ssr: false), and what the last request actually did.',
+      'For each Analog page: how it is rendered (server rendered per request, prerendered, cached, redirected or client only) with the routeRules entry, prerender.routes or build output that decides it, and what the last request to that page (including dynamic and catch-all URLs) actually did.',
     safety: 'read',
     inputSchema: { type: 'object', properties: {} },
     handler: async () => text(analogRenderModesText(project(), current())),
@@ -342,7 +389,7 @@ export async function registerAnalog(
   ctx.agent.registerTool({
     id: 'ng-devtools:analog-lint',
     description:
-      'Analog checks: two files for one URL, sibling [param] files, missing default export, layout without router-outlet, .server.ts without load or without a page, redirect mistakes, bad API method suffix, duplicate API routes, routes outside the API prefix, prerender entries that match nothing, frontmatter errors, duplicate slugs, plus live problems (load fetched twice, hydration errors, restart needed, API 404/405).',
+      'Analog checks: two files for one URL, sibling [param] files, missing default export, layout without router-outlet, .server.ts without load, action or server functions, or without a page, redirect mistakes, bad API method suffix, duplicate API routes, routes outside the API prefix, prerender entries that match nothing, frontmatter errors, duplicate slugs, plus live problems (load fetched twice, seeded server function read called again, hydration errors, restart needed, API 404/405).',
     safety: 'read',
     inputSchema: { type: 'object', properties: {} },
     handler: async () => text(analogLintText(project(), current())),

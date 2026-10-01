@@ -76,7 +76,9 @@ The plugin applies to `vite serve` only. `vite build` is not affected, so nothin
 
 ### Mounts the hub
 
-It mounts the devtools hub on the Vite dev server. The WebSocket shares Vite's HTTP server when it can. Otherwise it runs on its own port.
+It mounts the devtools hub on the Vite dev server. The WebSocket shares the dev server's port, over HTTP or HTTPS (`server.https` or `@vitejs/plugin-basic-ssl`). In middleware mode, where Vite has no server of its own, the WebSocket runs on its own port.
+
+The hub keeps working after a dev server restart, for example after a config or `.env` change.
 
 ### Records Analog server activity
 
@@ -110,7 +112,7 @@ The plugin also takes the devtools options, such as `inspectors`, `agent`, `acti
 
 ### `base`
 
-Change `base` if `/__devframes/` clashes with a route of your own. The overlay looks for `/__devframes/ng-devtools/` and `/__ng-devtools/` by default, so a custom base also needs a custom overlay path. See [A custom mount path](./overlay.md#a-custom-mount-path).
+Change `base` if `/__devframes/` clashes with a route of your own. The leading and trailing slashes are optional: `'devtools'`, `'/devtools'` and `'/devtools/'` all mount the hub at `/devtools/`, and the loopback checks cover the whole path. The overlay looks for `/__devframes/ng-devtools/` and `/__ng-devtools/` by default, so a custom base also needs a custom overlay path: pass `<base>ng-devtools/` to `initOverlay`. The floating button follows that path. See [A custom mount path](./overlay.md#a-custom-mount-path).
 
 ### `apiPrefix`
 
@@ -118,7 +120,9 @@ The plugin reads `apiPrefix` from your Analog config. Set it here only when the 
 
 ### `allowedOrigins`
 
-Each entry is an exact origin, such as `https://tunnel.example`. The request itself must still come from a loopback address.
+Each entry is an origin, such as `https://tunnel.example`. The request itself must still come from a loopback address.
+
+The plugin reads each entry the way a browser sends an origin: it drops a path or a trailing slash and lowercases the host, so `'https://Tunnel.example/app/'` allows `https://tunnel.example`. It prints a warning in the terminal when it changes an entry, and it ignores an entry that is not a URL, such as `'tunnel.example'`. The first request from each origin that the check refuses also prints a warning that names the origin.
 
 ### `auth`
 
@@ -181,7 +185,7 @@ A non-loopback entry in `server.allowedHosts` or `allowedOrigins` turns the one-
     No. It applies to the dev server only, and the overlay import is guarded by <code>import.meta.env.DEV</code>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why do I get a 403 from the devtools?">
-    The request did not come from your machine, or its origin is not trusted. Open the app on <code>localhost</code>, list your hostname in <code>server.allowedHosts</code>, or add the origin to <code>allowedOrigins</code>.
+    The request did not come from your machine, or its origin is not trusted. The terminal names a refused origin. Open the app on <code>localhost</code>, list your hostname in <code>server.allowedHosts</code>, or add the origin to <code>allowedOrigins</code>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The Analog tab shows no server calls">
     The plugin records server calls made through the Vite dev server. Check that the plugin is registered and that <code>apiPrefix</code> matches your server routes. The <a href="../guides/analog.md">Analog guide</a> walks through a full setup.
