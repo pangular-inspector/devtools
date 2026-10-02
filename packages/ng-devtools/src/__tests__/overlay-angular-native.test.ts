@@ -385,6 +385,30 @@ describe('initAngularNativeOverlay', () => {
     log.mockRestore();
   });
 
+  it('keeps the stand-in location while another connection is still pending', async () => {
+    const { withWebShims } = await import('../overlay-angular-native.ts');
+    let finishFirst!: () => void;
+    let finishSecond!: () => void;
+    const first = withWebShims(
+      'http://localhost:9999/',
+      () => new Promise<void>((r) => (finishFirst = r)),
+    );
+    const second = withWebShims(
+      'http://localhost:9999/',
+      () => new Promise<void>((r) => (finishSecond = r)),
+    );
+    expect((g['location'] as { origin: string }).origin).toBe('http://localhost:9999');
+
+    finishFirst();
+    await first;
+    expect((g['location'] as { origin: string }).origin).toBe('http://localhost:9999');
+    expect(typeof g['navigator']).not.toBe('undefined');
+
+    finishSecond();
+    await second;
+    expect(typeof g['location']).toBe('undefined');
+  });
+
   it('leaves a location the app already has untouched', async () => {
     const { root, ng } = fixture();
     g['ng'] = ng;

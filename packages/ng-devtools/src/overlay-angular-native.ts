@@ -378,32 +378,37 @@ function withTextGlobal<T>(fn: () => T): T {
  * for the page's until `connectDevframe()` settles, and is removed again: Expo
  * loads split bundles from `location.origin` whenever a `location` exists.
  */
-async function withWebShims<T>(baseURL: string, connect: () => Promise<T>): Promise<T> {
+let shimUsers = 0;
+let shims: Record<string, unknown> = {};
+
+export async function withWebShims<T>(baseURL: string, connect: () => Promise<T>): Promise<T> {
   const g = globalThis as Record<string, unknown>;
-  const added: string[] = [];
-  if (typeof g['location'] === 'undefined') {
-    const url = new URL(baseURL);
-    added.push('location');
-    g['location'] = {
-      href: url.href,
-      origin: url.origin,
-      protocol: url.protocol,
-      host: url.host,
-      hostname: url.hostname,
-      port: url.port,
-      pathname: url.pathname,
-      search: '',
-      hash: '',
-    };
-  }
-  if (typeof g['navigator'] === 'undefined') {
-    added.push('navigator');
-    g['navigator'] = { userAgent: TITLE };
+  if (shimUsers++ === 0) {
+    shims = {};
+    if (typeof g['location'] === 'undefined') {
+      const url = new URL(baseURL);
+      shims['location'] = {
+        href: url.href,
+        origin: url.origin,
+        protocol: url.protocol,
+        host: url.host,
+        hostname: url.hostname,
+        port: url.port,
+        pathname: url.pathname,
+        search: '',
+        hash: '',
+      };
+    }
+    if (typeof g['navigator'] === 'undefined') shims['navigator'] = { userAgent: TITLE };
+    for (const [key, value] of Object.entries(shims)) g[key] = value;
   }
   try {
     return await connect();
   } finally {
-    for (const key of added) delete g[key];
+    if (--shimUsers === 0) {
+      for (const [key, value] of Object.entries(shims)) if (g[key] === value) delete g[key];
+      shims = {};
+    }
   }
 }
 
