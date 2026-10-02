@@ -111,7 +111,7 @@ If you pass no `--port` and port 9999 is taken, it also prints the port it uses 
 
 ### What it shows
 
-No page is connected to the CLI server. The tabs show what your source declares:
+When no app is connected, the tabs show what your source declares. An [Angular Native](./angular-native.md) app connects through the **Angular Native apps** URL above and shows live data there:
 
 - [Components](../inspectors/components.md)
 - [Routes](../inspectors/router.md)

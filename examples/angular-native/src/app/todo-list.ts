@@ -9,7 +9,12 @@ import { TodoStore } from './todo.store.ts';
     <view class="card">
       <text class="title">Todos ({{ store.remaining() }} left)</text>
       @for (todo of store.todos(); track todo.id) {
-        <pressable accessibilityRole="checkbox" class="row" (press)="store.toggle(todo.id)">
+        <pressable
+          accessibilityRole="checkbox"
+          [accessibilityState]="{ checked: todo.done }"
+          class="row"
+          (press)="store.toggle(todo.id)"
+        >
           <text class="item">{{ todo.done ? '[x]' : '[ ]' }} {{ todo.title }}</text>
         </pressable>
       }
