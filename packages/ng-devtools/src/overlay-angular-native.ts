@@ -7,6 +7,8 @@ import { setRedaction } from './forms-privacy.ts';
 import { hostBySelector } from './host-tree.ts';
 import { collectInjectorTree } from './injector-tree.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
+import { attachPipes } from './pipes-collector.ts';
+import type { NgDebugApi } from './pipes-runtime.ts';
 import {
   angularNativeTree,
   clearOutline,
@@ -63,7 +65,6 @@ export function initAngularNativeOverlay(options: AngularNativeOverlayOptions): 
     console.warn('[ng-devtools] No WebSocket global, so the Angular Native overlay cannot start.');
     return () => {};
   }
-  installWebShims(baseURL);
   ensureWebSocketStates();
 
   const root = options.root;
@@ -126,19 +127,21 @@ async function connect(
 ): Promise<() => void> {
   const connectionMeta = await fetchConnectionMeta(baseURL);
   let closing = false;
-  const rpc = await connectDevframe({
-    baseURL,
-    connectionMeta,
-    transport: 'websocket',
-    simpleAuth: false,
-    otpParam: false,
-    webmcp: false,
-    wsOptions: {
-      onDisconnected: () => {
-        if (!closing) onDisconnected();
+  const rpc = await withWebShims(baseURL, () =>
+    connectDevframe({
+      baseURL,
+      connectionMeta,
+      transport: 'websocket',
+      simpleAuth: false,
+      otpParam: false,
+      webmcp: false,
+      wsOptions: {
+        onDisconnected: () => {
+          if (!closing) onDisconnected();
+        },
       },
-    },
-  });
+    }),
+  );
   try {
     const trusted = await rpc.ensureTrusted(TRUST_TIMEOUT_MS).catch(() => false);
     if (!trusted) throw new UntrustedError();
@@ -265,11 +268,16 @@ async function startSession(
       })
     : null;
 
+  const pipes = on.pipes
+    ? attachPipes(my, pageId, () => angularDebugApi() as NgDebugApi | undefined, { tree })
+    : null;
+
   const collectors = [
     on.components && pushTree,
     on.signals && pushSignalGraph,
     on.injectors && pushInjectorTree,
     ngrx && (() => ngrx.push()),
+    pipes && (async () => pipes.push()),
   ].filter((collect) => typeof collect === 'function');
   const tick = () => {
     if (rpc.status !== 'connected' && rpc.status !== 'connecting') return;
@@ -327,11 +335,13 @@ async function startSession(
     clearOutline();
     restoreSignalHook?.();
     ngrx?.stop();
+    pipes?.stop();
     const forget = [
       on.components && 'forget-component-page',
       on.signals && 'forget-signal-page',
       on.injectors && 'forget-injector-page',
       on.ngrx && 'forget-ngrx-page',
+      on.pipes && 'forget-pipes-page',
     ].filter((name): name is string => typeof name === 'string');
     void Promise.allSettled(forget.map((name) => my.rpc.call(name, pageId))).finally(() =>
       rpc.close?.(),
@@ -363,13 +373,17 @@ function withTextGlobal<T>(fn: () => T): T {
 }
 
 /**
- * `devframe/client` reads `location` and `navigator` as bare globals. React
- * Native has no `location`, so the server's address stands in for the page's.
+ * `devframe/client` reads `location` and `navigator` as bare globals while it
+ * connects. React Native has no `location`, so the server's address stands in
+ * for the page's until `connectDevframe()` settles, and is removed again: Expo
+ * loads split bundles from `location.origin` whenever a `location` exists.
  */
-function installWebShims(baseURL: string) {
+async function withWebShims<T>(baseURL: string, connect: () => Promise<T>): Promise<T> {
   const g = globalThis as Record<string, unknown>;
+  const added: string[] = [];
   if (typeof g['location'] === 'undefined') {
     const url = new URL(baseURL);
+    added.push('location');
     g['location'] = {
       href: url.href,
       origin: url.origin,
@@ -382,7 +396,15 @@ function installWebShims(baseURL: string) {
       hash: '',
     };
   }
-  if (typeof g['navigator'] === 'undefined') g['navigator'] = { userAgent: TITLE };
+  if (typeof g['navigator'] === 'undefined') {
+    added.push('navigator');
+    g['navigator'] = { userAgent: TITLE };
+  }
+  try {
+    return await connect();
+  } finally {
+    for (const key of added) delete g[key];
+  }
 }
 
 function ensureWebSocketStates() {

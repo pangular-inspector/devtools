@@ -294,11 +294,15 @@ describe('initAngularNativeOverlay', () => {
     delete g['location'];
   });
 
-  it('reports the tree over a WebSocket and stands in a location for the server', async () => {
+  it('reports the tree over a WebSocket and stands in a location only while connecting', async () => {
     const { root, ng } = fixture();
     g['ng'] = ng;
     const session = fakeRpc();
-    connectDevframe.mockResolvedValue(session.rpc);
+    let originWhileConnecting: string | undefined;
+    connectDevframe.mockImplementation(async () => {
+      originWhileConnecting = (g['location'] as { origin: string }).origin;
+      return session.rpc;
+    });
     const { initAngularNativeOverlay } = await import('../overlay-angular-native.ts');
     const dispose = initAngularNativeOverlay({
       root: asNode(root),
@@ -317,7 +321,8 @@ describe('initAngularNativeOverlay', () => {
         transport: 'websocket',
       }),
     );
-    expect((g['location'] as { origin: string }).origin).toBe('http://192.168.1.20:9999');
+    expect(originWhileConnecting).toBe('http://192.168.1.20:9999');
+    expect(typeof g['location']).toBe('undefined');
     const tree = session.calls.find(([name]) => name === 'push-component-tree')?.[1] as {
       pageId: string;
       count: number;
@@ -373,10 +378,27 @@ describe('initAngularNativeOverlay', () => {
     const pageOf = (calls: unknown[][]) =>
       (calls.find(([name]) => name === 'push-component-tree')?.[1] as { pageId: string }).pageId;
     expect(pageOf(second.calls)).toBe(pageOf(first.calls));
+    expect(typeof g['location']).toBe('undefined');
 
     dispose();
     warn.mockRestore();
     log.mockRestore();
+  });
+
+  it('leaves a location the app already has untouched', async () => {
+    const { root, ng } = fixture();
+    g['ng'] = ng;
+    const own = { origin: 'http://localhost:8081', href: 'http://localhost:8081/' };
+    g['location'] = own;
+    const session = fakeRpc();
+    connectDevframe.mockResolvedValue(session.rpc);
+    const { initAngularNativeOverlay } = await import('../overlay-angular-native.ts');
+    const dispose = initAngularNativeOverlay({ root: asNode(root), intervalMs: 1000 });
+    await vi.waitFor(() => expect(connectDevframe).toHaveBeenCalled());
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(g['location']).toBe(own);
+    dispose();
   });
 
   it('closes a session the server does not trust and says how to fix it', async () => {

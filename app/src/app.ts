@@ -67,7 +67,7 @@ const VIEW_ACCENT: Partial<Record<View, string>> = {
 const VIEW_TAB: Partial<Record<View, Tab>> = { ngrx: 'store', analog: 'analog' };
 const TAB_VIEW: Partial<Record<Tab, View>> = { store: 'ngrx', analog: 'analog' };
 const VIEW_TABS: Partial<Record<View, Tab[]>> = {
-  'angular-native': ['components', 'signals', 'injectors', 'store'],
+  'angular-native': ['components', 'signals', 'injectors', 'store', 'pipes'],
 };
 
 const COMING_SOON: Partial<Record<View, ComingSoonInfo>> = {

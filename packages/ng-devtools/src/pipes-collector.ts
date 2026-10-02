@@ -1,4 +1,5 @@
 import { elementId } from './element-id.ts';
+import type { HostTree } from './host-tree.ts';
 import { serialize } from './serialize.ts';
 import { clip } from './text.ts';
 import {
@@ -271,13 +272,31 @@ export interface PipesCollector {
   stop(): void;
 }
 
+export interface PipesOptions<H extends object> {
+  /** Hosts to scan in place of the DOM, such as an Angular Native app's views. */
+  tree?: HostTree<H>;
+}
+
+function hostsOf<H extends object>(tree: HostTree<H>): H[] {
+  const out: H[] = [];
+  const stack = tree.roots().reverse();
+  while (stack.length) {
+    const host = stack.pop()!;
+    out.push(host);
+    stack.push(...tree.children(host).reverse());
+  }
+  return out;
+}
+
 /** Live pipe usage: discovery (always on, cheap) plus, once instrumented,
  * per-call tracking via prototype patching. Mirrors `attachForms`'s shape. */
-export function attachPipes(
+export function attachPipes<H extends object = Element>(
   my: Rpc,
   pageId: string,
   getNg: () => NgDebugApi | undefined,
+  options: PipesOptions<H> = {},
 ): PipesCollector {
+  const tree = options.tree;
   let instrumented = false;
   let instrumentation: PipeInstrumentation | null = null;
   let stats = new WeakMap<AnyRecord, InstanceStats>();
@@ -297,7 +316,7 @@ export function attachPipes(
   const added = new Set<Element>();
   const textParents = new Set<Element>();
   const observer =
-    typeof MutationObserver === 'function'
+    !tree && typeof MutationObserver === 'function'
       ? new MutationObserver((records) => {
           for (const record of records) {
             if (record.removedNodes.length) removed = true;
@@ -319,6 +338,10 @@ export function attachPipes(
   observer?.observe(document.documentElement, { childList: true, subtree: true });
 
   function discover(ng: NgDebugApi): PipeUsage[] {
+    if (tree) {
+      usages = scanPipeViews(ng, hostsOf(tree) as unknown as Element[]).usages;
+      return usages;
+    }
     scansSinceFull++;
     let elements: Iterable<Element>;
     if (!observer || fullScanDue || scansSinceFull >= FULL_SCAN_EVERY) {
@@ -355,7 +378,10 @@ export function attachPipes(
         component && typeof component === 'object'
           ? read(() => ng.getHostElement?.(component) ?? null, null)
           : null;
-      const target = host instanceof Element ? { pageId, id: elementId(host) } : undefined;
+      const isHost = tree
+        ? tree.isHost(host)
+        : typeof Element === 'function' && host instanceof Element;
+      const target = isHost && host ? { pageId, id: elementId(host) } : undefined;
       cache.set(component, target);
       return target;
     };

@@ -14,6 +14,7 @@ import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-
 import { BehaviorSubject, of, type Observable } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachPipes } from '../pipes-collector.ts';
+import type { HostTree } from '../host-tree.ts';
 import { setRedaction } from '../forms-privacy.ts';
 import { explainPipeText } from '../rpc/pipe-explain.ts';
 import { mergePipePageReport } from '../rpc/pipes-tools.ts';
@@ -78,7 +79,7 @@ class FilterPipe implements PipeTransform {
 }
 Pipe({ name: 'filter' })(FilterPipe);
 
-function harness(pageId = 'pg') {
+function harness(pageId = 'pg', tree?: HostTree<Element>) {
   const calls: { name: string; args: unknown[] }[] = [];
   const handlers = new Map<string, (...args: any[]) => unknown>();
   const my = {
@@ -91,7 +92,7 @@ function harness(pageId = 'pg') {
       },
     },
   };
-  const collector = attachPipes(my, pageId, ng);
+  const collector = attachPipes(my, pageId, ng, { tree });
   stops.push(collector.stop);
   const reports = () =>
     calls.filter((c) => c.name === 'push-pipes').map((c) => c.args[0] as PipePageReport);
@@ -99,6 +100,38 @@ function harness(pageId = 'pg') {
 }
 
 describe('pipes collector', () => {
+  it('scans a host tree in place of the document', async () => {
+    const fixture = TestBed.createComponent(Receipt);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as Element;
+    host.remove();
+    const seen: Element[] = [];
+    const tree: HostTree<Element> = {
+      roots: () => [host],
+      children: (el) => {
+        seen.push(el);
+        return Array.from(el.children);
+      },
+      parent: (el) => el.parentElement,
+      tag: (el) => el.localName,
+      connected: () => true,
+      isHost: (value): value is Element => value === host || seen.includes(value as Element),
+    };
+    const h = harness('an', tree);
+    h.collector.push();
+    await Promise.resolve();
+
+    const currency = h
+      .reports()
+      .at(-1)!
+      .pipes.find((p) => p.name === 'currency')!;
+    expect(currency).toMatchObject({ className: 'CurrencyPipe', instanceCount: 2 });
+    expect(currency.components).toEqual([
+      { name: 'Receipt', count: 2, targets: [{ pageId: 'an', id: expect.any(String) }] },
+    ]);
+  });
+
   it('reports instance count and owning component for each pipe, without instrumenting', async () => {
     await mount(Receipt);
     const h = harness();

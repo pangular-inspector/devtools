@@ -19,8 +19,9 @@ description: Send live components, signals, injectors and NgRx stores from an An
 | Signals    | The signal graph of the selected component, or of the first component with signals. There is no routed component to pick. |
 | Injectors  | Element injectors, including `<ng-container>` anchors, and environment injectors with their providers.                    |
 | NgRx       | Live `@ngrx/signals` and `@ngrx/store` state and the change log.                                                          |
+| Pipes      | The pipes in use, with their instances and the components that use them. Recording pipe calls works as in the browser.    |
 
-The source scans (routes, pipes, NgRx declarations) come from the server, so they work as with the [Standalone CLI](./cli.md). The Router, Forms, Pipes, SSR & HTTP and change detection tabs show no live data for an Angular Native app, and there is no in-app popup.
+The source scans (routes, pipes, NgRx declarations) come from the server, so they work as with the [Standalone CLI](./cli.md). The Router, Forms, SSR & HTTP and change detection tabs show no live data for an Angular Native app, and there is no in-app popup.
 
 Some controls only work with the [browser overlay](./overlay.md), so the panel hides them while the Components tab shows an Angular Native app, in the **Angular Native** view and in the panel without `?view`:
 
@@ -33,7 +34,7 @@ The controls stay for browser pages. Hovering a row still outlines the component
 
 ## Where it shows in the panel
 
-The **Angular Native** view shows only the tabs an app on a device fills: **Components**, **Signals**, **Injectors** and **Store**, scoped to that app.
+The **Angular Native** view shows only the tabs an app on a device fills: **Components**, **Signals**, **Injectors**, **Store** and **Pipes**, scoped to that app.
 
 | Server                             | How to open the view                                                                               |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
