@@ -13,7 +13,7 @@ import {searchIndexPlugin} from './search-index.plugin.ts';
 import {rawMdPlugin} from './raw-md.plugin.ts';
 import {varsPlugin} from './vars.plugin.ts';
 import {apiGenPlugin} from './api-gen.plugin.ts';
-import {withoutCode} from './plugin-utils.ts';
+import {prerenderRoutes, withoutCode} from './plugin-utils.ts';
 import config from './src/ngmd.config.ts';
 
 /**
@@ -90,6 +90,9 @@ export default defineConfig(async () => ({
     searchIndexPlugin(),
     apiGenPlugin(),
     analog({
+      prerender: {
+        routes: async () => prerenderRoutes(import.meta.dirname),
+      },
       apiPrefix: '_server',
       content: {
         highlighter: 'shiki',
