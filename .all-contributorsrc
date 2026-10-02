@@ -59,6 +59,15 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "NathanWalker",
+      "name": "Nathan Walker",
+      "avatar_url": "https://avatars.githubusercontent.com/u/457187?v=4",
+      "profile": "https://nstudio.io",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
