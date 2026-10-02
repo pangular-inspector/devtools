@@ -72,12 +72,12 @@
     "nativescript"
   ],
   "dependencies": {
-    "@devframes/agentic": "^1.1.0",
-    "@devframes/hub": "^1.1.0",
-    "@devframes/hub-ui": "^1.1.0",
+    "@devframes/agentic": "^1.2.0",
+    "@devframes/hub": "^1.2.0",
+    "@devframes/hub-ui": "^1.2.0",
     "@valibot/to-json-schema": "^1.8.0",
     "cac": "^7.0.0",
-    "devframe": "^1.1.0",
+    "devframe": "^1.2.0",
     "h3": "^1.15.11",
     "valibot": "^1.5.0"
   },
