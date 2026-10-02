@@ -166,10 +166,13 @@ export interface DeferBlockInfo {
   hydratedAt?: number;
 }
 
+export type PagePlatform = 'browser' | 'angular-native';
+
 export interface ComponentTreeReport {
   pageId: string;
   url?: string;
   title?: string;
+  platform?: PagePlatform;
   roots: LiveComponentNode[];
   count: number;
   truncated?: boolean;

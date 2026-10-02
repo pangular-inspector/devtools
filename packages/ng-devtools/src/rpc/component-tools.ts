@@ -38,6 +38,7 @@ export function toComponentPage(report: Omit<ComponentPage, 'reportedAt'>, now =
   if (typeof report.url === 'string') page.url = redactUrl(report.url.slice(0, 2000));
   if (typeof report.title === 'string') page.title = redactMessage(report.title.slice(0, 200));
   if (Array.isArray(report.deferBlocks)) page.deferBlocks = report.deferBlocks.slice(0, 500);
+  if (report.platform === 'angular-native') page.platform = 'angular-native';
   return page;
 }
 

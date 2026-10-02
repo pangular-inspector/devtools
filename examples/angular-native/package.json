@@ -1,0 +1,36 @@
+{
+  "name": "angular-native-demo",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/main.ts",
+  "scripts": {
+    "devtools:pack": "pnpm --dir ../.. --filter @santoshyadavdev/ng-devtools pack --out examples/angular-native/ng-devtools.tgz",
+    "devtools": "ng-devtools dev --no-auth",
+    "start": "expo start",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "typecheck": "ngc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@angular/common": "^22.0.0",
+    "@angular/core": "^22.0.0",
+    "@ng-native/components": "0.2.0",
+    "@ng-native/fabric": "0.2.0",
+    "@ng-native/metro": "0.2.0",
+    "@ng-native/platform": "0.2.0",
+    "@ngrx/signals": "^22.0.1",
+    "@santoshyadavdev/ng-devtools": "file:ng-devtools.tgz",
+    "devframe": "^1.1.0",
+    "expo": "~57.0.26",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "rxjs": "~7.8.0"
+  },
+  "devDependencies": {
+    "@angular/compiler-cli": "^22.0.0",
+    "@babel/core": "^7.29.7",
+    "@types/react": "~19.2.4",
+    "typescript": "~6.0.3"
+  }
+}

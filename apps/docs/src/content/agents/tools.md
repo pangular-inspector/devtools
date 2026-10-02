@@ -41,7 +41,7 @@ If `page` names a tab that doesn't report that data, the tool answers `No page <
 
 ### list-pages
 
-Lists the tabs that report to the server, newest first: page id, URL, seconds since the last report, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
+Lists the tabs and [Angular Native](../getting-started/angular-native.md) apps that report to the server, newest first: page id, URL, platform (`browser` or `Angular Native`), seconds since the last report, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
 
 ### Action tools
 

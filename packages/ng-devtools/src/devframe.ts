@@ -1321,7 +1321,7 @@ const ngDevtools = defineDevframe({
       id: 'ng-devtools:component-tree',
       name: 'Angular Component Tree',
       description:
-        'Live component instances per connected page, as JSON: `pages[pageId].roots` is a tree with one node per rendered instance (`id` instance id, `name` class name, `tag` host tag, `directives` on the host), `count`, `truncated` and `truncatedBy` (`components` or `depth`, the cap that stopped collection, when the page has more instances than it lists), and `detail` (live input values, outputs, other properties, listeners, change detection, encapsulation and injected dependencies) for the selected instance: the one picked in the panel, on the page, or through ng-devtools:highlight or ng-devtools:inspect-component. `detail.properties` lists the other own fields (signals and resources unwrapped). `nodes` repeats the roots of the most recent page. Empty when no page is connected.',
+        'Live component instances per connected page, as JSON: `pages[pageId].roots` is a tree with one node per rendered instance (`id` instance id, `name` class name, `tag` host tag, `directives` on the host), `platform` (`angular-native` for an Angular Native app, missing for a browser page), `count`, `truncated` and `truncatedBy` (`components` or `depth`, the cap that stopped collection, when the page has more instances than it lists), and `detail` (live input values, outputs, other properties, listeners, change detection, encapsulation and injected dependencies) for the selected instance: the one picked in the panel, on the page, or through ng-devtools:highlight or ng-devtools:inspect-component. `detail.properties` lists the other own fields (signals and resources unwrapped). `nodes` repeats the roots of the most recent page. Empty when no page is connected.',
       mimeType: 'application/json',
       read: () => ({ text: JSON.stringify(componentTree.value(), null, 2) }),
     });
@@ -2438,7 +2438,7 @@ const ngDevtools = defineDevframe({
     agent.registerTool({
       id: 'ng-devtools:list-pages',
       description:
-        'List the browser tabs that report live data to this server, newest first: page id, URL, seconds since the last report and which inspectors report. Pass a page id as `page` to the live tools to pick a tab; without it they use the most recent page.',
+        'List the browser tabs and Angular Native apps that report live data to this server, newest first: page id, URL, platform (`browser` or `Angular Native`), seconds since the last report and which inspectors report. Pass a page id as `page` to the live tools to pick a page; without it they use the most recent page.',
       safety: 'read',
       inputSchema: { type: 'object', properties: {} },
       handler: async () => {
@@ -2447,11 +2447,16 @@ const ngDevtools = defineDevframe({
           if (page.snapshot?.url) urls.set(page.pageId, page.snapshot.url);
         }
         for (const page of httpPages.values()) urls.set(page.pageId, page.url);
+        const platforms = new Map<string, string>();
+        for (const page of componentPages.values()) {
+          if (page.platform) platforms.set(page.pageId, page.platform);
+        }
         const withUrl = <T extends { pageId: string; reportedAt: number }>(pages: Iterable<T>) =>
           [...pages].map((page) => ({
             pageId: page.pageId,
             reportedAt: page.reportedAt,
             url: urls.get(page.pageId),
+            platform: platforms.get(page.pageId),
           }));
         const pages = summarizePages({
           components: withUrl(componentPages.values()),

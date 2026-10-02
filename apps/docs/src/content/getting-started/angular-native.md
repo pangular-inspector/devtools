@@ -20,15 +20,41 @@ description: Send live components, signals, injectors and NgRx stores from an An
 | Injectors  | Element injectors, including `<ng-container>` anchors, and environment injectors with their providers.                    |
 | NgRx       | Live `@ngrx/signals` and `@ngrx/store` state and the change log.                                                          |
 
-The source scans (routes, pipes, NgRx declarations) come from the server, so they work as with the [Standalone CLI](./cli.md). The Router, Forms, Pipes, SSR & HTTP and change detection tabs show no live data for an Angular Native app, and there is no component picker or in-app popup.
+The source scans (routes, pipes, NgRx declarations) come from the server, so they work as with the [Standalone CLI](./cli.md). The Router, Forms, Pipes, SSR & HTTP and change detection tabs show no live data for an Angular Native app, and there is no in-app popup.
+
+Some controls only work with the [browser overlay](./overlay.md), so the panel hides them while the Components tab shows an Angular Native app, in the **Angular Native** view and in the panel without `?view`:
+
+| Control                    | Why it is hidden                                                    |
+| -------------------------- | ------------------------------------------------------------------- |
+| **Pick component on page** | Picking listens for a click on a DOM element.                       |
+| **Change detection** block | The Angular Native overlay does not record change detection cycles. |
+
+The controls stay for browser pages. Hovering a row still outlines the component on the device.
+
+## Where it shows in the panel
+
+The **Angular Native** view shows only the tabs an app on a device fills: **Components**, **Signals**, **Injectors** and **Store**, scoped to that app.
+
+| Server                             | How to open the view                                                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [Standalone CLI](./cli.md)         | Open the **Angular Native apps** URL the CLI prints, `http://localhost:9999/?view=angular-native`. |
+| A hub (Express or the Vite plugin) | Pick the **Angular Native** dock in the side rail.                                                 |
+
+The panel without `?view` also shows the app, in the same tabs as a browser page.
+
+The overlay marks its component reports with `platform: 'angular-native'`, and the view follows the newest app that sends them. It keeps the app it shows while that app reports, and the app keeps its page id when it reconnects. With no app connected, the view says **No Angular Native app is connected** and links to this page. The view reads the component reports, so turning off the `components` inspector hides the dock and leaves the view empty.
+
+`list-pages` gives each page's platform, so an agent can tell an Angular Native app from a browser tab. See [Agent tools](../agents/tools.md#list-pages).
 
 ## Requirements
 
 - A development build. Angular publishes its debug API on `globalThis.ng` only when `ngDevMode` is on, which is the default in a Metro development build.
 - An app started with `mount()` from `@ng-native/platform`. The overlay needs the root node it returns.
-- A `WebSocket` global and a standards-compliant `URL`. React Native provides `WebSocket`. Expo provides `URL`. A bare React Native app needs a polyfill such as `react-native-url-polyfill`.
+- A `WebSocket` global and a standards-compliant `URL`. React Native provides `WebSocket`. Expo provides `URL`. React Native's own `URL` is read-only, and the client sets the `protocol` of the socket URL, so a bare React Native app needs a polyfill such as `react-native-url-polyfill`.
 
 ## Set up the app
+
+The [Angular Native demo](../contributing/demo-apps.md#angular-native-demo) (`examples/angular-native`) is this setup, with a store, a service and signals to inspect. Its README runs it on iOS and Android.
 
 <ngmd-workflow>
   <ngmd-step title="Install the package">
@@ -41,7 +67,7 @@ The source scans (routes, pipes, NgRx declarations) come from the server, so the
     Run the CLI from the root of the app, so the source scans read its <code>src</code> folder.
   </ngmd-step>
   <ngmd-step title="Open the panel">
-    Open <code>http://localhost:9999/</code> on your machine. The live tabs fill once the app connects.
+    Open the <strong>Angular Native apps</strong> URL the server prints, <code>http://localhost:9999/?view=angular-native</code>, on your machine. The live tabs fill once the app connects.
   </ngmd-step>
 </ngmd-workflow>
 
@@ -72,6 +98,15 @@ AppRegistry.registerRunnable('main', ({rootTag}) => {
 
 ```bash
 npx @santoshyadavdev/ng-devtools dev --no-auth
+```
+
+When it is ready, the server prints the Angular Native view on its own line:
+
+```text
+  ng-devtools v0.0.6
+  Panel: http://localhost:9999/
+  Angular Native apps: http://localhost:9999/?view=angular-native
+  MCP:   http://localhost:9999/__mcp
 ```
 
 The app can't answer the one-time code the server asks for, so the server needs `--no-auth`. Without it, the overlay logs a warning that names the flag and keeps retrying.
@@ -106,7 +141,7 @@ The server's [configuration](./configuration.md) applies to the app: inspectors 
 ## How it works
 
 - **Host tree**: the overlay walks the engine nodes under `app.engine.root` with the same collectors as the browser overlay. Text runs are skipped, and the anchors of `@if`, `@for` and `<ng-container>` show as `ng-container`.
-- **Reporting**: the app polls every `intervalMs`, sends a report only when it changed (with a keepalive), and reconnects after `retryMs` when the server restarts or the socket drops.
+- **Reporting**: the app polls every `intervalMs`, sends a report only when it changed (with a keepalive), and reconnects after `retryMs` when the server restarts or the socket drops. It keeps one page id until the overlay stops.
 - **Highlight**: when the panel or the `highlight` agent tool points at a component, the overlay sets `outlineWidth`, `outlineStyle` and `outlineColor` in the view's inline style, and restores the previous values when the panel clears it.
 
 ## FAQ

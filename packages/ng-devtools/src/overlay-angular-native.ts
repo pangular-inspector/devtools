@@ -68,6 +68,7 @@ export function initAngularNativeOverlay(options: AngularNativeOverlayOptions): 
 
   const root = options.root;
   const getRoot = typeof root === 'function' ? root : () => root;
+  const pageId = Math.random().toString(36).slice(2, 6);
   let disposed = false;
   let session: (() => void) | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;
@@ -83,7 +84,7 @@ export function initAngularNativeOverlay(options: AngularNativeOverlayOptions): 
     }, retryMs);
   };
   const start = () => {
-    connect(baseURL, getRoot, options.intervalMs, again).then(
+    connect(baseURL, pageId, getRoot, options.intervalMs, again).then(
       (dispose) => {
         if (disposed) {
           dispose();
@@ -118,6 +119,7 @@ export function initAngularNativeOverlay(options: AngularNativeOverlayOptions): 
 
 async function connect(
   baseURL: string,
+  pageId: string,
   getRoot: () => AngularNativeNode | null | undefined,
   intervalMs: number | undefined,
   onDisconnected: () => void,
@@ -140,7 +142,7 @@ async function connect(
   try {
     const trusted = await rpc.ensureTrusted(TRUST_TIMEOUT_MS).catch(() => false);
     if (!trusted) throw new UntrustedError();
-    const stop = await startSession(rpc, getRoot, intervalMs);
+    const stop = await startSession(rpc, pageId, getRoot, intervalMs);
     return () => {
       closing = true;
       stop();
@@ -160,6 +162,7 @@ async function fetchConnectionMeta(baseURL: string): Promise<ConnectionMeta> {
 
 async function startSession(
   rpc: Rpc,
+  pageId: string,
   getRoot: () => AngularNativeNode | null | undefined,
   intervalMs: number | undefined,
 ): Promise<() => void> {
@@ -168,7 +171,6 @@ async function startSession(
   const on = config.inspectors;
   const tickMs = intervalMs ?? config.limits.refreshMs;
   setRedaction(config.redaction);
-  const pageId = Math.random().toString(36).slice(2, 6);
   const tree = angularNativeTree(getRoot, angularDebugApi);
 
   const pingKnows = async (name: string) => {
@@ -186,6 +188,7 @@ async function startSession(
       ...collectComponentTree(ng, { tree, selectedId: componentTarget }),
       url: '/',
       title: TITLE,
+      platform: 'angular-native' as const,
     };
     const json = JSON.stringify(report);
     if (!force && json === lastTreeJson) {

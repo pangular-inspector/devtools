@@ -534,7 +534,7 @@ describe('agent tools', () => {
     await push('push-injector-tree', { pageId: 'p1', roots: [injectorRoot('A')], environment: [] });
     const text = await call('list-pages', '');
     expect(text).toMatch(/1 page\(s\) report/);
-    expect(text).toMatch(/\| `p1` \| unknown \| \d+s ago \| components, injectors \|/);
+    expect(text).toMatch(/\| `p1` \| unknown \| browser \| \d+s ago \| components, injectors \|/);
   });
 
   it('expires injector trees a page stopped reporting', async () => {

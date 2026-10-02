@@ -156,6 +156,26 @@ function copyCommand(cli: CAC, from: Command, name: string, description: string)
   return command;
 }
 
+/** The lines the dev server prints once it listens. */
+export function startupLines(
+  origin: string,
+  port: number,
+  options: { mcp: boolean; requestedPort?: number },
+): string[] {
+  const base = origin.replace(/\/$/, '');
+  const panel = `${base}/`;
+  const lines = [
+    `  ng-devtools v${pkg.version}`,
+    `  Panel: ${panel}`,
+    `  Angular Native apps: ${panel}?view=angular-native`,
+  ];
+  if (options.mcp) lines.push(`  MCP:   ${base}/__mcp`);
+  if (options.requestedPort === undefined && port !== DEFAULT_PORT) {
+    lines.push(`  Port ${DEFAULT_PORT} is taken, so the server uses port ${port}.`);
+  }
+  return lines;
+}
+
 export interface NgDevtoolsCliOptions {
   env?: Env;
   log?: (message: string) => void;
@@ -229,13 +249,7 @@ export function createNgDevtoolsCli(options: NgDevtoolsCliOptions = {}) {
     defaultPort: DEFAULT_PORT,
     configureCli,
     onReady: ({ origin, port }) => {
-      const base = origin.replace(/\/$/, '');
-      const lines = [`  ng-devtools v${pkg.version}`, `  Panel: ${base}/`];
-      if (mcpOn) lines.push(`  MCP:   ${base}/__mcp`);
-      if (requestedPort === undefined && port !== DEFAULT_PORT) {
-        lines.push(`  Port ${DEFAULT_PORT} is taken, so the server uses port ${port}.`);
-      }
-      log(`\n${lines.join('\n')}\n`);
+      log(`\n${startupLines(origin, port, { mcp: mcpOn, requestedPort }).join('\n')}\n`);
     },
   });
   cli.globalCommand.versionNumber = pkg.version;

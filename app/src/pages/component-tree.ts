@@ -17,6 +17,7 @@ import {
 import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
 import { pickPage } from '../live-pages';
+import { isAngularNativePage } from '../native-page';
 import { isStaticReport } from '../rpc';
 import { Select, type SelectOption } from '../ui/select';
 import {
@@ -93,6 +94,7 @@ interface Page {
   pageId: string;
   url?: string;
   title?: string;
+  platform?: string;
   deferBlocks?: DeferBlock[];
   roots: LiveNode[];
   count: number;
@@ -175,17 +177,19 @@ function bare(name: string): string {
           />
         }
         <span class="count">{{ countLabel() }}</span>
-        <button
-          type="button"
-          class="pick"
-          [class.on]="picking()"
-          (click)="picking() ? cancelPick() : pick()"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 4l6.5 16 2.3-6.7L19.5 11z" />
-          </svg>
-          {{ picking() ? 'Cancel pick' : 'Pick component on page' }}
-        </button>
+        @if (!native()) {
+          <button
+            type="button"
+            class="pick"
+            [class.on]="picking()"
+            (click)="picking() ? cancelPick() : pick()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 4l6.5 16 2.3-6.7L19.5 11z" />
+            </svg>
+            {{ picking() ? 'Cancel pick' : 'Pick component on page' }}
+          </button>
+        }
       </div>
       <p class="sr-only" role="status">{{ announcement() }}</p>
       @if (pickMessage()) {
@@ -502,7 +506,7 @@ function bare(name: string): string {
           </ul>
         </section>
       }
-      @if (!staticReport()) {
+      @if (!staticReport() && !native()) {
         <app-cd-recording [page]="cdPage()" [pageId]="page()!.pageId" [rpc]="rpc()" />
       }
     } @else {
@@ -1340,6 +1344,8 @@ export class ComponentTree {
   readonly announcement = signal('');
   readonly picking = signal(false);
   readonly pickMessage = signal('');
+  private pickPageId: string | null = null;
+  private pickSeq = 0;
   readonly focusId = signal<string | null>(null);
   readonly collapsed = signal<ReadonlySet<string>>(new Set());
   readonly openKey = signal<string | null>(null);
@@ -1374,6 +1380,7 @@ export class ComponentTree {
   );
 
   readonly live = computed(() => (this.page()?.roots.length ?? 0) > 0);
+  readonly native = computed(() => isAngularNativePage(this.page()));
 
   private readonly cdPages = signal<Record<string, CdPage>>({});
   readonly cdPage = computed(() => {
@@ -1491,6 +1498,12 @@ export class ComponentTree {
   });
 
   constructor() {
+    effect(() => {
+      const shown = this.page()?.pageId ?? null;
+      untracked(() => {
+        if (this.picking() && shown !== this.pickPageId) this.dropPick();
+      });
+    });
     effect(() => {
       const client = this.rpc();
       if (!client) return;
@@ -1659,12 +1672,15 @@ export class ComponentTree {
   async pick() {
     const client = this.rpc();
     if (!client || this.picking()) return;
+    const seq = ++this.pickSeq;
+    this.pickPageId = this.page()?.pageId ?? null;
     this.picking.set(true);
     this.say('Click a component in the app. Press Escape to cancel.');
     const result = (await client
       .scope('ng-devtools')
-      .rpc.call('request-component-pick', { pageId: this.page()?.pageId })
+      .rpc.call('request-component-pick', { pageId: this.pickPageId ?? undefined })
       .catch(() => ({ ok: false, error: 'Could not reach the devtools server.' }))) as PickResult;
+    if (seq !== this.pickSeq) return;
     this.picking.set(false);
     if (!result?.ok || !result.id) {
       this.say(result?.error ?? 'No component was picked.');
@@ -1682,8 +1698,15 @@ export class ComponentTree {
     if (!client || !this.picking()) return;
     void client
       .scope('ng-devtools')
-      .rpc.call('cancel-component-pick', { pageId: this.page()?.pageId })
+      .rpc.call('cancel-component-pick', { pageId: this.pickPageId ?? undefined })
       .catch(() => {});
+  }
+
+  private dropPick() {
+    this.cancelPick();
+    this.pickSeq++;
+    this.picking.set(false);
+    this.say('Picking stopped because the page changed.');
   }
 
   private say(message: string) {

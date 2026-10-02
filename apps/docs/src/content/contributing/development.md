@@ -55,6 +55,7 @@ packages/
     src/rpc/                  # Node-side RPC functions and agent tools
 extension/                    # Chrome DevTools extension
 examples/analog/              # Analog demo app
+examples/angular-native/      # Angular Native demo app (outside the pnpm workspace)
 apps/docs/                    # This documentation site
 src/                          # Angular Travel, the host demo app
 ```

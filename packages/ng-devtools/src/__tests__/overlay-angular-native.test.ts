@@ -323,7 +323,7 @@ describe('initAngularNativeOverlay', () => {
       count: number;
       title: string;
     };
-    expect(tree).toMatchObject({ count: 3, title: 'Angular Native' });
+    expect(tree).toMatchObject({ count: 3, title: 'Angular Native', platform: 'angular-native' });
     expect(tree.pageId).toMatch(/^[a-z0-9]+$/);
     expect(session.calls.some(([name]) => name === 'push-injector-tree')).toBe(true);
     expect(session.calls.some(([name]) => name === 'push-signal-graph')).toBe(true);
@@ -370,6 +370,9 @@ describe('initAngularNativeOverlay', () => {
     expect(connectDevframe).toHaveBeenCalledTimes(2);
     expect(first.rpc.close).toHaveBeenCalled();
     expect(second.calls.some(([name]) => name === 'push-component-tree')).toBe(true);
+    const pageOf = (calls: unknown[][]) =>
+      (calls.find(([name]) => name === 'push-component-tree')?.[1] as { pageId: string }).pageId;
+    expect(pageOf(second.calls)).toBe(pageOf(first.calls));
 
     dispose();
     warn.mockRestore();

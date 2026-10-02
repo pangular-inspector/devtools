@@ -30,12 +30,20 @@ import { TabIcon } from './pages/tab-icon';
 import { styleHubRail } from './hub-rail-style';
 import { followHubDocks, selectHubDock } from './hub-dock-sync';
 import { panelConfig, tabEnabled } from './devtools-config';
-import { hostPageId } from './page-id';
+import { hostPageId, scopeToPage } from './page-id';
+import { angularNativePage, type PlatformPage } from './native-page';
 import { initialTab, storeTab, storedTab } from './tab-memory';
 import { detectBaseURL } from './base-url';
 import { clearHighlightsOnHide } from './rpc';
 
-const HUB_VIEWS = ['angular', 'ngrx', 'analog', 'nativescript', 'capacitor'] as const;
+const HUB_VIEWS = [
+  'angular',
+  'ngrx',
+  'analog',
+  'angular-native',
+  'nativescript',
+  'capacitor',
+] as const;
 
 type View = (typeof HUB_VIEWS)[number];
 
@@ -43,6 +51,7 @@ const VIEW_TITLE: Record<View, string> = {
   angular: 'Angular',
   ngrx: 'NgRx Store',
   analog: 'Analog',
+  'angular-native': 'Angular Native',
   nativescript: 'NativeScript',
   capacitor: 'Capacitor',
 };
@@ -50,12 +59,16 @@ const VIEW_TITLE: Record<View, string> = {
 const VIEW_ACCENT: Partial<Record<View, string>> = {
   ngrx: '#d770e8',
   analog: '#ff5470',
+  'angular-native': '#ff4d6d',
   nativescript: '#8196ff',
   capacitor: '#53b9ff',
 };
 
 const VIEW_TAB: Partial<Record<View, Tab>> = { ngrx: 'store', analog: 'analog' };
 const TAB_VIEW: Partial<Record<Tab, View>> = { store: 'ngrx', analog: 'analog' };
+const VIEW_TABS: Partial<Record<View, Tab[]>> = {
+  'angular-native': ['components', 'signals', 'injectors', 'store'],
+};
 
 const COMING_SOON: Partial<Record<View, ComingSoonInfo>> = {
   nativescript: {
@@ -105,6 +118,25 @@ const NOT_ANALOG: ComingSoonInfo = {
     'SSR, prerendered or client only, per page',
   ],
   link: { label: 'Get started with Analog', href: 'https://analogjs.org/docs/getting-started' },
+};
+
+const NO_ANGULAR_NATIVE: ComingSoonInfo = {
+  id: 'angular-native',
+  name: 'Angular Native',
+  badge: 'Not connected',
+  heading: 'No Angular Native app is connected',
+  summary:
+    'Start the overlay in your Angular Native app and run this server with --no-auth. The tabs fill as soon as the app reports.',
+  color: '#e11d48',
+  plans: [
+    'The component tree, with the view outlined on the device',
+    'Signals and injectors of the running app',
+    'Live @ngrx/signals and @ngrx/store state',
+  ],
+  link: {
+    label: 'Set up Angular Native',
+    href: 'https://github.com/santoshyadavdev/angular-devtools/blob/main/apps/docs/src/content/getting-started/angular-native.md',
+  },
 };
 
 function readView(): View | null {
@@ -160,6 +192,27 @@ function readView(): View | null {
               />
               <path fill="#119eff" d="m115.36 100.987l39.659-39.602L93.917.313L54.365 39.914z" />
               <path fill-opacity=".2" d="m115.359 100.985l39.659-39.601l-15.271-15.186z" />
+            </svg>
+          } @else if (view() === 'angular-native') {
+            <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true">
+              <defs>
+                <linearGradient id="an-mark-grad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#f0224f" />
+                  <stop offset="1" stop-color="#c4002d" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M16 0C27.2 0 32 4.8 32 16S27.2 32 16 32 0 27.2 0 16 4.8 0 16 0Z"
+                fill="url(#an-mark-grad)"
+              />
+              <g transform="translate(6.4 6.4) scale(0.8)" fill="#fff">
+                <path d="M14.8486 0L23.138 16.8551L23.9996 3.99892L14.8486 0Z" />
+                <path
+                  d="M16.9875 17.7114H7.01272L5.73926 20.627L12.0001 24L18.261 20.627L16.9875 17.7114Z"
+                />
+                <path d="M8.72168 13.9298H15.2812L11.9997 6.39575L8.72168 13.9298Z" />
+                <path d="M9.15103 0L0 3.99892L0.861556 16.8551L9.15103 0Z" />
+              </g>
             </svg>
           } @else if (view() === 'analog') {
             <svg width="24" height="17" viewBox="0 0 256 182" aria-hidden="true">
@@ -256,50 +309,54 @@ function readView(): View | null {
         </p>
       } @else if (comingSoon(); as info) {
         <app-coming-soon [info]="info" />
+      } @else if (view() === 'angular-native' && !nativePageId()) {
+        <p class="turned-off" role="status">Looking for an Angular Native app…</p>
       } @else if (!tabEnabled(tab(), config())) {
         <p class="turned-off">
           This inspector is turned off in the devtools config (<code>inspectors</code>).
         </p>
       } @else {
-        @switch (tab()) {
-          @case ('dashboard') {
-            <app-dashboard [rpc]="rpc()" (navigate)="switchTab($event)" />
-          }
-          @case ('components') {
-            <app-component-tree
-              [rpc]="rpc()"
-              [focus]="componentFocus()"
-              (focusHandled)="componentFocus.set(null)"
-              (showForm)="showForm($event)"
-            />
-          }
-          @case ('routes') {
-            <app-route-inspector [rpc]="rpc()" />
-          }
-          @case ('signals') {
-            <app-signal-inspector [rpc]="rpc()" />
-          }
-          @case ('injectors') {
-            <app-di-inspector [rpc]="rpc()" />
-          }
-          @case ('store') {
-            <app-store-inspector [rpc]="rpc()" />
-          }
-          @case ('network') {
-            <app-network-inspector [rpc]="rpc()" />
-          }
-          @case ('forms') {
-            <app-forms-inspector
-              [rpc]="rpc()"
-              [focus]="formFocus()"
-              (focusHandled)="formFocus.set(null)"
-            />
-          }
-          @case ('pipes') {
-            <app-pipes-inspector [rpc]="rpc()" />
-          }
-          @case ('analog') {
-            <app-analog-inspector [rpc]="rpc()" />
+        @for (scope of [scopeKey()]; track scope) {
+          @switch (tab()) {
+            @case ('dashboard') {
+              <app-dashboard [rpc]="rpc()" (navigate)="switchTab($event)" />
+            }
+            @case ('components') {
+              <app-component-tree
+                [rpc]="rpc()"
+                [focus]="componentFocus()"
+                (focusHandled)="componentFocus.set(null)"
+                (showForm)="showForm($event)"
+              />
+            }
+            @case ('routes') {
+              <app-route-inspector [rpc]="rpc()" />
+            }
+            @case ('signals') {
+              <app-signal-inspector [rpc]="rpc()" />
+            }
+            @case ('injectors') {
+              <app-di-inspector [rpc]="rpc()" />
+            }
+            @case ('store') {
+              <app-store-inspector [rpc]="rpc()" />
+            }
+            @case ('network') {
+              <app-network-inspector [rpc]="rpc()" />
+            }
+            @case ('forms') {
+              <app-forms-inspector
+                [rpc]="rpc()"
+                [focus]="formFocus()"
+                (focusHandled)="formFocus.set(null)"
+              />
+            }
+            @case ('pipes') {
+              <app-pipes-inspector [rpc]="rpc()" />
+            }
+            @case ('analog') {
+              <app-analog-inspector [rpc]="rpc()" />
+            }
           }
         }
       }
@@ -646,9 +703,17 @@ export class App implements OnInit, OnDestroy {
     return view ? VIEW_TITLE[view] : 'Angular DevTools';
   });
   readonly analogKnown = signal(false);
+  readonly nativePageId = signal<string | null>(null);
+  readonly nativeKnown = signal(false);
+  protected readonly scopeKey = computed(() =>
+    this.view() === 'angular-native' ? (this.nativePageId() ?? '') : '',
+  );
   readonly comingSoon = computed(() => {
     const view = this.view();
     if (view === 'analog') return this.analogKnown() && !this.analog() ? NOT_ANALOG : undefined;
+    if (view === 'angular-native') {
+      return this.nativeKnown() && !this.nativePageId() ? NO_ANGULAR_NATIVE : undefined;
+    }
     return view ? COMING_SOON[view] : undefined;
   });
   readonly config = computed(() => panelConfig(this.rpc()));
@@ -659,6 +724,8 @@ export class App implements OnInit, OnDestroy {
     const only = view ? VIEW_TAB[view] : undefined;
     const enabled = this.allTabs.filter((t) => tabEnabled(t.id, this.config()));
     if (only) return enabled.filter((t) => t.id === only);
+    const some = view ? VIEW_TABS[view] : undefined;
+    if (some) return enabled.filter((t) => some.includes(t.id));
     return enabled.filter(
       (t) => (t.id !== 'analog' || this.analog()) && !(view === 'angular' && TAB_VIEW[t.id]),
     );
@@ -672,7 +739,7 @@ export class App implements OnInit, OnDestroy {
 
   tab = linkedSignal<Tab>(() => {
     const view = this.view();
-    return (view && VIEW_TAB[view]) || 'dashboard';
+    return (view && (VIEW_TAB[view] ?? VIEW_TABS[view]?.[0])) || 'dashboard';
   });
   rpc = signal<DevframeRpcClient | null>(null);
   connected = signal(false);
@@ -690,6 +757,7 @@ export class App implements OnInit, OnDestroy {
       : `${hidden.length} tabs are in the background, showing their last data.`;
   });
   private stopVisibility = () => {};
+  private stopNative = () => {};
 
   private stopFollowing = () => {};
   private stopHighlights = () => {};
@@ -760,6 +828,7 @@ export class App implements OnInit, OnDestroy {
         this.rpc.set(client);
         this.connected.set(true);
         void this.watchVisibility(client);
+        void this.watchAngularNative(client);
         const scoped = client.scope('ng-devtools').rpc as unknown as {
           call: (name: string) => Promise<unknown>;
         };
@@ -782,11 +851,13 @@ export class App implements OnInit, OnDestroy {
       () => {
         this.connectionFailed.set(true);
         this.analogKnown.set(true);
+        this.nativeKnown.set(true);
       },
     );
   }
 
   ngOnDestroy() {
+    this.stopNative();
     this.stopFollowing();
     this.stopVisibility();
     this.stopHighlights();
@@ -795,6 +866,7 @@ export class App implements OnInit, OnDestroy {
 
   private showView(view: View) {
     if (view === this.view()) return;
+    scopeToPage(view === 'angular-native' ? this.nativePageId() : null);
     this.view.set(view);
     const url = new URL(location.href);
     url.searchParams.set('view', view);
@@ -842,6 +914,24 @@ export class App implements OnInit, OnDestroy {
 
   private tabScope() {
     return this.view() ?? 'panel';
+  }
+
+  private async watchAngularNative(client: DevframeRpcClient) {
+    try {
+      const state = await client.scope('ng-devtools').rpc.sharedState('component-tree');
+      const apply = (value: unknown) => {
+        const pages = (value as { pages?: Record<string, PlatformPage> } | undefined)?.pages;
+        const pageId = angularNativePage(pages, this.nativePageId());
+        if (this.view() === 'angular-native') scopeToPage(pageId);
+        this.nativePageId.set(pageId);
+        this.nativeKnown.set(true);
+      };
+      apply(state.value());
+      this.stopNative();
+      this.stopNative = state.on('updated', apply);
+    } catch {
+      this.nativeKnown.set(true);
+    }
   }
 
   private async watchVisibility(client: DevframeRpcClient) {

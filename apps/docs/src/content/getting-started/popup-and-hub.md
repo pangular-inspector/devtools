@@ -108,13 +108,14 @@ The panel saves its position, size and dock mode in `localStorage` under `ng-dev
 
 When the page's server mounts the hub (`/__devframes/`), the button opens the whole hub. A side rail shows one dock per tool:
 
-| Dock         | Shows                                                                           |
-| ------------ | ------------------------------------------------------------------------------- |
-| Angular      | Dashboard, Components, Routes, Signals, Injectors, Forms, Pipes, and SSR & HTTP |
-| NgRx         | The Store tab                                                                   |
-| Analog       | The Analog tab, or a notice in apps that do not use Analog                      |
-| NativeScript | A **Coming Soon** placeholder                                                   |
-| Capacitor    | A **Coming Soon** placeholder                                                   |
+| Dock           | Shows                                                                                                                                        |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Angular        | Dashboard, Components, Routes, Signals, Injectors, Forms, Pipes, and SSR & HTTP                                                              |
+| NgRx           | The Store tab                                                                                                                                |
+| Analog         | The Analog tab, or a notice in apps that do not use Analog                                                                                   |
+| Angular Native | Components, Signals, Injectors and Store for a connected [Angular Native](./angular-native.md) app, or a setup notice when none is connected |
+| NativeScript   | A **Coming Soon** placeholder                                                                                                                |
+| Capacitor      | A **Coming Soon** placeholder                                                                                                                |
 
 ### Full-page viewer
 

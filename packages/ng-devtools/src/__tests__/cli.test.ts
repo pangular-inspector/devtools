@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createCac } from 'devframe/adapters/cac';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { checkReportOutDir, createNgDevtoolsCli, guardReportOutDir } from '../cli.ts';
+import { checkReportOutDir, createNgDevtoolsCli, guardReportOutDir, startupLines } from '../cli.ts';
 import { fixtureDir } from '../rpc/__tests__/fixture-dir.ts';
 
 function project() {
@@ -121,5 +121,25 @@ describe('ng-devtools build --outDir', () => {
     expect(existsSync(join(shell, 'src/app.ts'))).toBe(true);
     expect(process.exitCode).toBe(1);
     expect(error.mock.calls.flat().join('\n')).toContain('working directory or one of its parents');
+  });
+});
+
+describe('ng-devtools dev startup', () => {
+  it('prints the Angular Native view next to the panel URL', () => {
+    for (const origin of ['http://localhost:9999', 'http://localhost:9999/']) {
+      const lines = startupLines(origin, 9999, { mcp: true });
+      expect(lines).toContain('  Panel: http://localhost:9999/');
+      expect(lines).toContain('  Angular Native apps: http://localhost:9999/?view=angular-native');
+      expect(lines).toContain('  MCP:   http://localhost:9999/__mcp');
+    }
+  });
+
+  it('keeps the Angular Native line without MCP and on a fallback port', () => {
+    const lines = startupLines('http://127.0.0.1:4321', 4321, { mcp: false });
+    expect(lines.slice(1)).toEqual([
+      '  Panel: http://127.0.0.1:4321/',
+      '  Angular Native apps: http://127.0.0.1:4321/?view=angular-native',
+      '  Port 9999 is taken, so the server uses port 4321.',
+    ]);
   });
 });

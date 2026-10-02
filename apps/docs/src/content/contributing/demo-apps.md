@@ -1,22 +1,25 @@
 ---
 title: Demo apps
-description: The Angular Travel demo and the Analog demo in the repository, and how to run each in development and production.
+description: The Angular Travel, Analog and Angular Native demos in the repository, and how to run each.
 ---
 
 <ngmd-hero title="Demo apps" gradient>
-  Two apps that give every inspector something to show. One Angular CLI app with SSR, one Analog app on Vite.
+  Three apps that give the inspectors something to show. An Angular CLI app with SSR, an Analog app on Vite and an Angular Native app on a device.
 </ngmd-hero>
 
 # Demo apps
 
-The repository has two demo apps. Use them to try a change against a real app before you open a PR.
+The repository has three demo apps. Use them to try a change against a real app before you open a PR.
 
-<ngmd-card-grid columns="2">
+<ngmd-card-grid columns="3">
   <ngmd-card icon="compass" title="Angular Travel" cta="src/">
     An Angular CLI app with SSR and Express. It uses the hub, the overlay and the HTTP providers.
   </ngmd-card>
   <ngmd-card icon="zap" title="Analog demo" cta="examples/analog">
     An Analog app wired with the Vite plugin. It covers file routes, server loads, API routes and content.
+  </ngmd-card>
+  <ngmd-card icon="layers" title="Angular Native demo" cta="examples/angular-native">
+    An Expo app on Angular Native. It reports components, signals, injectors and an NgRx store from a simulator or emulator.
   </ngmd-card>
 </ngmd-card-grid>
 
@@ -133,10 +136,39 @@ pnpm --filter analog-demo preview
   The Vite plugin runs on the dev server only, and the overlay loads only when <code>import.meta.env.DEV</code> is true. A production build has no devtools. Use it to check the <code>analog-prerender-plan</code> tool against real build output.
 </ngmd-alert>
 
+## Angular Native demo
+
+`examples/angular-native` is an *Angular app rendered by [Angular Native](../getting-started/angular-native.md) on iOS and Android, with the overlay started in `src/main.ts`.
+
+### What's in the Angular Native demo
+
+| File                         | What it covers                                                |
+| ---------------------------- | ------------------------------------------------------------- |
+| `src/main.ts`                | `mount()` and `initAngularNativeOverlay()`, in `__DEV__` only |
+| `src/app/counter-card.ts`    | An `input()`, a `computed()` and an injected service          |
+| `src/app/counter.service.ts` | A root service with signals                                   |
+| `src/app/todo.store.ts`      | An `@ngrx/signals` store, read by `src/app/todo-list.ts`      |
+
+### Outside the workspace
+
+The demo is excluded in `pnpm-workspace.yaml`, so `pnpm install` and CI don't install Expo or React Native, and `pnpm typecheck` doesn't check it. It installs with npm and depends on a tarball of the devtools package (`ng-devtools.tgz`), so Metro bundles the built `dist` files as npm publishes them.
+
+### Run the Angular Native demo
+
+```bash
+cd examples/angular-native
+npm run devtools:pack
+npm install
+npm run devtools
+```
+
+`devtools:pack` builds and packs `packages/ng-devtools` into the demo folder. After a change in the package, pack again and run `npm install ./ng-devtools.tgz`, since a plain `npm install` keeps the tarball its lockfile pins. `npm run devtools` starts the devtools server with `--no-auth` on port 9999. Then, in a second terminal, run `npm run ios`, or `adb reverse tcp:9999 tcp:9999` and `npm run android`. The demo's `README.md` has the details, and `npm run typecheck` checks its templates.
+
 ## Where to next
 
 <ngmd-pill-row>
   <ngmd-pill href="/contributing/development" title="Development setup"></ngmd-pill>
   <ngmd-pill href="/guides/analog" title="Set up Analog"></ngmd-pill>
   <ngmd-pill href="/guides/ssr-http" title="Set up SSR & HTTP"></ngmd-pill>
+  <ngmd-pill href="/getting-started/angular-native" title="Angular Native"></ngmd-pill>
 </ngmd-pill-row>

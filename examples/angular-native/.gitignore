@@ -1,0 +1,6 @@
+node_modules/
+.expo/
+ios/
+android/
+ng-devtools.tgz
+package-lock.json

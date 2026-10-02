@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Angular Native demo",
+    "slug": "angular-native-demo",
+    "version": "1.0.0",
+    "platforms": ["ios", "android"],
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "bundleIdentifier": "dev.ngdevtools.angularnative"
+    },
+    "android": {
+      "package": "dev.ngdevtools.angularnative"
+    },
+    "plugins": ["@ng-native/metro"]
+  }
+}

@@ -95,6 +95,7 @@ describe('ng-devtools binary', () => {
     });
     expect(stdout).toContain(`ng-devtools v${pkg.version}`);
     expect(stdout).toMatch(/Panel: http:\/\/localhost:\d+\//);
+    expect(stdout).toMatch(/Angular Native apps: http:\/\/localhost:\d+\/\?view=angular-native/);
     expect(stdout).toMatch(/MCP: {3}http:\/\/localhost:\d+\/__mcp/);
   });
 

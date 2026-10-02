@@ -168,13 +168,14 @@ bootstrapApplication(App, appConfig)
 
 A floating button appears on your page. It opens the devtools with one dock entry per tool:
 
-| Dock entry   | Shows                                                                           |
-| ------------ | ------------------------------------------------------------------------------- |
-| Angular      | Dashboard, components, routes, signals, injectors, forms, pipes, and SSR & HTTP |
-| NgRx         | Store patterns from source, and live state and actions                          |
-| Analog       | File routes, server calls, render modes and lint (a notice in non-Analog apps)  |
-| NativeScript | A **Coming Soon** placeholder                                                   |
-| Capacitor    | A **Coming Soon** placeholder                                                   |
+| Dock entry     | Shows                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------- |
+| Angular        | Dashboard, components, routes, signals, injectors, forms, pipes, and SSR & HTTP                   |
+| NgRx           | Store patterns from source, and live state and actions                                            |
+| Analog         | File routes, server calls, render modes and lint (a notice in non-Analog apps)                    |
+| Angular Native | Components, signals, injectors and store of a connected [Angular Native](./angular-native.md) app |
+| NativeScript   | A **Coming Soon** placeholder                                                                     |
+| Capacitor      | A **Coming Soon** placeholder                                                                     |
 
 [Popup and hub](./popup-and-hub.md) covers the panel, its dock modes and deep links.
 

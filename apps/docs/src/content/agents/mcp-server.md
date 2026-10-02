@@ -223,7 +223,7 @@ Your client can ask you before it runs them. To drop them from the server, set `
 
 ### Pages and tabs
 
-Each browser tab reports on its own and gets a page id. `list-pages` lists them. Tools that read live data use the most recent page by default. Pass `page` to pick another tab (`inspect-providers`, `highlight`, `inspect-component` and `defer-blocks` also accept `pageId`). An id that no tab reports gets an answer that lists the tabs that do, instead of data from another tab. The server drops pages that stop reporting after a short time.
+Each browser tab reports on its own and gets a page id, and so does an [Angular Native](../getting-started/angular-native.md) app. `list-pages` lists them with their platform. Tools that read live data use the most recent page by default. Pass `page` to pick another tab (`inspect-providers`, `highlight`, `inspect-component` and `defer-blocks` also accept `pageId`). An id that no tab reports gets an answer that lists the tabs that do, instead of data from another tab. The server drops pages that stop reporting after a short time.
 
 ## Where to next
 
