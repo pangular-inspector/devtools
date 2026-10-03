@@ -36,7 +36,8 @@
     "analog:dev": "pnpm --filter analog-demo dev",
     "docs:dev": "nx serve angular-devtools-docs",
     "docs:build": "nx build angular-devtools-docs",
-    "docs:test": "nx test angular-devtools-docs"
+    "docs:test": "nx test angular-devtools-docs",
+    "docs:deploy": "nx deploy angular-devtools-docs"
   },
   "private": true,
   "packageManager": "pnpm@10.33.4",

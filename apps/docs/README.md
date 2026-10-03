@@ -9,9 +9,12 @@ From the repository root:
 ```bash
 pnpm install
 pnpm docs:dev     # dev server on http://localhost:5173
-pnpm docs:build   # production build in apps/docs/dist
+pnpm docs:build   # production build in dist/apps/docs
 pnpm docs:test    # unit tests for the build plugins
+pnpm docs:deploy  # build, then deploy to Cloudflare Workers with wrangler
 ```
+
+`docs:deploy` serves the prerendered pages in `dist/apps/docs/analog/public` as static assets, using `wrangler.jsonc`. Log in once with `pnpm --filter angular-devtools-docs exec wrangler login`, or set `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in CI.
 
 These scripts run Nx targets. The `@nx/vite` and `@nx/vitest` plugins infer them from `vite.config.ts`. You can also run any target directly, for example `pnpm nx typecheck angular-devtools-docs` or `pnpm nx preview angular-devtools-docs`.
 

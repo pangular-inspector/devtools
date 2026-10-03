@@ -1,0 +1,10 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "angular-devtools-docs",
+  "compatibility_date": "2026-05-01",
+  // The site is fully prerendered, so it is served as static assets only.
+  "assets": {
+    "directory": "../../dist/apps/docs/analog/public",
+    "not_found_handling": "404-page",
+  },
+}

@@ -3,6 +3,8 @@
 # Compiled output
 /dist
 /packages/*/dist
+/apps/docs/.analog
+.wrangler
 /tmp
 /out-tsc
 /bazel-out

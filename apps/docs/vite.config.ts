@@ -4,6 +4,7 @@ import {defineConfig, type Plugin} from 'vite';
 import analog from '@analogjs/platform';
 import tailwindcss from '@tailwindcss/vite';
 import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
 import {getBuildExtensions} from './src/marked-extensions/index.ts';
 import {pageMetaPlugin} from './page-meta.plugin.ts';
 import {internalLinkGuard} from './link-guard.plugin.ts';
@@ -67,9 +68,14 @@ function siteHtml(): Plugin {
   };
 }
 
+// Nx runs the build from apps/docs, so Analog would write to apps/docs/dist.
+// The site goes to <repo>/dist/apps/docs like the other projects.
+const outDir = resolve(import.meta.dirname, '../../dist/apps/docs');
+
 export default defineConfig(async () => ({
   build: {
     target: ['es2020'],
+    outDir: resolve(outDir, 'client'),
   },
   resolve: {
     mainFields: ['module'],
@@ -90,6 +96,17 @@ export default defineConfig(async () => ({
     searchIndexPlugin(),
     apiGenPlugin(),
     analog({
+      // The intermediate SSR bundle is only used for prerendering. It imports
+      // packages installed in apps/docs/node_modules, which Node cannot find
+      // from <repo>/dist, so it stays under apps/docs.
+      ssrBuildDir: resolve(import.meta.dirname, '.analog/ssr'),
+      nitro: {
+        buildDir: resolve(import.meta.dirname, '.analog/nitro'),
+        output: {
+          dir: resolve(outDir, 'analog'),
+          publicDir: resolve(outDir, 'analog/public'),
+        },
+      },
       prerender: {
         routes: async () => prerenderRoutes(import.meta.dirname),
       },
