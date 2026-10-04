@@ -73,6 +73,17 @@
       .status a {
         color: var(--accent);
       }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+      main {
+        height: 100%;
+      }
       .status :focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: 2px;
@@ -80,20 +91,24 @@
     </style>
   </head>
   <body>
-    <div id="status" class="status" role="status">
-      <p id="status-message">Detecting Angular app…</p>
-      <ul id="status-tried" aria-label="URLs tried" hidden></ul>
-      <button id="status-allow" type="button" hidden>Allow access</button>
-      <a
-        id="status-docs"
-        href="https://github.com/santoshyadavdev/angular-devtools#get-started"
-        target="_blank"
-        rel="noreferrer"
-        hidden
-        >Set up the devtools server</a
-      >
-    </div>
-    <iframe id="devtools-frame" style="display: none"></iframe>
+    <main>
+      <h1 class="visually-hidden">Angular DevTools</h1>
+      <div id="status" class="status" role="status">
+        <p id="status-message">Detecting Angular app…</p>
+        <ul id="status-tried" aria-label="URLs tried" hidden></ul>
+        <button id="status-allow" type="button" hidden>Allow access</button>
+        <button id="status-retry" type="button" hidden>Try again</button>
+        <a
+          id="status-docs"
+          href="https://github.com/santoshyadavdev/angular-devtools#get-started"
+          target="_blank"
+          rel="noreferrer"
+          hidden
+          >Set up the devtools server</a
+        >
+      </div>
+      <iframe id="devtools-frame" style="display: none"></iframe>
+    </main>
     <script src="panel-bridge.js"></script>
   </body>
 </html>

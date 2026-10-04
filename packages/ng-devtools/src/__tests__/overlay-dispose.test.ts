@@ -46,6 +46,7 @@ describe.sequential('overlay dispose', () => {
     connectGate = Promise.resolve();
     document.body.innerHTML = '';
     delete window.__ngDevtoolsComponentOf;
+    delete window.__ngDevtoolsPageId;
     vi.stubGlobal('BroadcastChannel', undefined);
     vi.stubGlobal(
       'fetch',
@@ -152,6 +153,25 @@ describe.sequential('overlay dispose', () => {
 
     dispose();
     expect(window.__ngDevtoolsComponentOf).toBeUndefined();
+  });
+
+  it('exposes the page id it claimed until it is disposed', async () => {
+    const { initOverlay } = await loadOverlay();
+    const dispose = await initOverlay();
+    expect(window.__ngDevtoolsPageId).toBeTypeOf('string');
+    expect(window.__ngDevtoolsPageId).toBe(sessionStorage.getItem('ng-devtools-page-id'));
+
+    dispose();
+    expect(window.__ngDevtoolsPageId).toBeUndefined();
+  });
+
+  it('leaves a page id that is not its own', async () => {
+    const { initOverlay } = await loadOverlay();
+    const dispose = await initOverlay();
+    window.__ngDevtoolsPageId = 'other';
+
+    dispose();
+    expect(window.__ngDevtoolsPageId).toBe('other');
   });
 
   it('leaves an Elements-panel lookup that is not its own', async () => {

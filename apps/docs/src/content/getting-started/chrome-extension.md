@@ -81,7 +81,11 @@ The panel looks for the devtools server on the origin of the inspected page. It 
 
 Under each path it asks for `__devframe/__connection.json`, then `__connection.json`. It connects the UI to the first path that answers with a connection file. Each request times out after 1.5 seconds.
 
-If no path answers, the panel says "No devtools server answered", lists every URL it tried and links to the setup instructions.
+If no path answers, the panel says "No devtools server answered" and lists every URL it tried, each with the HTTP status it got or "no answer". It links to the setup instructions.
+
+If any URL got `401` or `403`, the panel says the server refused the request instead, and shows the start of the response text. The Vite plugin answers `403` to requests that do not come from your machine, for example when you open the app by its LAN IP. The panel then links to [Answers only your machine](./vite.md#answers-only-your-machine).
+
+Both messages have a **Try again** button. Click it after you start or fix the server, and the panel looks for the server again without a page reload.
 
 The panel only connects to pages served over `http` or `https`. On other pages it says so and stops.
 
@@ -91,7 +95,9 @@ The extension can reach loopback hosts from the start. For any other host, such 
 
 ### The inspected tab
 
-The overlay gives each page an id. The panel passes the id of the page it inspects to the UI. If several tabs run the same app, the panel shows the tab you inspect, not the one that reported last.
+The overlay gives each page an id and exposes it on the page as `window.__ngDevtoolsPageId`. The panel passes the id of the page it inspects to the UI. If several tabs run the same app, the panel shows the tab you inspect, not the one that reported last.
+
+The overlay claims the id after it connects to the server, so it can come later than the server answers. The panel waits up to five seconds for the id. If no id appears in that time, it uses the id the tab kept from an earlier load, if there is one. Without any id, it loads the UI and shows the page that reported last.
 
 ### Navigation
 
@@ -139,7 +145,13 @@ The content scripts are wider. Two of them run on every page. They check for an 
     The page is not on a loopback host. Click <strong>Allow access</strong> to let the extension reach that host. Chrome asks you to confirm.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel lists the URLs it tried">
-    None of them served a connection file. Check that the server of the page mounts the devtools and that the server accepts the request. See <a href="../security.md">Access and redaction</a>.
+    None of them served a connection file. The status next to each URL shows what the server answered. Check that the server of the page mounts the devtools and that the server accepts the request, then click <strong>Try again</strong>. See <a href="../security.md">Access and redaction</a>.
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="The panel says the server refused the request">
+    The server answered <code>401</code> or <code>403</code>. The Vite plugin refuses requests that do not come from your machine. Open the app on <code>localhost</code>, or see <a href="./vite.md#answers-only-your-machine">Answers only your machine</a>.
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="The panel shows another tab">
+    The overlay on the inspected page did not report its page id within five seconds, so the panel loaded without it. Check that the overlay starts on that page, then close and reopen DevTools.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Selecting an element does not select a component">
     Open the <strong>Components</strong> tab first, and check that the overlay is loaded. Elements outside any component select nothing.

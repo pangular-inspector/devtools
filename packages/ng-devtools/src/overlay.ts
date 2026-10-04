@@ -63,6 +63,7 @@ import { clearHighlight, showHighlight } from './page-highlight.ts';
 declare global {
   interface Window {
     __ngDevtoolsComponentOf?: (el: unknown) => string | null;
+    __ngDevtoolsPageId?: string;
   }
 }
 
@@ -301,6 +302,10 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
 
   const { id: pageId, release: releasePageId } = await claimPageId();
   if (!own(releasePageId)) return;
+  window.__ngDevtoolsPageId = pageId;
+  own(() => {
+    if (window.__ngDevtoolsPageId === pageId) delete window.__ngDevtoolsPageId;
+  });
   const stopAnalog = on.analog ? attachAnalog(my, pageId, getNg, limits.refreshMs) : () => {};
   const forms = on.forms
     ? attachForms(

@@ -12,7 +12,8 @@ type Listener = () => void;
 
 interface Setup {
   origin?: string;
-  pageId?: string | null;
+  pageId?: () => string | null;
+  storedPageId?: string | null;
   granted?: boolean;
   grant?: boolean;
   fetch?: (url: string) => Promise<Response>;
@@ -43,9 +44,11 @@ function open(setup: Setup = {}) {
             callback(
               expression === 'location.origin'
                 ? origin
-                : expression.includes('ng-devtools-page-id')
-                  ? (setup.pageId ?? null)
-                  : null,
+                : expression.includes('__ngDevtoolsPageId')
+                  ? (setup.pageId?.() ?? null)
+                  : expression.includes('ng-devtools-page-id')
+                    ? (setup.storedPageId ?? null)
+                    : null,
             ),
           ),
       },
@@ -73,6 +76,7 @@ function open(setup: Setup = {}) {
     tried: () => [...$('status-tried').querySelectorAll('li')].map((li) => li.textContent),
     triedList: $('status-tried'),
     allow: $<HTMLButtonElement>('status-allow'),
+    retry: $<HTMLButtonElement>('status-retry'),
     docs: $<HTMLAnchorElement>('status-docs'),
     frame: $<HTMLIFrameElement>('devtools-frame'),
   };
@@ -82,6 +86,8 @@ const found = (path: string) => (url: string) =>
   url.endsWith(path)
     ? Promise.resolve(new Response('{}', { status: 200 }))
     : Promise.resolve(new Response('', { status: 404 }));
+
+const urlOf = (line: string | null) => line?.replace(/ \(.*\)$/, '');
 
 describe('extension panel bridge', () => {
   beforeEach(() => vi.useFakeTimers());
@@ -112,6 +118,7 @@ describe('extension panel bridge', () => {
       granted: false,
       grant: true,
       fetch: found('/__ng-devtools/__devframe/__connection.json'),
+      pageId: () => 'page-1',
     });
     await vi.advanceTimersByTimeAsync(500);
     expect(panel.message()).toBe(
@@ -140,7 +147,7 @@ describe('extension panel bridge', () => {
     const panel = open();
     await vi.advanceTimersByTimeAsync(500);
     expect(panel.message()).toBe('No devtools server answered on http://localhost:4200. Tried:');
-    const tried = panel.tried();
+    const tried = panel.tried().map(urlOf);
     expect(tried.length).toBeGreaterThan(1);
     expect(new Set(tried).size).toBe(tried.length);
     expect(tried).toContain('http://localhost:4200/__devframe/__connection.json');
@@ -152,7 +159,7 @@ describe('extension panel bridge', () => {
 
   it('loads the panel with the base URL and page id of the server it found', async () => {
     const panel = open({
-      pageId: 'page-1',
+      pageId: () => 'page-1',
       fetch: found('/__devframes/ng-devtools/__connection.json'),
     });
     await vi.advanceTimersByTimeAsync(500);
@@ -166,16 +173,128 @@ describe('extension panel bridge', () => {
     expect(panel.status.classList.contains('hidden')).toBe(true);
   });
 
-  it('leaves the page id out when the page has none', async () => {
+  it('leaves the page id out when the page has none after five seconds', async () => {
     const panel = open({ fetch: found('/__ng-devtools/__devframe/__connection.json') });
     await vi.advanceTimersByTimeAsync(500);
+    expect(panel.frame.style.display).toBe('none');
+    expect(panel.message()).toBe('Detecting Angular app…');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(panel.frame.style.display).toBe('block');
     expect(new URL(panel.frame.src).searchParams.has('pageId')).toBe(false);
+  });
+
+  it('waits for a page id the overlay claims after the server answers', async () => {
+    let pageId: string | null = null;
+    const panel = open({
+      pageId: () => pageId,
+      storedPageId: 'other-tab',
+      fetch: found('/__ng-devtools/__devframe/__connection.json'),
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(panel.frame.style.display).toBe('none');
+    pageId = 'late-page';
+    await vi.advanceTimersByTimeAsync(250);
+    expect(panel.frame.style.display).toBe('block');
+    expect(new URL(panel.frame.src).searchParams.get('pageId')).toBe('late-page');
+  });
+
+  it('stops waiting for a page id when the page navigates', async () => {
+    let pageId: string | null = null;
+    const panel = open({
+      pageId: () => pageId,
+      fetch: found('/__ng-devtools/__devframe/__connection.json'),
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    panel.navigate();
+    pageId = 'next-page';
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(new URL(panel.frame.src).searchParams.get('pageId')).toBe('next-page');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(panel.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back to the stored page id of an overlay that sets no global', async () => {
+    const panel = open({
+      storedPageId: 'stored-page',
+      fetch: found('/__ng-devtools/__devframe/__connection.json'),
+    });
+    await vi.advanceTimersByTimeAsync(5500);
+    expect(new URL(panel.frame.src).searchParams.get('pageId')).toBe('stored-page');
+  });
+
+  it('shows the status of each probe and tries again on request', async () => {
+    let up = false;
+    const panel = open({
+      fetch: (url) =>
+        up
+          ? found('/__ng-devtools/__devframe/__connection.json')(url)
+          : url.endsWith('/__ng-devtools/__devframe/__connection.json')
+            ? Promise.resolve(new Response('', { status: 404 }))
+            : offline(),
+      pageId: () => 'page-1',
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(panel.tried()[0]).toBe(
+      'http://localhost:4200/__ng-devtools/__devframe/__connection.json (404)',
+    );
+    expect(panel.tried()[1]).toBe(
+      'http://localhost:4200/__ng-devtools/__connection.json (no answer)',
+    );
+    expect(panel.retry.hidden).toBe(false);
+    expect(panel.retry.textContent).toBe('Try again');
+
+    up = true;
+    panel.retry.click();
+    expect(panel.message()).toBe('Detecting Angular app…');
+    expect(panel.retry.hidden).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(panel.frame.style.display).toBe('block');
+    expect(new URL(panel.frame.src).searchParams.get('pageId')).toBe('page-1');
+  });
+
+  it('says the server refused the request when a probe gets a 403', async () => {
+    const panel = open({
+      origin: 'http://192.168.1.20:5173',
+      fetch: (url) =>
+        url.endsWith('/__devframes/ng-devtools/__connection.json')
+          ? Promise.resolve(
+              new Response('ng-devtools only answers requests from this machine.', { status: 403 }),
+            )
+          : Promise.resolve(new Response('', { status: 404 })),
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(panel.message()).toBe(
+      'The devtools server on http://192.168.1.20:5173 refused the request (403). It said: "ng-devtools only answers requests from this machine." Tried:',
+    );
+    expect(panel.tried()).toContain(
+      'http://192.168.1.20:5173/__devframes/ng-devtools/__connection.json (403)',
+    );
+    expect(panel.retry.hidden).toBe(false);
+    expect(panel.docs.hidden).toBe(false);
+    expect(panel.docs.textContent).toBe('Why the devtools server refuses requests');
+    expect(panel.docs.href).toMatch(/getting-started\/vite\.md#answers-only-your-machine$/);
+  });
+
+  it('restores the setup link after a refusal turns into no answer', async () => {
+    let refuse = true;
+    const panel = open({
+      fetch: () => (refuse ? Promise.resolve(new Response('', { status: 401 })) : offline()),
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(panel.message()).toMatch(/refused the request \(401\)\. Tried:$/);
+    refuse = false;
+    panel.retry.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(panel.message()).toBe('No devtools server answered on http://localhost:4200. Tried:');
+    expect(panel.docs.textContent).toBe('Set up the devtools server');
+    expect(panel.docs.href).toBe('https://github.com/santoshyadavdev/angular-devtools#get-started');
   });
 
   it('drops a detection that finishes after a navigation and detects again', async () => {
     let answer: (response: Response) => void = () => {};
     let slow = true;
     const panel = open({
+      pageId: () => 'page-1',
       fetch: (url) =>
         slow
           ? new Promise((resolve) => (answer = resolve))

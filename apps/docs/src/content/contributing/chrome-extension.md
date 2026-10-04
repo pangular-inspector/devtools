@@ -106,17 +106,21 @@ With access granted, it looks for the devtools server under these paths, in orde
 
 Under each path it fetches `__devframe/__connection.json`, then `__connection.json`, with no credentials, no cache, no redirects and a 1.5 second timeout. The first response that is OK and parses as JSON wins.
 
-If none answers, the status view lists every URL it tried and links to the setup section of the README.
+It records the status of each request, or "no answer" when the request fails or times out. If none answers, the status view lists every URL it tried with its status and links to the setup section of the README. If any request got `401` or `403`, the status view says the server refused the request, shows up to 200 characters of the response text and links to the 403 notes on the Vite page instead. Both views have a **Try again** button that starts the search over.
+
+### Waiting for the page id
+
+The overlay sets `window.__ngDevtoolsPageId` once it claims the page id, and removes it when it is disposed. After it finds the server, the panel evaluates that global every 250 milliseconds for up to five seconds. If the global never appears, it reads the `ng-devtools-page-id` value from `sessionStorage` once, for overlays that do not set the global, and loads the UI with whatever it got.
 
 ### Loading the UI
 
 The panel loads `ui/index.html` with three query parameters:
 
-| Parameter | Value                                                                                  |
-| --------- | -------------------------------------------------------------------------------------- |
-| `baseURL` | The path that served the connection file, on the origin of the page.                   |
-| `pageId`  | The `ng-devtools-page-id` value the overlay keeps in `sessionStorage`, when it is set. |
-| `theme`   | The DevTools theme name, `dark` or `default`.                                          |
+| Parameter | Value                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------- |
+| `baseURL` | The path that served the connection file, on the origin of the page.                     |
+| `pageId`  | The page id from [Waiting for the page id](#waiting-for-the-page-id), when there is one. |
+| `theme`   | The DevTools theme name, `dark` or `default`.                                            |
 
 Outside the extension, the UI accepts a `baseURL` only on its own origin. Inside the extension, it accepts any `http` or `https` URL. The panel only passes hosts the extension can reach.
 
