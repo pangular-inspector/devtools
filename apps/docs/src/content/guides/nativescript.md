@@ -127,7 +127,7 @@ See [Standalone CLI](../getting-started/cli.md) for the other server options and
 
 `examples/nativescript` is a `ns create --ng` project wired up this way, with a small showcase component (signals, a computed, an effect and a component-level provider). It is tested on the iOS simulator. Android is untested.
 
-The demo maps `@pangular-inspector/devtools/*` to the package's build output in `packages/ng-devtools/dist`, so build the package first:
+The demo maps `@pangular-inspector/devtools/*` to the package's build output in `packages/devtools/dist`, so build the package first:
 
 ```bash
 pnpm devtools:build-pkg

@@ -1356,7 +1356,7 @@ export class SignalInspector {
 
   async loadSignalGraph(client: DevframeRpcClient) {
     for (const cleanup of this.cleanups.splice(0)) cleanup();
-    const my = client.scope('ng-devtools');
+    const my = client.scope('pangular');
     try {
       const state = await my.rpc.sharedState('signal-graph');
       if (this.destroyRef.destroyed) return;
@@ -1398,7 +1398,7 @@ export class SignalInspector {
       ? { pageId, env: picked.slice(ENV.length) }
       : { pageId, id: picked };
     void client
-      .scope('ng-devtools')
+      .scope('pangular')
       .rpc.call('select-signal-target', target)
       .catch(() => {});
   }
@@ -1412,7 +1412,7 @@ export class SignalInspector {
   }
 
   async loadSourceSignals(client: DevframeRpcClient) {
-    const my = client.scope('ng-devtools');
+    const my = client.scope('pangular');
     try {
       const result = (await my.rpc.call('get-signals')) as SourceSignal[];
       this.sourceSignals.set(result);

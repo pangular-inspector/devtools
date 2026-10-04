@@ -164,10 +164,10 @@ Always set the language. When the code belongs in a specific file, put the path 
 ```ts {6}
 // src/app/app.config.ts
 import {ApplicationConfig} from '@angular/core';
-import {provideNgDevtoolsHttp} from '@pangular-inspector/devtools/http';
+import {providePangularHttp} from '@pangular-inspector/devtools/http';
 
 export const appConfig: ApplicationConfig = {
-  providers: [provideNgDevtoolsHttp()],
+  providers: [providePangularHttp()],
 };
 ```
 ````
@@ -188,7 +188,7 @@ npm install @pangular-inspector/devtools devframe
 
 ### Rules for samples
 
-- Samples must run. Include every import, and match the real exports and option names in `packages/ng-devtools`.
+- Samples must run. Include every import, and match the real exports and option names in `packages/devtools`.
 - Prefer the demo apps as the source. The Angular Travel demo is in `src/` and the Analog demo is in `examples/analog`.
 - Use realistic names: `TripSearch`, `authGuard`, `bookingForm`. Avoid `Foo`, `Example` or `prop1`.
 - Load the overlay only in development builds, with the `ngDevMode` check the installation page uses.
@@ -200,13 +200,13 @@ npm install @pangular-inspector/devtools devframe
 
 The docs describe what the code does today. Before you write a claim, find it in the source.
 
-| Page                      | Source of truth                                                                                                       |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Inspector pages           | The tab in `app/src/pages/` and its collector in `packages/ng-devtools/src/`                                          |
-| Agent tools and resources | `packages/ng-devtools/src/devframe.ts`, `rpc/*.ts` and `rpc/analog-register.ts`                                       |
-| Setup pages               | `packages/ng-devtools/package.json` exports, `hub.ts`, `vite.ts`, `config.ts`, `overlay.ts`, `popup.ts` and the demos |
-| Security                  | `hub.ts`, `vite.ts` and the redaction code, such as `forms-privacy.ts`                                                |
-| Contributing              | Root `package.json` scripts, `nx.json`, `project.json` files and `.github/workflows`                                  |
+| Page                      | Source of truth                                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Inspector pages           | The tab in `app/src/pages/` and its collector in `packages/devtools/src/`                                          |
+| Agent tools and resources | `packages/devtools/src/devframe.ts`, `rpc/*.ts` and `rpc/analog-register.ts`                                       |
+| Setup pages               | `packages/devtools/package.json` exports, `hub.ts`, `vite.ts`, `config.ts`, `overlay.ts`, `popup.ts` and the demos |
+| Security                  | `hub.ts`, `vite.ts` and the redaction code, such as `forms-privacy.ts`                                             |
+| Contributing              | Root `package.json` scripts, `nx.json`, `project.json` files and `.github/workflows`                               |
 
 Check names exactly: labels, buttons, tool names, arguments, option names and defaults. When the code changes, update the page in the same pull request.
 

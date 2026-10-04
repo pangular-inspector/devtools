@@ -1839,7 +1839,7 @@ export class StoreInspector {
       .catch(() => this.sourceEntries.set([]))
       .finally(() => this.sourceLoaded.set(true));
     try {
-      const state = await client.scope('ng-devtools').rpc.sharedState('ngrx-store');
+      const state = await client.scope('pangular').rpc.sharedState('ngrx-store');
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         const next = value as Partial<NgrxState> | undefined;

@@ -266,8 +266,8 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           <div class="empty">
             <p>No requests yet.</p>
             <p class="muted small">
-              Add <code>withNgDevtools()</code> to <code>provideHttpClient</code>, then load a page
-              of the app.
+              Add <code>withPangular()</code> to <code>provideHttpClient</code>, then load a page of
+              the app.
             </p>
           </div>
         }
@@ -536,7 +536,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           @if (h.warningsCaptured === false) {
             <h3>Warnings</h3>
             <p class="muted small">
-              Not captured: add <code>provideNgDevtoolsHttp()</code> to the app providers.
+              Not captured: add <code>providePangularHttp()</code> to the app providers.
             </p>
           } @else {
             <h3>Warnings ({{ h.warnings.length }})</h3>
@@ -1475,7 +1475,7 @@ export class NetworkInspector {
     this.loading.set(true);
     this.failed.set(false);
     try {
-      const rpc = client.scope('ng-devtools').rpc;
+      const rpc = client.scope('pangular').rpc;
       const [state, payloads] = await Promise.all([
         rpc.sharedState('http'),
         rpc.sharedState('http-payloads'),

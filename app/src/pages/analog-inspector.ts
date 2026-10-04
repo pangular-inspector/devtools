@@ -317,7 +317,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       <div class="empty">
         <h2 class="empty-title">This app is not an Analog app.</h2>
         <p class="muted">
-          Add <code>ngDevtools()</code> from <code>@pangular-inspector/devtools/vite</code> next to
+          Add <code>pangular()</code> from <code>@pangular-inspector/devtools/vite</code> next to
           <code>analog()</code> in vite.config.ts and run the Analog dev server.
         </p>
       </div>
@@ -2239,7 +2239,7 @@ export class AnalogInspector {
     if (this.destroyRef.destroyed) return;
     this.project.set(project);
     try {
-      const shared = await client.scope('ng-devtools').rpc.sharedState('analog');
+      const shared = await client.scope('pangular').rpc.sharedState('analog');
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => this.state.set((value as AnalogState) ?? {});
       apply(shared.value());

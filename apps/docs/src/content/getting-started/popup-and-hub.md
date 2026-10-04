@@ -17,8 +17,8 @@ When the overlay loads, a floating button appears in the bottom-right corner of 
 
 Importing the [overlay](./overlay.md) adds the button. The first time the panel opens, it looks for the devtools server:
 
-1. If the overlay connected, it uses that path. When the path is `<base>ng-devtools/` and a hub answers at `<base>`, it opens the hub.
-2. Otherwise it checks for the hub at `/__devframes/`, then for the devtools alone at `/__ng-devtools/` and `/__devframes/ng-devtools/`.
+1. If the overlay connected, it uses that path. When the path is `<base>pangular/` and a hub answers at `<base>`, it opens the hub.
+2. Otherwise it checks for the hub at `/__devframes/`, then for the devtools alone at `/__pangular/` and `/__devframes/pangular/`.
 
 A path counts only when it answers with JSON. If nothing answers, the panel says **No devtools server found** and looks again the next time it opens.
 
@@ -57,9 +57,9 @@ The button reads CSS variables from your page. Set them on `:root` to match your
 ```css
 /* src/styles.css */
 :root {
-  --ng-devtools-accent: #f5a524; /* button background */
-  --ng-devtools-accent-ink: #1c1300; /* button icon */
-  --ng-devtools-title: #f5a524; /* panel title and active dock mode */
+  --pangular-accent: #f5a524; /* button background */
+  --pangular-accent-ink: #1c1300; /* button icon */
+  --pangular-title: #f5a524; /* panel title and active dock mode */
 }
 ```
 
@@ -100,7 +100,7 @@ In a search box that has text, <kbd>Escape</kbd> clears the box and leaves the p
 
 ### Saved layout
 
-The panel saves its position, size and dock mode in `localStorage` under `ng-devtools-popup`, so it keeps its layout across reloads. Clear that key to reset it.
+The panel saves its position, size and dock mode in `localStorage` under `pangular-popup`, so it keeps its layout across reloads. Clear that key to reset it.
 
 ### Theme
 
@@ -133,7 +133,7 @@ Without the hub (for example the standalone CLI, or a panel mounted with `initDe
 
 ### Tab hashes
 
-The URL hash selects a tab. Open `/__devframes/ng-devtools/#tab=signals` to land on the Signals tab. Switching tabs updates the hash, so you can copy the URL at any time.
+The URL hash selects a tab. Open `/__devframes/pangular/#tab=signals` to land on the Signals tab. Switching tabs updates the hash, so you can copy the URL at any time.
 
 | Tab        | Hash              |
 | ---------- | ----------------- |
@@ -179,10 +179,10 @@ A browser tab in the background runs its timers about once a minute. The app pag
     Drag it somewhere else, or focus it and use the arrow keys. Double-click it to reset its position. To remove it, stop the overlay with <a href="/getting-started/overlay#stop-the-overlay"><code>disposeOverlay</code></a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Reset the panel layout">
-    Remove the <code>ng-devtools-popup</code> key from <code>localStorage</code> and reload.
+    Remove the <code>pangular-popup</code> key from <code>localStorage</code> and reload.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The button opens the panel, not the hub">
-    The overlay did not find the hub at <code>/__devframes/</code>. Check that your server mounts <code>initNgDevtoolsHub()</code> or the Vite plugin on the default base. On a custom base, pass <code>&lt;base&gt;ng-devtools/</code> to <a href="./overlay.md#a-custom-mount-path"><code>initOverlay</code></a>.
+    The overlay did not find the hub at <code>/__devframes/</code>. Check that your server mounts <code>initPangularHub()</code> or the Vite plugin on the default base. On a custom base, pass <code>&lt;base&gt;pangular/</code> to <a href="./overlay.md#a-custom-mount-path"><code>initOverlay</code></a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel says No devtools server found">
     No devtools path answered with JSON. Mount the hub or the Vite plugin, before the SSR handler. See <a href="./overlay.md#no-devtools-server-found">No devtools server found</a>.

@@ -23,24 +23,24 @@ Resources are empty when no page is connected. Read them through the [HTTP endpo
 
 ### Resource URIs
 
-Clients see each resource at a `devframe://resource/` URI with the id encoded. For example, `ng-devtools:component-tree` is served at:
+Clients see each resource at a `devframe://resource/` URI with the id encoded. For example, `pangular:component-tree` is served at:
 
 ```text
-devframe://resource/ng-devtools%3Acomponent-tree
+devframe://resource/pangular%3Acomponent-tree
 ```
 
 Each one returns JSON.
 
 ## Available resources
 
-| Resource                     | Name                   | Content                        |
-| ---------------------------- | ---------------------- | ------------------------------ |
-| `ng-devtools:component-tree` | Angular Component Tree | Live component hierarchy       |
-| `ng-devtools:signal-graph`   | Angular Signal Graph   | Signal dependency graph        |
-| `ng-devtools:injector-tree`  | Angular Injector Tree  | DI injector hierarchy          |
-| `ng-devtools:ngrx-store`     | NgRx Store State       | Live NgRx state and change log |
-| `ng-devtools:forms`          | Angular Forms          | Live forms and recent changes  |
-| `ng-devtools:router`         | Angular Router         | Live route and navigations     |
+| Resource                  | Name                   | Content                        |
+| ------------------------- | ---------------------- | ------------------------------ |
+| `pangular:component-tree` | Angular Component Tree | Live component hierarchy       |
+| `pangular:signal-graph`   | Angular Signal Graph   | Signal dependency graph        |
+| `pangular:injector-tree`  | Angular Injector Tree  | DI injector hierarchy          |
+| `pangular:ngrx-store`     | NgRx Store State       | Live NgRx state and change log |
+| `pangular:forms`          | Angular Forms          | Live forms and recent changes  |
+| `pangular:router`         | Angular Router         | Live route and navigations     |
 
 ### component-tree
 
@@ -80,16 +80,16 @@ The devtools keep their live data in shared-state keys. Every key is also listed
 
 This table covers the data that has no resource of its own.
 
-| Key                            | Content                                                             |
-| ------------------------------ | ------------------------------------------------------------------- |
-| `ng-devtools:http`             | The SSR & HTTP timeline, fault rules and hydration data             |
-| `ng-devtools:http-payloads`    | The TransferState payload of each page, by page id                  |
-| `ng-devtools:change-detection` | Change detection recordings, by page id                             |
-| `ng-devtools:pipe-usage`       | Live pipe instances and recorded calls                              |
-| `ng-devtools:analog`           | Analog page data and the server call log                            |
-| `ng-devtools:routes`           | Declared but not filled. Use `get-routes` or `list-routes` instead. |
+| Key                         | Content                                                             |
+| --------------------------- | ------------------------------------------------------------------- |
+| `pangular:http`             | The SSR & HTTP timeline, fault rules and hydration data             |
+| `pangular:http-payloads`    | The TransferState payload of each page, by page id                  |
+| `pangular:change-detection` | Change detection recordings, by page id                             |
+| `pangular:pipe-usage`       | Live pipe instances and recorded calls                              |
+| `pangular:analog`           | Analog page data and the server call log                            |
+| `pangular:routes`           | Declared but not filled. Use `get-routes` or `list-routes` instead. |
 
-The list also includes the keys behind the six resources above (`ng-devtools:component-tree`, `ng-devtools:forms`, and so on).
+The list also includes the keys behind the six resources above (`pangular:component-tree`, `pangular:forms`, and so on).
 
 ### Read a key with a tool
 
@@ -100,7 +100,7 @@ Some clients only use tools. The `devframe_state_read` tool reads the same keys:
     Call <code>devframe_state_read</code> without arguments. It returns every key.
   </ngmd-step>
   <ngmd-step title="Read one">
-    Call it again with <code>key</code>, for example <code>ng-devtools:http</code>. It returns the value as JSON.
+    Call it again with <code>key</code>, for example <code>pangular:http</code>. It returns the value as JSON.
   </ngmd-step>
 </ngmd-workflow>
 

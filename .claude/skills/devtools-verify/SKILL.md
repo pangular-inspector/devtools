@@ -48,7 +48,7 @@ node dist/angular-devtools/server/server.mjs   # Angular Travel on :4000
 pnpm analog:dev                                 # Analog demo on :5173
 ```
 
-Open the panel through the amber launcher on the page, at `/__devframes/`, and directly at `/__devframes/ng-devtools/?view=angular#tab=<tab>`.
+Open the panel through the amber launcher on the page, at `/__devframes/`, and directly at `/__devframes/pangular/?view=angular#tab=<tab>`.
 
 ## 3. Browser checks
 
@@ -58,7 +58,7 @@ With Playwright and `@axe-core/playwright` (install them in a scratch folder, no
 - Hub docks: clicking each rail button shows the matching view and only one frame (the rail selection and the content must match after fast switching and after a reload).
 - The feature itself, with real data from the demo app (for example `/examples/<area>`).
 
-Exclude the launcher (`#ng-devtools-popup-root`) from axe runs on demo pages; it is checked through the panel.
+Exclude the launcher (`#pangular-popup-root`) from axe runs on demo pages; it is checked through the panel.
 
 ## 4. Report honestly
 

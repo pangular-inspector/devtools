@@ -181,18 +181,18 @@ Without that recording, the guards listed for a navigation are candidates: the `
 
 ## Agent tools
 
-| Tool or resource                  | What it does                                                                                                                                                                       |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ng-devtools:explain-navigation`  | Why a navigation failed or redirected, with any loop and the cause of each hop. Pass `url` or `id` to narrow it, `limit` for more than the last 5, or `perf` for the slowest ones. |
-| `ng-devtools:inspect-route`       | The route the page is on. Pass `selector` (a component class, tag or link text) for the route a component was rendered for, or a link state.                                       |
-| `ng-devtools:list-routes`         | The live config with source files and example URLs. `match` predicts a URL, `audit` lists the guards of each page.                                                                 |
-| `ng-devtools:lint-routes`         | The lint findings, including redirect loops seen at runtime.                                                                                                                       |
-| `ng-devtools:router-config`       | The setup, including whether guard recording is on.                                                                                                                                |
-| `ng-devtools:export-navigation`   | A markdown repro, with any loop the navigation is part of. Defaults to the latest navigation that did not succeed.                                                                 |
-| `ng-devtools:explain-render-mode` | Which render mode a URL gets, from `*.routes.server.ts`.                                                                                                                           |
-| `ng-devtools:get-routes`          | Routes from your source files.                                                                                                                                                     |
-| `ng-devtools:navigate`            | Acts on the router: `navigate`, `abort`, `replay`, `probe`, `instrument` and `resolve-lazy`.                                                                                       |
-| `ng-devtools:router` (resource)   | The active route tree and recent navigations of each page.                                                                                                                         |
+| Tool or resource               | What it does                                                                                                                                                                       |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:explain-navigation`  | Why a navigation failed or redirected, with any loop and the cause of each hop. Pass `url` or `id` to narrow it, `limit` for more than the last 5, or `perf` for the slowest ones. |
+| `pangular:inspect-route`       | The route the page is on. Pass `selector` (a component class, tag or link text) for the route a component was rendered for, or a link state.                                       |
+| `pangular:list-routes`         | The live config with source files and example URLs. `match` predicts a URL, `audit` lists the guards of each page.                                                                 |
+| `pangular:lint-routes`         | The lint findings, including redirect loops seen at runtime.                                                                                                                       |
+| `pangular:router-config`       | The setup, including whether guard recording is on.                                                                                                                                |
+| `pangular:export-navigation`   | A markdown repro, with any loop the navigation is part of. Defaults to the latest navigation that did not succeed.                                                                 |
+| `pangular:explain-render-mode` | Which render mode a URL gets, from `*.routes.server.ts`.                                                                                                                           |
+| `pangular:get-routes`          | Routes from your source files.                                                                                                                                                     |
+| `pangular:navigate`            | Acts on the router: `navigate`, `abort`, `replay`, `probe`, `instrument` and `resolve-lazy`.                                                                                       |
+| `pangular:router` (resource)   | The active route tree and recent navigations of each page.                                                                                                                         |
 
 `navigate` only accepts same-origin relative URLs that start with `/`. `resolve-lazy` needs a `routeId`. With [`actions.router`](../getting-started/configuration.md#actions) set to `false`, the tool refuses `navigate`, `abort`, `replay` and `probe`, and keeps `instrument` and `resolve-lazy`. See [Tools](../agents/tools.md).
 
@@ -220,7 +220,7 @@ The devtools replace query, matrix and fragment values with secret-looking keys 
 
 ### History and config caps
 
-The page keeps the last 50 navigations and 50 preloads. Set the navigation count with [`limits.navigations`](../getting-started/configuration.md#limits). Once older navigations are dropped, the **Navigations** view and `explain-navigation` say how many. The live config lists at most 200 routes per level (a route's children and its loaded lazy routes count as one level) and 1000 routes in total. The **Routes** view and `ng-devtools:list-routes` say how many routes were left out.
+The page keeps the last 50 navigations and 50 preloads. Set the navigation count with [`limits.navigations`](../getting-started/configuration.md#limits). Once older navigations are dropped, the **Navigations** view and `explain-navigation` say how many. The live config lists at most 200 routes per level (a route's children and its loaded lazy routes count as one level) and 1000 routes in total. The **Routes** view and `pangular:list-routes` say how many routes were left out.
 
 ## FAQ
 

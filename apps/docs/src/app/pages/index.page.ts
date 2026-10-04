@@ -191,10 +191,10 @@ import {writeToClipboard} from '../utils/clipboard';
               tabindex="0"
               aria-label="src/server.ts and src/main.ts"
               class="p-4 text-sm overflow-x-auto text-zinc-700 dark:text-zinc-300 leading-relaxed"
-            ><code><span class="text-[color:var(--accent-strong)] font-semibold">import</span> {{ '{' }} initNgDevtoolsHub {{ '}' }}
+            ><code><span class="text-[color:var(--accent-strong)] font-semibold">import</span> {{ '{' }} initPangularHub {{ '}' }}
   <span class="text-[color:var(--accent-strong)] font-semibold">from</span> '@pangular-inspector/devtools/hub';
 
-<span class="text-[color:var(--accent-strong)] font-semibold">const</span> devtools = initNgDevtoolsHub({{ '{' }} ws: false {{ '}' }});
+<span class="text-[color:var(--accent-strong)] font-semibold">const</span> devtools = initPangularHub({{ '{' }} ws: false {{ '}' }});
 app.use(devtools.nodeMiddleware);
 
 <span class="text-zinc-500 dark:text-zinc-400">// src/main.ts</span>

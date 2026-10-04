@@ -15,7 +15,7 @@ This page lists every tool the [MCP server](./mcp-server.md) exposes. Each group
 
 ### Names
 
-Tool ids use a colon, as `ng-devtools:get-routes`. MCP clients see them with an underscore, as `ng-devtools_get-routes`. The tables below drop the `ng-devtools:` prefix.
+Tool ids use a colon, as `pangular:get-routes`. MCP clients see them with an underscore, as `pangular_get-routes`. The tables below drop the `pangular:` prefix.
 
 ### Source and live tools
 
@@ -361,7 +361,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 `devframe_state_read` reads the devtools' live shared state. Call it without arguments to list the keys, then with `key` to read a value as JSON.
 
-Use it for data that has no dedicated tool, such as the SSR & HTTP timeline (`ng-devtools:http`) or live pipe usage (`ng-devtools:pipe-usage`). See [Resources](./resources.md) for every key.
+Use it for data that has no dedicated tool, such as the SSR & HTTP timeline (`pangular:http`) or live pipe usage (`pangular:pipe-usage`). See [Resources](./resources.md) for every key.
 
 ## Where to next
 

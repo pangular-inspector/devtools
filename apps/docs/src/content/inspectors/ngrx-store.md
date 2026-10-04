@@ -156,13 +156,13 @@ To try another payload, type the action in **Dispatch an action** instead.
 
 ## Agent tools
 
-| Tool or resource                   | Kind     | What it does                                                                                                                      |
-| ---------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `ng-devtools:get-ngrx-store`       | tool     | NgRx declarations from source, with the members of each `signalStore` and the type strings of each action.                        |
-| `ng-devtools:dispatch-ngrx-action` | tool     | Dispatches an action to the classic Store, or an action from the log again, and returns the new log entry.                        |
-| `ng-devtools:ngrx-store`           | resource | The live stores per page, with state, computeds, methods, references and the change log. Classic Store actions carry an `origin`. |
-| `ng-devtools:inspect-signal-store` | tool     | The live state of one store, or a summary of every store discovered so far.                                                       |
-| `ng-devtools:signal-store-history` | tool     | The live change log, oldest first: state diffs, classic `@ngrx/store` actions and `@ngrx/signals/events` events.                  |
+| Tool or resource                | Kind     | What it does                                                                                                                      |
+| ------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:get-ngrx-store`       | tool     | NgRx declarations from source, with the members of each `signalStore` and the type strings of each action.                        |
+| `pangular:dispatch-ngrx-action` | tool     | Dispatches an action to the classic Store, or an action from the log again, and returns the new log entry.                        |
+| `pangular:ngrx-store`           | resource | The live stores per page, with state, computeds, methods, references and the change log. Classic Store actions carry an `origin`. |
+| `pangular:inspect-signal-store` | tool     | The live state of one store, or a summary of every store discovered so far.                                                       |
+| `pangular:signal-store-history` | tool     | The live change log, oldest first: state diffs, classic `@ngrx/store` actions and `@ngrx/signals/events` events.                  |
 
 No tool can restore a state. See [Dispatch an action](../agents/tools.md#dispatch-an-action) and [Resources](../agents/resources.md).
 

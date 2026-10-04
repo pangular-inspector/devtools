@@ -9,7 +9,7 @@ description: Run the devtools from the command line, build a static report, or s
 
 # Standalone CLI
 
-The package installs a `pangular` binary (called `ng-devtools` up to 0.0.6). Run it from the root of your Angular workspace, or point it there with `--root`. It scans the source files in that folder, so it works without starting your app.
+The package installs a `pangular` binary. Run it from the root of your Angular workspace, or point it there with `--root`. It scans the source files in that folder, so it works without starting your app.
 
 ## Commands
 
@@ -23,20 +23,20 @@ The package installs a `pangular` binary (called `ng-devtools` up to 0.0.6). Run
 
 ### Flags for every command
 
-| Flag              | What it does                                                                                                                                                          |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--root <dir>`    | The project folder to scan. The default is `NG_DEVTOOLS_ROOT`, then the working directory.                                                                            |
-| `--config <file>` | A JSON file with the [devtools options](./configuration.md). The default is `NG_DEVTOOLS_CONFIG`, then `ng-devtools.config.json` in the project folder, if it exists. |
-| `--read-only`     | Sets `agent.readOnly`: drops the agent tools that act on the page or the server. See [Inspectors and agent tools](./configuration.md#inspectors-and-agent-tools).     |
+| Flag              | What it does                                                                                                                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--root <dir>`    | The project folder to scan. The default is `PANGULAR_ROOT`, then the working directory.                                                                           |
+| `--config <file>` | A JSON file with the [devtools options](./configuration.md). The default is `PANGULAR_CONFIG`, then `pangular.config.json` in the project folder, if it exists.   |
+| `--read-only`     | Sets `agent.readOnly`: drops the agent tools that act on the page or the server. See [Inspectors and agent tools](./configuration.md#inspectors-and-agent-tools). |
 
 If the project folder has no `angular.json` and no `package.json` that depends on `@angular/core`, the CLI prints a warning on stderr, because the scans find nothing there.
 
 ### Config file
 
-The file holds the same options as `createNgDevtools()`, as JSON:
+The file holds the same options as `createPangular()`, as JSON:
 
 ```json
-// ng-devtools.config.json
+// pangular.config.json
 {
   "inspectors": {"analog": false},
   "agent": {"readOnly": true},
@@ -87,7 +87,7 @@ npx @pangular-inspector/devtools dev --port 9999 --open
 When the server is ready, it prints the version, the panel URL, the panel URL for [Angular Native](./angular-native.md) apps and the MCP endpoint:
 
 ```text
-  pangular v0.0.6
+  pangular v0.0.7
   Panel: http://localhost:9999/
   Angular Native apps: http://localhost:9999/?view=angular-native
   MCP:   http://localhost:9999/__mcp

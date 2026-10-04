@@ -116,7 +116,7 @@ Rules:
 - Highlight lines with `{3}` or `{2,5-7}` after the language. Count the path comment as line 1.
 - Install commands use a code group: ` ```bash group="install" name="pnpm" active ` then npm, yarn, bun.
 - `file="path#L5-L20"` imports a real file (relative to `apps/docs`, nothing outside it). It is not a title.
-- Samples must run: every import, real export names from `packages/ng-devtools/package.json`, real option names and defaults.
+- Samples must run: every import, real export names from `packages/devtools/package.json`, real option names and defaults.
 - Source samples from the demos: `src/` (Angular Travel) and `examples/analog`.
 - Load the overlay only in dev, with the `ngDevMode` dynamic import used on the installation page.
 - Secure by default: no `auth: false` or `allowedOrigins: false` in copyable code unless the page explains it.
@@ -125,13 +125,13 @@ Rules:
 
 ## 7. Check claims against the code
 
-| Page               | Source of truth                                                                                                |
-| ------------------ | -------------------------------------------------------------------------------------------------------------- |
-| inspectors/\*      | `app/src/pages/*.ts` (the tab) and `packages/ng-devtools/src/*` (collectors, actions)                          |
-| agents/\*          | `packages/ng-devtools/src/devframe.ts`, `rpc/*.ts`, `rpc/analog-register.ts`, Devframe built-ins               |
-| getting-started/\* | `packages/ng-devtools/package.json` exports, `hub.ts`, `vite.ts`, `config.ts`, `overlay.ts`, `popup.ts`, demos |
-| security           | `hub.ts`, `vite.ts`, `forms-privacy.ts`, `forms-actions.ts`, router and Analog redaction                       |
-| contributing/\*    | root `package.json`, `nx.json`, `project.json` files, `.github/workflows`, `extension/`                        |
+| Page               | Source of truth                                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- |
+| inspectors/\*      | `app/src/pages/*.ts` (the tab) and `packages/devtools/src/*` (collectors, actions)                          |
+| agents/\*          | `packages/devtools/src/devframe.ts`, `rpc/*.ts`, `rpc/analog-register.ts`, Devframe built-ins               |
+| getting-started/\* | `packages/devtools/package.json` exports, `hub.ts`, `vite.ts`, `config.ts`, `overlay.ts`, `popup.ts`, demos |
+| security           | `hub.ts`, `vite.ts`, `forms-privacy.ts`, `forms-actions.ts`, router and Analog redaction                    |
+| contributing/\*    | root `package.json`, `nx.json`, `project.json` files, `.github/workflows`, `extension/`                     |
 
 Check names exactly. When code changes, update the docs in the same PR. When unsure, say less rather than guess.
 

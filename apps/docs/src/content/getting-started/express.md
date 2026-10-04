@@ -22,7 +22,7 @@ In an *Angular app with server-side rendering, the devtools run inside your Expr
     Add <code>&#64;pangular-inspector/devtools</code> and <code>devframe</code>. See <a href="./installation.md">Installation</a>.
   </ngmd-step>
   <ngmd-step title="Mount the hub">
-    Add <code>initNgDevtoolsHub()</code> to <code>server.ts</code>, before your other routes.
+    Add <code>initPangularHub()</code> to <code>server.ts</code>, before your other routes.
   </ngmd-step>
   <ngmd-step title="Load the overlay">
     Import the overlay in <code>main.ts</code>, in development only.
@@ -39,10 +39,10 @@ In an *Angular app with server-side rendering, the devtools run inside your Expr
 ```ts {3,6-7}
 // src/server.ts
 import express from 'express';
-import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
 
 const app = express();
-const devtools = initNgDevtoolsHub({ws: false});
+const devtools = initPangularHub({ws: false});
 app.use(devtools.nodeMiddleware);
 ```
 
@@ -55,7 +55,7 @@ Mount the middleware before `express.static` and the Angular SSR handler, so the
 ```ts
 // src/server.ts
 const app = express();
-const devtools = initNgDevtoolsHub({ws: false});
+const devtools = initPangularHub({ws: false});
 app.use(devtools.nodeMiddleware); // devtools first
 
 app.use(express.static(browserDistFolder, {index: false}));
@@ -75,12 +75,12 @@ The browser talks to the hub over server-sent events or a WebSocket. Pick one wi
 
 ```ts group="transport" name="Server-sent events" active
 // src/server.ts
-const devtools = initNgDevtoolsHub({ws: false});
+const devtools = initPangularHub({ws: false});
 ```
 
 ```ts group="transport" name="WebSocket side-car"
 // src/server.ts
-const devtools = initNgDevtoolsHub({ws: {sidecar: true}});
+const devtools = initPangularHub({ws: {sidecar: true}});
 ```
 
 With `ws: false` there is no WebSocket, and the browser connects over SSE on the same port. It is the simplest choice: every request goes through your Express server, including under `ng serve`.
@@ -89,15 +89,15 @@ With `ws: {sidecar: true}`, the WebSocket runs on its own port, picked automatic
 
 ### Rebuilds under `ng serve`
 
-`ng serve` runs `server.ts` again after a rebuild that changes the server output. The process keeps one hub per `base`, so each new `initNgDevtoolsHub()` call closes the hub from the run before, along with its side-car port. A generated MCP token stays the same until the process exits.
+`ng serve` runs `server.ts` again after a rebuild that changes the server output. The process keeps one hub per `base`, so each new `initPangularHub()` call closes the hub from the run before, along with its side-car port. A generated MCP token stays the same until the process exits.
 
 ### Hub options
 
-`initNgDevtoolsHub()` accepts the options of `initHub()` from `@devframes/hub`, apart from `devframes` and `ui`. These are the ones you are most likely to set:
+`initPangularHub()` accepts the options of `initHub()` from `@devframes/hub`, apart from `devframes` and `ui`. These are the ones you are most likely to set:
 
 | Option           | Default                                   | What it does                                                                                                                                                                                                                        |
 | ---------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `base`           | `'/__devframes/'`                         | Where the hub is mounted. The devtools panel lives at `<base>ng-devtools/`.                                                                                                                                                         |
+| `base`           | `'/__devframes/'`                         | Where the hub is mounted. The devtools panel lives at `<base>pangular/`.                                                                                                                                                            |
 | `ws`             |                                           | `false` uses server-sent events only. `{ sidecar: true }` runs the WebSocket on its own port.                                                                                                                                       |
 | `auth`           | on                                        | `false` turns off the one-time code.                                                                                                                                                                                                |
 | `allowedOrigins` | loopback origins and the Chrome extension | Extra origins allowed to open the WebSocket. A list replaces the Chrome extension default. `false` turns the origin check off.                                                                                                      |
@@ -113,9 +113,9 @@ The origin check is on by default too. Only loopback origins and the [Chrome ext
 
 ```ts
 // src/server.ts
-import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
 
-const devtools = initNgDevtoolsHub({
+const devtools = initPangularHub({
   allowedOrigins: ['https://tunnel.example', 'chrome-extension://<id>'],
 });
 ```
@@ -126,18 +126,18 @@ The demo app in this repository mounts the hub like this:
 
 ```ts
 // src/server.ts
-const auth = process.env['NG_DEVTOOLS_AUTH'] === 'true';
-const devtools = initNgDevtoolsHub({
+const auth = process.env['PANGULAR_AUTH'] === 'true';
+const devtools = initPangularHub({
   ws: {sidecar: true},
   auth,
 });
 app.use(devtools.nodeMiddleware);
 ```
 
-It turns the one-time code off unless `NG_DEVTOOLS_AUTH` is `true`. Don't copy that setting. Keep the one-time code on for your own apps. The demo keeps the default origin check.
+It turns the one-time code off unless `PANGULAR_AUTH` is `true`. Don't copy that setting. Keep the one-time code on for your own apps. The demo keeps the default origin check.
 
 <ngmd-alert severity="warning">
-  <code>initNgDevtoolsHub()</code> has no production switch of its own. If your <code>server.ts</code> also runs in production, decide there whether to mount it.
+  <code>initPangularHub()</code> has no production switch of its own. If your <code>server.ts</code> also runs in production, decide there whether to mount it.
 </ngmd-alert>
 
 ## Load the overlay
@@ -215,22 +215,22 @@ To fill the SSR & HTTP tab, add the interceptor and hydration hooks to your app 
 import {provideHttpClient, withFetch} from '@angular/common/http';
 import {ApplicationConfig} from '@angular/core';
 import {provideClientHydration} from '@angular/platform-browser';
-import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/devtools/http';
+import {providePangularHttp, withPangular} from '@pangular-inspector/devtools/http';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideClientHydration(),
-    provideHttpClient(withFetch(), withNgDevtools()),
-    provideNgDevtoolsHttp(),
+    provideHttpClient(withFetch(), withPangular()),
+    providePangularHttp(),
   ],
 };
 ```
 
-`withNgDevtools()` records requests and applies fault rules. `provideNgDevtoolsHttp()` captures hydration warnings before the overlay loads. In production builds the interceptor passes requests through untouched.
+`withPangular()` records requests and applies fault rules. `providePangularHttp()` captures hydration warnings before the overlay loads. In production builds the interceptor passes requests through untouched.
 
-### Put `withNgDevtools` first
+### Put `withPangular` first
 
-Register `withNgDevtools()` before your own interceptors, for example `provideHttpClient(withNgDevtools(), withInterceptors([authInterceptor]))`. It then records requests as the app makes them, and fault rules apply before anything else.
+Register `withPangular()` before your own interceptors, for example `provideHttpClient(withPangular(), withInterceptors([authInterceptor]))`. It then records requests as the app makes them, and fault rules apply before anything else.
 
 ### Run SSR in the same process
 
@@ -245,13 +245,13 @@ To mount only the devtools panel without the dock, use `initDevframe()` from `de
 ```ts
 // src/server.ts
 import {initDevframe} from 'devframe/initiate';
-import ngDevtools from '@pangular-inspector/devtools/devframe';
+import pangular from '@pangular-inspector/devtools/devframe';
 
-const devtools = initDevframe(ngDevtools, {base: '/__ng-devtools/'});
+const devtools = initDevframe(pangular, {base: '/__pangular/'});
 app.use(devtools.nodeMiddleware);
 ```
 
-The overlay looks for `/__ng-devtools/` too. Without the hub, every tab sits in one tab bar.
+The overlay looks for `/__pangular/` too. Without the hub, every tab sits in one tab bar.
 
 ## Troubleshooting
 
@@ -269,7 +269,7 @@ The overlay looks for `/__ng-devtools/` too. Without the hub, every tab sits in 
     With <code>auth</code> on, a browser reads data only after it exchanges the one-time code the server printed. On a machine only you use, pass <code>auth: false</code>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The SSR & HTTP tab shows no server calls">
-    Add <code>withNgDevtools()</code> and <code>provideNgDevtoolsHttp()</code>, and run SSR in the same Express process as the hub. Prerendered routes make no requests at runtime.
+    Add <code>withPangular()</code> and <code>providePangularHttp()</code>, and run SSR in the same Express process as the hub. Prerendered routes make no requests at runtime.
   </ngmd-accordion-item>
 </ngmd-accordion>
 

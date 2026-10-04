@@ -152,28 +152,28 @@ You can also open a form from its component in the [Components tab](./components
 
 ### Read tools
 
-| Tool                                 | What it does                                                                                                      |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `ng-devtools:explain-form-invalid`   | Start here. Every invalid or pending form, with each failing field's value, validator, message and touched state. |
-| `ng-devtools:inspect-forms`          | The forms with status and error counts. With `form`, the field tree. Narrow with `path` or `onlyInvalid`.         |
-| `ng-devtools:explain-field`          | One field: error sources, skip reasons, pending values, binding, visible errors, and source lines.                |
-| `ng-devtools:explain-submit`         | What submit does, and why it might do nothing.                                                                    |
-| `ng-devtools:form-payload`           | What the form sends: value against raw value, and unvalidated fields.                                             |
-| `ng-devtools:form-history`           | The change timeline with origins. Returns a marker.                                                               |
-| `ng-devtools:form-diff`              | The net change since a marker.                                                                                    |
-| `ng-devtools:lint-forms`             | Form bugs and accessibility checks.                                                                               |
-| `ng-devtools:explain-custom-control` | How a field binds to its element, and what is wrong with the binding.                                             |
-| `ng-devtools:export-form`            | A JSON snapshot or a test fixture.                                                                                |
-| `ng-devtools:wait-for-form`          | Waits until the form is settled, valid, not pending or submitted.                                                 |
+| Tool                              | What it does                                                                                                      |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `pangular:explain-form-invalid`   | Start here. Every invalid or pending form, with each failing field's value, validator, message and touched state. |
+| `pangular:inspect-forms`          | The forms with status and error counts. With `form`, the field tree. Narrow with `path` or `onlyInvalid`.         |
+| `pangular:explain-field`          | One field: error sources, skip reasons, pending values, binding, visible errors, and source lines.                |
+| `pangular:explain-submit`         | What submit does, and why it might do nothing.                                                                    |
+| `pangular:form-payload`           | What the form sends: value against raw value, and unvalidated fields.                                             |
+| `pangular:form-history`           | The change timeline with origins. Returns a marker.                                                               |
+| `pangular:form-diff`              | The net change since a marker.                                                                                    |
+| `pangular:lint-forms`             | Form bugs and accessibility checks.                                                                               |
+| `pangular:explain-custom-control` | How a field binds to its element, and what is wrong with the binding.                                             |
+| `pangular:export-form`            | A JSON snapshot or a test fixture.                                                                                |
+| `pangular:wait-for-form`          | Waits until the form is settled, valid, not pending or submitted.                                                 |
 
 ### Write tools
 
-| Tool                      | What it does                                                                       |
-| ------------------------- | ---------------------------------------------------------------------------------- |
-| `ng-devtools:form-action` | Set, touch, revalidate, reset, submit, focus, snapshot, restore and more.          |
-| `ng-devtools:fill-form`   | Fills several fields through the inputs, like a user would. Can submit afterwards. |
+| Tool                   | What it does                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `pangular:form-action` | Set, touch, revalidate, reset, submit, focus, snapshot, restore and more.          |
+| `pangular:fill-form`   | Fills several fields through the inputs, like a user would. Can submit afterwards. |
 
-Agents can loop: inspect, act, `wait-for-form`, then `form-diff` from the marker they had. The `ng-devtools:forms` resource holds every form and recent changes. See [Tools](../agents/tools.md).
+Agents can loop: inspect, act, `wait-for-form`, then `form-diff` from the marker they had. The `pangular:forms` resource holds every form and recent changes. See [Tools](../agents/tools.md).
 
 ## Limits and gotchas
 

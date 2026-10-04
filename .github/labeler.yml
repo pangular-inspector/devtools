@@ -4,12 +4,11 @@
 
 'area: package':
   - changed-files:
-      - any-glob-to-any-file: ['packages/ng-devtools/**', 'bin.mjs']
+      - any-glob-to-any-file: ['packages/devtools/**', 'bin.mjs']
 
 'area: agents':
   - changed-files:
-      - any-glob-to-any-file:
-          ['packages/ng-devtools/src/devframe.ts', 'packages/ng-devtools/src/rpc/**']
+      - any-glob-to-any-file: ['packages/devtools/src/devframe.ts', 'packages/devtools/src/rpc/**']
 
 'area: extension':
   - changed-files:

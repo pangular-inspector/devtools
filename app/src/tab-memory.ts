@@ -1,4 +1,4 @@
-const TAB_KEY = 'ng-devtools-tab';
+const TAB_KEY = 'pangular-tab';
 
 /**
  * The tab to open on load. A `#tab=` deep link wins; without one, the last tab

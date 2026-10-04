@@ -1526,7 +1526,7 @@ export class ComponentTree {
 
   private async watch(client: DevframeRpcClient) {
     for (const cleanup of this.cleanups.splice(0)) cleanup();
-    const my = client.scope('ng-devtools');
+    const my = client.scope('pangular');
     try {
       const tree = await my.rpc.sharedState('component-tree');
       if (this.destroyRef.destroyed) return;
@@ -1574,7 +1574,7 @@ export class ComponentTree {
     const client = this.rpc();
     if (!client) return;
     this.loading.set(true);
-    const my = client.scope('ng-devtools');
+    const my = client.scope('pangular');
     try {
       this.source.set((await my.rpc.call('get-components')) as SourceComponent[]);
       this.error.set(false);
@@ -1677,7 +1677,7 @@ export class ComponentTree {
     this.picking.set(true);
     this.say('Click a component in the app. Press Escape to cancel.');
     const result = (await client
-      .scope('ng-devtools')
+      .scope('pangular')
       .rpc.call('request-component-pick', { pageId: this.pickPageId ?? undefined })
       .catch(() => ({ ok: false, error: 'Could not reach the devtools server.' }))) as PickResult;
     if (seq !== this.pickSeq) return;
@@ -1697,7 +1697,7 @@ export class ComponentTree {
     const client = this.rpc();
     if (!client || !this.picking()) return;
     void client
-      .scope('ng-devtools')
+      .scope('pangular')
       .rpc.call('cancel-component-pick', { pageId: this.pickPageId ?? undefined })
       .catch(() => {});
   }
@@ -1718,7 +1718,7 @@ export class ComponentTree {
     const client = this.rpc();
     if (!client) return;
     void client
-      .scope('ng-devtools')
+      .scope('pangular')
       .rpc.call('select-component', { pageId: this.page()?.pageId, id })
       .catch(() => {});
   }
@@ -1769,7 +1769,7 @@ export class ComponentTree {
     if (!client) return;
     const target = id ? { pageId: this.page()?.pageId, id } : null;
     void client
-      .scope('ng-devtools')
+      .scope('pangular')
       .rpc.call('request-page-highlight', target)
       .catch(() => {});
   }

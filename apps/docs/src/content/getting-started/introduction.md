@@ -73,8 +73,8 @@ Your app's server hosts the devtools, and a script in the page sends live data t
 
 | Setup                      | Server part             | Guide                                      |
 | -------------------------- | ----------------------- | ------------------------------------------ |
-| Angular CLI with SSR       | `initNgDevtoolsHub()`   | [Angular CLI and Express](./express.md)    |
-| SSR on Hono, h3 or Fastify | `initNgDevtoolsHub()`   | [Hono, h3 and Fastify](./other-servers.md) |
+| Angular CLI with SSR       | `initPangularHub()`     | [Angular CLI and Express](./express.md)    |
+| SSR on Hono, h3 or Fastify | `initPangularHub()`     | [Hono, h3 and Fastify](./other-servers.md) |
 | Analog                     | The Vite plugin         | [Vite and Analog](./vite.md)               |
 | Chrome DevTools (extra)    | One of the setups above | [Chrome extension](./chrome-extension.md)  |
 

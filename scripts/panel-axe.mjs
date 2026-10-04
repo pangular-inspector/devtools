@@ -7,7 +7,9 @@ import { chromium } from 'playwright';
 
 const dir = resolve(process.argv[2] ?? 'dist/panel-axe');
 if (!existsSync(join(dir, '__connection.json'))) {
-  console.error(`${dir} is not an ng-devtools report. Run: node bin.mjs build --outDir ${dir}`);
+  console.error(
+    `${dir} is not a Pangular Inspector report. Run: node bin.mjs build --outDir ${dir}`,
+  );
   process.exit(1);
 }
 
@@ -22,7 +24,7 @@ const TYPES = {
   '.woff2': 'font/woff2',
 };
 
-const PREFIX = '/__ng-devtools/';
+const PREFIX = '/__pangular/';
 
 async function serve(prefix) {
   const server = createServer((req, res) => {

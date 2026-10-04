@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pangular Inspector",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Inspect Angular components, signals, dependency injection, and routes.",
   "minimum_chrome_version": "111",
   "devtools_page": "devtools.html",

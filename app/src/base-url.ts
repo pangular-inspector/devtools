@@ -1,6 +1,6 @@
 type PanelLocation = Pick<Location, 'href' | 'origin' | 'protocol' | 'pathname' | 'search'>;
 
-// Chrome extension passes ?baseURL=...; embedded uses /__ng-devtools/; the CLI and a
+// Chrome extension passes ?baseURL=...; embedded uses /__pangular/; the CLI and a
 // static report serve the panel next to their own __connection.json
 function sameOrigin(value: string, loc: PanelLocation): boolean {
   try {
@@ -32,8 +32,8 @@ export function detectBaseURL(loc: PanelLocation = location): string | string[] 
     return fromQuery;
   }
 
-  if (loc.pathname.includes('__ng-devtools') || loc.pathname.includes('__devframes/')) {
+  if (loc.pathname.includes('__pangular') || loc.pathname.includes('__devframes/')) {
     return undefined;
   }
-  return ['/__ng-devtools/', './'];
+  return ['/__pangular/', './'];
 }

@@ -31,7 +31,7 @@ export class ThemeService {
 
     let channel: BroadcastChannel | undefined;
     try {
-      channel = new BroadcastChannel('ng-devtools:theme');
+      channel = new BroadcastChannel('pangular:theme');
     } catch {}
     effect(() => {
       const theme = this.current();
@@ -42,7 +42,7 @@ export class ThemeService {
         let w: Window = window;
         while (w !== w.parent) {
           w = w.parent;
-          w.postMessage({ type: 'ng-devtools:theme-change', theme }, '*');
+          w.postMessage({ type: 'pangular:theme-change', theme }, '*');
         }
       } catch {}
     });
@@ -50,7 +50,7 @@ export class ThemeService {
     const onMessage = (e: MessageEvent) => {
       if (e.source !== window.parent) return;
       const msg = e.data as { type?: unknown; theme?: unknown } | null;
-      if (msg?.type !== 'ng-devtools:theme-change') return;
+      if (msg?.type !== 'pangular:theme-change') return;
       pinned = true;
       this.apply(msg.theme === 'dark' ? 'dark' : 'light');
     };

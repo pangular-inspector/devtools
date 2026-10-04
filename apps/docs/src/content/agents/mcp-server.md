@@ -36,14 +36,14 @@ The package ships a `pangular` binary. Its `mcp` command starts an MCP server on
 ### Add the stdio server to your client
 
 ```bash group="stdio" name="Claude Code" active
-claude mcp add ng-devtools -- npx @pangular-inspector/devtools mcp --root /path/to/your-app
+claude mcp add pangular -- npx @pangular-inspector/devtools mcp --root /path/to/your-app
 ```
 
 ```json group="stdio" name="Cursor"
 // .cursor/mcp.json
 {
   "mcpServers": {
-    "ng-devtools": {
+    "pangular": {
       "command": "npx",
       "args": ["@pangular-inspector/devtools", "mcp", "--root", "${workspaceFolder}"]
     }
@@ -55,7 +55,7 @@ claude mcp add ng-devtools -- npx @pangular-inspector/devtools mcp --root /path/
 // .vscode/mcp.json
 {
   "servers": {
-    "ng-devtools": {
+    "pangular": {
       "type": "stdio",
       "command": "npx",
       "args": ["@pangular-inspector/devtools", "mcp", "--root", "${workspaceFolder}"]
@@ -66,13 +66,13 @@ claude mcp add ng-devtools -- npx @pangular-inspector/devtools mcp --root /path/
 
 ### Point it at the project folder
 
-The server scans the folder it starts in, and your client picks that folder. Some clients start servers in `/`. Pass `--root` with the root of your Angular or Analog project, the folder with `package.json` and `angular.json`, or set `NG_DEVTOOLS_ROOT`. Cursor and VS Code expand `${workspaceFolder}` to the open folder.
+The server scans the folder it starts in, and your client picks that folder. Some clients start servers in `/`. Pass `--root` with the root of your Angular or Analog project, the folder with `package.json` and `angular.json`, or set `PANGULAR_ROOT`. Cursor and VS Code expand `${workspaceFolder}` to the open folder.
 
 If the folder has no `angular.json` and no `package.json` that depends on `@angular/core`, the server prints a warning on stderr. Your client shows it in the MCP server log.
 
 ### Configure the stdio server
 
-The stdio server reads the [devtools options](../getting-started/configuration.md) from `ng-devtools.config.json` in the project folder, from the file you pass with `--config`, or from `NG_DEVTOOLS_CONFIG`. `--read-only` sets `agent.readOnly`. See [Flags for every command](../getting-started/cli.md#flags-for-every-command).
+The stdio server reads the [devtools options](../getting-started/configuration.md) from `pangular.config.json` in the project folder, from the file you pass with `--config`, or from `PANGULAR_CONFIG`. `--read-only` sets `agent.readOnly`. See [Flags for every command](../getting-started/cli.md#flags-for-every-command).
 
 <ngmd-alert severity="helpful">
   Inside this repository, <code>pnpm devtools:mcp</code> runs the same server against the demo app.
@@ -100,7 +100,7 @@ The path depends on how you mount the devtools. Use the port your server actuall
 
 The standalone CLI uses port 9999 by default. If that port is taken and you did not pass `--port`, it picks a free port. Use the URL it prints.
 
-If you mount the devtools panel without the hub, at `/__ng-devtools/`, the endpoint is `/__ng-devtools/__mcp`.
+If you mount the devtools panel without the hub, at `/__pangular/`, the endpoint is `/__pangular/__mcp`.
 
 ### Send an Origin header
 
@@ -119,7 +119,7 @@ If the hub asks for the one-time code, the HTTP endpoint also asks for a bearer 
 | [Express hub](../getting-started/express.md) | Yes, unless you pass `auth: false` or your own `mcp` option.                                          |
 | [Vite plugin](../getting-started/vite.md)    | Only when the one-time code is on. See the plugin's [`auth` option](../getting-started/vite.md#auth). |
 
-The hub prints a generated token in the terminal when it starts. The token changes when the server process restarts, but not when `ng serve` rebuilds `server.ts`. To keep the same token across restarts, set `NG_DEVTOOLS_MCP_TOKEN` in the environment of the server. The hub then uses that value and prints nothing.
+The hub prints a generated token in the terminal when it starts. The token changes when the server process restarts, but not when `ng serve` rebuilds `server.ts`. To keep the same token across restarts, set `PANGULAR_MCP_TOKEN` in the environment of the server. The hub then uses that value and prints nothing.
 
 Send the token in an `Authorization: Bearer <token>` header, next to the `Origin` header. If your setup needs no token, leave the `Authorization` header out.
 
@@ -131,11 +131,11 @@ The stdio server never needs a token.
 // .mcp.json
 {
   "mcpServers": {
-    "ng-devtools": {
+    "pangular": {
       "type": "http",
       "url": "http://localhost:4000/__devframes/__mcp",
       "headers": {
-        "Authorization": "Bearer ${NG_DEVTOOLS_MCP_TOKEN}",
+        "Authorization": "Bearer ${PANGULAR_MCP_TOKEN}",
         "Origin": "http://localhost:4000"
       }
     }
@@ -147,10 +147,10 @@ The stdio server never needs a token.
 // .cursor/mcp.json
 {
   "mcpServers": {
-    "ng-devtools": {
+    "pangular": {
       "url": "http://localhost:4000/__devframes/__mcp",
       "headers": {
-        "Authorization": "Bearer ${env:NG_DEVTOOLS_MCP_TOKEN}",
+        "Authorization": "Bearer ${env:PANGULAR_MCP_TOKEN}",
         "Origin": "http://localhost:4000"
       }
     }
@@ -164,17 +164,17 @@ The stdio server never needs a token.
   "inputs": [
     {
       "type": "promptString",
-      "id": "ng-devtools-token",
-      "description": "ng-devtools MCP token",
+      "id": "pangular-token",
+      "description": "Pangular Inspector MCP token",
       "password": true
     }
   ],
   "servers": {
-    "ng-devtools": {
+    "pangular": {
       "type": "http",
       "url": "http://localhost:4000/__devframes/__mcp",
       "headers": {
-        "Authorization": "Bearer ${input:ng-devtools-token}",
+        "Authorization": "Bearer ${input:pangular-token}",
         "Origin": "http://localhost:4000"
       }
     }
@@ -182,7 +182,7 @@ The stdio server never needs a token.
 }
 ```
 
-The Claude Code and Cursor examples read the token from `NG_DEVTOOLS_MCP_TOKEN`, so set the same value for the server and the client. VS Code asks for the token the first time it starts the server.
+The Claude Code and Cursor examples read the token from `PANGULAR_MCP_TOKEN`, so set the same value for the server and the client. VS Code asks for the token the first time it starts the server.
 
 ### Open the app in a browser
 
@@ -204,7 +204,7 @@ The live tools read what the page reports. Without an open page, they have nothi
 
 ### Tool names
 
-The server registers tools with a colon, as `ng-devtools:get-routes`. MCP clients see them with an underscore, as `ng-devtools_get-routes`. Calls with either form work.
+The server registers tools with a colon, as `pangular:get-routes`. MCP clients see them with an underscore, as `pangular_get-routes`. Calls with either form work.
 
 ### Read and action tools
 

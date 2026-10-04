@@ -6,7 +6,7 @@ Pangular Inspector inspects a running Angular app and serves what it finds to a 
 
 | Path                        | What it is                                                                                                                                                     |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/ng-devtools`      | The published package: the page overlay and collectors, the devframe server (`src/devframe.ts`), the Express hub, the Vite plugin, the CLI and the agent tools |
+| `packages/devtools`         | The published package: the page overlay and collectors, the devframe server (`src/devframe.ts`), the Express hub, the Vite plugin, the CLI and the agent tools |
 | `app`                       | The panel UI, an Angular app served by the hub and bundled into the Chrome extension                                                                           |
 | `extension`                 | The Chrome extension; `extension/ui` is a committed build of `app`                                                                                             |
 | `apps/docs`                 | The documentation site                                                                                                                                         |
@@ -32,7 +32,7 @@ The words this project uses for its own concepts (overlay, collector, hub, devfr
 
 - After any change in `app`, run `pnpm extension:build` and commit `extension/ui`. CI fails when the committed bundle is stale.
 - Commit messages and pull request titles use `type(scope): summary` with the scopes in `docs/contributing/commit-message-guidelines.md`. Pull requests are squash merged.
-- A new agent tool or RPC must be listed in `packages/ng-devtools/src/config.ts` (`AGENT_INSPECTOR`, `RPC_INSPECTOR`, and `ACTION_TOOLS` for anything that writes), or turning its inspector off won't hide it.
+- A new agent tool or RPC must be listed in `packages/devtools/src/config.ts` (`AGENT_INSPECTOR`, `RPC_INSPECTOR`, and `ACTION_TOOLS` for anything that writes), or turning its inspector off won't hide it.
 - Values sent to the panel or to agents go through `serialize` or the redaction helpers, so `redaction.secretNames`, JWTs and bearer tokens are masked everywhere.
 - Data from the page carries a `pageId` and expires, so one tab never overwrites another.
 - Docs links are relative `.md` links, which the build checks. `*Angular` style words are keyword links on purpose.
@@ -65,8 +65,8 @@ Roles for delegating work live in `.claude/agents/`: `ui-engineer`, `inspector-e
 - **Devtools SPA (hot reload):** `pnpm devtools:dev` → http://localhost:5173 (serves its own RPC, so source-scan data works; live tabs need an app page connected, so use the SSR server on 4000 for those)
 - **Demo app (SPA, no SSR):** `pnpm start` → http://localhost:4200 (runs `ng serve` with SSR and hot reload; devtools popup + RPC work without a separate server)
 - The devtools popup appears on the demo app page; click it to open the inspector panel
-- Changes to `app/src/` (devtools SPA) are visible live via `pnpm devtools:dev`; the SSR server serves the SPA built into `packages/ng-devtools/dist/public` (or the npm-published copy when it has not been built), so run `pnpm devtools:build-pkg` to refresh it
-- To publish: update the version in `packages/ng-devtools/package.json`, then run `pnpm devtools:publish` (the package build bundles the SPA)
+- Changes to `app/src/` (devtools SPA) are visible live via `pnpm devtools:dev`; the SSR server serves the SPA built into `packages/devtools/dist/public` (or the npm-published copy when it has not been built), so run `pnpm devtools:build-pkg` to refresh it
+- To publish: update the version in `packages/devtools/package.json`, then run `pnpm devtools:publish` (the package build bundles the SPA)
 
 ## Documentation
 

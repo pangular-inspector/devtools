@@ -17,7 +17,7 @@ app page (overlay.ts + <area>-collector.ts)
 
 Read `docs/contributing/coding-standards.md` ("Reading data from the page") before you start.
 
-## Page side (`packages/ng-devtools/src`)
+## Page side (`packages/devtools/src`)
 
 - Put collection logic in its own module (`<area>-collector.ts`) and keep `overlay.ts` changes to wiring: import, attach, push, `leave()` and the returned cleanup.
 - Read Angular through the debug APIs on `window.ng` and verify each field against `node_modules/@angular/core/fesm2022` (or the library's fesm build). Known helpers:

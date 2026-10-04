@@ -7,10 +7,10 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "ios": {
-      "bundleIdentifier": "dev.ngdevtools.angularnative"
+      "bundleIdentifier": "dev.pangular.angularnative"
     },
     "android": {
-      "package": "dev.ngdevtools.angularnative"
+      "package": "dev.pangular.angularnative"
     },
     "plugins": ["@ng-native/metro"]
   }

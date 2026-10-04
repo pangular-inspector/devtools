@@ -28,7 +28,7 @@ The app is not part of the pnpm workspace (`pnpm-workspace.yaml` excludes it), s
    npm install
    ```
 
-   After a change in `packages/ng-devtools`, run `npm run devtools:pack` and then `npm install ./ng-devtools.tgz`. A plain `npm install` keeps the tarball it installed before, because `package-lock.json` pins it.
+   After a change in `packages/devtools`, run `npm run devtools:pack` and then `npm install ./pangular-inspector-devtools.tgz`. A plain `npm install` keeps the tarball it installed before, because `package-lock.json` pins it.
 
 2. Start the devtools server in its own terminal. It scans this app's `src` folder and listens on `http://localhost:9999/`:
 
@@ -51,7 +51,7 @@ The app is not part of the pnpm workspace (`pnpm-workspace.yaml` excludes it), s
    npm run android
    ```
 
-4. Open `http://localhost:9999/`. The Metro log shows `[ng-devtools] Connected to the devtools server at http://localhost:9999/`, and the **Components**, **Signals**, **Injectors** and **Store** tabs fill. Hover a component in the tree to outline its view on the device.
+4. Open `http://localhost:9999/`. The Metro log shows `[pangular] Connected to the devtools server at http://localhost:9999/`, and the **Components**, **Signals**, **Injectors** and **Store** tabs fill. Hover a component in the tree to outline its view on the device.
 
 If you restart the devtools server, the app reconnects within five seconds.
 

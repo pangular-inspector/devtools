@@ -2,5 +2,5 @@ node_modules/
 .expo/
 ios/
 android/
-ng-devtools.tgz
+pangular-inspector-devtools.tgz
 package-lock.json

@@ -43,19 +43,19 @@ In detail, a request to the devtools must:
 - come from a loopback address (any `127.x.x.x` address or `::1`), and
 - have no `Origin` header, or an origin that is a loopback host, a Chrome extension, an entry in `allowedOrigins`, or a host that Vite's `server.allowedHosts` accepts.
 
-Other requests get `403` with the message "ng-devtools only answers requests from this machine." WebSocket upgrades follow the same rules.
+Other requests get `403` with the message "Pangular Inspector only answers requests from this machine." WebSocket upgrades follow the same rules.
 
 If you open the dev server through another hostname that points to your machine (for example `myapp.test`), list it in Vite's `server.allowedHosts` and the devtools trust it too. Add other origins with `allowedOrigins`:
 
 ```ts {7-8}
 // vite.config.ts
 import analog from '@analogjs/platform';
-import ngDevtools from '@pangular-inspector/devtools/vite';
+import pangular from '@pangular-inspector/devtools/vite';
 import {defineConfig} from 'vite';
 
 export default defineConfig({
   server: {allowedHosts: ['myapp.test']},
-  plugins: [analog(), ngDevtools({allowedOrigins: ['https://tunnel.example']})],
+  plugins: [analog(), pangular({allowedOrigins: ['https://tunnel.example']})],
 });
 ```
 
@@ -77,7 +77,7 @@ With only loopback hosts allowed, the loopback and origin checks take the place 
 
 ### Express hub
 
-`initNgDevtoolsHub()` has two checks, both on by default:
+`initPangularHub()` has two checks, both on by default:
 
 | Check         | Option           | What it does                                                                                                                              |
 | ------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -86,12 +86,12 @@ With only loopback hosts allowed, the loopback and origin checks take the place 
 
 ```ts {8}
 // src/server.ts
-import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
 import express from 'express';
 
 const app = express();
 
-const devtools = initNgDevtoolsHub({
+const devtools = initPangularHub({
   allowedOrigins: ['https://tunnel.example'],
 });
 app.use(devtools.nodeMiddleware);
@@ -111,7 +111,7 @@ The CLI server binds to `localhost` and asks for a one-time code. `--host` chang
 
 The HTTP MCP endpoint answers only requests that carry a loopback `Origin` header. In the Vite plugin, the request must also come from a loopback address, like every devtools request.
 
-While the one-time code is on, the endpoint also asks for a bearer token. That is the Express hub by default, and the Vite plugin when its code is on. The hub prints a generated token when it starts. Set `NG_DEVTOOLS_MCP_TOKEN` to choose the token yourself. Requests without the right `Authorization: Bearer <token>` header get `401`. The stdio server needs no token. See [Send a token](./agents/mcp-server.md#send-a-token).
+While the one-time code is on, the endpoint also asks for a bearer token. That is the Express hub by default, and the Vite plugin when its code is on. The hub prints a generated token when it starts. Set `PANGULAR_MCP_TOKEN` to choose the token yourself. Requests without the right `Authorization: Bearer <token>` header get `401`. The stdio server needs no token. See [Send a token](./agents/mcp-server.md#send-a-token).
 
 Without a token, the Express hub answers only requests from a loopback address. With a token, it also answers other addresses that send the right token and a loopback `Origin`. Any client can set that header, so treat the token like a password.
 
@@ -133,7 +133,7 @@ A field's value is replaced with `[redacted]` when the field:
 
 - is a password field,
 - has a password, one-time-code or credit-card `autocomplete`,
-- sits inside `.sentry-mask`, `.rr-mask`, `[data-private]` or `[data-ng-devtools="mask"]`,
+- sits inside `.sentry-mask`, `.rr-mask`, `[data-private]` or `[data-pangular="mask"]`,
 - has a name that contains a secret word (password, token, card, cvv, apiKey and similar), or a name listed in `mask`, or
 - sits inside a group or array whose name contains a secret word.
 
@@ -146,15 +146,14 @@ Those values are also removed from error messages. The devtools don't write secr
 Mark a field in the template, or list keys on `window`:
 
 ```html
-<input name="nickname" data-ng-devtools="mask" />
-<input name="cardHolder" data-ng-devtools="unmask" />
+<input name="nickname" data-pangular="mask" /> <input name="cardHolder" data-pangular="unmask" />
 ```
 
 ```ts
-window.__NG_DEVTOOLS_FORMS__ = {mask: ['iban'], unmask: ['passport']};
+window.__PANGULAR_FORMS__ = {mask: ['iban'], unmask: ['passport']};
 ```
 
-`[data-ng-devtools="unmask"]` opts a field back in. The `window` setting does the same by key.
+`[data-pangular="unmask"]` opts a field back in. The `window` setting does the same by key.
 
 The `mask` and `unmask` lists apply to every inspector on the page, not only forms: nested keys of an object-valued control, Signal Forms fields, form writes and restores, component inputs, signals, NgRx state, pipes and the Analog `load()` preview all follow them. Analog server call previews are recorded on the server, so they follow `redaction.secretNames` and `redaction.unmask` only.
 
@@ -213,7 +212,7 @@ Response previews and TransferState values in the [SSR & HTTP tab](./inspectors/
     Keep real credentials out of forms and API responses you inspect.
   </ngmd-step>
   <ngmd-step title="Mark extra secrets">
-    Use <code>data-ng-devtools="mask"</code>, <code>window.__NG_DEVTOOLS_FORMS__</code> or <code>redaction.secretNames</code> for fields the secret words miss.
+    Use <code>data-pangular="mask"</code>, <code>window.__PANGULAR_FORMS__</code> or <code>redaction.secretNames</code> for fields the secret words miss.
   </ngmd-step>
   <ngmd-step title="Block what you don't need">
     Set <code>agent.readOnly</code> or turn off <code>actions</code> to stop the panel and agents from writing to your app. See <a href="./getting-started/configuration.md#actions">Configuration</a>.

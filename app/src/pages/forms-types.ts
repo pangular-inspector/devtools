@@ -132,8 +132,7 @@ export function redactLabel(reason: string): string {
   return REDACT_LABELS[reason] ?? reason;
 }
 
-export const UNMASK_DOCS_URL =
-  'https://github.com/santoshyadavdev/angular-devtools/blob/main/apps/docs/src/content/security.md#opt-fields-in-or-out';
+export const UNMASK_DOCS_URL = 'https://pangular-inspector.dev/security/#opt-fields-in-or-out';
 
 export async function formAction(
   client: DevframeRpcClient | null,

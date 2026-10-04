@@ -1,4 +1,4 @@
-const PAGE_ID_KEY = 'ng-devtools-page-id';
+const PAGE_ID_KEY = 'pangular-page-id';
 
 let scopedPageId: string | null = null;
 

@@ -1,0 +1,119 @@
+{
+  "name": "@pangular-inspector/devtools",
+  "version": "0.0.7",
+  "description": "Pangular Inspector, the unified Angular devtools. Inspect components, signals, DI, and routes. Runs standalone, embedded, or over MCP.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/santoshyadavdev/angular-devtools.git",
+    "directory": "packages/devtools"
+  },
+  "homepage": "https://pangular-inspector.dev",
+  "type": "module",
+  "bin": {
+    "pangular": "./bin.mjs"
+  },
+  "exports": {
+    ".": "./src/devframe.ts",
+    "./devframe": "./src/devframe.ts",
+    "./config": "./src/config.ts",
+    "./overlay": "./src/overlay.ts",
+    "./overlay-angular-native": "./src/overlay-angular-native.ts",
+    "./popup": "./src/popup.ts",
+    "./overlay-nativescript": "./src/overlay-nativescript.ts",
+    "./cli": "./src/cli.ts",
+    "./http": "./src/http.ts",
+    "./hub": "./src/hub.ts",
+    "./package.json": "./package.json",
+    "./vite": "./src/vite.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./dist/devframe.mjs",
+      "./devframe": "./dist/devframe.mjs",
+      "./config": "./dist/config.mjs",
+      "./overlay": "./dist/overlay.mjs",
+      "./overlay-angular-native": "./dist/overlay-angular-native.mjs",
+      "./popup": "./dist/popup.mjs",
+      "./overlay-nativescript": "./dist/overlay-nativescript.mjs",
+      "./cli": "./dist/cli.mjs",
+      "./http": "./dist/http.mjs",
+      "./hub": "./dist/hub.mjs",
+      "./package.json": "./package.json",
+      "./vite": "./dist/vite.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown && vite build --config ../../app/vite.config.ts --outDir ../packages/devtools/dist/public --emptyOutDir",
+    "prepack": "pnpm build"
+  },
+  "nx": {
+    "targets": {
+      "build": {
+        "inputs": [
+          "production",
+          "^production",
+          "{workspaceRoot}/app/**/*"
+        ]
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "bin.mjs"
+  ],
+  "keywords": [
+    "angular",
+    "devtools",
+    "devframe",
+    "signals",
+    "dependency-injection",
+    "mcp",
+    "nativescript"
+  ],
+  "dependencies": {
+    "@devframes/agentic": "^1.2.0",
+    "@devframes/hub": "^1.2.0",
+    "@devframes/hub-ui": "^1.2.0",
+    "@valibot/to-json-schema": "^1.8.0",
+    "cac": "^7.0.0",
+    "devframe": "^1.2.0",
+    "h3": "^1.15.11",
+    "valibot": "^1.5.0"
+  },
+  "peerDependencies": {
+    "@nativescript/core": ">=8",
+    "@angular/common": ">=20",
+    "@angular/core": ">=20",
+    "rxjs": ">=7",
+    "vite": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "@nativescript/core": {
+      "optional": true
+    },
+    "@angular/common": {
+      "optional": true
+    },
+    "@angular/core": {
+      "optional": true
+    },
+    "rxjs": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@angular/common": "^22.1.0",
+    "@angular/core": "^22.1.0",
+    "hono": "4.13.8",
+    "@nativescript/core": "^9.1.0",
+    "rxjs": "~7.8.0",
+    "tsdown": "^0.23.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

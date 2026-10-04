@@ -35,7 +35,7 @@ body:
       label: Setup
       description: How the devtools are mounted in your app.
       options:
-        - Angular CLI with Express (initNgDevtoolsHub)
+        - Angular CLI with Express (initPangularHub)
         - Vite plugin
         - Analog
         - Standalone CLI (pangular dev)

@@ -29,7 +29,7 @@ function fakeClient(configs: object = {}): DevframeRpcClient {
   } as unknown as DevframeRpcClient;
 }
 
-const signalsOff = { 'ng-devtools': { inspectors: { signals: false } } };
+const signalsOff = { pangular: { inspectors: { signals: false } } };
 
 async function settle(fixture: ComponentFixture<unknown>) {
   for (let i = 0; i < 3; i++) {

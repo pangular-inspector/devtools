@@ -72,12 +72,12 @@ A content script checks each page for Angular: an `ng-version` attribute or a `w
 
 The panel looks for the devtools server on the origin of the inspected page. It tries these paths in order:
 
-| Path                        | Mounted by                            |
-| --------------------------- | ------------------------------------- |
-| `/__ng-devtools/`           | A panel mounted with `initDevframe()` |
-| `/__devframes/ng-devtools/` | The Express hub or the Vite plugin    |
-| `/__devframe/`              | A bare devframe mount                 |
-| `/`                         | A devframe served at the root         |
+| Path                     | Mounted by                            |
+| ------------------------ | ------------------------------------- |
+| `/__pangular/`           | A panel mounted with `initDevframe()` |
+| `/__devframes/pangular/` | The Express hub or the Vite plugin    |
+| `/__devframe/`           | A bare devframe mount                 |
+| `/`                      | A devframe served at the root         |
 
 Under each path it asks for `__devframe/__connection.json`, then `__connection.json`. It connects the UI to the first path that answers with a connection file. Each request times out after 1.5 seconds.
 
@@ -95,7 +95,7 @@ The extension can reach loopback hosts from the start. For any other host, such 
 
 ### The inspected tab
 
-The overlay gives each page an id and exposes it on the page as `window.__ngDevtoolsPageId`. The panel passes the id of the page it inspects to the UI. If several tabs run the same app, the panel shows the tab you inspect, not the one that reported last.
+The overlay gives each page an id and exposes it on the page as `window.__pangularPageId`. The panel passes the id of the page it inspects to the UI. If several tabs run the same app, the panel shows the tab you inspect, not the one that reported last.
 
 The overlay claims the id after it connects to the server, so it can come later than the server answers. The panel waits up to five seconds for the id. If no id appears in that time, it uses the id the tab kept from an earlier load, if there is one. Without any id, it loads the UI and shows the page that reported last.
 

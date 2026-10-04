@@ -45,13 +45,13 @@ describe('ThemeService', () => {
     expect(svc.current()).toBe('light');
   });
 
-  it('updates to light on a ng-devtools:theme-change postMessage', () => {
+  it('updates to light on a pangular:theme-change postMessage', () => {
     const svc = TestBed.inject(ThemeService);
     expect(svc.current()).toBe('dark');
 
     window.dispatchEvent(
       new MessageEvent('message', {
-        data: { type: 'ng-devtools:theme-change', theme: 'default' },
+        data: { type: 'pangular:theme-change', theme: 'default' },
         source: window.parent,
       }),
     );
@@ -60,14 +60,14 @@ describe('ThemeService', () => {
     expect(document.documentElement.dataset['theme']).toBe('light');
   });
 
-  it('updates to dark on a ng-devtools:theme-change postMessage', () => {
+  it('updates to dark on a pangular:theme-change postMessage', () => {
     document.documentElement.dataset['theme'] = 'light';
     const svc = TestBed.inject(ThemeService);
     expect(svc.current()).toBe('light');
 
     window.dispatchEvent(
       new MessageEvent('message', {
-        data: { type: 'ng-devtools:theme-change', theme: 'dark' },
+        data: { type: 'pangular:theme-change', theme: 'dark' },
         source: window.parent,
       }),
     );
@@ -81,7 +81,7 @@ describe('ThemeService', () => {
 
     window.dispatchEvent(
       new MessageEvent('message', {
-        data: { type: 'ng-devtools:theme-change', theme: 'default' },
+        data: { type: 'pangular:theme-change', theme: 'default' },
         source: null,
       }),
     );
@@ -117,7 +117,7 @@ describe('ThemeService', () => {
 
     window.dispatchEvent(
       new MessageEvent('message', {
-        data: { type: 'ng-devtools:theme-change', theme: 'dark' },
+        data: { type: 'pangular:theme-change', theme: 'dark' },
         source: window.parent,
       }),
     );

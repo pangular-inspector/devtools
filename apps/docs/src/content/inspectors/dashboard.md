@@ -86,9 +86,9 @@ The Components, Routes, NgRx and Pipes cards count the source scan. The Signals 
 
 ## Agent tools
 
-| Tool                     | What it returns                                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `ng-devtools:build-meta` | Angular and TypeScript versions, the project name, SSR status and, in Analog apps, the Analog version. |
+| Tool                  | What it returns                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------ |
+| `pangular:build-meta` | Angular and TypeScript versions, the project name, SSR status and, in Analog apps, the Analog version. |
 
 [Static reports](../getting-started/cli.md) include the same data. See [Tools](../agents/tools.md) for every tool.
 

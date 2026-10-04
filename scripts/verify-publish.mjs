@@ -45,7 +45,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const packageDir = path.join(root, 'packages/ng-devtools');
+const packageDir = path.join(root, 'packages/devtools');
 const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'));
 const manifest = readJson(path.join(packageDir, 'package.json'));
 
@@ -56,7 +56,7 @@ const REGISTRY = `http://localhost:${registryPort}`;
 const arg = (name) =>
   process.argv.find((value) => value.startsWith(`--${name}=`))?.slice(name.length + 3);
 
-const work = mkdtempSync(path.join(tmpdir(), 'ng-devtools-verify-'));
+const work = mkdtempSync(path.join(tmpdir(), 'pangular-verify-'));
 const children = new Set();
 
 function stopAll() {
@@ -267,7 +267,7 @@ async function checkHub(base, child, logFile) {
   } catch {
     throw new Error(`__connection.json is not JSON:\n${text.slice(0, 500)}`);
   }
-  const panelUrl = `${base}/__devframes/ng-devtools/`;
+  const panelUrl = `${base}/__devframes/pangular/`;
   const panel = await fetch(panelUrl);
   const html = await panel.text();
   if (!panel.ok || !html.includes('<title>Pangular Inspector</title>')) {
@@ -308,12 +308,12 @@ async function angularCli(version) {
   replaceIn(
     server,
     "import express from 'express';",
-    "import express from 'express';\nimport { initNgDevtoolsHub } from '@pangular-inspector/devtools/hub';",
+    "import express from 'express';\nimport { initPangularHub } from '@pangular-inspector/devtools/hub';",
   );
   replaceIn(
     server,
     'const app = express();',
-    'const app = express();\nconst devtools = initNgDevtoolsHub({ ws: false });\napp.use(devtools.nodeMiddleware);',
+    'const app = express();\nconst devtools = initPangularHub({ ws: false });\napp.use(devtools.nodeMiddleware);',
   );
   replaceIn(
     path.join(app, 'src/main.ts'),
@@ -352,9 +352,9 @@ async function analog(version) {
   replaceIn(
     config,
     "import analog from '@analogjs/platform';",
-    "import analog from '@analogjs/platform';\nimport ngDevtools from '@pangular-inspector/devtools/vite';",
+    "import analog from '@analogjs/platform';\nimport pangular from '@pangular-inspector/devtools/vite';",
   );
-  replaceIn(config, 'analog(),', 'analog(),\n    ngDevtools(),');
+  replaceIn(config, 'analog(),', 'analog(),\n    pangular(),');
   replaceIn(path.join(app, 'src/main.ts'), 'bootstrapApplication(App, appConfig);', OVERLAY_VITE);
 
   console.log('vite build');

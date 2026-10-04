@@ -14,7 +14,7 @@ function fakeClient(call: Call, connectionMeta: object = {}): DevframeRpcClient 
   return { connectionMeta, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
 }
 
-const routerActionsOff = { configs: { 'ng-devtools': { actions: { router: false } } } };
+const routerActionsOff = { configs: { pangular: { actions: { router: false } } } };
 
 const offline: Call = () => Promise.reject(new Error('offline'));
 

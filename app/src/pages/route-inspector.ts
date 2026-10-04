@@ -282,7 +282,7 @@ export class RouteInspector {
     this.loading.set(true);
     this.error.set(false);
     try {
-      const my = client.scope('ng-devtools');
+      const my = client.scope('pangular');
       const result = (await my.rpc.call('get-routes')) as SourceRoute[];
       this.routes.set(result);
     } catch {

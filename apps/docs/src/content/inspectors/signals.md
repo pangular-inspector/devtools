@@ -146,7 +146,7 @@ Entries are sampled instead of exact in these cases:
 
 ### Switch the graph from an agent
 
-The `ng-devtools:highlight` tool also switches the graph to the component it highlights. Calling `ng-devtools:inspect-signals` with `root` or a route path switches it to that injector. The picker does not show either choice.
+The `pangular:highlight` tool also switches the graph to the component it highlights. Calling `pangular:inspect-signals` with `root` or a route path switches it to that injector. The picker does not show either choice.
 
 ### Find a stuck effect in a root service
 
@@ -161,12 +161,12 @@ The `ng-devtools:highlight` tool also switches the graph to the component it hig
 
 ## Agent tools
 
-| Tool or resource              | Kind     | What it does                                                                                                                       |
-| ----------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `ng-devtools:get-signals`     | tool     | Signal declarations from source, with signal inputs, models and queries.                                                           |
-| `ng-devtools:inspect-signals` | tool     | The graph the page reported, with edges, resources and history. Takes a host tag, class name, instance id, `root` or a route path. |
-| `ng-devtools:highlight`       | tool     | Highlights a component and makes it the target of the graph.                                                                       |
-| `ng-devtools:signal-graph`    | resource | The live graph per page.                                                                                                           |
+| Tool or resource           | Kind     | What it does                                                                                                                       |
+| -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:get-signals`     | tool     | Signal declarations from source, with signal inputs, models and queries.                                                           |
+| `pangular:inspect-signals` | tool     | The graph the page reported, with edges, resources and history. Takes a host tag, class name, instance id, `root` or a route path. |
+| `pangular:highlight`       | tool     | Highlights a component and makes it the target of the graph.                                                                       |
+| `pangular:signal-graph`    | resource | The live graph per page.                                                                                                           |
 
 `inspect-signals` returns the graph of the chosen component. Call `highlight` first to switch it to another component. See [Tools](../agents/tools.md).
 

@@ -12,7 +12,7 @@ Then follow the [installation guide](./apps/docs/src/content/getting-started/ins
 
 ## Documentation
 
-The docs live in [`apps/docs`](./apps/docs). Run them locally with `pnpm docs:dev`.
+Read the docs at [pangular-inspector.dev](https://pangular-inspector.dev). Their source lives in [`apps/docs`](./apps/docs); run them locally with `pnpm docs:dev`.
 
 - [Getting started](./apps/docs/src/content/getting-started/introduction.md)
 - [Inspectors](./apps/docs/src/content/inspectors/dashboard.md)

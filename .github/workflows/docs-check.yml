@@ -28,7 +28,7 @@ jobs:
           NO_DOCS: ${{ contains(github.event.pull_request.labels.*.name, 'no-docs') }}
         run: |
           changed=$(git diff --name-only "$BASE...$HEAD")
-          code=$(printf '%s\n' "$changed" | grep -E '^(packages/ng-devtools/src/|app/src/|extension/[^/]+$)' | grep -vE '(__tests__/|\.(spec|test)\.ts$)' || true)
+          code=$(printf '%s\n' "$changed" | grep -E '^(packages/devtools/src/|app/src/|extension/[^/]+$)' | grep -vE '(__tests__/|\.(spec|test)\.ts$)' || true)
           docs=$(printf '%s\n' "$changed" | grep -E '^apps/docs/src/content/' || true)
           if [ -z "$code" ]; then
             echo "No code changes that need docs."

@@ -1,13 +1,13 @@
 import type { DevframeRpcClient } from 'devframe/client';
 
-/** Calls an `ng-devtools` RPC; resolves `null` without a client, rejections propagate. */
+/** Calls a `pangular` RPC; resolves `null` without a client, rejections propagate. */
 export function rpcCall(
   client: DevframeRpcClient | null,
   name: string,
   arg?: unknown,
 ): Promise<unknown> {
   if (!client) return Promise.resolve(null);
-  const rpc = client.scope('ng-devtools').rpc as unknown as {
+  const rpc = client.scope('pangular').rpc as unknown as {
     call: (name: string, ...args: unknown[]) => Promise<unknown>;
   };
   return rpc.call(name, ...(arg === undefined ? [] : [arg]));
@@ -33,7 +33,7 @@ export function isStaticReport(client: DevframeRpcClient | null): boolean {
 /** Clears the boxes the panel drew in the app when the panel page goes away; returns the cleanup. */
 export function clearHighlightsOnHide(client: () => DevframeRpcClient | null): () => void {
   const clear = () => {
-    const rpc = client()?.scope('ng-devtools').rpc;
+    const rpc = client()?.scope('pangular').rpc;
     if (!rpc) return;
     void rpc.callEvent('request-page-highlight', null);
     void rpc.callEvent('request-form-highlight', null);

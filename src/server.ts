@@ -6,15 +6,15 @@ import {
 } from '@angular/ssr/node';
 import express from 'express';
 import { join } from 'node:path';
-import { initNgDevtoolsHub } from '@pangular-inspector/devtools/hub';
+import { initPangularHub } from '@pangular-inspector/devtools/hub';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
 const app = express();
 const angularApp = new AngularNodeAppEngine();
 
-const auth = process.env['NG_DEVTOOLS_AUTH'] === 'true';
-const devtools = initNgDevtoolsHub({
+const auth = process.env['PANGULAR_AUTH'] === 'true';
+const devtools = initPangularHub({
   ws: { sidecar: true },
   auth,
 });

@@ -1474,7 +1474,7 @@ export class DiInspector {
     if (!client) return;
     const selector = node?.injector.type === 'element' ? (node.injector.selector ?? null) : null;
     void client
-      .scope('ng-devtools')
+      .scope('pangular')
       .rpc.call('request-page-highlight', selector)
       .catch(() => {});
   }
@@ -1538,7 +1538,7 @@ export class DiInspector {
   private async loadInjectorTree(client: DevframeRpcClient) {
     this.stopTree?.();
     this.stopTree = null;
-    const my = client.scope('ng-devtools');
+    const my = client.scope('pangular');
     let state: Awaited<ReturnType<typeof my.rpc.sharedState>>;
     try {
       state = await my.rpc.sharedState('injector-tree');
@@ -1564,7 +1564,7 @@ export class DiInspector {
   }
 
   private async loadSourceProviders(client: DevframeRpcClient) {
-    const my = client.scope('ng-devtools');
+    const my = client.scope('pangular');
     try {
       this.sourceProviders.set((await my.rpc.call('get-providers')) as SourceProvider[]);
     } catch {

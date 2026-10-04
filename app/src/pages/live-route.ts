@@ -312,7 +312,7 @@ export class LiveRoute {
     this.loading.set(true);
     this.failed.set(false);
     try {
-      const state = await client.scope('ng-devtools').rpc.sharedState('router');
+      const state = await client.scope('pangular').rpc.sharedState('router');
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         this.pages.set((value as { pages?: RouterPage[] } | undefined)?.pages ?? []);

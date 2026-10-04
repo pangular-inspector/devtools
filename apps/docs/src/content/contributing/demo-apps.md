@@ -62,11 +62,11 @@ Keep `redirectTo` cycles (`NG04016`) in the unit tests: Angular stops them befor
 
 The demo shows the full setup in three files:
 
-| File                    | What it adds                                                                                                                   |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `src/server.ts`         | The hub, with `initNgDevtoolsHub()` mounted as Express middleware                                                              |
-| `src/main.ts`           | The overlay and `registerNgrxSignals`, loaded in development only                                                              |
-| `src/app/app.config.ts` | `withNgDevtools()` and `provideNgDevtoolsHttp()` for the SSR & HTTP tab, and `withIncrementalHydration()` for the defer blocks |
+| File                    | What it adds                                                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `src/server.ts`         | The hub, with `initPangularHub()` mounted as Express middleware                                                            |
+| `src/main.ts`           | The overlay and `registerNgrxSignals`, loaded in development only                                                          |
+| `src/app/app.config.ts` | `withPangular()` and `providePangularHttp()` for the SSR & HTTP tab, and `withIncrementalHydration()` for the defer blocks |
 
 ### Run in development
 
@@ -151,7 +151,7 @@ pnpm --filter analog-demo preview
 
 ### Outside the workspace
 
-The demo is excluded in `pnpm-workspace.yaml`, so `pnpm install` and CI don't install Expo or React Native, and `pnpm typecheck` doesn't check it. It installs with npm and depends on a tarball of the devtools package (`ng-devtools.tgz`), so Metro bundles the built `dist` files as npm publishes them.
+The demo is excluded in `pnpm-workspace.yaml`, so `pnpm install` and CI don't install Expo or React Native, and `pnpm typecheck` doesn't check it. It installs with npm and depends on a tarball of the devtools package (`pangular-inspector-devtools.tgz`), so Metro bundles the built `dist` files as npm publishes them.
 
 ### Run the Angular Native demo
 
@@ -162,7 +162,7 @@ npm install
 npm run devtools
 ```
 
-`devtools:pack` builds and packs `packages/ng-devtools` into the demo folder. After a change in the package, pack again and run `npm install ./ng-devtools.tgz`, since a plain `npm install` keeps the tarball its lockfile pins. `npm run devtools` starts the devtools server with `--no-auth` on port 9999. Then, in a second terminal, run `npm run ios`, or `adb reverse tcp:9999 tcp:9999` and `npm run android`. The demo's `README.md` has the details, and `npm run typecheck` checks its templates.
+`devtools:pack` builds and packs `packages/devtools` into the demo folder. After a change in the package, pack again and run `npm install ./pangular-inspector-devtools.tgz`, since a plain `npm install` keeps the tarball its lockfile pins. `npm run devtools` starts the devtools server with `--no-auth` on port 9999. Then, in a second terminal, run `npm run ios`, or `adb reverse tcp:9999 tcp:9999` and `npm run android`. The demo's `README.md` has the details, and `npm run typecheck` checks its templates.
 
 ## Where to next
 

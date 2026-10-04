@@ -22,11 +22,11 @@ Add the Vite plugin next to `analog()` and load the overlay. See [Vite and Analo
 ```ts {3,7}
 // vite.config.ts
 import analog from '@analogjs/platform';
-import ngDevtools from '@pangular-inspector/devtools/vite';
+import pangular from '@pangular-inspector/devtools/vite';
 import {defineConfig} from 'vite';
 
 export default defineConfig({
-  plugins: [analog(), ngDevtools()],
+  plugins: [analog(), pangular()],
 });
 ```
 
@@ -82,7 +82,7 @@ Checks grouped by rule, each with a fix. Each card lists where the rule fired an
 - API method suffixes, duplicate API routes, and routes outside the API prefix.
 - Prerender entries that match nothing.
 - Frontmatter errors, duplicate slugs, and content that shadows a page.
-- From the live page: `load()` fetched twice, server function reads called again after hydration, hydration errors, API routes not found, and added pages that need a restart. To catch hydration errors from the first load, add `provideNgDevtoolsHttp()` (see [Set up Analog](../guides/analog.md#catch-hydration-errors-from-the-first-load)).
+- From the live page: `load()` fetched twice, server function reads called again after hydration, hydration errors, API routes not found, and added pages that need a restart. To catch hydration errors from the first load, add `providePangularHttp()` (see [Set up Analog](../guides/analog.md#catch-hydration-errors-from-the-first-load)).
 
 ## Where the data comes from
 
@@ -163,19 +163,19 @@ The tab reads every `routeRules` entry in `vite.config`. A rule like `/blog/**` 
 
 ## Agent tools
 
-| Tool                                  | Inputs                                         | What it does                                                            |
-| ------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------- |
-| `ng-devtools:analog-routes`           | `filter`                                       | File routes in match order, with page, layout and server files.         |
-| `ng-devtools:analog-explain-url`      | `url` (required)                               | Which files render a URL, or the closest candidates.                    |
-| `ng-devtools:analog-current-page`     | `page`                                         | The open page: its files, `load()` data, rendering and hydration state. |
-| `ng-devtools:analog-server-calls`     | `kind`, `route`, `limit`                       | Recent server calls, with server function names and action outcomes.    |
-| `ng-devtools:analog-api-routes`       |                                                | Server routes with method, URL and file, plus middleware.               |
-| `ng-devtools:analog-server-functions` |                                                | Server functions with name, method, file, id and call counts.           |
-| `ng-devtools:analog-call-api`         | `path` (required), `method`, `body`, `confirm` | Sends a real request to the dev server.                                 |
-| `ng-devtools:analog-render-modes`     |                                                | The render mode of each page, and what the last request did.            |
-| `ng-devtools:analog-prerender-plan`   |                                                | The prerender plan.                                                     |
-| `ng-devtools:analog-content`          | `filter`                                       | Markdown files with slug, frontmatter, route and parse errors.          |
-| `ng-devtools:analog-lint`             |                                                | The Analog checks.                                                      |
+| Tool                               | Inputs                                         | What it does                                                            |
+| ---------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------- |
+| `pangular:analog-routes`           | `filter`                                       | File routes in match order, with page, layout and server files.         |
+| `pangular:analog-explain-url`      | `url` (required)                               | Which files render a URL, or the closest candidates.                    |
+| `pangular:analog-current-page`     | `page`                                         | The open page: its files, `load()` data, rendering and hydration state. |
+| `pangular:analog-server-calls`     | `kind`, `route`, `limit`                       | Recent server calls, with server function names and action outcomes.    |
+| `pangular:analog-api-routes`       |                                                | Server routes with method, URL and file, plus middleware.               |
+| `pangular:analog-server-functions` |                                                | Server functions with name, method, file, id and call counts.           |
+| `pangular:analog-call-api`         | `path` (required), `method`, `body`, `confirm` | Sends a real request to the dev server.                                 |
+| `pangular:analog-render-modes`     |                                                | The render mode of each page, and what the last request did.            |
+| `pangular:analog-prerender-plan`   |                                                | The prerender plan.                                                     |
+| `pangular:analog-content`          | `filter`                                       | Markdown files with slug, frontmatter, route and parse errors.          |
+| `pangular:analog-lint`             |                                                | The Analog checks.                                                      |
 
 `analog-current-page` is the only place that shows the `load()` data a page received. See [Tools](../agents/tools.md).
 

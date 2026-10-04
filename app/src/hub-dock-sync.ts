@@ -1,5 +1,5 @@
 const CLIENT_CONTEXT_KEY = '__DEVFRAME_HUB_CLIENT_CONTEXT__';
-const DOCK_PREFIX = 'ng-devtools:';
+const DOCK_PREFIX = 'pangular:';
 
 interface DockState {
   events: { on: (event: 'entry:activated', listener: () => void) => () => void };

@@ -4,7 +4,7 @@ import { provideClientHydration, withEventReplay } from '@angular/platform-brows
 import { withComponentInputBinding } from '@angular/router';
 import { provideContent, withMarkdownRenderer } from '@analogjs/content';
 import { provideFileRouter, requestContextInterceptor } from '@analogjs/router';
-import { provideNgDevtoolsHttp } from '@pangular-inspector/devtools/http';
+import { providePangularHttp } from '@pangular-inspector/devtools/http';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -13,6 +13,6 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withFetch(), withInterceptors([requestContextInterceptor])),
     provideClientHydration(withEventReplay()),
     provideContent(withMarkdownRenderer()),
-    provideNgDevtoolsHttp(),
+    providePangularHttp(),
   ],
 };

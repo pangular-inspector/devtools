@@ -3,7 +3,7 @@ import { isPlatformBrowser } from '@angular/common';
 
 type Theme = 'system' | 'light' | 'dark';
 
-const STORAGE_KEY = 'ng-devtools-demo-theme';
+const STORAGE_KEY = 'pangular-demo-theme';
 const NEXT: Record<Theme, Theme> = { system: 'light', light: 'dark', dark: 'system' };
 const LABEL: Record<Theme, string> = { system: 'System', light: 'Light', dark: 'Dark' };
 

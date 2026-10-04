@@ -9,7 +9,7 @@ description: Bump the version, build, and publish the npm package. Ship the Chro
 
 # Publishing
 
-The devtools ship as one npm package, `@pangular-inspector/devtools`, from `packages/ng-devtools`. It holds the Node-side logic, RPC, CLI, overlay, popup, and the built UI in `dist/public`.
+The devtools ship as one npm package, `@pangular-inspector/devtools`, from `packages/devtools`. It holds the Node-side logic, RPC, CLI, overlay, popup, and the built UI in `dist/public`.
 
 ## What ships
 
@@ -47,7 +47,7 @@ The package's `build` script runs two steps:
 
 ### 1. Bump the version
 
-Update `version` in `packages/ng-devtools/package.json`. In the same commit, add a section for the version to `packages/ng-devtools/CHANGELOG.md`. The changelog follows [Keep a Changelog](https://keepachangelog.com), with entries grouped as Upgrade notes, Security fixes, Features and Documentation. Use a message like `chore(release): 0.0.7`.
+Update `version` in `packages/devtools/package.json`. In the same commit, add a section for the version to `packages/devtools/CHANGELOG.md`. The changelog follows [Keep a Changelog](https://keepachangelog.com), with entries grouped as Upgrade notes, Security fixes, Features and Documentation. Use a message like `chore(release): 0.0.7`.
 
 ### 2. Check the build
 
@@ -80,7 +80,7 @@ The extension has its own version, in `extension/manifest.json`. It does not fol
 1. Bump `version` in `extension/manifest.json`.
 2. Run `pnpm extension:zip`. It rebuilds `extension/ui` first.
 3. Commit `extension/ui` and the manifest.
-4. Upload `dist/ng-devtools-extension.zip`.
+4. Upload `dist/pangular-inspector-extension.zip`.
 
 See [Build the extension](./chrome-extension.md) for the upload steps.
 

@@ -137,7 +137,7 @@ const config: NgmdConfig = {
     description:
       'Inspect Angular components, signals, dependency injection, routes, forms and stores. In the page, from the CLI, or through a coding agent over MCP.',
     tagline: 'The unified Angular devtools',
-    url: 'https://santoshyadavdev.github.io/angular-devtools',
+    url: 'https://pangular-inspector.dev',
     githubUrl: 'https://github.com/santoshyadavdev/angular-devtools',
     githubDir: 'apps/docs',
     links: {

@@ -124,11 +124,11 @@ Look for **resubscribing** rows in **Async subscriptions**, and for `async-on-ca
 
 ## Agent tools
 
-| Tool                       | Live   | What it does                                                                                                                                                            |
-| -------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ng-devtools:get-pipes`    | no     | Custom pipes and the built-in pipes in use.                                                                                                                             |
-| `ng-devtools:lint-pipes`   | no     | Runs the lint rules above.                                                                                                                                              |
-| `ng-devtools:explain-pipe` | partly | One pipe by `name`: where it is declared or used, purity, live counts, last input and output, the stale warning, resubscribing `\| async` usages and the lint findings. |
+| Tool                    | Live   | What it does                                                                                                                                                            |
+| ----------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:get-pipes`    | no     | Custom pipes and the built-in pipes in use.                                                                                                                             |
+| `pangular:lint-pipes`   | no     | Runs the lint rules above.                                                                                                                                              |
+| `pangular:explain-pipe` | partly | One pipe by `name`: where it is declared or used, purity, live counts, last input and output, the stale warning, resubscribing `\| async` usages and the lint findings. |
 
 Agents can't turn recording on. To give `explain-pipe` call data, click **Record calls** in the panel first. See [Tools](../agents/tools.md).
 

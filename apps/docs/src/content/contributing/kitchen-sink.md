@@ -110,7 +110,7 @@ bun add @pangular-inspector/devtools devframe
 ```json
 {
   "mcpServers": {
-    "ng-devtools": {"command": "npx", "args": ["@pangular-inspector/devtools", "mcp"]}
+    "pangular": {"command": "npx", "args": ["@pangular-inspector/devtools", "mcp"]}
   }
 }
 ```

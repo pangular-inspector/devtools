@@ -1380,7 +1380,7 @@ export class FormsInspector {
     this.loading.set(true);
     this.failed.set(false);
     try {
-      const state = await client.scope('ng-devtools').rpc.sharedState('forms');
+      const state = await client.scope('pangular').rpc.sharedState('forms');
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         const snapshot = value as FormsSnapshot | undefined;
@@ -1520,7 +1520,7 @@ export class FormsInspector {
     const client = this.rpc();
     if (!client) return;
     void client
-      .scope('ng-devtools')
+      .scope('pangular')
       .rpc.callEvent('request-form-highlight', formId ? { formId, path } : null);
   }
 

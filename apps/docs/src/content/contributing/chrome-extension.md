@@ -74,7 +74,7 @@ After a rebuild, click the reload icon on the extension card, then reopen DevToo
 pnpm extension:zip
 ```
 
-This runs `extension:build`, then writes `dist/ng-devtools-extension.zip`. The zip leaves out `.DS_Store` files.
+This runs `extension:build`, then writes `dist/pangular-inspector-extension.zip`. The zip leaves out `.DS_Store` files.
 
 ### Upload
 
@@ -99,8 +99,8 @@ It then calls `chrome.permissions.contains()` for `<scheme>://<hostname>/*` of t
 
 With access granted, it looks for the devtools server under these paths, in order:
 
-1. `/__ng-devtools/`
-2. `/__devframes/ng-devtools/`
+1. `/__pangular/`
+2. `/__devframes/pangular/`
 3. `/__devframe/`
 4. `/`
 
@@ -110,7 +110,7 @@ It records the status of each request, or "no answer" when the request fails or 
 
 ### Waiting for the page id
 
-The overlay sets `window.__ngDevtoolsPageId` once it claims the page id, and removes it when it is disposed. After it finds the server, the panel evaluates that global every 250 milliseconds for up to five seconds. If the global never appears, it reads the `ng-devtools-page-id` value from `sessionStorage` once, for overlays that do not set the global, and loads the UI with whatever it got.
+The overlay sets `window.__pangularPageId` once it claims the page id, and removes it when it is disposed. After it finds the server, the panel evaluates that global every 250 milliseconds for up to five seconds. If the global never appears, it reads the `pangular-page-id` value from `sessionStorage` once, for overlays that do not set the global, and loads the UI with whatever it got.
 
 ### Loading the UI
 
@@ -128,13 +128,13 @@ On each navigation of the inspected page, the panel shows its status view again 
 
 ### Theme
 
-The panel follows the DevTools theme. `panel-bridge.js` reads `chrome.devtools.panels.themeName` at startup, sets `data-theme` on `panel.html` so the status view matches, and passes the name to the UI as the `theme` parameter (`dark` or `default`, which is light). Its `setThemeChangeHandler` updates `panel.html` and posts an `ng-devtools:theme-change` message to the UI frame when DevTools switches theme. `ThemeService` in the panel sets `data-theme` on `<html>`, and the CSS tokens in `app/src/styles/_theme.scss` follow it.
+The panel follows the DevTools theme. `panel-bridge.js` reads `chrome.devtools.panels.themeName` at startup, sets `data-theme` on `panel.html` so the status view matches, and passes the name to the UI as the `theme` parameter (`dark` or `default`, which is light). Its `setThemeChangeHandler` updates `panel.html` and posts a `pangular:theme-change` message to the UI frame when DevTools switches theme. `ThemeService` in the panel sets `data-theme` on `<html>`, and the CSS tokens in `app/src/styles/_theme.scss` follow it.
 
 ### Elements panel selection
 
-The overlay defines `window.__ngDevtoolsComponentOf` on the page. It takes an element and returns the id of the nearest component host, through shadow roots, or `null`.
+The overlay defines `window.__pangularComponentOf` on the page. It takes an element and returns the id of the nearest component host, through shadow roots, or `null`.
 
-When the Elements panel selection changes, `panel-bridge.js` evaluates it with `$0`. If it gets an id, it posts an `ng-devtools:inspect-component` message to the UI frame. The UI accepts the message only from its parent window and its own origin, and only while the **Components** tab is open. The tab then expands the parent rows, clears the filter if needed, selects the row and scrolls it into view.
+When the Elements panel selection changes, `panel-bridge.js` evaluates it with `$0`. If it gets an id, it posts a `pangular:inspect-component` message to the UI frame. The UI accepts the message only from its parent window and its own origin, and only while the **Components** tab is open. The tab then expands the parent rows, clears the filter if needed, selects the row and scrolls it into view.
 
 ## Where to next
 

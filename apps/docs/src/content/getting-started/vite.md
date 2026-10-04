@@ -18,7 +18,7 @@ For *Analog apps, add the *Vite plugin next to `analog()` and load the overlay i
     Add <code>&#64;pangular-inspector/devtools</code> and <code>devframe</code>. See <a href="./installation.md">Installation</a>.
   </ngmd-step>
   <ngmd-step title="Add the plugin">
-    Register <code>ngDevtools()</code> after <code>analog()</code> in <code>vite.config.ts</code>.
+    Register <code>pangular()</code> after <code>analog()</code> in <code>vite.config.ts</code>.
   </ngmd-step>
   <ngmd-step title="Load the overlay">
     Import the overlay in <code>src/main.ts</code> when <code>import.meta.env.DEV</code> is true.
@@ -35,11 +35,11 @@ For *Analog apps, add the *Vite plugin next to `analog()` and load the overlay i
 ```ts {3,7}
 // vite.config.ts
 import analog from '@analogjs/platform';
-import ngDevtools from '@pangular-inspector/devtools/vite';
+import pangular from '@pangular-inspector/devtools/vite';
 import {defineConfig} from 'vite';
 
 export default defineConfig({
-  plugins: [analog(), ngDevtools()],
+  plugins: [analog(), pangular()],
 });
 ```
 
@@ -86,7 +86,7 @@ It records Analog page renders, `load()` fetches, server functions and API calls
 
 ### Answers only your machine
 
-The plugin only answers requests from a loopback address (any `127.x.x.x` address or `::1`). Other requests to the devtools get `403` with the message "ng-devtools only answers requests from this machine." WebSocket upgrades follow the same rules.
+The plugin only answers requests from a loopback address (any `127.x.x.x` address or `::1`). Other requests to the devtools get `403` with the message "Pangular Inspector only answers requests from this machine." WebSocket upgrades follow the same rules.
 
 By default the plugin leaves the one-time code off, and the loopback and origin checks take its place. If `server.allowedHosts` or `allowedOrigins` allows a host that is not a loopback host, the plugin also asks for the code. See [`auth`](#auth). [Access and redaction](../security.md) covers every check.
 
@@ -94,7 +94,7 @@ By default the plugin leaves the one-time code off, and the loopback and origin 
 
 ```ts
 // vite.config.ts
-ngDevtools({
+pangular({
   base: '/__devframes/',
   apiPrefix: 'api',
   allowedOrigins: ['https://tunnel.example'],
@@ -112,7 +112,7 @@ The plugin also takes the devtools options, such as `inspectors`, `agent`, `acti
 
 ### `base`
 
-Change `base` if `/__devframes/` clashes with a route of your own. The leading and trailing slashes are optional: `'devtools'`, `'/devtools'` and `'/devtools/'` all mount the hub at `/devtools/`, and the loopback checks cover the whole path. The overlay looks for `/__devframes/ng-devtools/` and `/__ng-devtools/` by default, so a custom base also needs a custom overlay path: pass `<base>ng-devtools/` to `initOverlay`. The floating button follows that path. See [A custom mount path](./overlay.md#a-custom-mount-path).
+Change `base` if `/__devframes/` clashes with a route of your own. The leading and trailing slashes are optional: `'devtools'`, `'/devtools'` and `'/devtools/'` all mount the hub at `/devtools/`, and the loopback checks cover the whole path. The overlay looks for `/__devframes/pangular/` and `/__pangular/` by default, so a custom base also needs a custom overlay path: pass `<base>pangular/` to `initOverlay`. The floating button follows that path. See [A custom mount path](./overlay.md#a-custom-mount-path).
 
 ### `apiPrefix`
 
@@ -140,7 +140,7 @@ If your tunnel rewrites the `Host` header to `localhost`, you don't list it in `
 
 ```ts
 // vite.config.ts
-ngDevtools({auth: true});
+pangular({auth: true});
 ```
 
 ## Hostnames other than localhost
@@ -152,12 +152,12 @@ If you open the dev server through another hostname that points to your machine 
 ```ts {7}
 // vite.config.ts
 import analog from '@analogjs/platform';
-import ngDevtools from '@pangular-inspector/devtools/vite';
+import pangular from '@pangular-inspector/devtools/vite';
 import {defineConfig} from 'vite';
 
 export default defineConfig({
   server: {allowedHosts: ['myapp.test']},
-  plugins: [analog(), ngDevtools()],
+  plugins: [analog(), pangular()],
 });
 ```
 
@@ -167,7 +167,7 @@ Add other origins with `allowedOrigins`:
 
 ```ts
 // vite.config.ts
-ngDevtools({allowedOrigins: ['https://tunnel.example']});
+pangular({allowedOrigins: ['https://tunnel.example']});
 ```
 
 A non-loopback entry in `server.allowedHosts` or `allowedOrigins` turns the one-time code on. See [`auth`](#auth).

@@ -186,14 +186,14 @@ Use the arrow keys, Home and End to move through the tree. The right arrow expan
 
 ## Agent tools
 
-| Tool or resource                | Kind     | What it does                                                                                                                                                                          |
-| ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ng-devtools:get-components`    | tool     | Lists components and directives from source, with selector, kind, inputs, outputs, change detection, file and line.                                                                   |
-| `ng-devtools:highlight`         | tool     | Highlights a component in the page and selects it. Takes an instance id, class name, host tag or CSS selector. Also retargets the Signals graph. Lists every instance a name matches. |
-| `ng-devtools:inspect-component` | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services.                                                           |
-| `ng-devtools:defer-blocks`      | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                  |
-| `ng-devtools:change-detection`  | tool     | Starts, stops or clears a change detection recording, and returns the slowest and most often checked components and the latest cycles.                                                |
-| `ng-devtools:component-tree`    | resource | The live tree per page, with the detail of the selected instance and the defer blocks.                                                                                                |
+| Tool or resource             | Kind     | What it does                                                                                                                                                                          |
+| ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:get-components`    | tool     | Lists components and directives from source, with selector, kind, inputs, outputs, change detection, file and line.                                                                   |
+| `pangular:highlight`         | tool     | Highlights a component in the page and selects it. Takes an instance id, class name, host tag or CSS selector. Also retargets the Signals graph. Lists every instance a name matches. |
+| `pangular:inspect-component` | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services.                                                           |
+| `pangular:defer-blocks`      | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                  |
+| `pangular:change-detection`  | tool     | Starts, stops or clears a change detection recording, and returns the slowest and most often checked components and the latest cycles.                                                |
+| `pangular:component-tree`    | resource | The live tree per page, with the detail of the selected instance and the defer blocks.                                                                                                |
 
 See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 

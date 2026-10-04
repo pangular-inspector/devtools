@@ -18,7 +18,7 @@ describe('styleHubRail', () => {
   it('injects a style tag into the shadow root', () => {
     const dock = makeDock();
     styleHubRail(document, 'dark');
-    expect(dock.shadowRoot!.querySelector('style[data-ng-devtools]')).not.toBeNull();
+    expect(dock.shadowRoot!.querySelector('style[data-pangular]')).not.toBeNull();
   });
 
   it('does nothing when document is null', () => {
@@ -30,7 +30,7 @@ describe('styleHubRail', () => {
     styleHubRail(document, 'dark');
     const style = document
       .querySelector('devframes-dock-standalone')!
-      .shadowRoot!.querySelector<HTMLStyleElement>('style[data-ng-devtools]')!;
+      .shadowRoot!.querySelector<HTMLStyleElement>('style[data-pangular]')!;
     expect(style.textContent).toContain('#0b0b0e');
   });
 
@@ -39,7 +39,7 @@ describe('styleHubRail', () => {
     styleHubRail(document, 'light');
     const style = document
       .querySelector('devframes-dock-standalone')!
-      .shadowRoot!.querySelector<HTMLStyleElement>('style[data-ng-devtools]')!;
+      .shadowRoot!.querySelector<HTMLStyleElement>('style[data-pangular]')!;
     expect(style.textContent).toContain('#ffffff');
   });
 
@@ -49,7 +49,7 @@ describe('styleHubRail', () => {
     styleHubRail(document, 'light');
     const shadows = document.querySelectorAll('devframes-dock-standalone');
     const styleTags = [...shadows].flatMap((el) => [
-      ...(el.shadowRoot?.querySelectorAll('style[data-ng-devtools]') ?? []),
+      ...(el.shadowRoot?.querySelectorAll('style[data-pangular]') ?? []),
     ]);
     expect(styleTags).toHaveLength(1);
     expect(styleTags[0].textContent).toContain('#ffffff');
@@ -62,7 +62,7 @@ describe('styleHubRail', () => {
 
     const dock = makeDock();
     vi.advanceTimersByTime(100);
-    expect(dock.shadowRoot!.querySelector('style[data-ng-devtools]')).not.toBeNull();
+    expect(dock.shadowRoot!.querySelector('style[data-pangular]')).not.toBeNull();
   });
 
   it('deduplicates retry timers for the same document', () => {
@@ -71,7 +71,7 @@ describe('styleHubRail', () => {
     styleHubRail(document, 'light');
     const dock = makeDock();
     vi.advanceTimersByTime(100);
-    const styles = dock.shadowRoot!.querySelectorAll('style[data-ng-devtools]');
+    const styles = dock.shadowRoot!.querySelectorAll('style[data-pangular]');
     expect(styles).toHaveLength(1);
     expect(styles[0].textContent).toContain('#ffffff');
   });

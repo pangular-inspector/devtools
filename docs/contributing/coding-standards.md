@@ -10,7 +10,7 @@ These rules go together with the Angular rules in [`AGENTS.md`](../../AGENTS.md)
 - No `I` prefix on interfaces and no `$` suffix on observables.
 - Prefer `for...of` over `forEach` when the loop has side effects.
 - Only catch errors you expect, and say what happens instead (fall back, skip, report).
-- Comment the why, not the what. Public functions and exported types in `packages/ng-devtools` get a short doc comment when the name alone doesn't explain them.
+- Comment the why, not the what. Public functions and exported types in `packages/devtools` get a short doc comment when the name alone doesn't explain them.
 
 ## Angular (panel UI and demo app)
 
@@ -23,7 +23,7 @@ These rules go together with the Angular rules in [`AGENTS.md`](../../AGENTS.md)
 
 The panel's visual rules are in the [UI guidelines](./ui-guidelines.md).
 
-## Reading data from the page (`packages/ng-devtools`)
+## Reading data from the page (`packages/devtools`)
 
 The overlay runs inside the user's app, so it must be correct, cheap and invisible.
 
@@ -45,7 +45,7 @@ The overlay runs inside the user's app, so it must be correct, cheap and invisib
 
 ## Tests
 
-- Every behavior change comes with a test in `packages/ng-devtools/src/__tests__` or `packages/ng-devtools/src/rpc/__tests__`.
+- Every behavior change comes with a test in `packages/devtools/src/__tests__` or `packages/devtools/src/rpc/__tests__`.
 - Page-side collectors are tested in jsdom with a fake `ng` object; see `injector-tree.test.ts` and `component-tree.test.ts`.
 - Test names read as sentences: `it('keeps ids stable between collections')`.
 - Run `pnpm test:devtools`, `pnpm test:panel` and `pnpm test` before you push.

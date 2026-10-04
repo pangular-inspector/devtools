@@ -70,11 +70,11 @@ Add the plugin after `analog()`:
 ```ts {3,7}
 // vite.config.ts
 import analog from '@analogjs/platform';
-import ngDevtools from '@pangular-inspector/devtools/vite';
+import pangular from '@pangular-inspector/devtools/vite';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => ({
-  plugins: [analog(), ngDevtools()],
+  plugins: [analog(), pangular()],
 }));
 ```
 
@@ -130,27 +130,27 @@ Open the **Analog** dock to see file routes, server calls, render modes, content
 
 ## Catch hydration errors from the first load
 
-The overlay loads after the first render, so it misses hydration errors (`NG0500` to `NG0506`) logged during the first load. `provideNgDevtoolsHttp()` starts listening for them when the app starts. The Analog dock lists them under **Hydration error** in **Lint**, and the `analog-current-page` tool returns them.
+The overlay loads after the first render, so it misses hydration errors (`NG0500` to `NG0506`) logged during the first load. `providePangularHttp()` starts listening for them when the app starts. The Analog dock lists them under **Hydration error** in **Lint**, and the `analog-current-page` tool returns them.
 
-Analog's own `load()` fetches and API calls show in the Analog dock without extra setup. `withNgDevtools()` also records `HttpClient` calls in the **SSR & HTTP** tab.
+Analog's own `load()` fetches and API calls show in the Analog dock without extra setup. `withPangular()` also records `HttpClient` calls in the **SSR & HTTP** tab.
 
 ```ts {5,10-11}
 // src/app/app.config.ts
 import {provideHttpClient, withFetch} from '@angular/common/http';
 import {ApplicationConfig} from '@angular/core';
 import {provideFileRouter} from '@analogjs/router';
-import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/devtools/http';
+import {providePangularHttp, withPangular} from '@pangular-inspector/devtools/http';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideFileRouter(),
-    provideHttpClient(withFetch(), withNgDevtools()),
-    provideNgDevtoolsHttp(),
+    provideHttpClient(withFetch(), withPangular()),
+    providePangularHttp(),
   ],
 };
 ```
 
-`provideNgDevtoolsHttp()` and `withNgDevtools()` do nothing in production builds. See [Set up SSR & HTTP](./ssr-http.md) for the interceptor order.
+`providePangularHttp()` and `withPangular()` do nothing in production builds. See [Set up SSR & HTTP](./ssr-http.md) for the interceptor order.
 
 ## Try the demo
 

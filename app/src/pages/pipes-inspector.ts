@@ -1125,7 +1125,7 @@ export class PipesInspector {
     this.loading.set(true);
     this.loadFailed.set(false);
     try {
-      const my = client.scope('ng-devtools');
+      const my = client.scope('pangular');
       const pipes = (await my.rpc.call('get-pipes')) as PipeInfo[];
       this.pipes.set(pipes);
       const sel = this.selected();
@@ -1144,9 +1144,7 @@ export class PipesInspector {
   async loadLint(client: DevframeRpcClient) {
     this.lintFailed.set(false);
     try {
-      const findings = (await client
-        .scope('ng-devtools')
-        .rpc.call('pipe-lint')) as PipeLintFinding[];
+      const findings = (await client.scope('pangular').rpc.call('pipe-lint')) as PipeLintFinding[];
       this.lint.set(findings);
     } catch {
       this.lintFailed.set(true);
@@ -1155,7 +1153,7 @@ export class PipesInspector {
 
   async loadLive(client: DevframeRpcClient) {
     try {
-      const state = await client.scope('ng-devtools').rpc.sharedState('pipe-usage');
+      const state = await client.scope('pangular').rpc.sharedState('pipe-usage');
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         const snapshot = value as PipesSnapshot | undefined;
@@ -1181,7 +1179,7 @@ export class PipesInspector {
     this.pendingRecord.set(on);
     let result: { pages?: number } | undefined;
     try {
-      result = (await client.scope('ng-devtools').rpc.call('request-instrument-pipes', on)) as
+      result = (await client.scope('pangular').rpc.call('request-instrument-pipes', on)) as
         { pages?: number } | undefined;
     } catch {
       this.settleRecord("Couldn't reach the devtools server. Try again.");
@@ -1248,7 +1246,7 @@ export class PipesInspector {
     const client = this.rpc();
     if (!client) return;
     void client
-      .scope('ng-devtools')
+      .scope('pangular')
       .rpc.call(
         'request-page-highlight',
         target ? { ...target, ...(reveal ? { reveal } : {}) } : null,

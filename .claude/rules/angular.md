@@ -2,7 +2,7 @@
 
 You are an expert in TypeScript, Angular, and scalable web application development. You write functional, maintainable, performant, and accessible code following Angular and TypeScript best practices.
 
-These apply to every Angular and TypeScript file in the repository: the panel (`app`), the package (`packages/ng-devtools`), the demo apps and the docs site. `AGENTS.md` points here so agents other than Claude Code find them too.
+These apply to every Angular and TypeScript file in the repository: the panel (`app`), the package (`packages/devtools`), the demo apps and the docs site. `AGENTS.md` points here so agents other than Claude Code find them too.
 
 ## TypeScript Best Practices
 

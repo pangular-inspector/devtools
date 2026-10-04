@@ -15,11 +15,11 @@ Everything is on when you leave the options out. You set them once, on the serve
 
 These three functions take the same options:
 
-| Function              | Import                                  | Setup                                                           |
-| --------------------- | --------------------------------------- | --------------------------------------------------------------- |
-| `initNgDevtoolsHub()` | `@pangular-inspector/devtools/hub`      | [Angular CLI and Express](./express.md)                         |
-| `ngDevtools()`        | `@pangular-inspector/devtools/vite`     | [Vite and Analog](./vite.md)                                    |
-| `createNgDevtools()`  | `@pangular-inspector/devtools/devframe` | A custom devframe host, such as `initDevframe()` without a hub. |
+| Function            | Import                                  | Setup                                                           |
+| ------------------- | --------------------------------------- | --------------------------------------------------------------- |
+| `initPangularHub()` | `@pangular-inspector/devtools/hub`      | [Angular CLI and Express](./express.md)                         |
+| `pangular()`        | `@pangular-inspector/devtools/vite`     | [Vite and Analog](./vite.md)                                    |
+| `createPangular()`  | `@pangular-inspector/devtools/devframe` | A custom devframe host, such as `initDevframe()` without a hub. |
 
 The `pangular` binary reads the same options from a JSON file, for `dev`, `build` and `mcp`. See [Config file](./cli.md#config-file).
 
@@ -30,10 +30,10 @@ Pass the options next to the [access options](../security.md#express-hub) `auth`
 ```ts {8-10}
 // src/server.ts
 import express from 'express';
-import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
 
 const app = express();
-const devtools = initNgDevtoolsHub({
+const devtools = initPangularHub({
   ws: false,
   inspectors: {pipes: false},
   agent: {readOnly: true},
@@ -44,18 +44,18 @@ app.use(devtools.nodeMiddleware);
 
 ### Vite plugin
 
-Pass them to `ngDevtools()`, next to the [access options](../security.md#vite-plugin) `auth` and `allowedOrigins`:
+Pass them to `pangular()`, next to the [access options](../security.md#vite-plugin) `auth` and `allowedOrigins`:
 
 ```ts {9-12}
 // vite.config.ts
 import analog from '@analogjs/platform';
-import ngDevtools from '@pangular-inspector/devtools/vite';
+import pangular from '@pangular-inspector/devtools/vite';
 import {defineConfig} from 'vite';
 
 export default defineConfig({
   plugins: [
     analog(),
-    ngDevtools({
+    pangular({
       actions: {http: false, analog: false},
       limits: {refreshMs: 1000, navigations: 100},
     }),
@@ -65,17 +65,17 @@ export default defineConfig({
 
 ### Custom devframe host
 
-The default export of `@pangular-inspector/devtools/devframe` uses the defaults. Call `createNgDevtools()` to pass options:
+The default export of `@pangular-inspector/devtools/devframe` uses the defaults. Call `createPangular()` to pass options:
 
 ```ts {7-9}
 // src/server.ts
 import express from 'express';
 import {initDevframe} from 'devframe/initiate';
-import {createNgDevtools} from '@pangular-inspector/devtools/devframe';
+import {createPangular} from '@pangular-inspector/devtools/devframe';
 
 const app = express();
-const devtools = initDevframe(createNgDevtools({agent: {readOnly: true}}), {
-  base: '/__ng-devtools/',
+const devtools = initDevframe(createPangular({agent: {readOnly: true}}), {
+  base: '/__pangular/',
 });
 app.use(devtools.nodeMiddleware);
 ```
@@ -88,7 +88,7 @@ app.use(devtools.nodeMiddleware);
 
 ```ts
 // @pangular-inspector/devtools/config
-type NgDevtoolsInspector =
+type PangularInspector =
   | 'components'
   | 'injectors'
   | 'signals'
@@ -99,12 +99,12 @@ type NgDevtoolsInspector =
   | 'http'
   | 'analog';
 
-type NgDevtoolsAction = 'forms' | 'router' | 'ngrx' | 'http' | 'analog';
+type PangularAction = 'forms' | 'router' | 'ngrx' | 'http' | 'analog';
 
-interface NgDevtoolsConfig {
-  inspectors?: Partial<Record<NgDevtoolsInspector, boolean>>;
-  agent?: {readOnly?: boolean; tools?: Partial<Record<NgDevtoolsInspector, boolean>>};
-  actions?: boolean | Partial<Record<NgDevtoolsAction, boolean>>;
+interface PangularConfig {
+  inspectors?: Partial<Record<PangularInspector, boolean>>;
+  agent?: {readOnly?: boolean; tools?: Partial<Record<PangularInspector, boolean>>};
+  actions?: boolean | Partial<Record<PangularAction, boolean>>;
   redaction?: {secretNames?: string[]; unmask?: string[]};
   limits?: {
     refreshMs?: number;
@@ -151,7 +151,7 @@ The server refuses a blocked action. The panel disables its controls and shows a
 | Option                  | Default | What it does                                                                                                                                                |
 | ----------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `redaction.secretNames` | `[]`    | Extra field names to treat as secret, on top of the built-in list. They match by words, like the built-in list, so `passport` also covers `passportNumber`. |
-| `redaction.unmask`      | `[]`    | Field names to show even when they look secret. They join the `unmask` list of `window.__NG_DEVTOOLS_FORMS__`.                                              |
+| `redaction.unmask`      | `[]`    | Field names to show even when they look secret. They join the `unmask` list of `window.__PANGULAR_FORMS__`.                                                 |
 
 Forms, the router, component inputs, signals, NgRx, pipes, Analog previews and SSR & HTTP URLs use the extra secret names. Each list keeps up to 100 names. See [Access and redaction](../security.md#what-is-redacted) for what is redacted and what unmasking allows.
 
@@ -168,16 +168,16 @@ Values outside the bounds are clamped to the nearest one.
 | `limits.changeLog`    | `200`   | 10 to 2000  | NgRx change log entries kept per page.                         |
 | `limits.cdCycles`     | `200`   | 10 to 2000  | Change detection cycles kept per page while recording.         |
 
-When a timeline reaches its limit, the oldest entries are dropped. The timeline then shows a note above the list, such as "Showing the latest 200 HTTP calls. 12 older entries were dropped." with the limit to raise. This applies to the **SSR & HTTP** timeline, the router navigation timeline, the forms timeline, the NgRx change log and the change detection recording. The `explain-navigation`, `form-history` and `change-detection` agent tools add the same note, and the `ng-devtools:ngrx-store` resource reports a `dropped` count per page.
+When a timeline reaches its limit, the oldest entries are dropped. The timeline then shows a note above the list, such as "Showing the latest 200 HTTP calls. 12 older entries were dropped." with the limit to raise. This applies to the **SSR & HTTP** timeline, the router navigation timeline, the forms timeline, the NgRx change log and the change detection recording. The `explain-navigation`, `form-history` and `change-detection` agent tools add the same note, and the `pangular:ngrx-store` resource reports a `dropped` count per page.
 
 On Angular 20 and later, the page reports about 250 ms after Angular runs change detection, plus a heartbeat every 4 seconds. `refreshMs` doesn't change that. The page polls every `refreshMs` instead when it can't follow change detection, such as until the app bootstraps. The Analog inspector also reads the page every `refreshMs`. At any value, the page sends its data at least every 8 seconds, even when nothing changed, so the server never drops a page that is still open.
 
 ## Check the active configuration
 
-The server checks the options when it starts. An unknown key, a value of the wrong type or a limit outside its bounds prints one `[ng-devtools]` warning in the terminal that lists each problem and the value used instead. An unknown key names the closest known key:
+The server checks the options when it starts. An unknown key, a value of the wrong type or a limit outside its bounds prints one `[pangular]` warning in the terminal that lists each problem and the value used instead. An unknown key names the closest known key:
 
 ```text
-[ng-devtools] The devtools config has 2 problems:
+[pangular] The devtools config has 2 problems:
   - Unknown option `agent.readonly` was ignored. Did you mean `readOnly`?
   - `actions` should be true, false or an object, got the string "false". It was ignored, so every action is allowed.
 ```

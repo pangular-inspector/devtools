@@ -13,7 +13,7 @@ description: Mount the devtools hub in an Angular SSR server built on Hono, h3 o
 
 ## Two ways to mount the hub
 
-`initNgDevtoolsHub()` returns two request handlers for the same routes:
+`initPangularHub()` returns two request handlers for the same routes:
 
 | Handler          | Signature                                 | Outside `devtools.base` |
 | ---------------- | ----------------------------------------- | ----------------------- |
@@ -31,11 +31,11 @@ Hono and h3 take web-standard handlers, so they use `handler`. Fastify runs on N
 ```ts
 // src/server.ts
 import {AngularAppEngine, createRequestHandler} from '@angular/ssr';
-import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
 import {Hono} from 'hono';
 
 const angularApp = new AngularAppEngine();
-const devtools = initNgDevtoolsHub({ws: false});
+const devtools = initPangularHub({ws: false});
 const app = new Hono();
 
 app.all(`${devtools.base}*`, (c) => devtools.handler(c.req.raw));
@@ -49,10 +49,10 @@ export const reqHandler = createRequestHandler(app.fetch);
 ```ts
 // src/server.ts
 import {createRequestHandler} from '@angular/ssr';
-import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
 import {H3} from 'h3';
 
-const devtools = initNgDevtoolsHub({ws: false});
+const devtools = initPangularHub({ws: false});
 const app = new H3();
 
 app.all(`${devtools.base}**`, (event) => devtools.handler(event.req));
@@ -70,10 +70,10 @@ Fastify has no Connect middleware of its own. Hand requests under the base to `n
 ```ts
 // src/server.ts
 import {createNodeRequestHandler} from '@angular/ssr/node';
-import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
 import Fastify from 'fastify';
 
-const devtools = initNgDevtoolsHub({ws: false});
+const devtools = initPangularHub({ws: false});
 const app = Fastify();
 
 app.addHook('onRequest', (request, reply, done) => {
@@ -107,7 +107,7 @@ A web handler never sees WebSocket upgrades, and neither does a server that `ng 
 // src/server.ts
 import {serve} from '@hono/node-server';
 
-const devtools = initNgDevtoolsHub();
+const devtools = initPangularHub();
 // ... mount devtools.handler on the Hono app as shown above
 
 const server = serve({fetch: app.fetch, port: 4000});

@@ -114,7 +114,7 @@ const NATIVESCRIPT_SETUP: ComingSoonInfo = {
   ],
   link: {
     label: 'NativeScript setup guide',
-    href: 'https://santoshyadavdev.github.io/angular-devtools/guides/nativescript',
+    href: 'https://pangular-inspector.dev/guides/nativescript/',
   },
 };
 
@@ -149,7 +149,7 @@ const NO_ANGULAR_NATIVE: ComingSoonInfo = {
   ],
   link: {
     label: 'Set up Angular Native',
-    href: 'https://github.com/santoshyadavdev/angular-devtools/blob/main/apps/docs/src/content/getting-started/angular-native.md',
+    href: 'https://pangular-inspector.dev/getting-started/angular-native/',
   },
 };
 
@@ -855,7 +855,7 @@ export class App implements OnInit, OnDestroy {
         this.connected.set(true);
         void this.watchVisibility(client);
         void this.watchAngularNative(client);
-        const scoped = client.scope('ng-devtools').rpc as unknown as {
+        const scoped = client.scope('pangular').rpc as unknown as {
           call: (name: string) => Promise<unknown>;
         };
         scoped.call('analog-project').then(
@@ -915,7 +915,7 @@ export class App implements OnInit, OnDestroy {
   inspectFromPanel({ source, origin, data }: MessageEvent<unknown>) {
     if (source !== window.parent || origin !== location.origin) return;
     const message = data as { type?: unknown; id?: unknown } | null;
-    if (message?.type !== 'ng-devtools:inspect-component' || typeof message.id !== 'string') return;
+    if (message?.type !== 'pangular:inspect-component' || typeof message.id !== 'string') return;
     // Any element inside the app resolves to a component, so following every
     // Elements selection would pull the user off whichever tab they are on.
     if (this.tab() !== 'components' || !this.config().inspectors.components) return;
@@ -944,7 +944,7 @@ export class App implements OnInit, OnDestroy {
 
   private async watchAngularNative(client: DevframeRpcClient) {
     try {
-      const state = await client.scope('ng-devtools').rpc.sharedState('component-tree');
+      const state = await client.scope('pangular').rpc.sharedState('component-tree');
       const apply = (value: unknown) => {
         const pages = (value as { pages?: Record<string, PlatformPage> } | undefined)?.pages;
         const pageId = angularNativePage(pages, this.nativePageId());
@@ -962,7 +962,7 @@ export class App implements OnInit, OnDestroy {
 
   private async watchVisibility(client: DevframeRpcClient) {
     try {
-      const state = await client.scope('ng-devtools').rpc.sharedState('page-visibility');
+      const state = await client.scope('pangular').rpc.sharedState('page-visibility');
       const apply = (value: unknown) => {
         const hidden = (value as { hidden?: unknown } | undefined)?.hidden;
         this.hiddenPages.set(
@@ -1009,7 +1009,7 @@ export class App implements OnInit, OnDestroy {
       return;
     }
     try {
-      await client.call('hub:docks:activate', { dockId: `ng-devtools:${view}` });
+      await client.call('hub:docks:activate', { dockId: `pangular:${view}` });
       this.keepFocus();
       this.showView(view);
     } catch {

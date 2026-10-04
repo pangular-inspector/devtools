@@ -15,10 +15,10 @@ The [SSR & HTTP tab](../inspectors/ssr-http.md) records every `HttpClient` call 
 
 <ngmd-card-grid columns="3">
   <ngmd-card icon="zap" title="Interceptor">
-    <code>withNgDevtools()</code> records each request and applies fault rules.
+    <code>withPangular()</code> records each request and applies fault rules.
   </ngmd-card>
   <ngmd-card icon="lightbulb" title="Hydration hook">
-    <code>provideNgDevtoolsHttp()</code> captures the NG05xx hydration warnings Angular logs.
+    <code>providePangularHttp()</code> captures the NG05xx hydration warnings Angular logs.
   </ngmd-card>
   <ngmd-card icon="layers" title="One server process">
     SSR and the devtools hub run in the same Express process.
@@ -32,7 +32,7 @@ The [SSR & HTTP tab](../inspectors/ssr-http.md) records every `HttpClient` call 
     Register the interceptor and the hydration hook in <code>app.config.ts</code>.
   </ngmd-step>
   <ngmd-step title="Put the interceptor first">
-    Place <code>withNgDevtools()</code> before your own interceptors.
+    Place <code>withPangular()</code> before your own interceptors.
   </ngmd-step>
   <ngmd-step title="Mount the hub in server.ts">
     SSR and the devtools middleware share one Express process.
@@ -53,51 +53,51 @@ Both functions come from `@pangular-inspector/devtools/http`.
 // src/app/app.config.ts
 import {ApplicationConfig} from '@angular/core';
 import {provideHttpClient, withFetch} from '@angular/common/http';
-import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/devtools/http';
+import {providePangularHttp, withPangular} from '@pangular-inspector/devtools/http';
 import {provideClientHydration} from '@angular/platform-browser';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideClientHydration(),
-    provideHttpClient(withFetch(), withNgDevtools()),
-    provideNgDevtoolsHttp(),
+    provideHttpClient(withFetch(), withPangular()),
+    providePangularHttp(),
   ],
 };
 ```
 
 ### What each provider does
 
-- `withNgDevtools()` adds the interceptor that records calls and applies fault rules.
-- `provideNgDevtoolsHttp()` captures the hydration warnings (NG05xx) before the overlay loads.
+- `withPangular()` adds the interceptor that records calls and applies fault rules.
+- `providePangularHttp()` captures the hydration warnings (NG05xx) before the overlay loads.
 
 <ngmd-alert severity="helpful">
   The interceptor checks <code>ngDevMode</code>. In production builds it passes every request through untouched.
 </ngmd-alert>
 
-## Step 2: Put withNgDevtools first
+## Step 2: Put withPangular first
 
-Register `withNgDevtools()` before your own interceptors. Then it records requests as the app makes them, and fault rules apply before anything else.
+Register `withPangular()` before your own interceptors. Then it records requests as the app makes them, and fault rules apply before anything else.
 
 ```ts {11}
 // src/app/app.config.ts
 import {provideHttpClient, withFetch, withInterceptors} from '@angular/common/http';
 import {ApplicationConfig} from '@angular/core';
 import {provideClientHydration} from '@angular/platform-browser';
-import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/devtools/http';
+import {providePangularHttp, withPangular} from '@pangular-inspector/devtools/http';
 import {authInterceptor} from './auth.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideClientHydration(),
-    provideHttpClient(withFetch(), withNgDevtools(), withInterceptors([authInterceptor])),
-    provideNgDevtoolsHttp(),
+    provideHttpClient(withFetch(), withPangular(), withInterceptors([authInterceptor])),
+    providePangularHttp(),
   ],
 };
 ```
 
 ### How transfer cache hits are detected
 
-A call counts as a transfer cache hit when the cached response comes back right away. It also counts when the page's TransferState holds a GET or HEAD entry for the same URL. So an async interceptor after `withNgDevtools()` does not hide cache hits.
+A call counts as a transfer cache hit when the cached response comes back right away. It also counts when the page's TransferState holds a GET or HEAD entry for the same URL. So an async interceptor after `withPangular()` does not hide cache hits.
 
 ## Step 3: Mount the hub in server.ts
 
@@ -107,12 +107,12 @@ The interceptor on the server hands its calls to the devtools through the Node p
 // src/server.ts
 import {AngularNodeAppEngine, createNodeRequestHandler} from '@angular/ssr/node';
 import express from 'express';
-import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
 
 const app = express();
 const angularApp = new AngularNodeAppEngine();
 
-const devtools = initNgDevtoolsHub({
+const devtools = initPangularHub({
   ws: {sidecar: true},
 });
 app.use(devtools.nodeMiddleware);

@@ -10,7 +10,7 @@ Read `docs/contributing/ui-guidelines.md` first; it is the source of truth for t
 ## Before you write code
 
 1. Open two recently built pages as references: `app/src/pages/di-inspector.ts` (tree + detail, keyboard, highlight) and `app/src/pages/network-inspector.ts` (toolbar, tables, forms, `app-select`).
-2. Check which data the page gets and from where (`client.scope('ng-devtools').rpc.call(...)` or `rpc.sharedState(...)`). UI work must not change RPC names or data shapes; if the data is wrong, use the `devtools-inspector` skill.
+2. Check which data the page gets and from where (`client.scope('pangular').rpc.call(...)` or `rpc.sharedState(...)`). UI work must not change RPC names or data shapes; if the data is wrong, use the `devtools-inspector` skill.
 
 ## Rules
 

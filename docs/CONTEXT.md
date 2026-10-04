@@ -33,15 +33,15 @@ A report a collector sends to the server over RPC, such as `push-component-tree`
 _Avoid_: sync, upload, post
 
 **Inspector**:
-One area the devtools can look at: `components`, `injectors`, `signals`, `ngrx`, `forms`, `router`, `pipes`, `http` and `analog` (`NG_DEVTOOLS_INSPECTORS` in `config.ts`). An inspector owns a collector, its RPC functions, its agent tools and its view in the panel, and `inspectors` in the config turns all of them off together.
+One area the devtools can look at: `components`, `injectors`, `signals`, `ngrx`, `forms`, `router`, `pipes`, `http` and `analog` (`PANGULAR_INSPECTORS` in `config.ts`). An inspector owns a collector, its RPC functions, its agent tools and its view in the panel, and `inspectors` in the config turns all of them off together.
 _Avoid_: plugin, module, feature
 
 **Devframe**:
-The framework the devtools are built on (`devframe`). One definition, `packages/ng-devtools/src/devframe.ts`, declares the RPC functions, shared state and agent tools, and Devframe serves it as the embedded panel, the standalone CLI, the static report and the MCP server.
+The framework the devtools are built on (`devframe`). One definition, `packages/devtools/src/devframe.ts`, declares the RPC functions, shared state and agent tools, and Devframe serves it as the embedded panel, the standalone CLI, the static report and the MCP server.
 _Avoid_: framework, runtime, backend
 
 **Hub**:
-The server part an app mounts: `initNgDevtoolsHub()` for Express, or the Vite plugin. It is built on `@devframes/hub`, serves the panel and the connection file under `/__devframes/`, and lets other Devframe tools join the same dock.
+The server part an app mounts: `initPangularHub()` for Express, or the Vite plugin. It is built on `@devframes/hub`, serves the panel and the connection file under `/__devframes/`, and lets other Devframe tools join the same dock.
 _Avoid_: server (too broad), middleware, proxy
 
 **Dock**:
@@ -73,7 +73,7 @@ Anything that changes the app or the server rather than reading it: setting a fo
 _Avoid_: mutation, command, write tool
 
 **Resource**:
-Live state an agent reads as JSON over MCP, such as `ng-devtools:component-tree`. It holds what the connected pages reported, so it is empty when no page is connected.
+Live state an agent reads as JSON over MCP, such as `pangular:component-tree`. It holds what the connected pages reported, so it is empty when no page is connected.
 _Avoid_: snapshot, feed, state dump
 
 **Source scan**:

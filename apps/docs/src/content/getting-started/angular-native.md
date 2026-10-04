@@ -104,7 +104,7 @@ npx @pangular-inspector/devtools dev --no-auth
 When it is ready, the server prints the Angular Native view on its own line:
 
 ```text
-  pangular v0.0.6
+  pangular v0.0.7
   Panel: http://localhost:9999/
   Angular Native apps: http://localhost:9999/?view=angular-native
   MCP:   http://localhost:9999/__mcp
@@ -149,7 +149,7 @@ The server's [configuration](./configuration.md) applies to the app: inspectors 
 
 <ngmd-accordion>
   <ngmd-accordion-item title="The live tabs stay empty" open>
-    Check the Metro log for a <code>[ng-devtools]</code> line. A warning about <code>--no-auth</code> means the server asked for a code. A warning about reaching the server means the address is wrong for where the app runs. A release build has no <code>ng</code> global, so nothing is collected there.
+    Check the Metro log for a <code>[pangular]</code> line. A warning about <code>--no-auth</code> means the server asked for a code. A warning about reaching the server means the address is wrong for where the app runs. A release build has no <code>ng</code> global, so nothing is collected there.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The Providers list of an injector is empty">
     Angular records providers only when a <code>window</code> global exists as <code>mount()</code> creates the platform. If the list stays empty, check that <code>window</code> is defined before <code>mount()</code> runs.

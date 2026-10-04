@@ -9,7 +9,7 @@ function fakeHub(selectedId: string | null = null) {
   const docks = {
     selectedId,
     getStateById: (id: string) =>
-      id === 'ng-devtools:missing'
+      id === 'pangular:missing'
         ? undefined
         : {
             events: {
@@ -38,7 +38,7 @@ describe('hub dock sync', () => {
   });
 
   it('reports the dock the hub already has selected', () => {
-    parent[KEY] = fakeHub('ng-devtools:ngrx');
+    parent[KEY] = fakeHub('pangular:ngrx');
     const onView = vi.fn();
     followHubDocks(['angular', 'ngrx'], onView);
     expect(onView).toHaveBeenCalledOnce();
@@ -57,18 +57,18 @@ describe('hub dock sync', () => {
     parent[KEY] = hub;
     const onView = vi.fn();
     const stop = followHubDocks(['angular', 'ngrx', 'missing'], onView);
-    hub.listeners.get('ng-devtools:ngrx')?.();
-    hub.listeners.get('ng-devtools:angular')?.();
+    hub.listeners.get('pangular:ngrx')?.();
+    hub.listeners.get('pangular:angular')?.();
     expect(onView.mock.calls).toEqual([['ngrx'], ['angular']]);
     stop();
-    expect(hub.offs).toEqual(['ng-devtools:angular', 'ng-devtools:ngrx']);
+    expect(hub.offs).toEqual(['pangular:angular', 'pangular:ngrx']);
   });
 
   it('waits for the hub context to appear', () => {
     vi.useFakeTimers();
     const onView = vi.fn();
     followHubDocks(['angular'], onView);
-    parent[KEY] = fakeHub('ng-devtools:angular');
+    parent[KEY] = fakeHub('pangular:angular');
     vi.advanceTimersByTime(100);
     expect(onView).toHaveBeenCalledWith('angular');
   });
@@ -78,7 +78,7 @@ describe('hub dock sync', () => {
     const onView = vi.fn();
     const stop = followHubDocks(['angular'], onView);
     stop();
-    parent[KEY] = fakeHub('ng-devtools:angular');
+    parent[KEY] = fakeHub('pangular:angular');
     vi.advanceTimersByTime(1000);
     expect(onView).not.toHaveBeenCalled();
   });
@@ -94,7 +94,7 @@ describe('hub dock sync', () => {
     const hub = fakeHub();
     parent[KEY] = hub;
     expect(await selectHubDock('ngrx')).toBe(true);
-    expect(hub.docks.switchEntry).toHaveBeenCalledWith('ng-devtools:ngrx');
+    expect(hub.docks.switchEntry).toHaveBeenCalledWith('pangular:ngrx');
   });
 
   it('reports failure when the hub rejects the switch', async () => {

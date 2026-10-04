@@ -13,25 +13,25 @@ The SSR & HTTP tab shows the HTTP calls your app makes during server rendering a
 
 ## Setup
 
-The timeline and fault rules need the interceptor. The hydration warnings need the provider. Add both to the app config, with `withNgDevtools()` before your own interceptors:
+The timeline and fault rules need the interceptor. The hydration warnings need the provider. Add both to the app config, with `withPangular()` before your own interceptors:
 
 ```ts {9-10}
 // src/app/app.config.ts
 import {ApplicationConfig} from '@angular/core';
 import {provideHttpClient, withFetch, withInterceptors} from '@angular/common/http';
-import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/devtools/http';
+import {providePangularHttp, withPangular} from '@pangular-inspector/devtools/http';
 import {authInterceptor} from './auth.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideHttpClient(withFetch(), withNgDevtools(), withInterceptors([authInterceptor])),
-    provideNgDevtoolsHttp(),
+    provideHttpClient(withFetch(), withPangular(), withInterceptors([authInterceptor])),
+    providePangularHttp(),
   ],
 };
 ```
 
-<ngmd-callout type="warning" title="withNgDevtools() first">
-  Put <code>withNgDevtools()</code> before your own interceptors. Then it records requests as the app makes them, and fault rules apply before anything else. The full setup is in the <a href="../guides/ssr-http.md">SSR & HTTP guide</a>.
+<ngmd-callout type="warning" title="withPangular() first">
+  Put <code>withPangular()</code> before your own interceptors. Then it records requests as the app makes them, and fault rules apply before anything else. The full setup is in the <a href="../guides/ssr-http.md">SSR & HTTP guide</a>.
 </ngmd-callout>
 
 SSR must run in the same Node process as the devtools server, such as the Express server with the hub mounted, or the Vite dev server with the plugin. The [overlay](../getting-started/overlay.md) must be loaded, because client calls, hydration and the payload reach the tab through it.
@@ -96,10 +96,10 @@ Each entry in the page's `{APP_ID}-state` script, with its size. The tab decodes
 
 | Part                  | Needs                                   |
 | --------------------- | --------------------------------------- |
-| HTTP timeline         | `withNgDevtools()` and the overlay.     |
-| Fault injection       | `withNgDevtools()`.                     |
+| HTTP timeline         | `withPangular()` and the overlay.       |
+| Fault injection       | `withPangular()`.                       |
 | Hydration stats       | The overlay.                            |
-| Hydration warnings    | `provideNgDevtoolsHttp()`.              |
+| Hydration warnings    | `providePangularHttp()`.                |
 | TransferState payload | The overlay, on a server-rendered page. |
 
 ### Development builds
@@ -152,14 +152,14 @@ The interceptor works in development builds only. In production it passes reques
 
 ## Agent tools
 
-There is no dedicated tool for this tab. Agents read its data with the `devframe_state_read` tool and the `ng-devtools:http` key. See [Resources](../agents/resources.md).
+There is no dedicated tool for this tab. Agents read its data with the `devframe_state_read` tool and the `pangular:http` key. See [Resources](../agents/resources.md).
 
 Two router tools cover related ground:
 
-| Tool                              | What it does                                                  |
-| --------------------------------- | ------------------------------------------------------------- |
-| `ng-devtools:explain-render-mode` | Which render mode a URL gets, from `*.routes.server.ts`.      |
-| `ng-devtools:explain-navigation`  | Each navigation's story, including the HTTP requests it made. |
+| Tool                           | What it does                                                  |
+| ------------------------------ | ------------------------------------------------------------- |
+| `pangular:explain-render-mode` | Which render mode a URL gets, from `*.routes.server.ts`.      |
+| `pangular:explain-navigation`  | Each navigation's story, including the HTTP requests it made. |
 
 ## Limits and gotchas
 
@@ -192,7 +192,7 @@ The timeline keeps the last 200 SSR calls in total, and the last 200 client call
     SSR runs in a different process from the devtools, or the route is prerendered. Mount the hub in the same server, and use <code>RenderMode.Server</code>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why does Warnings say not captured?">
-    <code>provideNgDevtoolsHttp()</code> is missing from the app providers.
+    <code>providePangularHttp()</code> is missing from the app providers.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why did my client calls disappear?">
     Client calls live in the page, so a reload clears them. SSR calls stay until <strong>Clear timeline</strong> or a server restart.

@@ -1,8 +1,8 @@
 import { Component, input } from '@angular/core';
-import type { NgDevtoolsLimit } from '@pangular-inspector/devtools/config';
+import type { PangularLimit } from '@pangular-inspector/devtools/config';
 
 export const LIMITS_DOCS_URL =
-  'https://github.com/santoshyadavdev/angular-devtools/blob/main/apps/docs/src/content/getting-started/configuration.md#limits';
+  'https://pangular-inspector.dev/getting-started/configuration/#limits';
 
 /** Says that a capped timeline dropped its oldest entries, and which limit to raise. */
 @Component({
@@ -49,6 +49,6 @@ export class LimitNote {
   readonly dropped = input(0);
   readonly max = input.required<number>();
   readonly what = input.required<string>();
-  readonly limit = input.required<NgDevtoolsLimit>();
+  readonly limit = input.required<PangularLimit>();
   protected readonly docsUrl = LIMITS_DOCS_URL;
 }

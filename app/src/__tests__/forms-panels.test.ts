@@ -165,7 +165,7 @@ describe('FormsFieldDetail', () => {
     expect(text(fixture)).toContain('this field is redacted (password input)');
     const link = host.querySelector<HTMLAnchorElement>('a')!;
     expect(link.textContent).toContain('How to unmask it');
-    expect(link.href).toContain('security.md#opt-fields-in-or-out');
+    expect(link.href).toContain('security/#opt-fields-in-or-out');
   });
 });
 

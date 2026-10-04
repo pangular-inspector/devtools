@@ -39,7 +39,7 @@ importers:
         version: 22.0.1(@angular/core@22.1.7(@angular/compiler@22.1.7)(rxjs@7.8.2)(zone.js@0.16.3))(rxjs@7.8.2)
       '@pangular-inspector/devtools':
         specifier: workspace:*
-        version: link:packages/ng-devtools
+        version: link:packages/devtools
       devframe:
         specifier: ^1.2.0
         version: 1.2.0(@devframes/agentic@1.2.0)(cac@7.0.0)(srvx@1.0.5)
@@ -333,7 +333,7 @@ importers:
         version: 22.1.7(@angular/compiler@22.1.7)(typescript@6.0.3)
       '@pangular-inspector/devtools':
         specifier: workspace:*
-        version: link:../../packages/ng-devtools
+        version: link:../../packages/devtools
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -341,7 +341,7 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0)
 
-  packages/ng-devtools:
+  packages/devtools:
     dependencies:
       '@devframes/agentic':
         specifier: ^1.2.0

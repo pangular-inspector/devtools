@@ -53,10 +53,10 @@ export function styleHubRail(
         pendingRetries.delete(doc);
       }
     }
-    let style = root.querySelector<HTMLStyleElement>('style[data-ng-devtools]');
+    let style = root.querySelector<HTMLStyleElement>('style[data-pangular]');
     if (!style) {
       style = doc!.createElement('style');
-      style.dataset['ngDevtools'] = '';
+      style.dataset['pangular'] = '';
       root.append(style);
     }
     style.textContent = activeDockStyle(theme);
