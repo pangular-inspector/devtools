@@ -622,22 +622,24 @@ export function loopsText(loops: NavigationLoop[]): string {
 export function describeNavigation(nav: NavigationRecord, page?: RouterPage): string {
   const took =
     nav.beforeConnect && nav.endedAt === undefined && nav.outcome !== 'pending'
-      ? ' (before DevTools connected, no details)'
+      ? ' (before Pangular Inspector connected, no details)'
       : nav.beforeConnect
-        ? ' (started before DevTools connected)'
+        ? ' (started before Pangular Inspector connected)'
         : nav.endedAt === undefined
           ? ''
           : ` in ${nav.endedAt - nav.startedAt}ms`;
   const target =
     nav.finalUrl && nav.finalUrl !== nav.url ? ` (redirected to ${code(nav.finalUrl)})` : '';
   const lines = [
-    `- #${nav.id} ${code(nav.url)}${target}: **${nav.outcome}**${took}, trigger ${code(nav.trigger)}${nav.probe ? ' (DevTools probe)' : ''}`,
+    `- #${nav.id} ${code(nav.url)}${target}: **${nav.outcome}**${took}, trigger ${code(nav.trigger)}${nav.probe ? ' (Pangular Inspector probe)' : ''}`,
   ];
   if (nav.from) lines.push(`  - from ${code(nav.from)}`);
   if (nav.caller) lines.push(`  - started by ${code(nav.caller)}`);
   if (nav.extras?.length) lines.push(`  - extras: ${list(nav.extras)}`);
   if (nav.earlier) {
-    lines.push(`  - ${nav.earlier} earlier navigation(s) happened before DevTools connected`);
+    lines.push(
+      `  - ${nav.earlier} earlier navigation(s) happened before Pangular Inspector connected`,
+    );
   }
   if (nav.redirectedFrom !== undefined) {
     lines.push(`  - redirect from #${nav.redirectedFrom}`);
@@ -768,7 +770,7 @@ export function explainNavigationText(
   if (!matching.length) {
     return needle || args.id !== undefined
       ? `No recent navigation matches ${code(args.url ?? `#${args.id}`)}.${otherPages(state, page)}${freshness(page, now)}`
-      : `No navigations recorded since DevTools connected on page ${code(page.pageId)}; earlier ones are not visible.${otherPages(state, page)}${freshness(page, now)}`;
+      : `No navigations recorded since Pangular Inspector connected on page ${code(page.pageId)}; earlier ones are not visible.${otherPages(state, page)}${freshness(page, now)}`;
   }
   const recent = matching.slice(-limit).reverse();
   const loops = loopsOf(page).filter((loop) => recent.some((nav) => loop.ids.includes(nav.id)));

@@ -90,7 +90,8 @@ interface CheckoutModel {
           aria-describedby="card-hint"
         />
         <p id="card-hint" class="muted">
-          This demo never sends the card number. It is here to show how DevTools hides card fields.
+          This demo never sends the card number. It is here to show how Pangular Inspector hides
+          card fields.
         </p>
         <p class="muted">Total {{ cart.total() | currency }}</p>
         @if (orderError(); as message) {

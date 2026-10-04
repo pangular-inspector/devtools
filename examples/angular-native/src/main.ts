@@ -2,7 +2,7 @@
 import { AppRegistry, Image, Platform, processColor } from 'react-native';
 import { mount } from '@ng-native/platform';
 import { getFabricUIManager, registerPlatformComponents } from '@ng-native/fabric';
-import { initAngularNativeOverlay } from '@pangular-inspector/core/overlay-angular-native';
+import { initAngularNativeOverlay } from '@pangular-inspector/devtools/overlay-angular-native';
 import { App } from './app/app.ts';
 
 registerPlatformComponents(Platform.OS);

@@ -123,7 +123,7 @@ The script builds the devtools package, then starts the Vite dev server. That de
 
 ### Type-check the Analog demo
 
-`pnpm typecheck` runs `ngc -p examples/analog/tsconfig.app.json --noEmit`, so CI type-checks the demo's pages, templates, loaders, API routes and middleware. The demo resolves `@pangular-inspector/core` to the package source, which imports with `.ts` extensions, so `tsconfig.app.json` sets `rewriteRelativeImportExtensions`.
+`pnpm typecheck` runs `ngc -p examples/analog/tsconfig.app.json --noEmit`, so CI type-checks the demo's pages, templates, loaders, API routes and middleware. The demo resolves `@pangular-inspector/devtools` to the package source, which imports with `.ts` extensions, so `tsconfig.app.json` sets `rewriteRelativeImportExtensions`.
 
 ### Build and preview
 

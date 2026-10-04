@@ -313,7 +313,7 @@ function secretOf(
 }
 
 function secretRefusal(key: string, reason: RedactReason): string {
-  return `is redacted (${REDACT_LABELS[reason]}). DevTools never writes secret fields; to write it, ${unmaskHint(reason, key)}`;
+  return `is redacted (${REDACT_LABELS[reason]}). Pangular Inspector never writes secret fields; to write it, ${unmaskHint(reason, key)}`;
 }
 
 function elementFor(ctx: ActionContext, found: FoundForm, path: string): Element | null {
@@ -504,7 +504,7 @@ function writeValue(
   if (secret) {
     const key = secret.split('.').pop()!;
     const reason = redactReason(key) ?? 'key';
-    return `contains the secret field "${secret}" (${REDACT_LABELS[reason]}). DevTools never writes secret fields; to write it, ${unmaskHint(reason, key)}`;
+    return `contains the secret field "${secret}" (${REDACT_LABELS[reason]}). Pangular Inspector never writes secret fields; to write it, ${unmaskHint(reason, key)}`;
   }
   if (current && typeof current === 'object' && !(current instanceof Date)) {
     const guarded = guardedFields(ctx, found, node, path, force);

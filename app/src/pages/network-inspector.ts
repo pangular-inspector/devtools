@@ -16,7 +16,7 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
 import { rpcCall as call } from '../rpc';
 import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
-import { HTTP_RULE_STATUSES, isHttpRuleStatus } from '@pangular-inspector/core/config';
+import { HTTP_RULE_STATUSES, isHttpRuleStatus } from '@pangular-inspector/devtools/config';
 import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 

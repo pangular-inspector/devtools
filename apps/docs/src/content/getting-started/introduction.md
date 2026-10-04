@@ -14,7 +14,7 @@ The devtools inspect a running *Angular app. They read components, signals, inje
 The same tool runs in several places. It is built with *Devframe, so one definition powers every mode.
 
 <ngmd-callout type="info" title="One package">
-  Everything ships in <code>&#64;pangular-inspector/core</code>: the server side, the browser overlay, the in-page popup, the CLI and the built UI. See <a href="./installation.md">Installation</a>.
+  Everything ships in <code>&#64;pangular-inspector/devtools</code>: the server side, the browser overlay, the in-page popup, the CLI and the built UI. See <a href="./installation.md">Installation</a>.
 </ngmd-callout>
 
 ## What it inspects

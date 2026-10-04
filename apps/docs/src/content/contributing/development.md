@@ -62,12 +62,12 @@ src/                          # Angular Travel, the host demo app
 
 ### Nx projects
 
-| Project                    | Root                   | Targets                          |
-| -------------------------- | ---------------------- | -------------------------------- |
-| `angular-devtools`         | `.` (`project.json`)   | `build`, `serve`, `test`         |
-| `@pangular-inspector/core` | `packages/ng-devtools` | `build`                          |
-| `analog-demo`              | `examples/analog`      | `dev`, `build`, `preview`        |
-| `angular-devtools-docs`    | `apps/docs`            | `dev`, `build`, `test`, and more |
+| Project                        | Root                   | Targets                          |
+| ------------------------------ | ---------------------- | -------------------------------- |
+| `angular-devtools`             | `.` (`project.json`)   | `build`, `serve`, `test`         |
+| `@pangular-inspector/devtools` | `packages/ng-devtools` | `build`                          |
+| `analog-demo`                  | `examples/analog`      | `dev`, `build`, `preview`        |
+| `angular-devtools-docs`        | `apps/docs`            | `dev`, `build`, `test`, and more |
 
 Run `pnpm exec nx show projects` to list them. Package projects get their targets from their `package.json` scripts.
 
@@ -90,7 +90,7 @@ The scripts call Nx. You can also run a target on a project directly:
 
 ```bash group="nx" name="Build" active
 pnpm exec nx build                              # Angular Travel
-pnpm exec nx build @pangular-inspector/core # The npm package
+pnpm exec nx build @pangular-inspector/devtools # The npm package
 pnpm exec nx build angular-devtools-docs        # This site
 ```
 

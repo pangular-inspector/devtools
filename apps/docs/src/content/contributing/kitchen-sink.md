@@ -75,7 +75,7 @@ import {appConfig} from './app/app.config';
 
 bootstrapApplication(App, appConfig).then(() => {
   if (typeof ngDevMode === 'undefined' || ngDevMode) {
-    return import('@pangular-inspector/core/overlay');
+    return import('@pangular-inspector/devtools/overlay');
   }
   return undefined;
 });
@@ -84,19 +84,19 @@ bootstrapApplication(App, appConfig).then(() => {
 ### Code group
 
 ```bash group="install" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220" active
-pnpm add @pangular-inspector/core devframe
+pnpm add @pangular-inspector/devtools devframe
 ```
 
 ```bash group="install" name="npm" image="https://cdn.simpleicons.org/npm/CB3837"
-npm install @pangular-inspector/core devframe
+npm install @pangular-inspector/devtools devframe
 ```
 
 ```bash group="install" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
-yarn add @pangular-inspector/core devframe
+yarn add @pangular-inspector/devtools devframe
 ```
 
 ```bash group="install" name="bun" image="https://bun.sh/logo.svg"
-bun add @pangular-inspector/core devframe
+bun add @pangular-inspector/devtools devframe
 ```
 
 ### File import
@@ -110,7 +110,7 @@ bun add @pangular-inspector/core devframe
 ```json
 {
   "mcpServers": {
-    "ng-devtools": {"command": "npx", "args": ["@pangular-inspector/core", "mcp"]}
+    "ng-devtools": {"command": "npx", "args": ["@pangular-inspector/devtools", "mcp"]}
   }
 }
 ```
@@ -241,7 +241,7 @@ Text between alerts.
 
 <ngmd-workflow>
   <ngmd-step title="Install the package">
-    Run <code>pnpm add &#64;pangular-inspector/core devframe</code>.
+    Run <code>pnpm add &#64;pangular-inspector/devtools devframe</code>.
   </ngmd-step>
   <ngmd-step title="Mount the hub">
     Add the hub to your server.

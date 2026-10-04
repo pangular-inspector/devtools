@@ -15,7 +15,7 @@ For *Analog apps, add the *Vite plugin next to `analog()` and load the overlay i
 
 <ngmd-workflow>
   <ngmd-step title="Install the package">
-    Add <code>&#64;pangular-inspector/core</code> and <code>devframe</code>. See <a href="./installation.md">Installation</a>.
+    Add <code>&#64;pangular-inspector/devtools</code> and <code>devframe</code>. See <a href="./installation.md">Installation</a>.
   </ngmd-step>
   <ngmd-step title="Add the plugin">
     Register <code>ngDevtools()</code> after <code>analog()</code> in <code>vite.config.ts</code>.
@@ -35,7 +35,7 @@ For *Analog apps, add the *Vite plugin next to `analog()` and load the overlay i
 ```ts {3,7}
 // vite.config.ts
 import analog from '@analogjs/platform';
-import ngDevtools from '@pangular-inspector/core/vite';
+import ngDevtools from '@pangular-inspector/devtools/vite';
 import {defineConfig} from 'vite';
 
 export default defineConfig({
@@ -54,7 +54,7 @@ import {App} from './app/app';
 import {appConfig} from './app/app.config';
 
 bootstrapApplication(App, appConfig).then(() => {
-  if (import.meta.env.DEV) void import('@pangular-inspector/core/overlay');
+  if (import.meta.env.DEV) void import('@pangular-inspector/devtools/overlay');
 });
 ```
 
@@ -152,7 +152,7 @@ If you open the dev server through another hostname that points to your machine 
 ```ts {7}
 // vite.config.ts
 import analog from '@analogjs/platform';
-import ngDevtools from '@pangular-inspector/core/vite';
+import ngDevtools from '@pangular-inspector/devtools/vite';
 import {defineConfig} from 'vite';
 
 export default defineConfig({

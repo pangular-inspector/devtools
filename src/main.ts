@@ -9,7 +9,7 @@ bootstrapApplication(App, appConfig)
       return ref
         .whenStable()
         .then(() =>
-          Promise.all([import('@pangular-inspector/core/overlay'), import('@ngrx/signals')]),
+          Promise.all([import('@pangular-inspector/devtools/overlay'), import('@ngrx/signals')]),
         )
         .then(([devtools, { patchState, watchState }]) =>
           devtools.registerNgrxSignals({ patchState, watchState }),

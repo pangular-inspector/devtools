@@ -170,7 +170,7 @@ No tool can restore a state. See [Dispatch an action](../agents/tools.md#dispatc
 
 ### `watchState` needs `registerNgrxSignals`
 
-Without it, restore writes the state signals directly. Components update, but `watchState` listeners do not run, and the log entry says so. Call `registerNgrxSignals({ patchState, watchState })` from `@pangular-inspector/core/overlay` once, and restore goes through `patchState`. This applies to `signalStore` only. A `signalState` restore always writes directly. See [Restore NgRx signal state](../guides/ngrx-signals-restore.md).
+Without it, restore writes the state signals directly. Components update, but `watchState` listeners do not run, and the log entry says so. Call `registerNgrxSignals({ patchState, watchState })` from `@pangular-inspector/devtools/overlay` once, and restore goes through `patchState`. This applies to `signalStore` only. A `signalState` restore always writes directly. See [Restore NgRx signal state](../guides/ngrx-signals-restore.md).
 
 ### Stores appear when they are created
 

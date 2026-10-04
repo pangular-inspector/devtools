@@ -12,7 +12,7 @@ import type { DevframeRpcClient } from 'devframe/client';
 import {
   summarizeNgDevtoolsConfig,
   type ResolvedNgDevtoolsConfig,
-} from '@pangular-inspector/core/config';
+} from '@pangular-inspector/devtools/config';
 import { hostPageId } from '../page-id';
 import { injectorTreeFor, signalGraphFor } from '../live-pages';
 import { isStaticReport } from '../rpc';

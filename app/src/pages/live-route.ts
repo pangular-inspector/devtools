@@ -52,7 +52,7 @@ type TabId = (typeof TABS)[number]['id'];
       <div class="empty" role="alert">
         <p class="empty-title">Could not load the live router state.</p>
         <p class="muted">
-          Check that the dev server with ng-devtools is still running, then retry.
+          Check that the dev server with Pangular Inspector is still running, then retry.
         </p>
         <button type="button" class="retry" (click)="retry()">Retry</button>
       </div>

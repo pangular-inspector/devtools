@@ -62,7 +62,7 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: Angular, @pangular-inspector/core, browser, and Analog if used.
+      description: Angular, @pangular-inspector/devtools, browser, and Analog if used.
   - type: textarea
     id: extra
     attributes:

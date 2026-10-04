@@ -1,5 +1,5 @@
 import { Component, input } from '@angular/core';
-import type { NgDevtoolsLimit } from '@pangular-inspector/core/config';
+import type { NgDevtoolsLimit } from '@pangular-inspector/devtools/config';
 
 export const LIMITS_DOCS_URL =
   'https://github.com/santoshyadavdev/angular-devtools/blob/main/apps/docs/src/content/getting-started/configuration.md#limits';

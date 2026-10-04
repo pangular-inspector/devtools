@@ -36,9 +36,7 @@ import {
     @if (failed()) {
       <div class="empty" role="alert">
         <p class="empty-title">The route checks could not run.</p>
-        <p class="muted">
-          The Pangular Inspector server did not answer. Check that it is still running.
-        </p>
+        <p class="muted">The devtools server did not answer. Check that it is still running.</p>
         <button type="button" class="small" (click)="run()">Retry</button>
       </div>
     } @else if (!result()) {

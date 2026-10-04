@@ -32,7 +32,7 @@ This guide adds the devtools to a NativeScript Angular app. The app has no DOM, 
 
 <ngmd-workflow>
   <ngmd-step title="Install the packages">
-    Add <code>&#64;pangular-inspector/core</code> and <code>&#64;valor/nativescript-websockets</code>.
+    Add <code>&#64;pangular-inspector/devtools</code> and <code>&#64;valor/nativescript-websockets</code>.
   </ngmd-step>
   <ngmd-step title="Add a WebSocket global">
     Import <code>&#64;valor/nativescript-websockets</code> first in <code>src/polyfills.ts</code>.
@@ -48,19 +48,19 @@ This guide adds the devtools to a NativeScript Angular app. The app has no DOM, 
 ## Step 1: Install
 
 ```bash group="install" name="npm" image="https://cdn.simpleicons.org/npm/CB3837" active
-npm install @pangular-inspector/core @valor/nativescript-websockets
+npm install @pangular-inspector/devtools @valor/nativescript-websockets
 ```
 
 ```bash group="install" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220"
-pnpm add @pangular-inspector/core @valor/nativescript-websockets
+pnpm add @pangular-inspector/devtools @valor/nativescript-websockets
 ```
 
 ```bash group="install" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
-yarn add @pangular-inspector/core @valor/nativescript-websockets
+yarn add @pangular-inspector/devtools @valor/nativescript-websockets
 ```
 
 ```bash group="install" name="bun" image="https://bun.sh/logo.svg"
-bun add @pangular-inspector/core @valor/nativescript-websockets
+bun add @pangular-inspector/devtools @valor/nativescript-websockets
 ```
 
 ## Step 2: Add a WebSocket global
@@ -76,7 +76,7 @@ import '@valor/nativescript-websockets';
 
 ```ts {2,4-6}
 // src/main.ts
-import {initNativeScriptOverlay} from '@pangular-inspector/core/overlay-nativescript';
+import {initNativeScriptOverlay} from '@pangular-inspector/devtools/overlay-nativescript';
 
 if (__DEV__) {
   initNativeScriptOverlay();
@@ -101,7 +101,7 @@ Run the server in the app's folder, so the source scanners read its `src/`:
 
 ```bash
 cd my-nativescript-app
-npx @pangular-inspector/core dev --no-auth
+npx @pangular-inspector/devtools dev --no-auth
 ```
 
 The server listens on `localhost` only, which the iOS simulator and the Android emulator reach. `--no-auth` is needed because the app cannot enter the one-time code the panel asks for.
@@ -114,7 +114,7 @@ The server listens on `localhost` only, which the iOS simulator and the Android 
 A physical device reaches your machine over the network, so the server has to listen on an interface the device can reach:
 
 ```bash
-npx @pangular-inspector/core dev --host 192.168.1.20 --no-auth
+npx @pangular-inspector/devtools dev --host 192.168.1.20 --no-auth
 ```
 
 <ngmd-alert severity="warning" label="Trusted networks only">
@@ -127,7 +127,7 @@ See [Standalone CLI](../getting-started/cli.md) for the other server options and
 
 `examples/nativescript` is a `ns create --ng` project wired up this way, with a small showcase component (signals, a computed, an effect and a component-level provider). It is tested on the iOS simulator. Android is untested.
 
-The demo maps `@pangular-inspector/core/*` to the package's build output in `packages/ng-devtools/dist`, so build the package first:
+The demo maps `@pangular-inspector/devtools/*` to the package's build output in `packages/ng-devtools/dist`, so build the package first:
 
 ```bash
 pnpm devtools:build-pkg

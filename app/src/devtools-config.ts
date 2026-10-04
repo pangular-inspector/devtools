@@ -5,7 +5,7 @@ import {
   type NgDevtoolsAction,
   type NgDevtoolsInspector,
   type ResolvedNgDevtoolsConfig,
-} from '@pangular-inspector/core/config';
+} from '@pangular-inspector/devtools/config';
 import type { Tab } from './types/tab.types';
 
 export { actionBlockedMessage };

@@ -4,7 +4,7 @@ import { provideClientHydration, withEventReplay } from '@angular/platform-brows
 import { withComponentInputBinding } from '@angular/router';
 import { provideContent, withMarkdownRenderer } from '@analogjs/content';
 import { provideFileRouter, requestContextInterceptor } from '@analogjs/router';
-import { provideNgDevtoolsHttp } from '@pangular-inspector/core/http';
+import { provideNgDevtoolsHttp } from '@pangular-inspector/devtools/http';
 
 export const appConfig: ApplicationConfig = {
   providers: [

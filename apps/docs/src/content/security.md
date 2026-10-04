@@ -50,7 +50,7 @@ If you open the dev server through another hostname that points to your machine 
 ```ts {7-8}
 // vite.config.ts
 import analog from '@analogjs/platform';
-import ngDevtools from '@pangular-inspector/core/vite';
+import ngDevtools from '@pangular-inspector/devtools/vite';
 import {defineConfig} from 'vite';
 
 export default defineConfig({
@@ -86,7 +86,7 @@ With only loopback hosts allowed, the loopback and origin checks take the place 
 
 ```ts {8}
 // src/server.ts
-import {initNgDevtoolsHub} from '@pangular-inspector/core/hub';
+import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
 import express from 'express';
 
 const app = express();

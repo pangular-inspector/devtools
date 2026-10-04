@@ -9,22 +9,22 @@ description: Bump the version, build, and publish the npm package. Ship the Chro
 
 # Publishing
 
-The devtools ship as one npm package, `@pangular-inspector/core`, from `packages/ng-devtools`. It holds the Node-side logic, RPC, CLI, overlay, popup, and the built UI in `dist/public`.
+The devtools ship as one npm package, `@pangular-inspector/devtools`, from `packages/ng-devtools`. It holds the Node-side logic, RPC, CLI, overlay, popup, and the built UI in `dist/public`.
 
 ## What ships
 
 The package publishes `dist/` and `bin.mjs`. On publish, `publishConfig.exports` points every entry point at the built files:
 
-| Import                              | Published file      |
-| ----------------------------------- | ------------------- |
-| `@pangular-inspector/core`          | `dist/devframe.mjs` |
-| `@pangular-inspector/core/devframe` | `dist/devframe.mjs` |
-| `@pangular-inspector/core/config`   | `dist/config.mjs`   |
-| `@pangular-inspector/core/overlay`  | `dist/overlay.mjs`  |
-| `@pangular-inspector/core/popup`    | `dist/popup.mjs`    |
-| `@pangular-inspector/core/http`     | `dist/http.mjs`     |
-| `@pangular-inspector/core/hub`      | `dist/hub.mjs`      |
-| `@pangular-inspector/core/vite`     | `dist/vite.mjs`     |
+| Import                                  | Published file      |
+| --------------------------------------- | ------------------- |
+| `@pangular-inspector/devtools`          | `dist/devframe.mjs` |
+| `@pangular-inspector/devtools/devframe` | `dist/devframe.mjs` |
+| `@pangular-inspector/devtools/config`   | `dist/config.mjs`   |
+| `@pangular-inspector/devtools/overlay`  | `dist/overlay.mjs`  |
+| `@pangular-inspector/devtools/popup`    | `dist/popup.mjs`    |
+| `@pangular-inspector/devtools/http`     | `dist/http.mjs`     |
+| `@pangular-inspector/devtools/hub`      | `dist/hub.mjs`      |
+| `@pangular-inspector/devtools/vite`     | `dist/vite.mjs`     |
 
 The `pangular` binary is `bin.mjs`. In the workspace, the exports point at the TypeScript sources instead.
 
@@ -47,7 +47,7 @@ The package's `build` script runs two steps:
 
 ### 1. Bump the version
 
-Update `version` in `packages/ng-devtools/package.json`. In the same commit, add a section for the version to `packages/ng-devtools/CHANGELOG.md`. The changelog follows [Keep a Changelog](https://keepachangelog.com), with entries grouped as Upgrade notes, Security fixes, Features and Documentation. Use a message like `chore(release): ng-devtools 0.0.5`.
+Update `version` in `packages/ng-devtools/package.json`. In the same commit, add a section for the version to `packages/ng-devtools/CHANGELOG.md`. The changelog follows [Keep a Changelog](https://keepachangelog.com), with entries grouped as Upgrade notes, Security fixes, Features and Documentation. Use a message like `chore(release): 0.0.7`.
 
 ### 2. Check the build
 
@@ -67,7 +67,7 @@ If `app/` changed since the last release, run `pnpm extension:build` and commit 
 pnpm devtools:publish
 ```
 
-This runs `pnpm --filter @pangular-inspector/core publish --access public`. The `prepack` build bundles the library and the UI.
+This runs `pnpm --filter @pangular-inspector/devtools publish --access public`. The `prepack` build bundles the library and the UI.
 
 <ngmd-alert severity="important">
   <code>pnpm publish</code> checks git before it publishes. Run it from a clean working tree on <code>main</code>.

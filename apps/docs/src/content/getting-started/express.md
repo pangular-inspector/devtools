@@ -19,7 +19,7 @@ In an *Angular app with server-side rendering, the devtools run inside your Expr
 
 <ngmd-workflow>
   <ngmd-step title="Install the package">
-    Add <code>&#64;pangular-inspector/core</code> and <code>devframe</code>. See <a href="./installation.md">Installation</a>.
+    Add <code>&#64;pangular-inspector/devtools</code> and <code>devframe</code>. See <a href="./installation.md">Installation</a>.
   </ngmd-step>
   <ngmd-step title="Mount the hub">
     Add <code>initNgDevtoolsHub()</code> to <code>server.ts</code>, before your other routes.
@@ -39,7 +39,7 @@ In an *Angular app with server-side rendering, the devtools run inside your Expr
 ```ts {3,6-7}
 // src/server.ts
 import express from 'express';
-import {initNgDevtoolsHub} from '@pangular-inspector/core/hub';
+import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
 
 const app = express();
 const devtools = initNgDevtoolsHub({ws: false});
@@ -113,7 +113,7 @@ The origin check is on by default too. Only loopback origins and the [Chrome ext
 
 ```ts
 // src/server.ts
-import {initNgDevtoolsHub} from '@pangular-inspector/core/hub';
+import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
 
 const devtools = initNgDevtoolsHub({
   allowedOrigins: ['https://tunnel.example', 'chrome-extension://<id>'],
@@ -155,7 +155,7 @@ import {appConfig} from './app/app.config';
 bootstrapApplication(App, appConfig)
   .then(() => {
     if (typeof ngDevMode === 'undefined' || ngDevMode) {
-      return import('@pangular-inspector/core/overlay');
+      return import('@pangular-inspector/devtools/overlay');
     }
     return undefined;
   })
@@ -215,7 +215,7 @@ To fill the SSR & HTTP tab, add the interceptor and hydration hooks to your app 
 import {provideHttpClient, withFetch} from '@angular/common/http';
 import {ApplicationConfig} from '@angular/core';
 import {provideClientHydration} from '@angular/platform-browser';
-import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/core/http';
+import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/devtools/http';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -245,7 +245,7 @@ To mount only the devtools panel without the dock, use `initDevframe()` from `de
 ```ts
 // src/server.ts
 import {initDevframe} from 'devframe/initiate';
-import ngDevtools from '@pangular-inspector/core/devframe';
+import ngDevtools from '@pangular-inspector/devtools/devframe';
 
 const devtools = initDevframe(ngDevtools, {base: '/__ng-devtools/'});
 app.use(devtools.nodeMiddleware);

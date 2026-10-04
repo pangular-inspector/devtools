@@ -4,7 +4,7 @@
   "private": true,
   "main": "src/main.ts",
   "scripts": {
-    "devtools:pack": "pnpm --dir ../.. --filter @pangular-inspector/core pack --out examples/angular-native/ng-devtools.tgz",
+    "devtools:pack": "pnpm --dir ../.. --filter @pangular-inspector/devtools pack --out examples/angular-native/ng-devtools.tgz",
     "devtools": "pangular dev --no-auth",
     "start": "expo start",
     "ios": "expo run:ios",
@@ -19,7 +19,7 @@
     "@ng-native/metro": "0.2.0",
     "@ng-native/platform": "0.2.0",
     "@ngrx/signals": "^22.0.1",
-    "@pangular-inspector/core": "file:ng-devtools.tgz",
+    "@pangular-inspector/devtools": "file:ng-devtools.tgz",
     "devframe": "^1.2.0",
     "expo": "~57.0.26",
     "react": "19.2.3",

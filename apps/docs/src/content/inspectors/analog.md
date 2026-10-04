@@ -22,7 +22,7 @@ Add the Vite plugin next to `analog()` and load the overlay. See [Vite and Analo
 ```ts {3,7}
 // vite.config.ts
 import analog from '@analogjs/platform';
-import ngDevtools from '@pangular-inspector/core/vite';
+import ngDevtools from '@pangular-inspector/devtools/vite';
 import {defineConfig} from 'vite';
 
 export default defineConfig({

@@ -31,7 +31,7 @@ Hono and h3 take web-standard handlers, so they use `handler`. Fastify runs on N
 ```ts
 // src/server.ts
 import {AngularAppEngine, createRequestHandler} from '@angular/ssr';
-import {initNgDevtoolsHub} from '@pangular-inspector/core/hub';
+import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
 import {Hono} from 'hono';
 
 const angularApp = new AngularAppEngine();
@@ -49,7 +49,7 @@ export const reqHandler = createRequestHandler(app.fetch);
 ```ts
 // src/server.ts
 import {createRequestHandler} from '@angular/ssr';
-import {initNgDevtoolsHub} from '@pangular-inspector/core/hub';
+import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
 import {H3} from 'h3';
 
 const devtools = initNgDevtoolsHub({ws: false});
@@ -70,7 +70,7 @@ Fastify has no Connect middleware of its own. Hand requests under the base to `n
 ```ts
 // src/server.ts
 import {createNodeRequestHandler} from '@angular/ssr/node';
-import {initNgDevtoolsHub} from '@pangular-inspector/core/hub';
+import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
 import Fastify from 'fastify';
 
 const devtools = initNgDevtoolsHub({ws: false});

@@ -252,13 +252,13 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
   missingTitle.textContent = 'No devtools server found';
   const missingHint = document.createElement('p');
   missingHint.textContent =
-    'Mount the ng-devtools hub or the Vite plugin in your dev server, before the SSR handler. ' +
+    'Mount the Pangular Inspector hub or the Vite plugin in your dev server, before the SSR handler. ' +
     'If it is mounted on a custom path, pass that path to initOverlay({baseURL}).';
   const setupLink = document.createElement('a');
   setupLink.href = SETUP_URL;
   setupLink.target = '_blank';
   setupLink.rel = 'noopener noreferrer';
-  setupLink.textContent = 'How to set up ng-devtools';
+  setupLink.textContent = 'How to set up Pangular Inspector';
   const newTab = document.createElement('span');
   newTab.classList.add('sr-only');
   newTab.textContent = ' (opens in a new tab)';

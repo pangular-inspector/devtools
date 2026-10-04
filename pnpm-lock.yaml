@@ -37,7 +37,7 @@ importers:
       '@ngrx/signals':
         specifier: ^22.0.1
         version: 22.0.1(@angular/core@22.1.7(@angular/compiler@22.1.7)(rxjs@7.8.2)(zone.js@0.16.3))(rxjs@7.8.2)
-      '@pangular-inspector/core':
+      '@pangular-inspector/devtools':
         specifier: workspace:*
         version: link:packages/ng-devtools
       devframe:
@@ -331,7 +331,7 @@ importers:
       '@angular/compiler-cli':
         specifier: ^22.1.0
         version: 22.1.7(@angular/compiler@22.1.7)(typescript@6.0.3)
-      '@pangular-inspector/core':
+      '@pangular-inspector/devtools':
         specifier: workspace:*
         version: link:../../packages/ng-devtools
       typescript:

@@ -32,7 +32,7 @@ This guide adds the devtools to an *Analog app. Everything runs on the *Vite dev
 
 <ngmd-workflow>
   <ngmd-step title="Install the package">
-    Add <code>@pangular-inspector/core</code> and <code>devframe</code>.
+    Add <code>@pangular-inspector/devtools</code> and <code>devframe</code>.
   </ngmd-step>
   <ngmd-step title="Add the Vite plugin">
     Register it next to <code>analog()</code> in <code>vite.config.ts</code>.
@@ -48,19 +48,19 @@ This guide adds the devtools to an *Analog app. Everything runs on the *Vite dev
 ## Step 1: Install
 
 ```bash group="install" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220" active
-pnpm add @pangular-inspector/core devframe
+pnpm add @pangular-inspector/devtools devframe
 ```
 
 ```bash group="install" name="npm" image="https://cdn.simpleicons.org/npm/CB3837"
-npm install @pangular-inspector/core devframe
+npm install @pangular-inspector/devtools devframe
 ```
 
 ```bash group="install" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
-yarn add @pangular-inspector/core devframe
+yarn add @pangular-inspector/devtools devframe
 ```
 
 ```bash group="install" name="bun" image="https://bun.sh/logo.svg"
-bun add @pangular-inspector/core devframe
+bun add @pangular-inspector/devtools devframe
 ```
 
 ## Step 2: Add the Vite plugin
@@ -70,7 +70,7 @@ Add the plugin after `analog()`:
 ```ts {3,7}
 // vite.config.ts
 import analog from '@analogjs/platform';
-import ngDevtools from '@pangular-inspector/core/vite';
+import ngDevtools from '@pangular-inspector/devtools/vite';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => ({
@@ -106,7 +106,7 @@ import {App} from './app/app';
 import {appConfig} from './app/app.config';
 
 bootstrapApplication(App, appConfig).then(() => {
-  if (import.meta.env.DEV) void import('@pangular-inspector/core/overlay');
+  if (import.meta.env.DEV) void import('@pangular-inspector/devtools/overlay');
 });
 ```
 
@@ -139,7 +139,7 @@ Analog's own `load()` fetches and API calls show in the Analog dock without extr
 import {provideHttpClient, withFetch} from '@angular/common/http';
 import {ApplicationConfig} from '@angular/core';
 import {provideFileRouter} from '@analogjs/router';
-import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/core/http';
+import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/devtools/http';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -164,7 +164,7 @@ pnpm analog:dev
 The script builds the devtools package first, then starts the Vite dev server.
 
 <ngmd-alert severity="helpful">
-  The demo aliases <code>@pangular-inspector/core/overlay</code> to the built package in its <code>vite.config.ts</code>. Your app does not need that alias.
+  The demo aliases <code>@pangular-inspector/devtools/overlay</code> to the built package in its <code>vite.config.ts</code>. Your app does not need that alias.
 </ngmd-alert>
 
 ## Where to next

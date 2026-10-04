@@ -15,11 +15,11 @@ Everything is on when you leave the options out. You set them once, on the serve
 
 These three functions take the same options:
 
-| Function              | Import                              | Setup                                                           |
-| --------------------- | ----------------------------------- | --------------------------------------------------------------- |
-| `initNgDevtoolsHub()` | `@pangular-inspector/core/hub`      | [Angular CLI and Express](./express.md)                         |
-| `ngDevtools()`        | `@pangular-inspector/core/vite`     | [Vite and Analog](./vite.md)                                    |
-| `createNgDevtools()`  | `@pangular-inspector/core/devframe` | A custom devframe host, such as `initDevframe()` without a hub. |
+| Function              | Import                                  | Setup                                                           |
+| --------------------- | --------------------------------------- | --------------------------------------------------------------- |
+| `initNgDevtoolsHub()` | `@pangular-inspector/devtools/hub`      | [Angular CLI and Express](./express.md)                         |
+| `ngDevtools()`        | `@pangular-inspector/devtools/vite`     | [Vite and Analog](./vite.md)                                    |
+| `createNgDevtools()`  | `@pangular-inspector/devtools/devframe` | A custom devframe host, such as `initDevframe()` without a hub. |
 
 The `pangular` binary reads the same options from a JSON file, for `dev`, `build` and `mcp`. See [Config file](./cli.md#config-file).
 
@@ -30,7 +30,7 @@ Pass the options next to the [access options](../security.md#express-hub) `auth`
 ```ts {8-10}
 // src/server.ts
 import express from 'express';
-import {initNgDevtoolsHub} from '@pangular-inspector/core/hub';
+import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
 
 const app = express();
 const devtools = initNgDevtoolsHub({
@@ -49,7 +49,7 @@ Pass them to `ngDevtools()`, next to the [access options](../security.md#vite-pl
 ```ts {9-12}
 // vite.config.ts
 import analog from '@analogjs/platform';
-import ngDevtools from '@pangular-inspector/core/vite';
+import ngDevtools from '@pangular-inspector/devtools/vite';
 import {defineConfig} from 'vite';
 
 export default defineConfig({
@@ -65,13 +65,13 @@ export default defineConfig({
 
 ### Custom devframe host
 
-The default export of `@pangular-inspector/core/devframe` uses the defaults. Call `createNgDevtools()` to pass options:
+The default export of `@pangular-inspector/devtools/devframe` uses the defaults. Call `createNgDevtools()` to pass options:
 
 ```ts {7-9}
 // src/server.ts
 import express from 'express';
 import {initDevframe} from 'devframe/initiate';
-import {createNgDevtools} from '@pangular-inspector/core/devframe';
+import {createNgDevtools} from '@pangular-inspector/devtools/devframe';
 
 const app = express();
 const devtools = initDevframe(createNgDevtools({agent: {readOnly: true}}), {
@@ -84,10 +84,10 @@ app.use(devtools.nodeMiddleware);
 
 ### Type
 
-`@pangular-inspector/core/config` exports the type. The hub and Vite entry points export it too.
+`@pangular-inspector/devtools/config` exports the type. The hub and Vite entry points export it too.
 
 ```ts
-// @pangular-inspector/core/config
+// @pangular-inspector/devtools/config
 type NgDevtoolsInspector =
   | 'components'
   | 'injectors'

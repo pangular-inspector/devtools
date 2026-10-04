@@ -17,7 +17,7 @@ The short id a page claims when the overlay starts, kept in `sessionStorage` so 
 _Avoid_: tab id, session id, client id
 
 **Overlay**:
-The script the app imports in `main.ts` in development only (`@pangular-inspector/core/overlay`). It finds the server, starts the collectors and adds the floating button. It reads the page; it never changes it on its own.
+The script the app imports in `main.ts` in development only (`@pangular-inspector/devtools/overlay`). It finds the server, starts the collectors and adds the floating button. It reads the page; it never changes it on its own.
 _Avoid_: content script, agent, injected script
 
 **Collector**:

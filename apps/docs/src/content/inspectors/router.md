@@ -97,7 +97,7 @@ Route config mistakes, each with a fix:
 
 Each finding says whether Angular throws, warns or does not warn. The lint skips lazy routes that have not loaded. It runs again after each navigation and config change, and keeps the current findings on screen while it does. Click **Check again** to rerun it.
 
-If no check could run, the view says **No checks ran** and why: the page runs in events-only mode, or it has not reported its route config yet. If the DevTools server does not answer, the view shows an error with **Retry**.
+If no check could run, the view says **No checks ran** and why: the page runs in events-only mode, or it has not reported its route config yet. If the devtools server does not answer, the view shows an error with **Retry**.
 
 ### Source route config
 

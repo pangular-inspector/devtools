@@ -1,6 +1,6 @@
 # Angular Native demo
 
-A small [Angular Native](https://ng-native.com) app (Expo, React Native's Fabric renderer) wired to Pangular Inspector with `@pangular-inspector/core/overlay-angular-native`. It gives the live tabs something to show:
+A small [Angular Native](https://ng-native.com) app (Expo, React Native's Fabric renderer) wired to Pangular Inspector with `@pangular-inspector/devtools/overlay-angular-native`. It gives the live tabs something to show:
 
 | File                         | What it covers                                              |
 | ---------------------------- | ----------------------------------------------------------- |

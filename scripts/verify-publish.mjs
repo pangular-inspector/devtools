@@ -4,7 +4,7 @@
  * package into it from that registry, wire the documented setup, build it, and check the hub
  * answers.
  *
- * The workspace links `@pangular-inspector/core` to its TypeScript sources, so nothing else
+ * The workspace links `@pangular-inspector/devtools` to its TypeScript sources, so nothing else
  * here checks what npm actually gets: `publishConfig.exports`, the `files` list, the bundled panel
  * in `dist/public`, and dependencies that resolve by version from a registry.
  *
@@ -248,14 +248,14 @@ function newest(name, range) {
 const OVERLAY_CLI = `bootstrapApplication(App, appConfig)
   .then(() => {
     if (typeof ngDevMode === 'undefined' || ngDevMode) {
-      return import('@pangular-inspector/core/overlay');
+      return import('@pangular-inspector/devtools/overlay');
     }
     return undefined;
   })
   .catch((err) => console.error(err));`;
 
 const OVERLAY_VITE = `bootstrapApplication(App, appConfig).then(() => {
-  if (import.meta.env.DEV) void import('@pangular-inspector/core/overlay');
+  if (import.meta.env.DEV) void import('@pangular-inspector/devtools/overlay');
 });`;
 
 /** The hub answers its connection file and serves the panel the package bundles. */
@@ -308,7 +308,7 @@ async function angularCli(version) {
   replaceIn(
     server,
     "import express from 'express';",
-    "import express from 'express';\nimport { initNgDevtoolsHub } from '@pangular-inspector/core/hub';",
+    "import express from 'express';\nimport { initNgDevtoolsHub } from '@pangular-inspector/devtools/hub';",
   );
   replaceIn(
     server,
@@ -352,7 +352,7 @@ async function analog(version) {
   replaceIn(
     config,
     "import analog from '@analogjs/platform';",
-    "import analog from '@analogjs/platform';\nimport ngDevtools from '@pangular-inspector/core/vite';",
+    "import analog from '@analogjs/platform';\nimport ngDevtools from '@pangular-inspector/devtools/vite';",
   );
   replaceIn(config, 'analog(),', 'analog(),\n    ngDevtools(),');
   replaceIn(path.join(app, 'src/main.ts'), 'bootstrapApplication(App, appConfig);', OVERLAY_VITE);

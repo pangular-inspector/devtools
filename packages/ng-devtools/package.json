@@ -1,5 +1,5 @@
 {
-  "name": "@pangular-inspector/core",
+  "name": "@pangular-inspector/devtools",
   "version": "0.0.6",
   "description": "Pangular Inspector, the unified Angular devtools. Inspect components, signals, DI, and routes. Runs standalone, embedded, or over MCP.",
   "license": "MIT",

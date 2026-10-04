@@ -1,6 +1,14 @@
 # Changelog
 
-All notable changes to `@pangular-inspector/core` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com).
+All notable changes to `@pangular-inspector/devtools` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com).
+
+## Unreleased
+
+### Upgrade notes
+
+- The package is renamed from `@santoshyadavdev/ng-devtools` to `@pangular-inspector/devtools`. Update your `package.json` and imports.
+- The CLI command is renamed from `ng-devtools` to `pangular`.
+- The project is now called Pangular Inspector, the unified Angular devtools.
 
 ## 0.0.6
 

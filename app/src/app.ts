@@ -108,9 +108,9 @@ const NATIVESCRIPT_SETUP: ComingSoonInfo = {
   color: '#3c5afd',
   plansTitle: 'Set up an app',
   plans: [
-    'Install @pangular-inspector/core and @valor/nativescript-websockets',
+    'Install @pangular-inspector/devtools and @valor/nativescript-websockets',
     'Call initNativeScriptOverlay() in main.ts, before the app bootstraps',
-    'Run pangular dev --no-auth in the app, then open the Angular dock',
+    'Run npx pangular dev --no-auth in the app, then open the Angular dock',
   ],
   link: {
     label: 'NativeScript setup guide',

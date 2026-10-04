@@ -9,7 +9,7 @@ description: Send live components, signals, injectors and NgRx stores from an An
 
 # Angular Native
 
-[Angular Native](https://ng-native.com) renders *Angular onto React Native's Fabric renderer, so the app has no DOM for the [browser overlay](./overlay.md) to walk. The `@pangular-inspector/core/overlay-angular-native` entry point walks Angular Native's own node tree instead and sends the same live data to a devtools server that runs on your machine.
+[Angular Native](https://ng-native.com) renders *Angular onto React Native's Fabric renderer, so the app has no DOM for the [browser overlay](./overlay.md) to walk. The `@pangular-inspector/devtools/overlay-angular-native` entry point walks Angular Native's own node tree instead and sends the same live data to a devtools server that runs on your machine.
 
 ## What it shows
 
@@ -59,7 +59,7 @@ The [Angular Native demo](../contributing/demo-apps.md#angular-native-demo) (`ex
 
 <ngmd-workflow>
   <ngmd-step title="Install the package">
-    Add <code>&#64;pangular-inspector/core</code> and <code>devframe</code> to the app, as on the <a href="./installation.md">installation</a> page.
+    Add <code>&#64;pangular-inspector/devtools</code> and <code>devframe</code> to the app, as on the <a href="./installation.md">installation</a> page.
   </ngmd-step>
   <ngmd-step title="Start the overlay after mount()">
     Pass the root node of the mounted app. The check keeps the overlay out of release builds.
@@ -79,7 +79,7 @@ The [Angular Native demo](../contributing/demo-apps.md#angular-native-demo) (`ex
 import {AppRegistry, Image, Platform, processColor} from 'react-native';
 import {mount} from '@ng-native/platform';
 import {getFabricUIManager, registerPlatformComponents} from '@ng-native/fabric';
-import {initAngularNativeOverlay} from '@pangular-inspector/core/overlay-angular-native';
+import {initAngularNativeOverlay} from '@pangular-inspector/devtools/overlay-angular-native';
 import {App} from './app/app.ts';
 
 registerPlatformComponents(Platform.OS);
@@ -98,7 +98,7 @@ AppRegistry.registerRunnable('main', ({rootTag}) => {
 ### Start the server
 
 ```bash
-npx @pangular-inspector/core dev --no-auth
+npx @pangular-inspector/devtools dev --no-auth
 ```
 
 When it is ready, the server prints the Angular Native view on its own line:

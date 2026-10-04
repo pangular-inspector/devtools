@@ -26,7 +26,7 @@ import {appConfig} from './app/app.config';
 bootstrapApplication(App, appConfig)
   .then(() => {
     if (typeof ngDevMode === 'undefined' || ngDevMode) {
-      return import('@pangular-inspector/core/overlay');
+      return import('@pangular-inspector/devtools/overlay');
     }
     return undefined;
   })
@@ -40,7 +40,7 @@ import {App} from './app/app';
 import {appConfig} from './app/app.config';
 
 bootstrapApplication(App, appConfig).then(() => {
-  if (import.meta.env.DEV) void import('@pangular-inspector/core/overlay');
+  if (import.meta.env.DEV) void import('@pangular-inspector/devtools/overlay');
 });
 ```
 
@@ -106,7 +106,7 @@ import {appConfig} from './app/app.config';
 
 bootstrapApplication(App, appConfig).then(async () => {
   if (typeof ngDevMode === 'undefined' || ngDevMode) {
-    const {initOverlay} = await import('@pangular-inspector/core/overlay');
+    const {initOverlay} = await import('@pangular-inspector/devtools/overlay');
     const dispose = await initOverlay({baseURL: '/__my-devtools/'});
   }
 });
@@ -128,7 +128,7 @@ Call `disposeOverlay` to turn the overlay off:
 
 ```ts
 // src/app/devtools-toggle.ts
-import {disposeOverlay} from '@pangular-inspector/core/overlay';
+import {disposeOverlay} from '@pangular-inspector/devtools/overlay';
 
 export async function stopDevtools() {
   await disposeOverlay();
@@ -151,9 +151,11 @@ import {appConfig} from './app/app.config';
 
 bootstrapApplication(App, appConfig).then(() => {
   if (typeof ngDevMode === 'undefined' || ngDevMode) {
-    return Promise.all([import('@pangular-inspector/core/overlay'), import('@ngrx/signals')]).then(
-      ([devtools, {patchState, watchState}]) =>
-        devtools.registerNgrxSignals({patchState, watchState}),
+    return Promise.all([
+      import('@pangular-inspector/devtools/overlay'),
+      import('@ngrx/signals'),
+    ]).then(([devtools, {patchState, watchState}]) =>
+      devtools.registerNgrxSignals({patchState, watchState}),
     );
   }
   return undefined;

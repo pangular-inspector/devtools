@@ -364,7 +364,7 @@ describe('router tool text', () => {
       {},
       5_000,
     );
-    expect(early).toContain('**succeeded** (before DevTools connected, no details)');
+    expect(early).toContain('**succeeded** (before Pangular Inspector connected, no details)');
     expect(explainNavigationText(state({ navigations }), { url: 'nope' }, 5_000)).toContain(
       'No recent navigation matches',
     );
@@ -395,13 +395,13 @@ describe('router tool text', () => {
     expect(text).toContain('report too: `bbbb`');
   });
 
-  it('notes navigations that happened before DevTools connected', () => {
+  it('notes navigations that happened before Pangular Inspector connected', () => {
     const text = explainNavigationText(
       state({ navigations: [nav(3, { beforeConnect: true, endedAt: undefined, earlier: 2 })] }),
       {},
       5_000,
     );
-    expect(text).toContain('2 earlier navigation(s) happened before DevTools connected');
+    expect(text).toContain('2 earlier navigation(s) happened before Pangular Inspector connected');
     expect(explainNavigationText(state(), {}, 1_000)).toContain('earlier ones are not visible');
   });
 

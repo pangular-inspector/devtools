@@ -38,7 +38,7 @@ Without `registerNgrxSignals`, a restore changes the store but skips this listen
 
 ## Register patchState and watchState
 
-Call `registerNgrxSignals({ patchState, watchState })` from `@pangular-inspector/core/overlay` once, after the app starts. Load both modules with dynamic imports in development only, so production bundles do not include the devtools.
+Call `registerNgrxSignals({ patchState, watchState })` from `@pangular-inspector/devtools/overlay` once, after the app starts. Load both modules with dynamic imports in development only, so production bundles do not include the devtools.
 
 ```ts group="register" name="Angular CLI" active
 // src/main.ts
@@ -52,7 +52,7 @@ bootstrapApplication(App, appConfig)
       return ref
         .whenStable()
         .then(() =>
-          Promise.all([import('@pangular-inspector/core/overlay'), import('@ngrx/signals')]),
+          Promise.all([import('@pangular-inspector/devtools/overlay'), import('@ngrx/signals')]),
         )
         .then(([devtools, {patchState, watchState}]) =>
           devtools.registerNgrxSignals({patchState, watchState}),
@@ -72,7 +72,7 @@ import {appConfig} from './app/app.config';
 bootstrapApplication(App, appConfig).then(async () => {
   if (import.meta.env.DEV) {
     const [devtools, {patchState, watchState}] = await Promise.all([
-      import('@pangular-inspector/core/overlay'),
+      import('@pangular-inspector/devtools/overlay'),
       import('@ngrx/signals'),
     ]);
     devtools.registerNgrxSignals({patchState, watchState});

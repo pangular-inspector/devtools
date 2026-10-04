@@ -9,7 +9,7 @@ description: Run the devtools from the command line, build a static report, or s
 
 # Standalone CLI
 
-The package installs a `pangular` binary. Run it from the root of your Angular workspace, or point it there with `--root`. It scans the source files in that folder, so it works without starting your app.
+The package installs a `pangular` binary (called `ng-devtools` up to 0.0.6). Run it from the root of your Angular workspace, or point it there with `--root`. It scans the source files in that folder, so it works without starting your app.
 
 ## Commands
 
@@ -49,19 +49,19 @@ A missing `--config` file or invalid JSON stops the command with an error.
 ### Run it without installing
 
 ```bash group="run" name="npx" image="https://cdn.simpleicons.org/npm/CB3837" active
-npx @pangular-inspector/core dev
+npx @pangular-inspector/devtools dev
 ```
 
 ```bash group="run" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220"
-pnpm dlx @pangular-inspector/core dev
+pnpm dlx @pangular-inspector/devtools dev
 ```
 
 ```bash group="run" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
-yarn dlx @pangular-inspector/core dev
+yarn dlx -p @pangular-inspector/devtools pangular dev
 ```
 
 ```bash group="run" name="bun" image="https://bun.sh/logo.svg"
-bunx @pangular-inspector/core dev
+bunx --package @pangular-inspector/devtools pangular dev
 ```
 
 ### Run the installed binary
@@ -78,10 +78,10 @@ npx pangular mcp
 
 ### Start it
 
-The default command starts a local server with the devtools UI. `dev` is optional: `npx @pangular-inspector/core` does the same.
+The default command starts a local server with the devtools UI. `dev` is optional: `npx @pangular-inspector/devtools` does the same.
 
 ```bash
-npx @pangular-inspector/core dev --port 9999 --open
+npx @pangular-inspector/devtools dev --port 9999 --open
 ```
 
 When the server is ready, it prints the version, the panel URL, the panel URL for [Angular Native](./angular-native.md) apps and the MCP endpoint:
@@ -131,7 +131,7 @@ When no app is connected, the tabs show what your source declares. An [Angular N
 `build` writes a self-contained static copy of the devtools with the source scan baked in: components, routes, signals, providers, pipes, NgRx declarations and build metadata.
 
 ```bash
-npx @pangular-inspector/core build --outDir dist-report
+npx @pangular-inspector/devtools build --outDir dist-report
 ```
 
 ### Report flags
@@ -160,7 +160,7 @@ The output is static files. Open it offline or host it on any static file server
 `mcp` starts an *MCP server over stdio for coding agents:
 
 ```bash
-npx @pangular-inspector/core mcp
+npx @pangular-inspector/devtools mcp
 ```
 
 Your agent client runs this command for you. [MCP server](../agents/mcp-server.md) covers client setup.

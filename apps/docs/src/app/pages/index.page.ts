@@ -192,13 +192,13 @@ import {writeToClipboard} from '../utils/clipboard';
               aria-label="src/server.ts and src/main.ts"
               class="p-4 text-sm overflow-x-auto text-zinc-700 dark:text-zinc-300 leading-relaxed"
             ><code><span class="text-[color:var(--accent-strong)] font-semibold">import</span> {{ '{' }} initNgDevtoolsHub {{ '}' }}
-  <span class="text-[color:var(--accent-strong)] font-semibold">from</span> '@pangular-inspector/core/hub';
+  <span class="text-[color:var(--accent-strong)] font-semibold">from</span> '@pangular-inspector/devtools/hub';
 
 <span class="text-[color:var(--accent-strong)] font-semibold">const</span> devtools = initNgDevtoolsHub({{ '{' }} ws: false {{ '}' }});
 app.use(devtools.nodeMiddleware);
 
 <span class="text-zinc-500 dark:text-zinc-400">// src/main.ts</span>
-<span class="text-[color:var(--accent-strong)] font-semibold">if</span> (typeof ngDevMode === 'undefined' || ngDevMode) <span class="text-[color:var(--accent-strong)] font-semibold">import</span>('@pangular-inspector/core/overlay');</code></pre>
+<span class="text-[color:var(--accent-strong)] font-semibold">if</span> (typeof ngDevMode === 'undefined' || ngDevMode) <span class="text-[color:var(--accent-strong)] font-semibold">import</span>('@pangular-inspector/devtools/overlay');</code></pre>
           </div>
           <div
             class="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden"
@@ -422,22 +422,22 @@ export default class Home implements AfterViewInit {
   readonly installCommands = [
     {
       pm: 'npm',
-      cmd: 'npm install @pangular-inspector/core devframe',
+      cmd: 'npm install @pangular-inspector/devtools devframe',
       logo: 'https://cdn.simpleicons.org/npm/CB3837',
     },
     {
       pm: 'pnpm',
-      cmd: 'pnpm add @pangular-inspector/core devframe',
+      cmd: 'pnpm add @pangular-inspector/devtools devframe',
       logo: 'https://cdn.simpleicons.org/pnpm/F69220',
     },
     {
       pm: 'yarn',
-      cmd: 'yarn add @pangular-inspector/core devframe',
+      cmd: 'yarn add @pangular-inspector/devtools devframe',
       logo: 'https://cdn.simpleicons.org/yarn/2C8EBB',
     },
     {
       pm: 'bun',
-      cmd: 'bun add @pangular-inspector/core devframe',
+      cmd: 'bun add @pangular-inspector/devtools devframe',
       logo: 'https://bun.sh/logo.svg',
     },
   ];

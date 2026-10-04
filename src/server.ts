@@ -6,7 +6,7 @@ import {
 } from '@angular/ssr/node';
 import express from 'express';
 import { join } from 'node:path';
-import { initNgDevtoolsHub } from '@pangular-inspector/core/hub';
+import { initNgDevtoolsHub } from '@pangular-inspector/devtools/hub';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 

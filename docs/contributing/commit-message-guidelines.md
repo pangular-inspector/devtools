@@ -107,7 +107,7 @@ route with query parameters never showed as active.
 ```
 
 ```
-chore(release): ng-devtools 0.0.5
+chore(release): 0.0.7
 ```
 
 ```

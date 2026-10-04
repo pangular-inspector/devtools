@@ -36,7 +36,7 @@ The package ships a `pangular` binary. Its `mcp` command starts an MCP server on
 ### Add the stdio server to your client
 
 ```bash group="stdio" name="Claude Code" active
-claude mcp add ng-devtools -- npx @pangular-inspector/core mcp --root /path/to/your-app
+claude mcp add ng-devtools -- npx @pangular-inspector/devtools mcp --root /path/to/your-app
 ```
 
 ```json group="stdio" name="Cursor"
@@ -45,7 +45,7 @@ claude mcp add ng-devtools -- npx @pangular-inspector/core mcp --root /path/to/y
   "mcpServers": {
     "ng-devtools": {
       "command": "npx",
-      "args": ["@pangular-inspector/core", "mcp", "--root", "${workspaceFolder}"]
+      "args": ["@pangular-inspector/devtools", "mcp", "--root", "${workspaceFolder}"]
     }
   }
 }
@@ -58,7 +58,7 @@ claude mcp add ng-devtools -- npx @pangular-inspector/core mcp --root /path/to/y
     "ng-devtools": {
       "type": "stdio",
       "command": "npx",
-      "args": ["@pangular-inspector/core", "mcp", "--root", "${workspaceFolder}"]
+      "args": ["@pangular-inspector/devtools", "mcp", "--root", "${workspaceFolder}"]
     }
   }
 }

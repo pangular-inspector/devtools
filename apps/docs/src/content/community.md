@@ -43,7 +43,7 @@ Pangular Inspector is open source under the MIT license. Here is where to reach 
 
 A good bug report saves a round-trip. Include:
 
-- your Angular version and the version of `@pangular-inspector/core`,
+- your Angular version and the version of `@pangular-inspector/devtools`,
 - your setup: Angular CLI and Express, Vite and Analog, or the standalone CLI,
 - the tab that misbehaves, and what you expected to see,
 - a small reproduction, if you can.

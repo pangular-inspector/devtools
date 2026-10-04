@@ -19,7 +19,7 @@ The timeline and fault rules need the interceptor. The hydration warnings need t
 // src/app/app.config.ts
 import {ApplicationConfig} from '@angular/core';
 import {provideHttpClient, withFetch, withInterceptors} from '@angular/common/http';
-import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/core/http';
+import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/devtools/http';
 import {authInterceptor} from './auth.interceptor';
 
 export const appConfig: ApplicationConfig = {

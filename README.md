@@ -5,10 +5,10 @@ The unified Angular devtools. Inspect Angular component trees, signals, dependen
 ## Get started
 
 ```sh
-npm install @pangular-inspector/core devframe
+npm install @pangular-inspector/devtools devframe
 ```
 
-Then follow the [installation guide](./apps/docs/src/content/getting-started/installation.md) for your setup: Angular CLI with Express, Vite and Analog, the standalone CLI, or [Angular Native](./apps/docs/src/content/getting-started/angular-native.md). For a coding agent, run `npx @pangular-inspector/core mcp`.
+Then follow the [installation guide](./apps/docs/src/content/getting-started/installation.md) for your setup: Angular CLI with Express, Vite and Analog, the standalone CLI, or [Angular Native](./apps/docs/src/content/getting-started/angular-native.md). For a coding agent, run `npx @pangular-inspector/devtools mcp`.
 
 ## Documentation
 

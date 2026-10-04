@@ -47,13 +47,13 @@ The [SSR & HTTP tab](../inspectors/ssr-http.md) records every `HttpClient` call 
 
 ## Step 1: Add the providers
 
-Both functions come from `@pangular-inspector/core/http`.
+Both functions come from `@pangular-inspector/devtools/http`.
 
 ```ts {4,10-11}
 // src/app/app.config.ts
 import {ApplicationConfig} from '@angular/core';
 import {provideHttpClient, withFetch} from '@angular/common/http';
-import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/core/http';
+import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/devtools/http';
 import {provideClientHydration} from '@angular/platform-browser';
 
 export const appConfig: ApplicationConfig = {
@@ -83,7 +83,7 @@ Register `withNgDevtools()` before your own interceptors. Then it records reques
 import {provideHttpClient, withFetch, withInterceptors} from '@angular/common/http';
 import {ApplicationConfig} from '@angular/core';
 import {provideClientHydration} from '@angular/platform-browser';
-import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/core/http';
+import {provideNgDevtoolsHttp, withNgDevtools} from '@pangular-inspector/devtools/http';
 import {authInterceptor} from './auth.interceptor';
 
 export const appConfig: ApplicationConfig = {
@@ -107,7 +107,7 @@ The interceptor on the server hands its calls to the devtools through the Node p
 // src/server.ts
 import {AngularNodeAppEngine, createNodeRequestHandler} from '@angular/ssr/node';
 import express from 'express';
-import {initNgDevtoolsHub} from '@pangular-inspector/core/hub';
+import {initNgDevtoolsHub} from '@pangular-inspector/devtools/hub';
 
 const app = express();
 const angularApp = new AngularNodeAppEngine();
