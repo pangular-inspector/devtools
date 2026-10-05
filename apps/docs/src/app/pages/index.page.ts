@@ -288,6 +288,7 @@ app.use(devtools.nodeMiddleware);
               <span class="text-base font-semibold text-zinc-900 dark:text-zinc-100">{{
                 m.name
               }}</span>
+              <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">{{ m.role }}</span>
               <span class="text-sm text-zinc-500 dark:text-zinc-400">&#64;{{ m.login }}</span>
             </a>
           }
@@ -512,8 +513,8 @@ export default class Home implements AfterViewInit {
   ];
 
   readonly maintainers = [
-    {name: 'Santosh Yadav', login: 'santoshyadavdev'},
-    {name: 'Erkam Yaman', login: 'erkamyaman'},
+    {name: 'Erkam Yaman', login: 'erkamyaman', role: 'Lead maintainer'},
+    {name: 'Santosh Yadav', login: 'santoshyadavdev', role: 'Maintainer'},
   ];
 
   readonly comingSoon = [

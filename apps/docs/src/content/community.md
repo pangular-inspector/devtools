@@ -14,10 +14,10 @@ Pangular Inspector is open source under the MIT license. Here is where to reach 
 ## Maintainers
 
 <ngmd-card-grid columns="2">
-  <ngmd-card avatar image="https://github.com/santoshyadavdev.png?size=96" title="Santosh Yadav" link="https://github.com/santoshyadavdev" cta="GitHub">
-    Maintainer.
-  </ngmd-card>
   <ngmd-card avatar image="https://github.com/erkamyaman.png?size=96" title="Erkam Yaman" link="https://github.com/erkamyaman" cta="GitHub">
+    Lead maintainer.
+  </ngmd-card>
+  <ngmd-card avatar image="https://github.com/santoshyadavdev.png?size=96" title="Santosh Yadav" link="https://github.com/santoshyadavdev" cta="GitHub">
     Maintainer.
   </ngmd-card>
 </ngmd-card-grid>
