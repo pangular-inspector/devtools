@@ -1,8 +1,14 @@
 # Pangular Inspector
 
+[![npm version](https://img.shields.io/npm/v/@pangular-inspector/devtools)](https://www.npmjs.com/package/@pangular-inspector/devtools)
+[![npm downloads](https://img.shields.io/npm/dm/@pangular-inspector/devtools)](https://www.npmjs.com/package/@pangular-inspector/devtools)
+[![license](https://img.shields.io/npm/l/@pangular-inspector/devtools)](https://www.npmjs.com/package/@pangular-inspector/devtools)
+
 The unified Angular devtools. Inspect Angular component trees, signals, dependency injection, routes, forms, pipes and NgRx stores at dev time, build time, or through a coding agent. Built with [Devframe](https://devfra.me) so the same tool runs as an embedded panel, standalone CLI, static report, MCP server, or Chrome DevTools extension.
 
 ## Get started
+
+The package is published on npm as [`@pangular-inspector/devtools`](https://www.npmjs.com/package/@pangular-inspector/devtools).
 
 ```sh
 npm install @pangular-inspector/devtools devframe

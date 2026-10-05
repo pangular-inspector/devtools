@@ -9,6 +9,9 @@
     "directory": "packages/devtools"
   },
   "homepage": "https://pangular-inspector.dev",
+  "bugs": {
+    "url": "https://github.com/pangular-inspector/devtools/issues"
+  },
   "type": "module",
   "bin": {
     "pangular": "./bin.mjs"
