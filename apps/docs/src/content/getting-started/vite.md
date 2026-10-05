@@ -3,7 +3,7 @@ title: Vite and Analog
 description: Add the devtools Vite plugin to an Analog app.
 ---
 
-<ngmd-hero title="Vite and Analog" logo="/logos/vite.svg" gradient>
+<ngmd-hero title="Vite and Analog" logo="/logos/vite-mark.svg" gradient>
   One plugin next to <code>analog()</code>, one import in <code>main.ts</code>. The hub mounts on the Vite dev server.
 </ngmd-hero>
 

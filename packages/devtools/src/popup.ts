@@ -176,12 +176,23 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
   fab.setAttribute('aria-label', 'Toggle Pangular Inspector');
   fab.setAttribute('aria-expanded', 'false');
   fab.title = 'Pangular Inspector';
-  // The Angular shield, from the wordmark on angular.dev.
   fab.innerHTML =
-    `<svg width="22" height="22" viewBox="0 0 223 236" fill="currentColor" aria-hidden="true">` +
-    `<path d="m222.077 39.192-8.019 125.923L137.387 0l84.69 39.192Zm-53.105 162.825-57.933 33.056` +
-    `-57.934-33.056 11.783-28.556h92.301l11.783 28.556ZM111.039 62.675l30.357 73.803H80.681l30.358` +
-    `-73.803ZM7.937 165.115 0 39.192 84.69 0 7.937 165.115Z"/></svg>`;
+    `<svg width="28" height="28" viewBox="-20 -11 280 280" aria-hidden="true">` +
+    `<defs><mask id="pi-fab-mask"><rect x="-60" y="-60" width="360" height="380" fill="#fff"/>` +
+    `<g fill="none" stroke="#000" stroke-width="30"><path d="M88 66 V196"/>` +
+    `<path d="M88 66 H143 L170 98 L143 130 H88 Z"/></g></mask>` +
+    `<clipPath id="pi-fab-clip"><rect x="-40" y="129" width="320" height="200"/></clipPath></defs>` +
+    `<g transform="rotate(-10 120 129)"><ellipse cx="120" cy="129" rx="128" ry="34" fill="none"` +
+    ` stroke="currentColor" stroke-width="10"/></g>` +
+    `<path mask="url(#pi-fab-mask)" fill="currentColor" d="M120 5 L238 46 L218 198 L120 253 L22 198 L2 46 Z"/>` +
+    `<g transform="rotate(-10 120 129)"><g clip-path="url(#pi-fab-clip)" fill="none">` +
+    `<ellipse class="ko" cx="120" cy="129" rx="128" ry="34" stroke-width="22"/>` +
+    `<ellipse cx="120" cy="129" rx="128" ry="34" stroke="currentColor" stroke-width="10"/></g>` +
+    `<g transform="translate(230.9 146.0) rotate(10) scale(1.5) translate(-4 -4)">` +
+    `<line class="ko" x1="9" y1="9" x2="21" y2="21" stroke-width="14" stroke-linecap="round"/>` +
+    `<circle class="ko-fill" r="16"/>` +
+    `<line x1="9" y1="9" x2="21" y2="21" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>` +
+    `<circle class="ko-fill" r="12" stroke="currentColor" stroke-width="5"/></g></g></svg>`;
 
   // Panel container
   const panel = document.createElement('div');
@@ -324,7 +335,8 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
       height: 44px;
       border-radius: 50%;
       border: none;
-      background: var(--pangular-accent, #f5a524);
+      --_fab-bg: var(--pangular-accent, #f5a524);
+      background: var(--_fab-bg);
       color: var(--pangular-accent-ink, #1c1300);
       cursor: pointer;
       touch-action: none;
@@ -335,7 +347,9 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
       transition: transform 0.15s, filter 0.15s;
     }
     .fab:hover { filter: brightness(1.1); transform: scale(1.08); }
-    .fab.open { background: var(--_fab-open); }
+    .fab.open { --_fab-bg: var(--_fab-open); }
+    .fab .ko { stroke: var(--_fab-bg); }
+    .fab .ko-fill { fill: var(--_fab-bg); }
     .fab.dragging {
       transition: none;
       cursor: grabbing;

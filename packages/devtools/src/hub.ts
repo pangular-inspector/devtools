@@ -9,9 +9,8 @@ import type { WsOriginRegistry } from 'devframe/rpc/transports/ws-server';
 import { isAllowedOrigin } from 'devframe/utils/origin';
 import { createPangular } from './devframe.ts';
 import { pickPangularConfig, type PangularConfig } from './config.ts';
+import { PANGULAR_LOGO_DATA_URI } from './brand.ts';
 import pkg from '../package.json' with { type: 'json' };
-
-const LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 223 236"><path fill="#F5A524" d="m222.077 39.192-8.019 125.923L137.387 0l84.69 39.192Zm-53.105 162.825-57.933 33.056-57.934-33.056 11.783-28.556h92.301l11.783 28.556ZM111.039 62.675l30.357 73.803H80.681l30.358-73.803ZM7.937 165.115 0 39.192 84.69 0 7.937 165.115Z"/></svg>`;
 
 export const PANGULAR_HUB_BASE = DEVFRAMES_HUB_BASE;
 
@@ -36,7 +35,7 @@ function hubUi() {
   const ui = createUi({
     branding: {
       productName: 'Pangular Inspector',
-      logo: `data:image/svg+xml,${encodeURIComponent(LOGO)}`,
+      logo: PANGULAR_LOGO_DATA_URI,
       primaryColor: '#f5a524',
     },
   });

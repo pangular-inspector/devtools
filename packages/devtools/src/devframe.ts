@@ -1,5 +1,6 @@
 import type { DevframeSetupInfo, RemoteAssets } from 'devframe';
 import { defineDevframe } from 'devframe';
+import { PANGULAR_LOGO_DATA_URI } from './brand.ts';
 import { getRoutes } from './rpc/get-routes.ts';
 import { getComponents } from './rpc/get-components.ts';
 import { getPipes } from './rpc/get-pipes.ts';
@@ -188,7 +189,7 @@ const pangular = defineDevframe({
   packageName: pkg.name,
   description: 'Inspect Angular component trees, signals, and routes at dev and build time.',
   homepage: 'https://pangular-inspector.dev',
-  icon: 'ph:angular-logo-duotone',
+  icon: PANGULAR_LOGO_DATA_URI,
   importMetaUrl: import.meta.url,
   clientAssets,
   dock: { visibility: 'false' },

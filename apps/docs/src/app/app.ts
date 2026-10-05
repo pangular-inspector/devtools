@@ -19,7 +19,6 @@ import {
   LucideMoon,
   LucideSearch,
   LucideSun,
-  LucideSunMoon,
   LucideX,
 } from '@lucide/angular';
 import {GithubIcon} from './ui/github-icon';
@@ -91,10 +90,25 @@ import {ContentBanners} from './components/content-banners';
 
         <a
           routerLink="/"
-          class="flex items-center gap-2 text-lg font-bold tracking-tight font-[Geist_Mono,ui-monospace,monospace]"
+          class="flex shrink-0 items-center gap-2 whitespace-nowrap text-lg font-semibold tracking-tight font-[Geist_Mono,ui-monospace,monospace]"
         >
-          <img src="/logo-mark.svg" alt="" class="size-[30px]" aria-hidden="true" />
-          {{ siteName }}
+          <img
+            src="/logo-mark-light.svg"
+            alt=""
+            width="31"
+            height="28"
+            class="h-7 w-auto dark:hidden"
+            aria-hidden="true"
+          />
+          <img
+            src="/logo-mark-dark.svg"
+            alt=""
+            width="31"
+            height="28"
+            class="hidden h-7 w-auto dark:block"
+            aria-hidden="true"
+          />
+          <span class="sr-only min-[480px]:not-sr-only sm:max-md:sr-only">{{ siteName }}</span>
         </a>
 
         @if (headerNav.length > 0) {
@@ -175,17 +189,14 @@ import {ContentBanners} from './components/content-banners';
           <span class="hidden sm:block h-4 w-px bg-zinc-300/60 dark:bg-zinc-700/60"></span>
           <button
             type="button"
-            (click)="theme.cycle()"
+            (click)="theme.toggle()"
             class="rounded p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            [attr.aria-label]="'Theme: ' + theme.mode()"
-            [title]="'Theme: ' + theme.mode()"
+            [attr.aria-label]="
+              theme.mode() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'
+            "
+            [title]="theme.mode() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
           >
-            <svg
-              [lucideIcon]="
-                theme.mode() === 'light' ? sunIcon : theme.mode() === 'dark' ? moonIcon : autoIcon
-              "
-              class="size-5"
-            ></svg>
+            <svg [lucideIcon]="theme.mode() === 'dark' ? sunIcon : moonIcon" class="size-5"></svg>
           </button>
         </div>
       </header>
@@ -296,7 +307,6 @@ export class App implements OnInit {
   readonly searchIcon = LucideSearch;
   readonly sunIcon = LucideSun;
   readonly moonIcon = LucideMoon;
-  readonly autoIcon = LucideSunMoon;
 
   readonly siteName = siteConfig.site.name;
   readonly githubUrl = siteConfig.site.githubUrl;

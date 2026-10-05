@@ -4,8 +4,7 @@
     <meta charset="utf-8" />
     <title>%SITE_NAME%</title>
     <meta name="description" content="%SITE_DESCRIPTION%" />
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#0a0a0a" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="%SITE_NAME%" />
     <meta property="og:title" content="%SITE_NAME%" />
@@ -21,9 +20,16 @@
     <meta name="twitter:image" content="%SITE_URL%/og.png" />
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="alternate icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="application-name" content="%SITE_NAME%" />
+    <meta name="apple-mobile-web-app-title" content="Pangular" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#f59e0b" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="msapplication-TileColor" content="#1c1a17" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -34,16 +40,11 @@
     <script>
       (function () {
         try {
-          var stored = localStorage.getItem('ngmd-theme');
-          var mode = stored === 'light' || stored === 'dark' ? stored : 'auto';
-          var resolved =
-            mode === 'auto'
-              ? matchMedia('(prefers-color-scheme: dark)').matches
-                ? 'dark'
-                : 'light'
-              : mode;
-          if (resolved === 'dark') document.documentElement.classList.add('dark');
-        } catch (_) {}
+          if (localStorage.getItem('ngmd-theme') !== 'light')
+            document.documentElement.classList.add('dark');
+        } catch (_) {
+          document.documentElement.classList.add('dark');
+        }
       })();
     </script>
   </head>

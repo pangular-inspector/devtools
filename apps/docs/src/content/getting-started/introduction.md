@@ -3,7 +3,7 @@ title: Introduction
 description: What the devtools inspect, and the ways you can run them.
 ---
 
-<ngmd-hero title="Pangular Inspector" logo="/logo-mark.svg" gradient>
+<ngmd-hero title="Pangular Inspector" logo="/logo-mark-light.svg" logo-dark="/logo-mark-dark.svg" gradient>
   Inspect components, signals, injectors, routes, forms, pipes, NgRx stores and HTTP calls. In the page, from the command line, or through a coding agent.
 </ngmd-hero>
 

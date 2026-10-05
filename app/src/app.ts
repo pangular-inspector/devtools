@@ -181,7 +181,7 @@ function readView(): View | null {
   template: `
     <header>
       <h1 class="brand">
-        <span class="mark" [class.ng-mark]="view() === 'angular'">
+        <span class="mark" [class.ng-mark]="view() === 'angular'" [class.pi-mark]="!view()">
           @if (view() === 'nativescript') {
             <svg width="22" height="22" viewBox="0 0 256 256" aria-hidden="true">
               <path
@@ -269,16 +269,81 @@ function readView(): View | null {
               />
             </svg>
           } @else {
-            <svg
-              width="20"
-              height="22"
-              viewBox="0 0 223 236"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                d="m222.077 39.192-8.019 125.923L137.387 0l84.69 39.192Zm-53.105 162.825-57.933 33.056-57.934-33.056 11.783-28.556h92.301l11.783 28.556ZM111.039 62.675l30.357 73.803H80.681l30.358-73.803ZM7.937 165.115 0 39.192 84.69 0 7.937 165.115Z"
-              />
+            <svg width="30" height="30" viewBox="0 0 500 500" aria-hidden="true">
+              <rect width="500" height="500" rx="112" fill="#1c1a17" />
+              <g transform="translate(250 252) scale(1.38) translate(-120 -129)">
+                <defs>
+                  <mask id="pi-mark-mask">
+                    <rect x="-60" y="-60" width="360" height="380" fill="#fff" />
+                    <g fill="none" stroke="#000" stroke-width="30" stroke-linejoin="miter">
+                      <path d="M88 66 V196" />
+                      <path d="M88 66 H143 L170 98 L143 130 H88 Z" />
+                    </g>
+                  </mask>
+                  <clipPath id="pi-mark-clip">
+                    <rect x="-40" y="129" width="320" height="200" />
+                  </clipPath>
+                </defs>
+                <g transform="rotate(-10 120 129)">
+                  <ellipse
+                    cx="120"
+                    cy="129"
+                    rx="128"
+                    ry="34"
+                    fill="none"
+                    stroke="#78350f"
+                    stroke-width="10"
+                  />
+                </g>
+                <g mask="url(#pi-mark-mask)">
+                  <path fill="#fbbf24" d="M120 5 L2 46 L22 198 L120 253 Z" />
+                  <path fill="#f59e0b" d="M120 5 L238 46 L218 198 L120 253 Z" />
+                </g>
+                <g transform="rotate(-10 120 129)">
+                  <ellipse
+                    clip-path="url(#pi-mark-clip)"
+                    cx="120"
+                    cy="129"
+                    rx="128"
+                    ry="34"
+                    fill="none"
+                    stroke="#1c1a17"
+                    stroke-width="22"
+                  />
+                  <ellipse
+                    clip-path="url(#pi-mark-clip)"
+                    cx="120"
+                    cy="129"
+                    rx="128"
+                    ry="34"
+                    fill="none"
+                    stroke="#fde68a"
+                    stroke-width="10"
+                  />
+                  <g transform="translate(230.9 146.0) rotate(10) scale(1.5) translate(-4 -4)">
+                    <line
+                      x1="9"
+                      y1="9"
+                      x2="21"
+                      y2="21"
+                      stroke="#1c1a17"
+                      stroke-width="14"
+                      stroke-linecap="round"
+                    />
+                    <circle r="16" fill="#1c1a17" />
+                    <line
+                      x1="9"
+                      y1="9"
+                      x2="21"
+                      y2="21"
+                      stroke="#fde68a"
+                      stroke-width="7"
+                      stroke-linecap="round"
+                    />
+                    <circle r="12" fill="#1c1a17" stroke="#fde68a" stroke-width="5" />
+                  </g>
+                </g>
+              </g>
             </svg>
           }
         </span>
@@ -437,6 +502,10 @@ function readView(): View | null {
       border-radius: 8px;
       background: color-mix(in srgb, var(--accent) 8%, transparent);
       box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+    }
+    .mark.pi-mark {
+      background: none;
+      box-shadow: none;
     }
     .mark.ng-mark {
       background: linear-gradient(

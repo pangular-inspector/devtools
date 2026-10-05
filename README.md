@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./apps/docs/public/press/logo/svg/app-icon-animated.svg" alt="Pangular Inspector logo" width="128" height="128" />
+</p>
+
 # Pangular Inspector
 
 The unified Angular devtools. Inspect Angular component trees, signals, dependency injection, routes, forms, pipes and NgRx stores at dev time, build time, or through a coding agent. Built with [Devframe](https://devfra.me) so the same tool runs as an embedded panel, standalone CLI, static report, MCP server, or Chrome DevTools extension.
@@ -18,6 +22,7 @@ Read the docs at [pangular-inspector.dev](https://pangular-inspector.dev). Their
 - [Inspectors](./apps/docs/src/content/inspectors/dashboard.md)
 - [Agent tools](./apps/docs/src/content/agents/mcp-server.md)
 - [Security](./apps/docs/src/content/security.md)
+- [Press kit](./apps/docs/src/content/press-kit.md): name, logo, colors, descriptions and screenshots
 - [Contributing](./CONTRIBUTING.md)
 
 ## Maintainers

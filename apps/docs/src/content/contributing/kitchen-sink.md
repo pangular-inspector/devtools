@@ -4,7 +4,7 @@ description: Every NgMd component and markdown feature this site uses, on one pa
 noIndex: true
 ---
 
-<ngmd-hero title="Kitchen sink" logo="/logo-mark.svg" gradient>
+<ngmd-hero title="Kitchen sink" logo="/logo-mark-light.svg" logo-dark="/logo-mark-dark.svg" gradient>
   Every component and markdown feature on one page. Use it to check styles, dark mode and spacing after a change. It is left out of search and the sitemap.
 </ngmd-hero>
 

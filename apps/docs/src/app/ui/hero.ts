@@ -9,8 +9,16 @@ import {Component, computed, input} from '@angular/core';
       [style.background-image]="gradient() ? 'var(--accent-gradient-soft)' : null"
     >
       <div class="flex items-center gap-3 mb-3">
-        @if (logo()) {
-          <img [src]="logo()" alt="" aria-hidden="true" class="size-9 sm:size-10 object-contain" />
+        @if (logo(); as light) {
+          @let dark = logoDark() ?? light;
+          <picture class="shrink-0 dark:hidden">
+            <source media="(prefers-reduced-motion: reduce)" [srcset]="still(light)" />
+            <img [src]="light" alt="" aria-hidden="true" class="block h-9 w-auto sm:h-10" />
+          </picture>
+          <picture class="hidden shrink-0 dark:block">
+            <source media="(prefers-reduced-motion: reduce)" [srcset]="still(dark)" />
+            <img [src]="dark" alt="" aria-hidden="true" class="block h-9 w-auto sm:h-10" />
+          </picture>
         }
         <p
           class="text-3xl sm:text-4xl font-bold tracking-tight m-0"
@@ -32,6 +40,11 @@ import {Component, computed, input} from '@angular/core';
 export class NgmdHero {
   readonly title = input.required<string>();
   readonly logo = input<string>();
+  readonly logoDark = input<string>();
+
+  protected still(src: string): string {
+    return src.replace('-animated.svg', '.svg');
+  }
   readonly gradient = input(false, {
     transform: (v: boolean | string) => v === '' || v === true || v === 'true',
   });

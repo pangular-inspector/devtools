@@ -109,6 +109,7 @@ export interface NgmdConfig {
    *  paths route in-app; `http(s)` URLs open in a new tab. Leave undefined
    *  for no header links. */
   headerNav?: NavItem[];
+  footerNav?: NavItem[];
   /** Sponsors listed by `<app-sponsor-list>`. Leave undefined to render
    *  nothing. */
   sponsors?: Sponsor[];
@@ -151,6 +152,8 @@ const config: NgmdConfig = {
     {label: 'Inspectors', href: '/inspectors/dashboard'},
     {label: 'Agents', href: '/agents/mcp-server'},
   ],
+
+  footerNav: [{label: 'Press kit', href: '/press-kit'}],
 
   sponsors: [
     {name: 'CodeRabbit', login: 'coderabbitai'},
@@ -225,6 +228,7 @@ const config: NgmdConfig = {
       items: [
         {label: 'Get involved', href: '/community'},
         {label: 'Sponsors', href: '/sponsors'},
+        {label: 'Press kit', href: '/press-kit'},
       ],
     },
     {
