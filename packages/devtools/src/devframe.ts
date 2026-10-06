@@ -364,6 +364,7 @@ const pangular = defineDevframe({
         draft.setupErrors = next.setupErrors ?? [];
         draft.instrumented = next.instrumented ?? [];
         draft.dropped = next.dropped ?? {};
+        draft.webMcp = next.webMcp ?? [];
       });
 
     register({
@@ -2082,7 +2083,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-forms',
       description:
-        'Inspect the forms on the running page (Signal Forms, reactive and template-driven). Without arguments it lists each form with its status and error count. Pass `form` for its field tree (value, status, touched, dirty, errors per field). Password and other secret-looking values are redacted. For "why is this form invalid", call explain-form-invalid first.',
+        'Inspect the forms on the running page (Signal Forms, reactive and template-driven). Without arguments it lists each form with its status and error count. Pass `form` for its field tree (value, status, touched, dirty, errors per field). Signal Forms that set `experimentalWebMcpTool` also carry `webMcp`: the tool name, description, inputs, registration status (registered, or failed with the fields that blocked schema inference), required fields that changed since registration, duplicate names and recent agent calls. Password and other secret-looking values are redacted. For "why is this form invalid", call explain-form-invalid first.',
       safety: 'read',
       inputSchema: {
         type: 'object',

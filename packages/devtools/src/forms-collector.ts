@@ -36,6 +36,7 @@ import {
 } from './forms-instrument.ts';
 import { redactMessage } from './forms-privacy.ts';
 import { fieldPath, probeEveryTime } from './forms-read.ts';
+import { watchWebMcp } from './forms-webmcp.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -96,7 +97,9 @@ export function setupErrorOf(args: unknown[]): string | null {
   const text = args
     .map((arg) => (arg instanceof Error ? arg.message : typeof arg === 'string' ? arg : ''))
     .join(' ');
-  const match = text.match(/NG0?1\d{3}[^\n]*/);
+  const match = text.match(
+    /NG0?1\d{3}[^\n]*|Cannot register form "[^"\n]*" as a WebMCP tool[^\n]*/,
+  );
   return match ? redactMessage(match[0]).slice(0, 300) : null;
 }
 
@@ -158,9 +161,10 @@ export function attachForms(
   const pendingStarted = new Map<string, number>();
   let cancelPick: (() => void) | null = null;
   const ownerNames = new Set<string>();
+  const webMcp = watchWebMcp(() => schedulePush());
 
   const originNow = (): EventOrigin =>
-    isDevtoolsAction() ? 'devtools' : userActive ? 'user' : 'code';
+    isDevtoolsAction() ? 'devtools' : webMcp.active() ? 'agent' : userActive ? 'user' : 'code';
 
   function recordFormEvent(input: FormEvent, infer = true) {
     const event: FormEvent = { ...input, seq: ++eventSeq };
@@ -305,6 +309,7 @@ export function attachForms(
       const result = original.call(this, value);
       const formId = idOf(root);
       if (value) {
+        if (node === root) webMcp.link(root);
         started = true;
         submittingForm = formId;
         recordFormEvent({
@@ -364,16 +369,19 @@ export function attachForms(
       const now = Date.now();
       for (const form of forms) stampPending(form.id, form.root, now);
       const streamed = new Set(Array.from(watched.values(), ({ formId }) => formId));
+      const agentSincePush = webMcp.takeActivity();
       for (const event of diffForms(lastForms, forms)) {
         if (!streamed.has(event.formId) || DIFFED_FOR_ALL.includes(event.type)) {
           const caller = signalCallers.get(event.formId);
           const origin: EventOrigin | undefined = devtoolsSincePush
             ? 'devtools'
-            : userSincePush
-              ? 'user'
-              : caller !== undefined
-                ? 'code'
-                : undefined;
+            : agentSincePush
+              ? 'agent'
+              : userSincePush
+                ? 'user'
+                : caller !== undefined
+                  ? 'code'
+                  : undefined;
           const tagged: FormEvent = origin ? { ...event, origin } : event;
           if (caller && origin !== 'devtools') tagged.caller = caller;
           recordFormEvent(tagged, false);
@@ -391,9 +399,21 @@ export function attachForms(
           else instrumentation.addControl(form.root);
         }
       }
+      const mcp = webMcp.describe(
+        found.forms
+          .filter((form) => form.kind === 'signal')
+          .map((form) => ({ root: form.root, formId: idOf(form.root), element: form.element })),
+        ng,
+      );
+      for (const form of forms) {
+        const root = foundById.get(form.id)?.root;
+        const tool = root && mcp.forms.get(root);
+        if (tool) form.webMcp = tool;
+      }
       const report = {
         pageId,
         forms,
+        ...(mcp.page ? { webMcp: mcp.page } : {}),
         events: formEvents,
         setupErrors,
         instrumented: !!instrumentation,
@@ -688,6 +708,7 @@ export function attachForms(
     push: () => void pushForms(),
     stop() {
       observer?.disconnect();
+      webMcp.stop();
       probeEveryTime(false);
       clearTimeout(pushTimer);
       clearTimeout(userTimer);

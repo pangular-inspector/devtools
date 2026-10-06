@@ -3,7 +3,13 @@ import '@angular/compiler';
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { FormField, FormRoot, form, required } from '@angular/forms/signals';
+import {
+  FormField,
+  FormRoot,
+  form,
+  provideExperimentalWebMcpForms,
+  required,
+} from '@angular/forms/signals';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachForms, setupErrorOf } from '../forms-collector.ts';
@@ -43,6 +49,18 @@ Component({
   imports: [FormField, FormRoot],
   template: `<form [formRoot]="form"><input id="pname" [formField]="form.name" /><button>Go</button></form>`,
 })(Profile);
+
+class SignUp {
+  form = form(signal({ name: '', age: 20 }), (p) => required(p.name), {
+    submission: { action: async () => undefined },
+    experimentalWebMcpTool: { name: 'sign_up', description: 'Create an account' },
+  });
+}
+Component({
+  selector: 'sign-up-form',
+  imports: [FormField, FormRoot],
+  template: `<form [formRoot]="form"><input id="sname" [formField]="form.name" /><button>Go</button></form>`,
+})(SignUp);
 
 function harness(maxEvents?: number) {
   const calls: { name: string; args: any[] }[] = [];
@@ -346,6 +364,13 @@ describe('forms collector', () => {
       ]),
     ).toContain('Bearer [redacted]');
     expect(setupErrorOf(['plain error'])).toBeNull();
+    expect(
+      setupErrorOf([
+        new Error(
+          'Cannot register form "sign_up" as a WebMCP tool. Make sure to use `provideExperimentalWebMcpForms()`',
+        ),
+      ]),
+    ).toMatch(/^Cannot register form "sign_up" as a WebMCP tool/);
   });
 
   it('restores console.error and stops listening on stop', () => {
@@ -355,5 +380,46 @@ describe('forms collector', () => {
     stops.pop()!();
     expect(console.error).toBe(original);
     expect(h.calls).toEqual([]);
+  });
+
+  it('shows the WebMCP tool of a Signal Form and tags agent calls as agent', async () => {
+    const tools = new Map<string, { execute: (args: unknown) => Promise<unknown> }>();
+    (navigator as any).modelContext = {
+      registerTool: async (tool: {
+        name: string;
+        execute: (args: unknown) => Promise<unknown>;
+      }) => {
+        tools.set(tool.name, tool);
+      },
+    };
+    try {
+      TestBed.configureTestingModule({ providers: [provideExperimentalWebMcpForms()] });
+      const h = harness();
+      const fixture = await mount(SignUp);
+      await tick();
+      h.collector.push();
+      await tick();
+      const report = h.reports().at(-1);
+      expect(report.webMcp).toEqual({ modelContext: true, tools: [] });
+      expect(report.forms[0].webMcp).toMatchObject({
+        name: 'sign_up',
+        description: 'Create an account',
+        status: 'registered',
+        inputs: ['name: string', 'age: number'],
+        required: ['name'],
+      });
+      const answer = await tools.get('sign_up')!.execute({ name: 'Ada', age: 30 });
+      expect(answer).toMatchObject({ content: [{ text: 'Form submitted successfully.' }] });
+      fixture.detectChanges();
+      await tick();
+      const last = h.reports().at(-1);
+      expect(last.forms[0].webMcp.calls).toEqual([
+        expect.objectContaining({ outcome: 'submitted', fields: ['name', 'age'] }),
+      ]);
+      const agentEvents = h.lastEvents().filter((e) => e.origin === 'agent');
+      expect(agentEvents.map((e) => e.type)).toEqual(expect.arrayContaining(['submit', 'value']));
+    } finally {
+      delete (navigator as any).modelContext;
+    }
   });
 });

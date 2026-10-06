@@ -2,7 +2,7 @@ import { Component, computed, input, output, signal } from '@angular/core';
 import { time } from '../format';
 import { FORMS_STYLES, type FormEvent } from './forms-types';
 
-const ORIGINS = ['all', 'user', 'code', 'devtools'] as const;
+const ORIGINS = ['all', 'user', 'code', 'agent', 'devtools'] as const;
 
 @Component({
   selector: 'app-forms-timeline',

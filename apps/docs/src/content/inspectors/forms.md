@@ -19,6 +19,23 @@ The sidebar lists each form with its label, its kind (**Signal Forms**, **Reacti
 
 Select a form to see its status, whether it is dirty or touched, whether it was submitted or is submitting, and an **Error summary**.
 
+### WebMCP tool
+
+A Signal Form that sets `experimentalWebMcpTool` (with `provideExperimentalWebMcpForms()`) shows a **WebMCP tool** block in its details. See [WebMCP](https://angular.dev/ai/webmcp) for the API itself.
+
+| Part             | What it shows                                                                                                                    |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Name and status  | The tool name, and **registered** or **not registered**. A name another tool on the page also uses is marked **duplicate name**. |
+| Description      | The `description` the form passes.                                                                                               |
+| Inputs           | Each input with its type, and which ones the schema marks as required.                                                           |
+| Blocking fields  | When Angular could not infer a schema, each field that is `null`, `undefined`, an empty array or an unsupported type.            |
+| Required changed | Fields whose `required` changed after registration. Angular reads `required` once, so agents still see the old one.              |
+| Recent calls     | The last 5 agent calls with time, duration, the input names and the result (submitted, submit failed or threw).                  |
+
+Agent calls set the value and submit the form. Those changes show in the timeline with the **agent** origin.
+
+If the app provides `provideExperimentalWebMcpForms()` but the browser has no `modelContext`, Angular registers no tool. The block says so instead.
+
 ### Fields view
 
 Each field shows its value, status, touched and dirty state, and errors. Extra facts depend on the kind:
@@ -49,7 +66,7 @@ Click a field to open its details below the table. Click the field again, or **C
 
 ### Timeline view
 
-Recent changes, newest first, each tagged with its origin: user, code or devtools. Filter the list by origin. The timeline tracks array items by identity, so moves show as moves. Async validation times show as **pending** tags. The page keeps the last 200 events, set with [`limits.formTimeline`](../getting-started/configuration.md#limits). Once older events are dropped, the timeline and `form-history` say how many.
+Recent changes, newest first, each tagged with its origin: user, code, agent (a WebMCP tool call) or devtools. Filter the list by origin. The timeline tracks array items by identity, so moves show as moves. Async validation times show as **pending** tags. The page keeps the last 200 events, set with [`limits.formTimeline`](../getting-started/configuration.md#limits). Once older events are dropped, the timeline and `form-history` say how many.
 
 Check **Record details** to add the calling code of each change, validator changes, and component renders per keystroke. It is off by default and applies to the whole page.
 
@@ -152,19 +169,19 @@ You can also open a form from its component in the [Components tab](./components
 
 ### Read tools
 
-| Tool                              | What it does                                                                                                      |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `pangular:explain-form-invalid`   | Start here. Every invalid or pending form, with each failing field's value, validator, message and touched state. |
-| `pangular:inspect-forms`          | The forms with status and error counts. With `form`, the field tree. Narrow with `path` or `onlyInvalid`.         |
-| `pangular:explain-field`          | One field: error sources, skip reasons, pending values, binding, visible errors, and source lines.                |
-| `pangular:explain-submit`         | What submit does, and why it might do nothing.                                                                    |
-| `pangular:form-payload`           | What the form sends: value against raw value, and unvalidated fields.                                             |
-| `pangular:form-history`           | The change timeline with origins. Returns a marker.                                                               |
-| `pangular:form-diff`              | The net change since a marker.                                                                                    |
-| `pangular:lint-forms`             | Form bugs and accessibility checks.                                                                               |
-| `pangular:explain-custom-control` | How a field binds to its element, and what is wrong with the binding.                                             |
-| `pangular:export-form`            | A JSON snapshot or a test fixture.                                                                                |
-| `pangular:wait-for-form`          | Waits until the form is settled, valid, not pending or submitted.                                                 |
+| Tool                              | What it does                                                                                                                     |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:explain-form-invalid`   | Start here. Every invalid or pending form, with each failing field's value, validator, message and touched state.                |
+| `pangular:inspect-forms`          | The forms with status and error counts, and WebMCP tool state. With `form`, the field tree. Narrow with `path` or `onlyInvalid`. |
+| `pangular:explain-field`          | One field: error sources, skip reasons, pending values, binding, visible errors, and source lines.                               |
+| `pangular:explain-submit`         | What submit does, and why it might do nothing.                                                                                   |
+| `pangular:form-payload`           | What the form sends: value against raw value, and unvalidated fields.                                                            |
+| `pangular:form-history`           | The change timeline with origins. Returns a marker.                                                                              |
+| `pangular:form-diff`              | The net change since a marker.                                                                                                   |
+| `pangular:lint-forms`             | Form bugs and accessibility checks.                                                                                              |
+| `pangular:explain-custom-control` | How a field binds to its element, and what is wrong with the binding.                                                            |
+| `pangular:export-form`            | A JSON snapshot or a test fixture.                                                                                               |
+| `pangular:wait-for-form`          | Waits until the form is settled, valid, not pending or submitted.                                                                |
 
 ### Write tools
 
@@ -188,6 +205,10 @@ In the tab, the button turns into **Confirm reset**, **Confirm submit** or **Con
 ### Fields that are not written
 
 The actions don't write secret fields unless you unmask them. See [Access and redaction](../security.md#opt-fields-in-or-out). For Signal Forms, they skip hidden, readonly and rule-disabled fields too. They write disabled reactive fields only with `force`.
+
+### WebMCP is best effort
+
+`experimentalWebMcpTool` is experimental in Angular. The overlay wraps `modelContext.registerTool` when it loads, so it records registrations and calls from then on. For a tool registered earlier, it reads the browser's tool list when the browser offers one (`getTools()` or `listTools()`), and the block says **registered before the inspector attached**. Calls to those tools are not recorded. The overlay links a tool to its form by its input schema, or by the form an agent call submits. A tool it cannot link shows in the `inspect-forms` output under **WebMCP**.
 
 ### Snapshot limits
 

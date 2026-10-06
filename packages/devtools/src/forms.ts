@@ -1,5 +1,6 @@
 import { domFacts, submitDom, type DomFacts, type SubmitDom } from './forms-dom.ts';
 import { clip } from './text.ts';
+import type { WebMcpTool } from './forms-webmcp.ts';
 import {
   REDACTED,
   SecretSet,
@@ -100,6 +101,7 @@ export interface CollectedForm {
   submit?: SubmitSetup;
   submitDom?: SubmitDom;
   errorSummary?: FormErrorSummary[];
+  webMcp?: WebMcpTool;
   root: FormFieldNode;
 }
 
@@ -130,7 +132,7 @@ export interface FormEvent {
   rendered?: string[];
 }
 
-export type EventOrigin = 'user' | 'code' | 'devtools' | 'binding';
+export type EventOrigin = 'user' | 'code' | 'devtools' | 'binding' | 'agent';
 
 export interface FormsDebugApi {
   getComponent(el: Element): unknown;
