@@ -97,8 +97,13 @@ async function detectConnection() {
     const tried = probes.map(({ url, status }) => `${url} (${status ?? 'no answer'})`);
     if (refused) {
       const reason = refused.text ? ` It said: "${refused.text}"` : '';
+      const extension = chrome.runtime.getURL('').replace(/\/$/, '');
+      const hint =
+        refused.status === 403
+          ? ` To trust this extension, add ${extension} to allowedOrigins.`
+          : '';
       showStatus(
-        `The devtools server on ${page.origin} refused the request (${refused.status}).${reason} Tried:`,
+        `The devtools server on ${page.origin} refused the request (${refused.status}).${reason}${hint} Tried:`,
         { tried, retry: true, docs: REFUSED_DOCS },
       );
     } else {

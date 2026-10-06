@@ -84,6 +84,7 @@ describe('Pangular Inspector hub', () => {
 });
 
 const EXTENSION = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+const OTHER_EXTENSION = 'chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba';
 
 async function sseStatus(
   options: Parameters<typeof initPangularHub>[0],
@@ -135,13 +136,12 @@ describe('Pangular Inspector hub behind a web router', () => {
 });
 
 describe('Pangular Inspector hub origins', () => {
-  it('accepts loopback pages and the Chrome extension by default, and nothing else', () => {
+  it('accepts loopback pages by default, and no Chrome extension without a known ID', () => {
     for (const origin of [
       undefined,
       'http://localhost:4000',
       'http://127.0.0.1:4200',
       'http://[::1]:3000',
-      EXTENSION,
     ]) {
       expect(hubDefaultOrigins.isAllowed(origin)).toBe(true);
     }
@@ -149,6 +149,8 @@ describe('Pangular Inspector hub origins', () => {
       'https://evil.example',
       'http://127.attacker.example',
       'chrome-extension://',
+      EXTENSION,
+      OTHER_EXTENSION,
       'moz-extension://abcdefghijklmnop',
       'null',
     ]) {
@@ -156,17 +158,23 @@ describe('Pangular Inspector hub origins', () => {
     }
   });
 
-  it('lets the Chrome extension panel open the SSE stream by default', async () => {
-    expect(await sseStatus({}, EXTENSION)).toBe(200);
+  it('refuses an unknown Chrome extension on the SSE stream by default', async () => {
+    expect(await sseStatus({}, OTHER_EXTENSION)).toBe(403);
     expect(await sseStatus({}, 'http://localhost:4000')).toBe(200);
     expect(await sseStatus({}, 'https://evil.example')).toBe(403);
+  });
+
+  it('accepts an unpacked extension listed in allowedOrigins and refuses other extensions', async () => {
+    const unpacked = { allowedOrigins: [EXTENSION] };
+    expect(await sseStatus(unpacked, EXTENSION)).toBe(200);
+    expect(await sseStatus(unpacked, OTHER_EXTENSION)).toBe(403);
+    expect(await sseStatus(unpacked, 'http://localhost:4000')).toBe(200);
   });
 
   it('keeps an explicit allowedOrigins setting as given', async () => {
     const tunnel = { allowedOrigins: ['https://tunnel.example'] };
     expect(await sseStatus(tunnel, 'https://tunnel.example')).toBe(200);
     expect(await sseStatus(tunnel, EXTENSION)).toBe(403);
-    expect(await sseStatus({ allowedOrigins: [EXTENSION] }, EXTENSION)).toBe(200);
     expect(await sseStatus({ allowedOrigins: false }, 'https://evil.example')).toBe(200);
   });
 });

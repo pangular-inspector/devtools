@@ -84,12 +84,12 @@ The plugin runs on the dev server only (`apply: 'serve'`). Production builds do 
 
 All four are optional.
 
-| Option           | Default                                        | What it does                                           |
-| ---------------- | ---------------------------------------------- | ------------------------------------------------------ |
-| `base`           | `/__devframes/`                                | Where the hub is mounted.                              |
-| `apiPrefix`      | Read from your Analog config                   | The API prefix used to tell API calls from page calls. |
-| `allowedOrigins` | none                                           | Extra page origins accepted next to localhost.         |
-| `auth`           | on if a non-loopback host or origin is allowed | Whether the devtools ask for the one-time code.        |
+| Option           | Default                                        | What it does                                                                 |
+| ---------------- | ---------------------------------------------- | ---------------------------------------------------------------------------- |
+| `base`           | `/__devframes/`                                | Where the hub is mounted.                                                    |
+| `apiPrefix`      | Read from your Analog config                   | The API prefix used to tell API calls from page calls.                       |
+| `allowedOrigins` | none                                           | Extra page origins accepted next to localhost, such as the Chrome extension. |
+| `auth`           | on if a non-loopback host or origin is allowed | Whether the devtools ask for the one-time code.                              |
 
 The plugin also takes the devtools options. See [Vite and Analog](../getting-started/vite.md#options) and [Configuration](../getting-started/configuration.md).
 

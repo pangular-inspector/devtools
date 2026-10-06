@@ -8,6 +8,7 @@ import type { InitHubOptions } from '@devframes/hub/initiate';
 import type { WsOriginRegistry } from 'devframe/rpc/transports/ws-server';
 import { isAllowedOrigin } from 'devframe/utils/origin';
 import { createPangular } from './devframe.ts';
+import { isAllowedExtensionOrigin } from './extension-origin.ts';
 import { pickPangularConfig, type PangularConfig } from './config.ts';
 import { PANGULAR_LOGO_DATA_URI } from './brand.ts';
 import pkg from '../package.json' with { type: 'json' };
@@ -48,20 +49,11 @@ function hubUi() {
   };
 }
 
-function isExtensionOrigin(origin: string): boolean {
-  try {
-    const url = new URL(origin);
-    return url.protocol === 'chrome-extension:' && url.hostname !== '';
-  } catch {
-    return false;
-  }
-}
-
 export const hubDefaultOrigins: WsOriginRegistry = {
   token: '',
   registerFromUrl: () => undefined,
   isAllowed: (origin: string | undefined) =>
-    (origin !== undefined && isExtensionOrigin(origin)) || isAllowedOrigin(origin, []),
+    (origin !== undefined && isAllowedExtensionOrigin(origin)) || isAllowedOrigin(origin, []),
 };
 
 type PangularHub = ReturnType<typeof initHub>;
