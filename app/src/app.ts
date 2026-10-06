@@ -380,7 +380,7 @@ function readView(): View | null {
         {{ connected() ? 'Live' : connectionFailed() ? 'Disconnected' : 'Connecting…' }}
       </span>
     </header>
-    <main #main tabindex="-1">
+    <main #main tabindex="-1" [attr.aria-label]="mainLabel()">
       <p class="background-note" role="status">{{ backgroundNote() }}</p>
       @if (connectionFailed()) {
         <p class="connection-error" role="alert">
@@ -790,6 +790,9 @@ export class App implements OnInit, OnDestroy {
     const view = this.view();
     return view ? VIEW_TITLE[view] : 'Pangular Inspector';
   });
+  protected readonly mainLabel = computed(
+    () => this.availableTabs().find((t) => t.id === this.tab())?.label ?? this.title(),
+  );
   readonly analogKnown = signal(false);
   readonly nativePageId = signal<string | null>(null);
   readonly nativeKnown = signal(false);
