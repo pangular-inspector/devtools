@@ -190,7 +190,7 @@ Use `explain-navigation` for "why was I redirected". Pass `perf: true` for "why 
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
 | `list-routes`         | The live route config: every route with its full path, component or redirect, lazy state, guards, resolvers, title, source file and an example URL.                                                                 | `match`, `audit`, `filter`      |
 | `lint-routes`         | Route config mistakes, such as routes after `**`, redirect cycles, redirect loops seen at runtime, deprecated class guards, missing titles and param typos. Each finding says how Angular reacts and how to fix it. | none                            |
-| `router-config`       | How the router is set up: `provideRouter` or `forRoot`, effective options, enabled features, strategies, base href and hydration.                                                                                   | none                            |
+| `router-config`       | How the router is set up (`provideRouter`, `forRoot or other` or `unknown`), effective options, enabled features, strategies, base href and hydration.                                                              | none                            |
 | `explain-render-mode` | The `ServerRoute` and render mode (Server, Client, Prerender) a URL gets, plus server entries that match no client route.                                                                                           | `url`, defaults to the page URL |
 
 `list-routes` takes three optional arguments:
