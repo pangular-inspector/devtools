@@ -103,6 +103,19 @@ export default defineConfig({
 npx @pangular-inspector/devtools
 ```
 
+```json group="setup" name="Client-only Angular CLI" image="https://cdn.simpleicons.org/angular/DD0031"
+// proxy.conf.json
+{
+  "/__pangular": {
+    "target": "http://localhost:9999",
+    "pathRewrite": {"^/__pangular": ""},
+    "ws": true
+  }
+}
+```
+
+A client-only app (no SSR) has no server of its own to mount the devtools in. See [Client-only Angular CLI app](#client-only-angular-cli-app).
+
 ### Browser part
 
 Load the overlay after bootstrap, in development only. The check depends on your build tool:
@@ -134,7 +147,49 @@ bootstrapApplication(App, appConfig).then(() => {
 });
 ```
 
-The standalone CLI has no page connected, so it needs no browser part.
+The standalone CLI on its own has no page connected, so it needs no browser part. Behind the `ng serve` proxy of a client-only app it does, like any other setup.
+
+### Client-only Angular CLI app
+
+An app created with `ng new --ssr=false` only runs `ng serve`. Run the standalone CLI next to it, and let `ng serve` forward `/__pangular/` to the CLI. The overlay and the popup look for the devtools at `/__pangular/` on the page's own origin, so they find the CLI there.
+
+<ngmd-workflow>
+  <ngmd-step title="Start the devtools server">
+    Run <code>npx pangular dev --port 9999</code> from the root of your workspace. It serves the panel, the connection and the WebSocket at the root of port 9999.
+  </ngmd-step>
+  <ngmd-step title="Add the proxy config">
+    Save the <code>proxy.conf.json</code> above next to <code>angular.json</code>. It strips the <code>/__pangular</code> prefix, and <code>"ws": true</code> forwards the WebSocket the overlay and the panel connect over.
+  </ngmd-step>
+  <ngmd-step title="Point ng serve at it">
+    Set <code>proxyConfig</code> in the <code>serve</code> options of <code>angular.json</code>, or run <code>ng serve --proxy-config proxy.conf.json</code>.
+  </ngmd-step>
+  <ngmd-step title="Load the overlay">
+    Import the overlay in <code>main.ts</code>, as in the <strong>Angular CLI</strong> tab above.
+  </ngmd-step>
+  <ngmd-step title="Enter the one-time code">
+    When your app connects, the CLI prints a code and a link like <code>http://localhost:9999/#devframe_otp=123456</code>. That link only trusts port 9999. Open the same code on your app's origin instead, <code>http://localhost:4200/__pangular/#devframe_otp=123456</code>. If the panel was already open, reload your app.
+  </ngmd-step>
+</ngmd-workflow>
+
+```json
+// angular.json (excerpt)
+{
+  "projects": {
+    "my-app": {
+      "architect": {
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "proxyConfig": "proxy.conf.json"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+The full-page panel is at `/__pangular/` on your app's origin.
 
 ### Configure the devtools
 

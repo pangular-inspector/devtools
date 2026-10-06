@@ -134,7 +134,7 @@ The devtools are a <a href="https://devfra.me" target="_blank" rel="noopener nor
     No. The overlay adds a floating button to your page and opens the devtools in a panel. The <a href="./chrome-extension.md">Chrome extension</a> is optional. It adds the same UI as a panel in Chrome DevTools.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Does it work without SSR?">
-    The devtools need a server part. An Angular CLI app mounts it in its Express <code>server.ts</code>. An Analog app gets it from the Vite plugin. Without either, the <a href="./cli.md">standalone CLI</a> serves the source scan.
+    Yes. The devtools need a server part, but it doesn't have to be your app's. An Angular CLI app with SSR mounts it in its Express <code>server.ts</code>, and an Analog app gets it from the Vite plugin. A client-only Angular CLI app runs the <a href="./cli.md">standalone CLI</a> next to <code>ng serve</code> and proxies <code>/__pangular/</code> to it. See <a href="./installation.md#client-only-angular-cli-app">Client-only Angular CLI app</a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Does it ship in my production bundle?">
     Not if you follow the setup guides. They load the overlay with a dynamic import that only runs in development builds.
