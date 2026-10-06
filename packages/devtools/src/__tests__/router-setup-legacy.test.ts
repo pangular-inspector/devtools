@@ -41,13 +41,16 @@ it('finds the router of a provideRouter app without ng.ɵgetRouterInstance', () 
   expect(routerOf(ng as never)).toBe(app.injector.get(Router));
 });
 
-it('reports provideRouter from the root ROUTES when the router util is missing', () => {
-  const root = document.querySelector('app-root')!;
-  root.setAttribute('ng-version', '20.3.4');
-  expect(detectSetup(ng, app.injector.get(Router) as never, 1, root).setupKind).toBe(
-    'provideRouter',
-  );
-});
+it.each(['20.3.4', '20.3.5'])(
+  'reports provideRouter from the root ROUTES when the router util is missing on %s',
+  (version) => {
+    const root = document.querySelector('app-root')!;
+    root.setAttribute('ng-version', version);
+    expect(detectSetup(ng, app.injector.get(Router) as never, 1, root).setupKind).toBe(
+      'provideRouter',
+    );
+  },
+);
 
 it('reports unknown when neither the util nor the providers tell the setup apart', () => {
   const root = document.querySelector('app-root')!;

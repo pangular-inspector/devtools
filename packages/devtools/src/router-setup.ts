@@ -135,8 +135,8 @@ function setupKindOf(
     return 'provideRouter';
   const descriptions = provided.map((p) => tokenDescription(p.token));
   if (descriptions.includes('router duplicate forRoot guard')) return 'forRoot or other';
-  if (publishesRouterUtil(version)) return 'forRoot or other';
-  return descriptions.includes('ROUTES') ? 'provideRouter' : 'unknown';
+  if (descriptions.includes('ROUTES')) return 'provideRouter';
+  return publishesRouterUtil(version) ? 'forRoot or other' : 'unknown';
 }
 
 export function detectSetup(
