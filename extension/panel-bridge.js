@@ -18,6 +18,7 @@ const REFUSED_DOCS = {
 const PATHS = ['/__pangular/', '/__devframes/pangular/', '/__devframe/', '/'];
 const CONNECTION_FILES = ['__devframe/__connection.json', '__connection.json'];
 const PROBE_TIMEOUT_MS = 1500;
+const PINNED_ORIGIN = 'chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk';
 const REFUSED_TEXT_LIMIT = 200;
 const PAGE_ID_WAIT_MS = 5000;
 const PAGE_ID_POLL_MS = 250;
@@ -99,7 +100,7 @@ async function detectConnection() {
       const reason = refused.text ? ` It said: "${refused.text}"` : '';
       const extension = chrome.runtime.getURL('').replace(/\/$/, '');
       const hint =
-        refused.status === 403
+        refused.status === 403 && extension !== PINNED_ORIGIN
           ? ` To trust this extension, add ${extension} to allowedOrigins.`
           : '';
       showStatus(

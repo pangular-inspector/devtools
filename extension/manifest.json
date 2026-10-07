@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "Pangular Inspector",
   "version": "0.0.7",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsfLHWE3YKol6yLgiD8bc7p8zDEB4dN4Wlj+DqE9laAym8LuthA0YfjeDTdvUJ3HoL9ypRRXa2MmDL1GziCcd1zNF1lhCYN6zyZu999Cb0YWR/yQg/JiSBbNOHw7DdM5LVlov5J0SB/2vc87OYo4Q9kSuanS50pz7T22klLTNaeGq7E3jHHTF/dcJ8rYubDwDdMHRzRtW3hnpQfHQjrAgSpg8JhBXrR7RTuU2CjUeUXHMV3wYALWsS63MZRAK4BIEWZn+jE41FTe02f9V5XKoXnTtG11AEPa1AbJvhaLvnAil4PliWx0Lv9Uu/YVjTSkG8l+87K/9MFmPgFfLKOmjKQIDAQAB",
   "description": "Inspect Angular components, signals, dependency injection, and routes.",
   "minimum_chrome_version": "111",
   "devtools_page": "devtools.html",

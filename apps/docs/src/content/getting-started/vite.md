@@ -101,12 +101,12 @@ pangular({
 });
 ```
 
-| Option           | Default                                                       | What it does                                                                                     |
-| ---------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `base`           | `'/__devframes/'`                                             | Where the hub is mounted.                                                                        |
-| `apiPrefix`      | Analog's `apiPrefix`, or `'api'`                              | The prefix of your server routes, used to classify API calls.                                    |
-| `allowedOrigins` | none                                                          | Extra exact origins allowed to reach the devtools, for example a tunnel or the Chrome extension. |
-| `auth`           | on if a non-loopback host or origin is allowed, otherwise off | Whether the devtools ask for the one-time code.                                                  |
+| Option           | Default                                                       | What it does                                                             |
+| ---------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `base`           | `'/__devframes/'`                                             | Where the hub is mounted.                                                |
+| `apiPrefix`      | Analog's `apiPrefix`, or `'api'`                              | The prefix of your server routes, used to classify API calls.            |
+| `allowedOrigins` | none                                                          | Extra exact origins allowed to reach the devtools, for example a tunnel. |
+| `auth`           | on if a non-loopback host or origin is allowed, otherwise off | Whether the devtools ask for the one-time code.                          |
 
 The plugin also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](./configuration.md).
 
@@ -120,7 +120,7 @@ The plugin reads `apiPrefix` from your Analog config. Set it here only when the 
 
 ### `allowedOrigins`
 
-Each entry is an origin, such as `https://tunnel.example` or `chrome-extension://<id>`. The request itself must still come from a loopback address. The plugin refuses every Chrome extension that is not listed, so add the ID of the [Chrome extension](./chrome-extension.md#server-origin) to use its panel. An extension entry does not turn the one-time code on.
+Each entry is an origin, such as `https://tunnel.example` or `chrome-extension://<id>`. The request itself must still come from a loopback address. The plugin trusts the [Chrome extension](./chrome-extension.md#server-origin) by its fixed ID with no entry, and refuses every other extension that is not listed. Add an entry only for a build of the extension with another ID. An extension entry does not turn the one-time code on.
 
 The plugin reads each entry the way a browser sends an origin: it drops a path or a trailing slash and lowercases the host, so `'https://Tunnel.example/app/'` allows `https://tunnel.example`. It prints a warning in the terminal when it changes an entry, and it ignores an entry that is not a URL, such as `'tunnel.example'`. The first request from each origin that the check refuses also prints a warning that names the origin.
 

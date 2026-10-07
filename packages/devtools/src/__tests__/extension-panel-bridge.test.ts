@@ -14,6 +14,7 @@ interface Setup {
   origin?: string;
   pageId?: () => string | null;
   storedPageId?: string | null;
+  extensionId?: string;
   granted?: boolean;
   grant?: boolean;
   fetch?: (url: string) => Promise<Response>;
@@ -35,7 +36,9 @@ function open(setup: Setup = {}) {
     return granted;
   });
   const chrome = {
-    runtime: { getURL: (path: string) => `chrome-extension://ext-id/${path}` },
+    runtime: {
+      getURL: (path: string) => `chrome-extension://${setup.extensionId ?? 'ext-id'}/${path}`,
+    },
     permissions: { contains: vi.fn(async () => granted), request },
     devtools: {
       inspectedWindow: {
@@ -273,6 +276,21 @@ describe('extension panel bridge', () => {
     expect(panel.docs.hidden).toBe(false);
     expect(panel.docs.textContent).toBe('Why the devtools server refuses requests');
     expect(panel.docs.href).toMatch(/getting-started\/vite\.md#answers-only-your-machine$/);
+  });
+
+  it('leaves out the allowedOrigins hint for the extension with the pinned ID', async () => {
+    const panel = open({
+      origin: 'http://192.168.1.20:5173',
+      extensionId: 'dcogniffeelebaolkkfbopmjcblhblfk',
+      fetch: (url) =>
+        url.endsWith('/__devframes/pangular/__connection.json')
+          ? Promise.resolve(new Response('', { status: 403 }))
+          : Promise.resolve(new Response('', { status: 404 })),
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(panel.message()).toBe(
+      'The devtools server on http://192.168.1.20:5173 refused the request (403). Tried:',
+    );
   });
 
   it('restores the setup link after a refusal turns into no answer', async () => {

@@ -23,7 +23,7 @@ These three functions take the same options:
 
 The `pangular` binary reads the same options from a JSON file, for `dev`, `build` and `mcp`. See [Config file](./cli.md#config-file).
 
-The access options stay with the server. To use the [Chrome extension](./chrome-extension.md#server-origin), add its `chrome-extension://<id>` origin to `allowedOrigins` in the Express hub or the Vite plugin. No extension is trusted without it.
+The access options stay with the server. The Express hub and the Vite plugin trust the [Chrome extension](./chrome-extension.md#server-origin) by its fixed ID, with no setting. A build of the extension with another ID needs its `chrome-extension://<id>` origin in `allowedOrigins`.
 
 ### Express hub
 

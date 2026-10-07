@@ -83,6 +83,7 @@ describe('Pangular Inspector hub', () => {
   });
 });
 
+const PANGULAR_EXTENSION = 'chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk';
 const EXTENSION = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
 const OTHER_EXTENSION = 'chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba';
 
@@ -136,12 +137,13 @@ describe('Pangular Inspector hub behind a web router', () => {
 });
 
 describe('Pangular Inspector hub origins', () => {
-  it('accepts loopback pages by default, and no Chrome extension without a known ID', () => {
+  it('accepts loopback pages and the Pangular Inspector extension by default, and nothing else', () => {
     for (const origin of [
       undefined,
       'http://localhost:4000',
       'http://127.0.0.1:4200',
       'http://[::1]:3000',
+      PANGULAR_EXTENSION,
     ]) {
       expect(hubDefaultOrigins.isAllowed(origin)).toBe(true);
     }
@@ -149,6 +151,7 @@ describe('Pangular Inspector hub origins', () => {
       'https://evil.example',
       'http://127.attacker.example',
       'chrome-extension://',
+      `${PANGULAR_EXTENSION}/`,
       EXTENSION,
       OTHER_EXTENSION,
       'moz-extension://abcdefghijklmnop',
@@ -158,7 +161,8 @@ describe('Pangular Inspector hub origins', () => {
     }
   });
 
-  it('refuses an unknown Chrome extension on the SSE stream by default', async () => {
+  it('lets the Pangular Inspector extension open the SSE stream by default, and refuses other extensions', async () => {
+    expect(await sseStatus({}, PANGULAR_EXTENSION)).toBe(200);
     expect(await sseStatus({}, OTHER_EXTENSION)).toBe(403);
     expect(await sseStatus({}, 'http://localhost:4000')).toBe(200);
     expect(await sseStatus({}, 'https://evil.example')).toBe(403);
@@ -168,6 +172,7 @@ describe('Pangular Inspector hub origins', () => {
     const unpacked = { allowedOrigins: [EXTENSION] };
     expect(await sseStatus(unpacked, EXTENSION)).toBe(200);
     expect(await sseStatus(unpacked, OTHER_EXTENSION)).toBe(403);
+    expect(await sseStatus(unpacked, PANGULAR_EXTENSION)).toBe(200);
     expect(await sseStatus(unpacked, 'http://localhost:4000')).toBe(200);
   });
 
@@ -175,6 +180,8 @@ describe('Pangular Inspector hub origins', () => {
     const tunnel = { allowedOrigins: ['https://tunnel.example'] };
     expect(await sseStatus(tunnel, 'https://tunnel.example')).toBe(200);
     expect(await sseStatus(tunnel, EXTENSION)).toBe(403);
+    expect(await sseStatus(tunnel, PANGULAR_EXTENSION)).toBe(200);
+    expect(await sseStatus({ allowedOrigins: [] }, PANGULAR_EXTENSION)).toBe(200);
     expect(await sseStatus({ allowedOrigins: false }, 'https://evil.example')).toBe(200);
   });
 });

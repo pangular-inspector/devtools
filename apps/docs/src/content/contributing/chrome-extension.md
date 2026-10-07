@@ -36,6 +36,13 @@ extension/
 | `optional_host_permissions` | `http://*/*` and `https://*/*`. The panel requests one host at a time, only when you click **Allow access**. |
 | `content_scripts`           | `content-script.js` and `detect-angular.js`, on every page.                                                  |
 | `minimum_chrome_version`    | `111`.                                                                                                       |
+| `key`                       | The public key that fixes the extension ID to `dcogniffeelebaolkkfbopmjcblhblfk`.                            |
+
+### Extension ID
+
+Chrome derives the ID of an extension from its public key. The `key` in `manifest.json` gives every build the ID `dcogniffeelebaolkkfbopmjcblhblfk`, whether you load it unpacked or install it from the store. The Vite plugin and the Express hub trust `chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk` by default, through `PANGULAR_EXTENSION_IDS` in `packages/devtools/src/extension-origin.ts`.
+
+The maintainers keep the matching private key for the Chrome Web Store upload. It is not in the repository, and you never need it to build or load the extension. If you change the `key`, the ID changes too, and the server refuses the extension until its origin is in `allowedOrigins` or its ID is in `PANGULAR_EXTENSION_IDS`.
 
 ## Build
 
@@ -74,13 +81,21 @@ After a rebuild, click the reload icon on the extension card, then reopen DevToo
 pnpm extension:zip
 ```
 
-This runs `extension:build`, then writes `dist/pangular-inspector-extension.zip`. The zip leaves out `.DS_Store` files.
+This runs `extension:build`, then writes `dist/pangular-inspector-extension.zip`. The zip leaves out `.DS_Store` files and drops `key` from the manifest, because the Chrome Web Store refuses a manifest with a `key`.
+
+For the first upload of a new store item, give the script the private key so the store keeps the ID `dcogniffeelebaolkkfbopmjcblhblfk`:
+
+```bash
+PANGULAR_EXTENSION_KEY=/path/to/pangular-inspector-extension-key.pem pnpm extension:zip
+```
+
+The key goes into the zip as `key.pem`. Later updates don't need it.
 
 ### Upload
 
 1. Bump `version` in `extension/manifest.json`.
 2. Go to the <a href="https://chrome.google.com/webstore/devconsole" target="_blank" rel="noopener noreferrer">Chrome Developer Dashboard</a>.
-3. Click **New item** (or open the existing item) and upload the zip.
+3. Click **New item** (or open the existing item) and upload the zip. For **New item**, build the zip with `PANGULAR_EXTENSION_KEY` set, as above.
 4. Fill in the listing details and submit for review.
 
 <ngmd-alert severity="helpful">

@@ -9,6 +9,7 @@ import {
   isHubPath,
 } from '../vite.ts';
 
+const PANGULAR_EXTENSION = 'chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk';
 const EXTENSION = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
 const OTHER_EXTENSION = 'chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba';
 
@@ -74,7 +75,13 @@ describe('hubUpgradeListener', () => {
     const { server, hub } = guarded();
     const evil = upgrade(server, '127.0.0.1', '/__devframes/__ws', 'https://evil.example');
     expect(evil.destroy).toHaveBeenCalled();
-    for (const origin of ['http://127.attacker.example', 'null', 'file://', OTHER_EXTENSION]) {
+    for (const origin of [
+      'http://127.attacker.example',
+      'null',
+      'file://',
+      EXTENSION,
+      OTHER_EXTENSION,
+    ]) {
       expect(upgrade(server, '127.0.0.1', '/__devframes/__ws', origin).destroy).toHaveBeenCalled();
     }
     expect(hub).not.toHaveBeenCalled();
@@ -83,13 +90,14 @@ describe('hubUpgradeListener', () => {
       'http://localhost:5173',
       'https://127.0.0.1:4200',
       'http://[::1]:3000',
+      PANGULAR_EXTENSION,
       undefined,
     ]) {
       expect(
         upgrade(server, '127.0.0.1', '/__devframes/__ws', origin).destroy,
       ).not.toHaveBeenCalled();
     }
-    expect(hub).toHaveBeenCalledTimes(4);
+    expect(hub).toHaveBeenCalledTimes(5);
   });
 
   it('normalizes the path before deciding whether an upgrade targets the hub', () => {
@@ -107,9 +115,11 @@ describe('hubUpgradeListener', () => {
 });
 
 describe('hub origin policy', () => {
-  it('allows loopback http(s) pages, and rejects other sites and unknown extensions', () => {
+  it('allows loopback http(s) pages and the Pangular Inspector extension, and rejects other sites and extensions', () => {
     expect(isAllowedHubOrigin(undefined)).toBe(true);
     expect(isAllowedHubOrigin('http://localhost:5173')).toBe(true);
+    expect(isAllowedHubOrigin(PANGULAR_EXTENSION)).toBe(true);
+    expect(hubOriginRegistry.isAllowed(PANGULAR_EXTENSION)).toBe(true);
     expect(isAllowedHubOrigin(EXTENSION)).toBe(false);
     expect(isAllowedHubOrigin('chrome-extension://abcdefghijklmnop')).toBe(false);
     expect(isAllowedHubOrigin('https://evil.example')).toBe(false);
@@ -119,13 +129,15 @@ describe('hub origin policy', () => {
     expect(hubOriginRegistry.isAllowed(EXTENSION)).toBe(false);
   });
 
-  it('accepts only the extension IDs listed in allowedOrigins', () => {
+  it('accepts the extension IDs listed in allowedOrigins next to the Pangular Inspector extension', () => {
     const policy = { allowedOrigins: [EXTENSION] };
     expect(isAllowedHubOrigin(EXTENSION, policy)).toBe(true);
     expect(isAllowedHubOrigin(OTHER_EXTENSION, policy)).toBe(false);
     expect(isAllowedHubOrigin(`${EXTENSION}/`, policy)).toBe(false);
     expect(hubOriginRegistryFor(policy).isAllowed(EXTENSION)).toBe(true);
     expect(hubOriginRegistryFor(policy).isAllowed(OTHER_EXTENSION)).toBe(false);
+    expect(isAllowedHubOrigin(PANGULAR_EXTENSION, policy)).toBe(true);
+    expect(hubOriginRegistryFor(policy).isAllowed(PANGULAR_EXTENSION)).toBe(true);
   });
 });
 

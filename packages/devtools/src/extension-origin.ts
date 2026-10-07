@@ -1,8 +1,12 @@
 /**
- * IDs of published Pangular Inspector extension builds, trusted without any
- * `allowedOrigins` entry. Empty until the extension has a fixed ID.
+ * IDs of Pangular Inspector extension builds, trusted without any
+ * `allowedOrigins` entry. The `key` in `extension/manifest.json` fixes the ID.
  */
-export const PANGULAR_EXTENSION_IDS: readonly string[] = [];
+export const PANGULAR_EXTENSION_IDS: readonly string[] = ['dcogniffeelebaolkkfbopmjcblhblfk'];
+
+export const PANGULAR_EXTENSION_ORIGINS: readonly string[] = PANGULAR_EXTENSION_IDS.map(
+  (id) => `chrome-extension://${id}`,
+);
 
 const EXTENSION_ID = /^[a-p]{32}$/;
 
