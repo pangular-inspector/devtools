@@ -267,7 +267,7 @@ describe('extension panel bridge', () => {
     });
     await vi.advanceTimersByTimeAsync(500);
     expect(panel.message()).toBe(
-      'The devtools server on http://192.168.1.20:5173 refused the request (403). It said: "Pangular Inspector only answers requests from this machine." To trust this extension, add chrome-extension://ext-id to allowedOrigins. Tried:',
+      'The devtools server on http://192.168.1.20:5173 refused the request (403). It said: "Pangular Inspector only answers requests from this machine." If the page runs on this machine, add chrome-extension://ext-id to allowedOrigins to trust this extension. That does not change the rule that the server only answers this machine. Tried:',
     );
     expect(panel.tried()).toContain(
       'http://192.168.1.20:5173/__devframes/pangular/__connection.json (403)',

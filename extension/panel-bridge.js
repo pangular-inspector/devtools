@@ -101,7 +101,7 @@ async function detectConnection() {
       const extension = chrome.runtime.getURL('').replace(/\/$/, '');
       const hint =
         refused.status === 403 && extension !== PINNED_ORIGIN
-          ? ` To trust this extension, add ${extension} to allowedOrigins.`
+          ? ` If the page runs on this machine, add ${extension} to allowedOrigins to trust this extension. That does not change the rule that the server only answers this machine.`
           : '';
       showStatus(
         `The devtools server on ${page.origin} refused the request (${refused.status}).${reason}${hint} Tried:`,

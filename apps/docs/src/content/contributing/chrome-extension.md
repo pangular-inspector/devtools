@@ -89,7 +89,7 @@ For the first upload of a new store item, give the script the private key so the
 PANGULAR_EXTENSION_KEY=/path/to/pangular-inspector-extension-key.pem pnpm extension:zip
 ```
 
-The key goes into the zip as `key.pem`. Later updates don't need it.
+The key goes into the zip as `key.pem`, and the script stops if it doesn't match the `key` in the manifest. Later updates don't need it.
 
 ### Upload
 
