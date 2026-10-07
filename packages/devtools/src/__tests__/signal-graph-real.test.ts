@@ -18,6 +18,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { bootstrapApplication } from '@angular/platform-browser';
 import { afterEach, describe, expect, it } from 'vitest';
 import { collectSignalGraph, type SignalDebugNg } from '../signal-graph.ts';
+import { angularAtLeast } from './angular-version.ts';
 
 class TripStore {
   readonly trips = signal(['Lisbon'], { debugName: 'trips' });
@@ -80,7 +81,7 @@ const settle = async (app: ApplicationRef) => {
   }
 };
 
-describe('collectSignalGraph with a real app', () => {
+describe.skipIf(!angularAtLeast('20.1.0'))('collectSignalGraph with a real app', () => {
   let app: ApplicationRef | null = null;
   afterEach(() => {
     app?.destroy();

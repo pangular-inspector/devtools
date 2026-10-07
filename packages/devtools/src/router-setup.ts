@@ -48,7 +48,14 @@ function scrollerOf(ng: RouterDebugApi, root: Element | null): AnyRecord | null 
   const accept = (value: unknown) => read(() => !!(value as AnyRecord)?.['options'], false);
   const byClass = providerOf(ng, injector, 'RouterScroller', accept);
   if (byClass) return byClass;
-  const record = providersOf(ng, root).find((p) => tokenDescription(p.token) === 'Router Scroller');
+  const record = providersOf(ng, root).find(
+    (p) =>
+      tokenDescription(p.token) === 'Router Scroller' ||
+      read(
+        () => /new\s+_*RouterScroller\b/.test(String((p.provider as AnyRecord)['useFactory'])),
+        false,
+      ),
+  );
   const value = record
     ? read(() => (injector as AnyRecord)['get'](record.token, null) as unknown, null)
     : null;

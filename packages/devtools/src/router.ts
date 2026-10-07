@@ -895,10 +895,10 @@ export function applyRouterEvent(
     nav.url = redactUrl(url, state.secrets);
     const from = read(() => String(router?.['url'] ?? ''), '');
     if (router && from) nav.from = redactUrl(from);
-    const extras = read(
-      () => router?.['navigationTransitions']?.['currentNavigation']?.()?.['extras'] as AnyRecord,
-      null,
-    );
+    const extras = read(() => {
+      const current = router?.['navigationTransitions']?.['currentNavigation'];
+      return (typeof current === 'function' ? current() : current)?.['extras'] as AnyRecord;
+    }, null);
     const listed = extrasOf(extras, event['restoredState']);
     if (listed) nav.extras = listed;
     if (pendingCaller && at - pendingCaller.at < 2000 && nav.trigger === 'imperative') {

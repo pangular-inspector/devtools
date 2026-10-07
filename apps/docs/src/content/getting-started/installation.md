@@ -15,10 +15,10 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`. It contain
 
 <ngmd-card-grid columns="3">
   <ngmd-card icon="terminal" title="Node.js 22 or later">
-    The package declares <code>node &gt;=22</code> in its <code>engines</code> field. CI runs on Node.js 24.
+    The package declares <code>node &gt;=22</code> in its <code>engines</code> field. CI tests Node.js 22 and 24.
   </ngmd-card>
   <ngmd-card icon="code" title="Angular 20 or later">
-    <code>&#64;angular/core</code> and <code>&#64;angular/common</code> 20 and newer are supported. CI runs the tests on Angular 22.
+    <code>&#64;angular/core</code> and <code>&#64;angular/common</code> 20 and newer are supported, with no upper bound. See <a href="#tested-versions">Tested versions</a>.
   </ngmd-card>
   <ngmd-card icon="box" title="Package manager">
     pnpm, npm, yarn or bun. Any of the four.
@@ -28,6 +28,20 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`. It contain
 <ngmd-callout type="warning" title="Development builds only">
   Live data comes from Angular's debug API (<code>window.ng</code>). Production builds remove it, so the live tabs stay empty there. Run your app in development mode while you inspect it.
 </ngmd-callout>
+
+### Tested versions
+
+The peer range is `@angular/* >=20` with no upper bound. CI tests these versions:
+
+| Angular                 | Node.js | What runs                                                                 | When                                  |
+| ----------------------- | ------- | ------------------------------------------------------------------------- | ------------------------------------- |
+| 20.0 (lowest supported) | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
+| 21 (latest 21.x)        | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
+| 22 (latest 22.x)        | 22      | The page-side tests, including Signal Forms                               | Every push to `main`, and weekly      |
+| 22 (repository version) | 24      | Every package and panel test, the type checks and axe                     | Every pull request and push to `main` |
+| Newest the ranges allow | 24      | A fresh Angular CLI app and a fresh Analog app with the package installed | Weekly                                |
+
+Some features need a later Angular release than 20.0. The inspector pages list them, for example [abort and probe](../inspectors/router.md#abort-and-probe-need-angular-20-2) (20.2) and the live [signal graph](../inspectors/signals.md#debug-apis) (20.1). The Signal Forms tests run on Angular 22 and later, where Signal Forms are stable.
 
 ## Install the package
 

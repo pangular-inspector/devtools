@@ -6,6 +6,10 @@ inputs:
     description: Passed to setup-node, which writes an .npmrc for it. Only the release sets it.
     required: false
     default: ''
+  node-version:
+    description: A Node.js version to use in place of the one in .nvmrc.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -16,7 +20,8 @@ runs:
 
     - uses: actions/setup-node@v7
       with:
-        node-version-file: .nvmrc
+        node-version: ${{ inputs.node-version }}
+        node-version-file: ${{ inputs.node-version == '' && '.nvmrc' || '' }}
         cache: pnpm
         registry-url: ${{ inputs.registry-url }}
 

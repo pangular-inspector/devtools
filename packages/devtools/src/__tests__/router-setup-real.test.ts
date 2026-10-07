@@ -104,32 +104,45 @@ describe('detectSetup on a real provideRouter app', () => {
     vi.restoreAllMocks();
   });
 
-  it.each([
-    ['componentInputBinding', withComponentInputBinding(), 'on'],
-    ['viewTransitions', withViewTransitions(), 'on'],
-    ['navigationErrorHandler', withNavigationErrorHandler(() => {}), 'on'],
-    ['routerResources', withRouterResources(), 'on'],
-    ['injectorCleanup', withExperimentalAutoCleanupInjectors(), 'on'],
-    ['preloading', withPreloading(PreloadAllModules), 'PreloadAllModules'],
-    ['scroller', withInMemoryScrolling({ anchorScrolling: 'enabled' }), 'on'],
-  ] as const)('detects the %s feature', async (name, feature, value) => {
-    const setup = await setupWith([feature as RouterFeatures]);
+  it.each(
+    (
+      [
+        ['componentInputBinding', withComponentInputBinding, 'on'],
+        ['viewTransitions', withViewTransitions, 'on'],
+        ['navigationErrorHandler', () => withNavigationErrorHandler(() => {}), 'on'],
+        ['routerResources', withRouterResources, 'on'],
+        ['injectorCleanup', withExperimentalAutoCleanupInjectors, 'on'],
+        ['preloading', () => withPreloading(PreloadAllModules), 'PreloadAllModules'],
+        ['scroller', () => withInMemoryScrolling({ anchorScrolling: 'enabled' }), 'on'],
+      ] as const
+    ).filter(([, feature]) => typeof feature === 'function'),
+  )('detects the %s feature', async (name, feature, value) => {
+    const setup = await setupWith([(feature as () => unknown)() as RouterFeatures]);
     expect(setup.features[name]).toBe(value);
   });
 
-  it('detects withExperimentalPlatformNavigation()', async () => {
-    const navigation = Object.assign(new EventTarget(), {
-      currentEntry: { url: 'http://localhost/', key: '0', id: '0', index: 0, getState: () => null },
-      entries: () => [],
-      transition: null,
-      navigate: () => ({ committed: Promise.resolve(), finished: Promise.resolve() }),
-    });
-    const setup = await setupWith(
-      [withExperimentalPlatformNavigation()],
-      [{ provide: PlatformNavigation, useValue: navigation }],
-    );
-    expect(setup.features['platformNavigation']).toBe('on');
-  });
+  it.skipIf(typeof withExperimentalPlatformNavigation !== 'function')(
+    'detects withExperimentalPlatformNavigation()',
+    async () => {
+      const navigation = Object.assign(new EventTarget(), {
+        currentEntry: {
+          url: 'http://localhost/',
+          key: '0',
+          id: '0',
+          index: 0,
+          getState: () => null,
+        },
+        entries: () => [],
+        transition: null,
+        navigate: () => ({ committed: Promise.resolve(), finished: Promise.resolve() }),
+      });
+      const setup = await setupWith(
+        [withExperimentalPlatformNavigation()],
+        [{ provide: PlatformNavigation, useValue: navigation }],
+      );
+      expect(setup.features['platformNavigation']).toBe('on');
+    },
+  );
 
   it('reads scrolling options and withRouterConfig() options', async () => {
     const setup = await setupWith([
