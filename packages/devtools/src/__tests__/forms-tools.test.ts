@@ -437,6 +437,25 @@ describe('WebMCP in the forms agent output', () => {
     expect(
       isPageReport({ pageId: 'pg', forms: [{ ...signup, webMcp: { name: 1 } }], events: [] }),
     ).toBe(false);
+    for (const bad of [
+      { blocking: [null] },
+      { blocking: [{ path: 'birthday' }] },
+      { calls: [{ outcome: 'submitted' }] },
+      { calls: [{ at: 1, outcome: 'submitted', fields: [1] }] },
+      { inputs: [1] },
+      { requiredChanged: [{ path: 'email', now: 'yes' }] },
+    ]) {
+      const withBad = { ...signup, webMcp: { ...tool, ...bad } };
+      expect(isPageReport({ pageId: 'pg', forms: [withBad], events: [] })).toBe(false);
+      expect(
+        isPageReport({
+          pageId: 'pg',
+          forms: [],
+          events: [],
+          webMcp: { modelContext: true, tools: [{ ...tool, ...bad }] },
+        }),
+      ).toBe(false);
+    }
   });
 
   it('keeps WebMCP state per page and drops it with the page', () => {

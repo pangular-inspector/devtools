@@ -11,6 +11,38 @@ function code(text: string): string {
   return `\`${text.replace(/`/g, "'").replace(/\s+/g, ' ')}\``;
 }
 
+const MAX_ENTRIES = 200;
+
+function listOf(value: unknown, item: (entry: unknown) => boolean): boolean {
+  return (
+    value === undefined ||
+    (Array.isArray(value) && value.length <= MAX_ENTRIES && value.every(item))
+  );
+}
+
+const isString = (entry: unknown) => typeof entry === 'string';
+
+function isCall(entry: unknown): boolean {
+  return (
+    isRecord(entry) &&
+    typeof entry['at'] === 'number' &&
+    typeof entry['outcome'] === 'string' &&
+    (entry['ms'] === undefined || typeof entry['ms'] === 'number') &&
+    (entry['detail'] === undefined || typeof entry['detail'] === 'string') &&
+    listOf(entry['fields'], isString)
+  );
+}
+
+function isBlocking(entry: unknown): boolean {
+  return (
+    isRecord(entry) && typeof entry['path'] === 'string' && typeof entry['reason'] === 'string'
+  );
+}
+
+function isRequiredChange(entry: unknown): boolean {
+  return isRecord(entry) && typeof entry['path'] === 'string' && typeof entry['now'] === 'boolean';
+}
+
 export function isWebMcpTool(value: unknown): value is WebMcpTool {
   if (!isRecord(value)) return false;
   return (
@@ -18,10 +50,12 @@ export function isWebMcpTool(value: unknown): value is WebMcpTool {
     typeof value['description'] === 'string' &&
     typeof value['status'] === 'string' &&
     typeof value['seen'] === 'string' &&
-    (value['calls'] === undefined || Array.isArray(value['calls'])) &&
-    (value['inputs'] === undefined || Array.isArray(value['inputs'])) &&
-    (value['blocking'] === undefined || Array.isArray(value['blocking'])) &&
-    (value['requiredChanged'] === undefined || Array.isArray(value['requiredChanged']))
+    (value['error'] === undefined || typeof value['error'] === 'string') &&
+    listOf(value['calls'], isCall) &&
+    listOf(value['inputs'], isString) &&
+    listOf(value['required'], isString) &&
+    listOf(value['blocking'], isBlocking) &&
+    listOf(value['requiredChanged'], isRequiredChange)
   );
 }
 
