@@ -16,20 +16,23 @@ import {
   withDebugTracing,
   withDisabledInitialNavigation,
   withEnabledBlockingInitialNavigation,
-  withExperimentalAutoCleanupInjectors,
-  withExperimentalPlatformNavigation,
   withHashLocation,
   withInMemoryScrolling,
   withNavigationErrorHandler,
   withPreloading,
   withRouterConfig,
-  ɵwithRouterResources as withRouterResources,
   withViewTransitions,
   type RouterFeatures,
 } from '@angular/router';
+import * as router from '@angular/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RouterDebugApi } from '../router.ts';
 import { detectSetup, type RouterSetup } from '../router-setup.ts';
+
+const optionalRouter: Partial<typeof router> = router;
+const withExperimentalAutoCleanupInjectors = optionalRouter.withExperimentalAutoCleanupInjectors;
+const withExperimentalPlatformNavigation = optionalRouter.withExperimentalPlatformNavigation;
+const withRouterResources = optionalRouter.ɵwithRouterResources;
 
 class Root {}
 Component({ selector: 'app-root', template: '' })(Root);
@@ -137,7 +140,7 @@ describe('detectSetup on a real provideRouter app', () => {
         navigate: () => ({ committed: Promise.resolve(), finished: Promise.resolve() }),
       });
       const setup = await setupWith(
-        [withExperimentalPlatformNavigation()],
+        [withExperimentalPlatformNavigation!()],
         [{ provide: PlatformNavigation, useValue: navigation }],
       );
       expect(setup.features['platformNavigation']).toBe('on');
