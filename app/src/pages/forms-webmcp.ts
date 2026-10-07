@@ -95,6 +95,10 @@ const OUTCOMES: Record<string, string> = {
                 </li>
               }
             </ul>
+          } @else if (tool.seen === 'list') {
+            <p class="muted">
+              Calls are not recorded for a tool registered before the inspector attached.
+            </p>
           } @else {
             <p class="muted">No agent has called this tool since the inspector attached.</p>
           }

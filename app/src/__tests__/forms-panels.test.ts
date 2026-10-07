@@ -325,6 +325,20 @@ describe('FormsWebMcp', () => {
     expect(text(fixture)).toContain('No agent has called this tool');
   });
 
+  it('says calls are not recorded for a tool registered before the inspector attached', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', {
+      name: 'sign_up',
+      description: '',
+      status: 'registered',
+      seen: 'list',
+    });
+    await settle(fixture);
+    expect(text(fixture)).toContain('registered before the inspector attached');
+    expect(text(fixture)).toContain('Calls are not recorded');
+    expect(text(fixture)).not.toContain('No agent has called this tool');
+  });
+
   it('says when the provider is set but the browser has no modelContext', async () => {
     const fixture = TestBed.createComponent(FormsWebMcp);
     fixture.componentRef.setInput('page', { modelContext: false, provided: true, tools: [] });

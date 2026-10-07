@@ -265,13 +265,13 @@ For "why is this form invalid", call `explain-form-invalid` first. The tools red
 
 ### Track changes
 
-| Tool            | What it answers                                                                                                              | Arguments                                                                                                              |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `form-history`  | A timeline of changes, each tagged with its origin (`user`, `code`, `devtools`, `binding`). Returns the current marker.      | `form`, `path`, `type`, `origin`, `since`, `limit` (default 50, at most 200)                                           |
-| `form-diff`     | The net change since a marker: each field whose value or status ended up different.                                          | `form`, `since`                                                                                                        |
-| `wait-for-form` | Waits until a condition holds, or reports the state on timeout.                                                              | `form`, `until` (`settled`, `valid`, `not-pending` or `submitted`), `since`, `timeoutMs` (default 5000, at most 30000) |
-| `export-form`   | A JSON snapshot, or a test fixture with the expected status. Secret values stay redacted.                                    | `form`, `format` (`snapshot` or `fixture`)                                                                             |
-| `lint-forms`    | Form bugs, NG01xxx setup errors and model-aware accessibility checks, like a missing label or error text that is not linked. | `form`                                                                                                                 |
+| Tool            | What it answers                                                                                                                  | Arguments                                                                                                              |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `form-history`  | A timeline of changes, each tagged with its origin (`user`, `code`, `devtools`, `binding`, `agent`). Returns the current marker. | `form`, `path`, `type`, `origin`, `since`, `limit` (default 50, at most 200)                                           |
+| `form-diff`     | The net change since a marker: each field whose value or status ended up different.                                              | `form`, `since`                                                                                                        |
+| `wait-for-form` | Waits until a condition holds, or reports the state on timeout.                                                                  | `form`, `until` (`settled`, `valid`, `not-pending` or `submitted`), `since`, `timeoutMs` (default 5000, at most 30000) |
+| `export-form`   | A JSON snapshot, or a test fixture with the expected status. Secret values stay redacted.                                        | `form`, `format` (`snapshot` or `fixture`)                                                                             |
+| `lint-forms`    | Form bugs, NG01xxx setup errors and model-aware accessibility checks, like a missing label or error text that is not linked.     | `form`                                                                                                                 |
 
 Markers let an agent check its own work: read the marker, act, then call `form-diff` with `since` set to it. A marker counts events across every open page and keeps counting after a page reloads, so it stays valid when the agent works in another tab.
 
