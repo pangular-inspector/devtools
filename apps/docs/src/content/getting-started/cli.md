@@ -121,7 +121,7 @@ When no app is connected, the tabs show what your source declares. An [Angular N
 - [Pipes](../inspectors/pipes.md)
 
 <ngmd-alert severity="helpful">
-  For live data, mount the devtools in your app's own server. See <a href="./express.md">Angular CLI and Express</a> or <a href="./vite.md">Vite and Analog</a>.
+  For live data, mount the devtools in your app's own server. See <a href="./express.md">Angular CLI and Express</a> or <a href="./vite.md">Vite and Analog</a>. A client-only Angular CLI app can proxy <code>ng serve</code> to this server instead. See <a href="./installation.md#client-only-angular-cli-app">Client-only Angular CLI app</a>.
 </ngmd-alert>
 
 ## Static report
@@ -179,7 +179,7 @@ The stdio server has no page connected, so it registers only the tools that read
     The root of your Angular workspace. The scan starts from the current directory, or from the folder you pass with <code>--root</code>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Port 9999 is taken">
-    Without <code>--port</code>, the server picks a random free port and prints it. Pass <code>--port</code> to choose one yourself.
+    Without <code>--port</code>, the server listens on 9999, or on a random free port if 9999 is taken, and prints it. Pass <code>--port</code> to choose one yourself.
   </ngmd-accordion-item>
 </ngmd-accordion>
 

@@ -1871,7 +1871,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:router-config',
       description:
-        'How the router is set up on the running page: provideRouter or forRoot, Angular version, effective options with which are set and which are defaults (onSameUrlNavigation, paramsInheritanceStrategy, urlUpdateStrategy, canceledNavigationResolution, scrolling, initial navigation), enabled features (input binding, view transitions, error handler, preloading strategy, scroller, resources), strategies (location, title, reuse, URL handling), base href, hydration and whether per-guard instrumentation is on.',
+        'How the router is set up on the running page: provideRouter, forRoot or other, or unknown when the build cannot tell, Angular version, effective options with which are set and which are defaults (onSameUrlNavigation, paramsInheritanceStrategy, urlUpdateStrategy, canceledNavigationResolution, scrolling, initial navigation), enabled features (input binding, view transitions, error handler, preloading strategy, scroller, resources), strategies (location, title, reuse, URL handling), base href, hydration and whether per-guard instrumentation is on.',
       safety: 'read',
       inputSchema: { type: 'object', properties: { page: pageProperty } },
       handler: async (args: { page?: string }) => {

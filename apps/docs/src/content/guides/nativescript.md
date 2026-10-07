@@ -9,7 +9,7 @@ description: Inspect a NativeScript Angular app from the simulator or a device, 
 
 # Set up NativeScript
 
-This guide adds the devtools to a NativeScript Angular app. The app has no DOM, so a separate overlay walks the native view tree through *Angular's debug API and reports to the standalone devtools server.
+This guide adds the devtools to a NativeScript Angular app. The app has no DOM, so a separate overlay walks the native view tree through *Angular's debug API and reports to the standalone devtools server. For what each tab shows and the overlay options, see [NativeScript](../getting-started/nativescript.md).
 
 ## What you get
 
@@ -83,7 +83,7 @@ if (__DEV__) {
 }
 ```
 
-Call it before `runNativeScriptAngularApp()`. The injector inspector relies on *Angular's injector profiler, which *Angular only wires while it creates the platform.
+Call it before `runNativeScriptAngularApp()`. The injector inspector relies on *Angular's injector profiler, which *Angular only wires while it creates the platform. See [Options](../getting-started/nativescript.md#options) for `baseURL`, `intervalMs` and `retryMs`.
 
 ### Where the overlay connects
 
@@ -140,6 +140,7 @@ cd examples/nativescript && npm install && ns debug ios --no-hmr
 ## Where to next
 
 <ngmd-pill-row>
+  <ngmd-pill href="/getting-started/nativescript" title="NativeScript"></ngmd-pill>
   <ngmd-pill href="/getting-started/cli" title="Standalone CLI"></ngmd-pill>
   <ngmd-pill href="/inspectors/components" title="Components inspector"></ngmd-pill>
   <ngmd-pill href="/agents/mcp-server" title="MCP server"></ngmd-pill>

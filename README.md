@@ -18,7 +18,7 @@ The package is published on npm as [`@pangular-inspector/devtools`](https://www.
 npm install @pangular-inspector/devtools devframe
 ```
 
-Then follow the [installation guide](./apps/docs/src/content/getting-started/installation.md) for your setup: Angular CLI with Express, Vite and Analog, the standalone CLI, or [Angular Native](./apps/docs/src/content/getting-started/angular-native.md). For a coding agent, run `npx @pangular-inspector/devtools mcp`.
+Then follow the [installation guide](./apps/docs/src/content/getting-started/installation.md) for your setup: Angular CLI with Express, Vite and Analog, the standalone CLI, or [Angular Native](./apps/docs/src/content/guides/angular-native.md). For a coding agent, run `npx @pangular-inspector/devtools mcp`.
 
 ## Documentation
 

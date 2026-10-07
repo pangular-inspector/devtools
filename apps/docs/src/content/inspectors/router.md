@@ -65,7 +65,7 @@ The result of **Go** and **Read lazy** shows under the row you clicked.
 
 ### Setup
 
-How the router is set up: `provideRouter` or `forRoot`, the effective options with **set** or **default** badges, the enabled features, the strategies, the base href and hydration.
+How the router is set up (`provideRouter`, `forRoot or other` or `unknown`), the effective options with **set** or **default** badges, the enabled features, the strategies, the base href and hydration.
 
 `initialNavigation` shows the mode that `withEnabledBlockingInitialNavigation()`, `withDisabledInitialNavigation()` or the `forRoot` option sets. The features map to these router features:
 
@@ -204,7 +204,7 @@ Without that recording, the guards listed for a navigation are candidates: the `
 
 ### Setup kind on Angular 20.0 to 20.3.4
 
-**Set up with** tells `provideRouter` from `forRoot` by the `ng.ɵgetRouterInstance` helper. Angular 20.0 to 20.3.4 never publish it, so on those versions the row shows `unknown`.
+**Set up with** tells `provideRouter` from `forRoot` by the `ng.ɵgetRouterInstance` helper. Angular 20.0 to 20.3.4 never publish it, so on those versions the overlay reads the root providers instead. The `RouterModule.forRoot()` guard token means `forRoot or other`, and the `ROUTES` token without that guard means `provideRouter`. If neither is there, the row shows `unknown`.
 
 ### Abort and probe need Angular 20.2
 

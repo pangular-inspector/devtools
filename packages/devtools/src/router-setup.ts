@@ -127,6 +127,18 @@ function hasDebugTracing(ng: RouterDebugApi, root: Element | null): boolean {
   );
 }
 
+function setupKindOf(
+  provided: ProvidedToken[],
+  version: string | undefined,
+): RouterSetup['setupKind'] {
+  if (typeof (globalThis as AnyRecord)['ng']?.['ɵgetRouterInstance'] === 'function')
+    return 'provideRouter';
+  const descriptions = provided.map((p) => tokenDescription(p.token));
+  if (descriptions.includes('router duplicate forRoot guard')) return 'forRoot or other';
+  if (descriptions.includes('ROUTES')) return 'provideRouter';
+  return publishesRouterUtil(version) ? 'forRoot or other' : 'unknown';
+}
+
 export function detectSetup(
   ng: RouterDebugApi,
   router: AnyRecord,
@@ -137,7 +149,8 @@ export function detectSetup(
   const scroller = scrollerOf(ng, root);
   const scrollOptions = read(() => (scroller?.['options'] as AnyRecord) ?? {}, {});
   const transitions = read(() => router['navigationTransitions'] as AnyRecord, null);
-  const initialNavigation = initialNavigationOf(ng, root, providersOf(ng, root));
+  const provided = providersOf(ng, root);
+  const initialNavigation = initialNavigationOf(ng, root, provided);
   const effective: Record<string, unknown> = {
     ...options,
     initialNavigation: initialNavigation ?? options['initialNavigation'],
@@ -202,12 +215,7 @@ export function detectSetup(
   );
   const setup: RouterSetup = {
     mode: 'full',
-    setupKind:
-      typeof (globalThis as AnyRecord)['ng']?.['ɵgetRouterInstance'] === 'function'
-        ? 'provideRouter'
-        : publishesRouterUtil(version)
-          ? 'forRoot or other'
-          : 'unknown',
+    setupKind: setupKindOf(provided, version),
     routers,
     options: list,
     features,
