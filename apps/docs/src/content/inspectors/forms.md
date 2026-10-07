@@ -208,7 +208,25 @@ The actions don't write secret fields unless you unmask them. See [Access and re
 
 ### WebMCP is best effort
 
-`experimentalWebMcpTool` is experimental in Angular. The overlay wraps `modelContext.registerTool` when it loads, so it records registrations and calls from then on. For a tool registered earlier, it reads the browser's tool list when the browser offers one (`getTools()` or `listTools()`), and the block says **registered before the inspector attached**. Calls to those tools are not recorded. The overlay links a tool to its form by its input schema, or by the form an agent call submits. A tool it cannot link shows in the `inspect-forms` output under **WebMCP**.
+`experimentalWebMcpTool` is experimental in Angular. The overlay wraps `modelContext.registerTool` when it loads, so it records registrations and calls from then on. The overlay has no hook that runs before your app. For a tool registered earlier, it reads the browser's tool list when the browser offers one (`getTools()` or `listTools()`), and the block says **registered before the inspector attached**. Calls to those tools are not recorded. If the browser offers no tool list, a form that registered before the overlay loaded shows no **WebMCP tool** block. To see every registration and call, register the form after the overlay loads, for example on a route you open later. The overlay links a tool to its form by its input schema, or by the form an agent call submits. A tool it cannot link shows in the `inspect-forms` output under **WebMCP**.
+
+### Try WebMCP in the demo
+
+Without a browser that provides `modelContext`, Angular registers no tool. The [Angular Travel demo](../contributing/demo-apps.md#angular-travel) adds a stand-in `navigator.modelContext` in development when the browser has none. Its Signal Forms example on `/examples/forms` registers a `sign_up` tool:
+
+<ngmd-workflow>
+  <ngmd-step title="Open the demo home page">
+    Start on <code>/</code>, so the overlay loads before the form registers its tool.
+  </ngmd-step>
+  <ngmd-step title="Open the forms example">
+    Go to <strong>DevTools Lab</strong>, then <strong>Forms</strong>. The <strong>WebMCP tool</strong> block of <code>SignalFormExample.signup</code> shows <code>sign_up</code> as <strong>registered</strong>.
+  </ngmd-step>
+  <ngmd-step title="Call the tool">
+    Click <strong>Fill as an agent</strong>. The call shows under <strong>Recent calls</strong>, and its changes show in the timeline with the <strong>agent</strong> origin.
+  </ngmd-step>
+</ngmd-workflow>
+
+If you load `/examples/forms` directly, the form registers before the overlay loads. The block then says **registered before the inspector attached**, and the call is not recorded. In a browser with its own `modelContext`, the demo uses it, and **Fill as an agent** asks you to call `sign_up` from your agent.
 
 ### Snapshot limits
 
