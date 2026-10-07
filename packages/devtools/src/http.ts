@@ -189,7 +189,8 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     pageUrl = location.pathname + location.search;
   }
   const url = req.urlWithParams;
-  const rules = side === 'client' ? clientRules() : httpRegistry().rules;
+  const registry = httpRegistry();
+  const rules = side === 'client' ? clientRules() : registry.record && registry.rules;
   const rule = matchRule(url, req.method, rules, side);
   const started = Date.now();
   const delay = Math.min(Math.max(rule?.delayMs ?? 0, 0), MAX_DELAY_MS);

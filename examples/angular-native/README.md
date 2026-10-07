@@ -57,4 +57,4 @@ If you restart the devtools server, the app reconnects within five seconds.
 
 Type-check the app with `npm run typecheck`.
 
-The setup is explained on the [Angular Native](../../apps/docs/src/content/getting-started/angular-native.md) docs page.
+The setup is explained in the [Set up Angular Native](../../apps/docs/src/content/guides/angular-native.md) guide.
