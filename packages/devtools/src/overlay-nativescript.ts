@@ -193,7 +193,10 @@ async function startSession(
     const owner = graph.component?.id ?? '';
     const full = force || !historyDelta || owner !== historyFor;
     historyFor = owner;
-    const history = signalHistory.collectDelta(graph.nodes, full);
+    const { changes: history, rollback } = signalHistory.collectDeltaWithRollback(
+      graph.nodes,
+      full,
+    );
     let answer: { delta?: boolean } | undefined;
     try {
       answer = (await my.rpc.call('push-signal-graph', {
@@ -202,7 +205,7 @@ async function startSession(
         ...(full ? { history } : { historyDelta: history }),
       })) as { delta?: boolean } | undefined;
     } catch (error) {
-      signalHistory.rollback();
+      rollback();
       lastSignalKey = '';
       throw error;
     }

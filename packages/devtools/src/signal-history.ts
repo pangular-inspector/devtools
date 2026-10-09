@@ -36,7 +36,6 @@ export function createSignalHistory(
   const history = new Map<string, SignalChange[]>();
   const totals = new Map<string, number>();
   const sent = new Map<string, number>();
-  let previous = new Map<string, number | undefined>();
   let trackSeq = 0;
 
   function onWrite(node: RawSignalNode) {
@@ -148,16 +147,20 @@ export function createSignalHistory(
     return totals.get(id) ?? 0;
   }
 
-  function collectDelta(nodes: SignalGraphNode[], full = false): Record<string, SignalChange[]> {
+  function collectDeltaWithRollback(
+    nodes: SignalGraphNode[],
+    full = false,
+  ): { changes: Record<string, SignalChange[]>; rollback: () => void } {
     const out: Record<string, SignalChange[]> = {};
-    previous = new Map();
+    const advanced = new Map<string, { before: number | undefined }>();
     for (const [id, list] of Object.entries(collect(nodes))) {
       const last = full ? -Infinity : (sent.get(id) ?? -Infinity);
       const fresh = list.filter((change) => change.epoch > last);
       if (list.length) {
-        previous.set(id, sent.get(id));
+        const after = list.at(-1)!.epoch;
+        advanced.set(id, { before: sent.get(id) });
         sent.delete(id);
-        sent.set(id, list.at(-1)!.epoch);
+        sent.set(id, after);
       }
       if (fresh.length) out[id] = fresh;
     }
@@ -165,18 +168,21 @@ export function createSignalHistory(
       if (sent.size <= MAX_NODES) break;
       sent.delete(id);
     }
-    return out;
+    const rollback = () => {
+      for (const [id, { before }] of advanced) {
+        const now = sent.get(id);
+        if (before === undefined) sent.delete(id);
+        else if (now === undefined || before < now) sent.set(id, before);
+      }
+    };
+    return { changes: out, rollback };
   }
 
-  function rollback() {
-    for (const [id, epoch] of previous) {
-      if (epoch === undefined) sent.delete(id);
-      else sent.set(id, epoch);
-    }
-    previous = new Map();
+  function collectDelta(nodes: SignalGraphNode[], full = false): Record<string, SignalChange[]> {
+    return collectDeltaWithRollback(nodes, full).changes;
   }
 
-  return { onWrite, collect, collectDelta, rollback, changesOf };
+  return { onWrite, collect, collectDelta, collectDeltaWithRollback, changesOf };
 }
 
 type SignalSetHook = ((node: RawSignalNode) => void) | null;

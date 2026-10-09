@@ -272,7 +272,10 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
         epoch: r.epoch,
         value: r.status,
       }));
-    const history = signalHistory.collectDelta([...graph.nodes, ...statuses], full);
+    const { changes: history, rollback } = signalHistory.collectDeltaWithRollback(
+      [...graph.nodes, ...statuses],
+      full,
+    );
     for (const item of [...graph.nodes, ...(graph.resources ?? [])]) {
       const changes = signalHistory.changesOf(item.id);
       if (changes) item.changes = changes;
@@ -286,7 +289,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
         ...(full ? { history } : { historyDelta: history }),
       })) as { delta?: boolean } | undefined;
     } catch (error) {
-      signalHistory.rollback();
+      rollback();
       lastSignalKey = '';
       throw error;
     }
