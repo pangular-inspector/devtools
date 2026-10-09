@@ -323,6 +323,18 @@ describe.sequential('devtools popup', () => {
     expect(stored().docked).toBe('float');
   });
 
+  it('draws no resize grip on a docked panel, whose size is fixed', async () => {
+    await loadPopup(true);
+    const sheet = document
+      .getElementById('pangular-popup-root')!
+      .shadowRoot!.querySelector('style')!.textContent!;
+    for (const mode of ['bottom', 'right']) {
+      const rule = new RegExp(`\\.panel\\.dock-${mode}\\s*\\{([^}]*)\\}`).exec(sheet)![1];
+      expect(rule).toContain('!important');
+      expect(rule).toMatch(/resize\s*:\s*none/);
+    }
+  });
+
   it('lets Escape clear a search box in the frame without closing the panel', async () => {
     await loadPopup(true);
     const doc = await frameDocument();

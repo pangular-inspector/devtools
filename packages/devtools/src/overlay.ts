@@ -329,7 +329,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     : null;
   const pipes = on.pipes ? attachPipes(my, pageId, getNg) : null;
   const http = on.http ? attachHttp(my, pageId, tickMs) : null;
-  const cd = on.components ? attachChangeDetection(my, pageId, getNg, limits.cdCycles) : null;
+  const cd = on.components
+    ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs)
+    : null;
   const ngrx = on.ngrx ? attachNgrx(my, pageId, getNg, limits.changeLog) : null;
 
   const navigations: NavigationRecord[] = [];

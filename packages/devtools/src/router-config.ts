@@ -98,7 +98,11 @@ export function walkConfig(router: AnyRecord, cut = { routes: 0 }): RouteNode[] 
     prefix: string,
     depth: number,
   ): RouteNode[] => {
-    if (!Array.isArray(routes) || depth > MAX_DEPTH) return [];
+    if (!Array.isArray(routes)) return [];
+    if (depth > MAX_DEPTH) {
+      cut.routes += routes.reduce((total, route) => total + subtreeSize(route, 0), 0);
+      return [];
+    }
     const out: RouteNode[] = [];
     routes.forEach((route, index) => {
       if (index >= MAX_SIBLINGS || ++count > MAX_NODES) {

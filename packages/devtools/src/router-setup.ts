@@ -31,7 +31,9 @@ const OPTION_DEFAULTS: [string, string][] = [
 ];
 
 function strategyName(value: unknown): string {
-  return nameOf(value).replace(/^_+/, '') || 'unknown';
+  if (value === undefined || value === null) return 'unknown';
+  const name = nameOf(value);
+  return name.startsWith('[object') ? 'unknown' : name.replace(/^_+/, '') || 'unknown';
 }
 
 export function preloaderOf(ng: RouterDebugApi, root: Element | null): AnyRecord | null {

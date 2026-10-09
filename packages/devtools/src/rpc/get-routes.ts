@@ -106,6 +106,7 @@ interface ParsedRoute {
   route: ExtractedRoute;
   parent: number;
   group?: string;
+  childrenRef?: string;
   lazy?: LazyTarget;
 }
 
@@ -157,6 +158,8 @@ function parseFile(file: string, cwd: string): ParsedFile | null {
       parent: literal.parent >= 0 ? (kept.get(literal.parent) ?? -1) : -1,
       group: literal.group,
     };
+    const childrenRef = props.get('children')?.match(/^[\w$]+$/)?.[0];
+    if (childrenRef) parsed.childrenRef = childrenRef;
     const lazy = lazyTarget(props.get('loadChildren'), file, cwd);
     if (lazy) parsed.lazy = lazy;
     kept.set(index, routes.length);
@@ -213,7 +216,16 @@ function resolveFiles(found: string[], cwd: string): ExtractedRoute[] {
     if (visiting.has(key)) return '';
     visiting.add(key);
     const route = parsed.get(file)!.routes[index];
-    const base = route.parent >= 0 ? fullPathOf(file, route.parent) : prefixOf(file, route.group);
+    const owner =
+      route.parent < 0 && route.group
+        ? parsed.get(file)!.routes.findIndex((r) => r.childrenRef === route.group)
+        : -1;
+    const base =
+      route.parent >= 0
+        ? fullPathOf(file, route.parent)
+        : owner >= 0
+          ? fullPathOf(file, owner)
+          : prefixOf(file, route.group);
     const full = joinPath(base, route.route.path);
     visiting.delete(key);
     memo.set(key, full);
@@ -312,7 +324,7 @@ function routeGuards(props: Map<string, string>): Record<string, string[]> | und
 function routeResolvers(props: Map<string, string>): string[] | undefined {
   const body = props.get('resolve')?.match(/^\{([\s\S]*)\}$/)?.[1];
   if (body === undefined) return undefined;
-  const keys = [...topLevelProps(body)].map(([key, value]) => `${key}: ${guardName(value)}`);
+  const keys = [...topLevelProps(body, true)].map(([key, value]) => `${key}: ${guardName(value)}`);
   return keys.length ? keys : undefined;
 }
 
@@ -447,11 +459,15 @@ function objectLiterals(source: string): RouteLiteral[] {
   return out;
 }
 
-function topLevelProps(body: string): Map<string, string> {
+function topLevelProps(body: string, shorthand = false): Map<string, string> {
   const props = new Map<string, string>();
   for (const part of splitTopLevel(body)) {
-    const prop = part.match(/^\s*(\w+)\s*:\s*([\s\S]*?)\s*$/);
-    if (prop) props.set(prop[1], prop[2]);
+    const prop = part.match(/^\s*(?:(['"])([\w$]+)\1|([\w$]+))\s*:\s*([\s\S]*?)\s*$/);
+    if (prop) props.set(prop[2] ?? prop[3], prop[4]);
+    else if (shorthand) {
+      const name = part.match(/^\s*([\w$]+)\s*$/)?.[1];
+      if (name) props.set(name, name);
+    }
   }
   return props;
 }

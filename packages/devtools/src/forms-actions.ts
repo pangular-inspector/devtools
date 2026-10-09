@@ -734,12 +734,16 @@ async function perform(
         else written++;
       }
       let message = `Wrote ${written} field(s)${skipped.length ? `, skipped ${skipped.length}` : ''}.`;
-      if (request.submit) {
+      let ok = written > 0 || !skipped.length;
+      if (request.submit && written === 0 && skipped.length) {
+        message += ' No field was written, so the form was not submitted.';
+      } else if (request.submit) {
         await settle(ctx, found);
         const submitted = await perform(ctx, found, { ...request, action: 'submit' }, '');
         message += ` ${submitted.message}`;
+        ok = ok && submitted.ok;
       }
-      return { ok: written > 0 || !skipped.length, message, skipped };
+      return { ok, message, skipped };
     }
     case 'mark-touched':
     case 'mark-untouched':

@@ -200,12 +200,9 @@ export function lintForm(
     });
   }
 
-  const submits = events.filter(
-    (event) =>
-      event.formId === form.id && event.type === 'submit' && event.detail?.includes('INVALID'),
-  );
+  const submits = events.filter((event) => event.formId === form.id && event.type === 'submit');
   const last = submits[submits.length - 1];
-  if (last && !/focus on (input|select|textarea)/.test(last.detail ?? '')) {
+  if (last?.detail?.includes('INVALID') && !/focus on (?!button\b|a\b)/.test(last.detail)) {
     add(
       'no-focus-on-invalid-submit',
       'info',

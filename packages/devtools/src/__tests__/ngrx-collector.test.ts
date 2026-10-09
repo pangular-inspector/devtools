@@ -101,6 +101,13 @@ describe('ngrx collector', () => {
     expect(info.writable).toBe(true);
   });
 
+  it('drops a component that no longer holds the store from its references', () => {
+    const { app, collector } = setup();
+    expect(collector.collect().stores[0].references).toEqual(['App.store']);
+    delete (app as { store?: unknown }).store;
+    expect(collector.collect().stores[0].references).toEqual([]);
+  });
+
   it('unwraps a store that is no longer found and wraps it once when it comes back', () => {
     const { store, app, rootEnv, collector } = setup();
     const original = store.setQuery;

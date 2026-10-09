@@ -35,6 +35,28 @@ describe('explainPipeText', () => {
     expect(live).not.toContain('—');
   });
 
+  it('shows already-described values as they are, without escaping them again', () => {
+    const live: PipesState = {
+      pipes: [
+        {
+          name: 'appPrice',
+          className: 'PricePipe',
+          isPure: true,
+          instanceCount: 1,
+          components: [],
+          call: { callCount: 2, lastArgs: ['{"b":2}'], lastResult: '{"a":1}' },
+        },
+      ],
+      async: [],
+      reportedAt: 0,
+      instrumented: ['page-1'],
+    };
+    const text = explainPipeText('appPrice', fixture(), live);
+    expect(text).toContain('Last input: `[{"b":2}]`');
+    expect(text).toContain('Last output: `{"a":1}`');
+    expect(text).not.toContain('\\"');
+  });
+
   it('says the pipe was not seen when recording is on', () => {
     const text = explainPipeText('appPrice', fixture(), state(['page-1']));
     expect(text).toContain('**Live:** not seen on the currently connected page.');

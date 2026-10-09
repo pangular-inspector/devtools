@@ -49,7 +49,7 @@ export const VALIDATOR_METHODS = [
 const METHODS = [...VALUE_METHODS, ...STRUCTURE_METHODS, ...STATE_METHODS, ...VALIDATOR_METHODS];
 
 const FRAMEWORK =
-  /@angular|node_modules|\.vite\/deps|rxjs|zone\.js|zone-|forms-(instrument|collector|actions)\.[mc]?[jt]s|(packages|@pangular-inspector)\/devtools\/(dist|src\/(?!__tests__))|<anonymous>|\(native\)/;
+  /@angular|node_modules|\.vite\/deps|(?<![\w-])rxjs(?![\w-])|(?<![\w-])zone\.js|(?<![\w-])zone-[\w-]*\.[mc]?js|(?<![\w-])forms-(instrument|collector|actions)\.[mc]?[jt]s|(packages|@pangular-inspector)\/devtools\/(dist|src\/(?!__tests__))|<anonymous>|\(native\)/;
 const FRAMEWORK_CLASS =
   /^(Abstract|Form|Ng|Default|Operator|Checkbox|Select|Radio|Number|Range|Subscriber|Safe|Consumer|Observable|Subject|EventEmitter|Zone|Object|Array|Function|Proxy|Promise|Router|Renderer|Dom|EventManager|ApplicationRef|ChangeDetection|ViewRef|ComponentRef|Injector|R3Injector|NodeInjector|Listener|Task|Scheduler|Interop|Signal|Field|Deep)/;
 const FRAMEWORK_FUNCTION =

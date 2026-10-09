@@ -11,12 +11,16 @@ function capJson(value: unknown): string {
   if (value === undefined) return 'undefined';
   let json: string | undefined;
   try {
-    json = JSON.stringify(value);
+    json = typeof value === 'string' ? value : JSON.stringify(value);
   } catch {
     json = undefined;
   }
   const text = json ?? String(value);
   return text.length > MAX_VALUE_CHARS ? `${text.slice(0, MAX_VALUE_CHARS)}…` : text;
+}
+
+function capArgs(args: unknown): string {
+  return Array.isArray(args) ? `[${args.map(capJson).join(', ')}]` : capJson(args);
 }
 
 /** Formats everything known about one pipe — static declaration/usage, live
@@ -71,7 +75,7 @@ function runtimeText(runtime: PipeUsageInfo | undefined, instrumented: boolean):
   ];
   if (runtime.call) {
     parts.push(
-      `Called ${runtime.call.callCount} time(s). Last input: ${code(capJson(runtime.call.lastArgs))}. Last output: ${code(capJson(runtime.call.lastResult))}.${
+      `Called ${runtime.call.callCount} time(s). Last input: ${code(capArgs(runtime.call.lastArgs))}. Last output: ${code(capJson(runtime.call.lastResult))}.${
         runtime.call.lastCaller ? ` Last caller: ${code(runtime.call.lastCaller)}.` : ''
       }`,
     );
@@ -81,7 +85,7 @@ function runtimeText(runtime: PipeUsageInfo | undefined, instrumented: boolean):
         `Per instance: ${instances
           .map(
             (i) =>
-              `${i.component} ×${i.callCount} ${code(capJson(i.lastArgs))} → ${code(capJson(i.lastResult))}`,
+              `${i.component} ×${i.callCount} ${code(capArgs(i.lastArgs))} → ${code(capJson(i.lastResult))}`,
           )
           .join('; ')}.`,
       );

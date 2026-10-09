@@ -84,6 +84,15 @@ export function lintPipes(cwd: string): PipeLintFinding[] {
   return findings;
 }
 
+function templateBraceEnd(text: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}' && --depth === 0) return i;
+  }
+  return text.length;
+}
+
 /** Byte spans of every `@for (...) { ... }` block's body in `text`. */
 function forBlocks(text: string): { start: number; end: number }[] {
   const blocks: { start: number; end: number }[] = [];
@@ -95,7 +104,7 @@ function forBlocks(text: string): { start: number; end: number }[] {
     if (closeParen >= text.length) break;
     const openBrace = text.indexOf('{', closeParen);
     if (openBrace === -1) break;
-    const closeBrace = matchDelimiter(text, openBrace, '{', '}');
+    const closeBrace = templateBraceEnd(text, openBrace);
     blocks.push({ start: openBrace, end: closeBrace });
     re.lastIndex = openBrace + 1;
   }
@@ -104,9 +113,12 @@ function forBlocks(text: string): { start: number; end: number }[] {
 
 function impurePipeInForFindings(template: TemplateSource, purity: PurityMap): PipeLintFinding[] {
   const findings: PipeLintFinding[] = [];
+  const seen = new Set<number>();
   for (const block of forBlocks(template.text)) {
     const body = template.text.slice(block.start, block.end);
     for (const { name, index } of pipeUsesIn(body)) {
+      if (seen.has(block.start + index)) continue;
+      seen.add(block.start + index);
       const isPure = purity.get(name);
       if (isPure === undefined || isPure) continue;
       findings.push({

@@ -1,4 +1,4 @@
-import { addProfilerListener } from './change-detection.ts';
+import { addProfilerListener, keepaliveDue } from './change-detection.ts';
 import { createCdRecorder, type CdRecording } from './cd-recorder.ts';
 import { elementId } from './element-id.ts';
 
@@ -21,8 +21,6 @@ export interface CdReport extends CdRecording {
   supported: boolean;
 }
 
-const KEEPALIVE_MS = 8000;
-
 /**
  * Records change detection cycles while the panel or an agent turns recording
  * on, and reports them. It does nothing until then.
@@ -32,6 +30,7 @@ export function attachChangeDetection(
   pageId: string,
   getNg: () => unknown,
   maxCycles: number,
+  tickMs: () => number = () => 0,
 ) {
   const recorder = createCdRecorder({ maxCycles });
   const hostIds = new WeakMap<object, string | null>();
@@ -71,7 +70,7 @@ export function attachChangeDetection(
     const report: CdReport = { pageId, supported, ...recorder.snapshot(hostId) };
     const json = JSON.stringify(report);
     if (!force && json === lastJson) {
-      if (Date.now() - sentAt < KEEPALIVE_MS) return;
+      if (!keepaliveDue(sentAt, tickMs())) return;
       sentAt = Date.now();
       const answer = (await my.rpc.call('ping-change-detection', pageId)) as
         { known?: boolean } | undefined;

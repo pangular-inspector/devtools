@@ -110,6 +110,15 @@ Component({
   template: `<p>{{ items().join(',') | uppercase }}</p>`,
 })(Cart);
 
+class Labelled {
+  value = 'a';
+}
+Component({
+  selector: 'app-labelled',
+  imports: [UpperCasePipe],
+  template: `<th>uppercase</th><p>{{ value | uppercase }}</p>`,
+})(Labelled);
+
 describe('stale pure-pipe check (experimental, real Angular render)', () => {
   it('recovers a real binding slot and reads the last argument Angular compared', async () => {
     const fixture = await mount(Cart);
@@ -123,6 +132,16 @@ describe('stale pure-pipe check (experimental, real Angular render)', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(readBoundArg(upper, check!)).toBe('c,d');
+  });
+
+  it('is not fooled by static text equal to the pipe name', async () => {
+    const fixture = await mount(Labelled);
+    const usages = findPipeUsages(ng(), document.querySelectorAll('*'));
+    const upper = usages.find((u) => u.name === 'uppercase')!;
+    const check = staleCheckFor(upper);
+    expect(check).not.toBeNull();
+    expect(readBoundArg(upper, check!)).toBe('a');
+    fixture.destroy();
   });
 
   it('returns null gracefully when the template source does not match the expected shape', () => {

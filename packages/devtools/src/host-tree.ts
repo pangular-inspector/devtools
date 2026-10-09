@@ -60,6 +60,7 @@ export function angularRoots(doc: Document = document): Element[] {
   const roots = tagged.filter((root) => !tagged.some((o) => o !== root && o.contains(root)));
   if (!doc.body) return roots;
   if (!roots.length) return [doc.body];
+  if (roots.includes(doc.body)) return roots;
   const outside: Element[] = [];
   const collect = (el: Element) => {
     for (const child of childElements(el)) {

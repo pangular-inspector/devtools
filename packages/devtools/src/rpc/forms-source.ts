@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
-import { lineCounter, sourceRoots, stripComments, walkFiles } from './source-scan.ts';
+import { dirname, join, relative } from 'node:path';
+import { lineCounter, skipString, sourceRoots, stripComments, walkFiles } from './source-scan.ts';
 
 export interface SourceLine {
   file: string;
@@ -77,7 +77,9 @@ function schemaRefs(text: string): string[] {
 function blockEnd(source: string, open: number): number {
   let depth = 0;
   for (let i = open; i < source.length; i++) {
-    if (source[i] === '(') depth++;
+    const ch = source[i];
+    if (ch === '"' || ch === "'" || ch === '`') i = skipString(source, i);
+    else if (source[i] === '(') depth++;
     else if (source[i] === ')' && --depth === 0) return i;
   }
   return source.length;
@@ -193,7 +195,7 @@ export function findFormSource(
     const content = readCached(full);
     if (content === null || !needle.test(content)) continue;
     result = formSourceIn(content, relative(cwd, full), owner, property, path, (name) =>
-      schemaFile(cwd, files, name),
+      schemaFile(cwd, files, name, full, content),
     );
     if (result) break;
   }
@@ -201,13 +203,31 @@ export function findFormSource(
   return result;
 }
 
-function schemaFile(cwd: string, files: string[], name: string): SchemaSource | null {
+function schemaFile(
+  cwd: string,
+  files: string[],
+  name: string,
+  from: string,
+  fromContent: string,
+): SchemaSource | null {
   const needle = new RegExp(`\\b(?:const|let|var)\\s+${escape(name)}\\b[^=;]*=\\s*schema\\b`);
+  const matches: { full: string; content: string }[] = [];
   for (const full of files) {
     const content = readCached(full);
-    if (content !== null && needle.test(content)) return { content, file: relative(cwd, full) };
+    if (content !== null && needle.test(content)) matches.push({ full, content });
   }
-  return null;
+  const specifier = new RegExp(
+    `import\\s*\\{[^}]*\\b${escape(name)}\\b[^}]*\\}\\s*from\\s*['"](\\.[^'"]*)['"]`,
+  ).exec(stripComments(fromContent))?.[1];
+  if (specifier) {
+    const base = join(dirname(from), specifier.replace(/\.[mc]?[jt]s$/, ''));
+    const imported = matches.find(
+      (match) => match.full === `${base}.ts` || match.full === join(base, 'index.ts'),
+    );
+    if (imported) return { content: imported.content, file: relative(cwd, imported.full) };
+  }
+  if (matches.length !== 1) return null;
+  return { content: matches[0].content, file: relative(cwd, matches[0].full) };
 }
 
 function readCached(full: string): string | null {

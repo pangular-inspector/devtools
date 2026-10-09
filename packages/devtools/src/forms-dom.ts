@@ -102,7 +102,10 @@ export function domFacts(
   facts.required =
     el.hasAttribute('required') || el.getAttribute('aria-required') === 'true' ? true : undefined;
   if (facts.required === undefined) delete facts.required;
-  facts.labelled = isLabelled(el);
+  const unlabelled =
+    (el instanceof HTMLInputElement && el.type === 'hidden') ||
+    el.getAttribute('aria-hidden') === 'true';
+  if (!unlabelled) facts.labelled = isLabelled(el);
   const describedBy = [
     ...referenced(el, 'aria-describedby'),
     ...referenced(el, 'aria-errormessage'),

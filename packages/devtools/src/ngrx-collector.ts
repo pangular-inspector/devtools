@@ -994,6 +994,7 @@ export function createNgrxCollector<H extends object = Element>(
       }
     }
 
+    for (const t of tracked.values()) t.references.clear();
     for (const { injector, component } of perElement) {
       if (!component) continue;
       const owner = className(component.constructor);
