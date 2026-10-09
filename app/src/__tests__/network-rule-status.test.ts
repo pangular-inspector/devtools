@@ -83,3 +83,29 @@ describe('NetworkInspector rule status', () => {
     expect(hint()).toBe('');
   });
 });
+
+describe('NetworkInspector rule limits', () => {
+  afterEach(() => {
+    fixture?.destroy();
+    TestBed.resetTestingModule();
+  });
+
+  it('refuses a mock body longer than the server keeps', async () => {
+    const { host, inspector } = await mount();
+    inspector.setDraft('body', JSON.stringify({ text: 'x'.repeat(100_000) }));
+    await fixture.whenStable();
+    expect(inspector.draftRule()).toBeNull();
+    expect(host.querySelector('#body-error')!.textContent).toContain('100000');
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
+  });
+
+  it('refuses a pattern longer than the server keeps', async () => {
+    const { host, inspector } = await mount();
+    inspector.setDraft('status', '503');
+    inspector.setDraft('pattern', '/api/' + 'a'.repeat(500));
+    await fixture.whenStable();
+    expect(inspector.draftRule()).toBeNull();
+    expect(host.querySelector('#rule-hint')!.textContent).toContain('500');
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
+  });
+});

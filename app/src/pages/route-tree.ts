@@ -3,6 +3,7 @@ import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { actionAllowed, actionBlockedMessage } from '../devtools-config';
 import {
+  PAGE_UNREACHABLE,
   SHARED_STYLES,
   routerAction,
   routerCall,
@@ -171,7 +172,7 @@ interface MatchResult {
                   }
                 </td>
                 <td>
-                  @for (guard of guardList(row.node); track guard) {
+                  @for (guard of guardList(row.node); track $index) {
                     <span class="tag">{{ guard }}</span>
                   }
                   @for (resolver of row.node.resolvers ?? []; track resolver) {
@@ -456,6 +457,7 @@ export class RouteTree {
   canNavigate(node: RouteNode) {
     return (
       node.redirectTo === undefined &&
+      !node.matcher &&
       !node.outlet &&
       !node.fullPath.includes('**') &&
       (!!node.component || node.kind === 'component' || node.kind === 'lazy')
@@ -482,12 +484,16 @@ export class RouteTree {
   async predict() {
     const url = this.testUrl().trim();
     if (!url) return;
-    this.match.set(
-      await routerCall<MatchResult>(this.rpc(), 'router-match', {
-        pageId: this.page().pageId,
-        url,
-      }),
-    );
+    const result = await routerCall<MatchResult>(this.rpc(), 'router-match', {
+      pageId: this.page().pageId,
+      url,
+    });
+    this.match.set(result);
+    if (result) {
+      if (this.message() === PAGE_UNREACHABLE) this.message.set('');
+    } else {
+      this.message.set(PAGE_UNREACHABLE);
+    }
   }
 
   async probe() {

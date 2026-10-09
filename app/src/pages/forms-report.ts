@@ -106,7 +106,7 @@ export class FormsSubmit {
       kind: 'fixture',
       form: this.formId(),
     });
-    const code = (text ?? '').match(/```ts\n([\s\S]*?)```/)?.[1];
+    const code = (text ?? '').match(/```ts\n([\s\S]*)```\s*$/)?.[1];
     if (!code) {
       this.message.set('No test fixture is available for this form.');
       return;

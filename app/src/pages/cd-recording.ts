@@ -85,7 +85,7 @@ const SHOWN_CYCLES = 30;
                 </tr>
               </thead>
               <tbody>
-                @for (c of slowest(); track c.name) {
+                @for (c of slowest(); track $index) {
                   <tr>
                     <td class="mono">{{ c.name }}</td>
                     <td class="num">{{ c.checks }}</td>

@@ -172,11 +172,12 @@ export function actionMessage(result: FormActionResult): string {
   return `${text}${skipped}${result.status ? ` Status: ${result.status}.` : ''}`;
 }
 
+const MARKUP = /"(?:[^"\\\n]|\\.)*"|`([^`\n]*)`|\*\*/g;
+
 export function plain(text: string | null): string {
   return (text ?? '')
     .replace(/^_Labels, paths.*_\n\n/, '')
-    .replace(/`/g, '')
-    .replace(/\*\*/g, '');
+    .replace(MARKUP, (match, code?: string) => code ?? (match === '**' ? '' : match));
 }
 
 export const FORMS_STYLES = `

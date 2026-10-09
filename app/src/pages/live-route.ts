@@ -279,10 +279,9 @@ export class LiveRoute {
     computation: (pages, previous) =>
       previous?.value && pages.some((p) => p.pageId === previous.value)
         ? previous.value
-        : (pages.find((p) => p.pageId === this.hostPageId && p.snapshot)?.pageId ??
-          pages.find((p) => p.snapshot)?.pageId ??
-          pages[0]?.pageId ??
-          null),
+        : this.hostPageId
+          ? (pages.find((p) => p.pageId === this.hostPageId)?.pageId ?? null)
+          : (pages.find((p) => p.snapshot)?.pageId ?? pages[0]?.pageId ?? null),
   });
 
   private unsubscribe: (() => void) | null = null;
@@ -290,7 +289,9 @@ export class LiveRoute {
 
   readonly page = computed(() => {
     const pages = this.pages();
-    return pages.find((p) => p.pageId === this.pageId()) ?? pages[0] ?? null;
+    return (
+      pages.find((p) => p.pageId === this.pageId()) ?? (this.hostPageId ? null : pages[0]) ?? null
+    );
   });
 
   readonly problems = computed(
