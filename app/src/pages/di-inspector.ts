@@ -1391,6 +1391,7 @@ export class DiInspector {
 
   private readonly destroyRef = inject(DestroyRef);
   private stopTree: (() => void) | null = null;
+  private treeLoad = 0;
 
   constructor() {
     effect(() => {
@@ -1553,6 +1554,7 @@ export class DiInspector {
   }
 
   private async loadInjectorTree(client: DevframeRpcClient) {
+    const load = ++this.treeLoad;
     this.clearTree();
     const my = client.scope('pangular');
     let state: Awaited<ReturnType<typeof my.rpc.sharedState>>;
@@ -1561,7 +1563,7 @@ export class DiInspector {
     } catch {
       return;
     }
-    if (this.destroyRef.destroyed || this.rpc() !== client) return;
+    if (this.destroyRef.destroyed || this.rpc() !== client || load !== this.treeLoad) return;
     const pageId = hostPageId();
     const apply = (value: unknown) => {
       const shared = value as {

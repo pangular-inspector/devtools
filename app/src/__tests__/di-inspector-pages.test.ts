@@ -81,6 +81,39 @@ describe('injector tree loading and row actions', () => {
     expect(active).toBe(0);
   });
 
+  it('applies the newest load when an older one for the same client resolves last', async () => {
+    const pending: (() => void)[] = [];
+    const states = [
+      { roots: [node('old')], environment: [] },
+      { roots: [node('new')], environment: [] },
+    ];
+    let call = 0;
+    const rpc = {
+      call: () => Promise.resolve([]),
+      callEvent: () => Promise.resolve(),
+      sharedState: () => {
+        const state = states[call++];
+        return new Promise((resolve) => {
+          pending.push(() => resolve({ value: () => state, on: () => () => {} }));
+        });
+      },
+    };
+    const client = { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
+    const fixture = TestBed.createComponent(DiInspector);
+    fixture.componentRef.setInput('rpc', client);
+    fixture.detectChanges();
+    fixture.componentRef.setInput('rpc', null);
+    fixture.detectChanges();
+    fixture.componentRef.setInput('rpc', client);
+    fixture.detectChanges();
+    pending[1]();
+    await new Promise((resolve) => setTimeout(resolve));
+    pending[0]();
+    await new Promise((resolve) => setTimeout(resolve));
+    await fixture.whenStable();
+    expect(fixture.componentInstance.roots().map((n) => n.injector.name)).toEqual(['new']);
+  });
+
   it('scrolls to a revealed row that was collapsed and not yet rendered', async () => {
     const tree = [
       {

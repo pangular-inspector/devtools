@@ -350,7 +350,7 @@ function injectCalls(code: string): { token: string; start: number }[] {
 }
 
 function injectedToken(argument: string): string | null {
-  const forward = /^forwardRef\s*\(\s*\(\s*\)\s*=>\s*([A-Za-z_$][\w$.]*)/.exec(argument);
+  const forward = /^forwardRef\s*\(\s*\(\s*\)\s*=>\s*([A-Za-z_$][\w$.]*)\s*\)$/.exec(argument);
   const reference =
     forward?.[1] ??
     /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*(?=\s*(?:!|as\b|$))/.exec(argument)?.[0];

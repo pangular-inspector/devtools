@@ -208,6 +208,7 @@ class Settings {}`,
         c = inject(Api, { optional: true });
         d = inject(this.token);
         e = inject(getToken());
+        f = inject(forwardRef(() => Foo()));
       }
     `);
     expect(providers.filter((p) => p.type === 'injection').map((p) => [p.token, p.source])).toEqual(

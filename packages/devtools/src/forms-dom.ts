@@ -82,7 +82,7 @@ function controlCount(node: Element): number {
 
 function ownContainer(el: Element): Element | null {
   const boundary = el.closest(CONTAINER) ?? el.parentElement;
-  let best = el.parentElement;
+  let best: Element | null = null;
   for (let node = el.parentElement; node; node = node.parentElement) {
     if (controlCount(node) > 1) break;
     best = node;

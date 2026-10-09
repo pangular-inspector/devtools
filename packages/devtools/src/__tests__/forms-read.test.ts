@@ -410,12 +410,15 @@ describe('DOM facts', () => {
         <div><input id="b" name="b"><div class="error">Zip required</div></div>
       </fieldset>
       <div class="field"><input id="c" name="c"><div class="error">Name required</div></div>
+      <fieldset><input id="d" name="d"><input id="e" name="e"><div class="error">Pick one</div></fieldset>
       <fieldset><input id="r1" type="radio" name="r"><input id="r2" type="radio" name="r">
         <div class="error">Pick one</div></fieldset>`;
     const facts = (id: string) => domFacts(document.getElementById(id)!, { hasErrors: true });
     expect(facts('a').errorShown).toBe(false);
     expect(facts('b').errorShown).toBe(true);
     expect(facts('c').errorShown).toBe(true);
+    expect(facts('d').errorShown).toBe(false);
+    expect(facts('e').errorShown).toBe(false);
     expect(facts('r1').errorShown).toBe(true);
   });
 
