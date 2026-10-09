@@ -775,9 +775,11 @@ const CLASSIC_KINDS = new Set([
               }
             </li>
           } @empty {
-            <li class="empty compact" role="status">
-              <p class="empty-title">No declarations match.</p>
-              <button type="button" class="btn" (click)="clearFilters()">Clear filters</button>
+            <li>
+              <div class="empty compact" role="status">
+                <p class="empty-title">No declarations match.</p>
+                <button type="button" class="btn" (click)="clearFilters()">Clear filters</button>
+              </div>
             </li>
           }
         </ul>

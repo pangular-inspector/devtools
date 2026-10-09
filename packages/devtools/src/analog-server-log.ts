@@ -154,16 +154,20 @@ function redactJsonText(text: string): string {
   return out;
 }
 
-export function previewOf(body: string, type: string | undefined): string | undefined {
-  if (!body) return undefined;
-  if (type && !/json|text\/plain/.test(type)) return undefined;
+export function redactBody(body: string): string {
   let text = body;
   try {
     text = JSON.stringify(redactJson(JSON.parse(body)));
   } catch {
     text = redactJsonText(body);
   }
-  text = redactMessage(text);
+  return redactMessage(text);
+}
+
+export function previewOf(body: string, type: string | undefined): string | undefined {
+  if (!body) return undefined;
+  if (type && !/json|text\/plain/.test(type)) return undefined;
+  const text = redactBody(body);
   return text.length > MAX_PREVIEW ? `${text.slice(0, MAX_PREVIEW)}…` : text;
 }
 

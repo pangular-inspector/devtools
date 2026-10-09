@@ -334,9 +334,23 @@ function resultObject(content: string, start: number, end: number): number {
     return content[j] === '{' ? j : -1;
   }
   if (content[j] !== '{') return -1;
-  const body = content.slice(j, end);
-  const ret = /\breturn\s*\{/.exec(body);
-  return ret ? j + ret.index + ret[0].length - 1 : -1;
+  return lastTopLevelReturn(content, j, end);
+}
+
+function lastTopLevelReturn(content: string, open: number, end: number): number {
+  let depth = 0;
+  let found = -1;
+  for (let i = open; i < end; i++) {
+    const ch = content[i];
+    if (ch === '{' || ch === '(' || ch === '[') depth++;
+    else if (ch === '}' || ch === ')' || ch === ']') depth--;
+    else if (depth === 1 && ch === 'r' && /\breturn\s*\{/y.test(content.slice(i, i + 40))) {
+      if (i > 0 && /[\w$]/.test(content[i - 1])) continue;
+      const brace = content.indexOf('{', i + 6);
+      if (brace >= 0 && brace < end) found = brace;
+    }
+  }
+  return found;
 }
 
 function stateKeys(content: string, start: number, end: number): string[] {

@@ -105,12 +105,23 @@ function componentsIn(
       line: lineAt(scope.start),
       inputs: [...names(body, INPUT), ...names(body, INPUT_DECORATOR)],
       outputs: [...names(body, OUTPUT), ...names(body, OUTPUT_DECORATOR)],
-      isStandalone: !/\bstandalone\s*:\s*false\b/.test(scope.decoratorArgs ?? ''),
+      isStandalone: standaloneOf(scope.decoratorArgs, major),
       // A directive carries no change detection strategy of its own.
       ...(kind === 'component' ? changeDetectionFields(scope.decoratorArgs, major) : {}),
     });
   });
   return components;
+}
+
+function standaloneOf(decoratorArgs: string | undefined, major: number | undefined): boolean {
+  const key = decoratorArgs ? topLevelKey(decoratorArgs, STANDALONE_KEY) : undefined;
+  if (decoratorArgs && key) {
+    const start = key.index + key[0].length;
+    const value = decoratorArgs.slice(start, valueEnd(decoratorArgs, start)).trim();
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+  }
+  return major === undefined || major >= 19;
 }
 
 /**
@@ -136,6 +147,7 @@ function changeDetectionFields(
 }
 
 const CHANGE_DETECTION_KEY = /(?<![\w$.])changeDetection\s*:/g;
+const STANDALONE_KEY = /(?<![\w$.])standalone\s*:/g;
 // The whole value, optionally qualified (`ChangeDetectionStrategy.OnPush`,
 // `core.ChangeDetectionStrategy.OnPush`) or a bare `OnPush` import alias.
 const STRATEGY_VALUE =
@@ -165,7 +177,10 @@ function declaredChangeDetection(
  * like `({ ... })`, so a property of the component sits at depth 2; a match
  * nested deeper, such as inside `providers`, belongs to something else.
  */
-function topLevelKey(args: string): RegExpExecArray | undefined {
+function topLevelKey(
+  args: string,
+  pattern: RegExp = CHANGE_DETECTION_KEY,
+): RegExpExecArray | undefined {
   const depthAt = new Map<number, number>();
   let depth = 0;
   for (let i = 0; i < args.length; i++) {
@@ -175,8 +190,8 @@ function topLevelKey(args: string): RegExpExecArray | undefined {
     else if (ch === '(' || ch === '[' || ch === '{') depth++;
     else if (ch === ')' || ch === ']' || ch === '}') depth--;
   }
-  CHANGE_DETECTION_KEY.lastIndex = 0;
-  for (const key of args.matchAll(CHANGE_DETECTION_KEY)) {
+  pattern.lastIndex = 0;
+  for (const key of args.matchAll(pattern)) {
     if (depthAt.get(key.index) === 2) return key;
   }
   return undefined;

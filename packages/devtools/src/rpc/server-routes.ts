@@ -1,6 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { relative } from 'node:path';
-import { sourceRoots, stripComments, walkFiles } from './source-scan.ts';
+import {
+  matchDelimiter,
+  maskStrings,
+  skipString,
+  sourceRoots,
+  stripComments,
+  walkFiles,
+} from './source-scan.ts';
 
 export interface ServerRouteEntry {
   path: string;
@@ -9,25 +16,42 @@ export interface ServerRouteEntry {
 }
 
 const MAX_FILES = 20;
-const ENTRY =
-  /\{[^{}]*?\bpath\s*:\s*(['"`])([^'"`]*)\1[^{}]*?\brenderMode\s*:\s*RenderMode\.(\w+)[^{}]*?\}/g;
-const ENTRY_REVERSED =
-  /\{[^{}]*?\brenderMode\s*:\s*RenderMode\.(\w+)[^{}]*?\bpath\s*:\s*(['"`])([^'"`]*)\2[^{}]*?\}/g;
+const PATH_KEY = /(?<![\w$.])path\s*:\s*(['"`])/;
+const MODE_KEY = /(?<![\w$.])renderMode\s*:\s*RenderMode\.(\w+)/;
+
+function ownLevel(masked: string, open: number, close: number): string {
+  let out = '';
+  let depth = 0;
+  for (let i = open; i <= close; i++) {
+    const ch = masked[i];
+    if (ch === '{' || ch === '(' || ch === '[') {
+      depth++;
+      out += ' ';
+    } else if (ch === '}' || ch === ')' || ch === ']') {
+      depth--;
+      out += ' ';
+    } else out += depth === 1 || ch === '\n' ? ch : ' ';
+  }
+  return out;
+}
 
 export function parseServerRoutes(source: string, file: string): ServerRouteEntry[] {
   const code = stripComments(source);
-  const out: ServerRouteEntry[] = [];
-  const seen = new Set<string>();
-  for (const match of code.matchAll(ENTRY)) {
-    const key = `${match.index}`;
-    seen.add(key);
-    out.push({ path: match[2], renderMode: match[3], file });
+  const masked = maskStrings(code);
+  const forward: ServerRouteEntry[] = [];
+  const reversed: ServerRouteEntry[] = [];
+  for (let open = masked.indexOf('{'); open >= 0; open = masked.indexOf('{', open + 1)) {
+    const close = matchDelimiter(masked, open, '{', '}');
+    const own = ownLevel(masked, open, Math.min(close, masked.length - 1));
+    const path = PATH_KEY.exec(own);
+    const mode = MODE_KEY.exec(own);
+    if (!path || !mode) continue;
+    const quote = open + path.index + path[0].length - 1;
+    const end = skipString(code, quote);
+    const entry = { path: code.slice(quote + 1, end), renderMode: mode[1], file };
+    (path.index < mode.index ? forward : reversed).push(entry);
   }
-  for (const match of code.matchAll(ENTRY_REVERSED)) {
-    if (seen.has(`${match.index}`)) continue;
-    out.push({ path: match[3], renderMode: match[1], file });
-  }
-  return out;
+  return [...forward, ...reversed];
 }
 
 /**

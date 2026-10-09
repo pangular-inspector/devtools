@@ -47,6 +47,24 @@ describe('get-components', () => {
     ]);
   });
 
+  it('defaults standalone from the Angular major of the project', async () => {
+    const source = `
+      @Component({ selector: 'app-plain', template: '' })
+      export class Plain {}
+      @Component({ selector: 'app-on', template: '', standalone: true })
+      export class On {}
+      @Component({ selector: 'app-off', template: '', providers: [{ standalone: true }], standalone: false })
+      export class Off {}
+      @Directive({ selector: '[appDir]' })
+      export class Dir {}
+    `;
+    const flags = async (version?: string) =>
+      (await componentsFor(source, version)).map((c) => c.isStandalone);
+    expect(await flags('18.2.0')).toEqual([false, true, false, false]);
+    expect(await flags('19.0.0')).toEqual([true, true, false, true]);
+    expect(await flags()).toEqual([true, true, false, true]);
+  });
+
   it('reads inputs declared without a type argument', async () => {
     const [component] = await componentsFor(`
       @Component({ selector: 'app-card', template: '' })

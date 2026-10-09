@@ -1362,7 +1362,7 @@ export class SignalInspector {
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         const next = value as { graph?: SignalGraph | null; pages?: Record<string, SignalGraph> };
-        const reported = (this.pageId ? next?.pages?.[this.pageId] : next?.graph) ?? null;
+        const reported = this.reportedGraph(next);
         this.unsupported.set(!!reported?.unsupported);
         const graph = reported?.unsupported ? null : reported;
         const owner = (g: SignalGraph | null) => g?.component?.id ?? g?.injector?.id;
@@ -1386,6 +1386,20 @@ export class SignalInspector {
     } catch {
       this.treePages.set({});
     }
+  }
+
+  private lockedPage: string | null = null;
+
+  private reportedGraph(next: {
+    graph?: SignalGraph | null;
+    pages?: Record<string, SignalGraph>;
+  }): SignalGraph | null {
+    if (this.pageId) return next?.pages?.[this.pageId] ?? null;
+    const locked = this.lockedPage ? next?.pages?.[this.lockedPage] : undefined;
+    if (locked) return locked;
+    const latest = next?.graph ?? null;
+    this.lockedPage = latest?.pageId ?? null;
+    return latest;
   }
 
   pickComponent(value: string | null) {

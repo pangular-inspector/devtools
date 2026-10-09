@@ -206,7 +206,7 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
 
   const title = document.createElement('span');
   title.classList.add('title');
-  title.textContent = 'Remember, we need to find a new name. Help us pls';
+  title.textContent = 'Pangular Inspector';
 
   const dockGroup = document.createElement('div');
   dockGroup.classList.add('dock-group');

@@ -491,7 +491,9 @@ function bare(name: string): string {
                   (mouseleave)="highlight(null)"
                 >
                   <span class="name mono">{{ block.owner?.name ?? 'Unknown component' }}</span>
-                  <span class="state" [class]="'state-' + block.state">{{ block.state }}</span>
+                  <span class="defer-state" [class]="'defer-state-' + block.state">{{
+                    block.state
+                  }}</span>
                   @if (block.hydrateNever) {
                     <span class="flag">hydrate never</span>
                   } @else if (block.hydration !== 'not-configured') {
@@ -820,7 +822,7 @@ function bare(name: string): string {
     .defer-row:disabled {
       cursor: default;
     }
-    .state {
+    .defer-state {
       padding: 0 8px;
       border-radius: 99px;
       background: var(--surface-3);
@@ -828,14 +830,14 @@ function bare(name: string): string {
       font-size: 11px;
       line-height: 18px;
     }
-    .state-complete {
+    .defer-state-complete {
       @include m.soft(var(--ok));
     }
-    .state-error {
+    .defer-state-error {
       @include m.soft(var(--danger));
     }
-    .state-loading,
-    .state-placeholder {
+    .defer-state-loading,
+    .defer-state-placeholder {
       @include m.soft(var(--warn));
     }
     .triggers {

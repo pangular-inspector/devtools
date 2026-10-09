@@ -1001,13 +1001,11 @@ function collectOne(
         ? serializeField(found.root, elements, property ?? '')
         : serializeControl(found.root, elements, property ?? '');
     if (found.kind === 'signal') errorSummary = read(() => errorSummaryOf(found.root), []);
-    if (set.size) {
-      redactTree(root, set);
-      errorSummary = errorSummary.map((entry) => ({
-        ...entry,
-        message: set.redact(entry.message),
-      }));
-    }
+    redactTree(root, set);
+    errorSummary = errorSummary.map((entry) => ({
+      ...entry,
+      message: set.redact(entry.message),
+    }));
   } finally {
     secrets = null;
   }

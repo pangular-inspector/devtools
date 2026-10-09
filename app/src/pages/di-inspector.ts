@@ -1554,9 +1554,9 @@ export class DiInspector {
         truncated?: unknown;
         pages?: Record<string, { roots?: unknown; environment?: unknown; truncated?: unknown }>;
       } | null;
-      const next = (pageId ? shared?.pages?.[pageId] : undefined) ?? shared;
-      if (isTree(next?.roots)) this.roots.set(next.roots);
-      if (isTree(next?.environment)) this.environment.set(next.environment);
+      const next = pageId ? shared?.pages?.[pageId] : shared;
+      this.roots.set(isTree(next?.roots) ? next.roots : []);
+      this.environment.set(isTree(next?.environment) ? next.environment : []);
       this.truncated.set(next?.truncated === true);
     };
     apply(state.value());

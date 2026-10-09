@@ -297,6 +297,17 @@ describe('real Router', () => {
     expect(text).not.toMatch(/RAWTOKEN9|a&b|SECRET9/);
   });
 
+  it('redacts a JWT and a bearer token in the document title', async () => {
+    const jwt = 'eyJhbGciOiJI.eyJzdWIiOiIx.c2lnbmF0dXJl';
+    document.title = `Reset ${jwt} Bearer abc.def`;
+    await router.navigateByUrl('/login');
+    await Promise.resolve();
+    const snapshot = snapshotRouter(router as never)!;
+    expect(snapshot.title).toBe('Reset [redacted] Bearer [redacted]');
+    expect(last().title).toBe('Reset [redacted] Bearer [redacted]');
+    document.title = '';
+  });
+
   it('lists only the guards and resolvers the router actually ran', async () => {
     await router.navigateByUrl('/users/8');
     await router.navigateByUrl('/users/8?tab=2');

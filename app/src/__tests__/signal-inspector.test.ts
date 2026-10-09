@@ -51,4 +51,45 @@ describe('SignalInspector', () => {
     const fixture = await render(graph);
     expect(notices(fixture).some((text) => text.includes('write hook'))).toBe(false);
   });
+
+  it('stays on the first page it follows when a second tab reports later', async () => {
+    const listeners = new Set<(value: unknown) => void>();
+    const owned = (pageId: string, id: string) => ({
+      ...graph,
+      pageId,
+      component: { ...graph.component, id },
+    });
+    const a = owned('A', 'cA');
+    const b = owned('B', 'cB');
+    const state = (value: unknown) =>
+      Promise.resolve({
+        value: () => value,
+        on: (_event: string, listener: (value: unknown) => void) => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+      });
+    const rpc = {
+      call: () => Promise.resolve([]),
+      callEvent: () => Promise.resolve(),
+      sharedState: (name: string) =>
+        state(name === 'signal-graph' ? { graph: a, pages: { A: a } } : { pages: {} }),
+    };
+    const fixture = TestBed.createComponent(SignalInspector);
+    fixture.componentRef.setInput('rpc', {
+      connectionMeta: {},
+      scope: () => ({ rpc }),
+    } as unknown as DevframeRpcClient);
+    for (let i = 0; i < 3; i++) {
+      await new Promise((resolve) => setTimeout(resolve));
+      await fixture.whenStable();
+    }
+    expect(fixture.componentInstance.graph()?.pageId).toBe('A');
+
+    for (const listener of listeners) listener({ graph: b, pages: { A: a, B: b } });
+    expect(fixture.componentInstance.graph()?.pageId).toBe('A');
+
+    for (const listener of listeners) listener({ graph: b, pages: { B: b } });
+    expect(fixture.componentInstance.graph()?.pageId).toBe('B');
+  });
 });

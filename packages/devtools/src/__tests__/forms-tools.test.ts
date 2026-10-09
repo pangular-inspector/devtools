@@ -337,6 +337,30 @@ describe('value hiding and resource size', () => {
     ]);
   });
 
+  it('drops uncommitted input, model drift and metadata when includeValues is false', () => {
+    const f = form(
+      group([
+        control('name', {
+          value: 'Ada',
+          uncommitted: 'Ada Lovelace',
+          modelDrift: { model: 'Ada', viewModel: 'Ada Lovelace' },
+          metadata: ['ada@example.com'],
+        }),
+      ]),
+    );
+    const text = inspectFormsText(
+      { forms: [f], events: [], reportedAt: 1 },
+      { form: 'form-1', includeValues: false },
+      1,
+    );
+    expect(text).not.toMatch(/Lovelace|ada@example/);
+    const [tree] = JSON.parse(text.split('\n\n')[1]);
+    const name = tree.root.children[0];
+    expect(name.uncommitted).toBeUndefined();
+    expect(name.modelDrift).toBeUndefined();
+    expect(name.metadata).toBeUndefined();
+  });
+
   it('keeps the resource valid JSON when it is too large', () => {
     const big = form(
       group(Array.from({ length: 100 }, (_, i) => control(`f${i}`, { value: 'x'.repeat(2000) }))),

@@ -280,3 +280,19 @@ describe('StoreInspector signal store', () => {
     expect(resetChip?.textContent).not.toContain('ms');
   });
 });
+
+describe('StoreInspector source declarations', () => {
+  it('keeps only list items inside the declaration list when a filter matches nothing', async () => {
+    const { fixture } = await mount([entry(1)]);
+    const list = () => root(fixture).querySelector('#ngrx-source-heading')!.closest('section')!;
+    type(root(fixture).querySelector<HTMLInputElement>('input[type="search"], input')!, 'zzz');
+    await settle(fixture);
+    const nodes = list().querySelector('ul.nodes')!;
+    expect(nodes.textContent).toContain('No declarations match.');
+    for (const child of Array.from(nodes.children)) {
+      expect(child.tagName).toBe('LI');
+      expect(child.getAttribute('role')).toBeNull();
+    }
+    expect(nodes.querySelector('[role="status"]')).not.toBeNull();
+  });
+});

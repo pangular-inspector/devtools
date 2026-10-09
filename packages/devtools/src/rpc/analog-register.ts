@@ -5,6 +5,7 @@ import {
   duplicateLoads,
   onCalls,
   recentCalls,
+  redactBody,
   refetchedServerFns,
   type AnalogCall,
 } from '../analog-server-log.ts';
@@ -111,7 +112,7 @@ export async function callApi(request: ApiRequest, origin = devOrigin()): Promis
       signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       redirect: 'manual',
     });
-    const text = await response.text();
+    const text = redactBody(await response.text());
     return {
       ok: response.ok,
       status: response.status,

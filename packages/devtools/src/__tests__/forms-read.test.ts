@@ -318,6 +318,23 @@ describe('privacy', () => {
     expect(text).toContain('"path":"hint"');
   });
 
+  it('masks a JWT and a bearer token in a form that has no secret field', () => {
+    const jwt = 'eyJhbGciOiJI.eyJzdWIiOiIx.c2lnbmF0dXJl';
+    const group = new FormGroup({
+      notes: new FormControl(`Bearer abc.def and ${jwt}`),
+      curl: new FormControl(jwt),
+    });
+    group.controls.notes.setErrors({ custom: `bad ${jwt}` });
+    const [collected] = collectForms({
+      forms: [{ kind: 'reactive', root: group as any, owner: null }],
+      elements: new WeakMap(),
+    });
+    const text = JSON.stringify(collected);
+    expect(text).not.toContain('eyJhbGciOiJI');
+    expect(text).not.toContain('abc.def');
+    expect(text).toContain('Bearer [redacted]');
+  });
+
   it('removes a secret value quoted in another field error', () => {
     const group = new FormGroup({
       password: new FormControl('hunter2'),

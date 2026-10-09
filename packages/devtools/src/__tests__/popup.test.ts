@@ -152,6 +152,11 @@ describe.sequential('devtools popup', () => {
     expect(shadow.querySelector('.close-btn')!.getAttribute('aria-label')).toBeTruthy();
   });
 
+  it('shows the product name in the toolbar', async () => {
+    await loadPopup();
+    expect(parts().toolbar.querySelector('.title')!.textContent).toBe('Pangular Inspector');
+  });
+
   it('opens the hub on the custom base the overlay connected to', async () => {
     const popup = await loadPopup((url) =>
       url === `${location.origin}/__tools/__connection.json` ? json() : notFound(),

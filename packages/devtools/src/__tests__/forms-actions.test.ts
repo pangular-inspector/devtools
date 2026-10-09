@@ -523,6 +523,38 @@ describe('secret safety for group writes', () => {
     );
   });
 
+  it('refuses to snapshot a value that cannot be cloned instead of storing a clipped copy', async () => {
+    const fixture = await render(Signup);
+    const ctx = contextFor(fixture.nativeElement);
+    const form = fixture.componentInstance.form;
+    const original = { run() {}, note: 'x'.repeat(300) };
+    form.controls.age.setValue(original as never);
+    const snap = await runFormAction(ctx, { action: 'snapshot', formId: 'form-1' });
+    expect(snap.ok).toBe(false);
+    expect(snap.snapshot).toBeUndefined();
+    expect(form.controls.age.value).toBe(original);
+  });
+
+  it('restores long strings and long arrays without clipping them', async () => {
+    const fixture = await render(Order);
+    const ctx = contextFor(fixture.nativeElement);
+    const form = fixture.componentInstance.form;
+    const tags = Array.from({ length: 40 }, (_, i) => `tag-${i}`);
+    form.controls.tags.setValue(tags);
+    form.controls.color.setValue('c'.repeat(300));
+    const snap = await runFormAction(ctx, { action: 'snapshot', formId: 'form-1' });
+    form.controls.tags.setValue(tags.map((tag) => `${tag}-edited`));
+    form.controls.color.setValue('red');
+    await runFormAction(ctx, {
+      action: 'restore',
+      formId: 'form-1',
+      snapshot: snap.snapshot,
+      confirm: true,
+    });
+    expect(form.controls.tags.value).toEqual(tags);
+    expect(form.controls.color.value).toBe('c'.repeat(300));
+  });
+
   it('refuses to restore a snapshot into another form', async () => {
     const fixture = await render(Signup);
     const ctx = contextFor(fixture.nativeElement);

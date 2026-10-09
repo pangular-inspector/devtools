@@ -220,8 +220,12 @@ export function signalStoreHistoryText(
       break;
     }
   }
-  const keptLines = keepFrom > 0 ? lines.slice(keepFrom) : lines;
-  const dropped = keepFrom;
+  let keptLines = keepFrom > 0 ? lines.slice(keepFrom) : lines;
+  let dropped = keepFrom;
+  if (keepFrom === lines.length) {
+    keptLines = [`${lines[lines.length - 1].slice(0, Math.max(0, budget))} …`];
+    dropped = lines.length - 1;
+  }
   const droppedNote =
     dropped > 0
       ? `\n\n(${dropped} older ${dropped === 1 ? 'entry was' : 'entries were'} omitted; pass \`storeId\` or \`since\` to narrow the results)`

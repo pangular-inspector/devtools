@@ -138,6 +138,25 @@ describe('get-ngrx-store members', () => {
     );
   });
 
+  it('reads the returned object of a block body, not a nested helper return', async () => {
+    const entries = await storeFor(
+      [
+        'export const S = signalStore(',
+        '  withState({ a: 1, b: 2 }),',
+        '  withMethods((store) => {',
+        '    const f = () => { return { zzz: 1 }; };',
+        '    if (!store) { return { early: true }; }',
+        '    return { inc() {}, dec: () => {} };',
+        '  }),',
+        ');',
+      ].join('\n'),
+    );
+    expect(entries.find((e) => e.name === 'S')!.members).toEqual({
+      state: ['a', 'b'],
+      methods: ['inc', 'dec'],
+    });
+  });
+
   it('reads inline withState keys and class field signalState', async () => {
     const entries = await storeFor(
       [

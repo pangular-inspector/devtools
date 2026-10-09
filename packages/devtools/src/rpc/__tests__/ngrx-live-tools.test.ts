@@ -258,6 +258,18 @@ describe('signal-store-history', () => {
     expect(text).toMatch(/older.*omitted/i);
   });
 
+  it('still shows the newest entry, clipped, when it alone exceeds the budget', () => {
+    const huge = 'y'.repeat(40_000);
+    const pages = pagesWith(
+      [store()],
+      [logEntry({ seq: 1 }), logEntry({ seq: 2, type: huge, args: undefined })],
+    );
+    const text = signalStoreHistoryText(pages);
+    expect(text).toMatch(/#2\b/);
+    expect(text).toMatch(/1 older entry was omitted/);
+    expect(text.length).toBeLessThan(NGRX_LIVE_TOOL_MAX + 200);
+  });
+
   it('requires page when since is supplied for multiple connected pages', () => {
     const pages: NgrxPages = new Map();
     for (const pid of ['p1', 'p2']) {

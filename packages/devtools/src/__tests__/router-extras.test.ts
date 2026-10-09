@@ -168,6 +168,25 @@ describe('server routes', () => {
     expect(renderModeFor(entries, '/account')?.renderMode).toBe('Server');
     expect(renderModeFor(entries, '/anything/else')?.renderMode).toBe('Prerender');
   });
+
+  it('keeps entries that carry a function body or a nested object', () => {
+    const source = `
+      export const serverRoutes: ServerRoute[] = [
+        {
+          path: 'post/:id',
+          renderMode: RenderMode.Prerender,
+          getPrerenderParams: async () => { return [{ id: '1' }]; },
+        },
+        { renderMode: RenderMode.Server, headers: { 'x-a': 'b' }, status: 200, path: 'account' },
+        { path: '**', renderMode: RenderMode.Server },
+      ];`;
+    const entries = parseServerRoutes(source, 'app.routes.server.ts');
+    expect(entries.map((e) => `${e.path}:${e.renderMode}`).sort()).toEqual([
+      '**:Server',
+      'account:Server',
+      'post/:id:Prerender',
+    ]);
+  });
 });
 
 describe('explanations', () => {

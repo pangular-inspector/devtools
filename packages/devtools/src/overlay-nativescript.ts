@@ -118,6 +118,7 @@ async function connect(baseURL: string, intervalMs: number, onDisconnected: () =
   // SSE is out: the NativeScript fetch has no streaming body.
   // Closing the socket on purpose also fires the close event.
   let closing = false;
+  let dead = false;
   const rpc = await connectDevframe({
     baseURL,
     transport: 'websocket',
@@ -126,12 +127,18 @@ async function connect(baseURL: string, intervalMs: number, onDisconnected: () =
     webmcp: false,
     wsOptions: {
       onDisconnected: () => {
+        dead = true;
         if (!closing) onDisconnected();
       },
     },
   });
   try {
     const stop = await startSession(rpc, intervalMs);
+    if (dead) {
+      closing = true;
+      stop();
+      return () => {};
+    }
     return () => {
       closing = true;
       stop();
@@ -187,11 +194,18 @@ async function startSession(
     const full = force || !historyDelta || owner !== historyFor;
     historyFor = owner;
     const history = signalHistory.collectDelta(graph.nodes, full);
-    const answer = (await my.rpc.call('push-signal-graph', {
-      ...graph,
-      pageId,
-      ...(full ? { history } : { historyDelta: history }),
-    })) as { delta?: boolean } | undefined;
+    let answer: { delta?: boolean } | undefined;
+    try {
+      answer = (await my.rpc.call('push-signal-graph', {
+        ...graph,
+        pageId,
+        ...(full ? { history } : { historyDelta: history }),
+      })) as { delta?: boolean } | undefined;
+    } catch (error) {
+      signalHistory.rollback();
+      lastSignalKey = '';
+      throw error;
+    }
     historyDelta = answer?.delta === true;
   }
 

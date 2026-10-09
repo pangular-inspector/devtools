@@ -249,6 +249,18 @@ describe('createSignalHistory', () => {
     expect(full['a'].map((c) => c.epoch)).toEqual([0, 2]);
     expect(full['b']).toHaveLength(1);
   });
+
+  it('resends the changes of a push that failed once the cursor is rolled back', () => {
+    let at = 0;
+    const h = createSignalHistory(identity, () => ++at);
+    h.collectDelta([graphNode('a', 'count', 0, 0)]);
+    const lost = h.collectDelta([graphNode('a', 'count', 2, 2)]);
+    expect(lost['a'].map((c) => c.epoch)).toEqual([2]);
+    h.rollback();
+    const retry = h.collectDelta([graphNode('a', 'count', 3, 3)]);
+    expect(retry['a'].map((c) => c.epoch)).toEqual([2, 3]);
+    expect(h.collectDelta([graphNode('a', 'count', 3, 3)])).toEqual({});
+  });
 });
 
 describe('installSignalWriteHook', () => {

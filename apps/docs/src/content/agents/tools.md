@@ -288,6 +288,8 @@ When a write goes through a native `<select>` (`mode: user`, the default for `fi
 
 `form-action` accepts these actions: `set-value`, `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`, `touch-all`, `revalidate`, `reset`, `enable`, `disable`, `submit`, `focus`, `focus-first-invalid`, `store-as-global`, `snapshot`, `restore` and `instrument`.
 
+`snapshot` keeps a copy of the form value, so it refuses a form whose value cannot be cloned, such as a control that holds a function. `inspect-forms` with `includeValues: false` also leaves out uncommitted input, model drift and metadata.
+
 <ngmd-callout type="warning" title="Some actions need confirm">
   <code>reset</code>, <code>submit</code> and <code>restore</code> need <code>confirm: true</code>, and so does <code>fill-form</code> with <code>submit</code>. Disabled reactive fields need <code>force</code>.
 </ngmd-callout>
@@ -340,7 +342,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 ### Call a server route <ngmd-badge variant="alpha">Action</ngmd-badge>
 
-`analog-call-api` sends a request to a route on the running dev server, like `GET /api/v1/hello`, and returns the status, time and body. Reads: Vite plugin.
+`analog-call-api` sends a request to a route on the running dev server, like `GET /api/v1/hello`, and returns the status, time and body. Secret keys, tokens and `Bearer` values in the body are masked. Reads: Vite plugin.
 
 | Argument  | Required | Value                                                         |
 | --------- | -------- | ------------------------------------------------------------- |

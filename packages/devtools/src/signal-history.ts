@@ -36,6 +36,7 @@ export function createSignalHistory(
   const history = new Map<string, SignalChange[]>();
   const totals = new Map<string, number>();
   const sent = new Map<string, number>();
+  let previous = new Map<string, number | undefined>();
   let trackSeq = 0;
 
   function onWrite(node: RawSignalNode) {
@@ -149,10 +150,12 @@ export function createSignalHistory(
 
   function collectDelta(nodes: SignalGraphNode[], full = false): Record<string, SignalChange[]> {
     const out: Record<string, SignalChange[]> = {};
+    previous = new Map();
     for (const [id, list] of Object.entries(collect(nodes))) {
       const last = full ? -Infinity : (sent.get(id) ?? -Infinity);
       const fresh = list.filter((change) => change.epoch > last);
       if (list.length) {
+        previous.set(id, sent.get(id));
         sent.delete(id);
         sent.set(id, list.at(-1)!.epoch);
       }
@@ -165,7 +168,15 @@ export function createSignalHistory(
     return out;
   }
 
-  return { onWrite, collect, collectDelta, changesOf };
+  function rollback() {
+    for (const [id, epoch] of previous) {
+      if (epoch === undefined) sent.delete(id);
+      else sent.set(id, epoch);
+    }
+    previous = new Map();
+  }
+
+  return { onWrite, collect, collectDelta, rollback, changesOf };
 }
 
 type SignalSetHook = ((node: RawSignalNode) => void) | null;

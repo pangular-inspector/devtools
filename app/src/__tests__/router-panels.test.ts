@@ -76,6 +76,33 @@ describe('RouteTree row actions', () => {
     ],
   });
 
+  it('shows the param it will navigate with after the row is hidden and shown again', async () => {
+    const calls: Record<string, unknown>[] = [];
+    const fixture = mount(RouteTree, config, (_, arg) => {
+      calls.push(arg);
+      return Promise.resolve({ id: 4, outcome: 'succeeded', finalUrl: '/users/42' });
+    });
+    await settle(fixture);
+    const first = el(fixture).querySelector<HTMLInputElement>('input.param')!;
+    first.value = '42';
+    first.dispatchEvent(new Event('input'));
+
+    const filter = el(fixture).querySelector<HTMLInputElement>('input.filter')!;
+    filter.value = 'lazy';
+    filter.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    expect(el(fixture).querySelector('input.param')).toBeNull();
+    filter.value = '';
+    filter.dispatchEvent(new Event('input'));
+    await settle(fixture);
+
+    const again = el(fixture).querySelector<HTMLInputElement>('input.param')!;
+    expect(again.value).toBe('42');
+    button(fixture, 'Navigate to users/:id').click();
+    await settle(fixture);
+    expect(calls[0]).toMatchObject({ request: { params: { id: '42' } } });
+  });
+
   it('asks for empty params next to the row instead of calling the page', async () => {
     const calls: Record<string, unknown>[] = [];
     const fixture = mount(RouteTree, config, (_, arg) => {

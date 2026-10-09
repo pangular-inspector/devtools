@@ -89,6 +89,9 @@ function pruneTree(node: FormFieldNode, args: InspectFormsArgs): FormFieldNode |
   if (args.includeValues === false) {
     delete out.value;
     delete out.defaultValue;
+    delete out.uncommitted;
+    delete out.modelDrift;
+    delete out.metadata;
     out.errors = node.errors.map(withoutValue);
   }
   return out;

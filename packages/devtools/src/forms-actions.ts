@@ -882,11 +882,17 @@ async function perform(
     }
     case 'snapshot': {
       const value = rawValue(found, found.root);
+      let copy: unknown;
+      try {
+        copy = structuredClone(value);
+      } catch {
+        return fail('This form value cannot be snapshotted.');
+      }
       const id = `s${++snapshotSeq}`;
       snapshots.set(id, {
         root: found.root,
         formId: request.formId ?? '',
-        value: structuredCloneSafe(value),
+        value: copy,
         shape: shapeOf(value),
       });
       if (snapshots.size > 20) snapshots.delete(snapshots.keys().next().value!);
@@ -907,7 +913,7 @@ async function perform(
       }
       const guarded = guardedFields(ctx, found, found.root, '');
       if (!guarded) return fail('The form is too large to check for protected fields.');
-      let restored = keepSecrets(structuredCloneSafe(saved.value), currentValue);
+      let restored = keepSecrets(structuredClone(saved.value), currentValue);
       for (const field of guarded) {
         restored = setAt(restored, field.path, valueAt(currentValue, field.path));
       }
@@ -917,13 +923,5 @@ async function perform(
     }
     default:
       return fail('Unknown action.');
-  }
-}
-
-function structuredCloneSafe<T>(value: T): T {
-  try {
-    return structuredClone(value);
-  } catch {
-    return serializeFormValue(value) as T;
   }
 }

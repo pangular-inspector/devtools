@@ -507,7 +507,7 @@ export function snapshotRouter(router: AnyRecord): RouterSnapshot | null {
     const routerUrl = read(() => String(router['url']), '');
     snapshot.urlDrift = normalize(browser) !== normalize(routerUrl);
   }
-  if (typeof document !== 'undefined') snapshot.title = clip(document.title, MAX_REASON);
+  if (typeof document !== 'undefined') snapshot.title = redactMessage(document.title, secrets);
   const current = currentNavigationOf(router, Date.now());
   if (current) snapshot.pending = { id: current.id, url: current.url };
   return snapshot;
@@ -1027,7 +1027,8 @@ export function applyRouterEvent(
         const reused = reusedOf(router);
         if (reused.length) nav.reused = reused;
         Promise.resolve().then(() => {
-          if (typeof document !== 'undefined') nav.title = clip(document.title, MAX_REASON);
+          if (typeof document !== 'undefined')
+            nav.title = redactMessage(document.title, state.secrets);
         });
       }
       finish(nav, at, router);

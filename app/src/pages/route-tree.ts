@@ -203,6 +203,7 @@ interface MatchResult {
                             isInvalid(row.node, param) ? 'route-tree-row-result' : null
                           "
                           [placeholder]="param"
+                          [value]="paramValues()[row.node.id]?.[param] ?? ''"
                           (input)="setParam(row.node.id, param, $any($event.target).value)"
                         />
                       }
@@ -406,7 +407,7 @@ export class RouteTree {
   readonly match = signal<MatchResult | null>(null);
   readonly message = signal('');
   readonly rowResult = signal<{ id: string; text: string } | null>(null);
-  private readonly paramValues = signal<Record<string, Record<string, string>>>({});
+  protected readonly paramValues = signal<Record<string, Record<string, string>>>({});
   private readonly checkedRow = signal<string | null>(null);
 
   readonly active = computed(() => new Set(this.page().activeIds ?? []));
