@@ -8,6 +8,7 @@ import {
   refetchedServerFns,
   type AnalogCall,
 } from '../analog-server-log.ts';
+import { redactAnalogReport } from '../analog-redact.ts';
 import type { PayloadSummary } from '../http-payload.ts';
 import {
   explainUrl,
@@ -207,7 +208,9 @@ export async function registerAnalog(
     handler: (report: unknown) => {
       if (!isAnalogReport(report)) return;
       seenAt.set(report.pageId, Date.now());
-      apply(mergeAnalogReport(current(), resolveAnalogReport(project(), report)));
+      apply(
+        mergeAnalogReport(current(), resolveAnalogReport(project(), redactAnalogReport(report))),
+      );
     },
   });
   my.rpc.register({

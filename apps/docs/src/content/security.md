@@ -12,7 +12,7 @@ description: Who can reach the devtools, and which values are redacted before th
 The devtools read your running app and send what they find to a server on your machine. This page covers who can reach that server, and what is redacted on the way.
 
 <ngmd-alert severity="critical">
-  Don't expose the dev server beyond localhost. Some values, such as HTTP response previews, are sent as they are.
+  Don't expose the dev server beyond localhost. Values that no rule recognizes as secret are sent as they are.
 </ngmd-alert>
 
 ## At a glance
@@ -193,15 +193,13 @@ Component inputs, signal values, NgRx state, and pipe inputs, outputs and async 
 
 ### Analog
 
-Server call previews and URLs are redacted: keys in JSON bodies that the forms rules treat as secret, secret query parameters, JWTs and bearer tokens. This covers form action validation errors and redirect targets too. Only JSON and plain text responses get a preview, and it is cut at 1000 characters. The devtools keep the first 16 KB of a body, and a cut JSON body still has its secret-looking keys redacted. The `load()` data preview on the open page redacts the same keys. Keys are matched by whole words, so `sessionId` and `apiKey` are redacted while `author` and `passengers` stay visible. JSON nested deeper than the preview reads is shown as `[Truncated]`.
+Server call previews and URLs are redacted: keys in JSON bodies that the forms rules treat as secret, secret query parameters, JWTs and bearer tokens. This covers form action validation errors and redirect targets too. Only JSON and plain text responses get a preview, and it is cut at 1000 characters. The devtools keep the first 16 KB of a body, and a cut JSON body still has its secret-looking keys redacted. The `load()` data preview on the open page redacts the same keys, and JWTs and bearer tokens inside its string values. The page report's URL, `load()` preview and hydration errors are redacted again on the devtools server. Keys are matched by whole words, so `sessionId` and `apiKey` are redacted while `author` and `passengers` stay visible. JSON nested deeper than the preview reads is shown as `[Truncated]`.
 
 ### SSR & HTTP
 
 Request URLs, page URLs and error messages in the [SSR & HTTP tab](./inspectors/ssr-http.md) are redacted like router URLs, in the page and again on the devtools server. This covers SSR and client calls, and `devframe_state_read`.
 
-### Not redacted
-
-Response previews and TransferState values in the [SSR & HTTP tab](./inspectors/ssr-http.md) are not redacted. They reach the devtools server unchanged, so don't expose the dev server beyond localhost.
+Response previews are redacted on the devtools server: keys that the forms rules treat as secret, JWTs, bearer tokens and secret query pairs. The same holds for TransferState entries: their values, keys and request URLs are redacted before they reach the panel or an agent. Large payload values are still cut, so a long value can end in `[Truncated]`.
 
 ## Checklist
 

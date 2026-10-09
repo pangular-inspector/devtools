@@ -1,4 +1,5 @@
 import { untracked } from '@angular/core';
+import { isRedactedKey, REDACTED } from './forms-privacy.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
 import { className, tokenName } from './injector-tree.ts';
 import {
@@ -175,6 +176,10 @@ function snapshotDiff(before: Snapshot, after: Snapshot, keys: PropertyKey[]): N
     if (out.length >= MAX_DIFF) break;
     if (before[key] === after[key]) continue;
     const root = String(key);
+    if (typeof key === 'string' && isRedactedKey(key)) {
+      out.push({ path: root, op: 'change', before: REDACTED, after: REDACTED });
+      continue;
+    }
     const found = diff(
       serializeSlice(key, before[key]),
       serializeSlice(key, after[key]),

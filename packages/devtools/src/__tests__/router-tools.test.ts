@@ -173,6 +173,17 @@ describe('router events', () => {
 });
 
 describe('router reports', () => {
+  it('accepts a recorded request URL up to the length the collector keeps', () => {
+    const url = `https://x.test/?${'a=1&'.repeat(100)}`;
+    const withRequests = (u: string) => ({
+      pageId: 'a',
+      snapshot: null,
+      navigations: [{ ...nav(1), requests: { count: 1, urls: [u] } }],
+    });
+    expect(isRouterReport(withRequests(url))).toBe(true);
+    expect(isRouterReport(withRequests('x'.repeat(2001)))).toBe(false);
+  });
+
   it('accepts what the overlay sends and rejects what the tools cannot read', () => {
     const valid: RouterReport = { pageId: 'a', snapshot, navigations: [nav(1)] };
     expect(isRouterReport(valid)).toBe(true);

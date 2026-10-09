@@ -1,6 +1,6 @@
 import { keepaliveDue } from './change-detection.ts';
 import { hasStateScript, scanHydration } from './http-hydration.ts';
-import { isRedactedKey } from './forms-privacy.ts';
+import { isRedactedKey, redactMessage } from './forms-privacy.ts';
 import { createHydrationScanner } from './http-overlay.ts';
 import { httpRegistry } from './http-rules.ts';
 import { findRouters, type RouterDebugApi } from './router.ts';
@@ -65,6 +65,7 @@ export function fileOfEndpoint(endpointKey: string | undefined): {
 }
 
 function redact(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') return redactMessage(value);
   if (value === null || typeof value !== 'object') return value;
   if (depth > 5) return '[Truncated]';
   if (Array.isArray(value)) return value.slice(0, 20).map((item) => redact(item, depth + 1));
@@ -144,7 +145,7 @@ export function loadSummary(data: unknown): AnalogRuntimeReport['load'] | undefi
   try {
     text = JSON.stringify(redact(data)) ?? 'undefined';
   } catch {
-    text = String(data);
+    text = redactMessage(String(data));
   }
   const bytes = read(() => (JSON.stringify(data) ?? '').length, text.length);
   return {

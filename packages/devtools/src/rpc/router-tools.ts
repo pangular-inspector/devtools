@@ -106,8 +106,8 @@ function optional(value: unknown, check: (v: unknown) => boolean): boolean {
   return value === undefined || check(value);
 }
 
-function isNames(value: unknown, max = 100): boolean {
-  return Array.isArray(value) && value.length <= max && value.every((v) => isText(v, 300));
+function isNames(value: unknown, max = 100, length = 300): boolean {
+  return Array.isArray(value) && value.length <= max && value.every((v) => isText(v, length));
 }
 
 function isNumber(value: unknown): boolean {
@@ -242,7 +242,7 @@ function isNavigation(value: unknown): boolean {
       (v) =>
         isRecord(v) &&
         isNumber((v as { count?: unknown }).count) &&
-        isNames((v as { urls?: unknown }).urls, 10),
+        isNames((v as { urls?: unknown }).urls, 10, 2000),
     ) &&
     optional(nav.runs, (v) => Array.isArray(v) && v.length <= 40 && v.every(isRun)) &&
     optional(

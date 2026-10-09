@@ -136,6 +136,19 @@ describe('Analog MCP tools', () => {
     expect(text).toContain('restart the dev server');
   });
 
+  it('analog-current-page masks tokens in the url, load preview and hydration errors', async () => {
+    const { call, push } = await boot(makeProject(BASE_FILES));
+    await push('push-analog', {
+      ...report,
+      url: '/auth/callback?code=abc999&token=eyJhbGciOi.eyJzdWIi.sigsig',
+      load: { preview: '{"header":"Bearer xyz.789"}', bytes: 10, keys: ['header'] },
+      hydrationErrors: ['NG0500 at /cb?token=qrs456 Bearer lmn.012'],
+    });
+    const text = await call('analog-current-page');
+    expect(text).not.toMatch(/abc999|eyJhbGci|xyz\.789|qrs456|lmn\.012/);
+    expect(text).toContain('/auth/callback');
+  });
+
   it('analog-server-calls lists calls and flags loads fetched twice', async () => {
     const { call } = await boot(makeProject(BASE_FILES));
     expect(await call('analog-server-calls')).toContain('No server calls recorded yet');

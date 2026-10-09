@@ -1,4 +1,6 @@
 import type { HydrationMismatch } from './http-hydration.ts';
+import { redactUrl } from './router.ts';
+import { serialize } from './serialize.ts';
 import type { HydrationStats } from './types.ts';
 
 export type PayloadSource = 'http' | 'analog' | 'hydration';
@@ -23,10 +25,18 @@ export interface PayloadSummary {
 
 const MAX_VALUE_CHARS = 20_000;
 
+const VALUE_LIMITS = { depth: 12, keys: 200, items: 200, text: MAX_VALUE_CHARS, budget: 50_000 };
+
+function safe(value: unknown): unknown {
+  return clip(serialize(value, VALUE_LIMITS));
+}
+
 function clip(value: unknown): unknown {
   const text = JSON.stringify(value) ?? '';
   return text.length > MAX_VALUE_CHARS ? `${text.slice(0, MAX_VALUE_CHARS)}…` : value;
 }
+
+const redactOptional = (url: string | undefined) => (url === undefined ? url : redactUrl(url));
 
 const MAX_ENTRIES = 500;
 const MAX_LIST = 200;
@@ -51,8 +61,9 @@ export function sanitizePayload(input: unknown): PayloadSummary {
   for (const raw of Array.isArray(p.entries) ? p.entries.slice(0, MAX_ENTRIES) : []) {
     if (!raw || typeof raw !== 'object') continue;
     const e = raw as { [K in keyof PayloadEntry]?: unknown };
-    const key = str(e.key, 500);
-    if (key === undefined) continue;
+    const rawKey = str(e.key, 500);
+    if (rawKey === undefined) continue;
+    const key = redactUrl(rawKey).slice(0, 500);
     const h = e.http && typeof e.http === 'object' ? (e.http as Record<string, unknown>) : null;
     const source =
       e.source === 'http' || e.source === 'analog' || e.source === 'hydration'
@@ -63,12 +74,12 @@ export function sanitizePayload(input: unknown): PayloadSummary {
     entries.push({
       key,
       size: num(e.size) ?? 0,
-      value: clip(e.value),
+      value: safe(e.value),
       ...(source && { source }),
       ...(fnId && /^[0-9a-f]{16}$/.test(fnId) && { fn: { id: fnId } }),
       ...(h && {
         http: {
-          url: str(h['url'], 2000),
+          url: redactOptional(str(h['url'], 2000)),
           status: num(h['status']),
           statusText: str(h['statusText'], 200),
           responseType: str(h['responseType'], 20),

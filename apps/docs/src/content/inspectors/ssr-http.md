@@ -163,8 +163,8 @@ Two router tools cover related ground:
 
 ## Limits and gotchas
 
-<ngmd-callout type="danger" title="Response bodies are not redacted">
-  Request URLs, page URLs and error messages are redacted like router URLs. Response previews and TransferState values reach the devtools server as they are. Don't expose the dev server beyond localhost. See <a href="../security.md">Security</a>.
+<ngmd-callout type="warning" title="Only secrets that match a rule are redacted">
+  Request URLs, page URLs, error messages, response previews and TransferState entries are redacted on the devtools server: secret-looking keys, JWTs, bearer tokens and secret query values. Other values are shown as they are, so don't expose the dev server beyond localhost. See <a href="../security.md">Security</a>.
 </ngmd-callout>
 
 ### Prerendered routes make no requests

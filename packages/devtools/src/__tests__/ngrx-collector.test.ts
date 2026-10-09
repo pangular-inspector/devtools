@@ -247,6 +247,18 @@ describe('ngrx collector', () => {
     });
   });
 
+  it('keeps a redacted top-level state key out of the change log', () => {
+    const { store, collector } = setup();
+    (store as any)[STATE_SOURCE].apiKey = writable('hunter2');
+    collector.collect();
+    (store as any)[STATE_SOURCE].apiKey.set('swordfish');
+    return Promise.resolve().then(() => {
+      const log = JSON.stringify(collector.logSince(0));
+      expect(log).toContain('apiKey');
+      expect(log).not.toMatch(/hunter2|swordfish/);
+    });
+  });
+
   it('only rescans the page when asked to rediscover stores', () => {
     const { store, collector, ng } = setup();
     const spy = vi.spyOn(ng, 'getComponent');

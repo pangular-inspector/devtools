@@ -27,6 +27,16 @@ function analogRoute(path: string, endpointKey: string, extra: Record<string, un
 }
 
 describe('Analog runtime reader', () => {
+  it('masks JWTs and bearer tokens held in string values of the load preview', () => {
+    const summary = loadSummary({
+      header: 'Bearer abc.def123',
+      note: 'eyJhbGciOiJI.eyJzdWIiOiIx.SflKxwRJSMeK',
+      password: 'x',
+    })!;
+    expect(summary.preview).not.toMatch(/abc\.def123|eyJhbGci/);
+    expect(loadSummary('Bearer abc.def123')!.preview).not.toContain('abc.def123');
+  });
+
   it('finds the hidden route metadata and maps it to files', () => {
     const route = analogRoute('', '/src/app/pages/products/[id].server.ts');
     expect(analogMetaOf(route)?.endpointKey).toBe('/src/app/pages/products/[id].server.ts');
