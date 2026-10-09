@@ -30,5 +30,7 @@ it('states on the tools page how many tools the server registers', async () => {
   );
   const stated = /^\s*([A-Z][a-z]+(?:-[a-z]+)?) tools, grouped by inspector/m.exec(page)?.[1];
   expect(stated).toBeDefined();
-  expect(WORDS.indexOf(stated!) + 48).toBe(registered);
+  const index = WORDS.indexOf(stated!);
+  expect(index).toBeGreaterThanOrEqual(0);
+  expect(index + 48).toBe(registered);
 });

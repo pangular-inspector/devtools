@@ -6,6 +6,7 @@ import {
   lineCounter,
   maskStrings,
   matchDelimiter,
+  skipString,
   sourceRoots,
   stripComments,
   walkFiles,
@@ -84,10 +85,20 @@ export function lintPipes(cwd: string): PipeLintFinding[] {
   return findings;
 }
 
+function interpolationEnd(text: string, open: number): number {
+  for (let i = open + 2; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"' || ch === "'" || ch === '`') i = skipString(text, i);
+    else if (text.startsWith('}}', i)) return i + 1;
+  }
+  return text.length;
+}
+
 function templateBraceEnd(text: string, open: number): number {
   let depth = 0;
   for (let i = open; i < text.length; i++) {
-    if (text[i] === '{') depth++;
+    if (text.startsWith('{{', i)) i = interpolationEnd(text, i);
+    else if (text[i] === '{') depth++;
     else if (text[i] === '}' && --depth === 0) return i;
   }
   return text.length;

@@ -44,6 +44,37 @@ function other() {
     expect(found?.schemas?.map((s) => s.file.replaceAll('\\', '/'))).toEqual(['src/b/schema.ts']);
   });
 
+  it('matches the local binding of an aliased import', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'pangular-schema-'));
+    for (const dir of ['a', 'b']) {
+      mkdirSync(join(cwd, 'src', dir), { recursive: true });
+      writeFileSync(
+        join(cwd, 'src', dir, 'schema.ts'),
+        `export const addressSchema = schema<A>((p) => {\n  required(p.city);\n});\n`,
+      );
+    }
+    writeFileSync(
+      join(cwd, 'src', 'page.ts'),
+      `import { addressSchema as shippingSchema } from './a/schema';\nimport { addressSchema } from './b/schema';\nexport class Page {\n  f = form(this.model, addressSchema);\n}\n`,
+    );
+    const found = findFormSource(cwd, 'Page', 'f', 'city');
+    expect(found?.schemas?.map((s) => s.file.replaceAll('\\', '/'))).toEqual(['src/b/schema.ts']);
+  });
+
+  it('does not use an unrelated declaration when the import cannot be resolved', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'pangular-schema-'));
+    mkdirSync(join(cwd, 'src', 'a'), { recursive: true });
+    writeFileSync(
+      join(cwd, 'src', 'a', 'schema.ts'),
+      `export const addressSchema = schema<A>((p) => {\n  required(p.city);\n});\n`,
+    );
+    writeFileSync(
+      join(cwd, 'src', 'page.ts'),
+      `import { addressSchema } from '@app/schema';\nexport class Page {\n  f = form(this.model, addressSchema);\n}\n`,
+    );
+    expect(findFormSource(cwd, 'Page', 'f', 'city')?.schemas).toBeUndefined();
+  });
+
   it('does not guess between same-named schemas it cannot tell apart', () => {
     const cwd = mkdtempSync(join(tmpdir(), 'pangular-schema-'));
     for (const dir of ['a', 'b']) {

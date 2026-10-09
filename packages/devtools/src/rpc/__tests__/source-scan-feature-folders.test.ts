@@ -24,4 +24,18 @@ describe('source scan feature folders', () => {
       'app-src-app-coverage',
     ]);
   });
+
+  it('scans a project rooted in a feature folder only once', async () => {
+    const dir = fixtureDir('pangular-nested-roots-');
+    mkdirSync(join(dir, 'src/app/build'), { recursive: true });
+    writeFileSync(join(dir, 'src/app/build/x.component.ts'), component('app-build'));
+    writeFileSync(
+      join(dir, 'angular.json'),
+      JSON.stringify({
+        projects: { web: { sourceRoot: 'src' }, tools: { sourceRoot: 'src/app/build' } },
+      }),
+    );
+    const components = await scan(getComponents, dir);
+    expect(components.map((c) => c.selector)).toEqual(['app-build']);
+  });
 });

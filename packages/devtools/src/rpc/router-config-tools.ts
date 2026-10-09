@@ -350,8 +350,8 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
         !node.matcher &&
         !node.children?.length &&
         !earlier.children?.length &&
-        node.lazy !== 'unloaded' &&
-        earlier.lazy !== 'unloaded'
+        !(node.kind === 'lazy' && node.lazy === 'unloaded') &&
+        !(earlier.kind === 'lazy' && earlier.lazy === 'unloaded')
       ) {
         findings.push({
           rule: 'duplicate-path',
@@ -362,7 +362,7 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
           angular: 'silent',
         });
       }
-      seen.set(key, node);
+      if (!node.children?.length) seen.set(key, node);
     }
     primary.forEach((node, index) => {
       const own = parts(node.path);
@@ -765,7 +765,7 @@ export function explainRenderModeText(
     const unloaded: string[] = [];
     walk(page.config, (node) => {
       if (!node.children?.length && node.redirectTo === undefined) clientPaths.push(node.fullPath);
-      if (node.lazy === 'unloaded') unloaded.push(node.fullPath);
+      if (node.kind === 'lazy' && node.lazy === 'unloaded') unloaded.push(node.fullPath);
     });
     const unknown = entries.filter(
       (entry) =>

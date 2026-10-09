@@ -25,6 +25,11 @@ describe('impure-pipe-in-for block matching', () => {
     expect(lintFor(template)).toEqual([]);
   });
 
+  it('ignores a brace inside a string when finding the end of the loop body', () => {
+    const template = `@for (x of xs; track x) { {{ '}' }} {{ x | slow }} }`;
+    expect(lintFor(template)).toHaveLength(1);
+  });
+
   it('reports a pipe in nested loops once', () => {
     const template = `@for (r of rows; track r) {\n@for (c of r; track c) {\n{{ c | slow }}\n}\n}`;
     expect(lintFor(template)).toHaveLength(1);

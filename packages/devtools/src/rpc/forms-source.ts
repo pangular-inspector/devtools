@@ -203,6 +203,21 @@ export function findFormSource(
   return result;
 }
 
+function importSpecifier(source: string, local: string): string | undefined {
+  for (const clause of source.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+    for (const part of clause[1].split(',')) {
+      const bound = part
+        .trim()
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)
+        .pop()
+        ?.trim();
+      if (bound === local) return clause[2];
+    }
+  }
+  return undefined;
+}
+
 function schemaFile(
   cwd: string,
   files: string[],
@@ -216,15 +231,14 @@ function schemaFile(
     const content = readCached(full);
     if (content !== null && needle.test(content)) matches.push({ full, content });
   }
-  const specifier = new RegExp(
-    `import\\s*\\{[^}]*\\b${escape(name)}\\b[^}]*\\}\\s*from\\s*['"](\\.[^'"]*)['"]`,
-  ).exec(stripComments(fromContent))?.[1];
-  if (specifier) {
+  const specifier = importSpecifier(stripComments(fromContent), name);
+  if (specifier !== undefined) {
+    if (!specifier.startsWith('.')) return null;
     const base = join(dirname(from), specifier.replace(/\.[mc]?[jt]s$/, ''));
     const imported = matches.find(
       (match) => match.full === `${base}.ts` || match.full === join(base, 'index.ts'),
     );
-    if (imported) return { content: imported.content, file: relative(cwd, imported.full) };
+    return imported ? { content: imported.content, file: relative(cwd, imported.full) } : null;
   }
   if (matches.length !== 1) return null;
   return { content: matches[0].content, file: relative(cwd, matches[0].full) };

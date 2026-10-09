@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const calls: { name: string; at: number }[] = [];
 let failTree = false;
+let failOnce: string | null = null;
 
 vi.mock('@nativescript/core', () => ({
   Application: { getRootView: () => null },
@@ -17,6 +18,10 @@ vi.mock('devframe/client', () => ({
         call: vi.fn(async (name: string) => {
           calls.push({ name, at: Date.now() });
           if (failTree && name === 'push-component-tree') throw new Error('rejected');
+          if (failOnce === name) {
+            failOnce = null;
+            throw new Error('rejected');
+          }
           return undefined;
         }),
         register: vi.fn(),
@@ -66,6 +71,7 @@ describe('NativeScript overlay reports', () => {
     vi.stubGlobal('ng', { getComponent: () => null });
     calls.length = 0;
     failTree = false;
+    failOnce = null;
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
@@ -92,6 +98,23 @@ describe('NativeScript overlay reports', () => {
     expect(names).toContain('push-ngrx');
     dispose();
   });
+
+  it.each(['push-component-tree', 'push-injector-tree'])(
+    'retries an unchanged %s on the next tick after it was rejected',
+    async (name) => {
+      failOnce = name;
+      const { initNativeScriptOverlay } = await import('../overlay-nativescript.ts');
+      const dispose = initNativeScriptOverlay({
+        baseURL: 'http://localhost:9999/',
+        intervalMs: 3000,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      await flush();
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(calls.filter((c) => c.name === name)).toHaveLength(2);
+      dispose();
+    },
+  );
 
   it('re-sends an unchanged tree within the page expiry at a slow interval', async () => {
     const { initNativeScriptOverlay } = await import('../overlay-nativescript.ts');

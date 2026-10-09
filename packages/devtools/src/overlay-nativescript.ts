@@ -169,9 +169,18 @@ async function startSession(
     const report = collectComponentTree(ng, { tree, selectedId: componentTarget });
     const json = JSON.stringify(report);
     if (!force && json === lastTreeJson && !keepaliveDue(treeSentAt, intervalMs)) return;
+    const previous = { json: lastTreeJson, sentAt: treeSentAt };
     lastTreeJson = json;
     treeSentAt = Date.now();
-    await my.rpc.call('push-component-tree', { ...report, pageId });
+    try {
+      await my.rpc.call('push-component-tree', { ...report, pageId });
+    } catch (error) {
+      if (lastTreeJson === json) {
+        lastTreeJson = previous.json;
+        treeSentAt = previous.sentAt;
+      }
+      throw error;
+    }
   }
 
   const signalHistory = createSignalHistory((value, name) =>
@@ -221,9 +230,18 @@ async function startSession(
     const report = collectInjectorTree(ng, tree);
     const json = JSON.stringify(report);
     if (json === lastInjectorJson && !keepaliveDue(injectorSentAt, intervalMs)) return;
+    const previous = { json: lastInjectorJson, sentAt: injectorSentAt };
     lastInjectorJson = json;
     injectorSentAt = Date.now();
-    await my.rpc.call('push-injector-tree', { ...report, pageId });
+    try {
+      await my.rpc.call('push-injector-tree', { ...report, pageId });
+    } catch (error) {
+      if (lastInjectorJson === json) {
+        lastInjectorJson = previous.json;
+        injectorSentAt = previous.sentAt;
+      }
+      throw error;
+    }
   }
 
   const ngrx = attachNgrx(my, pageId, angularDebugApi, undefined, {

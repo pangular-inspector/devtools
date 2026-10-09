@@ -376,7 +376,7 @@ export function sourceRoots(cwd: string): string[] {
       // declared below one is only reachable by starting there.
       const crosses = relative(cover, real)
         .split(/[\\/]/)
-        .some((part) => IGNORED_DIRS.has(part.toLowerCase()));
+        .some((part, depth) => skipsDirectory(part, depth === 0));
       if (!crosses) continue;
       kept.push(dir);
       continue;

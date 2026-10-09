@@ -21,6 +21,15 @@ describe('duplicate-path lint', () => {
     expect(lintRoutes(page({ config })).map((f) => f.rule)).not.toContain('duplicate-path');
   });
 
+  it('keeps comparing against an earlier leaf when a middle sibling has children', () => {
+    const config = [
+      node('/home'),
+      node('/home', { children: [node('/home/x', { path: 'x' })] }),
+      node('/home'),
+    ];
+    expect(lintRoutes(page({ config })).filter((f) => f.rule === 'duplicate-path')).toHaveLength(1);
+  });
+
   it('still flags identical leaf routes', () => {
     const config = [node('/home'), node('/home')];
     expect(lintRoutes(page({ config })).filter((f) => f.rule === 'duplicate-path')).toHaveLength(1);
@@ -36,6 +45,14 @@ describe('explain-render-mode', () => {
     ];
     const text = explainRenderModeText({ pages: [page({ config })] }, entries, {});
     expect(text).not.toContain('no matching client route');
+  });
+
+  it('still reports an entry under a route that only loads a component lazily', () => {
+    const config = [
+      node('/admin', { kind: 'component', lazy: 'unloaded', component: undefined, path: 'admin' }),
+    ];
+    const text = explainRenderModeText({ pages: [page({ config })] }, entries, {});
+    expect(text).toContain('no matching client route');
   });
 
   it('does not claim a build failure when the config was truncated', () => {

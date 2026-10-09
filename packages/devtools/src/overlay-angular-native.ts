@@ -258,6 +258,7 @@ async function startSession(
     } catch (error) {
       rollback();
       lastSignalKey = '';
+      historyDelta = false;
       throw error;
     }
     historyDelta = answer?.delta === true;
