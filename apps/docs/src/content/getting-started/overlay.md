@@ -122,6 +122,39 @@ Only one overlay runs on a page. Importing the module already starts one on the 
 
 An overlay that was stopped or replaced before it connected does not report its connection error.
 
+### Start it yourself
+
+`@pangular-inspector/devtools/overlay-manual` exports the same functions and starts nothing on import. Nothing connects and no floating button appears until you call `initOverlay`:
+
+```ts
+// src/main.ts
+import {bootstrapApplication} from '@angular/platform-browser';
+import {App} from './app/app';
+import {appConfig} from './app/app.config';
+
+bootstrapApplication(App, appConfig).then(async () => {
+  if (typeof ngDevMode === 'undefined' || ngDevMode) {
+    const {initOverlay} = await import('@pangular-inspector/devtools/overlay-manual');
+    await initOverlay({baseURL: '/__my-devtools/'});
+  }
+});
+```
+
+### Pass the connection info
+
+`initOverlay` first fetches `__connection.json` from `baseURL` to learn the server's transport. A page on another origin, such as an app in a [Capacitor WebView](../guides/capacitor.md), cannot read that file. Pass its content as `connectionMeta` and the overlay skips the fetch:
+
+```ts
+// src/main.ts
+const {initOverlay} = await import('@pangular-inspector/devtools/overlay-manual');
+await initOverlay({
+  baseURL: 'http://localhost:9999/',
+  connectionMeta: {backend: 'websocket', websocket: {path: '__ws'}},
+});
+```
+
+The overlay takes its inspectors, redaction and limits from `connectionMeta.configs`. Without `configs`, it uses the defaults.
+
 ## Stop the overlay
 
 Call `disposeOverlay` to turn the overlay off:

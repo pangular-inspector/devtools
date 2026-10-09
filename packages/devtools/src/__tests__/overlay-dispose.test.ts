@@ -36,6 +36,11 @@ async function loadOverlay() {
   return import('../overlay.ts');
 }
 
+async function loadAutoOverlay() {
+  vi.resetModules();
+  return import('../overlay-auto.ts');
+}
+
 const flush = async () => {
   for (let i = 0; i < 10; i++) await Promise.resolve();
 };
@@ -271,7 +276,7 @@ describe.sequential('overlay dispose', () => {
           : new Response('', { status: 404 }),
       ),
     );
-    const { initOverlay, disposeOverlay } = await loadOverlay();
+    const { initOverlay, disposeOverlay } = await loadAutoOverlay();
     await vi.waitFor(() => expect(document.getElementById('pangular-popup-root')).not.toBeNull());
     await initOverlay({ baseURL: '/__tools/pangular/' });
     await flush();
@@ -290,7 +295,7 @@ describe.sequential('overlay dispose', () => {
     const panelFrame = document.createElement('iframe');
     host.attachShadow({ mode: 'open' }).append(panelFrame);
     vi.spyOn(window, 'frameElement', 'get').mockReturnValue(panelFrame);
-    await loadOverlay();
+    await loadAutoOverlay();
     await vi.advanceTimersByTimeAsync(0);
     await flush();
 
@@ -301,7 +306,7 @@ describe.sequential('overlay dispose', () => {
 
   it('stops the auto-started overlay and removes the floating button', async () => {
     vi.stubEnv('VITEST', '');
-    const { disposeOverlay } = await loadOverlay();
+    const { disposeOverlay } = await loadAutoOverlay();
     await vi.waitFor(() => {
       expect(clients).toHaveLength(1);
       expect(document.getElementById('pangular-popup-root')).not.toBeNull();

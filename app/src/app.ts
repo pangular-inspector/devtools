@@ -80,24 +80,6 @@ const VIEW_TABS: Partial<Record<View, Tab[]>> = {
   'angular-native': ['components', 'signals', 'injectors', 'store', 'pipes'],
 };
 
-const COMING_SOON: Partial<Record<View, ComingSoonInfo>> = {
-  capacitor: {
-    id: 'capacitor',
-    name: 'Capacitor',
-    badge: 'Coming Soon',
-    heading: 'Capacitor Support',
-    summary: 'Connect Ionic and Capacitor apps running in a device WebView back to these tools.',
-    color: '#119eff',
-    plans: [
-      'Manual overlay start for apps that load from capacitor:// or a device',
-      'Connection settings passed in, no cross-origin probing',
-      'Setup guides for the Android emulator and iOS simulator',
-    ],
-    pr: 21,
-    author: { name: 'Erkam Yaman', login: 'erkamyaman' },
-  },
-};
-
 const NATIVESCRIPT_SETUP: ComingSoonInfo = {
   id: 'nativescript',
   name: 'NativeScript',
@@ -115,6 +97,26 @@ const NATIVESCRIPT_SETUP: ComingSoonInfo = {
   link: {
     label: 'NativeScript setup guide',
     href: 'https://pangular-inspector.dev/guides/nativescript/',
+  },
+};
+
+const CAPACITOR_SETUP: ComingSoonInfo = {
+  id: 'capacitor',
+  name: 'Capacitor',
+  badge: 'Available',
+  heading: 'Inspect Capacitor apps',
+  summary:
+    'An Ionic or Capacitor app runs the browser overlay in its WebView and reports to this server, so it shows up in the Angular dock like any other page.',
+  color: '#119eff',
+  plansTitle: 'Set up an app',
+  plans: [
+    'Install @pangular-inspector/devtools in the app',
+    'Call initOverlay() from @pangular-inspector/devtools/overlay-manual with this server and its connectionMeta',
+    'Run npx pangular dev --no-auth in the app, then open the Angular dock',
+  ],
+  link: {
+    label: 'Capacitor setup guide',
+    href: 'https://pangular-inspector.dev/guides/capacitor/',
   },
 };
 
@@ -803,10 +805,11 @@ export class App implements OnInit, OnDestroy {
     const view = this.view();
     if (view === 'analog') return this.analogKnown() && !this.analog() ? NOT_ANALOG : undefined;
     if (view === 'nativescript') return NATIVESCRIPT_SETUP;
+    if (view === 'capacitor') return CAPACITOR_SETUP;
     if (view === 'angular-native') {
       return this.nativeKnown() && !this.nativePageId() ? NO_ANGULAR_NATIVE : undefined;
     }
-    return view ? COMING_SOON[view] : undefined;
+    return undefined;
   });
   readonly config = computed(() => panelConfig(this.rpc()));
   protected readonly tabEnabled = tabEnabled;

@@ -11,7 +11,7 @@ export default defineConfig(() => ({
     mainFields: ['module'],
     alias: {
       '@pangular-inspector/devtools/overlay': fileURLToPath(
-        new URL('../../packages/devtools/dist/overlay.mjs', import.meta.url),
+        new URL('../../packages/devtools/dist/overlay-auto.mjs', import.meta.url),
       ),
       '@pangular-inspector/devtools/http': fileURLToPath(
         new URL('../../packages/devtools/dist/http.mjs', import.meta.url),

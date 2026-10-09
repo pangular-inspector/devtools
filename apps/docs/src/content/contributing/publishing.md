@@ -15,16 +15,17 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`, from `pack
 
 The package publishes `dist/` and `bin.mjs`. On publish, `publishConfig.exports` points every entry point at the built files:
 
-| Import                                  | Published file      |
-| --------------------------------------- | ------------------- |
-| `@pangular-inspector/devtools`          | `dist/devframe.mjs` |
-| `@pangular-inspector/devtools/devframe` | `dist/devframe.mjs` |
-| `@pangular-inspector/devtools/config`   | `dist/config.mjs`   |
-| `@pangular-inspector/devtools/overlay`  | `dist/overlay.mjs`  |
-| `@pangular-inspector/devtools/popup`    | `dist/popup.mjs`    |
-| `@pangular-inspector/devtools/http`     | `dist/http.mjs`     |
-| `@pangular-inspector/devtools/hub`      | `dist/hub.mjs`      |
-| `@pangular-inspector/devtools/vite`     | `dist/vite.mjs`     |
+| Import                                        | Published file          |
+| --------------------------------------------- | ----------------------- |
+| `@pangular-inspector/devtools`                | `dist/devframe.mjs`     |
+| `@pangular-inspector/devtools/devframe`       | `dist/devframe.mjs`     |
+| `@pangular-inspector/devtools/config`         | `dist/config.mjs`       |
+| `@pangular-inspector/devtools/overlay`        | `dist/overlay-auto.mjs` |
+| `@pangular-inspector/devtools/overlay-manual` | `dist/overlay.mjs`      |
+| `@pangular-inspector/devtools/popup`          | `dist/popup.mjs`        |
+| `@pangular-inspector/devtools/http`           | `dist/http.mjs`         |
+| `@pangular-inspector/devtools/hub`            | `dist/hub.mjs`          |
+| `@pangular-inspector/devtools/vite`           | `dist/vite.mjs`         |
 
 The `pangular` binary is `bin.mjs`. In the workspace, the exports point at the TypeScript sources instead.
 

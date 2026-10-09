@@ -988,6 +988,7 @@ claude mcp add pangular -- \\
       logo: '/logos/angular-native.svg',
       size: 17,
     },
+    {name: 'Capacitor', url: '/guides/capacitor', logo: '/logos/capacitor.svg', size: 16},
   ];
 
   readonly maintainers = [
@@ -995,14 +996,7 @@ claude mcp add pangular -- \\
     {name: 'Santosh Yadav', login: 'santoshyadavdev', role: 'Maintainer'},
   ];
 
-  readonly comingSoon: StackItem[] = [
-    {
-      name: 'Capacitor',
-      url: 'https://github.com/pangular-inspector/devtools/pull/21',
-      logo: '/logos/capacitor.svg',
-      size: 16,
-    },
-  ];
+  readonly comingSoon: StackItem[] = [];
 
   readonly reasons: {
     icon: LucideIconInput;

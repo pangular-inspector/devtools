@@ -62,9 +62,8 @@ describe('Pangular Inspector hub', () => {
       ['pangular:nativescript', '/__devframes/pangular/?view=nativescript'],
       ['pangular:capacitor', '/__devframes/pangular/?view=capacitor'],
     ]);
-    expect(ours.filter((d) => d.title.endsWith('Coming Soon')).map((d) => d.id)).toEqual([
-      'pangular:capacitor',
-    ]);
+    expect(ours.filter((d) => d.title.endsWith('Coming Soon'))).toEqual([]);
+    expect(ours.find((d) => d.id === 'pangular:capacitor')?.title).toBe('Capacitor');
     expect(ours.find((d) => d.id === 'pangular:angular-native')?.title).toBe('Angular Native');
     expect(ours.some((d) => d.badge || d.groupId)).toBe(false);
     expect(new Set(ours.map((d) => d.frameId))).toEqual(new Set(['pangular']));
