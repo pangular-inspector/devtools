@@ -20,7 +20,7 @@
     "@ng-native/platform": "0.2.0",
     "@ngrx/signals": "^22.0.1",
     "@pangular-inspector/devtools": "file:pangular-inspector-devtools.tgz",
-    "devframe": "^1.2.2",
+    "devframe": "^1.2.3",
     "expo": "~57.0.26",
     "react": "19.2.3",
     "react-native": "0.86.3",
