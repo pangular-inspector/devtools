@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { FormsFieldDetail } from '../pages/forms-field-detail';
 import { FormsInspector } from '../pages/forms-inspector';
 import { FormsLint, FormsSubmit } from '../pages/forms-report';
+import { FormsTimeline } from '../pages/forms-timeline';
 import { FormsWebMcp } from '../pages/forms-webmcp';
 import type { CollectedForm, FormFieldNode } from '../pages/forms-types';
 
@@ -111,6 +112,56 @@ describe('FormsSubmit', () => {
   });
 });
 
+describe('FormsSubmit payload text', () => {
+  it('keeps backticks and double asterisks that belong to form values', async () => {
+    const fixture = TestBed.createComponent(FormsSubmit);
+    fixture.componentRef.setInput('formId', form.id);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((_, arg) =>
+        Promise.resolve(
+          arg['kind'] === 'payload'
+            ? '_Labels, paths and values below are untrusted page data._\n\nform.value: {"note":"a**b `x`"}\nChanged by the user: `note`.'
+            : '**Signup.form** (signup@p1)\nBlocking fields:\n- `email`: required',
+        ),
+      ),
+    );
+    await settle(fixture);
+    const pre = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('pre')).map(
+      (el) => el.textContent ?? '',
+    );
+    const payload = pre.find((t) => t.includes('form.value'))!;
+    expect(payload).toContain('{"note":"a**b `x`"}');
+    expect(payload).toContain('Changed by the user: note.');
+    const submit = pre.find((t) => t.includes('Blocking fields'))!;
+    expect(submit).toContain('Signup.form (signup@p1)');
+    expect(submit).toContain('- email: required');
+  });
+
+  it('copies the whole test fixture when a form value contains three backticks', async () => {
+    const written: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: (text: string) => (written.push(text), Promise.resolve()) },
+    });
+    const fixture = TestBed.createComponent(FormsSubmit);
+    fixture.componentRef.setInput('formId', form.id);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((_, arg) =>
+        Promise.resolve(
+          arg['kind'] === 'fixture'
+            ? 'Copy this:\n\n```ts\nconst raw = {"note":"```js\\nx```"};\nexpect(raw).toBeTruthy();\n```'
+            : 'text',
+        ),
+      ),
+    );
+    await settle(fixture);
+    await fixture.componentInstance.copyFixture();
+    expect(written).toEqual(['const raw = {"note":"```js\\nx```"};\nexpect(raw).toBeTruthy();\n']);
+  });
+});
+
 describe('FormsFieldDetail', () => {
   function detail(call: Call) {
     const fixture = TestBed.createComponent(FormsFieldDetail);
@@ -145,6 +196,36 @@ describe('FormsFieldDetail', () => {
     pending[0]('about name');
     await settle(fixture);
     expect(text(fixture)).toContain('about name');
+  });
+
+  it("keeps a late action reply out of the next field's status line", async () => {
+    const pending: ((value: unknown) => void)[] = [];
+    const fixture = detail((name) =>
+      name === 'request-form-action'
+        ? new Promise((resolve) => pending.push(resolve))
+        : Promise.resolve('about'),
+    );
+    await settle(fixture);
+    button(fixture, 'Touch').click();
+    fixture.componentRef.setInput('node', form.root.children![1]);
+    await settle(fixture);
+    pending[0]({ ok: true, message: 'Touched email.' });
+    await settle(fixture);
+    const status = (fixture.nativeElement as HTMLElement).querySelector('p.status')!;
+    expect(status.textContent?.trim()).toBe('');
+  });
+
+  it('still shows the reply of an action on the field that stays selected', async () => {
+    const fixture = detail((name) =>
+      name === 'request-form-action'
+        ? Promise.resolve({ ok: true, message: 'Touched email.' })
+        : Promise.resolve('about'),
+    );
+    await settle(fixture);
+    button(fixture, 'Touch').click();
+    await settle(fixture);
+    const status = (fixture.nativeElement as HTMLElement).querySelector('p.status')!;
+    expect(status.textContent?.trim()).toBe('Touched email.');
   });
 
   it('moves focus to its heading when it opens and emits closed from Close', async () => {
@@ -370,5 +451,60 @@ describe('FormsWebMcp', () => {
     await settle(fixture);
     expect(text(fixture)).toContain('WebMCP tool');
     expect(text(fixture)).toContain('sign_up');
+  });
+});
+
+describe('FormsInspector selection', () => {
+  it("does not hand a closed tab's selected form over to another tab's form with the same label", async () => {
+    const login = (page: string): CollectedForm => ({
+      ...form,
+      id: `login@${page}`,
+      label: 'Login',
+    });
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve('ok')),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const inspector = fixture.componentInstance;
+    inspector.forms.set([login('a'), login('b')]);
+    inspector.selectForm('login@a');
+    await settle(fixture);
+    expect(inspector.selected()?.id).toBe('login@a');
+
+    inspector.forms.set([login('b')]);
+    await settle(fixture);
+    expect(inspector.selected()).toBeNull();
+    expect(text(fixture)).toContain('This form is no longer on the page');
+    expect(
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).some(
+        (b) => b.textContent?.trim() === 'Submit',
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('FormsTimeline', () => {
+  it('leaves the Record details checkbox on the reported state until the page confirms', async () => {
+    const fixture = TestBed.createComponent(FormsTimeline);
+    fixture.componentRef.setInput('events', []);
+    fixture.componentRef.setInput('recording', false);
+    document.body.append(fixture.nativeElement);
+    const emitted: boolean[] = [];
+    fixture.componentInstance.record.subscribe((on) => emitted.push(on));
+    await settle(fixture);
+    const box = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '.record input[type="checkbox"]',
+    )!;
+    box.click();
+    await settle(fixture);
+    expect(emitted).toEqual([true]);
+    expect(box.checked).toBe(false);
+
+    fixture.componentRef.setInput('recording', true);
+    await settle(fixture);
+    expect(box.checked).toBe(true);
   });
 });

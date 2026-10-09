@@ -9,7 +9,7 @@ const ORIGINS = ['all', 'user', 'code', 'agent', 'devtools'] as const;
   template: `
     <div class="toolbar">
       <label class="record" [class.on]="recording()">
-        <input type="checkbox" [checked]="recording()" (change)="record.emit(!recording())" />
+        <input type="checkbox" [checked]="recording()" (change)="toggle($event)" />
         <span class="record-text">
           <span class="record-title">
             @if (recording()) {
@@ -343,6 +343,12 @@ export class FormsTimeline {
   events = input.required<FormEvent[]>();
   recording = input(false);
   readonly record = output<boolean>();
+
+  toggle(event: Event) {
+    const box = event.target as HTMLInputElement;
+    box.checked = this.recording();
+    this.record.emit(!this.recording());
+  }
 
   readonly origins = ORIGINS;
   readonly filter = signal<(typeof ORIGINS)[number]>('all');

@@ -227,13 +227,27 @@ const FEATURES: Record<string, keyof SignalStoreMembers> = {
   withEntities: 'entities',
 };
 
+function genericEnd(text: string, open: number): number {
+  let angle = 0;
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === ';') return -1;
+    if (ch === '<') angle++;
+    else if (ch === '>' && text[i - 1] !== '=' && --angle === 0) return i;
+  }
+  return -1;
+}
+
 function splitTop(text: string): { text: string; start: number }[] {
   const parts: { text: string; start: number }[] = [];
   let depth = 0;
   let start = 0;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
-    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    if (ch === '<' && /[\w$>]/.test(text[i - 1] ?? '')) {
+      const close = genericEnd(text, i);
+      if (close > 0) i = close;
+    } else if (ch === '(' || ch === '[' || ch === '{') depth++;
     else if (ch === ')' || ch === ']' || ch === '}') depth--;
     else if (ch === ',' && depth === 0) {
       parts.push({ text: text.slice(start, i), start });

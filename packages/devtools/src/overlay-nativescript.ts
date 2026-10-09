@@ -8,6 +8,7 @@
 
 import { Application, isAndroid } from '@nativescript/core';
 import { connectDevframe } from 'devframe/client';
+import { keepaliveDue } from './change-detection.ts';
 import { collectComponentTree, type ComponentDebugNg } from './component-tree.ts';
 import { elementById } from './element-id.ts';
 import { hostBySelector } from './host-tree.ts';
@@ -161,16 +162,25 @@ async function startSession(
 
   let componentTarget: string | null = null;
   let lastTreeJson = '';
-  let treeSkips = 0;
+  let treeSentAt = 0;
   async function pushTree(force = false) {
     const ng = angularDebugApi();
     if (!ng) return;
     const report = collectComponentTree(ng, { tree, selectedId: componentTarget });
     const json = JSON.stringify(report);
-    if (!force && json === lastTreeJson && ++treeSkips < 4) return;
+    if (!force && json === lastTreeJson && !keepaliveDue(treeSentAt, intervalMs)) return;
+    const previous = { json: lastTreeJson, sentAt: treeSentAt };
     lastTreeJson = json;
-    treeSkips = 0;
-    await my.rpc.call('push-component-tree', { ...report, pageId });
+    treeSentAt = Date.now();
+    try {
+      await my.rpc.call('push-component-tree', { ...report, pageId });
+    } catch (error) {
+      if (lastTreeJson === json) {
+        lastTreeJson = previous.json;
+        treeSentAt = previous.sentAt;
+      }
+      throw error;
+    }
   }
 
   const signalHistory = createSignalHistory((value, name) =>
@@ -180,16 +190,16 @@ async function startSession(
 
   let signalTarget: SignalTarget = null;
   let lastSignalKey = '';
-  let signalSkips = 0;
+  let signalSentAt = 0;
   let historyDelta = false;
   let historyFor = '';
   async function pushSignalGraph(force = false) {
     const graph = collectSignalGraph(angularDebugApi(), signalTarget, tree);
     if (!graph) return;
     const key = graphKey(graph);
-    if (!force && key === lastSignalKey && ++signalSkips < 4) return;
+    if (!force && key === lastSignalKey && !keepaliveDue(signalSentAt, intervalMs)) return;
     lastSignalKey = key;
-    signalSkips = 0;
+    signalSentAt = Date.now();
     const owner = graph.component?.id ?? '';
     const full = force || !historyDelta || owner !== historyFor;
     historyFor = owner;
@@ -213,16 +223,25 @@ async function startSession(
   }
 
   let lastInjectorJson = '';
-  let injectorSkips = 0;
+  let injectorSentAt = 0;
   async function pushInjectorTree() {
     const ng = angularDebugApi();
     if (!ng) return;
     const report = collectInjectorTree(ng, tree);
     const json = JSON.stringify(report);
-    if (json === lastInjectorJson && ++injectorSkips < 4) return;
+    if (json === lastInjectorJson && !keepaliveDue(injectorSentAt, intervalMs)) return;
+    const previous = { json: lastInjectorJson, sentAt: injectorSentAt };
     lastInjectorJson = json;
-    injectorSkips = 0;
-    await my.rpc.call('push-injector-tree', { ...report, pageId });
+    injectorSentAt = Date.now();
+    try {
+      await my.rpc.call('push-injector-tree', { ...report, pageId });
+    } catch (error) {
+      if (lastInjectorJson === json) {
+        lastInjectorJson = previous.json;
+        injectorSentAt = previous.sentAt;
+      }
+      throw error;
+    }
   }
 
   const ngrx = attachNgrx(my, pageId, angularDebugApi, undefined, {
@@ -231,10 +250,9 @@ async function startSession(
   });
 
   const report = async () => {
-    await pushTree();
-    await pushSignalGraph();
-    await pushInjectorTree();
-    await ngrx.push();
+    for (const collect of [pushTree, pushSignalGraph, pushInjectorTree, () => ngrx.push()]) {
+      await collect().catch((error: unknown) => console.warn('[pangular] report failed', error));
+    }
   };
   const tick = () => {
     if (rpc.status !== 'connected' && rpc.status !== 'connecting') return;

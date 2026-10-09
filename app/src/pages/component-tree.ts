@@ -1367,7 +1367,7 @@ export class ComponentTree {
   });
   readonly collapsed = signal<ReadonlySet<string>>(new Set());
   readonly openKey = signal<string | null>(null);
-  private readonly outlets = signal<OutletInfo[]>([]);
+  private readonly routerPages = signal<{ pageId?: string; outlets?: OutletInfo[] }[]>([]);
   private readonly pageId = hostPageId();
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
@@ -1476,6 +1476,11 @@ export class ComponentTree {
     return rows[0]?.node.id ?? null;
   });
 
+  private readonly outlets = computed<OutletInfo[]>(() => {
+    const shown = this.page()?.pageId;
+    return this.routerPages().find((p) => p.pageId === shown)?.outlets ?? [];
+  });
+
   readonly routedById = computed(() => {
     const map = new Map<string, RoutedHit[]>();
     const visit = (outlets: OutletInfo[]) => {
@@ -1576,18 +1581,13 @@ export class ComponentTree {
       const router = await my.rpc.sharedState('router');
       if (this.destroyRef.destroyed) return;
       const applyRouter = (value: unknown) => {
-        const pages =
-          (value as { pages?: { pageId?: string; outlets?: OutletInfo[]; snapshot?: unknown }[] })
-            ?.pages ?? [];
-        const page = this.pageId
-          ? pages.find((p) => p.pageId === this.pageId)
-          : (pages.find((p) => p.snapshot) ?? pages[0]);
-        this.outlets.set(page?.outlets ?? []);
+        const pages = (value as { pages?: { pageId?: string; outlets?: OutletInfo[] }[] })?.pages;
+        this.routerPages.set(Array.isArray(pages) ? pages : []);
       };
       applyRouter(router.value());
       this.cleanups.push(router.on('updated', applyRouter));
     } catch {
-      this.outlets.set([]);
+      this.routerPages.set([]);
     }
   }
 

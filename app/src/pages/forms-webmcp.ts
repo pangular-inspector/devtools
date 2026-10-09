@@ -77,7 +77,7 @@ const OUTCOMES: Record<string, string> = {
           <p class="muted">Recent calls</p>
           @if (tool.calls?.length) {
             <ul>
-              @for (call of tool.calls!; track call.at) {
+              @for (call of tool.calls!; track $index) {
                 <li>
                   <time [attr.datetime]="iso(call.at)">{{ call.at | date: 'HH:mm:ss' }}</time>
                   <span class="state" [attr.data-state]="call.outcome">{{

@@ -57,7 +57,12 @@ function keyOf(url: string): string {
 export function redirectCycles(config: RouteNode[]): string[][] {
   const edges = new Map<string, string>();
   walk(config, (node, parents) => {
-    if (typeof node.redirectTo !== 'string' || node.redirectTo.startsWith('function ')) return;
+    if (
+      node.outlet ||
+      typeof node.redirectTo !== 'string' ||
+      node.redirectTo.startsWith('function ')
+    )
+      return;
     if (/:/.test(node.path) || node.path === '**') return;
     const base = parents.length ? parents[parents.length - 1].fullPath : '';
     const target = node.redirectTo.startsWith('/')

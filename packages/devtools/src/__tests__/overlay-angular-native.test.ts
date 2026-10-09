@@ -441,6 +441,72 @@ describe('initAngularNativeOverlay', () => {
     warn.mockRestore();
   });
 
+  it('sends the signal graph again on the next tick after a rejected push', async () => {
+    const { root, ng } = fixture();
+    g['ng'] = ng;
+    const session = fakeRpc();
+    const scope = session.rpc.scope;
+    let rejected = false;
+    session.rpc.scope = () => {
+      const scoped = scope();
+      const call = scoped.rpc.call;
+      scoped.rpc.call = vi.fn(async (name: string, arg: unknown) => {
+        const answer = await call(name, arg);
+        if (name === 'push-signal-graph' && !rejected) {
+          rejected = true;
+          throw new Error('socket down');
+        }
+        return answer;
+      });
+      return scoped;
+    };
+    connectDevframe.mockResolvedValue(session.rpc);
+    const { initAngularNativeOverlay } = await import('../overlay-angular-native.ts');
+    const dispose = initAngularNativeOverlay({ root: asNode(root), intervalMs: 1000 });
+    await vi.waitFor(() => expect(rejected).toBe(true));
+    await vi.advanceTimersByTimeAsync(2500);
+    const pushes = session.calls.filter(([name]) => name === 'push-signal-graph');
+    expect(pushes.length).toBeGreaterThanOrEqual(2);
+    dispose();
+  });
+
+  it('retries a rejected full history push as a full push, not a delta', async () => {
+    const { root, ng } = fixture();
+    g['ng'] = ng;
+    const session = fakeRpc();
+    const scope = session.rpc.scope;
+    let failNext = false;
+    session.rpc.scope = () => {
+      const scoped = scope();
+      const call = scoped.rpc.call;
+      scoped.rpc.call = vi.fn(async (name: string, arg: unknown) => {
+        const answer = await call(name, arg);
+        if (name === 'push-signal-graph' && failNext) {
+          failNext = false;
+          throw new Error('socket down');
+        }
+        return (name === 'push-signal-graph' ? { delta: true } : answer) as typeof answer;
+      });
+      return scoped;
+    };
+    connectDevframe.mockResolvedValue(session.rpc);
+    const { initAngularNativeOverlay } = await import('../overlay-angular-native.ts');
+    const dispose = initAngularNativeOverlay({ root: asNode(root), intervalMs: 1000 });
+    await vi.waitFor(() => expect(session.handlers.has('select-signal-component')).toBe(true));
+    await vi.waitFor(() =>
+      expect(session.calls.some(([name]) => name === 'push-signal-graph')).toBe(true),
+    );
+    failNext = true;
+    session.handlers.get('select-signal-component')?.({ selector: 'app-row' });
+    await vi.advanceTimersByTimeAsync(1500);
+    const pushes = session.calls.filter(([name]) => name === 'push-signal-graph');
+    const retry = pushes.at(-1)?.[1] as Record<string, unknown>;
+    expect(pushes.length).toBeGreaterThanOrEqual(3);
+    expect(retry).toHaveProperty('history');
+    expect(retry).not.toHaveProperty('historyDelta');
+    dispose();
+  });
+
   it('outlines the node a highlight request names', async () => {
     const { root, second, ng } = fixture();
     g['ng'] = ng;

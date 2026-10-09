@@ -1,8 +1,9 @@
 import type { Type } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { DevframeRpcClient } from 'devframe/client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RouteCurrent } from '../pages/route-current';
+import { RouteLint } from '../pages/route-lint';
 import { RouteTimeline } from '../pages/route-timeline';
 import { RouteTree } from '../pages/route-tree';
 import type { NavigationRecord, RouterPage } from '../pages/router-types';
@@ -161,6 +162,131 @@ describe('RouteTree row actions', () => {
     expect(result?.previousElementSibling?.textContent).toContain('lazy');
     expect(result?.textContent?.trim()).toBe('Could not reach the page.');
     expect(el(fixture).querySelector('p.message')).toBeNull();
+  });
+});
+
+describe('RouteTree edge cases', () => {
+  async function submitUrl(fixture: ComponentFixture<unknown>, url: string) {
+    const input = el(fixture).querySelector<HTMLInputElement>('#test-url')!;
+    input.value = url;
+    input.dispatchEvent(new Event('input'));
+    el(fixture)
+      .querySelector('form.test')!
+      .dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(fixture);
+  }
+
+  it('lists two unnamed guards of one kind without a duplicate track key', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fixture = mount(
+      RouteTree,
+      page({
+        config: [
+          {
+            id: 'r1',
+            path: 'a',
+            fullPath: 'a',
+            kind: 'component',
+            component: 'A',
+            guards: { canActivate: ['anonymous function', 'anonymous function'] },
+          },
+        ],
+      }),
+      offline,
+    );
+    await settle(fixture);
+    fixture.componentRef.setInput(
+      'page',
+      page({
+        generation: 2,
+        config: [
+          {
+            id: 'r1',
+            path: 'a',
+            fullPath: 'a',
+            kind: 'component',
+            component: 'A',
+            guards: { canActivate: ['anonymous function', 'anonymous function', 'x'] },
+          },
+        ],
+      }),
+    );
+    await settle(fixture);
+    expect(el(fixture).querySelectorAll('td .tag')).toHaveLength(3);
+    const logged = [...warn.mock.calls, ...error.mock.calls].flat().join(' ');
+    warn.mockRestore();
+    error.mockRestore();
+    expect(logged).not.toContain('NG0955');
+  });
+
+  it('tells the user when Predict gets no answer from the page', async () => {
+    const fixture = mount(
+      RouteTree,
+      page({
+        config: [{ id: 'r1', path: 'a', fullPath: 'a', kind: 'component', component: 'A' }],
+      }),
+      () => Promise.resolve(null),
+    );
+    await settle(fixture);
+    await submitUrl(fixture, '/users/1');
+    expect(el(fixture).querySelector('p.message[role="status"]')?.textContent).toContain(
+      'Could not reach the page.',
+    );
+  });
+
+  it('offers no Go button for a custom matcher route', async () => {
+    const fixture = mount(
+      RouteTree,
+      page({
+        config: [
+          {
+            id: 'r1',
+            path: '',
+            fullPath: '/',
+            kind: 'component',
+            component: 'Foo',
+            matcher: 'customMatcher',
+          },
+        ],
+      }),
+      offline,
+    );
+    await settle(fixture);
+    expect(el(fixture).querySelector('[aria-label="Navigate to /"]')).toBeNull();
+  });
+});
+
+describe('RouteLint reruns', () => {
+  it('checks again when a link without ariaCurrentWhenActive appears and no navigation happened', async () => {
+    let checks = 0;
+    const fixture = mount(RouteLint, page({ links: [] }), () => {
+      checks++;
+      return Promise.resolve({ checked: true, findings: [] });
+    });
+    await settle(fixture);
+    expect(checks).toBe(1);
+
+    fixture.componentRef.setInput(
+      'page',
+      page({ links: [{ text: 'Home', href: '/', linkActive: true }] }),
+    );
+    await settle(fixture);
+    expect(checks).toBe(2);
+
+    fixture.componentRef.setInput(
+      'page',
+      page({ links: [{ text: 'Home', href: '/', linkActive: true }], reportedAt: 5 }),
+    );
+    await settle(fixture);
+    expect(checks).toBe(2);
+
+    fixture.componentRef.setInput(
+      'page',
+      page({ links: [{ text: 'Start', href: '/start', linkActive: true }] }),
+    );
+    await settle(fixture);
+    expect(checks).toBe(3);
   });
 });
 

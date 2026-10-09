@@ -245,7 +245,16 @@ export class RouteLint {
   private readonly key = computed(() => {
     const page = this.page();
     const last = page.navigations[page.navigations.length - 1];
-    return `${page.pageId}:${page.generation}:${last?.id}:${last?.outcome}`;
+    const links = JSON.stringify(
+      (page.links ?? []).map((link) => [
+        link.text,
+        link.href,
+        link.linkActive !== undefined,
+        link.ariaCurrent === undefined,
+      ]),
+    );
+    const setup = `${page.setup?.mode}/${page.setup?.features?.['componentInputBinding']}`;
+    return `${page.pageId}:${page.generation}:${last?.id}:${last?.outcome}:${links}:${setup}`;
   });
   private seq = 0;
   private checkedPage: string | null = null;

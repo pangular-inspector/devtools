@@ -415,7 +415,7 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
       width: 100% !important;
       height: 40vh !important;
       border-radius: 10px 10px 0 0;
-      resize: vertical;
+      resize: none;
     }
     .panel.dock-right {
       top: 0 !important;
@@ -425,7 +425,7 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
       width: 40vw !important;
       height: 100% !important;
       border-radius: 10px 0 0 10px;
-      resize: horizontal;
+      resize: none;
     }
     .toolbar {
       cursor: grab;

@@ -9,6 +9,7 @@ import {
   classScopes,
   lineCounter,
   maskStrings,
+  matchDelimiter,
   skipString,
   sourceRoots,
   stripComments,
@@ -103,8 +104,8 @@ function componentsIn(
       kind,
       file: relPath,
       line: lineAt(scope.start),
-      inputs: [...names(body, INPUT), ...names(body, INPUT_DECORATOR)],
-      outputs: [...names(body, OUTPUT), ...names(body, OUTPUT_DECORATOR)],
+      inputs: [...names(body, INPUT), ...decoratedNames(body, 'Input')],
+      outputs: [...names(body, OUTPUT), ...decoratedNames(body, 'Output')],
       isStandalone: standaloneOf(scope.decoratorArgs, major),
       // A directive carries no change detection strategy of its own.
       ...(kind === 'component' ? changeDetectionFields(scope.decoratorArgs, major) : {}),
@@ -240,11 +241,17 @@ const OUTPUT = new RegExp(
 // A member can carry modifiers and an accessor keyword before its name:
 // `@Input() set value(v)` declares `value`, not `set`.
 const MEMBER_PREFIX = String.raw`(?:(?:readonly|public|private|protected|override|declare|static|abstract|get|set|async)\s+)*`;
-const INPUT_DECORATOR = new RegExp(
-  String.raw`@Input\([^)]*\)\s+` + MEMBER_PREFIX + String.raw`([$\w]+)`,
-  'g',
-);
-const OUTPUT_DECORATOR = new RegExp(
-  String.raw`@Output\([^)]*\)\s+` + MEMBER_PREFIX + String.raw`([$\w]+)`,
-  'g',
-);
+const DECORATED_MEMBER = new RegExp(String.raw`\s+` + MEMBER_PREFIX + String.raw`([$\w]+)`, 'y');
+
+function decoratedNames(body: string, decorator: 'Input' | 'Output'): string[] {
+  const found: string[] = [];
+  const opening = new RegExp(String.raw`@${decorator}\(`, 'g');
+  let match: RegExpExecArray | null;
+  while ((match = opening.exec(body)) !== null) {
+    const close = matchDelimiter(body, match.index + match[0].length - 1, '(', ')');
+    DECORATED_MEMBER.lastIndex = close + 1;
+    const name = DECORATED_MEMBER.exec(body)?.[1];
+    if (name) found.push(name);
+  }
+  return found;
+}

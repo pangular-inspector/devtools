@@ -918,6 +918,12 @@ export class App implements OnInit, OnDestroy {
       this.availableTabs().map((t) => t.id),
     );
     if (restored) this.tab.set(restored);
+    else if (
+      !this.view() &&
+      initialTab(location.hash, storedTab(this.tabScope()), ['analog']) === 'analog'
+    ) {
+      this.restoreAnalog = true;
+    }
 
     this.stopHighlights = clearHighlightsOnHide(() => this.rpc());
     const baseURL = detectBaseURL();
@@ -935,10 +941,15 @@ export class App implements OnInit, OnDestroy {
             const isAnalog = !!(project as { analog?: boolean } | null)?.analog;
             this.analog.set(isAnalog);
             this.analogKnown.set(true);
+            if (isAnalog && this.restoreAnalog && tabEnabled('analog', this.config())) {
+              this.tab.set('analog');
+            }
+            this.restoreAnalog = false;
             if (!isAnalog && this.tab() === 'analog' && !this.view()) this.tab.set('dashboard');
           },
           () => {
             this.analogKnown.set(true);
+            this.restoreAnalog = false;
             if (this.tab() === 'analog' && !this.view()) this.tab.set('dashboard');
           },
         );
@@ -1004,7 +1015,10 @@ export class App implements OnInit, OnDestroy {
     history.replaceState(history.state, '', `#tab=${id}`);
   }
 
+  private restoreAnalog = false;
+
   private setTab(id: Tab) {
+    this.restoreAnalog = false;
     this.keepFocus();
     this.tab.set(id);
     storeTab(this.tabScope(), id);

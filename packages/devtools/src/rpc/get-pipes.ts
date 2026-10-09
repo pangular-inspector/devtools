@@ -311,7 +311,8 @@ function expressionRegionsIn(text: string): { start: number; end: number }[] {
   }
 
   // [prop]="…", [(prop)]="…", (event)="…", *directive="…"
-  const boundAttr = /(?:\[\(?[\w.$-]+\)?\]|\([\w.$-]+\)|\*[\w.$-]+)\s*=\s*(["'])/g;
+  const boundAttr =
+    /(?:\[\(?@?[\w.$-]+\)?\]|\(@?[\w.$-]+\)|\*[\w.$-]+|\b(?:bind|on|bindon)-[\w.$-]+)\s*=\s*(["'])/g;
   while ((m = boundAttr.exec(text)) !== null) {
     const quote = m[1];
     const start = m.index + m[0].length;
@@ -366,7 +367,7 @@ function letEnd(text: string, start: number): number {
 export function pipeUsesIn(text: string): { name: string; index: number }[] {
   const uses: { name: string; index: number }[] = [];
   for (const region of expressionRegionsIn(text)) {
-    const slice = text.slice(region.start, region.end);
+    const slice = maskStrings(text.slice(region.start, region.end));
     PIPE_USE.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = PIPE_USE.exec(slice)) !== null) {

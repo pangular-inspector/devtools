@@ -125,4 +125,13 @@ describe('Select', () => {
     await chosen.press('c');
     expect(chosen.fixture.componentInstance.value()).toBe('cherry');
   });
+
+  it('keeps focus on the trigger when the list itself is pressed', async () => {
+    const { fixture, press } = await setup(FRUIT);
+    await press('ArrowDown');
+    const list = fixture.nativeElement.querySelector('ul[role="listbox"]') as HTMLElement;
+    const down = new Event('pointerdown', { bubbles: true, cancelable: true });
+    list.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(true);
+  });
 });

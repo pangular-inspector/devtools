@@ -232,20 +232,26 @@ function pickPage(state: AnalogState, page?: string): AnalogRuntimeReport | unde
   return page ? state.pages.find((p) => p.pageId === page) : state.pages[0];
 }
 
+const CONFIG_PATH_CAP = 500;
+
+function normalPath(path: string): string {
+  return `/${path.split('/').filter(Boolean).join('/')}`;
+}
+
 export function restartNeeded(project: AnalogProject, report: AnalogRuntimeReport): string[] {
-  const top = new Set(
-    report.configPaths.map(
-      (p) => `/${p.split('/').filter(Boolean)[0] ?? ''}`.replace(/\/$/, '') || '/',
-    ),
-  );
-  if (!top.size) return [];
-  return project.routes
-    .filter((route) => route.file && route.kind !== 'group')
-    .map(
-      (route) => `/${route.fullPath.split('/').filter(Boolean)[0] ?? ''}`.replace(/\/$/, '') || '/',
+  if (!report.configPaths.length || report.configPaths.length >= CONFIG_PATH_CAP) return [];
+  const known = new Set(report.configPaths.map(normalPath));
+  const missing = flattenRoutes(project.routes)
+    .filter(
+      (route) =>
+        route.file &&
+        (route.kind === 'page' || route.kind === 'markdown') &&
+        !route.catchAll &&
+        !route.fullPath.includes('**'),
     )
-    .filter((path) => !top.has(path))
-    .filter((path, i, all) => all.indexOf(path) === i);
+    .map((route) => normalPath(route.fullPath))
+    .filter((path) => !known.has(path));
+  return [...new Set(missing)];
 }
 
 export function analogCurrentPageText(
@@ -618,6 +624,20 @@ export function analogContentText(project: AnalogProject, filter?: string): stri
   return `${UNTRUSTED}\n\n${lines.join('\n')}`;
 }
 
+function hasHandler(project: AnalogProject, call: AnalogCall): boolean {
+  const want = (call.route ?? call.url).split(/[?#]/)[0].split('/').filter(Boolean);
+  return project.api.some((api) => {
+    if (api.method !== 'ANY' && api.method !== call.method.toUpperCase()) return false;
+    const have = api.path.split('/').filter(Boolean);
+    for (let i = 0; i < have.length; i++) {
+      if (have[i] === '**') return i < want.length;
+      if (i >= want.length) return false;
+      if (!have[i].startsWith(':') && have[i] !== want[i]) return false;
+    }
+    return have.length === want.length;
+  });
+}
+
 export function analogLint(project: AnalogProject, state: AnalogState): AnalogLintFinding[] {
   if (!project.analog) return [];
   const findings = lintAnalog(project);
@@ -663,8 +683,12 @@ export function analogLint(project: AnalogProject, state: AnalogState): AnalogLi
       });
     }
   }
+  const reported = new Set<string>();
   for (const call of state.calls) {
     if (call.kind === 'api' && (call.status === 404 || call.status === 405)) {
+      const key = `${call.method} ${call.route ?? call.url}`;
+      if (reported.has(key) || hasHandler(project, call)) continue;
+      reported.add(key);
       findings.push({
         rule: 'api-not-found',
         severity: 'warning',

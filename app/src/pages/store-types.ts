@@ -131,8 +131,28 @@ export interface LiveStore {
 
 const TYPE = '@type';
 
+const TAGS = new Set([
+  'undefined',
+  'number',
+  'bigint',
+  'symbol',
+  'function',
+  'Date',
+  'RegExp',
+  'Error',
+  'Element',
+  'Map',
+  'Set',
+]);
+
 function tagged(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value) && TYPE in value;
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    TYPE in value &&
+    TAGS.has((value as Record<string, unknown>)[TYPE] as string)
+  );
 }
 
 function key(name: string): string {

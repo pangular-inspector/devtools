@@ -1326,7 +1326,6 @@ export class FormsInspector {
     return (
       forms.find((f) => f.id === id) ??
       forms.find((f) => f.label === label && pageOf(f.id) === page) ??
-      forms.find((f) => f.label === label) ??
       null
     );
   });

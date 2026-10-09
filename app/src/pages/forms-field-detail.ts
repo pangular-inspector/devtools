@@ -251,25 +251,27 @@ export class FormsFieldDetail {
   }
 
   async act(action: string) {
-    const result = await formAction(this.rpc(), {
-      action,
-      formId: this.form().id,
-      path: this.node().path,
-    });
+    const formId = this.form().id;
+    const path = this.node().path;
+    const result = await formAction(this.rpc(), { action, formId, path });
+    if (this.form().id !== formId || this.node().path !== path) return;
     this.message.set(
       result.expression ? `${actionMessage(result)} ${result.expression}` : actionMessage(result),
     );
   }
 
   async setValue() {
+    const formId = this.form().id;
+    const path = this.node().path;
     const result = await formAction(this.rpc(), {
       action: 'set-value',
-      formId: this.form().id,
-      path: this.node().path,
+      formId,
+      path,
       value: this.draft(),
       coerce: true,
       mode: 'user',
     });
+    if (this.form().id !== formId || this.node().path !== path) return;
     this.message.set(actionMessage(result));
   }
 }

@@ -33,6 +33,17 @@ function walk(node: FormFieldNode, visit: (node: FormFieldNode) => void) {
   for (const child of node.children ?? []) walk(child, visit);
 }
 
+function unmatchedForms(
+  state: FormsState,
+  args: FieldArgs,
+  matched: CollectedForm[],
+): string | null {
+  if (matched.length || (!args.form && !args.page)) return null;
+  return state.forms.length
+    ? noMatch(onPage(state.forms, args.page), args.form ?? args.page ?? '')
+    : 'No forms have been reported.';
+}
+
 function pickForm(state: FormsState, args: FieldArgs): CollectedForm | string {
   const forms = matchForms(state.forms, args.form, args.page);
   if (!forms.length) {
@@ -378,6 +389,8 @@ export interface HistoryArgs extends FieldArgs {
 
 export function formHistoryText(state: FormsState, args: HistoryArgs): string {
   const forms = matchForms(state.forms, args.form, args.page);
+  const unmatched = unmatchedForms(state, args, forms);
+  if (unmatched) return unmatched;
   const ids = new Set(forms.map((f) => f.id));
   const limit = Math.min(Math.max(args.limit ?? 50, 1), MAX_HISTORY);
   const events = state.events.filter(
@@ -405,6 +418,8 @@ export function formHistoryText(state: FormsState, args: HistoryArgs): string {
 export function formDiffText(state: FormsState, args: FieldArgs & { since?: number }): string {
   const since = args.since ?? 0;
   const forms = matchForms(state.forms, args.form, args.page);
+  const unmatched = unmatchedForms(state, args, forms);
+  if (unmatched) return unmatched;
   const ids = new Set(forms.map((f) => f.id));
   const net = new Map<
     string,

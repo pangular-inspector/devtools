@@ -741,6 +741,8 @@ function probe(router: AnyRecord, navigations: NavigationRecord[], url: string):
     promise?.catch?.(() => {});
     timer = setTimeout(() => {
       subscription.unsubscribe();
+      abortCurrent();
+      markProbe(targetId);
       resolve({ error: 'The probe did not finish within 10s.' });
     }, WAIT_MS);
   });

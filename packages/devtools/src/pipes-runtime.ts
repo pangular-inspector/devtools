@@ -325,10 +325,10 @@ export interface StaleCheck {
  * This recovers it by regex-scanning `tView.template.toString()` (available
  * in dev/unminified builds) for the pipe's own `ɵɵpipe(index, name)` call to
  * get its raw index, then for a call passing that same index as its first
- * argument to get the binding's `slotOffset`. The pipe-creation call is
- * matched by shape (`ident(N, 'name')`), but the binding call must be a
- * `pipeBind` instruction so an unrelated call sharing the same first numeric
- * argument can't supply the offset. It tolerates both AOT names
+ * argument to get the binding's `slotOffset`. The pipe-creation call must be a
+ * `pipe` instruction, so a static text node equal to the pipe name can't stand
+ * in for it, and the binding call must be a `pipeBind` instruction so an
+ * unrelated call sharing the same first numeric argument can't supply the offset. It tolerates both AOT names
  * (`ɵɵpipeBind1`) and JIT names (`jit___pipeBind1_8`). Returns `null`
  * whenever anything doesn't match; never throws.
  */
@@ -340,7 +340,10 @@ export function staleCheckFor(slot: PipeBinding): StaleCheck | null {
     if (typeof templateFn !== 'function' || typeof bindingRoot !== 'number') return null;
     const src = templateFn.toString();
     const escapedName = slot.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const creates = new RegExp(`\\w+\\(\\s*(\\d+)\\s*,\\s*['"\`]${escapedName}['"\`]\\s*\\)`, 'g');
+    const creates = new RegExp(
+      `[\\w$\\u0275]*pipe(?:_\\d+)?\\(\\s*(\\d+)\\s*,\\s*['"\`]${escapedName}['"\`]\\s*[,)]`,
+      'g',
+    );
     const ordinal = ordinalOf(slot);
     let create: RegExpExecArray | null = null;
     for (let i = 0; i <= ordinal; i++) {

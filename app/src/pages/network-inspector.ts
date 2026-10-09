@@ -126,6 +126,8 @@ const EMPTY_DRAFT: RuleDraft = {
 };
 
 const MAX_RULES = 50;
+const MAX_PATTERN = 500;
+const MAX_BODY = 100_000;
 
 const HTTP_STATUS_OPTIONS: SelectOption[] = [
   { value: '', label: 'None' },
@@ -1419,7 +1421,7 @@ export class NetworkInspector {
   readonly draftRule = computed<Omit<HttpRule, 'id'> | null>(() => {
     const draft = this.draft();
     const pattern = draft.pattern.trim();
-    if (!pattern || this.bodyError()) return null;
+    if (!pattern || pattern.length > MAX_PATTERN || this.bodyError()) return null;
     if (this.rules().length >= MAX_RULES) return null;
     const body = draft.body.trim();
     const delayMs = Math.min(Math.max(Math.round(Number(draft.delayMs)) || 0, 0), 10_000);
@@ -1443,6 +1445,8 @@ export class NetworkInspector {
       return `You can add up to ${MAX_RULES} rules. Remove one to add another.`;
     }
     if (!draft.pattern.trim()) return 'Enter a URL pattern to add a rule.';
+    if (draft.pattern.trim().length > MAX_PATTERN)
+      return `The URL pattern is limited to ${MAX_PATTERN} characters.`;
     if (this.bodyError()) return '';
     if (draft.status.trim() && !isHttpRuleStatus(Number(draft.status)))
       return 'Pick a status from the list.';
@@ -1455,6 +1459,7 @@ export class NetworkInspector {
   readonly bodyError = computed(() => {
     const body = this.draft().body.trim();
     if (!body) return '';
+    if (body.length > MAX_BODY) return `The mock body is limited to ${MAX_BODY} characters.`;
     try {
       JSON.parse(body);
       return '';

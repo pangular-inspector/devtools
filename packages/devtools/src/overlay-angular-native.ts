@@ -230,17 +230,37 @@ async function startSession(
     const owner = graph.component?.id ?? '';
     const full = force || !historyDelta || owner !== historyFor;
     historyFor = owner;
-    const history = signalHistory.collectDelta(graph.nodes, full);
-    for (const item of graph.nodes) {
+    const statuses = (graph.resources ?? [])
+      .filter((r) => r.status)
+      .map((r) => ({
+        id: r.id,
+        kind: 'resource' as const,
+        label: r.name,
+        epoch: r.epoch,
+        value: r.status,
+      }));
+    const { changes: history, rollback } = signalHistory.collectDeltaWithRollback(
+      [...graph.nodes, ...statuses],
+      full,
+    );
+    for (const item of [...graph.nodes, ...(graph.resources ?? [])]) {
       const changes = signalHistory.changesOf(item.id);
       if (changes) item.changes = changes;
     }
-    const answer = (await my.rpc.call('push-signal-graph', {
-      ...graph,
-      ...(restoreSignalHook ? {} : { writeHook: false as const }),
-      pageId,
-      ...(full ? { history } : { historyDelta: history }),
-    })) as { delta?: boolean } | undefined;
+    let answer: { delta?: boolean } | undefined;
+    try {
+      answer = (await my.rpc.call('push-signal-graph', {
+        ...graph,
+        ...(restoreSignalHook ? {} : { writeHook: false as const }),
+        pageId,
+        ...(full ? { history } : { historyDelta: history }),
+      })) as { delta?: boolean } | undefined;
+    } catch (error) {
+      rollback();
+      lastSignalKey = '';
+      historyDelta = false;
+      throw error;
+    }
     historyDelta = answer?.delta === true;
   }
 

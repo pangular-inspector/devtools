@@ -343,7 +343,16 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
     for (const node of primary) {
       const key = `${node.path}|${node.pathMatch ?? 'prefix'}`;
       const earlier = seen.get(key);
-      if (earlier && !node.guards?.canMatch && !earlier.guards?.canMatch && !node.matcher) {
+      if (
+        earlier &&
+        !node.guards?.canMatch &&
+        !earlier.guards?.canMatch &&
+        !node.matcher &&
+        !node.children?.length &&
+        !earlier.children?.length &&
+        !(node.kind === 'lazy' && node.lazy === 'unloaded') &&
+        !(earlier.kind === 'lazy' && earlier.lazy === 'unloaded')
+      ) {
         findings.push({
           rule: 'duplicate-path',
           severity: 'warning',
@@ -353,7 +362,7 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
           angular: 'silent',
         });
       }
-      seen.set(key, node);
+      if (!node.children?.length) seen.set(key, node);
     }
     primary.forEach((node, index) => {
       const own = parts(node.path);
@@ -753,12 +762,18 @@ export function explainRenderModeText(
   }
   if (page?.config) {
     const clientPaths: string[] = [];
+    const unloaded: string[] = [];
     walk(page.config, (node) => {
       if (!node.children?.length && node.redirectTo === undefined) clientPaths.push(node.fullPath);
+      if (node.kind === 'lazy' && node.lazy === 'unloaded') unloaded.push(node.fullPath);
     });
     const unknown = entries.filter(
       (entry) =>
         entry.path !== '**' &&
+        !page.configTruncated &&
+        !unloaded.some((prefix) =>
+          serverPathMatches(`${prefix.replace(/^\//, '')}/**`, `/${entry.path}`),
+        ) &&
         !clientPaths.some(
           (path) =>
             serverPathMatches(entry.path, path) ||

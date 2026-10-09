@@ -92,4 +92,23 @@ describe('SignalInspector', () => {
     for (const listener of listeners) listener({ graph: b, pages: { B: b } });
     expect(fixture.componentInstance.graph()?.pageId).toBe('B');
   });
+
+  it('offers Clear filters when a filter hides the only resource of a resource-only graph', async () => {
+    const fixture = await render({
+      ...graph,
+      resources: [{ id: 'r1', name: 'user', named: true, status: 'resolved', nodeIds: ['1'] }],
+    });
+    const host = fixture.nativeElement as HTMLElement;
+    fixture.componentInstance.filter.set('zzz');
+    await fixture.whenStable();
+    expect(host.textContent).toContain('No signals match.');
+    expect(host.textContent).not.toContain('No signals in this graph.');
+    const clear = Array.from(host.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Clear filters',
+    );
+    expect(clear).toBeDefined();
+    clear!.click();
+    await fixture.whenStable();
+    expect(host.textContent).toContain('user');
+  });
 });

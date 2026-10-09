@@ -548,16 +548,16 @@ const KIND_COLORS: Record<string, string> = {
         } @empty {
           <li class="empty compact">
             <p class="empty-title">
-              {{ visibleNodes().length ? 'No signals match.' : 'No signals in this graph.' }}
+              {{ hasAnySignals() ? 'No signals match.' : 'No signals in this graph.' }}
             </p>
             <p class="hint">
               {{
-                visibleNodes().length
+                hasAnySignals()
                   ? 'Try a different name or kind.'
                   : 'Select a component that reads signals, or interact with the page to create some.'
               }}
             </p>
-            @if (visibleNodes().length) {
+            @if (hasAnySignals()) {
               <button type="button" class="reset" (click)="clearFilters()">Clear filters</button>
             }
           </li>
@@ -1228,6 +1228,7 @@ export class SignalInspector {
     const internal = this.internalIds();
     return (this.graph()?.nodes ?? []).filter((n) => !internal.has(n.id));
   });
+  readonly hasAnySignals = computed(() => this.visibleNodes().length + this.resources().length > 0);
   kindCounts = computed(() => {
     const kinds: string[] = this.graph()
       ? [...this.visibleNodes().map((n) => n.kind), ...this.resources().map(() => 'resource')]

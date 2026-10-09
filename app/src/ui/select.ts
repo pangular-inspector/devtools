@@ -63,6 +63,7 @@ let nextId = 0;
         [attr.aria-labelledby]="labelledBy() || uid + '-trigger'"
         [class.up]="dropUp()"
         animate.enter="list-in"
+        (pointerdown)="$event.preventDefault()"
       >
         @for (opt of options(); track opt.value; let i = $index) {
           <li

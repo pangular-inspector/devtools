@@ -376,7 +376,7 @@ export function sourceRoots(cwd: string): string[] {
       // declared below one is only reachable by starting there.
       const crosses = relative(cover, real)
         .split(/[\\/]/)
-        .some((part) => IGNORED_DIRS.has(part.toLowerCase()));
+        .some((part, depth) => skipsDirectory(part, depth === 0));
       if (!crosses) continue;
       kept.push(dir);
       continue;
@@ -406,6 +406,14 @@ export const IGNORED_DIRS = new Set([
   '.yarn',
 ]);
 
+const GENERATED_DIRS = new Set(['dist', 'build', 'out-tsc', 'coverage', 'tmp']);
+
+function skipsDirectory(name: string, top: boolean): boolean {
+  const lower = name.toLowerCase();
+  if (!IGNORED_DIRS.has(lower)) return false;
+  return top || !GENERATED_DIRS.has(lower);
+}
+
 /**
  * Calls `visit` with the path and name of every file under `dir`, skipping
  * `IGNORED_DIRS` and unreadable entries. Symbolic links are not followed: a
@@ -417,6 +425,7 @@ export function walkFiles(
   dir: string,
   visit: (full: string, name: string) => boolean | void,
   maxDepth = Infinity,
+  top = true,
 ): boolean {
   let entries: string[];
   try {
@@ -430,8 +439,8 @@ export function walkFiles(
       const stats = lstatSync(full);
       if (stats.isSymbolicLink()) continue;
       if (stats.isDirectory()) {
-        if (maxDepth > 0 && !IGNORED_DIRS.has(entry.toLowerCase())) {
-          if (!walkFiles(full, visit, maxDepth - 1)) return false;
+        if (maxDepth > 0 && !skipsDirectory(entry, top)) {
+          if (!walkFiles(full, visit, maxDepth - 1, false)) return false;
         }
         continue;
       }
