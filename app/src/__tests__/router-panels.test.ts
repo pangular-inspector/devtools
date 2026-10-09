@@ -280,6 +280,13 @@ describe('RouteLint reruns', () => {
     );
     await settle(fixture);
     expect(checks).toBe(2);
+
+    fixture.componentRef.setInput(
+      'page',
+      page({ links: [{ text: 'Start', href: '/start', linkActive: true }] }),
+    );
+    await settle(fixture);
+    expect(checks).toBe(3);
   });
 });
 

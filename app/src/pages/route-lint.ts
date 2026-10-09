@@ -245,10 +245,14 @@ export class RouteLint {
   private readonly key = computed(() => {
     const page = this.page();
     const last = page.navigations[page.navigations.length - 1];
-    const flagged = (page.links ?? []).filter(
-      (link) => link.linkActive !== undefined && link.ariaCurrent === undefined,
-    ).length;
-    const links = `${page.links?.length ?? 0}/${flagged}`;
+    const links = JSON.stringify(
+      (page.links ?? []).map((link) => [
+        link.text,
+        link.href,
+        link.linkActive !== undefined,
+        link.ariaCurrent === undefined,
+      ]),
+    );
     const setup = `${page.setup?.mode}/${page.setup?.features?.['componentInputBinding']}`;
     return `${page.pageId}:${page.generation}:${last?.id}:${last?.outcome}:${links}:${setup}`;
   });
