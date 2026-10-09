@@ -233,6 +233,30 @@ describe('http redaction', () => {
     expect(b.calls[0].preview).not.toContain('hunter2');
   });
 
+  it('redacts secret query pairs inside value strings and clipped escaped keys', async () => {
+    vi.useFakeTimers();
+    const { push, state, payloads } = await boot();
+    const payload = {
+      found: true,
+      size: 1,
+      entries: [{ key: 'k', size: 1, value: { next: '/callback?token=abc123&tab=1' } }],
+    };
+    const preview = JSON.stringify({ next: '/cb?code=qrs456&tab=1' });
+    const clipped = `{"pass\\u0077ord":"hunter2","items":[${'1,'.repeat(1200)}`;
+    await push(
+      'push-http',
+      report('a', {
+        payload,
+        calls: [call('/a', { preview }), call('/b', { id: 'c2', preview: clipped })],
+      }),
+    );
+    expect(JSON.stringify((await payloads()).pages['a'])).not.toContain('abc123');
+    const [first, second] = (await state()).pages[0].calls;
+    expect(first.preview).not.toContain('qrs456');
+    expect(first.preview).toContain('tab=1');
+    expect(second.preview).not.toContain('hunter2');
+  });
+
   it('redacts TransferState payload values, URLs and keys', async () => {
     const { push, payloads } = await boot({ redaction: { secretNames: ['tenant'] } });
     await push(

@@ -149,6 +149,17 @@ describe('Analog MCP tools', () => {
     expect(text).toContain('/auth/callback');
   });
 
+  it('analog-current-page masks secret query values in load keys', async () => {
+    const { call, push } = await boot(makeProject(BASE_FILES));
+    await push('push-analog', {
+      ...report,
+      load: { preview: '{}', bytes: 2, keys: ['/callback?token=abc123', 'id'] },
+    });
+    const text = await call('analog-current-page');
+    expect(text).not.toContain('abc123');
+    expect(text).toContain('id');
+  });
+
   it('analog-server-calls lists calls and flags loads fetched twice', async () => {
     const { call } = await boot(makeProject(BASE_FILES));
     expect(await call('analog-server-calls')).toContain('No server calls recorded yet');

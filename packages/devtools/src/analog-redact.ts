@@ -11,7 +11,13 @@ export function redactAnalogReport(report: AnalogRuntimeReport): AnalogRuntimeRe
   return {
     ...report,
     url: redactUrl(report.url),
-    ...(report.load && { load: { ...report.load, preview: redactPreview(report.load.preview) } }),
+    ...(report.load && {
+      load: {
+        ...report.load,
+        preview: redactPreview(report.load.preview),
+        keys: report.load.keys.map((key) => redactUrl(key)),
+      },
+    }),
     hydrationErrors: report.hydrationErrors.map((error) => clip(redactText(error), 300)),
   };
 }

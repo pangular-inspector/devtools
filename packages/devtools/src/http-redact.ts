@@ -5,7 +5,22 @@ import { serialize } from './serialize.ts';
 import { clip } from './text.ts';
 
 const PREVIEW_MAX = 2001;
-const JSON_PAIR = /("([^"\\]{1,100})"\s*:\s*)("(?:[^"\\]|\\.)*"?|[^,}\]\s]*)/g;
+const JSON_PAIR = /("((?:[^"\\]|\\.){1,100})"\s*:\s*)("(?:[^"\\]|\\.)*"?|[^,}\]\s]*)/g;
+
+export function redactStrings(value: unknown): unknown {
+  if (typeof value === 'string') return redactText(value);
+  if (Array.isArray(value)) return value.map(redactStrings);
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactStrings(item)]));
+}
+
+function decodeKey(key: string): string {
+  try {
+    return JSON.parse(`"${key}"`) as string;
+  } catch {
+    return key;
+  }
+}
 
 /**
  * Hides secrets in a recorded body preview. A complete JSON preview is walked
@@ -23,13 +38,13 @@ export function redactPreview(preview: string): string {
         text: PREVIEW_MAX,
         budget: 5000,
       });
-      return clip(JSON.stringify(safe) ?? '', PREVIEW_MAX);
+      return clip(JSON.stringify(redactStrings(safe)) ?? '', PREVIEW_MAX);
     }
   } catch {
     /* clipped or not JSON: fall through to text masking */
   }
   const masked = preview.replace(JSON_PAIR, (match, head: string, key: string) =>
-    isRedactedKey(key) ? `${head}"[redacted]"` : match,
+    isRedactedKey(decodeKey(key)) ? `${head}"[redacted]"` : match,
   );
   return clip(redactText(masked), PREVIEW_MAX);
 }

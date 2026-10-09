@@ -976,6 +976,16 @@ describe('ngrx collector with a classic store', () => {
     ]);
   });
 
+  it('keeps a redacted top-level key out of the logged diff', () => {
+    const { store, collector } = fakeClassic({ apiKey: 'hunter2' }, (state, action) =>
+      action.type === 'rotate' ? { apiKey: 'swordfish' } : state,
+    );
+    store.dispatch({ type: 'rotate' });
+    const log = JSON.stringify(collector.logSince(0));
+    expect(log).toContain('apiKey');
+    expect(log).not.toMatch(/hunter2|swordfish/);
+  });
+
   it('tags each action with where it came from', () => {
     const { store, collector } = fakeClassic({ n: 0 }, (s) => ({ n: s.n + 1 }));
     store.dispatch({ type: 'from component' });

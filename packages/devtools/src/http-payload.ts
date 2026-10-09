@@ -1,4 +1,5 @@
 import type { HydrationMismatch } from './http-hydration.ts';
+import { redactStrings } from './http-redact.ts';
 import { redactUrl } from './router.ts';
 import { serialize } from './serialize.ts';
 import type { HydrationStats } from './types.ts';
@@ -28,7 +29,7 @@ const MAX_VALUE_CHARS = 20_000;
 const VALUE_LIMITS = { depth: 12, keys: 200, items: 200, text: MAX_VALUE_CHARS, budget: 50_000 };
 
 function safe(value: unknown): unknown {
-  return clip(serialize(value, VALUE_LIMITS));
+  return clip(redactStrings(serialize(value, VALUE_LIMITS)));
 }
 
 function clip(value: unknown): unknown {
