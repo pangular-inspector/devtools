@@ -46,6 +46,8 @@ describe.sequential('overlay dispose', () => {
     connectGate = Promise.resolve();
     document.body.innerHTML = '';
     delete window.__pangularComponentOf;
+    delete window.__pangularHostOf;
+    delete window.__pangularClassOf;
     delete window.__pangularPageId;
     vi.stubGlobal('BroadcastChannel', undefined);
     vi.stubGlobal(
@@ -151,8 +153,12 @@ describe.sequential('overlay dispose', () => {
     const dispose = await initOverlay();
     expect(window.__pangularComponentOf).toBeTypeOf('function');
 
+    expect(window.__pangularHostOf).toBeTypeOf('function');
+
     dispose();
     expect(window.__pangularComponentOf).toBeUndefined();
+    expect(window.__pangularHostOf).toBeUndefined();
+    expect(window.__pangularClassOf).toBeUndefined();
   });
 
   it('exposes the page id it claimed until it is disposed', async () => {

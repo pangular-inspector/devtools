@@ -9,6 +9,7 @@ import { analogMiddleware, setDevOrigin } from './analog-server-log.ts';
 import { analogConfig, setAnalogRoot } from './rpc/analog-scan.ts';
 import { stopAnalog } from './rpc/analog-register.ts';
 import { httpRegistry } from './http-rules.ts';
+import { extensionOrigin, isAllowedExtensionOrigin } from './extension-origin.ts';
 import { pickPangularConfig, resolvePangularConfig, type PangularConfig } from './config.ts';
 
 export type { PangularConfig } from './config.ts';
@@ -47,7 +48,9 @@ export function isAllowedHubOrigin(
   if (origin === undefined) return true;
   try {
     const url = new URL(origin);
-    if (url.protocol === 'chrome-extension:') return url.hostname !== '';
+    if (url.protocol === 'chrome-extension:') {
+      return isAllowedExtensionOrigin(origin, policy.allowedOrigins);
+    }
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
     if (policy.allowedOrigins?.includes(url.origin)) return true;
     return isLoopbackHostname(url.hostname) || hostAllowed(url.hostname, policy.allowedHosts);
@@ -67,6 +70,14 @@ function isLoopbackOrigin(origin: string): boolean {
   }
 }
 
+function webOrigin(entry: string): string {
+  try {
+    return new URL(entry).origin;
+  } catch {
+    return 'null';
+  }
+}
+
 /**
  * Reduces each `allowedOrigins` entry to the origin a browser sends: no path or
  * trailing slash, and a lowercase host. Entries that are not URLs are dropped.
@@ -77,12 +88,7 @@ export function normalizeAllowedOrigins(
 ): string[] {
   const origins: string[] = [];
   for (const entry of entries ?? []) {
-    let origin: string;
-    try {
-      origin = new URL(entry).origin;
-    } catch {
-      origin = 'null';
-    }
+    const origin = extensionOrigin(entry) ?? webOrigin(entry);
     if (origin === 'null') {
       warn(
         `[pangular] Ignoring allowedOrigins entry "${entry}": it is not an origin such as https://tunnel.example.`,
@@ -105,7 +111,9 @@ export function allowsRemoteOrigins(policy: HubOriginPolicy = {}): boolean {
   if (hosts.some((entry) => !isLoopbackHostname(entry.replace(/^\./, '').toLowerCase()))) {
     return true;
   }
-  return (policy.allowedOrigins ?? []).some((origin) => !isLoopbackOrigin(origin));
+  return (policy.allowedOrigins ?? []).some(
+    (origin) => !isLoopbackOrigin(origin) && !extensionOrigin(origin),
+  );
 }
 
 export function hubAuthFor(policy: HubOriginPolicy, auth?: boolean): boolean {

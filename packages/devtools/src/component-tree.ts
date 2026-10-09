@@ -1,3 +1,4 @@
+import { componentSource } from './component-source.ts';
 import { elementById, elementId, pruneElementIds } from './element-id.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
 import { className, dependenciesOf, type DebugNg } from './injector-tree.ts';
@@ -281,6 +282,8 @@ export function componentDetail<H extends object = Element>(
     }),
     dependencies: [],
   };
+  const source = componentSource(instance);
+  if (source) detail.source = source;
   const cd = meta?.changeDetection;
   if (typeof cd === 'number' && CHANGE_DETECTION[cd]) detail.changeDetection = CHANGE_DETECTION[cd];
   const enc = meta?.encapsulation;

@@ -364,6 +364,7 @@ const pangular = defineDevframe({
         draft.setupErrors = next.setupErrors ?? [];
         draft.instrumented = next.instrumented ?? [];
         draft.dropped = next.dropped ?? {};
+        draft.webMcp = next.webMcp ?? [];
       });
 
     register({
@@ -1329,7 +1330,7 @@ const pangular = defineDevframe({
       id: 'pangular:component-tree',
       name: 'Angular Component Tree',
       description:
-        'Live component instances per connected page, as JSON: `pages[pageId].roots` is a tree with one node per rendered instance (`id` instance id, `name` class name, `tag` host tag, `directives` on the host), `platform` (`angular-native` for an Angular Native app, missing for a browser page), `count`, `truncated` and `truncatedBy` (`components` or `depth`, the cap that stopped collection, when the page has more instances than it lists), and `detail` (live input values, outputs, other properties, listeners, change detection, encapsulation and injected dependencies) for the selected instance: the one picked in the panel, on the page, or through pangular:highlight or pangular:inspect-component. `detail.properties` lists the other own fields (signals and resources unwrapped). `nodes` repeats the roots of the most recent page. Empty when no page is connected.',
+        'Live component instances per connected page, as JSON: `pages[pageId].roots` is a tree with one node per rendered instance (`id` instance id, `name` class name, `tag` host tag, `directives` on the host), `platform` (`angular-native` for an Angular Native app, missing for a browser page), `count`, `truncated` and `truncatedBy` (`components` or `depth`, the cap that stopped collection, when the page has more instances than it lists), and `detail` (live input values, outputs, other properties, listeners, change detection, encapsulation, injected dependencies, and `source` with the project-relative `file` and 1-based `line` of the class when a dev build has the debug info of Angular) for the selected instance: the one picked in the panel, on the page, or through pangular:highlight or pangular:inspect-component. `detail.properties` lists the other own fields (signals and resources unwrapped). `nodes` repeats the roots of the most recent page. Empty when no page is connected.',
       mimeType: 'application/json',
       read: () => ({ text: JSON.stringify(componentTree.value(), null, 2) }),
     });
@@ -1525,7 +1526,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-component',
       description:
-        'Get the live detail of one component instance: inputs, outputs with whether a parent listens, other own properties (signals and resources unwrapped), DOM listeners, host directives, change detection, encapsulation, host path and injected services. Pass an instance id from the pangular:component-tree resource, a class name or a host tag. This selects the instance on its page (the panel follows) and waits for the page to report it. A class name or tag that matches several instances answers for the first and lists the ids of all of them. Secret-looking values are redacted.',
+        'Get the live detail of one component instance: inputs, outputs with whether a parent listens, other own properties (signals and resources unwrapped), DOM listeners, host directives, change detection, encapsulation, host path, injected services and the source file and line of the class when a dev build has them. Pass an instance id from the pangular:component-tree resource, a class name or a host tag. This selects the instance on its page (the panel follows) and waits for the page to report it. A class name or tag that matches several instances answers for the first and lists the ids of all of them. Secret-looking values are redacted.',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -1871,7 +1872,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:router-config',
       description:
-        'How the router is set up on the running page: provideRouter or forRoot, Angular version, effective options with which are set and which are defaults (onSameUrlNavigation, paramsInheritanceStrategy, urlUpdateStrategy, canceledNavigationResolution, scrolling, initial navigation), enabled features (input binding, view transitions, error handler, preloading strategy, scroller, resources), strategies (location, title, reuse, URL handling), base href, hydration and whether per-guard instrumentation is on.',
+        'How the router is set up on the running page: provideRouter, forRoot or other, or unknown when the build cannot tell, Angular version, effective options with which are set and which are defaults (onSameUrlNavigation, paramsInheritanceStrategy, urlUpdateStrategy, canceledNavigationResolution, scrolling, initial navigation), enabled features (input binding, view transitions, error handler, preloading strategy, scroller, resources), strategies (location, title, reuse, URL handling), base href, hydration and whether per-guard instrumentation is on.',
       safety: 'read',
       inputSchema: { type: 'object', properties: { page: pageProperty } },
       handler: async (args: { page?: string }) => {
@@ -2082,7 +2083,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-forms',
       description:
-        'Inspect the forms on the running page (Signal Forms, reactive and template-driven). Without arguments it lists each form with its status and error count. Pass `form` for its field tree (value, status, touched, dirty, errors per field). Password and other secret-looking values are redacted. For "why is this form invalid", call explain-form-invalid first.',
+        'Inspect the forms on the running page (Signal Forms, reactive and template-driven). Without arguments it lists each form with its status and error count. Pass `form` for its field tree (value, status, touched, dirty, errors per field). Signal Forms that set `experimentalWebMcpTool` also carry `webMcp`: the tool name, description, inputs, registration status (registered, or failed with the fields that blocked schema inference), required fields that changed since registration, duplicate names and recent agent calls. Password and other secret-looking values are redacted. For "why is this form invalid", call explain-form-invalid first.',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -2222,7 +2223,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:form-history',
       description:
-        'Timeline of form changes: value (with previous value and repeat count), status, submit (ran, blocked, threw), added and removed fields, each tagged with its origin (user, code, devtools). Filter by form, path, type, origin or `since` (a marker from an earlier call). Returns the current marker.',
+        'Timeline of form changes: value (with previous value and repeat count), status, submit (ran, blocked, threw), added and removed fields, each tagged with its origin (user, code, devtools, binding, or agent for a WebMCP tool call). Filter by form, path, type, origin or `since` (a marker from an earlier call). Returns the current marker.',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -2244,7 +2245,7 @@ const pangular = defineDevframe({
               'validators',
             ],
           },
-          origin: { type: 'string', enum: ['user', 'code', 'devtools', 'binding'] },
+          origin: { type: 'string', enum: ['user', 'code', 'devtools', 'binding', 'agent'] },
           since: { type: 'number', description: 'Only events after this marker.' },
           limit: { type: 'number', description: 'Max events (default 50, max 200).' },
           page: formPageProperty,

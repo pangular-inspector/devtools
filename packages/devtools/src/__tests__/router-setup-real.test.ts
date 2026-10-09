@@ -16,20 +16,23 @@ import {
   withDebugTracing,
   withDisabledInitialNavigation,
   withEnabledBlockingInitialNavigation,
-  withExperimentalAutoCleanupInjectors,
-  withExperimentalPlatformNavigation,
   withHashLocation,
   withInMemoryScrolling,
   withNavigationErrorHandler,
   withPreloading,
   withRouterConfig,
-  ɵwithRouterResources as withRouterResources,
   withViewTransitions,
   type RouterFeatures,
 } from '@angular/router';
+import * as router from '@angular/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RouterDebugApi } from '../router.ts';
 import { detectSetup, type RouterSetup } from '../router-setup.ts';
+
+const optionalRouter: Partial<typeof router> = router;
+const withExperimentalAutoCleanupInjectors = optionalRouter.withExperimentalAutoCleanupInjectors;
+const withExperimentalPlatformNavigation = optionalRouter.withExperimentalPlatformNavigation;
+const withRouterResources = optionalRouter.ɵwithRouterResources;
 
 class Root {}
 Component({ selector: 'app-root', template: '' })(Root);
@@ -104,32 +107,45 @@ describe('detectSetup on a real provideRouter app', () => {
     vi.restoreAllMocks();
   });
 
-  it.each([
-    ['componentInputBinding', withComponentInputBinding(), 'on'],
-    ['viewTransitions', withViewTransitions(), 'on'],
-    ['navigationErrorHandler', withNavigationErrorHandler(() => {}), 'on'],
-    ['routerResources', withRouterResources(), 'on'],
-    ['injectorCleanup', withExperimentalAutoCleanupInjectors(), 'on'],
-    ['preloading', withPreloading(PreloadAllModules), 'PreloadAllModules'],
-    ['scroller', withInMemoryScrolling({ anchorScrolling: 'enabled' }), 'on'],
-  ] as const)('detects the %s feature', async (name, feature, value) => {
-    const setup = await setupWith([feature as RouterFeatures]);
+  it.each(
+    (
+      [
+        ['componentInputBinding', withComponentInputBinding, 'on'],
+        ['viewTransitions', withViewTransitions, 'on'],
+        ['navigationErrorHandler', () => withNavigationErrorHandler(() => {}), 'on'],
+        ['routerResources', withRouterResources, 'on'],
+        ['injectorCleanup', withExperimentalAutoCleanupInjectors, 'on'],
+        ['preloading', () => withPreloading(PreloadAllModules), 'PreloadAllModules'],
+        ['scroller', () => withInMemoryScrolling({ anchorScrolling: 'enabled' }), 'on'],
+      ] as const
+    ).filter(([, feature]) => typeof feature === 'function'),
+  )('detects the %s feature', async (name, feature, value) => {
+    const setup = await setupWith([(feature as () => unknown)() as RouterFeatures]);
     expect(setup.features[name]).toBe(value);
   });
 
-  it('detects withExperimentalPlatformNavigation()', async () => {
-    const navigation = Object.assign(new EventTarget(), {
-      currentEntry: { url: 'http://localhost/', key: '0', id: '0', index: 0, getState: () => null },
-      entries: () => [],
-      transition: null,
-      navigate: () => ({ committed: Promise.resolve(), finished: Promise.resolve() }),
-    });
-    const setup = await setupWith(
-      [withExperimentalPlatformNavigation()],
-      [{ provide: PlatformNavigation, useValue: navigation }],
-    );
-    expect(setup.features['platformNavigation']).toBe('on');
-  });
+  it.skipIf(typeof withExperimentalPlatformNavigation !== 'function')(
+    'detects withExperimentalPlatformNavigation()',
+    async () => {
+      const navigation = Object.assign(new EventTarget(), {
+        currentEntry: {
+          url: 'http://localhost/',
+          key: '0',
+          id: '0',
+          index: 0,
+          getState: () => null,
+        },
+        entries: () => [],
+        transition: null,
+        navigate: () => ({ committed: Promise.resolve(), finished: Promise.resolve() }),
+      });
+      const setup = await setupWith(
+        [withExperimentalPlatformNavigation!()],
+        [{ provide: PlatformNavigation, useValue: navigation }],
+      );
+      expect(setup.features['platformNavigation']).toBe('on');
+    },
+  );
 
   it('reads scrolling options and withRouterConfig() options', async () => {
     const setup = await setupWith([

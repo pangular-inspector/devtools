@@ -1,6 +1,9 @@
 import { bootstrapApplication } from '@angular/platform-browser';
 import { appConfig } from './app/app.config';
 import { App } from './app/app';
+import { installDemoModelContext } from './app/examples/webmcp-demo';
+
+if (typeof ngDevMode === 'undefined' || ngDevMode) installDemoModelContext();
 
 // Load the devtools overlay (which also opens the popup) in development only
 bootstrapApplication(App, appConfig)

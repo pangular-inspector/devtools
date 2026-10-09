@@ -43,7 +43,7 @@ it('finds the router for the Analog report without ng.ɵgetRouterInstance', () =
   expect(routerOf(ng as never)).toBe(app.injector.get(Router));
 });
 
-it('reports the setup kind as unknown on versions that never publish the router util', () => {
+it('reports forRoot from its guard token on every version, with or without the router util', () => {
   const root = document.querySelector('app-root')!;
   const setupOn = (version: string) => {
     root.setAttribute('ng-version', version);
@@ -51,8 +51,8 @@ it('reports the setup kind as unknown on versions that never publish the router 
   };
   expect(setupOn('22.1.7')).toBe('forRoot or other');
   expect(setupOn('20.3.5')).toBe('forRoot or other');
-  expect(setupOn('20.3.4')).toBe('unknown');
-  expect(setupOn('20.0.0')).toBe('unknown');
+  expect(setupOn('20.3.4')).toBe('forRoot or other');
+  expect(setupOn('20.0.0')).toBe('forRoot or other');
 });
 
 it('knows which versions publish the router util', () => {

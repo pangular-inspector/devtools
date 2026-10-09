@@ -100,7 +100,7 @@ With `ws: {sidecar: true}`, the WebSocket runs on its own port, picked automatic
 | `base`           | `'/__devframes/'`                         | Where the hub is mounted. The devtools panel lives at `<base>pangular/`.                                                                                                                                                            |
 | `ws`             |                                           | `false` uses server-sent events only. `{ sidecar: true }` runs the WebSocket on its own port.                                                                                                                                       |
 | `auth`           | on                                        | `false` turns off the one-time code.                                                                                                                                                                                                |
-| `allowedOrigins` | loopback origins and the Chrome extension | Extra origins allowed to open the WebSocket. A list replaces the Chrome extension default. `false` turns the origin check off.                                                                                                      |
+| `allowedOrigins` | loopback origins and the Chrome extension | Extra origins allowed to open the WebSocket, such as a tunnel. `false` turns the origin check off.                                                                                                                                  |
 | `mcp`            | a bearer token                            | Mounts the MCP endpoint at `<base>__mcp` and asks for a bearer token. With `auth: false` the default is `'auto'`: it mounts once agent tools exist and asks for no token. See [Send a token](../agents/mcp-server.md#send-a-token). |
 
 The hub also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](./configuration.md).
@@ -109,7 +109,7 @@ The hub also takes the devtools options, such as `inspectors`, `agent`, `actions
 
 The hub protects its connection with a one-time code by default. The server prints the code, and a browser can read data only after it exchanges that code. On a machine only you use, pass `auth: false` to turn the gate off.
 
-The origin check is on by default too. Only loopback origins and the [Chrome extension](./chrome-extension.md) can open the WebSocket. If you pass your own `allowedOrigins` list, it keeps loopback origins but drops the extension. Add `chrome-extension://<id>` to the list, with the ID from `chrome://extensions`:
+The origin check is on by default too. Only loopback origins and the [Chrome extension](./chrome-extension.md#server-origin), `chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk`, can open the WebSocket. A list in `allowedOrigins` keeps both and adds its entries. A build of the extension with another ID needs its own entry, with the ID from `chrome://extensions`:
 
 ```ts
 // src/server.ts

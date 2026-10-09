@@ -34,7 +34,12 @@ describe('allowsRemoteOrigins', () => {
     expect(
       allowsRemoteOrigins({
         allowedHosts: ['localhost', '.localhost', '127.0.0.1', '::1', '[::1]'],
-        allowedOrigins: ['http://localhost:4200', 'https://127.0.0.1:5173', 'http://[::1]:3000'],
+        allowedOrigins: [
+          'http://localhost:4200',
+          'https://127.0.0.1:5173',
+          'http://[::1]:3000',
+          'chrome-extension://abcdefghijklmnopabcdefghijklmnop',
+        ],
       }),
     ).toBe(false);
   });
@@ -141,5 +146,34 @@ describe('pangularVite allowedOrigins', () => {
     expect(status('https://evil.example')).toBe(403);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('https://evil.example'));
+  });
+  it('accepts the Pangular Inspector extension with no allowedOrigins, without the one-time code', () => {
+    const { auth, status } = plugin([]);
+    expect(auth).toBe(false);
+    expect(status('chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk')).toBe('next');
+  });
+
+  it('refuses a Chrome extension that is not listed', () => {
+    const { status } = plugin([]);
+    expect(status('chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba')).toBe(403);
+    expect(status('chrome-extension://abcdefghijklmnopabcdefghijklmnop')).toBe(403);
+  });
+
+  it('accepts an unpacked extension ID listed in allowedOrigins, without the one-time code', () => {
+    const selfBuilt = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+    const { auth, warn, status } = plugin([selfBuilt]);
+    expect(auth).toBe(false);
+    expect(warn).not.toHaveBeenCalled();
+    expect(status(selfBuilt)).toBe('next');
+    expect(status('chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk')).toBe('next');
+    expect(status('chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba')).toBe(403);
+  });
+
+  it('reads an extension entry with a trailing slash or uppercase ID as its origin', () => {
+    const { warn, status } = plugin(['chrome-extension://ABCDEFGHIJKLMNOPABCDEFGHIJKLMNOP/']);
+    expect(status('chrome-extension://abcdefghijklmnopabcdefghijklmnop')).toBe('next');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('"chrome-extension://abcdefghijklmnopabcdefghijklmnop"'),
+    );
   });
 });

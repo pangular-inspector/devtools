@@ -19,6 +19,7 @@ import {
   type NavigationRecord,
   type RouterDebugApi,
 } from '../router.ts';
+import { angularAtLeast } from './angular-version.ts';
 
 TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
 
@@ -91,16 +92,19 @@ describe('real Router', () => {
 
   const last = () => navigations[navigations.length - 1];
 
-  it('finds the router through the debug util that provideRouter publishes', () => {
-    const published = (globalThis as { ng?: RouterDebugApi }).ng;
-    expect(typeof published?.ɵgetRouterInstance).toBe('function');
-    const injector = TestBed.inject(Injector);
-    const ng: RouterDebugApi = {
-      getInjector: () => injector,
-      ɵgetRouterInstance: published!.ɵgetRouterInstance,
-    };
-    expect(findRouter(ng, [document.createElement('div')])).toBe(router);
-  });
+  it.skipIf(!angularAtLeast('20.3.5'))(
+    'finds the router through the debug util that provideRouter publishes',
+    () => {
+      const published = (globalThis as { ng?: RouterDebugApi }).ng;
+      expect(typeof published?.ɵgetRouterInstance).toBe('function');
+      const injector = TestBed.inject(Injector);
+      const ng: RouterDebugApi = {
+        getInjector: () => injector,
+        ɵgetRouterInstance: published!.ɵgetRouterInstance,
+      };
+      expect(findRouter(ng, [document.createElement('div')])).toBe(router);
+    },
+  );
 
   it('reports the active route with params, resolved data, guards and redacted secrets', async () => {
     await router.navigateByUrl('/users/42?tab=posts&token=xyz#bio');

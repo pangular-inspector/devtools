@@ -5,6 +5,8 @@ import {
   type FormFieldError,
   type FormFieldNode,
 } from '../forms.ts';
+import type { WebMcpPage } from '../forms-webmcp.ts';
+import { isWebMcpPage, isWebMcpTool, webMcpLine, webMcpNotes } from './forms-webmcp.ts';
 import { fixedTtl, type PageTtl } from './page-ttl.ts';
 
 export interface FormsState {
@@ -15,6 +17,7 @@ export interface FormsState {
   instrumented?: string[];
   /** Older events removed at `limits.formTimeline`, by page id. */
   dropped?: Record<string, number>;
+  webMcp?: (WebMcpPage & { pageId: string })[];
 }
 
 export interface InspectFormsArgs {
@@ -32,6 +35,7 @@ export interface PageReport {
   setupErrors?: string[];
   instrumented?: boolean;
   dropped?: number;
+  webMcp?: WebMcpPage;
 }
 
 const STALE_AFTER_MS = 10_000;
@@ -215,9 +219,9 @@ export function inspectFormsText(
     const lines = forms.map((f) => {
       const fields = countNodes(f.root, () => 1);
       const errors = countNodes(f.root, (n) => n.errors.length);
-      return `- ${f.id} ${code(f.label)} (${f.kind}): ${f.root.status}, ${fields} fields, ${errors} errors`;
+      return `- ${f.id} ${code(f.label)} (${f.kind}): ${f.root.status}, ${fields} fields, ${errors} errors${webMcpLine(f)}`;
     });
-    return `${UNTRUSTED}\n\n${forms.length} form(s) on the page. Pass \`form\` for a field tree, or use explain-form-invalid for validation problems.\n\n${lines.join('\n')}${stale}`;
+    return `${UNTRUSTED}\n\n${forms.length} form(s) on the page. Pass \`form\` for a field tree, or use explain-form-invalid for validation problems.\n\n${lines.join('\n')}${webMcpNotes(state, args.page)}${stale}`;
   }
   const missing: string[] = [];
   const trees = forms.map((f) => {
@@ -231,6 +235,7 @@ export function inspectFormsText(
       label: f.label,
       kind: f.kind,
       submitted: f.submitted,
+      ...(f.webMcp ? { webMcp: f.webMcp } : {}),
       root: start && pruneTree(start, args),
     };
   });
@@ -372,6 +377,7 @@ function isCollectedForm(value: unknown): boolean {
             typeof entry.kind === 'string' &&
             typeof entry.message === 'string',
         ))) &&
+    (form.webMcp === undefined || isWebMcpTool(form.webMcp)) &&
     isFieldNode(form.root)
   );
 }
@@ -397,6 +403,7 @@ export function isPageReport(value: unknown): value is PageReport {
     Array.isArray(report.events) &&
     report.events.every(isFormEvent) &&
     (report.instrumented === undefined || typeof report.instrumented === 'boolean') &&
+    (report.webMcp === undefined || isWebMcpPage(report.webMcp)) &&
     (report.dropped === undefined ||
       (typeof report.dropped === 'number' && Number.isFinite(report.dropped))) &&
     (report.setupErrors === undefined ||
@@ -430,6 +437,13 @@ function withGlobalSeqs(pages: Pages, report: PageReport) {
   return { events, seqs };
 }
 
+function withWebMcp(pages: PageReport[]): Pick<FormsState, 'webMcp'> {
+  const webMcp = pages.flatMap((page) =>
+    page.webMcp ? [{ ...page.webMcp, pageId: page.pageId }] : [],
+  );
+  return webMcp.length ? { webMcp } : {};
+}
+
 export function currentForms(pages: Pages, maxEvents = MAX_EVENTS): FormsState {
   return stateOf(pages, maxEvents);
 }
@@ -454,6 +468,7 @@ function stateOf(pages: Pages, maxEvents: number): FormsState {
     setupErrors: all.flatMap((page) =>
       (page.setupErrors ?? []).map((message) => ({ pageId: page.pageId, message })),
     ),
+    ...withWebMcp(all),
   };
 }
 

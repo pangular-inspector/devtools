@@ -62,11 +62,15 @@ Keep `redirectTo` cycles (`NG04016`) in the unit tests: Angular stops them befor
 
 The demo shows the full setup in three files:
 
-| File                    | What it adds                                                                                                               |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `src/server.ts`         | The hub, with `initPangularHub()` mounted as Express middleware                                                            |
-| `src/main.ts`           | The overlay and `registerNgrxSignals`, loaded in development only                                                          |
-| `src/app/app.config.ts` | `withPangular()` and `providePangularHttp()` for the SSR & HTTP tab, and `withIncrementalHydration()` for the defer blocks |
+| File                    | What it adds                                                                                                                                                   |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/server.ts`         | The hub, with `initPangularHub()` mounted as Express middleware                                                                                                |
+| `src/main.ts`           | The overlay and `registerNgrxSignals`, loaded in development only, and the WebMCP stand-in from `src/app/examples/webmcp-demo.ts`                              |
+| `src/app/app.config.ts` | `withPangular()` and `providePangularHttp()` for the SSR & HTTP tab, `withIncrementalHydration()` for the defer blocks, and `provideExperimentalWebMcpForms()` |
+
+### WebMCP stand-in
+
+In development, `src/main.ts` adds a `navigator.modelContext` stand-in before bootstrap when the browser has none on `document` or `navigator`. It is demo code and not part of the package. The Signal Forms example registers a `sign_up` tool with it, and **Fill as an agent** calls that tool. See [Try WebMCP in the demo](../inspectors/forms.md#try-webmcp-in-the-demo).
 
 ### Run in development
 

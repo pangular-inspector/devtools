@@ -131,11 +131,19 @@ export interface ComponentProp {
   kind?: 'signal' | 'resource';
 }
 
+export interface ComponentSource {
+  /** Project-relative path from Angular's dev-mode debug info. */
+  file: string;
+  /** 1-based line of the class declaration. */
+  line: number;
+}
+
 export interface ComponentDetail {
   id: string;
   name: string;
   tag: string;
   path: string;
+  source?: ComponentSource;
   changeDetection?: string;
   encapsulation?: string;
   inputs: ComponentProp[];

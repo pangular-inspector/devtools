@@ -5,7 +5,10 @@ import { runInNewContext } from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const root = join(import.meta.dirname, '../../../../extension');
-const source = readFileSync(join(root, 'panel-bridge.js'), 'utf8');
+const source = [
+  readFileSync(join(root, 'panel-actions.js'), 'utf8'),
+  readFileSync(join(root, 'panel-bridge.js'), 'utf8'),
+].join('\n');
 const html = readFileSync(join(root, 'panel.html'), 'utf8');
 
 type Listener = () => void;
@@ -14,16 +17,18 @@ interface Setup {
   origin?: string;
   pageId?: () => string | null;
   storedPageId?: string | null;
+  extensionId?: string;
   granted?: boolean;
   grant?: boolean;
   fetch?: (url: string) => Promise<Response>;
+  inspect?: (expression: string) => unknown;
 }
 
 const offline = () => Promise.reject(new TypeError('Failed to fetch'));
 
 function open(setup: Setup = {}) {
   const body = new DOMParser().parseFromString(html, 'text/html').body;
-  body.querySelector('script')?.remove();
+  body.querySelectorAll('script').forEach((script) => script.remove());
   document.body.innerHTML = body.innerHTML;
 
   const origin = setup.origin ?? 'http://localhost:4200';
@@ -35,7 +40,9 @@ function open(setup: Setup = {}) {
     return granted;
   });
   const chrome = {
-    runtime: { getURL: (path: string) => `chrome-extension://ext-id/${path}` },
+    runtime: {
+      getURL: (path: string) => `chrome-extension://${setup.extensionId ?? 'ext-id'}/${path}`,
+    },
     permissions: { contains: vi.fn(async () => granted), request },
     devtools: {
       inspectedWindow: {
@@ -48,16 +55,21 @@ function open(setup: Setup = {}) {
                   ? (setup.pageId?.() ?? null)
                   : expression.includes('pangular-page-id')
                     ? (setup.storedPageId ?? null)
-                    : null,
+                    : (setup.inspect?.(expression) ?? null),
             ),
           ),
+        getResources: (callback: (resources: { url: string }[]) => void) => callback([]),
       },
       network: { onNavigated: { addListener: (l: Listener) => navigated.push(l) } },
-      panels: { elements: { onSelectionChanged: { addListener: () => {} } } },
+      panels: {
+        elements: { onSelectionChanged: { addListener: () => {} } },
+        openResource: vi.fn(),
+      },
     },
   };
   runInNewContext(source, {
     chrome,
+    window,
     document,
     location,
     fetch,
@@ -80,6 +92,10 @@ function open(setup: Setup = {}) {
     docs: $<HTMLAnchorElement>('status-docs'),
     frame: $<HTMLIFrameElement>('devtools-frame'),
   };
+}
+
+function fromFrame(frame: HTMLIFrameElement, data: unknown, origin = location.origin) {
+  window.dispatchEvent(new MessageEvent('message', { data, origin, source: frame.contentWindow }));
 }
 
 const found = (path: string) => (url: string) =>
@@ -264,7 +280,7 @@ describe('extension panel bridge', () => {
     });
     await vi.advanceTimersByTimeAsync(500);
     expect(panel.message()).toBe(
-      'The devtools server on http://192.168.1.20:5173 refused the request (403). It said: "Pangular Inspector only answers requests from this machine." Tried:',
+      'The devtools server on http://192.168.1.20:5173 refused the request (403). It said: "Pangular Inspector only answers requests from this machine." If the page runs on this machine, add chrome-extension://ext-id to allowedOrigins to trust this extension. That does not change the rule that the server only answers this machine. Tried:',
     );
     expect(panel.tried()).toContain(
       'http://192.168.1.20:5173/__devframes/pangular/__connection.json (403)',
@@ -273,6 +289,21 @@ describe('extension panel bridge', () => {
     expect(panel.docs.hidden).toBe(false);
     expect(panel.docs.textContent).toBe('Why the devtools server refuses requests');
     expect(panel.docs.href).toMatch(/getting-started\/vite\.md#answers-only-your-machine$/);
+  });
+
+  it('leaves out the allowedOrigins hint for the extension with the pinned ID', async () => {
+    const panel = open({
+      origin: 'http://192.168.1.20:5173',
+      extensionId: 'dcogniffeelebaolkkfbopmjcblhblfk',
+      fetch: (url) =>
+        url.endsWith('/__devframes/pangular/__connection.json')
+          ? Promise.resolve(new Response('', { status: 403 }))
+          : Promise.resolve(new Response('', { status: 404 })),
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(panel.message()).toBe(
+      'The devtools server on http://192.168.1.20:5173 refused the request (403). Tried:',
+    );
   });
 
   it('restores the setup link after a refusal turns into no answer', async () => {
@@ -316,5 +347,38 @@ describe('extension panel bridge', () => {
     expect(new URL(panel.frame.src).searchParams.get('baseURL')).toBe(
       'http://localhost:4200/__pangular/',
     );
+  });
+  it('reveals a component the UI frame asks for and answers with the request id', async () => {
+    const inspect = vi.fn((expression: string) =>
+      expression.includes('__pangularHostOf') ? true : null,
+    );
+    const panel = open({ inspect });
+    const replies: unknown[] = [];
+    vi.spyOn(panel.frame.contentWindow!, 'postMessage').mockImplementation((data) =>
+      replies.push(data),
+    );
+    fromFrame(panel.frame, {
+      type: 'pangular:reveal-element',
+      requestId: 'r1',
+      pageId: 'page-1',
+      id: 'cab12-3',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const [expression] = inspect.mock.calls.at(-1)!;
+    expect(expression).toContain('window.__pangularHostOf?.("page-1", "cab12-3")');
+    expect(expression).toContain('inspect(target)');
+    expect(replies).toEqual([{ type: 'pangular:panel-action-result', requestId: 'r1', ok: true }]);
+  });
+
+  it('ignores panel actions from other windows or origins', async () => {
+    const inspect = vi.fn(() => true);
+    const panel = open({ inspect });
+    const post = vi.spyOn(panel.frame.contentWindow!, 'postMessage');
+    const request = { type: 'pangular:reveal-element', requestId: 'r1', pageId: 'p', id: 'c' };
+    fromFrame(panel.frame, request, 'https://evil.example');
+    window.dispatchEvent(new MessageEvent('message', { data: request, origin: location.origin }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(inspect).not.toHaveBeenCalled();
+    expect(post).not.toHaveBeenCalled();
   });
 });

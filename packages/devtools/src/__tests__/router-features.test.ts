@@ -30,6 +30,7 @@ import {
   type PreloadRecord,
 } from '../router-actions.ts';
 import { matchUrl } from '../rpc/router-config-tools.ts';
+import { angularAtLeast } from './angular-version.ts';
 
 TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
 
@@ -229,60 +230,63 @@ describe('router features on a real Router', () => {
     expect(router.config.find((r) => r.path === 'admin')!.canActivate![0]).toBe(authGuard);
   });
 
-  it('navigates, replays, probes and resolves lazy routes on request', async () => {
-    let instrumented = false;
-    const set = (on: boolean) => (instrumented = on);
-    const nav = (await runAction(
-      router as never,
-      navigations,
-      { action: 'navigate', pattern: '/users/:id', params: { id: '5' } },
-      set,
-    )) as Record<string, unknown>;
-    expect(nav).toMatchObject({ outcome: 'succeeded', url: '/users/5' });
-    expect(last().caller).toBe('navigate from DevTools');
+  it.skipIf(!angularAtLeast('20.2.0'))(
+    'navigates, replays, probes and resolves lazy routes on request',
+    async () => {
+      let instrumented = false;
+      const set = (on: boolean) => (instrumented = on);
+      const nav = (await runAction(
+        router as never,
+        navigations,
+        { action: 'navigate', pattern: '/users/:id', params: { id: '5' } },
+        set,
+      )) as Record<string, unknown>;
+      expect(nav).toMatchObject({ outcome: 'succeeded', url: '/users/5' });
+      expect(last().caller).toBe('navigate from DevTools');
 
-    const unsafe = (await runAction(
-      router as never,
-      navigations,
-      { action: 'navigate', url: 'https://evil.test/' },
-      set,
-    )) as Record<string, unknown>;
-    expect(unsafe['error']).toMatch(/same-origin/);
+      const unsafe = (await runAction(
+        router as never,
+        navigations,
+        { action: 'navigate', url: 'https://evil.test/' },
+        set,
+      )) as Record<string, unknown>;
+      expect(unsafe['error']).toMatch(/same-origin/);
 
-    await router.navigateByUrl('/admin');
-    const redirected = navigations.find((n) => n.url === '/admin')!;
-    const replay = (await runAction(
-      router as never,
-      navigations,
-      { action: 'replay', id: redirected.id },
-      set,
-    )) as Record<string, unknown>;
-    expect(replay).toMatchObject({ same: true, replay: { outcome: 'redirected' } });
+      await router.navigateByUrl('/admin');
+      const redirected = navigations.find((n) => n.url === '/admin')!;
+      const replay = (await runAction(
+        router as never,
+        navigations,
+        { action: 'replay', id: redirected.id },
+        set,
+      )) as Record<string, unknown>;
+      expect(replay).toMatchObject({ same: true, replay: { outcome: 'redirected' } });
 
-    const probe = (await runAction(
-      router as never,
-      navigations,
-      { action: 'probe', url: '/users/77' },
-      set,
-    )) as Record<string, unknown>;
-    expect(probe).toMatchObject({ matched: true });
-    expect(router.url).not.toBe('/users/77');
-    expect(navigations.some((n) => n.probe && n.url === '/users/77')).toBe(true);
+      const probe = (await runAction(
+        router as never,
+        navigations,
+        { action: 'probe', url: '/users/77' },
+        set,
+      )) as Record<string, unknown>;
+      expect(probe).toMatchObject({ matched: true });
+      expect(router.url).not.toBe('/users/77');
+      expect(navigations.some((n) => n.probe && n.url === '/users/77')).toBe(true);
 
-    const lazy = (await runAction(
-      router as never,
-      navigations,
-      { action: 'resolve-lazy', id: '6' },
-      set,
-    )) as Record<string, unknown>;
-    expect(lazy).toMatchObject({ routes: [{ path: '' }, { path: 'deep' }] });
-    expect((router.config[6] as { _loadedRoutes?: unknown })._loadedRoutes).toBeUndefined();
+      const lazy = (await runAction(
+        router as never,
+        navigations,
+        { action: 'resolve-lazy', id: '6' },
+        set,
+      )) as Record<string, unknown>;
+      expect(lazy).toMatchObject({ routes: [{ path: '' }, { path: 'deep' }] });
+      expect((router.config[6] as { _loadedRoutes?: unknown })._loadedRoutes).toBeUndefined();
 
-    await runAction(router as never, navigations, { action: 'instrument', on: true }, set);
-    expect(instrumented).toBe(true);
-  });
+      await runAction(router as never, navigations, { action: 'instrument', on: true }, set);
+      expect(instrumented).toBe(true);
+    },
+  );
 
-  it('aborts the navigation in flight', async () => {
+  it.skipIf(!angularAtLeast('20.2.0'))('aborts the navigation in flight', async () => {
     const pending = router.navigateByUrl('/slow');
     await new Promise((resolve) => setTimeout(resolve, 5));
     const result = (await runAction(

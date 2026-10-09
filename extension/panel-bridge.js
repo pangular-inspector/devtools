@@ -18,9 +18,11 @@ const REFUSED_DOCS = {
 const PATHS = ['/__pangular/', '/__devframes/pangular/', '/__devframe/', '/'];
 const CONNECTION_FILES = ['__devframe/__connection.json', '__connection.json'];
 const PROBE_TIMEOUT_MS = 1500;
+const PINNED_ORIGIN = 'chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk';
 const REFUSED_TEXT_LIMIT = 200;
 const PAGE_ID_WAIT_MS = 5000;
 const PAGE_ID_POLL_MS = 250;
+const OPEN_RESOURCE_TIMEOUT_MS = 3000;
 const DETECTING = 'Detecting Angular app…';
 const PAGE_ID = `typeof window.__pangularPageId === 'string' ? window.__pangularPageId : null`;
 const STORED_PAGE_ID = `(() => {
@@ -97,8 +99,13 @@ async function detectConnection() {
     const tried = probes.map(({ url, status }) => `${url} (${status ?? 'no answer'})`);
     if (refused) {
       const reason = refused.text ? ` It said: "${refused.text}"` : '';
+      const extension = chrome.runtime.getURL('').replace(/\/$/, '');
+      const hint =
+        refused.status === 403 && extension !== PINNED_ORIGIN
+          ? ` If the page runs on this machine, add ${extension} to allowedOrigins to trust this extension. That does not change the rule that the server only answers this machine.`
+          : '';
       showStatus(
-        `The devtools server on ${page.origin} refused the request (${refused.status}).${reason} Tried:`,
+        `The devtools server on ${page.origin} refused the request (${refused.status}).${reason}${hint} Tried:`,
         { tried, retry: true, docs: REFUSED_DOCS },
       );
     } else {
@@ -186,6 +193,26 @@ chrome.devtools.panels.elements.onSelectionChanged.addListener(async () => {
   const id = await evalInPage('window.__pangularComponentOf?.($0) ?? null');
   if (typeof id !== 'string') return;
   frame.contentWindow?.postMessage({ type: 'pangular:inspect-component', id }, location.origin);
+});
+
+const handlePanelAction = createPanelActions({
+  evalInPage,
+  getResources: () =>
+    new Promise((resolve) => chrome.devtools.inspectedWindow.getResources(resolve)),
+  openResource: (url, line) =>
+    new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(false), OPEN_RESOURCE_TIMEOUT_MS);
+      chrome.devtools.panels.openResource(url, line, (response) => {
+        clearTimeout(timer);
+        resolve(!response?.isError);
+      });
+    }),
+});
+
+window.addEventListener('message', async (event) => {
+  if (event.source !== frame.contentWindow || event.origin !== location.origin) return;
+  const reply = await handlePanelAction(event.data);
+  if (reply) frame.contentWindow?.postMessage(reply, location.origin);
 });
 
 // Start detection after a short delay to let the page settle

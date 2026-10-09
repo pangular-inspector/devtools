@@ -19,11 +19,13 @@ import {
   storedInstrumented,
 } from '../router-actions.ts';
 import { touchRouterPage } from '../rpc/router-tools.ts';
+import { angularAtLeast } from './angular-version.ts';
 
 TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
 
 class Nav {
   readonly router = inject(Router);
+  readonly nullOptions = angularAtLeast('22.0.0');
   go() {
     void this.router.navigateByUrl('/b');
   }
@@ -48,7 +50,9 @@ Component({
     <a routerLink="/b" routerLinkActive="on" [routerLinkActiveOptions]="{ queryParams: 'exact' }"
       >Partial</a
     >
-    <a routerLink="/b" routerLinkActive="on" [routerLinkActiveOptions]="$any(null)">Never</a>
+    @if (nullOptions) {
+      <a routerLink="/b" routerLinkActive="on" [routerLinkActiveOptions]="$any(null)">Never</a>
+    }
   `,
 })(Nav);
 
@@ -118,16 +122,19 @@ describe('router audit fixes on a real Router', () => {
     expect(matchOptionsOf(null)).toBeNull();
   });
 
-  it('agrees with RouterLinkActive for partial match options and null options', async () => {
-    const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/b?tab=1');
-    harness.detectChanges();
-    const links = linksOf(ng(), router as never);
-    const partial = links.find((l) => l.text === 'Partial')!;
-    const never = links.find((l) => l.text === 'Never')!;
-    expect(partial).toMatchObject({ active: false, linkActive: false });
-    expect(never).toMatchObject({ active: false, linkActive: false });
-  });
+  it.skipIf(!angularAtLeast('22.0.0'))(
+    'agrees with RouterLinkActive for partial match options and null options',
+    async () => {
+      const harness = await RouterTestingHarness.create();
+      await harness.navigateByUrl('/b?tab=1');
+      harness.detectChanges();
+      const links = linksOf(ng(), router as never);
+      const partial = links.find((l) => l.text === 'Partial')!;
+      const never = links.find((l) => l.text === 'Never')!;
+      expect(partial).toMatchObject({ active: false, linkActive: false });
+      expect(never).toMatchObject({ active: false, linkActive: false });
+    },
+  );
 
   it('only credits a click to RouterLink when the element carries the directive', async () => {
     cleanup.push(captureCallers(router as never, navigations, ng()));
@@ -173,7 +180,7 @@ describe('router audit fixes on a real Router', () => {
     ]);
   });
 
-  it('says what a probe did and did not run', async () => {
+  it.skipIf(!angularAtLeast('20.2.0'))('says what a probe did and did not run', async () => {
     const probe = (await runAction(
       router as never,
       navigations,

@@ -8,6 +8,7 @@ import type { InitHubOptions } from '@devframes/hub/initiate';
 import type { WsOriginRegistry } from 'devframe/rpc/transports/ws-server';
 import { isAllowedOrigin } from 'devframe/utils/origin';
 import { createPangular } from './devframe.ts';
+import { PANGULAR_EXTENSION_ORIGINS, isAllowedExtensionOrigin } from './extension-origin.ts';
 import { pickPangularConfig, type PangularConfig } from './config.ts';
 import { PANGULAR_LOGO_DATA_URI } from './brand.ts';
 import pkg from '../package.json' with { type: 'json' };
@@ -48,21 +49,20 @@ function hubUi() {
   };
 }
 
-function isExtensionOrigin(origin: string): boolean {
-  try {
-    const url = new URL(origin);
-    return url.protocol === 'chrome-extension:' && url.hostname !== '';
-  } catch {
-    return false;
-  }
-}
-
 export const hubDefaultOrigins: WsOriginRegistry = {
   token: '',
   registerFromUrl: () => undefined,
   isAllowed: (origin: string | undefined) =>
-    (origin !== undefined && isExtensionOrigin(origin)) || isAllowedOrigin(origin, []),
+    (origin !== undefined && isAllowedExtensionOrigin(origin)) || isAllowedOrigin(origin, []),
 };
+
+function hubAllowedOrigins(
+  allowedOrigins: InitHubOptions['allowedOrigins'],
+): NonNullable<InitHubOptions['allowedOrigins']> {
+  if (allowedOrigins === undefined) return hubDefaultOrigins;
+  if (Array.isArray(allowedOrigins)) return [...allowedOrigins, ...PANGULAR_EXTENSION_ORIGINS];
+  return allowedOrigins;
+}
 
 type PangularHub = ReturnType<typeof initHub>;
 
@@ -106,7 +106,7 @@ export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
     version: pkg.version,
     base: PANGULAR_HUB_BASE,
     ...rest,
-    allowedOrigins: rest.allowedOrigins ?? hubDefaultOrigins,
+    allowedOrigins: hubAllowedOrigins(rest.allowedOrigins),
     mcp: hubMcpFor(rest),
     devframes: [createPangular(config)],
     ui: hubUi(),

@@ -185,6 +185,7 @@ const config: NgmdConfig = {
         {label: 'Browser overlay', href: '/getting-started/overlay', status: 'updated'},
         {label: 'Chrome extension', href: '/getting-started/chrome-extension'},
         {label: 'Angular Native', href: '/getting-started/angular-native', status: 'new'},
+        {label: 'NativeScript', href: '/getting-started/nativescript', status: 'new'},
       ],
     },
     {
@@ -217,6 +218,7 @@ const config: NgmdConfig = {
         {label: 'Set up SSR & HTTP', href: '/guides/ssr-http'},
         {label: 'Set up Analog', href: '/guides/analog'},
         {label: 'Set up NativeScript', href: '/guides/nativescript'},
+        {label: 'Set up Angular Native', href: '/guides/angular-native'},
       ],
     },
     {

@@ -39,7 +39,16 @@ The tree shows up to 2000 component instances, and walks up to 256 levels of DOM
 
 ### Detail header
 
-The header of the selected instance shows the class name, the host tag, and the source file and line. The file and line come from the source scan, matched by class name. They are missing when the scan has no match.
+The header of the selected instance shows the class name, the host tag, and the source file and line. In a development build, the file and line come from the debug info Angular's compiler attaches to the component, so they point at the exact class. Without it, they come from the source scan, matched by class name. They are missing when neither has them.
+
+In the [Chrome extension](../getting-started/chrome-extension.md), the header also has two buttons:
+
+| Button                 | What it does                                                                                                                                                                              |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reveal in Elements** | Selects the host element of the instance in the Chrome **Elements** panel.                                                                                                                |
+| **Open source**        | Opens the file in the Chrome **Sources** panel at the class line, if the source maps list that file. Otherwise it opens the compiled class. If neither works, it shows the file and line. |
+
+The buttons only work for the tab that DevTools inspects. They don't appear in the hub, the popup or a static report. They don't change the app, so the [`actions`](../getting-started/configuration.md) option doesn't turn them off.
 
 When a form exists in the same source file, a **Show … in Forms** button opens it in the [Forms tab](./forms.md).
 
@@ -110,6 +119,7 @@ The live tree reads `window.ng`, which only development builds expose. It uses t
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | `ng.getComponent`, `ng.getDirectives`                                      | Finding instances and the directives on each host.                  |
 | `ng.getDirectiveMetadata`                                                  | Inputs, outputs, change detection and encapsulation.                |
+| `ɵcmp.debugInfo` on the component class                                    | The source file and line in the detail header.                      |
 | `ng.isSignal`                                                              | Unwrapping signal inputs.                                           |
 | `ng.getListeners`                                                          | Output listeners and DOM listeners.                                 |
 | `ng.getInjector`, `ɵgetDependenciesFromInjectable`, `ɵgetInjectorMetadata` | The **Injected** block, and the services **Properties** leaves out. |
@@ -154,6 +164,8 @@ Press Escape, in the app or in the panel, or click **Cancel pick** to stop. Pick
 ### Start from the Elements panel
 
 If you use the [Chrome extension](../getting-started/chrome-extension.md), open the **Components** tab in its panel. Then select an element in the Chrome **Elements** panel. The tab selects the component that hosts that element and scrolls its row into view.
+
+To go the other way, select a component and click **Reveal in Elements** in its header.
 
 ### Check why an output does nothing
 
@@ -222,7 +234,7 @@ Instance ids change on every page load. Don't store them between sessions.
     No page is connected, or the connected page is a production build. Open the app in a development build with the overlay loaded.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why are the file and line missing?">
-    The detail header matches the class name against the source scan. Classes outside the scanned folders, or from libraries, have no match.
+    Production builds drop Angular's debug info. The detail header then matches the class name against the source scan, and classes outside the scanned folders, or from libraries, have no match.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why does a component show +2?">
     Two directives sit on its host element. Select it to see one block per directive.

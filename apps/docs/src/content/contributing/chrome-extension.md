@@ -22,6 +22,7 @@ extension/
   devtools.html
   devtools.js            # Creates the panel on Angular pages
   panel.html             # The panel page and its status view
+  panel-actions.js       # Answers the UI's reveal and open-source requests
   panel-bridge.js        # Asks for host access, finds the dev server, connects the UI to it
   icons/
   ui/                    # The built devtools UI (committed)
@@ -36,6 +37,13 @@ extension/
 | `optional_host_permissions` | `http://*/*` and `https://*/*`. The panel requests one host at a time, only when you click **Allow access**. |
 | `content_scripts`           | `content-script.js` and `detect-angular.js`, on every page.                                                  |
 | `minimum_chrome_version`    | `111`.                                                                                                       |
+| `key`                       | The public key that fixes the extension ID to `dcogniffeelebaolkkfbopmjcblhblfk`.                            |
+
+### Extension ID
+
+Chrome derives the ID of an extension from its public key. The `key` in `manifest.json` gives every build the ID `dcogniffeelebaolkkfbopmjcblhblfk`, whether you load it unpacked or install it from the store. The Vite plugin and the Express hub trust `chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk` by default, through `PANGULAR_EXTENSION_IDS` in `packages/devtools/src/extension-origin.ts`.
+
+The maintainers keep the matching private key for the Chrome Web Store upload. It is not in the repository, and you never need it to build or load the extension. If you change the `key`, the ID changes too, and the server refuses the extension until its origin is in `allowedOrigins` or its ID is in `PANGULAR_EXTENSION_IDS`.
 
 ## Build
 
@@ -74,13 +82,21 @@ After a rebuild, click the reload icon on the extension card, then reopen DevToo
 pnpm extension:zip
 ```
 
-This runs `extension:build`, then writes `dist/pangular-inspector-extension.zip`. The zip leaves out `.DS_Store` files.
+This runs `extension:build`, then writes `dist/pangular-inspector-extension.zip`. The zip leaves out `.DS_Store` files and drops `key` from the manifest, because the Chrome Web Store refuses a manifest with a `key`.
+
+For the first upload of a new store item, give the script the private key so the store keeps the ID `dcogniffeelebaolkkfbopmjcblhblfk`:
+
+```bash
+PANGULAR_EXTENSION_KEY=/path/to/pangular-inspector-extension-key.pem pnpm extension:zip
+```
+
+The key goes into the zip as `key.pem`, and the script stops if it doesn't match the `key` in the manifest. Later updates don't need it.
 
 ### Upload
 
 1. Bump `version` in `extension/manifest.json`.
 2. Go to the <a href="https://chrome.google.com/webstore/devconsole" target="_blank" rel="noopener noreferrer">Chrome Developer Dashboard</a>.
-3. Click **New item** (or open the existing item) and upload the zip.
+3. Click **New item** (or open the existing item) and upload the zip. For **New item**, build the zip with `PANGULAR_EXTENSION_KEY` set, as above.
 4. Fill in the listing details and submit for review.
 
 <ngmd-alert severity="helpful">
@@ -135,6 +151,19 @@ The panel follows the DevTools theme. `panel-bridge.js` reads `chrome.devtools.p
 The overlay defines `window.__pangularComponentOf` on the page. It takes an element and returns the id of the nearest component host, through shadow roots, or `null`.
 
 When the Elements panel selection changes, `panel-bridge.js` evaluates it with `$0`. If it gets an id, it posts a `pangular:inspect-component` message to the UI frame. The UI accepts the message only from its parent window and its own origin, and only while the **Components** tab is open. The tab then expands the parent rows, clears the filter if needed, selects the row and scrolls it into view.
+
+### Reveal and open source
+
+The overlay also defines `window.__pangularHostOf(pageId, id)` and `window.__pangularClassOf(pageId, id)`. They return the host element or the component class of an instance id, and `null` when the id belongs to another page.
+
+Inside the extension (a `chrome-extension:` frame), the **Components** detail header shows **Reveal in Elements** and **Open source**. The UI posts `pangular:reveal-element` or `pangular:open-source` with a `requestId`, the `pageId` and the instance `id` to its parent. `panel-bridge.js` accepts them only from the UI frame and its own origin, and `panel-actions.js` handles them:
+
+| Request                   | What the extension does                                                                                                                                                                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:reveal-element` | Evaluates `inspect()` on the host element in the inspected page.                                                                                                                                                                                              |
+| `pangular:open-source`    | Looks up the `file` among the scripts in `chrome.devtools.inspectedWindow.getResources()` by path suffix, skipping style sheets and calls `chrome.devtools.panels.openResource` at `line - 1`. If no resource matches, it evaluates `inspect()` on the class. |
+
+It answers with `pangular:panel-action-result`, carrying the same `requestId` and `ok`. The UI gives up after 6 seconds.
 
 ## Where to next
 

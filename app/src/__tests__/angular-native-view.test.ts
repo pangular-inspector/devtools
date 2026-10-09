@@ -100,7 +100,7 @@ describe('Angular Native view', () => {
     expect(text).toContain('No Angular Native app is connected');
     const link = host(fixture).querySelector<HTMLAnchorElement>('a.cta');
     expect(link?.textContent).toContain('Set up Angular Native');
-    expect(link?.href).toContain('getting-started/angular-native/');
+    expect(link?.href).toContain('guides/angular-native/');
     expect(tabNames(fixture)).toEqual([]);
   });
 

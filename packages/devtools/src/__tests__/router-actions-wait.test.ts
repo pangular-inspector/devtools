@@ -13,6 +13,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { watchRouter, type NavigationRecord } from '../router.ts';
 import { runAction, waitForStable } from '../router-actions.ts';
+import { angularAtLeast } from './angular-version.ts';
 
 TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
 
@@ -117,7 +118,7 @@ describe('router actions that wait on the app', () => {
     expect(await waitForStable({} as never, 30)).toBeNull();
   });
 
-  it.each([
+  it.skipIf(!angularAtLeast('20.2.0')).each([
     ['a UrlTree', '/members'],
     ['a RedirectCommand', '/vip'],
     ['an error the error handler redirects', '/crash'],

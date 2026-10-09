@@ -175,6 +175,20 @@ pnpm commit:check                   # Commit messages on your branch
 
 A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`.
 
+### Angular compatibility
+
+`.github/workflows/compat.yml` runs the page-side tests on the oldest and newest Angular versions the peer range allows. It runs on pushes to `main`, every Monday at 06:00 UTC, and on demand from the **Actions** tab. It doesn't run on pull requests.
+
+| Job          | Angular range | Node.js |
+| ------------ | ------------- | ------- |
+| Angular 20.0 | `~20.0.0`     | 22      |
+| Angular 21   | `^21.0.0`     | 22      |
+| Angular 22   | `^22.0.0`     | 22      |
+
+Each job appends `overrides` for the `@angular/*` runtime packages to `pnpm-workspace.yaml`, reinstalls, and runs `vitest` with `packages/devtools/vitest.compat.config.ts`. That config picks the tests that render a real Angular app and leaves out the panel and server tests. It adds the Signal Forms tests on Angular 22 and later, and loads `zone.js` before Angular 21, where `TestBed` still expects it. A test that needs a feature from a later release checks the version with `angularAtLeast()` from `src/__tests__/angular-version.ts` and skips on older ones.
+
+To reproduce a job, add the same `overrides` block to `pnpm-workspace.yaml`, run `pnpm install --no-frozen-lockfile`, then `pnpm exec vitest run --root packages/devtools --config vitest.compat.config.ts`. Don't commit the changed lockfile.
+
 ### Pull request checks
 
 Two more workflows run on pull requests. Both only warn. They never fail the pull request.

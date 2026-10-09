@@ -435,3 +435,96 @@ describe('isPageReport', () => {
     }
   });
 });
+
+describe('WebMCP in the forms agent output', () => {
+  const tool = {
+    name: 'sign_up',
+    description: 'Create an account',
+    status: 'failed' as const,
+    seen: 'error' as const,
+    error: 'schema',
+    blocking: [{ path: 'birthday', reason: 'null' }],
+    duplicate: true,
+  };
+  const signup = form(group([control('birthday', { value: null })]), {
+    id: 'form-1@pg',
+    label: 'Signup.form',
+    webMcp: tool,
+  });
+
+  it('accepts reports with WebMCP state and rejects malformed ones', () => {
+    const page = { modelContext: true, tools: [] };
+    expect(isPageReport({ pageId: 'pg', forms: [signup], events: [], webMcp: page })).toBe(true);
+    expect(isPageReport({ pageId: 'pg', forms: [], events: [], webMcp: { tools: [] } })).toBe(
+      false,
+    );
+    expect(
+      isPageReport({ pageId: 'pg', forms: [{ ...signup, webMcp: { name: 1 } }], events: [] }),
+    ).toBe(false);
+    for (const bad of [
+      { blocking: [null] },
+      { blocking: [{ path: 'birthday' }] },
+      { calls: [{ outcome: 'submitted' }] },
+      { calls: [{ at: 1, outcome: 'submitted', fields: [1] }] },
+      { inputs: [1] },
+      { requiredChanged: [{ path: 'email', now: 'yes' }] },
+    ]) {
+      const withBad = { ...signup, webMcp: { ...tool, ...bad } };
+      expect(isPageReport({ pageId: 'pg', forms: [withBad], events: [] })).toBe(false);
+      expect(
+        isPageReport({
+          pageId: 'pg',
+          forms: [],
+          events: [],
+          webMcp: { modelContext: true, tools: [{ ...tool, ...bad }] },
+        }),
+      ).toBe(false);
+    }
+  });
+
+  it('keeps WebMCP state per page and drops it with the page', () => {
+    const pages = new Map();
+    const report = (pageId: string, modelContext: boolean) => ({
+      pageId,
+      forms: [],
+      events: [],
+      webMcp: { modelContext, provided: true, tools: [] },
+    });
+    mergePageReport(pages, report('a', true), 1000);
+    const state = mergePageReport(pages, report('b', false), 1000);
+    expect(state.webMcp?.map((p) => [p.pageId, p.modelContext])).toEqual([
+      ['a', true],
+      ['b', false],
+    ]);
+    expect(expirePages(pages, 1000 + 10 * 60_000)?.webMcp).toBeUndefined();
+  });
+
+  it('names the tool, its blocking fields and page notes in inspect-forms', () => {
+    const state = {
+      forms: [signup],
+      events: [],
+      reportedAt: 1,
+      webMcp: [
+        {
+          pageId: 'pg',
+          modelContext: true,
+          tools: [{ ...tool, name: 'orphan', status: 'registered' as const }],
+        },
+        { pageId: 'other', modelContext: false, provided: true, tools: [] },
+      ],
+    };
+    const summary = inspectFormsText(state, {}, 1);
+    expect(summary).toContain(
+      'WebMCP tool `sign_up`: failed: schema could not be inferred (`birthday` is null); another tool has the same name',
+    );
+    expect(summary).toContain(
+      'WebMCP tool `orphan` (registered; duplicate name) is not linked to a form',
+    );
+    expect(summary).toContain(
+      'Page other: provideExperimentalWebMcpForms() is set, but the browser has no modelContext',
+    );
+    expect(inspectFormsText(state, { page: 'pg' }, 1)).not.toContain('Page other');
+    const tree = JSON.parse(inspectFormsText(state, { form: 'Signup' }, 1).split('\n\n')[1]);
+    expect(tree[0].webMcp).toEqual(tool);
+  });
+});

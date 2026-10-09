@@ -53,6 +53,7 @@ export interface HttpRegistry {
   dispose?: () => void;
   /** The hub context whose setup installed `record` and `dispose`. */
   owner?: unknown;
+  rulesOff?: boolean;
 }
 
 export const MAX_CALLS = 200;
@@ -71,7 +72,9 @@ export const RULES_STORAGE_KEY = 'pangular:http-rules';
  * next load, before the overlay connects.
  */
 export function storeRules(rules: HttpRule[]) {
-  httpRegistry().rules = rules;
+  const registry = httpRegistry();
+  if (registry.rulesOff) rules = [];
+  registry.rules = rules;
   try {
     if (rules.length) sessionStorage.setItem(RULES_STORAGE_KEY, JSON.stringify(rules));
     else sessionStorage.removeItem(RULES_STORAGE_KEY);
@@ -80,8 +83,14 @@ export function storeRules(rules: HttpRule[]) {
   }
 }
 
+export function allowClientRules(allowed: boolean) {
+  httpRegistry().rulesOff = !allowed;
+  if (!allowed) storeRules([]);
+}
+
 export function clientRules(): HttpRule[] {
   const registry = httpRegistry();
+  if (registry.rulesOff) return [];
   if (!registry.rules) {
     try {
       registry.rules = sanitizeRules(JSON.parse(sessionStorage.getItem(RULES_STORAGE_KEY) ?? '[]'));

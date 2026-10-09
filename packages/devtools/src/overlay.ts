@@ -4,7 +4,7 @@ import { attachAnalog } from './analog-runtime.ts';
 import { attachForms } from './forms-collector.ts';
 import { attachPipes } from './pipes-collector.ts';
 import { attachHttp } from './http-overlay.ts';
-import { httpRegistry, storeRules } from './http-rules.ts';
+import { allowClientRules, httpRegistry } from './http-rules.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
 import { collectInjectorTree } from './injector-tree.ts';
 import {
@@ -38,6 +38,7 @@ import { createSignalHistory, installSignalWriteHook } from './signal-history.ts
 export { installSignalWriteHook } from './signal-history.ts';
 import { collectComponentTree, componentHostOf } from './component-tree.ts';
 import { startComponentPick } from './component-pick.ts';
+import { installSourceHelpers } from './component-source.ts';
 import { createDeferTracker } from './defer-blocks.ts';
 import { elementById, elementId } from './element-id.ts';
 import {
@@ -196,7 +197,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   const devtoolsConfig = configFromConnection(rpc.connectionMeta);
   const on = devtoolsConfig.inspectors;
   const limits = devtoolsConfig.limits;
-  if (!on.http) storeRules([]);
+  allowClientRules(on.http && devtoolsConfig.actions.http);
   setRedaction(devtoolsConfig.redaction);
   setNavigationLimit(limits.navigations);
   if (on.http) httpRegistry().maxCalls = limits.httpCalls;
@@ -622,6 +623,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     own(() => {
       if (window.__pangularComponentOf === componentOf) delete window.__pangularComponentOf;
     });
+    own(installSourceHelpers(pageId, getNg));
   }
 
   const forget = (inspector: keyof typeof on, name: string) => {

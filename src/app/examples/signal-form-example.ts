@@ -11,6 +11,7 @@ import {
   required,
   validate,
 } from '@angular/forms/signals';
+import { demoModelContext } from './webmcp-demo';
 
 interface Signup {
   name: string;
@@ -103,7 +104,10 @@ interface Signup {
         <button type="button" (click)="addTag()">Add tag</button>
       </fieldset>
 
-      <button type="submit">Save</button>
+      <div class="row">
+        <button type="submit">Save</button>
+        <button type="button" (click)="fillAsAgent()">Fill as an agent</button>
+      </div>
       <p class="status" role="status">{{ result() }}</p>
     </form>
   `,
@@ -143,8 +147,28 @@ export class SignalFormExample {
         },
         onInvalid: () => this.result.set('Fix the errors above before saving.'),
       },
+      experimentalWebMcpTool: {
+        name: 'sign_up',
+        description: 'Create a demo account with a name, email, age, plan and tags.',
+      },
     },
   );
+
+  protected async fillAsAgent() {
+    const context = demoModelContext();
+    if (!context) {
+      this.result.set('This browser has its own modelContext. Call sign_up from your agent.');
+      return;
+    }
+    const answer = (await context.executeTool('sign_up', {
+      name: 'Ada',
+      email: 'ada@example.com',
+      age: 36,
+      plan: 'pro',
+      tags: [{ label: 'agent' }],
+    })) as { content?: { text?: string }[] } | undefined;
+    this.result.set(answer?.content?.[0]?.text ?? 'The agent call finished.');
+  }
 
   protected addTag() {
     this.model.update((value) => ({ ...value, tags: [...value.tags, { label: '' }] }));

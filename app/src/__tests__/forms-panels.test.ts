@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { FormsFieldDetail } from '../pages/forms-field-detail';
 import { FormsInspector } from '../pages/forms-inspector';
 import { FormsLint, FormsSubmit } from '../pages/forms-report';
+import { FormsWebMcp } from '../pages/forms-webmcp';
 import type { CollectedForm, FormFieldNode } from '../pages/forms-types';
 
 type Call = (name: string, arg: Record<string, unknown>) => Promise<unknown>;
@@ -280,5 +281,94 @@ describe('FormsInspector redaction', () => {
     await settle(fixture);
     expect(text(fixture)).toContain('redacted: name looks secret');
     expect(text(fixture)).not.toContain('redacted (key)');
+  });
+});
+
+describe('FormsWebMcp', () => {
+  it('shows the tool, its inputs, changed required fields and recent calls', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', {
+      name: 'sign_up',
+      description: 'Create an account',
+      status: 'registered',
+      seen: 'register',
+      inputs: ['name: string', 'age: number'],
+      required: ['name'],
+      requiredChanged: [{ path: 'age', now: true }],
+      calls: [{ at: 0, ms: 12, outcome: 'failed', fields: ['name'], detail: 'name: is required' }],
+    });
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('h3')?.textContent).toContain('WebMCP tool');
+    expect(text(fixture)).toContain('sign_up');
+    expect(text(fixture)).toContain('Create an account');
+    expect(host.querySelectorAll('.inputs li')[0].textContent).toContain('required');
+    expect(host.querySelectorAll('.inputs li')[1].textContent).not.toContain('required');
+    expect(text(fixture)).toContain('is now required');
+    expect(text(fixture)).toContain('submit failed');
+    expect(text(fixture)).toContain('name: is required');
+  });
+
+  it('lists the fields that block schema inference', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', {
+      name: 'book',
+      description: '',
+      status: 'failed',
+      seen: 'error',
+      error: 'schema',
+      blocking: [{ path: 'when', reason: 'null' }],
+    });
+    await settle(fixture);
+    expect(text(fixture)).toContain('not registered');
+    expect(text(fixture)).toContain('when is null');
+    expect(text(fixture)).toContain('No agent has called this tool');
+  });
+
+  it('says calls are not recorded for a tool registered before the inspector attached', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', {
+      name: 'sign_up',
+      description: '',
+      status: 'registered',
+      seen: 'list',
+    });
+    await settle(fixture);
+    expect(text(fixture)).toContain('registered before the inspector attached');
+    expect(text(fixture)).toContain('Calls are not recorded');
+    expect(text(fixture)).not.toContain('No agent has called this tool');
+  });
+
+  it('says when the provider is set but the browser has no modelContext', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('page', { modelContext: false, provided: true, tools: [] });
+    fixture.componentRef.setInput('signalForm', true);
+    await settle(fixture);
+    expect(text(fixture)).toContain('the browser has no');
+    fixture.componentRef.setInput('signalForm', false);
+    await settle(fixture);
+    expect(text(fixture).trim()).toBe('');
+  });
+
+  it('appears in the form detail of the inspector', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    const withTool: CollectedForm = {
+      ...form,
+      kind: 'signal',
+      webMcp: {
+        name: 'sign_up',
+        description: 'Create an account',
+        status: 'registered',
+        seen: 'register',
+      },
+    };
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve(''), [withTool]),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    expect(text(fixture)).toContain('WebMCP tool');
+    expect(text(fixture)).toContain('sign_up');
   });
 });

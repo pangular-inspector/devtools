@@ -19,10 +19,10 @@ The devtools read your running app and send what they find to a server on your m
 
 <ngmd-card-grid columns="2">
   <ngmd-card icon="zap" title="Vite plugin">
-    Loopback requests only. A request that sends an <code>Origin</code> must come from a loopback host, a Chrome extension, <code>allowedOrigins</code> or Vite's <code>server.allowedHosts</code>. Asks for a one-time code when a non-loopback host or origin is allowed.
+    Loopback requests only. A request that sends an <code>Origin</code> must come from a loopback host, the Pangular Inspector extension, an entry in <code>allowedOrigins</code> or Vite's <code>server.allowedHosts</code>. Asks for a one-time code when a non-loopback host or origin is allowed.
   </ngmd-card>
   <ngmd-card icon="layers" title="Express hub">
-    A one-time code and an origin check that accepts loopback origins and the Chrome extension. Both on by default.
+    A one-time code and an origin check that accepts loopback origins and the Pangular Inspector extension. Both on by default.
   </ngmd-card>
   <ngmd-card icon="terminal" title="Standalone CLI">
     Binds to <code>localhost</code> and asks for a one-time code by default.
@@ -36,12 +36,12 @@ The devtools read your running app and send what they find to a server on your m
 
 ### Vite plugin
 
-The devtools only answer requests from this machine. When a request carries an `Origin` header, that origin must be a loopback host, the Chrome extension or an origin you allowed. Requests without an `Origin` header pass the origin check. Browsers leave the header out of some cross-site requests, such as image loads and link clicks, so the origin check alone does not stop every request from another website.
+The devtools only answer requests from this machine. When a request carries an `Origin` header, that origin must be a loopback host, the Pangular Inspector extension or an origin you allowed. Requests without an `Origin` header pass the origin check. Browsers leave the header out of some cross-site requests, such as image loads and link clicks, so the origin check alone does not stop every request from another website.
 
 In detail, a request to the devtools must:
 
 - come from a loopback address (any `127.x.x.x` address or `::1`), and
-- have no `Origin` header, or an origin that is a loopback host, a Chrome extension, an entry in `allowedOrigins`, or a host that Vite's `server.allowedHosts` accepts.
+- have no `Origin` header, or an origin that is a loopback host, the [Pangular Inspector extension](#chrome-extension), an entry in `allowedOrigins`, or a host that Vite's `server.allowedHosts` accepts.
 
 Other requests get `403` with the message "Pangular Inspector only answers requests from this machine." WebSocket upgrades follow the same rules.
 
@@ -79,10 +79,10 @@ With only loopback hosts allowed, the loopback and origin checks take the place 
 
 `initPangularHub()` has two checks, both on by default:
 
-| Check         | Option           | What it does                                                                                                                              |
-| ------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| One-time code | `auth`           | The server prints a code. A browser can read data only after it exchanges that code.                                                      |
-| Origin check  | `allowedOrigins` | Only loopback origins, the Chrome extension, or clients that send no `Origin`, can open the WebSocket. Pass a list to allow more origins. |
+| Check         | Option           | What it does                                                                                                                                          |
+| ------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One-time code | `auth`           | The server prints a code. A browser can read data only after it exchanges that code.                                                                  |
+| Origin check  | `allowedOrigins` | Only loopback origins, the Pangular Inspector extension, or clients that send no `Origin`, can open the WebSocket. Pass a list to allow more origins. |
 
 ```ts {8}
 // src/server.ts
@@ -97,7 +97,7 @@ const devtools = initPangularHub({
 app.use(devtools.nodeMiddleware);
 ```
 
-A list keeps loopback origins but replaces the Chrome extension default. If you use the extension with your own list, add its origin, `chrome-extension://<id>`, with the ID from `chrome://extensions`.
+A list keeps loopback origins and the Pangular Inspector extension. See [Chrome extension](#chrome-extension).
 
 <ngmd-callout type="warning" title="Turning the checks off">
   Pass <code>auth: false</code> only on a machine only you use. Keep it on when you allow a tunnel origin: the origin check does not tell who is on the other end of the tunnel. <code>allowedOrigins: false</code> turns the origin check off. Keep the check on for your own apps.
@@ -121,7 +121,11 @@ The extension has host permissions for loopback hosts only: `localhost` and its 
 
 On any other host, the panel doesn't send a request until you click **Allow access**. Chrome then asks you to grant the extension that one host, on the scheme of the page and any port. The extension never asks for all hosts at once.
 
-Granting the extension a host doesn't change what the devtools server accepts. The server still applies the checks on this page. Both the Vite plugin and the Express hub accept the extension's `chrome-extension://` origin by default. An Express hub with its own `allowedOrigins` list needs the extension origin in that list. See [Chrome extension](./getting-started/chrome-extension.md#host-access).
+Granting the extension a host doesn't change what the devtools server accepts. The server still applies the checks on this page.
+
+Every installed extension can send requests to a loopback host, with its own `chrome-extension://<id>` origin. So the Vite plugin and the Express hub accept one extension by default: `chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk`. The `key` in the extension manifest fixes that ID, so the unpacked extension and the store build share it. Every other extension origin is refused.
+
+If you build the extension with another `key`, add its origin to `allowedOrigins`. Each entry names one extension. The ID is on the extension card in `chrome://extensions`. In the Vite plugin, an extension entry does not turn the one-time code on. See [Server origin](./getting-started/chrome-extension.md#server-origin).
 
 ## What is redacted
 

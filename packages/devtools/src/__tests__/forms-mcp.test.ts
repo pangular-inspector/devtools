@@ -317,6 +317,30 @@ describe('forms MCP tools', () => {
     );
   });
 
+  it('form-history filters by the agent origin', async () => {
+    const { push, call } = await boot();
+    await push('push-forms', {
+      pageId: 'pg1',
+      forms: [signup],
+      events: [
+        ...events,
+        {
+          formId: 'form-1@pg1',
+          path: 'name',
+          type: 'value',
+          detail: '"Ada"',
+          prev: '""',
+          origin: 'agent',
+          timestamp: 1004,
+          seq: 5,
+        },
+      ],
+    });
+    const byAgent = await call('form-history', { form: 'Signup', origin: 'agent' });
+    expect(byAgent).toContain('"Ada"');
+    expect(byAgent).not.toContain('"xy"');
+  });
+
   it('form-history shows callers, async timing, render counts and moves', async () => {
     const { push, call } = await boot();
     await push('push-forms', {

@@ -1,0 +1,63 @@
+name: Angular compatibility
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  page-side:
+    name: Angular ${{ matrix.angular }} on Node.js 22
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - angular: '20.0'
+            range: '~20.0.0'
+          - angular: '21'
+            range: '^21.0.0'
+          - angular: '22'
+            range: '^22.0.0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          node-version: 22
+
+      - name: Install Angular ${{ matrix.angular }}
+        env:
+          RANGE: ${{ matrix.range }}
+        run: |
+          {
+            echo 'overrides:'
+            for pkg in animations common compiler core elements forms platform-browser platform-browser-dynamic platform-server router; do
+              echo "  '@angular/$pkg': '$RANGE'"
+            done
+          } >> pnpm-workspace.yaml
+          pnpm install --no-frozen-lockfile
+
+      - name: List the versions under test
+        run: |
+          {
+            echo "- Node.js $(node --version)"
+            for pkg in core common router forms platform-browser; do
+              echo "- @angular/$pkg $(node -p "require('@angular/$pkg/package.json').version")"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Test the page side
+        run: pnpm exec vitest run --root packages/devtools --config vitest.compat.config.ts
