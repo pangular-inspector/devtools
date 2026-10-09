@@ -561,7 +561,7 @@ export function fullPathOf(snapshot: AnyRecord): string {
   return `/${parts.join('/')}`;
 }
 
-function configSecretsFor(router: AnyRecord | undefined, url: string): string[] {
+export function configSecretsFor(router: AnyRecord | undefined, url: string): string[] {
   if (!router) return [];
   const segments = url
     .split(/[?#(]/)[0]
@@ -1127,15 +1127,18 @@ export function currentNavigationOf(router: AnyRecord, at: number): NavigationRe
   if (!current) return null;
   const url = urlOf(router, current['extractedUrl']) ?? urlOf(router, current['initialUrl']);
   if (!url) return null;
-  return {
+  const secrets = configSecretsFor(router, url);
+  const record: NavigationRecord = {
     id: read(() => Number(current['id']), 0),
-    url: redactUrl(url),
+    url: redactUrl(url, secrets),
     trigger: read(() => String(current['trigger'] ?? 'imperative'), 'imperative'),
     startedAt: at,
     outcome: 'pending',
     beforeConnect: true,
     generation: configGeneration,
   };
+  stateOf(record).secrets = secrets;
+  return record;
 }
 
 export function eventsOf(router: AnyRecord): AnyRecord | null {

@@ -1,6 +1,7 @@
 import {
   clip,
   componentName,
+  configSecretsFor,
   fullPathOf,
   read,
   redactUrl,
@@ -174,7 +175,8 @@ export function linksOf(ng: RouterDebugApi, router: AnyRecord): LinkInfo[] {
     };
     const tree = read(() => link?.['urlTree'], null);
     if (tree) {
-      info.href = redactUrl(read(() => String(router['serializeUrl'](tree)), ''));
+      const href = read(() => String(router['serializeUrl'](tree)), '');
+      info.href = redactUrl(href, configSecretsFor(router, href));
       const match = read(() => matchOptionsOf(active?.['routerLinkActiveOptions']), false);
       info.active = match !== null && read(() => !!router['isActive'](tree, match), false);
     }

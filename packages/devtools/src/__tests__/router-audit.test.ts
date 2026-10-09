@@ -6,7 +6,12 @@ import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-
 import { Router, RouterLink, RouterLinkActive, provideRouter, type Routes } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { watchRouter, type NavigationRecord, type RouterDebugApi } from '../router.ts';
+import {
+  currentNavigationOf,
+  watchRouter,
+  type NavigationRecord,
+  type RouterDebugApi,
+} from '../router.ts';
 import { ConfigTracker } from '../router-config.ts';
 import { linksOf, matchOptionsOf } from '../router-links.ts';
 import {
@@ -50,6 +55,7 @@ Component({
     <a routerLink="/b" routerLinkActive="on" [routerLinkActiveOptions]="{ queryParams: 'exact' }"
       >Partial</a
     >
+    <a routerLink="/invite/k7m2q">Invite</a>
     @if (nullOptions) {
       <a routerLink="/b" routerLinkActive="on" [routerLinkActiveOptions]="$any(null)">Never</a>
     }
@@ -200,6 +206,37 @@ describe('router instrumentation flag', () => {
     expect(storedInstrumented()).toBe(true);
     storeInstrumented(false);
     expect(storedInstrumented()).toBe(false);
+  });
+});
+
+describe('route-config secrets before any navigation event', () => {
+  const router = {
+    config: [{ path: 'reset/:token' }, { path: 'invite/:code' }],
+    serializeUrl: (tree: unknown) => String(tree),
+  };
+
+  it('masks a short path-param token in the navigation adopted at connect time', () => {
+    const adopted = currentNavigationOf(
+      {
+        ...router,
+        currentNavigation: () => ({ id: 3, extractedUrl: '/reset/zq81x', trigger: 'imperative' }),
+      },
+      0,
+    );
+    expect(adopted?.url).toBe('/reset/[redacted]');
+  });
+
+  it('masks a short path-param token in a rendered routerLink href', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [provideRouter([{ path: 'invite/:code', component: Nav }, ...routes])],
+    });
+    const real = TestBed.inject(Router);
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/a');
+    harness.detectChanges();
+    const links = linksOf((globalThis as { ng?: RouterDebugApi }).ng!, real as never);
+    expect(links.find((l) => l.text === 'Invite')?.href).toBe('/invite/[redacted]');
   });
 });
 

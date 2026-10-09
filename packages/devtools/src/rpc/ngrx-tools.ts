@@ -8,6 +8,7 @@ import type {
   NgrxUnrestorable,
 } from '../ngrx-shared.ts';
 import type { SignalStoreMembers } from './get-ngrx-store.ts';
+import { redactMessage, redactUrl } from '../router.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
 
 export const NGRX_PAGE_EXPIRES_MS = PAGE_TTL_MS;
@@ -105,8 +106,8 @@ export function mergeNgrxReport(
   pages.set(report.pageId, {
     pageId: report.pageId,
     session: report.session,
-    url: String(report.url ?? '').slice(0, 2000),
-    title: String(report.title ?? '').slice(0, 200),
+    url: redactUrl(String(report.url ?? '').slice(0, 2000)),
+    title: redactMessage(String(report.title ?? '').slice(0, 2000)).slice(0, 200),
     stores: report.stores.map((store) => ({ ...store, ...nameStore(store, declarations) })),
     classic: report.classic ?? null,
     log,

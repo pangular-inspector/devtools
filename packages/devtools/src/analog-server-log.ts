@@ -1,17 +1,37 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isRedactedKey } from './forms-privacy.ts';
+import { redactJsonText } from './json-text-redact.ts';
 
 const JWT = /\beyJ[\w-]{5,}\.[\w-]{5,}\.[\w-]{5,}/g;
 const BEARER = /\bBearer\s+[\w.~+/=-]+/gi;
-const SECRET_QUERY = /([?&][^=&#]*(?:token|secret|password|key|code|session)[^=&#]*=)[^&#]*/gi;
+const QUERY_PAIR = /([?&])([^=&#\s"'\\]*)=([^&#\s"'\\]*)/g;
+const SECRET_QUERY_KEY =
+  /token|secret|password|key|code|session|^(sig|signature|auth|authorization|credentials?|jwt)$|^x-(amz|goog)-(signature|credential|security-token)$/i;
 
-const SECRET_PAIR = /([A-Za-z_][\w.-]*)(\s*[=:]\s*)[^\s&,;"']+/g;
+const SECRET_PAIR = /([A-Za-z_][\w.-]*)(\s*[=:]\s*)(["']?)[^\s&,;"']+\3/g;
+
+function queryKey(key: string): string {
+  try {
+    return decodeURIComponent(key);
+  } catch {
+    return key;
+  }
+}
 
 export function redactMessage(text: string): string {
   return text
     .replace(JWT, '[redacted]')
     .replace(BEARER, 'Bearer [redacted]')
-    .replace(SECRET_QUERY, '$1[redacted]');
+    .replace(QUERY_PAIR, (whole, sep: string, key: string) => {
+      const name = queryKey(key);
+      return SECRET_QUERY_KEY.test(name) || isRedactedKey(name) ? `${sep}${key}=[redacted]` : whole;
+    });
+}
+
+function redactPairs(text: string): string {
+  return text.replace(SECRET_PAIR, (whole, key: string, sep: string, quote: string) =>
+    isSecretJsonKey(key) ? `${key}${sep}${quote}[redacted]${quote}` : whole,
+  );
 }
 
 export type AnalogCallKind = 'load' | 'action' | 'fn' | 'api' | 'page';
@@ -92,6 +112,7 @@ function isSecretJsonKey(key: string): boolean {
 }
 
 function redactJson(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') return redactPairs(value);
   if (value === null || typeof value !== 'object') return value;
   if (depth > 6) return '[Truncated]';
   if (Array.isArray(value)) return value.slice(0, 50).map((item) => redactJson(item, depth + 1));
@@ -102,68 +123,12 @@ function redactJson(value: unknown, depth = 0): unknown {
   return out;
 }
 
-function stringEnd(text: string, start: number): number {
-  for (let i = start + 1; i < text.length; i++) {
-    if (text[i] === '\\') i++;
-    else if (text[i] === '"') return i + 1;
-  }
-  return text.length;
-}
-
-function valueEnd(text: string, start: number): number {
-  const first = text[start];
-  if (first === '"') return stringEnd(text, start);
-  if (first !== '{' && first !== '[') {
-    const stop = text.slice(start).search(/[,}\]]/);
-    return stop < 0 ? text.length : start + stop;
-  }
-  let depth = 0;
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i];
-    if (ch === '"') i = stringEnd(text, i) - 1;
-    else if (ch === '{' || ch === '[') depth++;
-    else if ((ch === '}' || ch === ']') && --depth === 0) return i + 1;
-  }
-  return text.length;
-}
-
-function redactJsonText(text: string): string {
-  const colon = /\s*:\s*/y;
-  let out = '';
-  let i = 0;
-  while (i < text.length) {
-    if (text[i] !== '"') {
-      out += text[i++];
-      continue;
-    }
-    const end = stringEnd(text, i);
-    const token = text.slice(i, end);
-    out += token;
-    i = end;
-    colon.lastIndex = i;
-    const sep = colon.exec(text);
-    if (!sep) continue;
-    let key: string;
-    try {
-      key = String(JSON.parse(token));
-    } catch {
-      key = token.slice(1, -1);
-    }
-    if (!isSecretJsonKey(key)) continue;
-    out += `${sep[0]}"[redacted]"`;
-    i = valueEnd(text, i + sep[0].length);
-  }
-  return out;
-}
-
 export function redactBody(body: string): string {
   let text = body;
   try {
     text = JSON.stringify(redactJson(JSON.parse(body)));
   } catch {
-    text = redactJsonText(body).replace(SECRET_PAIR, (whole, key: string, sep: string) =>
-      isSecretJsonKey(key) ? `${key}${sep}[redacted]` : whole,
-    );
+    text = redactPairs(redactJsonText(body, isSecretJsonKey));
   }
   return redactMessage(text);
 }

@@ -170,10 +170,9 @@ function safeQuery(element: Element, selector: string): boolean {
 
 export function redactMessage(text: string, secrets: Iterable<string> = []): string {
   let out = text.replace(JWT, REDACTED).replace(BEARER, `Bearer ${REDACTED}`);
-  for (const secret of secrets) {
-    if (secret.length < 3) continue;
-    out = out.split(secret).join(REDACTED);
-  }
+  const longestFirst = [...secrets].filter((secret) => secret.length >= 3);
+  longestFirst.sort((a, b) => b.length - a.length);
+  for (const secret of longestFirst) out = out.split(secret).join(REDACTED);
   return out;
 }
 

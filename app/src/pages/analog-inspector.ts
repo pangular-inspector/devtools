@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { time } from '../format';
+import { hostPageId } from '../page-id';
 import { rpcCall, rpcTry as call } from '../rpc';
 import { actionAllowed, actionBlockedMessage } from '../devtools-config';
 import { Select } from '../ui/select';
@@ -308,7 +309,15 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
   selector: 'app-analog-inspector',
   imports: [Select],
   template: `
-    @if (project() === null) {
+    @if (project() === null && loadFailed()) {
+      <div class="empty" role="alert">
+        <h2 class="empty-title">Could not read the project.</h2>
+        <p class="muted">
+          Check that the dev server with Pangular Inspector is still running, then retry.
+        </p>
+        <button type="button" class="btn" (click)="retry()">Retry</button>
+      </div>
+    } @else if (project() === null) {
       <div class="loading" role="status">
         <span class="spinner" aria-hidden="true"></span>
         <span>Reading the project…</span>
@@ -2105,6 +2114,7 @@ export class AnalogInspector {
   readonly methodOptions = this.methods.map((m) => ({ value: m, label: m }));
   readonly view = signal<View>('routes');
   readonly project = signal<AnalogProject | null>(null);
+  readonly loadFailed = signal(false);
   readonly state = signal<AnalogState>({});
   readonly findings = signal<Finding[]>([]);
   readonly renderRows = signal<RenderRow[]>([]);
@@ -2132,7 +2142,12 @@ export class AnalogInspector {
   private refreshRun = 0;
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly page = computed(() => this.state().pages?.[0] ?? null);
+  private readonly hostPageId = hostPageId();
+
+  readonly page = computed(() => {
+    const pages = this.state().pages ?? [];
+    return (this.hostPageId ? pages.find((p) => p.pageId === this.hostPageId) : pages[0]) ?? null;
+  });
   readonly openFiles = computed(() => new Set((this.page()?.chain ?? []).map((c) => c.file)));
   readonly allCalls = computed(() => this.state().calls ?? []);
   readonly calls = computed(() => {
@@ -2238,6 +2253,7 @@ export class AnalogInspector {
     const project = await call<AnalogProject>(client, 'analog-project');
     if (this.destroyRef.destroyed) return;
     this.project.set(project);
+    this.loadFailed.set(project === null);
     try {
       const shared = await client.scope('pangular').rpc.sharedState('analog');
       if (this.destroyRef.destroyed) return;
@@ -2250,6 +2266,13 @@ export class AnalogInspector {
     }
     if (this.destroyRef.destroyed) return;
     await this.refresh(this.view());
+  }
+
+  retry() {
+    const client = this.rpc();
+    if (!client) return;
+    this.loadFailed.set(false);
+    void this.load(client);
   }
 
   private scheduleRefresh(view: View) {
@@ -2269,9 +2292,12 @@ export class AnalogInspector {
     this.findings.set(findings ?? []);
     this.renderRows.set(render?.rows ?? []);
     this.plan.set(render?.plan ?? null);
-    if (view === 'routes' || view === 'content') {
+    if (view === 'routes' || view === 'content' || this.project() === null) {
       const project = await call<AnalogProject>(client, 'analog-project');
-      if (project && run === this.refreshRun) this.project.set(project);
+      if (project && run === this.refreshRun) {
+        this.project.set(project);
+        this.loadFailed.set(false);
+      }
     }
   }
 

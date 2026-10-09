@@ -167,6 +167,43 @@ describe('Analog runtime reader', () => {
     expect(collectAnalog({}, 'p', [])).toBeNull();
   });
 
+  it('masks secret route params in the url and hydration errors on the page', () => {
+    document.body.innerHTML = '<app-root ng-version="22"></app-root>';
+    const leaf = {
+      routeConfig: analogRoute('', '/src/app/pages/reset/[token].page.ts'),
+      data: {},
+      params: {},
+      children: [],
+      firstChild: null,
+    };
+    const middle = {
+      routeConfig: { path: 'reset/:token' },
+      data: {},
+      params: { token: 'q8w2e' },
+      children: [leaf],
+      firstChild: leaf,
+    };
+    const router = {
+      url: '/reset/q8w2e',
+      config: [analogRoute('reset/:token', '/src/app/pages/reset/[token].page.ts')],
+      routerState: {
+        snapshot: {
+          root: {
+            routeConfig: null,
+            data: {},
+            params: {},
+            children: [middle],
+            firstChild: middle,
+          },
+        },
+      },
+    };
+    const ng = { getInjector: () => ({}), ɵgetRouterInstance: () => router };
+    const report = collectAnalog(ng, 'p1', ['NG0500: text "q8w2e" differs'])!;
+    expect(report.url).toBe('/reset/[redacted]');
+    expect(JSON.stringify(report.hydrationErrors)).not.toContain('q8w2e');
+  });
+
   it('does not mistake a plain Angular app with lazy routes for Analog', () => {
     document.body.innerHTML = '<app-root ng-version="22"></app-root>';
     const router = {

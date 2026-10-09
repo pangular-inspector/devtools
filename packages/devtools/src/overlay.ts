@@ -231,7 +231,12 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     }
     lastTreeJson = json;
     treeSentAt = Date.now();
-    await my.rpc.call('push-component-tree', { ...tree, pageId });
+    try {
+      await my.rpc.call('push-component-tree', { ...tree, pageId });
+    } catch (error) {
+      lastTreeJson = '';
+      throw error;
+    }
   }
 
   const signalHistory = createSignalHistory(
@@ -308,7 +313,12 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     }
     lastInjectorJson = json;
     injectorSentAt = Date.now();
-    await my.rpc.call('push-injector-tree', { ...tree, pageId });
+    try {
+      await my.rpc.call('push-injector-tree', { ...tree, pageId });
+    } catch (error) {
+      lastInjectorJson = '';
+      throw error;
+    }
   }
 
   const { id: pageId, release: releasePageId } = await claimPageId();
@@ -461,6 +471,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       if (answer?.hasConfig === false) sentGeneration = -1;
       else if (report['config']) sentGeneration = configTracker.generation;
     } catch {
+      lastRouterPayload = '';
       return;
     }
   }
@@ -575,7 +586,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       const next = toSignalTarget(request, pageId);
       if (next === undefined) return;
       signalTarget = next;
-      void pushSignalGraph(true);
+      void pushSignalGraph(true).catch(() => {});
     },
   });
 
@@ -586,7 +597,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     handler: (request: { pageId?: string; id?: string | null } | null) => {
       if (request?.pageId && request.pageId !== pageId) return;
       componentTarget = typeof request?.id === 'string' ? request.id : null;
-      void pushTree(true);
+      void pushTree(true).catch(() => {});
     },
   });
 

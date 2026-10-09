@@ -339,10 +339,22 @@ function injectCalls(code: string): { token: string; start: number }[] {
       if (close === -1) continue;
       at = close + 1;
     }
-    const token = /^\s*\(\s*([A-Za-z_$][\w$]*)/.exec(code.slice(at, at + 200));
-    if (token) out.push({ token: token[1], start: match.index });
+    const open = /^\s*\(/.exec(code.slice(at, at + 200));
+    if (!open) continue;
+    const parenAt = at + open[0].length - 1;
+    const [first] = topLevelElements(code, parenAt + 1, matchDelimiter(code, parenAt, '(', ')'));
+    const token = first ? injectedToken(first.text) : null;
+    if (token) out.push({ token, start: match.index });
   }
   return out;
+}
+
+function injectedToken(argument: string): string | null {
+  const forward = /^forwardRef\s*\(\s*\(\s*\)\s*=>\s*([A-Za-z_$][\w$.]*)/.exec(argument);
+  const reference =
+    forward?.[1] ??
+    /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*(?=\s*(?:!|as\b|$))/.exec(argument)?.[0];
+  return reference && !/^this\b/.test(reference) ? reference : null;
 }
 
 /** The field or variable an `inject()` call is assigned to, as in `x = inject(T)`. */
@@ -462,6 +474,7 @@ function constructorParams(code: string): { token: string; name: string; start: 
 function injectedParam(text: string): { token: string; name: string } | null {
   let rest = text;
   let token: string | undefined;
+  let injected = false;
   for (
     let decorator = /^@([\w$]+)\s*/.exec(rest);
     decorator;
@@ -471,6 +484,7 @@ function injectedParam(text: string): { token: string; name: string } | null {
     if (!rest.startsWith('(')) continue;
     const close = matchDelimiter(rest, 0, '(', ')');
     if (decorator[1] === 'Inject') {
+      injected = true;
       const arg = rest.slice(1, close).trim();
       token =
         /^forwardRef\s*\(\s*\(\s*\)\s*=>\s*([\w$.]+)/.exec(arg)?.[1] ??
@@ -484,6 +498,7 @@ function injectedParam(text: string): { token: string; name: string } | null {
     );
   if (!param) return null;
   const type = param[2];
+  if (injected && !token) return null;
   token ??= type && /^[A-Z]/.test(type) ? type : undefined;
   return token ? { token, name: param[1] } : null;
 }

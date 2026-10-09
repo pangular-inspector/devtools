@@ -372,6 +372,53 @@ describe('DOM facts', () => {
     expect(domFacts(el, { value: 'old', secret: true }).drift).toBeUndefined();
   });
 
+  it('does not report drift for a select whose options use ngValue ids', () => {
+    document.body.innerHTML = `
+      <select id="s"><option value="0: foo">foo</option><option value="1: 5" selected>five</option>
+      <option value="2: null">none</option></select>`;
+    const el = document.getElementById('s') as HTMLSelectElement;
+    expect(domFacts(el, { value: 5 }).drift).toBeUndefined();
+    el.value = '0: foo';
+    expect(domFacts(el, { value: 'foo' }).drift).toBeUndefined();
+    el.value = '2: null';
+    expect(domFacts(el, { value: null }).drift).toBeUndefined();
+    el.value = '0: foo';
+    expect(domFacts(el, { value: 'bar' }).drift).toBe('0: foo');
+  });
+
+  it('counts an error element hidden with visibility as not shown', () => {
+    const original = (Element.prototype as { checkVisibility?: unknown }).checkVisibility;
+    (Element.prototype as { checkVisibility?: unknown }).checkVisibility = function (
+      this: HTMLElement,
+      options?: { visibilityProperty?: boolean },
+    ) {
+      return !(options?.visibilityProperty && this.style.visibility === 'hidden');
+    };
+    try {
+      document.body.innerHTML = `
+        <div class="field"><input id="x"><div class="error" style="visibility:hidden">Required</div></div>`;
+      expect(domFacts(document.getElementById('x')!, { hasErrors: true }).errorShown).toBe(false);
+    } finally {
+      (Element.prototype as { checkVisibility?: unknown }).checkVisibility = original;
+    }
+  });
+
+  it('does not credit a field with the error shown for its neighbour in a shared fieldset', () => {
+    document.body.innerHTML = `
+      <fieldset>
+        <div><input id="a" name="a"></div>
+        <div><input id="b" name="b"><div class="error">Zip required</div></div>
+      </fieldset>
+      <div class="field"><input id="c" name="c"><div class="error">Name required</div></div>
+      <fieldset><input id="r1" type="radio" name="r"><input id="r2" type="radio" name="r">
+        <div class="error">Pick one</div></fieldset>`;
+    const facts = (id: string) => domFacts(document.getElementById(id)!, { hasErrors: true });
+    expect(facts('a').errorShown).toBe(false);
+    expect(facts('b').errorShown).toBe(true);
+    expect(facts('c').errorShown).toBe(true);
+    expect(facts('r1').errorShown).toBe(true);
+  });
+
   it('explains why a non-form host never submits, only when something listens for submit', () => {
     document.body.innerHTML = '<div id="f"></div>';
     const host = document.getElementById('f')!;

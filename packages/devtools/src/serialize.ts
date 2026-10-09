@@ -53,6 +53,23 @@ function isPlain(value: object): boolean {
   return proto === null || proto === Object.prototype;
 }
 
+function safeKey(key: string, taken: object): string {
+  const safe = redactMessage(key);
+  if (!Object.prototype.hasOwnProperty.call(taken, safe)) return safe;
+  let n = 2;
+  while (Object.prototype.hasOwnProperty.call(taken, `${safe} (${n})`)) n++;
+  return `${safe} (${n})`;
+}
+
+function setKey(target: Record<string, unknown>, key: string, value: unknown) {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 export function serialize(value: unknown, limits: SerializeLimits = {}): unknown {
   const maxDepth = limits.depth ?? 4;
   const maxKeys = limits.keys ?? 40;
@@ -126,7 +143,7 @@ export function serialize(value: unknown, limits: SerializeLimits = {}): unknown
         } catch {
           item = '[Unreadable]';
         }
-        out[key] = walkNamed(key, item, level + 1);
+        setKey(out, safeKey(key, out), walkNamed(key, item, level + 1));
       }
       if (keys.length > maxKeys) out['…'] = `${keys.length - maxKeys} more`;
       return out;

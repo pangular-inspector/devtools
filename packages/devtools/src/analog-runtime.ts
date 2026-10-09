@@ -3,7 +3,13 @@ import { hasStateScript, scanHydration } from './http-hydration.ts';
 import { isRedactedKey, redactMessage } from './forms-privacy.ts';
 import { createHydrationScanner } from './http-overlay.ts';
 import { httpRegistry } from './http-rules.ts';
-import { findRouters, type RouterDebugApi } from './router.ts';
+import {
+  findRouters,
+  redactText,
+  redactUrl,
+  secretParamsOf,
+  type RouterDebugApi,
+} from './router.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -226,10 +232,14 @@ export function collectAnalog(
   const { chain, data, loadFrom } = chainOf(root);
   const paths = configPathsOf(read(() => router['config'], []));
   const analog = chain.length > 0 || hasAnalogMeta(read(() => router['config'], null));
+  const secrets = read(() => secretParamsOf(root), []);
   const rootEl = document.querySelector('[ng-version]');
   const report: AnalogRuntimeReport = {
     pageId,
-    url: read(() => String(router['url']), location.pathname),
+    url: redactUrl(
+      read(() => String(router['url']), location.pathname),
+      secrets,
+    ),
     analog,
     chain,
     hydrated: analog ? hydratedNodes(scanner) : 0,
@@ -237,7 +247,7 @@ export function collectAnalog(
     hydrationErrors: mergeHydrationErrors(
       read(() => httpRegistry().warnings, undefined),
       hydrationErrors,
-    ),
+    ).map((error) => redactText(error, secrets)),
     configPaths: paths,
   };
   const context = rootEl?.getAttribute('ng-server-context');

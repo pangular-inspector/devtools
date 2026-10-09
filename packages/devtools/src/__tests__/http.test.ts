@@ -797,3 +797,117 @@ describe('hydration warning capture', () => {
     expect(httpRegistry().warnings).toEqual(['NG0500: During hydration ']);
   });
 });
+
+describe('http overlay edge cases', () => {
+  const jwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
+  const entry = (id: string) => ({
+    id,
+    url: `/api/${id}`,
+    method: 'GET',
+    status: 200,
+    durationMs: 1,
+    side: 'client' as const,
+    cacheHit: false,
+    faulted: false,
+    at: 1,
+  });
+
+  afterEach(() => {
+    httpRegistry().calls = [];
+    delete httpRegistry().warnings;
+    document.title = '';
+  });
+
+  it('sends the calls that finish while a push is in flight', async () => {
+    const sent: { calls: { id: string }[] }[] = [];
+    let release: () => void = () => {};
+    const my = {
+      rpc: {
+        call: async (name: string, report?: unknown) => {
+          if (name === 'get-http-rules') return [];
+          if (name === 'ping-http') return { known: true };
+          sent.push(report as never);
+          if (sent.length === 1) await new Promise<void>((resolve) => (release = resolve));
+          return { needPayload: false };
+        },
+        register: () => {},
+      },
+    };
+    httpRegistry().calls = [entry('a')];
+    const http = attachHttp(my, 'p1');
+    const first = http.push();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    httpRegistry().calls!.push(entry('b'));
+    release();
+    await first;
+    await http.push();
+    expect(sent.map((r) => r.calls.map((c) => c.id))).toEqual([['a'], ['b']]);
+  });
+
+  it('does not reject when the server clears calls while the connection fails', async () => {
+    const handlers = new Map<string, () => void>();
+    const my = {
+      rpc: {
+        call: async (name: string) => {
+          if (name === 'get-http-rules') return [];
+          throw new Error('connection lost');
+        },
+        register: (def: { name: string; handler: () => void }) =>
+          handlers.set(def.name, def.handler),
+      },
+    };
+    attachHttp(my, 'p1');
+    const seen: unknown[] = [];
+    const onRejection = (reason: unknown) => seen.push(reason);
+    process.on('unhandledRejection', onRejection);
+    try {
+      handlers.get('http-clear')!();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } finally {
+      process.off('unhandledRejection', onRejection);
+    }
+    expect(seen).toEqual([]);
+  });
+
+  it('masks the document title and hydration warnings before they leave the page', async () => {
+    document.title = `Reset ${jwt}`;
+    const sent: Record<string, any>[] = [];
+    const my = {
+      rpc: {
+        call: async (name: string, report?: unknown) => {
+          if (name === 'push-http') sent.push(report as never);
+          return name === 'get-http-rules' ? [] : { needPayload: false };
+        },
+        register: () => {},
+      },
+    };
+    await attachHttp(my, 'p1').push();
+    expect(JSON.stringify(sent[0])).not.toContain('eyJhbGci');
+    expect(sent[0]['title']).toContain('[redacted]');
+  });
+
+  it('masks a token that straddles the warning clip and the mismatch detail clip', () => {
+    const original = console.warn;
+    console.warn = () => {};
+    delete httpRegistry().warnings;
+    try {
+      createEnvironmentInjector([providePangularHttp()], Injector.NULL as EnvironmentInjector);
+      console.warn(`NG0500: ${'x'.repeat(980)} ${jwt}`);
+      expect(httpRegistry().warnings).toHaveLength(1);
+      expect(httpRegistry().warnings![0]).not.toContain('eyJ');
+    } finally {
+      console.warn = original;
+    }
+    document.body.innerHTML = '<app-card></app-card>';
+    (document.querySelector('app-card') as unknown as Record<string, unknown>)[
+      '__ngDebugHydrationInfo__'
+    ] = {
+      status: 'mismatched',
+      expectedNodeDetails: `${'y'.repeat(470)} ${jwt}`,
+      actualNodeDetails: 'Bearer abc123def456',
+    };
+    const [mismatch] = scanHydration(document).mismatches;
+    expect(JSON.stringify(mismatch)).not.toMatch(/eyJ|abc123def456/);
+    document.body.innerHTML = '';
+  });
+});

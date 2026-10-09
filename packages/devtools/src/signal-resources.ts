@@ -4,6 +4,7 @@ import type {
   SignalResource,
   SignalResourceStatus,
 } from './types.ts';
+import { redactUrl } from './router.ts';
 
 /** The fields of a reactive node this module reads. Never calls the signal. */
 export interface RawNode {
@@ -239,9 +240,8 @@ function paramsOf(request: unknown): unknown {
   if (!request || typeof request !== 'object') return request;
   const { method, urlWithParams, body } = request as Record<string, unknown>;
   if (typeof method !== 'string' || typeof urlWithParams !== 'string') return request;
-  return body === null || body === undefined
-    ? { method, url: urlWithParams }
-    : { method, url: urlWithParams, body };
+  const url = redactUrl(urlWithParams);
+  return body === null || body === undefined ? { method, url } : { method, url, body };
 }
 
 const THREW = '(threw an error)';

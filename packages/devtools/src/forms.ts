@@ -161,6 +161,7 @@ export interface FoundForms {
 const MAX_DEPTH = 8;
 const MAX_CHILDREN = 100;
 const MAX_STRING = 200;
+const MAX_REDACT_WINDOW = 65536;
 const MAX_VALUE_ITEMS = 20;
 const MAX_VALUE_DEPTH = 3;
 const MAX_DETAIL = 120;
@@ -308,7 +309,8 @@ function isoOf(date: Date): string {
 
 export function serializeFormValue(value: unknown, depth = 0): unknown {
   if (value === undefined || value === null) return value;
-  if (typeof value === 'string') return clip(value, MAX_STRING);
+  if (typeof value === 'string')
+    return clip(redactMessage(value.slice(0, MAX_REDACT_WINDOW)), MAX_STRING);
   if (typeof value === 'number' || typeof value === 'boolean') return value;
   if (typeof value === 'bigint') return String(value);
   if (typeof value === 'function') return 'ƒ';

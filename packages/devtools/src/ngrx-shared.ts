@@ -1,4 +1,5 @@
 import { isRedactedKey, REDACTED, redactMessage } from './forms-privacy.ts';
+import { clip } from './text.ts';
 
 export interface NgrxSignalStoreInfo {
   id: string;
@@ -185,6 +186,8 @@ export interface SerializeOptions {
 
 export const TYPE_KEY = '@type';
 
+const REDACT_WINDOW = 65536;
+
 export function serialize(value: unknown, options: SerializeOptions = {}): unknown {
   const maxDepth = options.depth ?? 8;
   const maxKeys = options.maxKeys ?? 100;
@@ -199,7 +202,10 @@ export function serialize(value: unknown, options: SerializeOptions = {}): unkno
       case 'undefined':
         return { [TYPE_KEY]: 'undefined' };
       case 'string':
-        return redactMessage(val.length > maxString ? `${val.slice(0, maxString)}…` : val);
+        return clip(
+          redactMessage(val.length > REDACT_WINDOW ? val.slice(0, REDACT_WINDOW) : val),
+          maxString,
+        );
       case 'number':
         return Number.isFinite(val) ? val : { [TYPE_KEY]: 'number', value: String(val) };
       case 'boolean':

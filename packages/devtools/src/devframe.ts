@@ -128,7 +128,7 @@ import {
 } from './http-rules.ts';
 import { sanitizeHydration, sanitizePayload, type PayloadSummary } from './http-payload.ts';
 import { redactCall } from './http-redact.ts';
-import { redactUrl } from './router.ts';
+import { redactMessage, redactUrl } from './router.ts';
 import {
   changeDetectionText,
   expireCdPages,
@@ -643,7 +643,7 @@ const pangular = defineDevframe({
     const forgetHttpPages = (pageIds: string[]) => {
       for (const id of pageIds) httpPages.delete(id);
       applyHttpPages();
-      if (!pageIds.some((id) => httpPayloads.delete(id))) return;
+      if (!pageIds.filter((id) => httpPayloads.delete(id)).length) return;
       httpPayloadState.mutate((draft) => {
         for (const id of pageIds) delete draft.pages[id];
       });
@@ -674,7 +674,10 @@ const pangular = defineDevframe({
           pageId: page.pageId,
           url,
           initialUrl: typeof page.initialUrl === 'string' ? redactUrl(page.initialUrl) : url,
-          title: typeof page.title === 'string' ? page.title.slice(0, 200) : '',
+          title:
+            typeof page.title === 'string'
+              ? redactMessage(page.title.slice(0, 2000)).slice(0, 200)
+              : '',
           hydration: sanitizeHydration(page.hydration),
           calls:
             page.full === false && known
@@ -839,7 +842,10 @@ const pangular = defineDevframe({
       name: 'request-page-highlight',
       type: 'action',
       jsonSerializable: true,
-      handler: (selector: string | { pageId?: unknown; id?: unknown; reveal?: unknown } | null) => {
+      handler: (
+        selector:
+          string | { pageId?: unknown; id?: unknown; selector?: unknown; reveal?: unknown } | null,
+      ) => {
         const target =
           selector && typeof selector === 'object' && typeof selector.id === 'string'
             ? {
@@ -847,9 +853,14 @@ const pangular = defineDevframe({
                 ...(typeof selector.pageId === 'string' ? { pageId: selector.pageId } : {}),
                 ...(selector.reveal === true ? { reveal: true } : {}),
               }
-            : typeof selector === 'string'
-              ? selector
-              : '';
+            : selector && typeof selector === 'object' && typeof selector.selector === 'string'
+              ? {
+                  selector: selector.selector.slice(0, 500),
+                  ...(typeof selector.pageId === 'string' ? { pageId: selector.pageId } : {}),
+                }
+              : typeof selector === 'string'
+                ? selector
+                : '';
         if (target) highlightSessions.bind('highlight-in-page');
         else highlightSessions.unbind('highlight-in-page');
         void my.rpc.broadcast({ method: 'highlight-in-page', args: [target], optional: true });

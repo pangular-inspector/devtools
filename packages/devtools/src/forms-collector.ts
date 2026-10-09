@@ -168,10 +168,11 @@ export function attachForms(
 
   function recordFormEvent(input: FormEvent, infer = true) {
     const event: FormEvent = { ...input, seq: ++eventSeq };
+    if (event.detail) event.detail = redactFormText(event.formId, event.detail);
     if (infer) event.origin ??= originNow();
     const key = `${event.formId}:${event.path}`;
     if (pendingCaller?.formId === event.formId && !event.caller && event.origin !== 'devtools') {
-      event.caller = pendingCaller.text;
+      event.caller = redactFormText(event.formId, pendingCaller.text);
     }
     if (event.type === 'status') {
       const next = event.detail?.split('→').pop()?.trim();
@@ -213,7 +214,8 @@ export function attachForms(
 
   function seedStatuses(formId: string, node: FormFieldNode) {
     lastStatus.set(`${formId}:${node.path}`, node.status);
-    if (node.type === 'control') lastValue.set(`${formId}:${node.path}`, detailOf(node.value));
+    if (node.type === 'control')
+      lastValue.set(`${formId}:${node.path}`, redactFormText(formId, detailOf(node.value)));
     for (const child of node.children ?? []) seedStatuses(formId, child);
   }
 

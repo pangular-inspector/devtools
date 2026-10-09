@@ -35,8 +35,17 @@ function safe<T>(fn: () => T, fallback: T): T {
 export function isShown(el: Element): boolean {
   if (!el.textContent?.trim()) return false;
   if (el.closest('[hidden], [aria-hidden="true"]')) return false;
-  const check = (el as Element & { checkVisibility?: () => boolean }).checkVisibility;
-  if (typeof check === 'function') return safe(() => check.call(el), true);
+  const check = (
+    el as Element & {
+      checkVisibility?: (options?: {
+        visibilityProperty?: boolean;
+        checkVisibilityCSS?: boolean;
+      }) => boolean;
+    }
+  ).checkVisibility;
+  if (typeof check === 'function') {
+    return safe(() => check.call(el, { visibilityProperty: true, checkVisibilityCSS: true }), true);
+  }
   const view = el.ownerDocument?.defaultView;
   for (let node: Element | null = el; node; node = node.parentElement) {
     const style = view ? safe(() => view.getComputedStyle(node!), null) : null;
@@ -61,15 +70,46 @@ function isLabelled(el: Element): boolean {
   return !!el.getAttribute('title')?.trim();
 }
 
+const CONTROLS = 'input:not([type="hidden"]), select, textarea';
+
+function controlCount(node: Element): number {
+  const seen = new Set<unknown>();
+  for (const control of safe(() => Array.from(node.querySelectorAll(CONTROLS)), [] as Element[])) {
+    seen.add(control.getAttribute('name') || control);
+  }
+  return seen.size;
+}
+
+function ownContainer(el: Element): Element | null {
+  const boundary = el.closest(CONTAINER) ?? el.parentElement;
+  let best = el.parentElement;
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    if (controlCount(node) > 1) break;
+    best = node;
+    if (node === boundary) break;
+  }
+  return best;
+}
+
 function errorElements(el: Element): Element[] {
   const linked = [...referenced(el, 'aria-describedby'), ...referenced(el, 'aria-errormessage')];
-  const container = el.closest(CONTAINER) ?? el.parentElement;
+  const container = ownContainer(el);
   const near = container
     ? Array.from(safe(() => container.querySelectorAll(ERROR_TEXT), [] as never)).filter(
         (candidate: Element) => candidate !== el && !candidate.contains(el),
       )
     : [];
   return [...new Set([...linked, ...near])];
+}
+
+const NG_VALUE_PREFIX = /^\d+: /;
+
+function sameSelectValue(dom: string, model: unknown): boolean {
+  if (sameValue(dom, model)) return true;
+  if (!NG_VALUE_PREFIX.test(dom)) return false;
+  const value = dom.replace(NG_VALUE_PREFIX, '');
+  if (model === null || model === undefined) return value === 'null' || value === 'undefined';
+  return sameValue(value, model);
 }
 
 function domValue(el: Element): string | boolean | undefined {
@@ -112,7 +152,11 @@ export function domFacts(
   const disabled = (el as HTMLInputElement).disabled;
   if (typeof disabled === 'boolean' && disabled !== !!model.disabled) facts.disabled = disabled;
   const dom = domValue(el);
-  if (dom !== undefined && 'value' in model && !sameValue(dom, model.value)) {
+  const same =
+    el instanceof HTMLSelectElement && typeof dom === 'string'
+      ? sameSelectValue(dom, model.value)
+      : dom === undefined || sameValue(dom, model.value);
+  if (dom !== undefined && 'value' in model && !same) {
     facts.drift = model.secret ? true : String(dom).slice(0, 200);
   }
   const classes = Array.from(el.classList).filter((c) => STATUS_CLASS.test(c));

@@ -307,7 +307,7 @@ function describe(root: string, raw: RawRoute, parentPath: string, index: number
     route.params = [optional[1]];
   } else if (raw.segment.includes('**')) route.catchAll = 'required';
   if (file && !markdown) {
-    route.defaultExport = /export\s+default\b/.test(code);
+    if (file.endsWith('.ts')) route.defaultExport = /export\s+default\b/.test(code);
     const meta = routeMetaOf(code);
     if (meta) route.routeMeta = meta;
     if (kind === 'layout') route.outlet = /router-outlet|RouterOutlet/.test(source);
@@ -323,11 +323,14 @@ function describe(root: string, raw: RawRoute, parentPath: string, index: number
   return route;
 }
 
+const PAGE_EXTENSIONS = ['.page.ts', '.page.analog', '.page.ag'];
+const PAGE_FILE = /\.page\.(ts|analog|ag)$/;
+
 export function routeFiles(root: string): string[] {
   const files = [
     ...walk(join(root, 'app/routes'), (n) => n.endsWith('.ts') || n.endsWith('.md')),
     ...walk(join(root, 'src/app/routes'), (n) => n.endsWith('.ts') || n.endsWith('.md')),
-    ...walk(join(root, 'src/app/pages'), (n) => n.endsWith('.page.ts') || n.endsWith('.md')),
+    ...walk(join(root, 'src/app/pages'), (n) => PAGE_FILE.test(n) || n.endsWith('.md')),
     ...walk(join(root, 'src/content'), (n) => n.endsWith('.md')),
   ];
   return files.map((file) => rel(root, file)).filter((file) => !file.endsWith('.server.ts'));
@@ -917,13 +920,13 @@ export function lintAnalog(project: AnalogProject): AnalogLintFinding[] {
   const pages = new Set(project.files);
   for (const file of project.serverFiles) {
     if (fnFiles.has(file) && !hasPageExports(read(join(project.root, file)))) continue;
-    if (!pages.has(file.replace('.server.ts', '.page.ts'))) {
+    if (!PAGE_EXTENSIONS.some((ext) => pages.has(file.replace(/\.server\.ts$/, ext)))) {
       out.push({
         rule: 'orphan-server-file',
         severity: 'warning',
         file,
         message: 'No page file next to this .server.ts, so its load never runs.',
-        fix: 'Rename it to match a .page.ts file.',
+        fix: 'Rename it to match a .page.ts, .page.analog or .page.ag file.',
       });
     }
   }

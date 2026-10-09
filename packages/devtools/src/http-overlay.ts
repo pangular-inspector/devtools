@@ -3,7 +3,7 @@ import { appIdOf, scanHydration } from './http-hydration.ts';
 import { decodePayload, type PayloadSummary } from './http-payload.ts';
 import { redactCall } from './http-redact.ts';
 import { httpRegistry, sanitizeRules, storeRules, type HttpCall } from './http-rules.ts';
-import { redactUrl } from './router.ts';
+import { redactMessage, redactUrl } from './router.ts';
 import type { HttpReport, HydrationStats } from './types.ts';
 
 interface RpcScope {
@@ -93,13 +93,14 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
       pageId,
       url: redactUrl(location.pathname + location.search),
       initialUrl,
-      title: document.title,
+      title: redactMessage(document.title),
       hydration: hydrationStats(payload, scanner),
       dropped: registry.dropped ?? 0,
     };
     const metaJson = JSON.stringify(meta);
     const full = !payloadSent;
     const calls = full ? [...all] : newCalls(all);
+    const sentUpTo = all.at(-1) ?? lastCall;
     if (!full && !calls.length && metaJson === lastMeta) {
       if (!keepaliveDue(lastSentAt, tickMs())) return;
       lastSentAt = Date.now();
@@ -112,7 +113,7 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
       { needPayload?: boolean } | null | undefined;
     lastMeta = metaJson;
     lastSentAt = Date.now();
-    lastCall = all.at(-1) ?? lastCall;
+    lastCall = sentUpTo;
     payloadSent = !answer?.needPayload;
   };
 
@@ -132,7 +133,7 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
       const registry = httpRegistry();
       registry.calls = [];
       registry.dropped = 0;
-      void push();
+      push().catch(() => {});
     },
   });
 

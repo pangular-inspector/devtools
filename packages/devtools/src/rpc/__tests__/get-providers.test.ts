@@ -200,6 +200,44 @@ class Settings {}`,
     );
   });
 
+  it('reads the real token of inject() for forwardRef, dotted references and options', async () => {
+    const providers = await providersFor(`
+      class Panel {
+        a = inject(forwardRef(() => Foo));
+        b = inject(Tokens.API_URL);
+        c = inject(Api, { optional: true });
+        d = inject(this.token);
+        e = inject(getToken());
+      }
+    `);
+    expect(providers.filter((p) => p.type === 'injection').map((p) => [p.token, p.source])).toEqual(
+      [
+        ['Foo', 'a'],
+        ['Tokens.API_URL', 'b'],
+        ['Api', 'c'],
+      ],
+    );
+  });
+
+  it('does not report a constructor param under its type when @Inject names another token', async () => {
+    const providers = await providersFor(`
+      @Injectable()
+      export class Repo {
+        constructor(
+          @Inject('APP_CONFIG') private cfg: AppConfig,
+          @Inject(API_URL) readonly url: string,
+          private http: HttpClient,
+        ) {}
+      }
+    `);
+    expect(providers.filter((p) => p.type === 'injection').map((p) => [p.token, p.source])).toEqual(
+      [
+        ['API_URL', 'url'],
+        ['HttpClient', 'http'],
+      ],
+    );
+  });
+
   it('reads inject() with nested generic arguments', async () => {
     const providers = await providersFor(`
       class Panel {

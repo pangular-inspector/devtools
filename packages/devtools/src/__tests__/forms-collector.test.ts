@@ -423,3 +423,38 @@ describe('forms collector', () => {
     }
   });
 });
+
+class Notes {
+  form = new FormGroup({
+    notes: new FormControl(''),
+    password: new FormControl('hunter2-secret'),
+  });
+}
+Component({
+  selector: 'notes-form',
+  imports: [ReactiveFormsModule],
+  template: `<form [formGroup]="form"><input id="notes" formControlName="notes" /><input id="pw" type="password" formControlName="password" /></form>`,
+})(Notes);
+
+describe('forms collector event redaction', () => {
+  it.each([
+    [
+      'a JWT',
+      ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.'),
+      'eyJhbGci',
+    ],
+    ['a bearer token', 'Bearer abc123def456', 'abc123def456'],
+    ['a secret learned from a password field', 'copied hunter2-secret here', 'hunter2-secret'],
+  ])('masks %s in value events', async (_name, value, leak) => {
+    const fixture = await mount(Notes);
+    const h = harness();
+    h.collector.push();
+    await tick();
+    const { notes } = fixture.componentInstance.form.controls;
+    notes.setValue(value);
+    await tick();
+    const events = h.lastEvents().filter((e) => e.type === 'value' && e.path === 'notes');
+    expect(JSON.stringify(events)).not.toContain(leak);
+    expect(JSON.stringify(events)).toContain('[redacted]');
+  });
+});

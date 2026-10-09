@@ -143,7 +143,7 @@ A field's value is replaced with `[redacted]` when the field:
 
 The Fields view says why a field is redacted: **name looks secret**, **password input**, **autocomplete is a secret kind**, **marked as mask**, **inside a secret group** or **listed in mask**. The field details say the same where the Set editor is hidden, with a link to this section.
 
-Those values are also removed from error messages. The devtools don't write secret fields unless you unmask them (see [Opt fields in or out](#opt-fields-in-or-out)). Other values are sent as they are, so keep real credentials out of forms you inspect.
+Those values are also removed from error messages. The form event log follows the same rules: a value that holds a JWT or bearer token, or repeats a secret from another field of the form, is shown as `[redacted]` in the event and in its previous value. The devtools don't write secret fields unless you unmask them (see [Opt fields in or out](#opt-fields-in-or-out)). Other values are sent as they are, so keep real credentials out of forms you inspect.
 
 ### Opt fields in or out
 
@@ -181,7 +181,7 @@ These are replaced with `[redacted]` in URLs, params, data and messages:
 - JWTs, bearer tokens and long opaque tokens,
 - route params with secret-looking names.
 
-A secret route param is only known once the route is recognized or found in the config. A navigation that fails before that (for example inside a lazy route that failed to load) can still show it in its URL.
+A secret route param is known from the route config before a navigation is recognized, so link targets and a navigation that was already running when the overlay attached are masked too. A navigation that fails before that (for example inside a lazy route that failed to load) can still show it in its URL. JWTs are masked before long values are cut, so a long token never leaves a readable start behind.
 
 <ngmd-alert severity="info">
   A navigation whose URL was redacted cannot be replayed.
@@ -189,17 +189,17 @@ A secret route param is only known once the route is recognized or found in the 
 
 ### Components, signals, NgRx and pipes
 
-Component inputs, signal values, NgRx state, and pipe inputs, outputs and async values use the same secret names and the same `mask` and `unmask` lists as forms. A value whose name looks secret is replaced with `[redacted]`. JWTs and bearer tokens inside strings and error messages are replaced too, NgRx strings and errors included.
+Component inputs, signal values, NgRx state, and pipe inputs, outputs and async values use the same secret names and the same `mask` and `unmask` lists as forms. A value whose name looks secret is replaced with `[redacted]`. JWTs and bearer tokens inside strings and error messages are replaced too, NgRx strings and errors included, and so are tokens used as object keys. The URL and title of the NgRx page, and the request URL of an `httpResource`, are redacted like router URLs.
 
 ### Analog
 
-Server call previews and URLs are redacted: keys in JSON bodies that the forms rules treat as secret, secret query parameters, JWTs and bearer tokens. This covers form action validation errors and redirect targets too. Only JSON and plain text responses get a preview, and it is cut at 1000 characters. The devtools keep the first 16 KB of a body, and a cut JSON body still has its secret-looking keys redacted. The `load()` data preview on the open page redacts the same keys, and JWTs and bearer tokens inside its string values. The page report's URL, `load()` preview and hydration errors are redacted again on the devtools server. Keys are matched by whole words, so `sessionId` and `apiKey` are redacted while `author` and `passengers` stay visible. JSON nested deeper than the preview reads is shown as `[Truncated]`.
+Server call previews and URLs are redacted: keys in JSON bodies that the forms rules treat as secret, secret query parameters (including `redaction.secretNames`, `sig`, `signature` and `auth`), `key=value` pairs with quoted values, JWTs and bearer tokens. This covers form action validation errors and redirect targets too. Only JSON and plain text responses get a preview, and it is cut at 1000 characters. The devtools keep the first 16 KB of a body, and a cut JSON body still has its secret-looking keys redacted. The `load()` data preview on the open page redacts the same keys, and JWTs and bearer tokens inside its string values. The page report's URL and hydration errors are redacted on the page, with the secret route params of the open route, and the URL, `load()` preview and hydration errors again on the devtools server. Keys are matched by whole words, so `sessionId` and `apiKey` are redacted while `author` and `passengers` stay visible. JSON nested deeper than the preview reads is shown as `[Truncated]`.
 
 ### SSR & HTTP
 
 Request URLs, page URLs and error messages in the [SSR & HTTP tab](./inspectors/ssr-http.md) are redacted like router URLs, in the page and again on the devtools server. This covers SSR and client calls, and `devframe_state_read`.
 
-Response previews are redacted on the devtools server: keys that the forms rules treat as secret, JWTs, bearer tokens and secret query pairs. The same holds for TransferState entries: their values, keys and request URLs are redacted before they reach the panel or an agent. Large payload values are still cut, so a long value can end in `[Truncated]`.
+The page title, the hydration warnings and mismatch details, and the TransferState parse error are redacted too. Response previews are redacted on the devtools server: keys that the forms rules treat as secret, JWTs, bearer tokens and secret query pairs, also in a preview that was cut inside a nested object or array. The same holds for TransferState entries: their values, keys and request URLs are redacted before they reach the panel or an agent. Large payload values are still cut, so a long value can end in `[Truncated]`.
 
 ## Checklist
 

@@ -62,6 +62,25 @@ describe('ngrx-store resource', () => {
   });
 });
 
+describe('ngrx page url and title', () => {
+  it('masks secrets in the url and title before they reach the shared state and the tools', async () => {
+    const { push, read } = await boot();
+    const jwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
+    await push('push-ngrx-state', {
+      pageId: 'p1',
+      session: 's1',
+      url: '/cb?access_token=abc123xyz&code=998877&tab=1',
+      title: `Welcome Bearer ${jwt}`,
+      stores: [],
+      classic: { state: { count: 0 }, devtools: false, scope: 'root' },
+      log: [],
+    } satisfies NgrxPageReport);
+    const state = await read('ngrx-store');
+    expect(state).not.toMatch(/abc123xyz|998877|eyJhbGci/);
+    expect(state).toContain('tab=1');
+  });
+});
+
 type Broadcast = {
   method: string;
   args: [{ requestId: string; pageId: string; request: unknown }];

@@ -1,6 +1,7 @@
 import { documentTree, type HostTree } from './host-tree.ts';
 import { createNgrxCollector, type NgrxDebugNg } from './ngrx-collector.ts';
 import type { NgrxPageReport, NgrxRequest } from './ngrx-shared.ts';
+import { redactMessage, redactUrl } from './router.ts';
 
 interface RpcScope {
   rpc: {
@@ -69,8 +70,8 @@ export function attachNgrx<H extends object = Element>(
       lastBody = body;
       lastPushAt = Date.now();
       const page = options.describe?.() ?? {
-        url: location.pathname + location.search,
-        title: document.title,
+        url: redactUrl(location.pathname + location.search),
+        title: redactMessage(document.title),
       };
       const report: NgrxPageReport = {
         pageId,

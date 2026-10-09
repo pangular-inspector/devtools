@@ -150,6 +150,29 @@ describe('Analog route rules', () => {
     expect(findings.find((f) => f.rule === 'duplicate-url')?.message).toContain('/about');
   });
 
+  it('scans .page.analog and .page.ag pages and pairs their .server.ts files', () => {
+    const root = makeProject(BASE_FILES, {
+      'src/app/pages/blog.page.analog': `<script lang="ts">\n  defineMetadata({ title: 'Blog' });\n</script>\n\n<template><h1>Blog</h1></template>\n`,
+      'src/app/pages/blog.server.ts': `export const load = async () => ({ posts: [] });\n`,
+      'src/app/pages/news.page.ag': `<template><h1>News</h1></template>\n`,
+    });
+    const project = scanAnalog(root);
+    const all = flattenRoutes(project.routes);
+    expect(all.find((r) => r.file === '/src/app/pages/blog.page.analog')).toMatchObject({
+      fullPath: '/blog',
+      kind: 'page',
+      serverFile: '/src/app/pages/blog.server.ts',
+    });
+    expect(all.find((r) => r.file === '/src/app/pages/news.page.ag')?.fullPath).toBe('/news');
+    expect(explainUrl(project.routes, '/blog').chain.map((r) => r.file)).toEqual([
+      '/src/app/pages/blog.page.analog',
+    ]);
+    const findings = lintAnalog(project).filter(
+      (f) => f.file?.includes('blog') || f.file?.includes('news'),
+    );
+    expect(findings).toEqual([]);
+  });
+
   it('flags content files that take over a dynamic page', () => {
     const root = makeProject(BASE_FILES, {
       'src/app/pages/blog/[slug].page.ts': `import { Component } from '@angular/core';\n@Component({ template: '' })\nexport default class Post {}\n`,

@@ -246,6 +246,32 @@ describe('watchWebMcp', () => {
     expect(onChange).toHaveBeenCalled();
   });
 
+  it('masks tokens in the description, error and call detail of a tool no form owns', async () => {
+    const jwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
+    const { tools } = fakeContext((tool) =>
+      tool.name === 'broken' ? new Error(`bad token ${jwt}`) : null,
+    );
+    const watcher = watch();
+    const register = (navigator as any).modelContext.registerTool;
+    await register({
+      name: 'lookup',
+      description: 'Uses Bearer abc123def456',
+      inputSchema: { type: 'string' },
+      execute: async () => ({
+        content: [{ type: 'text', text: `Form submission failed:\ninvalid ${jwt}` }],
+      }),
+    });
+    await expect(
+      register({ name: 'broken', description: '', inputSchema: {}, execute: vi.fn() }),
+    ).rejects.toThrow();
+    await tools.get('lookup')!.execute({});
+    await tick();
+    const text = JSON.stringify(watcher.describe([]).page);
+    expect(text).not.toContain('eyJhbGci');
+    expect(text).not.toContain('abc123def456');
+    expect(text).toContain('[redacted]');
+  });
+
   it('reads tools that were registered before it attached from the browser tool list', async () => {
     fakeContext();
     (navigator as any).modelContextTesting = {

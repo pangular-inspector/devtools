@@ -1,6 +1,6 @@
 import type { HydrationMismatch } from './http-hydration.ts';
 import { redactStrings } from './http-redact.ts';
-import { redactUrl } from './router.ts';
+import { redactText, redactUrl } from './router.ts';
 import { serialize } from './serialize.ts';
 import type { HydrationStats } from './types.ts';
 
@@ -46,12 +46,15 @@ const str = (value: unknown, max: number) =>
   typeof value === 'string' ? value.slice(0, max) : undefined;
 const num = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+const REDACT_WINDOW = 20_000;
+const masked = (value: unknown, max: number) =>
+  typeof value === 'string' ? redactText(value.slice(0, REDACT_WINDOW)).slice(0, max) : undefined;
 const strings = (value: unknown, max: number) =>
   Array.isArray(value)
     ? value
         .slice(-MAX_LIST)
         .filter((v): v is string => typeof v === 'string')
-        .map((v) => v.slice(0, max))
+        .map((v) => masked(v, max) ?? '')
     : [];
 
 /** Validates a payload summary reported over RPC and caps its size. */
@@ -92,7 +95,7 @@ export function sanitizePayload(input: unknown): PayloadSummary {
     found: p.found === true,
     size: num(p.size) ?? 0,
     entries,
-    error: str(p.error, 500),
+    error: masked(p.error, 500),
   };
 }
 
@@ -111,8 +114,8 @@ export function sanitizeHydration(input: unknown): HydrationStats | null {
     if (!component) continue;
     mismatches.push({
       component,
-      expected: str(m['expected'], 500),
-      actual: str(m['actual'], 500),
+      expected: masked(m['expected'], 500),
+      actual: masked(m['actual'], 500),
     });
   }
   return {

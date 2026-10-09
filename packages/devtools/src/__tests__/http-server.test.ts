@@ -257,6 +257,31 @@ describe('http redaction', () => {
     expect(second.preview).not.toContain('hunter2');
   });
 
+  it('redacts the page title, hydration warnings, mismatch details and payload errors', async () => {
+    const jwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
+    const { push, state, payloads } = await boot();
+    await push(
+      'push-http',
+      report('a', {
+        title: `Reset ${jwt}`,
+        hydration: {
+          enabled: true,
+          warnings: [`NG0500: text node with "Bearer abc123def456" differs`],
+          skipHydrationHosts: [],
+          mismatches: [
+            { component: 'app-x', expected: `NODE ("${jwt}")`, actual: 'link?token=xyz789' },
+          ],
+        },
+        payload: { found: true, size: 1, entries: [], error: `Unexpected token in "${jwt}"` },
+      }),
+    );
+    const page = (await state()).pages[0];
+    expect(JSON.stringify(page)).not.toMatch(/eyJhbGci|abc123def456|xyz789/);
+    expect(page.title).toContain('[redacted]');
+    expect(page.hydration?.mismatches[0].expected).toContain('[redacted]');
+    expect(JSON.stringify((await payloads()).pages['a'])).not.toContain('eyJhbGci');
+  });
+
   it('redacts TransferState payload values, URLs and keys', async () => {
     const { push, payloads } = await boot({ redaction: { secretNames: ['tenant'] } });
     await push(

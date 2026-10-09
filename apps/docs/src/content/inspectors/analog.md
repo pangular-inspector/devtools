@@ -40,11 +40,11 @@ The demo lives in `examples/analog`. It uses Analog 2.7 on Angular 22. Run it wi
 
 ### Summary
 
-The summary at the top shows the Analog version, and the number of pages, API routes, server calls and issues. It also shows the page open in the browser.
+The summary at the top shows the Analog version, and the number of pages, API routes, server calls and issues. It also shows the page open in the browser. When several app tabs are open, it follows the tab the panel belongs to.
 
 ### Routes
 
-Every page, layout and markdown file with its URL, route groups, `[param]` and catch-all segments, `.server.ts` files and `routeMeta`.
+Every page (`.page.ts`, `.page.analog` or `.page.ag`), layout and markdown file with its URL, route groups, `[param]` and catch-all segments, `.server.ts` files and `routeMeta`.
 
 Type a URL into **Test a URL** and click **Explain** to see which files render it: the layout chain, the page and its params. A URL that matches nothing gets the closest candidates. The result names the URL it explains, so it stays correct while you type the next one. If the devtools server does not answer, the result says so.
 

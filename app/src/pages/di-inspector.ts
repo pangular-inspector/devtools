@@ -1,4 +1,14 @@
-import { Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
 
@@ -1241,6 +1251,7 @@ function isTree(value: unknown): value is InjectorNode[] {
 })
 export class DiInspector {
   rpc = input<DevframeRpcClient | null>(null);
+  private readonly injector = inject(Injector);
 
   readonly nullId = NULL_ID;
   readonly roots = signal<InjectorNode[]>([]);
@@ -1466,16 +1477,17 @@ export class DiInspector {
     if (node.injector.type === 'element' && !node.injector.component)
       this.componentsOnly.set(false);
     this.select(id);
-    queueMicrotask(() => this.focusRow(id, false));
+    afterNextRender(() => this.focusRow(id, false), { injector: this.injector });
   }
 
   highlight(node: InjectorNode | null) {
     const client = this.rpc();
     if (!client) return;
     const selector = node?.injector.type === 'element' ? (node.injector.selector ?? null) : null;
+    const target = selector ? { pageId: hostPageId(), selector } : null;
     void client
       .scope('pangular')
-      .rpc.call('request-page-highlight', selector)
+      .rpc.call('request-page-highlight', target)
       .catch(() => {});
   }
 
@@ -1535,9 +1547,13 @@ export class DiInspector {
     el.scrollIntoView({ block: 'nearest' });
   }
 
-  private async loadInjectorTree(client: DevframeRpcClient) {
+  private clearTree() {
     this.stopTree?.();
     this.stopTree = null;
+  }
+
+  private async loadInjectorTree(client: DevframeRpcClient) {
+    this.clearTree();
     const my = client.scope('pangular');
     let state: Awaited<ReturnType<typeof my.rpc.sharedState>>;
     try {
@@ -1545,7 +1561,7 @@ export class DiInspector {
     } catch {
       return;
     }
-    if (this.destroyRef.destroyed) return;
+    if (this.destroyRef.destroyed || this.rpc() !== client) return;
     const pageId = hostPageId();
     const apply = (value: unknown) => {
       const shared = value as {
@@ -1560,6 +1576,7 @@ export class DiInspector {
       this.truncated.set(next?.truncated === true);
     };
     apply(state.value());
+    this.clearTree();
     this.stopTree = state.on('updated', apply);
   }
 

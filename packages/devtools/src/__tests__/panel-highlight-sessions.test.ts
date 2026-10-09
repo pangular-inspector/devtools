@@ -38,6 +38,14 @@ describe('panel highlights and their connection', () => {
     ]);
   });
 
+  it('passes a selector highlight with its page id so other tabs ignore it', async () => {
+    const { as, sent } = await boot();
+    await as(1, 'request-page-highlight', { pageId: 'p1', selector: 'app-card' });
+    expect(sent()).toEqual([
+      ['pangular:highlight-in-page', { pageId: 'p1', selector: 'app-card' }],
+    ]);
+  });
+
   it('leaves a highlight drawn by another panel or already cleared', async () => {
     const { rpc, broadcast, as, sent } = await boot();
     await as(1, 'request-page-highlight', 'app-card');

@@ -1,25 +1,17 @@
 import { isRedactedKey } from './forms-privacy.ts';
 import type { HttpCall } from './http-rules.ts';
+import { redactJsonText } from './json-text-redact.ts';
 import { redactText, redactUrl } from './router.ts';
 import { serialize } from './serialize.ts';
 import { clip } from './text.ts';
 
 const PREVIEW_MAX = 2001;
-const JSON_PAIR = /("((?:[^"\\]|\\.){1,100})"\s*:\s*)("(?:[^"\\]|\\.)*"?|[^,}\]\s]*)/g;
 
 export function redactStrings(value: unknown): unknown {
   if (typeof value === 'string') return redactText(value);
   if (Array.isArray(value)) return value.map(redactStrings);
   if (value === null || typeof value !== 'object') return value;
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactStrings(item)]));
-}
-
-function decodeKey(key: string): string {
-  try {
-    return JSON.parse(`"${key}"`) as string;
-  } catch {
-    return key;
-  }
 }
 
 /**
@@ -43,10 +35,7 @@ export function redactPreview(preview: string): string {
   } catch {
     /* clipped or not JSON: fall through to text masking */
   }
-  const masked = preview.replace(JSON_PAIR, (match, head: string, key: string) =>
-    isRedactedKey(decodeKey(key)) ? `${head}"[redacted]"` : match,
-  );
-  return clip(redactText(masked), PREVIEW_MAX);
+  return clip(redactText(redactJsonText(preview, isRedactedKey)), PREVIEW_MAX);
 }
 
 /**

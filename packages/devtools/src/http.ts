@@ -18,6 +18,7 @@ import {
 import { Observable, throwError, timer, of } from 'rxjs';
 import type { Subscription } from 'rxjs';
 
+import { redactMessage } from './forms-privacy.ts';
 import { transferCacheKeys } from './http-cache-key.ts';
 import { appIdOf, isHydrationMessage } from './http-hydration.ts';
 
@@ -317,7 +318,7 @@ function captureHydrationWarnings() {
     console[level] = (...args: unknown[]) => {
       try {
         const text = args.map(textOf).join(' ');
-        const warning = text.slice(0, 1000);
+        const warning = redactMessage(text.slice(0, 5000)).slice(0, 1000);
         if (isHydrationMessage(text) && !warnings.includes(warning)) {
           warnings.push(warning);
           if (warnings.length > MAX_WARNINGS) warnings.shift();

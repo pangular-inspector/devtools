@@ -1,3 +1,5 @@
+import { redactMessage } from './forms-privacy.ts';
+
 export const HYDRATION_CODE = /\bNG05\d\d\b/;
 
 export interface HydrationMismatch {
@@ -34,7 +36,9 @@ export function hasStateScript(doc: Document): boolean {
 }
 
 const detail = (value: unknown) =>
-  typeof value === 'string' && value ? value.slice(0, MAX_DETAIL) : undefined;
+  typeof value === 'string' && value
+    ? redactMessage(value.slice(0, MAX_DETAIL * 4)).slice(0, MAX_DETAIL)
+    : undefined;
 
 /** Counts the hydration status Angular patches on DOM nodes in dev mode. */
 export function scanHydration(root: Node): HydrationScan {

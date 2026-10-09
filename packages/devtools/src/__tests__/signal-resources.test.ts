@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { serializeNamed } from '../serialize.ts';
 import { groupResources } from '../signal-resources.ts';
 import type { SignalGraphEdge, SignalGraphNode } from '../types.ts';
 
@@ -72,5 +73,44 @@ describe('groupResources', () => {
   it('leaves user signals alone', () => {
     const nodes = [node('1', 'signal', 'count', 1), node('2', 'computed', undefined, 2)];
     expect(groupResources(nodes, [{ consumer: 1, producer: 0 }], [], serialize)).toEqual([]);
+  });
+
+  it('masks secret query values in the url of an httpResource request', () => {
+    const signalOf = (raw: object) => {
+      const fn = () => undefined;
+      (fn as unknown as Record<symbol, unknown>)[Symbol('SIGNAL')] = raw;
+      return fn;
+    };
+    const instance = {
+      user: {
+        debugName: 'user',
+        state: signalOf({
+          version: 2,
+          value: {
+            status: 'resolved',
+            extRequest: {
+              request: { method: 'GET', urlWithParams: '/api/me?api_key=sk_live_abc123&page=2' },
+              reload: 0,
+            },
+          },
+        }),
+        extRequest: signalOf({ version: 1 }),
+        value: signalOf({ version: 3, value: 'ada' }),
+      },
+    };
+    const nodes = [
+      node('1', 'computed', 'Resource#user.value', 'ada', 3),
+      node('2', 'linkedSignal', 'Resource#user.state', undefined, 2),
+      node('3', 'linkedSignal', 'Resource#user.extRequest', undefined, 1),
+    ];
+    const edges = [
+      { consumer: 0, producer: 1 },
+      { consumer: 1, producer: 2 },
+    ];
+    const [user] = groupResources(nodes, edges, [instance], (label, value) =>
+      serializeNamed(label, value),
+    );
+    expect(JSON.stringify(user.params)).not.toContain('sk_live_abc123');
+    expect(user.params).toEqual({ method: 'GET', url: '/api/me?api_key=[redacted]&page=2' });
   });
 });

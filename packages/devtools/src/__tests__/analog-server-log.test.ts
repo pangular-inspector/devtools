@@ -12,7 +12,7 @@ import {
   type AnalogCall,
 } from '../analog-server-log.ts';
 import pangularVite from '../vite.ts';
-import { isRedactedKey as isSecretKey } from '../forms-privacy.ts';
+import { isRedactedKey as isSecretKey, setRedaction } from '../forms-privacy.ts';
 
 class FakeRes extends EventEmitter {
   statusCode = 200;
@@ -51,7 +51,10 @@ function run(
   return { nexted, call: recentCalls().at(-1) };
 }
 
-afterEach(() => clearCalls());
+afterEach(() => {
+  clearCalls();
+  setRedaction();
+});
 
 describe('Analog server call log', () => {
   it('classifies load, server function, API and page requests', () => {
@@ -258,6 +261,38 @@ describe('Analog server call log', () => {
     expect(redactMessage('/cb?token=abc&x=1')).toBe('/cb?token=[redacted]&x=1');
     expect(previewOf('<html>', 'text/html')).toBeUndefined();
     expect(previewOf('x'.repeat(2000), 'text/plain')!.length).toBeLessThan(1100);
+  });
+
+  it('masks configured secret names and signed-URL params in recorded urls', () => {
+    setRedaction({ secretNames: ['ssn'] });
+    const { call } = run(
+      '/api/lookup?ssn=123-45-6789&sig=abc123&X-Amz-Credential=cred999&page=2',
+      (res) => res.end('{}'),
+    );
+    expect(call?.url).not.toMatch(/123-45-6789|abc123|cred999/);
+    expect(call?.url).toContain('page=2');
+    expect(redactMessage('/cb?auth=zzz&signature=yyy')).toBe(
+      '/cb?auth=[redacted]&signature=[redacted]',
+    );
+  });
+
+  it('keeps JSON valid when a string value holds a url with a secret param', () => {
+    expect(previewOf('{"next":"/cb?token=abc"}', 'application/json')).toBe(
+      '{"next":"/cb?token=[redacted]"}',
+    );
+    expect(previewOf('{"next":"/cb?token=abc","user":"bob"}', 'application/json')).toBe(
+      '{"next":"/cb?token=[redacted]","user":"bob"}',
+    );
+  });
+
+  it('masks quoted key=value secrets in text and inside JSON strings', () => {
+    expect(previewOf('password: "hunter2"', 'text/plain')).toBe('password: "[redacted]"');
+    const preview = previewOf(
+      '{"msg":"login failed password=hunter2 for x","other":1}',
+      'application/json',
+    )!;
+    expect(preview).not.toContain('hunter2');
+    expect(preview).toContain('"other":1');
   });
 
   it('redacts secret keys in JSON bodies cut at the capture limit', () => {
