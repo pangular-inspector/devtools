@@ -113,7 +113,10 @@ function componentsIn(
   return components;
 }
 
-function standaloneOf(decoratorArgs: string | undefined, major: number | undefined): boolean {
+export function standaloneOf(
+  decoratorArgs: string | undefined,
+  major: number | undefined,
+): boolean {
   const key = decoratorArgs ? topLevelKey(decoratorArgs, STANDALONE_KEY) : undefined;
   if (decoratorArgs && key) {
     const start = key.index + key[0].length;

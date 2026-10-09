@@ -5,10 +5,15 @@ import { scan } from './scan.ts';
 import { describe, expect, it } from 'vitest';
 import { getPipes, pipeUsesIn } from '../get-pipes.ts';
 
-async function pipesFor(source: string) {
+async function pipesFor(source: string, angularVersion?: string) {
   const dir = fixtureDir('pangular-pipes-');
   mkdirSync(join(dir, 'src'));
   writeFileSync(join(dir, 'src', 'app.ts'), source);
+  if (angularVersion) {
+    const coreDir = join(dir, 'node_modules', '@angular', 'core');
+    mkdirSync(coreDir, { recursive: true });
+    writeFileSync(join(coreDir, 'package.json'), JSON.stringify({ version: angularVersion }));
+  }
   return scan(getPipes, dir);
 }
 
@@ -38,6 +43,34 @@ describe('get-pipes', () => {
       }
     `);
     expect(pipe.isPure).toBe(false);
+  });
+
+  it('defaults standalone from the Angular major of the project', async () => {
+    const source = `
+      @Pipe({ name: 'plain' })
+      export class PlainPipe {}
+      @Pipe({ name: 'on', standalone: true })
+      export class OnPipe {}
+      @Pipe({ name: 'off', standalone: false })
+      export class OffPipe {}
+    `;
+    const flags = async (version?: string) =>
+      (await pipesFor(source, version)).map((p) => [p.name, p.isStandalone]);
+    expect(await flags('18.2.0')).toEqual([
+      ['plain', false],
+      ['on', true],
+      ['off', false],
+    ]);
+    expect(await flags('19.0.0')).toEqual([
+      ['plain', true],
+      ['on', true],
+      ['off', false],
+    ]);
+    expect(await flags()).toEqual([
+      ['plain', true],
+      ['on', true],
+      ['off', false],
+    ]);
   });
 
   it('reads a non-standalone pipe', async () => {

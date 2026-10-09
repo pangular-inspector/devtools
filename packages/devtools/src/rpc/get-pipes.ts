@@ -1,6 +1,8 @@
 import { defineRpcFunction } from 'devframe';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
+import { angularMajor } from './angular-version.ts';
+import { standaloneOf } from './get-components.ts';
 import { readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
@@ -94,6 +96,7 @@ export const PIPE_USE = /(?<!\|)\|(?!\|)[ \t]*([A-Za-z_$][\w$]*)/g;
 
 export function scanPipes(cwd: string): PipeInfo[] {
   const pipes: PipeInfo[] = [];
+  const major = angularMajor(cwd);
   const builtinUsages = new Map<string, UsageSite[]>();
   for (const root of sourceRoots(cwd)) {
     walkFiles(root, (full, entry) => {
@@ -101,7 +104,7 @@ export function scanPipes(cwd: string): PipeInfo[] {
       try {
         const content = readFileSync(full, 'utf-8');
         const relPath = relative(cwd, full);
-        pipes.push(...pipesIn(content, relPath));
+        pipes.push(...pipesIn(content, relPath, major));
         collectBuiltinUsages(content, relPath, full, cwd, builtinUsages);
       } catch {
         // skip
@@ -126,7 +129,7 @@ export function scanPipes(cwd: string): PipeInfo[] {
   return pipes;
 }
 
-function pipesIn(content: string, relPath: string): PipeInfo[] {
+function pipesIn(content: string, relPath: string, major: number | undefined): PipeInfo[] {
   const source = stripComments(content);
   // A decorator quoted inside a template is not code.
   const code = maskStrings(source);
@@ -140,7 +143,7 @@ function pipesIn(content: string, relPath: string): PipeInfo[] {
       className: scope.className,
       file: relPath,
       line: lineAt(scope.start),
-      isStandalone: !/\bstandalone\s*:\s*false\b/.test(scope.decoratorArgs ?? ''),
+      isStandalone: standaloneOf(scope.decoratorArgs, major),
       isPure: !/\bpure\s*:\s*false\b/.test(scope.decoratorArgs ?? ''),
       builtin: false,
     });
