@@ -245,7 +245,7 @@ const CLASSIC_KINDS = new Set([
                     <button
                       type="button"
                       class="btn copy"
-                      aria-label="Copy state as JSON"
+                      aria-label="Copy state"
                       (click)="copyState()"
                     >
                       Copy
@@ -601,7 +601,7 @@ const CLASSIC_KINDS = new Set([
               <button
                 type="button"
                 class="btn copy"
-                [attr.aria-label]="'Copy the state diff of #' + selected.seq + ' as JSON'"
+                [attr.aria-label]="'Copy the state diff of #' + selected.seq"
                 (click)="copyDiff(selected)"
               >
                 Copy

@@ -232,7 +232,7 @@ describe('StoreInspector copy', () => {
   it('copies the formatted state shown in the panel', async () => {
     const { fixture } = await mount([]);
     const shown = root(fixture).querySelector('pre.tree')!.textContent;
-    copyButton(fixture, 'Copy state as JSON')!.click();
+    copyButton(fixture, 'Copy state')!.click();
     await settle(fixture);
     expect(copied).toEqual([shown]);
     expect(copied[0]).toBe('{\n  items: []\n}');
@@ -242,10 +242,10 @@ describe('StoreInspector copy', () => {
   it('copies the state diff of the selected entry', async () => {
     const diff = [{ path: 'items.0', op: 'add' as const, after: { id: 1 } }];
     const { fixture } = await mount([entry(1, { diff })]);
-    expect(copyButton(fixture, 'Copy the state diff of #1 as JSON')).toBeNull();
+    expect(copyButton(fixture, 'Copy the state diff of #1')).toBeNull();
     root(fixture).querySelector<HTMLButtonElement>('.log-item')!.click();
     await settle(fixture);
-    copyButton(fixture, 'Copy the state diff of #1 as JSON')!.click();
+    copyButton(fixture, 'Copy the state diff of #1')!.click();
     await settle(fixture);
     expect(copied).toEqual([
       '[\n  {\n    path: "items.0",\n    op: "add",\n    after: {\n      id: 1\n    }\n  }\n]',
@@ -257,13 +257,13 @@ describe('StoreInspector copy', () => {
     const { fixture } = await mount([entry(1)]);
     root(fixture).querySelector<HTMLButtonElement>('.log-item')!.click();
     await settle(fixture);
-    expect(copyButton(fixture, 'Copy the state diff of #1 as JSON')).toBeNull();
+    expect(copyButton(fixture, 'Copy the state diff of #1')).toBeNull();
   });
 
   it('says so when the clipboard is missing', async () => {
     stubClipboard();
     const { fixture } = await mount([]);
-    copyButton(fixture, 'Copy state as JSON')!.click();
+    copyButton(fixture, 'Copy state')!.click();
     await settle(fixture);
     expect(message(fixture)).toBe('The clipboard is not available here.');
   });
@@ -271,7 +271,7 @@ describe('StoreInspector copy', () => {
   it('says so when the clipboard rejects the write', async () => {
     stubClipboard(() => Promise.reject(new Error('denied')));
     const { fixture } = await mount([]);
-    copyButton(fixture, 'Copy state as JSON')!.click();
+    copyButton(fixture, 'Copy state')!.click();
     await settle(fixture);
     expect(message(fixture)).toBe('The clipboard is not available here.');
   });
