@@ -121,18 +121,35 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
           timing.push(`resolve;dur=${sum((n) => n.resolvers?.ms)}`);
         }
         const existing = headerText(res.getHeader('server-timing'));
-        // A headers object passed to writeHead would override setHeader, so merge into it.
-        const headers = args.find(
-          (arg, i) => i > 0 && arg && typeof arg === 'object' && !Array.isArray(arg),
-        ) as OutgoingHttpHeaders | undefined;
+        const merge = (passed?: string) => [existing, passed, ...timing].filter(Boolean).join(', ');
         // Header names are case-insensitive, so `Server-Timing` counts as the same header.
-        const passedKey = headers
-          ? Object.keys(headers).find((key) => key.toLowerCase() === 'server-timing')
-          : undefined;
-        const passed = passedKey ? headerText(headers?.[passedKey]) : undefined;
-        const value = [existing, passed, ...timing].filter(Boolean).join(', ');
-        if (headers && passedKey && passed !== undefined) headers[passedKey] = value;
-        else res.setHeader('server-timing', value);
+        const isTiming = (name: unknown) => String(name).toLowerCase() === 'server-timing';
+        // Headers passed to writeHead would override setHeader, so merge into them. Node takes
+        // an object, a flat `[name, value, ...]` array or `[name, value]` pairs.
+        const slot = args.findIndex((arg, i) => i > 0 && arg && typeof arg === 'object');
+        const headers = args[slot];
+        if (Array.isArray(headers)) {
+          // Work on a copy so the caller's array is left as it was.
+          const raw = [...headers] as unknown[];
+          const pairs = Array.isArray(raw[0]);
+          const i = raw.findIndex((entry, n) =>
+            pairs ? isTiming((entry as unknown[])[0]) : n % 2 === 0 && isTiming(entry),
+          );
+          // Added to the array, not with setHeader: Node rejects pairs once a header is set.
+          if (i < 0)
+            raw.push(...(pairs ? [['server-timing', merge()]] : ['server-timing', merge()]));
+          else if (pairs) {
+            const [name, value] = raw[i] as [string, string | string[]];
+            raw[i] = [name, merge(headerText(value))];
+          } else raw[i + 1] = merge(headerText(raw[i + 1] as string | string[]));
+          args[slot] = raw;
+        } else {
+          const object = headers as OutgoingHttpHeaders | undefined;
+          const passedKey = object ? Object.keys(object).find(isTiming) : undefined;
+          const passed = passedKey ? headerText(object?.[passedKey]) : undefined;
+          if (object && passedKey && passed !== undefined) object[passedKey] = merge(passed);
+          else res.setHeader('server-timing', merge());
+        }
       }
       return (writeHead as (...a: unknown[]) => ServerResponse).apply(this, args);
     } as typeof res.writeHead;

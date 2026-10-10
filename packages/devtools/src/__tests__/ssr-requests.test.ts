@@ -125,6 +125,49 @@ describe('ssrMiddleware', () => {
     }
   });
 
+  it('merges with a Server-Timing value passed to writeHead as a raw array', async () => {
+    const middleware = createSsrMiddleware();
+    const raw = ['Server-Timing', 'db;dur=5', 'Content-Type', 'text/html'];
+    const server = createServer((req, res) => {
+      middleware(req, res, () => {});
+      res.writeHead(200, raw);
+      res.end(HTML);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const response = await fetch(`http://127.0.0.1:${port}/`, {
+        headers: { accept: 'text/html' },
+      });
+      await response.text();
+      expect(response.headers.get('server-timing')).toMatch(/^db;dur=5, pangular;desc="/);
+      expect(raw[1]).toBe('db;dur=5');
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it('adds Server-Timing to [name, value] pairs passed to writeHead', async () => {
+    const middleware = createSsrMiddleware();
+    const server = createServer((req, res) => {
+      middleware(req, res, () => {});
+      res.writeHead(200, [['Content-Type', 'text/html']] as unknown as string[]);
+      res.end(HTML);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const response = await fetch(`http://127.0.0.1:${port}/`, {
+        headers: { accept: 'text/html' },
+      });
+      await response.text();
+      expect(response.status).toBe(200);
+      expect(response.headers.get('server-timing')).toMatch(/^pangular;desc="/);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
   it('skips non-HTML requests, hub paths and when the http inspector is off', () => {
     const middleware = createSsrMiddleware({ skip: ['/__devframes/'] });
     const passed: string[] = [];
