@@ -290,7 +290,7 @@ async function startSession(
       const next = toSignalTarget(request, pageId);
       if (next === undefined) return;
       signalTarget = next;
-      void pushSignalGraph(true);
+      void pushSignalGraph(true).catch(() => {});
     },
   });
 
@@ -301,7 +301,7 @@ async function startSession(
     handler: (request: { pageId?: string; id?: string | null } | null) => {
       if (request?.pageId && request.pageId !== pageId) return;
       componentTarget = typeof request?.id === 'string' ? request.id : null;
-      void pushTree(true);
+      void pushTree(true).catch(() => {});
     },
   });
 
@@ -311,6 +311,7 @@ async function startSession(
     ngrx.stop();
     void Promise.allSettled([
       my.rpc.call('forget-component-page', pageId),
+      my.rpc.call('forget-signal-page', pageId),
       my.rpc.call('forget-injector-page', pageId),
       my.rpc.call('forget-ngrx-page', pageId),
     ]).finally(() => rpc.close?.());
