@@ -7,6 +7,7 @@ import {
   loopBGuard,
   userResolver,
 } from './route-guards';
+import { productAccessGuard, productResolver } from './ssr-guards';
 
 /**
  * Deliberately varied: children, grandchildren, a redirect, route data and a
@@ -107,6 +108,14 @@ export const examplesRoutes: Routes = [
     path: 'ssr',
     loadComponent: () => import('./ssr-requests-example').then((m) => m.SsrRequestsExample),
     data: { title: 'SSR requests', inspector: 'network' },
+  },
+  { path: 'ssr-guards', redirectTo: 'ssr/product/3', pathMatch: 'full' },
+  {
+    path: 'ssr/product/:id',
+    loadComponent: () => import('./ssr-guards-example').then((m) => m.SsrGuardsExample),
+    canActivate: [productAccessGuard],
+    resolve: { product: productResolver },
+    data: { title: 'SSR guards', inspector: 'network' },
   },
   {
     path: 'store',

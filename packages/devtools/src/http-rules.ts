@@ -1,4 +1,4 @@
-import { isHttpRuleStatus } from './config.ts';
+import { CACHE_SKIP_TEXT, isHttpRuleStatus, type CacheSkip } from './config.ts';
 
 export type HttpSide = 'client' | 'server';
 
@@ -37,6 +37,10 @@ export interface HttpCall {
   pageUrl?: string;
   /** The SSR request this server call belongs to, set when `ssrMiddleware` traced the render. */
   requestId?: string;
+  /** Server calls only: the transfer cache stored the response for hydration. */
+  cacheStored?: boolean;
+  /** Server calls only: why the transfer cache did not store it. */
+  cacheSkip?: CacheSkip;
   at: number;
   error?: string;
   preview?: string;
@@ -178,6 +182,10 @@ export function sanitizeCalls(input: unknown, max = MAX_CALLS): HttpCall[] {
       rulePattern: str(c.rulePattern, 500),
       pageUrl: str(c.pageUrl, 2000),
       ...(str(c.requestId, 40) ? { requestId: str(c.requestId, 40) } : {}),
+      ...(typeof c.cacheStored === 'boolean' ? { cacheStored: c.cacheStored } : {}),
+      ...(typeof c.cacheSkip === 'string' && Object.hasOwn(CACHE_SKIP_TEXT, c.cacheSkip)
+        ? { cacheSkip: c.cacheSkip as CacheSkip }
+        : {}),
       at: num(c.at) ?? 0,
       error: str(c.error, 500),
       preview: str(c.preview, 2001),

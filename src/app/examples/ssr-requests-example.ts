@@ -73,6 +73,10 @@ interface Quote {
           </p>
         </li>
       </ul>
+      <p class="why">
+        For guards and resolvers that call an API during the render, load
+        <a href="/examples/ssr/product/3">SSR guards and resolvers</a>.
+      </p>
     </app-example-page>
   `,
   styles: `

@@ -16,7 +16,12 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
 import { rpcCall as call } from '../rpc';
 import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
-import { HTTP_RULE_STATUSES, isHttpRuleStatus } from '@pangular-inspector/devtools/config';
+import {
+  CACHE_SKIP_TEXT,
+  HTTP_RULE_STATUSES,
+  isHttpRuleStatus,
+  type CacheSkip,
+} from '@pangular-inspector/devtools/config';
 import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 
@@ -49,9 +54,21 @@ interface HttpCall {
   rulePattern?: string;
   pageUrl?: string;
   requestId?: string;
+  cacheStored?: boolean;
+  cacheSkip?: CacheSkip;
   at: number;
   error?: string;
   preview?: string;
+}
+
+interface SsrNavigation {
+  url: string;
+  finalUrl?: string;
+  outcome: string;
+  reason?: string;
+  durationMs?: number;
+  guards?: { names: string[]; passed?: boolean; ms?: number };
+  resolvers?: { names: string[]; ms?: number };
 }
 
 interface SsrRequest {
@@ -63,10 +80,11 @@ interface SsrRequest {
   durationMs: number;
   renderMs: number;
   bytes: number;
-  renderMode: 'server' | 'prerender' | 'client' | 'unknown';
+  renderMode: 'server' | 'prerender' | 'client' | 'redirect' | 'not-rendered' | 'unknown';
   fetches: number;
   fetchMs: number;
   headers: Record<string, string>;
+  navigations?: SsrNavigation[];
   aborted?: boolean;
 }
 
@@ -74,6 +92,8 @@ const RENDER_MODE_LABEL: Record<SsrRequest['renderMode'], string> = {
   server: 'Server',
   prerender: 'Prerender',
   client: 'Client',
+  redirect: 'Redirect',
+  'not-rendered': 'Not rendered',
   unknown: 'Unknown',
 };
 
@@ -302,6 +322,47 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                   <dd>{{ requestPage()?.title || requestPage()?.url || 'not connected' }}</dd>
                 </div>
               </dl>
+              @if (req.navigations?.length) {
+                <h3>Router during the render</h3>
+                @for (n of req.navigations; track $index) {
+                  <dl class="stats nav-stats">
+                    <div>
+                      <dt>Navigation</dt>
+                      <dd>
+                        <code>{{ n.url }}</code>
+                        @if (n.finalUrl) {
+                          to <code>{{ n.finalUrl }}</code>
+                        }
+                        ({{ n.outcome }})
+                      </dd>
+                    </div>
+                    @if (n.guards) {
+                      <div>
+                        <dt>Guards</dt>
+                        <dd [class.bad]="guardVerdict(n) === 'rejected'">
+                          {{ msLabel(n.guards.ms)
+                          }}{{ guardVerdict(n) ? ', ' + guardVerdict(n) : '' }}
+                        </dd>
+                      </div>
+                    }
+                    @if (n.resolvers) {
+                      <div>
+                        <dt>Resolvers</dt>
+                        <dd>{{ msLabel(n.resolvers.ms) }}</dd>
+                      </div>
+                    }
+                    @if (n.durationMs !== undefined) {
+                      <div>
+                        <dt>Navigation total</dt>
+                        <dd>{{ n.durationMs }} ms</dd>
+                      </div>
+                    }
+                  </dl>
+                  @if (n.reason) {
+                    <p class="muted small">{{ n.reason }}</p>
+                  }
+                }
+              }
               <h3>Server calls ({{ requestCalls().length }})</h3>
               @for (c of requestCalls(); track c.id) {
                 <p class="request-call">
@@ -314,7 +375,15 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                     >{{ statusLabel(c) }}</span
                   >
                   <span class="muted">{{ c.durationMs }} ms</span>
+                  @if (c.cacheStored) {
+                    <span class="tag server">cached</span>
+                  } @else if (c.cacheSkip) {
+                    <span class="tag" [title]="skipText(c.cacheSkip)">not cached</span>
+                  }
                 </p>
+                @if (!c.cacheStored && c.cacheSkip) {
+                  <p class="muted small skip-reason">Not cached: {{ skipText(c.cacheSkip) }}.</p>
+                }
               } @empty {
                 <p class="muted small">The render made no HttpClient calls.</p>
               }
@@ -322,8 +391,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 <h3>Fetched again in the browser ({{ refetched().length }})</h3>
                 <p class="muted small">
                   These calls ran on the server and again after hydration instead of reading the
-                  transfer cache. Non-GET requests, <code>transferCache: false</code> and requests
-                  with auth headers are left out of the cache.
+                  transfer cache.
                 </p>
                 @for (c of refetched(); track c.id) {
                   <p class="request-call">
@@ -331,6 +399,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                     <span class="preview-url" [title]="c.url">{{ c.url }}</span>
                     <span class="tag fault">cache miss</span>
                   </p>
+                  @if (refetchReason(c); as why) {
+                    <p class="muted small skip-reason">Why: {{ why }}.</p>
+                  }
                 }
               } @else if (requestPage() && requestCalls().length) {
                 <p class="muted small ok-note">No server call ran again in the browser.</p>
@@ -1297,6 +1368,12 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     .request-call .preview-url {
       flex: 1 1 auto;
     }
+    .skip-reason {
+      margin: 0 0 8px;
+    }
+    .nav-stats {
+      margin-bottom: 8px;
+    }
     .preview-rule {
       margin-bottom: 8px;
       color: var(--text-2);
@@ -1722,6 +1799,30 @@ export class NetworkInspector {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** A guard that returns a UrlTree reports shouldActivate false, so a redirect is not a rejection. */
+  guardVerdict(nav: SsrNavigation): 'redirected' | 'rejected' | '' {
+    if (nav.guards?.passed !== false) return '';
+    return nav.outcome === 'redirected' ? 'redirected' : 'rejected';
+  }
+
+  msLabel(ms: number | undefined): string {
+    return ms === undefined ? 'n/a' : `${ms} ms`;
+  }
+
+  skipText(skip: CacheSkip): string {
+    return CACHE_SKIP_TEXT[skip] ?? '';
+  }
+
+  refetchReason(call: HttpCall): string {
+    const key = `${call.method} ${pathOf(call.url)}`;
+    const matches = this.requestCalls().filter((c) => `${c.method} ${pathOf(c.url)}` === key);
+    const first = matches[0];
+    // Several matching server calls with different outcomes can't be paired, so name no reason.
+    return first?.cacheSkip && matches.every((c) => c.cacheSkip === first.cacheSkip)
+      ? this.skipText(first.cacheSkip)
+      : '';
   }
 
   renderModeLabel(mode: SsrRequest['renderMode']): string {

@@ -51,6 +51,16 @@ app.get('/api/products{/:id}', (req, res) => {
   }, delay);
 });
 
+/** Access check for the SSR guards example: product 2 is sold out, unknown ids answer 404. */
+app.get('/api/access/:id', (req, res) => {
+  const delay = Math.min(Math.max(Number(req.query['delay']) || 0, 0), 5000);
+  setTimeout(() => {
+    const product = products.find((p) => p.id === Number(req.params['id']));
+    if (!product) res.status(404).json({ allowed: false });
+    else res.json({ allowed: product.stock > 0, soldOut: product.stock === 0 });
+  }, delay);
+});
+
 /** A POST for the SSR requests example; the transfer cache leaves POSTs out by default. */
 app.post('/api/quote', express.json({ limit: '1kb' }), (req, res) => {
   const ids: unknown[] = Array.isArray(req.body?.ids) ? req.body.ids.slice(0, 20) : [];

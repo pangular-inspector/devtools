@@ -28,6 +28,24 @@ export const PANGULAR_LIMITS = {
 
 export type PangularLimit = keyof typeof PANGULAR_LIMITS;
 
+/** Why Angular's transfer cache did not store a server response. */
+export const CACHE_SKIP_TEXT = {
+  'opted-out': 'the request sets transferCache: false',
+  post: 'POST requests are left out unless includePostRequests is set',
+  method: 'only GET, HEAD and POST requests are cached',
+  'auth-headers': 'it sends an Authorization, Proxy-Authorization or Cookie header',
+  credentials: 'it sends credentials (withCredentials or credentials: include/same-origin)',
+  'no-cache-request': 'the request asks for no-store, no-cache or private',
+  'no-cache-response': 'the response has Cache-Control no-store, no-cache or private',
+  'set-cookie': 'the response sets a cookie',
+  error: 'failed responses are not stored',
+  mocked: 'a fault rule answered before the transfer cache ran',
+  'cache-off-or-filter':
+    'the transfer cache is off, or its filter (or another withHttpTransferCacheOptions setting) left it out',
+} as const;
+
+export type CacheSkip = keyof typeof CACHE_SKIP_TEXT;
+
 export const HTTP_RULE_STATUSES: readonly (readonly [status: number, reason: string])[] = [
   [200, 'OK'],
   [201, 'Created'],

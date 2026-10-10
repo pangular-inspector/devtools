@@ -48,11 +48,27 @@ describe('NetworkInspector SSR requests', () => {
         fetches: 2,
         fetchMs: 24,
         headers: {},
+        navigations: [
+          {
+            url: '/examples/ssr',
+            outcome: 'succeeded',
+            durationMs: 20,
+            guards: { names: ['adminGuard'], passed: true, ms: 3 },
+            resolvers: { names: [], ms: 12 },
+          },
+        ],
       },
     ]);
     inspector.serverCalls.set([
-      call({ id: 's1', requestId: 'r1' }),
-      call({ id: 's2', requestId: 'r1', method: 'POST', url: 'http://localhost/api/quote' }),
+      call({ id: 's1', requestId: 'r1', cacheStored: true }),
+      call({
+        id: 's2',
+        requestId: 'r1',
+        method: 'POST',
+        url: 'http://localhost/api/quote',
+        cacheStored: false,
+        cacheSkip: 'post',
+      }),
     ]);
     inspector.pages.set([
       {
@@ -75,6 +91,13 @@ describe('NetworkInspector SSR requests', () => {
     expect(detail.textContent).toContain('Server calls (2)');
     expect(detail.textContent).toContain('Fetched again in the browser (1)');
     expect(inspector.refetched().map((c) => c.id)).toEqual(['b2']);
+    expect(detail.textContent).toContain('Router during the render');
+    expect(detail.textContent).toMatch(/Guards\s*3 ms/);
+    expect(detail.textContent).toMatch(/Resolvers\s*12 ms/);
+    expect(detail.querySelector('.tag.server')!.textContent).toBe('cached');
+    expect(detail.textContent).toContain(
+      'Why: POST requests are left out unless includePostRequests is set.',
+    );
     expect(host.querySelector('tr.selected .tag.server')!.textContent).toBe('this page');
 
     inspector.selectedRequestId.set('r2');

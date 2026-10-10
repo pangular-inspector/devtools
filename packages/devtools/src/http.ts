@@ -8,9 +8,13 @@ import type { HttpEvent, HttpInterceptorFn, HttpRequest } from '@angular/common/
 import { isPlatformServer } from '@angular/common';
 import {
   ApplicationRef,
+  DestroyRef,
+  EnvironmentInjector,
   PLATFORM_ID,
   REQUEST,
+  TransferState,
   inject,
+  makeStateKey,
   makeEnvironmentProviders,
   provideEnvironmentInitializer,
   type EnvironmentProviders,
@@ -20,6 +24,7 @@ import type { Subscription } from 'rxjs';
 
 import { redactMessage } from './forms-privacy.ts';
 import { transferCacheKeys } from './http-cache-key.ts';
+import { cacheSkipReason, type CacheSkip } from './http-cache-reason.ts';
 import { appIdOf, isHydrationMessage } from './http-hydration.ts';
 
 import {
@@ -33,6 +38,7 @@ import {
   type HttpSide,
 } from './http-rules.ts';
 import { SSR_REQUEST_HEADER, activeSsrRequest, noteSsrFetch } from './ssr-registry.ts';
+import { watchSsrNavigations } from './ssr-navigation.ts';
 
 export * from './http-rules.ts';
 export { decodePayload, type PayloadEntry, type PayloadSummary } from './http-payload.ts';
@@ -253,6 +259,17 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
   }
   const cacheable = side === 'client' && !mocked && transferWindowOpen();
   const claimable = cacheable && transferCacheEligible(req);
+  const transferState = side === 'server' ? inject(TransferState, { optional: true }) : null;
+  const serverCache = (
+    response: { ok: boolean; headers?: HttpHeaders } | null,
+  ): { cacheStored: boolean; cacheSkip?: CacheSkip } | Record<string, never> => {
+    if (side !== 'server' || !transferState) return {};
+    if (mocked) return { cacheStored: false, cacheSkip: 'mocked' };
+    const stored = transferCacheKeys(req).some((key) => transferState.hasKey(makeStateKey(key)));
+    return stored
+      ? { cacheStored: true }
+      : { cacheStored: false, cacheSkip: cacheSkipReason(req, response) };
+  };
   const observed = new Observable<HttpEvent<unknown>>((subscriber) => {
     // The transfer cache replays a hit synchronously, so a response that
     // arrives before subscribe() returns came from the SSR payload.
@@ -267,6 +284,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
             status: event.status,
             cacheHit: side === 'client' ? cacheable && (sync || fromPayload) : !mocked && sync,
             preview: preview(mocked ? rule?.body : event.body),
+            ...serverCache({ ok: event.ok, headers: event.headers }),
           });
         }
         subscriber.next(event);
@@ -275,7 +293,12 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
         const failed = error instanceof HttpErrorResponse;
         const message = failed ? error.message : String(error);
         settled = true;
-        done({ status: failed ? error.status : 0, cacheHit: false, error: message.slice(0, 500) });
+        done({
+          status: failed ? error.status : 0,
+          cacheHit: false,
+          error: message.slice(0, 500),
+          ...serverCache(null),
+        });
         subscriber.error(error);
       },
       complete: () => subscriber.complete(),
@@ -341,10 +364,24 @@ export function withPangular() {
   return withInterceptors([pangularHttpInterceptor]);
 }
 
+function watchServerNavigations() {
+  const platform = inject(PLATFORM_ID, { optional: true });
+  if (!devMode() || !platform || !isPlatformServer(platform)) return;
+  const request = inject(REQUEST, { optional: true });
+  const requestId = activeSsrRequest(request?.headers.get(SSR_REQUEST_HEADER));
+  if (!requestId) return;
+  // Subscribe now: the initial navigation starts in an app initializer, before any microtask.
+  inject(DestroyRef).onDestroy(watchSsrNavigations(requestId, inject(EnvironmentInjector)));
+}
+
 /**
- * Captures hydration warnings (NG05xx) before the overlay loads. Add it next
- * to `provideHttpClient(withPangular())`.
+ * Captures hydration warnings (NG05xx) before the overlay loads, and the
+ * router's guard and resolver timings during a server render traced by
+ * `ssrMiddleware`. Add it next to `provideHttpClient(withPangular())`.
  */
 export function providePangularHttp(): EnvironmentProviders {
-  return makeEnvironmentProviders([provideEnvironmentInitializer(captureHydrationWarnings)]);
+  return makeEnvironmentProviders([
+    provideEnvironmentInitializer(captureHydrationWarnings),
+    provideEnvironmentInitializer(watchServerNavigations),
+  ]);
 }

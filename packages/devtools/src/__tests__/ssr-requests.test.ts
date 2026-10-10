@@ -129,6 +129,30 @@ describe('ssrMiddleware', () => {
     expect(req.headers[SSR_REQUEST_HEADER]).toBeUndefined();
   });
 
+  const answer = (status: number, body: string) => {
+    const res = new FakeResponse();
+    createSsrMiddleware()(request('/page'), res as unknown as ServerResponse, () => {});
+    res.statusCode = status;
+    res.setHeader('content-type', 'text/html');
+    res.end(body || undefined);
+    return recorded.at(-1);
+  };
+
+  it('calls an error page Angular did not render Not rendered', () => {
+    expect(answer(404, '<pre>Cannot GET /missing</pre>')).toMatchObject({
+      status: 404,
+      renderMode: 'not-rendered',
+    });
+  });
+
+  it('keeps a not-found page Angular rendered with status 404 as Server', () => {
+    expect(answer(404, HTML)).toMatchObject({ status: 404, renderMode: 'server' });
+  });
+
+  it('calls a redirect with no body Redirect', () => {
+    expect(answer(302, '')).toMatchObject({ status: 302, renderMode: 'redirect' });
+  });
+
   it('ignores HTML-accepting requests answered with something else', () => {
     const middleware = createSsrMiddleware();
     const res = new FakeResponse();
@@ -141,7 +165,11 @@ describe('ssrMiddleware', () => {
   it('reads the render mode from ng-server-context', () => {
     expect(renderModeOf(HTML)).toBe('server');
     expect(renderModeOf('<app-root ng-server-context="ssg">')).toBe('prerender');
-    expect(renderModeOf('<html><app-root></app-root></html>')).toBe('client');
+    const shell =
+      '<base href="/"><app-root></app-root><script src="main.js" type="module"></script>';
+    expect(renderModeOf(shell)).toBe('client');
+    expect(renderModeOf(shell, 404)).toBe('client');
+    expect(renderModeOf('<p>Hello</p>')).toBe('unknown');
   });
 });
 
