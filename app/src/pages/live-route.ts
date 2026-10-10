@@ -6,6 +6,7 @@ import {
   inject,
   input,
   linkedSignal,
+  output,
   signal,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
@@ -86,7 +87,11 @@ type TabId = (typeof TABS)[number]['id'];
       >
         @switch (selected()) {
           @case ('current') {
-            <app-route-current [page]="current" [rpc]="rpc()" />
+            <app-route-current
+              [page]="current"
+              [rpc]="rpc()"
+              (showComponent)="showComponent.emit($event)"
+            />
           }
           @case ('navigations') {
             <app-route-timeline [page]="current" [rpc]="rpc()" />
@@ -267,6 +272,7 @@ type TabId = (typeof TABS)[number]['id'];
 export class LiveRoute {
   rpc = input<DevframeRpcClient | null>(null);
   sources = input<SourceRoute[]>([]);
+  readonly showComponent = output<string>();
 
   readonly tabs = TABS;
   readonly selected = signal<TabId>('current');

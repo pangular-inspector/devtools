@@ -1,7 +1,7 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { Component, computed, input, output, signal } from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
-import { actionAllowed, actionBlockedMessage } from '../devtools-config';
+import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
 import {
   SHARED_STYLES,
   routerAction,
@@ -169,6 +169,18 @@ interface OutletRow {
               @if (row.outlet.activated) {
                 <code>{{ row.outlet.component ?? '?' }}</code> for
                 <code>{{ row.outlet.route ?? '?' }}</code>
+                @if (row.outlet.devtoolsId && componentsOn()) {
+                  <button
+                    type="button"
+                    class="small show-component"
+                    (click)="showComponent.emit(row.outlet.devtoolsId)"
+                  >
+                    Show in Components<span class="visually-hidden"
+                      >:
+                      {{ row.outlet.component ?? row.outlet.element ?? 'routed component' }}</span
+                    >
+                  </button>
+                }
               } @else {
                 <span class="muted">not activated</span>
               }
@@ -308,6 +320,10 @@ interface OutletRow {
     .outlets li:hover {
       background: var(--surface-2);
     }
+    .show-component {
+      margin-left: 6px;
+      vertical-align: middle;
+    }
     .outlet-data {
       display: block;
       color: var(--text-2);
@@ -320,6 +336,9 @@ export class RouteCurrent {
   rpc = input<DevframeRpcClient | null>(null);
   readonly navigationAllowed = computed(() => actionAllowed(this.rpc(), 'router'));
   protected readonly navigationOff = actionBlockedMessage('router');
+  readonly componentsOn = computed(() => panelConfig(this.rpc()).inspectors.components);
+  /** The devtools id of a routed component to select in the Components tab. */
+  readonly showComponent = output<string>();
 
   readonly message = signal('');
 

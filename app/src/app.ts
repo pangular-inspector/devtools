@@ -409,7 +409,7 @@ function readView(): View | null {
               />
             }
             @case ('routes') {
-              <app-route-inspector [rpc]="rpc()" />
+              <app-route-inspector [rpc]="rpc()" (showComponent)="showComponent($event)" />
             }
             @case ('signals') {
               <app-signal-inspector [rpc]="rpc()" />
@@ -993,6 +993,13 @@ export class App implements OnInit, OnDestroy {
   showForm(formId: string) {
     this.formFocus.set({ id: formId });
     this.switchTab('forms');
+  }
+
+  showComponent(id: string) {
+    if (!this.config().inspectors.components) return;
+    // Switch first: the focus belongs to the tab, so the switch would clear it.
+    this.switchTab('components');
+    this.componentFocus.set({ id });
   }
 
   inspectFromPanel({ source, origin, data }: MessageEvent<unknown>) {
