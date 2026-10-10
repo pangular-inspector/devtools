@@ -134,6 +134,19 @@ describe('signalGraphText', () => {
     expect(missing).toContain('`doubled`');
   });
 
+  it('drops resource references to nodes it left out', () => {
+    const graph = smallGraph();
+    graph.resources![1]!.nodeIds = ['c', 'e'];
+    const view = JSON.parse(signalGraphText(graph, { node: 'doubled' })) as SignalGraph;
+    expect(view.resources).toEqual([expect.objectContaining({ id: 'r2', nodeIds: ['c'] })]);
+  });
+
+  it('keeps a no-match answer within the budget', () => {
+    expect(signalGraphText(smallGraph(), { node: 'x'.repeat(30_000) }).length).toBe(
+      SIGNAL_TOOL_MAX,
+    );
+  });
+
   it('drops history with `history: false`', () => {
     const view = JSON.parse(signalGraphText(smallGraph(), { history: false })) as SignalGraph;
     expect(view.history).toBeUndefined();

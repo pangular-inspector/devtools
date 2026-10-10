@@ -1822,7 +1822,9 @@ const pangular = defineDevframe({
             : '';
           const head = `No signal graph for \`${args.selector}\`.${hint} The live graph covers \`${covers}\`:\n\n`;
           return {
-            markdown: head + signalGraphText(graph, view, SIGNAL_TOOL_MAX - head.length),
+            markdown: (
+              head + signalGraphText(graph, view, Math.max(0, SIGNAL_TOOL_MAX - head.length))
+            ).slice(0, SIGNAL_TOOL_MAX),
           };
         }
         return { markdown: signalGraphText(graph, view) };

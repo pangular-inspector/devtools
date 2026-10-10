@@ -31,7 +31,9 @@ function pick(graph: Graph, keep: number[]): Graph {
   }
   const out: Graph = { ...graph, nodes, edges };
   if (graph.resources) {
-    const resources = graph.resources.filter((r) => r.nodeIds.some((id) => ids.has(id)));
+    const resources = graph.resources
+      .filter((r) => r.nodeIds.some((id) => ids.has(id)))
+      .map((r) => ({ ...r, nodeIds: r.nodeIds.filter((id) => ids.has(id)) }));
     if (resources.length) out.resources = resources;
     else delete out.resources;
   }
@@ -98,7 +100,8 @@ export function signalGraphText(
   let view: Graph = graph;
   if (args.node) {
     const narrowed = neighbourhood(graph, args.node);
-    if (!narrowed) return `No signal node \`${args.node}\`.${knownNodes(graph.nodes)}`;
+    if (!narrowed)
+      return `No signal node \`${args.node}\`.${knownNodes(graph.nodes)}`.slice(0, budget);
     view = narrowed;
   }
   if (args.history === false) {
