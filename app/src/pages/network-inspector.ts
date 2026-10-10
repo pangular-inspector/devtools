@@ -48,10 +48,34 @@ interface HttpCall {
   ruleId?: string;
   rulePattern?: string;
   pageUrl?: string;
+  requestId?: string;
   at: number;
   error?: string;
   preview?: string;
 }
+
+interface SsrRequest {
+  id: string;
+  method: string;
+  url: string;
+  status: number;
+  at: number;
+  durationMs: number;
+  renderMs: number;
+  bytes: number;
+  renderMode: 'server' | 'prerender' | 'client' | 'unknown';
+  fetches: number;
+  fetchMs: number;
+  headers: Record<string, string>;
+  aborted?: boolean;
+}
+
+const RENDER_MODE_LABEL: Record<SsrRequest['renderMode'], string> = {
+  server: 'Server',
+  prerender: 'Prerender',
+  client: 'Client',
+  unknown: 'Unknown',
+};
 
 interface PayloadEntry {
   key: string;
@@ -96,6 +120,7 @@ interface HttpPage {
   hydration: HydrationStats | null;
   calls: HttpCall[];
   dropped?: number;
+  ssrRequestId?: string;
   firstSeenAt?: number;
   reportedAt: number;
 }
@@ -103,6 +128,7 @@ interface HttpPage {
 interface HttpState {
   serverCalls: HttpCall[];
   serverDropped?: number;
+  requests?: SsrRequest[];
   pages: HttpPage[];
   rules: HttpRule[];
 }
@@ -124,6 +150,15 @@ const EMPTY_DRAFT: RuleDraft = {
   delayMs: '',
   body: '',
 };
+
+function pathOf(url: string): string {
+  try {
+    const parsed = new URL(url, 'http://x');
+    return parsed.pathname + parsed.search;
+  } catch {
+    return url;
+  }
+}
 
 const MAX_RULES = 50;
 const MAX_PATTERN = 500;
@@ -180,6 +215,139 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     </div>
 
     <div class="grid">
+      <section class="panel wide" aria-labelledby="ssr-heading">
+        <h2 id="ssr-heading">SSR requests ({{ requests().length }})</h2>
+        @if (requests().length) {
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Request</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Render mode</th>
+                  <th scope="col" class="num">Render</th>
+                  <th scope="col" class="num">Server calls</th>
+                  <th scope="col">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (req of requests(); track req.id) {
+                  <tr
+                    [class.selected]="selectedRequest()?.id === req.id"
+                    (click)="selectedRequestId.set(req.id)"
+                  >
+                    <td class="url">
+                      <button
+                        type="button"
+                        class="link"
+                        [title]="req.url"
+                        [attr.aria-pressed]="selectedRequest()?.id === req.id"
+                        aria-controls="ssr-detail"
+                      >
+                        <span class="method">{{ req.method }}</span> {{ req.url }}
+                      </button>
+                    </td>
+                    <td
+                      class="status"
+                      [class.ok]="statusTone(req.status) === 'ok'"
+                      [class.redirect]="statusTone(req.status) === 'redirect'"
+                      [class.bad]="statusTone(req.status) === 'bad'"
+                    >
+                      <span class="dot" aria-hidden="true"></span>{{ req.status }}
+                    </td>
+                    <td>{{ renderModeLabel(req.renderMode) }}</td>
+                    <td class="num">{{ req.renderMs }} ms</td>
+                    <td class="num">{{ req.fetches }} ({{ req.fetchMs }} ms)</td>
+                    <td>
+                      <div class="notes">
+                        @if (req.id === selected()?.ssrRequestId) {
+                          <span class="tag server">this page</span>
+                        }
+                        @if (req.aborted) {
+                          <span class="tag fault">aborted</span>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (selectedRequest(); as req) {
+            <div id="ssr-detail" class="preview" role="region" aria-labelledby="ssr-detail-heading">
+              <h3 id="ssr-detail-heading">
+                {{ req.method }} <code>{{ req.url }}</code>
+              </h3>
+              <dl class="stats">
+                <div>
+                  <dt>Request id</dt>
+                  <dd>
+                    <code>{{ req.id }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Render</dt>
+                  <dd>{{ req.renderMs }} ms</dd>
+                </div>
+                <div>
+                  <dt>Total</dt>
+                  <dd>{{ req.durationMs }} ms</dd>
+                </div>
+                <div>
+                  <dt>Sent</dt>
+                  <dd>{{ req.bytes }} B</dd>
+                </div>
+                <div>
+                  <dt>Browser page</dt>
+                  <dd>{{ requestPage()?.title || requestPage()?.url || 'not connected' }}</dd>
+                </div>
+              </dl>
+              <h3>Server calls ({{ requestCalls().length }})</h3>
+              @for (c of requestCalls(); track c.id) {
+                <p class="request-call">
+                  <span class="method">{{ c.method }}</span>
+                  <span class="preview-url" [title]="c.url">{{ c.url }}</span>
+                  <span
+                    class="status"
+                    [class.ok]="callTone(c) === 'ok'"
+                    [class.bad]="callTone(c) === 'bad'"
+                    >{{ statusLabel(c) }}</span
+                  >
+                  <span class="muted">{{ c.durationMs }} ms</span>
+                </p>
+              } @empty {
+                <p class="muted small">The render made no HttpClient calls.</p>
+              }
+              @if (refetched().length) {
+                <h3>Fetched again in the browser ({{ refetched().length }})</h3>
+                <p class="muted small">
+                  These calls ran on the server and again after hydration instead of reading the
+                  transfer cache. Non-GET requests, <code>transferCache: false</code> and requests
+                  with auth headers are left out of the cache.
+                </p>
+                @for (c of refetched(); track c.id) {
+                  <p class="request-call">
+                    <span class="method">{{ c.method }}</span>
+                    <span class="preview-url" [title]="c.url">{{ c.url }}</span>
+                    <span class="tag fault">cache miss</span>
+                  </p>
+                }
+              } @else if (requestPage() && requestCalls().length) {
+                <p class="muted small ok-note">No server call ran again in the browser.</p>
+              }
+            </div>
+          }
+        } @else {
+          <div class="empty">
+            <p>No SSR requests traced.</p>
+            <p class="muted small">
+              Add <code>app.use(devtools.ssrMiddleware)</code> before the Angular handler in
+              <code>server.ts</code>, then load a server rendered page.
+            </p>
+          </div>
+        }
+      </section>
+
       <section class="panel wide" aria-labelledby="timeline-heading">
         <h2 id="timeline-heading">HTTP timeline ({{ timeline().length }})</h2>
         <app-limit-note
@@ -1119,6 +1287,16 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       min-width: 0;
       margin-bottom: 8px;
     }
+    .request-call {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      min-width: 0;
+      margin: 0 0 4px;
+    }
+    .request-call .preview-url {
+      flex: 1 1 auto;
+    }
     .preview-rule {
       margin-bottom: 8px;
       color: var(--text-2);
@@ -1366,6 +1544,7 @@ export class NetworkInspector {
   readonly pages = signal<HttpPage[]>([]);
   readonly payloads = signal<Record<string, HttpPayload>>({});
   readonly serverDropped = signal(0);
+  readonly requests = signal<SsrRequest[]>([]);
   readonly rules = signal<HttpRule[]>([]);
   private readonly hostPageId = hostPageId();
   readonly selectedPageId = linkedSignal<HttpPage[], string | null>({
@@ -1376,6 +1555,9 @@ export class NetworkInspector {
         : (pages.find((p) => p.pageId === this.hostPageId)?.pageId ?? pages[0]?.pageId ?? null),
   });
   readonly selectedCallId = signal<string | null>(null);
+  readonly selectedRequestId = linkedSignal<string | null>(
+    () => this.selected()?.ssrRequestId ?? null,
+  );
   readonly draft = signal<RuleDraft>({ ...EMPTY_DRAFT });
   readonly message = signal('');
   readonly bodyPlaceholder = '{ "error": "Service unavailable" }';
@@ -1412,6 +1594,38 @@ export class NetworkInspector {
   readonly selectedCall = computed(
     () => this.timeline().find((c) => c.id === this.selectedCallId()) ?? null,
   );
+
+  readonly selectedRequest = computed(
+    () => this.requests().find((r) => r.id === this.selectedRequestId()) ?? null,
+  );
+
+  readonly requestCalls = computed(() => {
+    const id = this.selectedRequest()?.id;
+    return id ? this.serverCalls().filter((c) => c.requestId === id) : [];
+  });
+
+  readonly requestPage = computed(() => {
+    const id = this.selectedRequest()?.id;
+    return id ? (this.pages().find((p) => p.ssrRequestId === id) ?? null) : null;
+  });
+
+  readonly refetched = computed(() => {
+    const request = this.selectedRequest();
+    const page = this.requestPage();
+    if (!request || !page) return [];
+    const fetched = new Set(
+      this.requestCalls()
+        .filter((c) => c.status)
+        .map((c) => `${c.method} ${pathOf(c.url)}`),
+    );
+    return page.calls.filter(
+      (c) =>
+        !c.cacheHit &&
+        !c.mocked &&
+        c.at >= request.at &&
+        fetched.has(`${c.method} ${pathOf(c.url)}`),
+    );
+  });
 
   readonly draftMocksOnServer = computed(() => {
     const rule = this.draftRule();
@@ -1490,6 +1704,7 @@ export class NetworkInspector {
         const snapshot = value as HttpState | undefined;
         this.serverCalls.set(snapshot?.serverCalls ?? []);
         this.serverDropped.set(snapshot?.serverDropped ?? 0);
+        this.requests.set([...(snapshot?.requests ?? [])].reverse());
         this.pages.set(snapshot?.pages ?? []);
         this.rules.set(snapshot?.rules ?? []);
       };
@@ -1506,6 +1721,10 @@ export class NetworkInspector {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  renderModeLabel(mode: SsrRequest['renderMode']): string {
+    return RENDER_MODE_LABEL[mode] ?? 'Unknown';
   }
 
   statusLabel(call: HttpCall): string {

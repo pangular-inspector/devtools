@@ -1,5 +1,6 @@
 import type {} from 'devframe';
 import type { HttpCall, HttpRule } from './http-rules.ts';
+import type { SsrRequest } from './ssr-registry.ts';
 import type { PayloadSummary } from './http-payload.ts';
 import type { HydrationMismatch } from './http-hydration.ts';
 
@@ -331,6 +332,8 @@ export interface HttpPage {
   calls: HttpCall[];
   /** Older client calls the page removed at `limits.httpCalls`. */
   dropped?: number;
+  /** The SSR request that served this document, read from its Server-Timing header. */
+  ssrRequestId?: string;
   firstSeenAt: number;
   reportedAt: number;
 }
@@ -342,6 +345,8 @@ export interface HttpState {
   serverCalls: HttpCall[];
   /** Older SSR calls removed at `limits.httpCalls`. */
   serverDropped?: number;
+  /** Requests traced by `ssrMiddleware`, oldest first. */
+  requests: SsrRequest[];
   pages: HttpPage[];
   rules: HttpRule[];
 }

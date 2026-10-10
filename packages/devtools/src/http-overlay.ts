@@ -4,6 +4,7 @@ import { decodePayload, type PayloadSummary } from './http-payload.ts';
 import { redactCall } from './http-redact.ts';
 import { httpRegistry, sanitizeRules, storeRules, type HttpCall } from './http-rules.ts';
 import { redactMessage, redactUrl } from './router.ts';
+import { readSsrRequestId } from './ssr-registry.ts';
 import type { HttpReport, HydrationStats } from './types.ts';
 
 interface RpcScope {
@@ -74,6 +75,7 @@ function hydrationStats(
 export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = () => 0) {
   const payload = decodePayload(document, appIdOf(document));
   const initialUrl = redactUrl(location.pathname + location.search);
+  const ssrRequestId = readSsrRequestId();
   const scanner = createHydrationScanner();
   let payloadSent = false;
   let lastCall: HttpCall | undefined;
@@ -96,6 +98,7 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
       title: redactMessage(document.title),
       hydration: hydrationStats(payload, scanner),
       dropped: registry.dropped ?? 0,
+      ...(ssrRequestId ? { ssrRequestId } : {}),
     };
     const metaJson = JSON.stringify(meta);
     const full = !payloadSent;

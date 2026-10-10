@@ -11,6 +11,7 @@ import { createPangular } from './devframe.ts';
 import { PANGULAR_EXTENSION_ORIGINS, isAllowedExtensionOrigin } from './extension-origin.ts';
 import { pickPangularConfig, type PangularConfig } from './config.ts';
 import { PANGULAR_LOGO_DATA_URI } from './brand.ts';
+import { createSsrMiddleware } from './ssr-middleware.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 export const PANGULAR_HUB_BASE = DEVFRAMES_HUB_BASE;
@@ -64,7 +65,13 @@ function hubAllowedOrigins(
   return allowedOrigins;
 }
 
-type PangularHub = ReturnType<typeof initHub>;
+type PangularHub = ReturnType<typeof initHub> & {
+  /**
+   * Opt-in Express or Connect middleware that traces each SSR request and adds
+   * a `Server-Timing` header. Add it before the Angular request handler.
+   */
+  ssrMiddleware: ReturnType<typeof createSsrMiddleware>;
+};
 
 interface HubRegistry {
   token?: string;
@@ -115,6 +122,7 @@ export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
   let closing: Promise<void> | undefined;
   const own: PangularHub = {
     ...hub,
+    ssrMiddleware: createSsrMiddleware({ skip: [hub.base] }),
     close: () => {
       if (hubs.get(hub.base) === own) hubs.delete(hub.base);
       return (closing ??= hub.close());
