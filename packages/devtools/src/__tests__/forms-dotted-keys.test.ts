@@ -368,3 +368,66 @@ describe('stored-global expressions with backslashes in keys', () => {
     expect(result.expression).toBe(String.raw`$form['a\\b']`);
   });
 });
+
+class EmptyKey {
+  form = new FormGroup({
+    '': new FormControl('blank'),
+    other: new FormControl('other'),
+  });
+}
+Component({
+  selector: 'empty-key-form',
+  imports: [ReactiveFormsModule],
+  template: `<form [formGroup]="form">
+    <input id="blank" [formControlName]="''" /><input id="other" formControlName="other" />
+  </form>`,
+})(EmptyKey);
+
+describe('a control with an empty key at the root', () => {
+  it('gets a path of its own instead of the root path', async () => {
+    const fixture = await render(EmptyKey);
+    const [collected] = collect(fixture.nativeElement);
+    const [rootPath, emptyPath, otherPath] = paths(collected.root);
+    expect(rootPath).toBe('');
+    expect(emptyPath).not.toBe('');
+    expect(otherPath).toBe('other');
+    const found = findForms(ngApi(), fixture.nativeElement.querySelectorAll('*'));
+    const group = fixture.componentInstance.form;
+    expect(controlPathOf(group as any, group.controls[''] as any)).toBe(emptyPath);
+    expect(nodeAt(found.forms[0], emptyPath)).toBe(group.controls['']);
+  });
+
+  it('marks and sets only that control, not the whole form', async () => {
+    const fixture = await render(EmptyKey);
+    const ctx = contextFor(fixture.nativeElement);
+    const group = fixture.componentInstance.form;
+    const [, emptyPath] = paths(collect(fixture.nativeElement)[0].root);
+
+    const touched = await runFormAction(ctx, {
+      action: 'mark-touched',
+      formId: 'form-1',
+      path: emptyPath,
+    });
+    expect(touched.ok).toBe(true);
+    expect(group.controls[''].touched).toBe(true);
+    expect(group.controls.other.touched).toBe(false);
+
+    const set = await runFormAction(ctx, {
+      action: 'set-value',
+      formId: 'form-1',
+      path: emptyPath,
+      value: 'changed',
+    });
+    expect(set.ok).toBe(true);
+    expect(group.controls[''].value).toBe('changed');
+    expect(group.controls.other.value).toBe('other');
+
+    const stored = await runFormAction(ctx, {
+      action: 'store-as-global',
+      formId: 'form-1',
+      path: emptyPath,
+    });
+    expect(stored.expression).toBe("$form.get('')");
+    expect((window as any).$control).toBe(group.controls['']);
+  });
+});

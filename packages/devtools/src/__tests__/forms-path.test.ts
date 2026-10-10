@@ -51,4 +51,14 @@ describe('form control paths', () => {
     expect(childPath('g', 'a.b')).toBe('g.a\\.b');
     expect(childPath('g\\.h', 'c')).toBe('g\\.h.c');
   });
+
+  it('tells a lone empty key apart from the root', () => {
+    expect(joinPath([''])).not.toBe('');
+    expect(splitPath(joinPath(['']))).toEqual(['']);
+    expect(childPath('', '')).toBe(joinPath(['']));
+    expect(splitPath(childPath(childPath('', ''), 'a'))).toEqual(['', 'a']);
+    for (const segments of [[''], ['', ''], ['', '', 'a'], ['a', '', '']]) {
+      expect(splitPath(joinPath(segments))).toEqual(segments);
+    }
+  });
 });
