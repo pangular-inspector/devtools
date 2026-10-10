@@ -28,13 +28,28 @@ function wantsHtml(req: IncomingMessage, skip: string[]): boolean {
   return /\btext\/html\b/.test(req.headers.accept ?? '');
 }
 
-export function renderModeOf(html: string): SsrRenderMode {
+/**
+ * What kind of answer this was. The HTML wins over the status, so a not-found
+ * page that Angular rendered with status 404 still counts as Server.
+ */
+export function renderModeOf(html: string, status = 200): SsrRenderMode {
   const match = /<[^>]*\sng-server-context="([^"]*)"/.exec(html);
-  if (!match) return /<\w[^>]*\sng-version=/.test(html) ? 'unknown' : 'client';
-  // `ssr|hydration` style lists come from older versions.
-  const values = match[1].split('|');
-  if (values.includes('ssr')) return 'server';
-  if (values.includes('ssg')) return 'prerender';
+  if (match) {
+    // `ssr|hydration` style lists come from older versions.
+    const values = match[1].split('|');
+    if (values.includes('ssr')) return 'server';
+    if (values.includes('ssg')) return 'prerender';
+    return 'unknown';
+  }
+  // index.csr.html: an empty custom-element root and the app's module script.
+  if (
+    /<[a-z]+-[\w-]*[^>]*>\s*<\/[a-z]+-[\w-]*>/i.test(html) &&
+    /<script[^>]*type="module"/.test(html)
+  ) {
+    return 'client';
+  }
+  if (status >= 300 && status < 400) return 'redirect';
+  if (status >= 400) return 'not-rendered';
   return 'unknown';
 }
 
@@ -142,10 +157,7 @@ export function createSsrMiddleware(options: { skip?: string[] } = {}) {
         durationMs: Date.now() - at,
         renderMs: renderMs || Date.now() - at,
         bytes,
-        renderMode:
-          /\btext\/html\b/.test(type) && sniff && res.statusCode < 400
-            ? renderModeOf(sniff)
-            : 'unknown',
+        renderMode: renderModeOf(/\btext\/html\b/.test(type) ? sniff : '', res.statusCode),
         fetches: active.fetches,
         fetchMs: active.fetchMs,
         headers,

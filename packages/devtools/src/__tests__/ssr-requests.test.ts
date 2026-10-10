@@ -129,24 +129,28 @@ describe('ssrMiddleware', () => {
     expect(req.headers[SSR_REQUEST_HEADER]).toBeUndefined();
   });
 
-  it('does not call an HTML error page a Client render', () => {
-    const middleware = createSsrMiddleware();
+  const answer = (status: number, body: string) => {
     const res = new FakeResponse();
-    middleware(request('/missing'), res as unknown as ServerResponse, () => {});
-    res.statusCode = 404;
+    createSsrMiddleware()(request('/page'), res as unknown as ServerResponse, () => {});
+    res.statusCode = status;
     res.setHeader('content-type', 'text/html');
-    res.end('<pre>Cannot GET /missing</pre>');
-    expect(recorded[0]).toMatchObject({ status: 404, renderMode: 'unknown' });
+    res.end(body || undefined);
+    return recorded.at(-1);
+  };
+
+  it('calls an error page Angular did not render Not rendered', () => {
+    expect(answer(404, '<pre>Cannot GET /missing</pre>')).toMatchObject({
+      status: 404,
+      renderMode: 'not-rendered',
+    });
   });
 
-  it('does not call an HTML redirect with no body a Client render', () => {
-    const middleware = createSsrMiddleware();
-    const res = new FakeResponse();
-    middleware(request('/destinations/3'), res as unknown as ServerResponse, () => {});
-    res.statusCode = 302;
-    res.setHeader('content-type', 'text/html');
-    res.end();
-    expect(recorded[0]).toMatchObject({ status: 302, renderMode: 'unknown' });
+  it('keeps a not-found page Angular rendered with status 404 as Server', () => {
+    expect(answer(404, HTML)).toMatchObject({ status: 404, renderMode: 'server' });
+  });
+
+  it('calls a redirect with no body Redirect', () => {
+    expect(answer(302, '')).toMatchObject({ status: 302, renderMode: 'redirect' });
   });
 
   it('ignores HTML-accepting requests answered with something else', () => {
@@ -161,7 +165,11 @@ describe('ssrMiddleware', () => {
   it('reads the render mode from ng-server-context', () => {
     expect(renderModeOf(HTML)).toBe('server');
     expect(renderModeOf('<app-root ng-server-context="ssg">')).toBe('prerender');
-    expect(renderModeOf('<html><app-root></app-root></html>')).toBe('client');
+    const shell =
+      '<base href="/"><app-root></app-root><script src="main.js" type="module"></script>';
+    expect(renderModeOf(shell)).toBe('client');
+    expect(renderModeOf(shell, 404)).toBe('client');
+    expect(renderModeOf('<p>Hello</p>')).toBe('unknown');
   });
 });
 

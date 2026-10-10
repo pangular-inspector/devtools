@@ -183,7 +183,7 @@ export function sanitizeCalls(input: unknown, max = MAX_CALLS): HttpCall[] {
       pageUrl: str(c.pageUrl, 2000),
       ...(str(c.requestId, 40) ? { requestId: str(c.requestId, 40) } : {}),
       ...(typeof c.cacheStored === 'boolean' ? { cacheStored: c.cacheStored } : {}),
-      ...(typeof c.cacheSkip === 'string' && c.cacheSkip in CACHE_SKIP_TEXT
+      ...(typeof c.cacheSkip === 'string' && Object.hasOwn(CACHE_SKIP_TEXT, c.cacheSkip)
         ? { cacheSkip: c.cacheSkip as CacheSkip }
         : {}),
       at: num(c.at) ?? 0,

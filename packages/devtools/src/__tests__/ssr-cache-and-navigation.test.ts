@@ -23,7 +23,7 @@ import { httpRegistry, sanitizeCalls, type HttpCall } from '../http-rules.ts';
 import { EventType } from '../router.ts';
 import { watchSsrNavigations } from '../ssr-navigation.ts';
 import { ssrRegistry, type SsrRequest } from '../ssr-registry.ts';
-import { explainSsrRequestText, sanitizeSsrRequest } from '../rpc/ssr-tools.ts';
+import { explainSsrRequestText, sanitizeSsrRequest, serverCallFor } from '../rpc/ssr-tools.ts';
 
 const ok = { ok: true, headers: new HttpHeaders() };
 
@@ -254,6 +254,24 @@ describe('explain-ssr-request with reasons and navigations', () => {
       'POST `/api/quote`: POST requests are left out unless includePostRequests is set',
     );
     expect(text).not.toContain('anything the `filter` option rejects');
+  });
+
+  it('names no reason when repeated server calls had different outcomes', () => {
+    const server = [
+      call({ id: 's1', method: 'GET', url: 'http://localhost/api/a', cacheSkip: 'error' }),
+      call({ id: 's2', method: 'GET', url: 'http://localhost/api/a', cacheSkip: 'auth-headers' }),
+    ];
+    const browser = call({ id: 'b', side: 'client', method: 'GET', url: '/api/a' });
+    expect(serverCallFor(browser, server)).toBeUndefined();
+    expect(serverCallFor(browser, server.slice(0, 1))?.id).toBe('s1');
+  });
+
+  it('drops render modes and skip reasons that are not its own keys', () => {
+    expect(sanitizeSsrRequest({ ...request(), renderMode: 'toString' })!.renderMode).toBe(
+      'unknown',
+    );
+    const raw = { id: 'a', url: '/a', method: 'GET', at: 1, cacheSkip: 'constructor' };
+    expect(sanitizeCalls([raw])[0]).not.toHaveProperty('cacheSkip');
   });
 
   it('calls a guard that returned a UrlTree redirected, not rejected', () => {

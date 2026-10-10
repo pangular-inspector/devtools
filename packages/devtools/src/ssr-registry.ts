@@ -6,7 +6,8 @@ export const SSR_REQUEST_HEADER = 'x-pangular-ssr-id';
 /** Server-Timing metric whose description is the SSR request id. */
 export const SSR_TIMING_NAME = 'pangular';
 
-export type SsrRenderMode = 'server' | 'prerender' | 'client' | 'unknown';
+export type SsrRenderMode =
+  'server' | 'prerender' | 'client' | 'redirect' | 'not-rendered' | 'unknown';
 
 export interface SsrRequest {
   id: string;
@@ -20,7 +21,7 @@ export interface SsrRequest {
   /** Arrival until the status and headers were sent, which is when the render finished. */
   renderMs: number;
   bytes: number;
-  /** Read from `ng-server-context` in the HTML: `ssr` is Server, `ssg` is Prerender, none is Client. */
+  /** Read from `ng-server-context` in the HTML (`ssr` Server, `ssg` Prerender, none Client), else from the status. */
   renderMode: SsrRenderMode;
   /** Server HttpClient calls that finished before the headers were sent. */
   fetches: number;

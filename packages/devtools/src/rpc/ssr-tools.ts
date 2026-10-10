@@ -11,6 +11,8 @@ const MODE_LABEL: Record<SsrRenderMode, string> = {
   server: 'Server',
   prerender: 'Prerender',
   client: 'Client (no server render)',
+  redirect: 'Redirect (no page rendered)',
+  'not-rendered': 'Not rendered (the error page did not come from Angular)',
   unknown: 'unknown',
 };
 
@@ -100,7 +102,10 @@ export function sanitizeSsrRequest(raw: unknown): SsrRequest | undefined {
     durationMs: num(r.durationMs),
     renderMs: num(r.renderMs),
     bytes: num(r.bytes),
-    renderMode: mode === 'server' || mode === 'prerender' || mode === 'client' ? mode : 'unknown',
+    renderMode:
+      typeof mode === 'string' && Object.hasOwn(MODE_LABEL, mode)
+        ? (mode as SsrRenderMode)
+        : 'unknown',
     fetches: num(r.fetches),
     fetchMs: num(r.fetchMs),
     headers,
@@ -114,10 +119,12 @@ export function cacheNote(call: HttpCall): string {
   return call.cacheSkip ? `not cached: ${CACHE_SKIP_TEXT[call.cacheSkip]}` : '';
 }
 
-/** The server call a browser call repeated. */
+/** The server call a browser call repeated, when every matching server call had the same cache outcome. */
 export function serverCallFor(call: HttpCall, serverCalls: HttpCall[]): HttpCall | undefined {
   const key = `${call.method} ${pathOf(call.url)}`;
-  return serverCalls.find((c) => `${c.method} ${pathOf(c.url)}` === key);
+  const matches = serverCalls.filter((c) => `${c.method} ${pathOf(c.url)}` === key);
+  const first = matches[0];
+  return first && matches.every((c) => c.cacheSkip === first.cacheSkip) ? first : undefined;
 }
 
 function pathOf(url: string): string {

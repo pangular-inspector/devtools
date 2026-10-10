@@ -80,7 +80,7 @@ interface SsrRequest {
   durationMs: number;
   renderMs: number;
   bytes: number;
-  renderMode: 'server' | 'prerender' | 'client' | 'unknown';
+  renderMode: 'server' | 'prerender' | 'client' | 'redirect' | 'not-rendered' | 'unknown';
   fetches: number;
   fetchMs: number;
   headers: Record<string, string>;
@@ -92,6 +92,8 @@ const RENDER_MODE_LABEL: Record<SsrRequest['renderMode'], string> = {
   server: 'Server',
   prerender: 'Prerender',
   client: 'Client',
+  redirect: 'Redirect',
+  'not-rendered': 'Not rendered',
   unknown: 'Unknown',
 };
 
@@ -1815,8 +1817,12 @@ export class NetworkInspector {
 
   refetchReason(call: HttpCall): string {
     const key = `${call.method} ${pathOf(call.url)}`;
-    const server = this.requestCalls().find((c) => `${c.method} ${pathOf(c.url)}` === key);
-    return server?.cacheSkip ? this.skipText(server.cacheSkip) : '';
+    const matches = this.requestCalls().filter((c) => `${c.method} ${pathOf(c.url)}` === key);
+    const first = matches[0];
+    // Several matching server calls with different outcomes can't be paired, so name no reason.
+    return first?.cacheSkip && matches.every((c) => c.cacheSkip === first.cacheSkip)
+      ? this.skipText(first.cacheSkip)
+      : '';
   }
 
   renderModeLabel(mode: SsrRequest['renderMode']): string {
