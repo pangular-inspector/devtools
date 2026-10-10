@@ -240,7 +240,17 @@ const CLASSIC_KINDS = new Set([
 
               <div class="facts">
                 <section class="fact" aria-labelledby="ngrx-state-heading">
-                  <h4 id="ngrx-state-heading">State</h4>
+                  <div class="fact-head">
+                    <h4 id="ngrx-state-heading">State</h4>
+                    <button
+                      type="button"
+                      class="btn copy"
+                      aria-label="Copy state as JSON"
+                      (click)="copyState()"
+                    >
+                      Copy
+                    </button>
+                  </div>
                   <pre #stateTree class="tree" tabindex="0" aria-labelledby="ngrx-state-heading">{{
                     stateText()
                   }}</pre>
@@ -585,7 +595,19 @@ const CLASSIC_KINDS = new Set([
           }
         </dl>
         @if (selected.source !== 'event') {
-          <div class="sub" role="heading" [attr.aria-level]="headingLevel + 1">State diff</div>
+          <div class="sub-head">
+            <div class="sub" role="heading" [attr.aria-level]="headingLevel + 1">State diff</div>
+            @if (selected.diff.length) {
+              <button
+                type="button"
+                class="btn copy"
+                [attr.aria-label]="'Copy the state diff of #' + selected.seq + ' as JSON'"
+                (click)="copyDiff(selected)"
+              >
+                Copy
+              </button>
+            }
+          </div>
           @if (selected.diff.length) {
             <ul class="diff">
               @for (change of selected.diff; track change.path) {
@@ -896,6 +918,32 @@ const CLASSIC_KINDS = new Set([
     }
     .sub {
       margin: 14px 0 8px;
+    }
+    .fact-head,
+    .sub-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+    .fact-head {
+      margin-bottom: 10px;
+    }
+    .fact-head h4 {
+      margin: 0;
+    }
+    .sub-head {
+      margin: 14px 0 8px;
+    }
+    .sub-head .sub {
+      margin: 0;
+    }
+    .btn.copy {
+      flex: none;
+      height: 26px;
+      padding: 0 10px;
+      font-size: 12px;
     }
     .pill {
       min-width: 20px;
@@ -1880,6 +1928,23 @@ export class StoreInspector {
     this.selectedChangeSeq.set(this.selectedChangeSeq() === seq ? null : seq);
     this.confirmSeq.set(null);
     this.message.set('');
+  }
+
+  copyState() {
+    return this.copyText(this.stateText());
+  }
+
+  copyDiff(entry: NgrxLogEntry) {
+    return this.copyText(pretty(entry.diff));
+  }
+
+  private async copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      this.message.set('Copied.');
+    } catch {
+      this.message.set('The clipboard is not available here.');
+    }
   }
 
   askRestore(seq: number) {
