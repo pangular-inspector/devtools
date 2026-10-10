@@ -125,9 +125,13 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
         const headers = args.find(
           (arg, i) => i > 0 && arg && typeof arg === 'object' && !Array.isArray(arg),
         ) as OutgoingHttpHeaders | undefined;
-        const passed = headers ? headerText(headers['server-timing']) : undefined;
+        // Header names are case-insensitive, so `Server-Timing` counts as the same header.
+        const passedKey = headers
+          ? Object.keys(headers).find((key) => key.toLowerCase() === 'server-timing')
+          : undefined;
+        const passed = passedKey ? headerText(headers?.[passedKey]) : undefined;
         const value = [existing, passed, ...timing].filter(Boolean).join(', ');
-        if (headers && passed !== undefined) headers['server-timing'] = value;
+        if (headers && passedKey && passed !== undefined) headers[passedKey] = value;
         else res.setHeader('server-timing', value);
       }
       return (writeHead as (...a: unknown[]) => ServerResponse).apply(this, args);

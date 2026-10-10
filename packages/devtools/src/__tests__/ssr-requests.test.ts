@@ -1,6 +1,7 @@
 import '@angular/compiler';
 import { EventEmitter } from 'node:events';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { Injector, PLATFORM_ID, REQUEST, runInInjectionContext } from '@angular/core';
 import { HttpRequest, HttpResponse, type HttpEvent } from '@angular/common/http';
 import { createHostContext } from 'devframe/node';
@@ -102,6 +103,26 @@ describe('ssrMiddleware', () => {
     res.writeHead(200, { 'server-timing': 'db;dur=5', 'content-type': 'text/html' });
     res.end(HTML);
     expect(res.sentHeaders['server-timing']).toMatch(/^db;dur=5, pangular;desc="/);
+  });
+
+  it('merges with a Server-Timing value passed to writeHead in any case', async () => {
+    const middleware = createSsrMiddleware();
+    const server = createServer((req, res) => {
+      middleware(req, res, () => {});
+      res.writeHead(200, { 'Server-Timing': 'db;dur=5', 'Content-Type': 'text/html' });
+      res.end(HTML);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const response = await fetch(`http://127.0.0.1:${port}/`, {
+        headers: { accept: 'text/html' },
+      });
+      await response.text();
+      expect(response.headers.get('server-timing')).toMatch(/^db;dur=5, pangular;desc="/);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 
   it('skips non-HTML requests, hub paths and when the http inspector is off', () => {
