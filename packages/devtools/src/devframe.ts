@@ -475,6 +475,7 @@ const pangular = defineDevframe({
           );
         } catch {
           routerPages.delete(report.pageId);
+          applyRouter(currentRouter(routerPages));
         }
         return { hasConfig: !!routerPages.get(report.pageId)?.config };
       },
