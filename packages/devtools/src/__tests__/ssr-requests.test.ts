@@ -121,6 +121,14 @@ describe('ssrMiddleware', () => {
     expect(passed).toHaveLength(3);
   });
 
+  it('drops a forged request id header from requests it does not trace', () => {
+    const middleware = createSsrMiddleware();
+    const req = request('/api/products', 'application/json');
+    req.headers[SSR_REQUEST_HEADER] = 'forged';
+    middleware(req, new FakeResponse() as unknown as ServerResponse, () => {});
+    expect(req.headers[SSR_REQUEST_HEADER]).toBeUndefined();
+  });
+
   it('ignores HTML-accepting requests answered with something else', () => {
     const middleware = createSsrMiddleware();
     const res = new FakeResponse();

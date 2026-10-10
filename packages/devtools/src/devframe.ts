@@ -610,23 +610,6 @@ const pangular = defineDevframe({
         rules: [...registry.rules],
       } as HttpState,
     });
-    const ssr = ssrRegistry();
-    ssr.record = on.http
-      ? (raw) => {
-          const request = sanitizeSsrRequest(raw);
-          if (!request) return;
-          // Server calls are batched, so flush them first to keep their order.
-          if (flushTimer) {
-            clearTimeout(flushTimer);
-            flushServerCalls();
-          }
-          httpState.mutate((draft) => {
-            draft.requests.push(request);
-            const extra = draft.requests.length - limits.httpCalls;
-            if (extra > 0) draft.requests.splice(0, extra);
-          });
-        }
-      : undefined;
     const httpPayloadState = await my.rpc.sharedState('http-payloads', {
       initialValue: { pages: {} } as HttpPayloadState,
     });
@@ -650,6 +633,23 @@ const pangular = defineDevframe({
         if (dropped) draft.serverDropped = (draft.serverDropped ?? 0) + dropped;
       });
     };
+    const ssr = ssrRegistry();
+    ssr.record = on.http
+      ? (raw) => {
+          const request = sanitizeSsrRequest(raw);
+          if (!request) return;
+          // Server calls are batched, so flush them first to keep their order.
+          if (flushTimer) {
+            clearTimeout(flushTimer);
+            flushServerCalls();
+          }
+          httpState.mutate((draft) => {
+            draft.requests.push(request);
+            const extra = draft.requests.length - limits.httpCalls;
+            if (extra > 0) draft.requests.splice(0, extra);
+          });
+        }
+      : undefined;
     registry.record = on.http
       ? (call) => {
           pendingServerCalls.push(redactCall(call));

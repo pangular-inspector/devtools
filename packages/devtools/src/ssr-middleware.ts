@@ -51,7 +51,11 @@ export function createSsrMiddleware(options: { skip?: string[] } = {}) {
   const skip = options.skip ?? [];
   return (req: IncomingMessage, res: ServerResponse, next: Next) => {
     const registry = ssrRegistry();
-    if (!registry.record || !wantsHtml(req, skip)) return next();
+    if (!registry.record) return next();
+    if (!wantsHtml(req, skip)) {
+      delete req.headers[SSR_REQUEST_HEADER];
+      return next();
+    }
     const id = randomBytes(8).toString('hex');
     const at = Date.now();
     const active = { fetches: 0, fetchMs: 0 };

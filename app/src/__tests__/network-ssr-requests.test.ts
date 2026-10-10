@@ -76,5 +76,10 @@ describe('NetworkInspector SSR requests', () => {
     expect(detail.textContent).toContain('Fetched again in the browser (1)');
     expect(inspector.refetched().map((c) => c.id)).toEqual(['b2']);
     expect(host.querySelector('tr.selected .tag.server')!.textContent).toBe('this page');
+
+    inspector.selectedRequestId.set('r2');
+    inspector.pages.update((pages) => pages.map((p) => ({ ...p, reportedAt: 2000 })));
+    await fixture.whenStable();
+    expect(inspector.selectedRequestId()).toBe('r2');
   });
 });

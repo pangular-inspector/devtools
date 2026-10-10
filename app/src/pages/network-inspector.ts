@@ -1555,9 +1555,6 @@ export class NetworkInspector {
         : (pages.find((p) => p.pageId === this.hostPageId)?.pageId ?? pages[0]?.pageId ?? null),
   });
   readonly selectedCallId = signal<string | null>(null);
-  readonly selectedRequestId = linkedSignal<string | null>(
-    () => this.selected()?.ssrRequestId ?? null,
-  );
   readonly draft = signal<RuleDraft>({ ...EMPTY_DRAFT });
   readonly message = signal('');
   readonly bodyPlaceholder = '{ "error": "Service unavailable" }';
@@ -1571,6 +1568,9 @@ export class NetworkInspector {
   readonly selected = computed(
     () => this.pages().find((p) => p.pageId === this.selectedPageId()) ?? null,
   );
+
+  private readonly pageRequestId = computed(() => this.selected()?.ssrRequestId ?? null);
+  readonly selectedRequestId = linkedSignal<string | null>(() => this.pageRequestId());
 
   readonly selectedPayload = computed(() => {
     const pageId = this.selectedPageId();
@@ -1620,6 +1620,7 @@ export class NetworkInspector {
     );
     return page.calls.filter(
       (c) =>
+        c.side === 'client' &&
         !c.cacheHit &&
         !c.mocked &&
         c.at >= request.at &&
