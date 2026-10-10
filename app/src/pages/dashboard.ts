@@ -15,6 +15,7 @@ import {
 } from '@pangular-inspector/devtools/config';
 import { hostPageId } from '../page-id';
 import { injectorTreeFor, signalGraphFor } from '../live-pages';
+import { pageOf } from './forms-types';
 import { isStaticReport } from '../rpc';
 import { panelConfig, tabEnabled } from '../devtools-config';
 import { TabIcon } from './tab-icon';
@@ -36,9 +37,16 @@ const STATS = [
   { tab: 'injectors', label: 'Injectors' },
   { tab: 'store', label: 'NgRx declarations' },
   { tab: 'pipes', label: 'Pipes' },
+  { tab: 'forms', label: 'Forms' },
+  { tab: 'network', label: 'SSR & HTTP' },
 ] as const;
 
 type StatTab = (typeof STATS)[number]['tab'];
+
+/** The cards to show: one per inspector that is on in the config. */
+export function dashboardStats(config: ResolvedPangularConfig) {
+  return STATS.filter((stat) => tabEnabled(stat.tab, config));
+}
 
 interface Card {
   value: number;
@@ -95,6 +103,21 @@ const NGRX_NAMES: Record<string, [string, string]> = {
   'signal-method': ['signal method', 'signal methods'],
 };
 
+interface FormsSnapshot {
+  forms?: { id: string; root?: { status?: string } }[];
+}
+
+interface HttpCallSummary {
+  status?: number;
+  cancelled?: boolean;
+  pageUrl?: string;
+}
+
+interface HttpSnapshot {
+  serverCalls?: HttpCallSummary[];
+  pages?: { pageId: string; initialUrl?: string; reportedAt: number; calls?: HttpCallSummary[] }[];
+}
+
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
@@ -138,6 +161,50 @@ export function storeCard(rows: Row[]): Card {
       return plural(count, one, many);
     });
   return { value: rows.length, sub: parts.join(' · ') };
+}
+
+/** Forms of the host page when one is known, else every reported form, as the Forms tab shows them. */
+export function formsCard(state: FormsSnapshot | null, hostPageId: string | null): Card {
+  const all = state?.forms ?? [];
+  const forms = hostPageId ? all.filter((form) => pageOf(form.id) === hostPageId) : all;
+  if (!forms.length) return { value: 0, sub: 'no forms on the page yet' };
+  const invalid = forms.filter((form) => form.root?.status === 'INVALID').length;
+  return {
+    value: forms.length,
+    sub: `${forms.length === 1 ? 'form' : 'forms'} · ${invalid} invalid`,
+  };
+}
+
+function httpFailed(call: HttpCallSummary): boolean {
+  if (call.cancelled || call.status === undefined) return false;
+  return call.status === 0 || call.status >= 400;
+}
+
+/**
+ * Calls of the host page when one is known, else of the newest page, with the
+ * server calls made while rendering it, as the SSR & HTTP tab lists them.
+ */
+export function httpCard(state: HttpSnapshot | null, hostPageId: string | null): Card {
+  const pages = state?.pages ?? [];
+  const page = hostPageId
+    ? (pages.find((p) => p.pageId === hostPageId) ?? null)
+    : pages.reduce<(typeof pages)[number] | null>(
+        (newest, p) => (!newest || p.reportedAt > newest.reportedAt ? p : newest),
+        null,
+      );
+  // Until the host page reports, there is no URL to tell its server calls from other tabs' ones.
+  const server = hostPageId && !page ? [] : (state?.serverCalls ?? []);
+  const initialUrl = page?.initialUrl;
+  const calls = [
+    ...(initialUrl ? server.filter((c) => !c.pageUrl || c.pageUrl === initialUrl) : server),
+    ...(page?.calls ?? []),
+  ];
+  if (!calls.length) return { value: 0, sub: 'no calls recorded yet' };
+  const failed = calls.filter(httpFailed).length;
+  return {
+    value: calls.length,
+    sub: `${calls.length === 1 ? 'call' : 'calls'} · ${failed} failed`,
+  };
 }
 
 @Component({
@@ -511,15 +578,15 @@ export class Dashboard {
 
   meta = signal<BuildMeta | null>(null);
   private readonly config = computed(() => panelConfig(this.rpc()));
-  protected readonly stats = computed(() =>
-    this.rpc() ? STATS.filter((stat) => tabEnabled(stat.tab, this.config())) : [],
-  );
+  protected readonly stats = computed(() => (this.rpc() ? dashboardStats(this.config()) : []));
   protected readonly configItems = computed(() => summarizePangularConfig(this.config()));
   protected readonly metaState = signal<LoadState>('loading');
   protected readonly states = signal<Partial<Record<StatTab, LoadState>>>({});
   private readonly rows = signal<Partial<Record<StatTab, Row[]>>>({});
   private readonly injectorTree = signal<InjectorSnapshot | null>(null);
   private readonly signalGraph = signal<GraphSnapshot | null>(null);
+  private readonly formsState = signal<FormsSnapshot | null>(null);
+  private readonly httpState = signal<HttpSnapshot | null>(null);
   private readonly pageId = hostPageId();
   private readonly destroyRef = inject(DestroyRef);
   private stopLive: (() => void)[] = [];
@@ -584,6 +651,10 @@ export class Dashboard {
         sub: 'provider declarations in source',
       };
     }
+    const forms = this.formsState();
+    if (forms) out.forms = formsCard(forms, this.pageId);
+    const http = this.httpState();
+    if (http) out.network = httpCard(http, this.pageId);
     return out;
   });
 
@@ -596,6 +667,8 @@ export class Dashboard {
       this.metaState.set('loading');
       this.states.set({});
       this.rows.set({});
+      this.formsState.set(null);
+      this.httpState.set(null);
       my.rpc
         .call('build-meta')
         .then((m) => {
@@ -636,16 +709,21 @@ export class Dashboard {
     this.unwatch();
     const rpc = client.scope('pangular').rpc;
     const follow = async <T>(
-      name: 'injector-tree' | 'signal-graph',
+      name: 'injector-tree' | 'signal-graph' | 'forms' | 'http',
       target: (value: T) => void,
+      tab?: StatTab,
     ) => {
+      const mark = (state: LoadState) =>
+        tab && this.states.update((all) => ({ ...all, [tab]: state }));
       try {
         const state = await rpc.sharedState(name);
         if (this.destroyRef.destroyed || this.rpc() !== client) return;
         target(state.value() as T);
+        mark('ready');
         this.stopLive.push(state.on('updated', (value: unknown) => target(value as T)));
       } catch {
         target(null as T);
+        mark('error');
       }
     };
     await Promise.all([
@@ -653,6 +731,10 @@ export class Dashboard {
         follow<InjectorSnapshot | null>('injector-tree', (value) => this.injectorTree.set(value)),
       config.inspectors.signals &&
         follow<GraphSnapshot | null>('signal-graph', (value) => this.signalGraph.set(value)),
+      tabEnabled('forms', config) &&
+        follow<FormsSnapshot | null>('forms', (value) => this.formsState.set(value ?? {}), 'forms'),
+      tabEnabled('network', config) &&
+        follow<HttpSnapshot | null>('http', (value) => this.httpState.set(value ?? {}), 'network'),
     ]);
   }
 
