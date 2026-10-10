@@ -140,6 +140,16 @@ describe('pipe recording requests', () => {
     expect(await invoke('request-instrument-pipes', true)).toEqual({ pages: 1 });
   });
 
+  it('does not start recording on every tab before any page has reported', async () => {
+    const { ctx, invoke } = await boot();
+    const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
+    expect(await invoke('request-instrument-pipes', true)).toEqual({ pages: 0 });
+    const starts = broadcast.mock.calls.filter(
+      ([options]) => (options as { method: string }).method === 'pangular:instrument-pipes',
+    );
+    expect(starts).toHaveLength(0);
+  });
+
   it('sends the page id with the request so other tabs stay unpatched', async () => {
     vi.useFakeTimers();
     try {

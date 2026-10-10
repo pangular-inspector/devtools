@@ -440,8 +440,10 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: (message: unknown) => {
         const request = pipeInstrumentRequest(message, pipePages);
+        // No page has reported yet: starting now would patch every connected tab.
+        if (request.on && !request.pageId) return { pages: 0 };
         void my.rpc.broadcast({ method: 'instrument-pipes', args: [request], optional: true });
-        if (!request.pageId) return { pages: request.on ? 0 : pipePages.size };
+        if (!request.pageId) return { pages: pipePages.size };
         return { pages: pipePages.has(request.pageId) ? 1 : 0 };
       },
     });
