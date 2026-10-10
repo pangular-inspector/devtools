@@ -160,12 +160,16 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
       // Angular's Node adapter flushes headers before the body, which would fix the old content-length.
       res.flushHeaders = function () {} as typeof res.flushHeaders;
       res.setHeader('x-pangular-override', 'state-edit');
-      res.write = function (this: ServerResponse, chunk: unknown) {
+      // Callbacks wait until the held HTML is really sent.
+      const callbacks: ((error?: Error | null) => void)[] = [];
+      res.write = function (this: ServerResponse, chunk: unknown, ...rest: unknown[]) {
         if (chunk !== undefined && chunk !== null && typeof chunk !== 'function') {
           chunks.push(
             typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk as Uint8Array),
           );
         }
+        const callback = [chunk, ...rest].find((arg) => typeof arg === 'function');
+        if (callback) callbacks.push(callback as (typeof callbacks)[number]);
         return true;
       } as typeof res.write;
       res.end = function (this: ServerResponse, chunk?: unknown, ...rest: unknown[]) {
@@ -198,8 +202,12 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
           res.setHeader('content-length', Buffer.byteLength(out));
         }
         res.flushHeaders = flushHeaders;
-        const last = rest.find((arg) => typeof arg === 'function');
-        return (flushEnd as (...a: unknown[]) => ServerResponse).call(this, out, last);
+        const last = [chunk, ...rest].find((arg) => typeof arg === 'function');
+        if (last) callbacks.push(last as (typeof callbacks)[number]);
+        const onSent = callbacks.length
+          ? (error?: Error | null) => callbacks.forEach((callback) => callback(error))
+          : undefined;
+        return (flushEnd as (...a: unknown[]) => ServerResponse).call(this, out, onSent);
       } as typeof res.end;
     }
 
