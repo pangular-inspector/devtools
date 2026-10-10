@@ -229,6 +229,15 @@ function pagePath(url: string): string {
   }
 }
 
+/**
+ * The page path as a prefilled override pattern. Patterns match anywhere in the URL, so the site
+ * root (`/`) would match every page; it is left empty for the user to fill in.
+ */
+function pagePattern(url: string): string {
+  const path = pagePath(url);
+  return path === '/' ? '' : path;
+}
+
 /** The longest TransferState key `set-ssr-overrides` keeps (see `sanitizeSsrOverrides`). */
 const MAX_OVERRIDE_KEY = 200;
 const MAX_RULES = 50;
@@ -2275,9 +2284,13 @@ export class NetworkInspector {
     }
   }
 
-  /** The edit needs HTTP writes, and the server drops keys longer than it accepts. */
+  /**
+   * The edit needs HTTP writes and a key the server keeps exactly: it trims keys and drops longer
+   * ones than it accepts.
+   */
   canEditEntry(entry: PayloadEntry): boolean {
-    return this.canWrite() && entry.key.length <= MAX_OVERRIDE_KEY;
+    const { key } = entry;
+    return this.canWrite() && !!key && key === key.trim() && key.length <= MAX_OVERRIDE_KEY;
   }
 
   /**
@@ -2290,7 +2303,7 @@ export class NetworkInspector {
     this.overrideDraft.set({
       ...EMPTY_OVERRIDE,
       kind: 'state-edit',
-      pattern: page ? pagePath(page.initialUrl ?? page.url) : '',
+      pattern: page ? pagePattern(page.initialUrl ?? page.url) : '',
       key: entry.key,
     });
     this.overrideFromPayload.set(entry.http ? 'http' : 'other');

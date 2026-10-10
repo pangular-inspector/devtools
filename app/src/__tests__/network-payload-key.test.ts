@@ -35,9 +35,12 @@ const payload = {
   ],
 };
 
-function client(actions: Record<string, boolean> = {}): DevframeRpcClient {
+function client(
+  actions: Record<string, boolean> = {},
+  shown: typeof page = page,
+): DevframeRpcClient {
   const values: Record<string, unknown> = {
-    http: { serverCalls: [], pages: [page], rules: [], ssrOverrides: [] },
+    http: { serverCalls: [], pages: [shown], rules: [], ssrOverrides: [] },
     'http-payloads': { pages: { p1: payload } },
   };
   const rpc = {
@@ -129,6 +132,29 @@ describe('NetworkInspector TransferState keys', () => {
     expect(host.querySelector('#override-value')!.getAttribute('aria-describedby')).toContain(
       'override-value-note',
     );
+  });
+
+  it('leaves the pattern empty for the site root, which would match every page', async () => {
+    const root = 'http://localhost:4000/';
+    const host = await render(client({}, { ...page, url: root, initialUrl: root }));
+    entries(host)[0]
+      .querySelector<HTMLButtonElement>(
+        `button[aria-label="Edit in SSR overrides, key ${HTTP_KEY}"]`,
+      )!
+      .click();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.overrideDraft().pattern).toBe('');
+    expect(document.activeElement).toBe(host.querySelector('#override-pattern'));
+  });
+
+  it('offers the edit only for keys the server keeps exactly', async () => {
+    await render(client());
+    const inspector = fixture.componentInstance;
+    const entry = (key: string) => ({ key, size: 1, value: 1 }) as never;
+    expect(inspector.canEditEntry(entry('greeting'))).toBe(true);
+    expect(inspector.canEditEntry(entry(' greeting'))).toBe(false);
+    expect(inspector.canEditEntry(entry(''))).toBe(false);
+    expect(inspector.canEditEntry(entry('k'.repeat(201)))).toBe(false);
   });
 
   it('hides the edit action when HTTP writes are off but keeps Copy', async () => {
