@@ -86,6 +86,7 @@ function isTree(value: unknown): value is InjectorNode[] {
 @Component({
   selector: 'app-di-inspector',
   template: `
+    <p class="sr-only" role="status">{{ announcement() }}</p>
     @if (roots().length > 0) {
       <p class="intro">
         Every component and directive gets an injector. When it asks for a token, Angular walks up
@@ -271,7 +272,23 @@ function isTree(value: unknown): value is InjectorNode[] {
           }
         </div>
 
-        @if (selected(); as sel) {
+        @if (gone(); as name) {
+          <section class="detail gone" aria-labelledby="di-detail-title">
+            <header class="detail-head">
+              <h2 id="di-detail-title" class="mono">{{ name }}</h2>
+            </header>
+            <div class="state compact">
+              <p class="state-hint">
+                This injector is no longer on the page. Its component or directive was destroyed.
+              </p>
+              @if (rows()[0]; as first) {
+                <button type="button" (click)="reveal(first.node.injector.id)">
+                  Show {{ label(first.node) }}
+                </button>
+              }
+            </div>
+          </section>
+        } @else if (selected(); as sel) {
           <section class="detail" aria-labelledby="di-detail-title">
             <header class="detail-head">
               <span class="badge" [style.--tone]="tone(kind(sel))">{{ kind(sel) }}</span>
@@ -1141,6 +1158,13 @@ function isTree(value: unknown): value is InjectorNode[] {
     .state-title + .state-hint + button {
       margin-top: 8px;
     }
+    .state button:focus-visible {
+      @include m.focus-ring;
+    }
+    .gone .state {
+      align-items: flex-start;
+      text-align: left;
+    }
     .notice {
       display: flex;
       align-items: flex-start;
@@ -1266,6 +1290,9 @@ export class DiInspector {
   readonly collapsed = signal<ReadonlySet<string>>(new Set());
   readonly selectedId = signal<string | null>(null);
   readonly focusId = signal<string | null>(null);
+  readonly announcement = signal('');
+  private readonly selectedLabel = signal<string | null>(null);
+  private wasGone = false;
 
   private readonly index = computed(() => {
     const map = new Map<string, InjectorNode>();
@@ -1311,10 +1338,17 @@ export class DiInspector {
     return rows;
   });
 
+  /** Falls back to the first row only while nothing is chosen, never when the choice is gone. */
   readonly selected = computed(() => {
     const id = this.selectedId();
-    const found = id ? this.index().map.get(id) : undefined;
-    return found ?? this.rows()[0]?.node ?? null;
+    if (!id) return this.rows()[0]?.node ?? null;
+    return this.index().map.get(id) ?? null;
+  });
+
+  /** The label of the chosen injector once it has left the page. */
+  readonly gone = computed(() => {
+    const id = this.selectedId();
+    return id && !this.index().map.has(id) ? (this.selectedLabel() ?? 'The injector') : null;
   });
 
   readonly rovingId = computed(() => {
@@ -1440,13 +1474,29 @@ export class DiInspector {
   setView(view: TreeView) {
     if (this.view() === view) return;
     this.view.set(view);
-    this.selectedId.set(null);
+    this.choose(null);
     this.focusId.set(null);
   }
 
   select(id: string) {
-    this.selectedId.set(id);
+    this.choose(id);
     this.focusId.set(id);
+  }
+
+  private choose(id: string | null) {
+    const node = id ? this.index().map.get(id) : undefined;
+    this.selectedId.set(id);
+    this.selectedLabel.set(node ? labelOf(node) : null);
+    this.wasGone = false;
+  }
+
+  /** Announces once when the chosen injector leaves the page, like the component tree does. */
+  private syncGone() {
+    const gone = this.gone() !== null;
+    if (gone && !this.wasGone) {
+      this.announcement.set('The selected injector is no longer on the page.');
+    }
+    this.wasGone = gone;
   }
 
   toggle(id: string, event?: Event) {
@@ -1536,7 +1586,7 @@ export class DiInspector {
     if (next >= 0) {
       const id = rows[next].node.injector.id;
       this.focusId.set(id);
-      this.selectedId.set(id);
+      this.choose(id);
       queueMicrotask(() => this.focusRow(id, true));
     }
   }
@@ -1576,6 +1626,7 @@ export class DiInspector {
       this.roots.set(isTree(next?.roots) ? next.roots : []);
       this.environment.set(isTree(next?.environment) ? next.environment : []);
       this.truncated.set(next?.truncated === true);
+      this.syncGone();
     };
     apply(state.value());
     this.clearTree();
