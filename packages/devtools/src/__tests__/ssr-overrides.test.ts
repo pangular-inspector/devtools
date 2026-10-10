@@ -41,6 +41,9 @@ class FakeResponse extends EventEmitter {
   getHeader(name: string) {
     return this.headers[name.toLowerCase()];
   }
+  flushHeaders() {
+    if (!this.headersSent) this.writeHead(this.statusCode);
+  }
   removeHeader(name: string) {
     delete this.headers[name.toLowerCase()];
   }
@@ -117,6 +120,15 @@ describe('editTransferState', () => {
     expect(JSON.parse(json)).toEqual({ a: { b: '</script><x>' } });
   });
 
+  it('writes a __proto__ key as an entry instead of changing the prototype', () => {
+    const out = editTransferState(STATE_HTML, [
+      override({ kind: 'state-edit', key: '__proto__', value: '{"polluted":true}' }),
+    ])!;
+    const json = /<script id="ng-state"[^>]*>([\s\S]*?)<\/script>/.exec(out.html)![1];
+    expect(json).toContain('"__proto__":{"polluted":true}');
+    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+  });
+
   it('returns null with no state script or nothing to change', () => {
     const edit = override({ kind: 'state-edit', key: 'missing' });
     expect(editTransferState('<html></html>', [edit])).toBeNull();
@@ -174,6 +186,35 @@ describe('ssrMiddleware overrides', () => {
       expect.objectContaining({
         applied: false,
         note: expect.stringContaining('browserDistFolder'),
+      }),
+    ]);
+  });
+
+  it('keeps headers back when the adapter flushes them, so content-length matches the edit', () => {
+    ssrRegistry().overrides = [
+      override({ kind: 'state-edit', key: 'a', value: '{"b":"longer value"}' }),
+    ];
+    const res = new FakeResponse();
+    createSsrMiddleware()(request(), res as unknown as ServerResponse, () => {});
+    res.setHeader('content-type', 'text/html');
+    res.setHeader('content-length', Buffer.byteLength(STATE_HTML));
+    res.flushHeaders();
+    expect(res.headersSent).toBe(false);
+    res.end(STATE_HTML);
+    expect(res.body).toContain('longer value');
+    expect(res.sentHeaders['content-length']).toBe(Buffer.byteLength(res.body));
+  });
+
+  it('says a set failed, not that an entry was missing, when the state does not parse', () => {
+    ssrRegistry().overrides = [override({ kind: 'state-edit', key: 'a', value: '1' })];
+    const res = new FakeResponse();
+    createSsrMiddleware()(request(), res as unknown as ServerResponse, () => {});
+    res.setHeader('content-type', 'text/html');
+    res.end('<script id="ng-state" type="application/json">{broken</script>');
+    expect(recorded[0].overrides).toEqual([
+      expect.objectContaining({
+        applied: false,
+        note: 'could not edit the TransferState script for a',
       }),
     ]);
   });

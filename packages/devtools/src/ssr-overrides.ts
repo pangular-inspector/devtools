@@ -111,7 +111,13 @@ export function editTransferState(
       if (!Object.hasOwn(state, edit.key)) continue;
       delete state[edit.key];
     } else {
-      state[edit.key] = JSON.parse(edit.value);
+      // defineProperty, so a `__proto__` key becomes an entry instead of changing the prototype.
+      Object.defineProperty(state, edit.key, {
+        value: JSON.parse(edit.value),
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
     keys.push(edit.key);
   }

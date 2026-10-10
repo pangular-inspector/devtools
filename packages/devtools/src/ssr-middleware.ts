@@ -156,6 +156,9 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
     function bufferForEdits(list: ReturnType<typeof matchingOverrides>) {
       const chunks: Buffer[] = [];
       const flushEnd = res.end;
+      const flushHeaders = res.flushHeaders;
+      // Angular's Node adapter flushes headers before the body, which would fix the old content-length.
+      res.flushHeaders = function () {} as typeof res.flushHeaders;
       res.setHeader('x-pangular-override', 'state-edit');
       res.write = function (this: ServerResponse, chunk: unknown) {
         if (chunk !== undefined && chunk !== null && typeof chunk !== 'function') {
@@ -184,7 +187,9 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
             applied: done,
             note: done
               ? `${o.value === undefined ? 'removed' : 'set'} ${o.key}`
-              : `no entry ${o.key} to remove`,
+              : o.value === undefined
+                ? `no entry ${o.key} to remove`
+                : `could not edit the TransferState script for ${o.key}`,
           });
         }
         const out = edited ? edited.html : html;
@@ -192,6 +197,7 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
           res.removeHeader('content-length');
           res.setHeader('content-length', Buffer.byteLength(out));
         }
+        res.flushHeaders = flushHeaders;
         const last = rest.find((arg) => typeof arg === 'function');
         return (flushEnd as (...a: unknown[]) => ServerResponse).call(this, out, last);
       } as typeof res.end;
