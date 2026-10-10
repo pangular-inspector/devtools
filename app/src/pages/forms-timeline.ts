@@ -1,11 +1,30 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, computed, ElementRef, input, output, signal, viewChild } from '@angular/core';
 import { time } from '../format';
+import { Select, type SelectOption } from '../ui/select';
 import { FORMS_STYLES, type FormEvent } from './forms-types';
 
 const ORIGINS = ['all', 'user', 'code', 'agent', 'devtools'] as const;
 
+/** How many events the list renders, newest first. */
+export const TIMELINE_SHOWN = 100;
+
+/** Event types in the order the `form-history` agent tool lists them. */
+const EVENT_TYPES = [
+  'value',
+  'status',
+  'touched',
+  'dirty',
+  'submit',
+  'reset',
+  'added',
+  'removed',
+  'moved',
+  'validators',
+];
+
 @Component({
   selector: 'app-forms-timeline',
+  imports: [Select],
   template: `
     <div class="toolbar">
       <label class="record" [class.on]="recording()">
@@ -37,6 +56,27 @@ const ORIGINS = ['all', 'user', 'code', 'agent', 'devtools'] as const;
           </label>
         }
       </fieldset>
+    </div>
+    <div class="filters">
+      <div class="search">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+        <input
+          #pathInput
+          type="search"
+          placeholder="Filter by field path…"
+          aria-label="Filter by field path"
+          autocomplete="off"
+          spellcheck="false"
+          [value]="pathFilter()"
+          (input)="pathFilter.set($any($event.target).value)"
+          (keydown.escape)="pathFilter.set('')"
+        />
+      </div>
+      <app-select ariaLabel="Event type" [options]="typeOptions()" [(value)]="typeFilter" />
+      <span class="total" aria-live="polite">{{ summary() }}</span>
     </div>
     @if (shown().length) {
       <ol class="events">
@@ -88,8 +128,9 @@ const ORIGINS = ['all', 'user', 'code', 'agent', 'devtools'] as const;
       </ol>
     } @else if (events().length) {
       <div class="empty-state">
-        <p class="empty-title">No changes from {{ filter() }}</p>
-        <p>Pick another source above, or interact with the form to record more.</p>
+        <p class="empty-title">No events match these filters</p>
+        <p>Change the path, type or origin, or interact with the form to record more.</p>
+        <button type="button" class="small" (click)="clearFilters()">Clear filters</button>
       </div>
     } @else {
       <div class="empty-state">
@@ -232,6 +273,65 @@ const ORIGINS = ['all', 'user', 'code', 'agent', 'devtools'] as const;
       outline: 2px solid var(--accent);
       outline-offset: 2px;
     }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: center;
+      min-width: 0;
+    }
+    .search {
+      position: relative;
+      flex: 1 1 200px;
+      min-width: 0;
+    }
+    .search-icon {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      width: 14px;
+      height: 14px;
+      transform: translateY(-50%);
+      fill: none;
+      stroke: var(--text-3);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      pointer-events: none;
+    }
+    .search:focus-within .search-icon {
+      stroke: var(--accent);
+    }
+    input[type='search'] {
+      width: 100%;
+      height: var(--control-h);
+      padding: 0 12px 0 34px;
+      background: var(--bg);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 13px;
+      transition:
+        border-color 150ms var(--ease),
+        box-shadow 150ms var(--ease);
+    }
+    input[type='search']::placeholder {
+      color: var(--text-3);
+    }
+    input[type='search']:focus-visible {
+      @include m.field-focus;
+    }
+    .filters app-select {
+      width: 150px;
+    }
+    .total {
+      flex: none;
+      color: var(--text-2);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .empty-state .small {
+      margin-top: 6px;
+    }
     .events {
       display: grid;
       gap: 2px;
@@ -331,6 +431,13 @@ const ORIGINS = ['all', 'user', 'code', 'agent', 'devtools'] as const;
       .chips {
         width: 100%;
       }
+      .filters app-select {
+        flex: 1 1 140px;
+        width: auto;
+      }
+      .total {
+        flex: 1 1 100%;
+      }
       .chips label {
         flex: 1;
         justify-content: center;
@@ -353,13 +460,62 @@ export class FormsTimeline {
   readonly origins = ORIGINS;
   readonly filter = signal<(typeof ORIGINS)[number]>('all');
 
-  readonly shown = computed(() => {
-    const origin = this.filter();
-    return this.events()
-      .filter((e) => origin === 'all' || e.origin === origin)
-      .slice(-100)
-      .reverse();
+  readonly pathFilter = signal('');
+  readonly typeFilter = signal<string | null>('all');
+  private readonly pathInput = viewChild<ElementRef<HTMLInputElement>>('pathInput');
+
+  /** All types, then the types present in the events in the agent tool's order. */
+  readonly typeOptions = computed<SelectOption[]>(() => {
+    const present = new Set(this.events().map((e) => e.type));
+    const selected = this.typeFilter();
+    if (selected && selected !== 'all') present.add(selected);
+    const known = EVENT_TYPES.filter((type) => present.has(type));
+    const other = [...present].filter((type) => !EVENT_TYPES.includes(type)).sort();
+    return [
+      { value: 'all', label: 'All types' },
+      ...[...known, ...other].map((type) => ({ value: type, label: type })),
+    ];
   });
+
+  /** Events that pass the path, type and origin filters, oldest first. */
+  readonly matching = computed(() => {
+    const origin = this.filter();
+    const type = this.typeFilter() ?? 'all';
+    const path = this.pathFilter().trim().toLowerCase();
+    return this.events().filter(
+      (e) =>
+        (origin === 'all' || e.origin === origin) &&
+        (type === 'all' || e.type === type) &&
+        (!path || e.path.toLowerCase().includes(path)),
+    );
+  });
+
+  readonly shown = computed(() => this.matching().slice(-TIMELINE_SHOWN).reverse());
+
+  readonly filtered = computed(
+    () =>
+      this.filter() !== 'all' ||
+      (this.typeFilter() ?? 'all') !== 'all' ||
+      !!this.pathFilter().trim(),
+  );
+
+  readonly summary = computed(() => {
+    const total = this.events().length;
+    const matching = this.matching().length;
+    const noun = (n: number) => (n === 1 ? 'event' : 'events');
+    const scope = this.filtered() ? ` matching ${noun(matching)}` : ` ${noun(matching)}`;
+    if (matching > TIMELINE_SHOWN)
+      return `Showing the latest ${TIMELINE_SHOWN} of ${matching}${scope}`;
+    if (this.filtered()) return `${matching} of ${total} ${noun(total)}`;
+    return `${total} ${noun(total)}`;
+  });
+
+  clearFilters() {
+    this.pathFilter.set('');
+    this.typeFilter.set('all');
+    this.filter.set('all');
+    this.pathInput()?.nativeElement.focus();
+  }
 
   iso(timestamp: number) {
     return new Date(timestamp).toISOString();
