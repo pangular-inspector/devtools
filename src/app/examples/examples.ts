@@ -34,6 +34,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
         <a routerLink="http" routerLinkActive="active" ariaCurrentWhenActive="page"
           >SSR &amp; HTTP</a
         >
+        <a routerLink="ssr" routerLinkActive="active" ariaCurrentWhenActive="page">SSR requests</a>
         <a routerLink="store" routerLinkActive="active" ariaCurrentWhenActive="page">NgRx</a>
         <a routerLink="defer" routerLinkActive="active" ariaCurrentWhenActive="page">Defer</a>
       </nav>

@@ -14,6 +14,7 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'examples/routes/loop-b', renderMode: RenderMode.Client },
   // Rendered per request so SSR calls /api/products live and fault rules apply.
   { path: 'examples/http', renderMode: RenderMode.Server },
+  { path: 'examples/ssr', renderMode: RenderMode.Server },
   {
     path: '**',
     renderMode: RenderMode.Prerender,

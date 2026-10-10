@@ -104,6 +104,11 @@ export const examplesRoutes: Routes = [
     data: { title: 'SSR & HTTP', inspector: 'network' },
   },
   {
+    path: 'ssr',
+    loadComponent: () => import('./ssr-requests-example').then((m) => m.SsrRequestsExample),
+    data: { title: 'SSR requests', inspector: 'network' },
+  },
+  {
     path: 'store',
     loadComponent: () => import('./store-example').then((m) => m.StoreExample),
     data: { title: 'NgRx', inspector: 'store' },
