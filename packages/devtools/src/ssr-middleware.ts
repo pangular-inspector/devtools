@@ -4,6 +4,7 @@ import {
   SSR_REQUEST_HEADER,
   SSR_TIMING_NAME,
   ssrRegistry,
+  type ActiveRequest,
   type SsrRenderMode,
   type SsrRequest,
 } from './ssr-registry.ts';
@@ -58,7 +59,7 @@ export function createSsrMiddleware(options: { skip?: string[] } = {}) {
     }
     const id = randomBytes(8).toString('hex');
     const at = Date.now();
-    const active = { fetches: 0, fetchMs: 0 };
+    const active: ActiveRequest = { fetches: 0, fetchMs: 0 };
     registry.active.set(id, active);
     req.headers[SSR_REQUEST_HEADER] = id;
 
@@ -76,6 +77,15 @@ export function createSsrMiddleware(options: { skip?: string[] } = {}) {
           `render;dur=${renderMs}`,
           `fetch;desc="${active.fetches} calls";dur=${active.fetchMs}`,
         ];
+        const navs = active.navigations ?? [];
+        const sum = (pick: (n: (typeof navs)[number]) => number | undefined) =>
+          navs.reduce((total, n) => total + (pick(n) ?? 0), 0);
+        if (navs.some((n) => n.guards?.ms !== undefined)) {
+          timing.push(`guards;dur=${sum((n) => n.guards?.ms)}`);
+        }
+        if (navs.some((n) => n.resolvers?.ms !== undefined)) {
+          timing.push(`resolve;dur=${sum((n) => n.resolvers?.ms)}`);
+        }
         const existing = headerText(res.getHeader('server-timing'));
         // A headers object passed to writeHead would override setHeader, so merge into it.
         const headers = args.find(
@@ -132,10 +142,11 @@ export function createSsrMiddleware(options: { skip?: string[] } = {}) {
         durationMs: Date.now() - at,
         renderMs: renderMs || Date.now() - at,
         bytes,
-        renderMode: /\btext\/html\b/.test(type) ? renderModeOf(sniff) : 'unknown',
+        renderMode: /\btext\/html\b/.test(type) && sniff ? renderModeOf(sniff) : 'unknown',
         fetches: active.fetches,
         fetchMs: active.fetchMs,
         headers,
+        ...(active.navigations?.length ? { navigations: active.navigations } : {}),
         ...(aborted ? { aborted: true } : {}),
       };
       registry.record?.(request);

@@ -129,6 +129,16 @@ describe('ssrMiddleware', () => {
     expect(req.headers[SSR_REQUEST_HEADER]).toBeUndefined();
   });
 
+  it('does not call an HTML redirect with no body a Client render', () => {
+    const middleware = createSsrMiddleware();
+    const res = new FakeResponse();
+    middleware(request('/destinations/3'), res as unknown as ServerResponse, () => {});
+    res.statusCode = 302;
+    res.setHeader('content-type', 'text/html');
+    res.end();
+    expect(recorded[0]).toMatchObject({ status: 302, renderMode: 'unknown' });
+  });
+
   it('ignores HTML-accepting requests answered with something else', () => {
     const middleware = createSsrMiddleware();
     const res = new FakeResponse();

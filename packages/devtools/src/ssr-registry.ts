@@ -1,3 +1,5 @@
+import type { SsrNavigation } from './ssr-navigation.ts';
+
 /** Request header that carries the SSR request id from `ssrMiddleware` into the render. */
 export const SSR_REQUEST_HEADER = 'x-pangular-ssr-id';
 
@@ -24,13 +26,16 @@ export interface SsrRequest {
   fetches: number;
   fetchMs: number;
   headers: Record<string, string>;
+  /** Router navigations during the render, with guard and resolver timings, when `providePangularHttp()` is set up. */
+  navigations?: SsrNavigation[];
   /** The connection closed before the response finished. */
   aborted?: boolean;
 }
 
-interface ActiveRequest {
+export interface ActiveRequest {
   fetches: number;
   fetchMs: number;
+  navigations?: SsrNavigation[];
 }
 
 export interface SsrRegistry {

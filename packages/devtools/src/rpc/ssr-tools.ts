@@ -1,5 +1,7 @@
+import { CACHE_SKIP_TEXT } from '../config.ts';
 import type { HttpCall } from '../http-rules.ts';
-import { redactUrl } from '../router.ts';
+import { redactMessage, redactUrl } from '../router.ts';
+import type { SsrNavigation } from '../ssr-navigation.ts';
 import { isSsrRequestId, type SsrRenderMode, type SsrRequest } from '../ssr-registry.ts';
 import type { HttpPage } from '../types.ts';
 import { UNTRUSTED, code } from './forms-tools.ts';
@@ -24,6 +26,56 @@ const KEPT_HEADERS = new Set([
 const num = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.round(value) : 0;
 
+const OUTCOMES = new Set(['pending', 'succeeded', 'redirected', 'cancelled', 'failed', 'skipped']);
+
+function names(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .filter((n): n is string => typeof n === 'string')
+        .slice(0, 30)
+        .map((n) => n.slice(0, 200))
+    : [];
+}
+
+function phaseMs(value: unknown): { ms?: number } {
+  return typeof value === 'number' && Number.isFinite(value) ? { ms: num(value) } : {};
+}
+
+function sanitizeNavigations(raw: unknown): SsrNavigation[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(-5).flatMap((item): SsrNavigation[] => {
+    if (!item || typeof item !== 'object') return [];
+    const n = item as { [K in keyof SsrNavigation]?: unknown };
+    if (typeof n.url !== 'string' || typeof n.outcome !== 'string' || !OUTCOMES.has(n.outcome)) {
+      return [];
+    }
+    const guards = n.guards as { names?: unknown; passed?: unknown; ms?: unknown } | undefined;
+    const resolvers = n.resolvers as { names?: unknown; ms?: unknown } | undefined;
+    return [
+      {
+        url: redactUrl(n.url),
+        ...(typeof n.finalUrl === 'string' ? { finalUrl: redactUrl(n.finalUrl) } : {}),
+        outcome: n.outcome as SsrNavigation['outcome'],
+        ...(typeof n.reason === 'string' ? { reason: redactMessage(n.reason) } : {}),
+        ...(typeof n.durationMs === 'number' ? { durationMs: num(n.durationMs) } : {}),
+        ...(guards && typeof guards === 'object'
+          ? {
+              guards: {
+                names: names(guards.names),
+                ...(typeof guards.passed === 'boolean' ? { passed: guards.passed } : {}),
+                ...phaseMs(guards.ms),
+              },
+            }
+          : {}),
+        ...(resolvers && typeof resolvers === 'object'
+          ? { resolvers: { names: names(resolvers.names), ...phaseMs(resolvers.ms) } }
+          : {}),
+        ...(names(n.lazyLoaded).length ? { lazyLoaded: names(n.lazyLoaded) } : {}),
+      },
+    ];
+  });
+}
+
 /** Validates a request from the middleware and redacts its URL and headers. */
 export function sanitizeSsrRequest(raw: unknown): SsrRequest | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
@@ -38,6 +90,7 @@ export function sanitizeSsrRequest(raw: unknown): SsrRequest | undefined {
     }
   }
   const mode = r.renderMode;
+  const navigations = sanitizeNavigations(r.navigations);
   return {
     id: r.id,
     method: typeof r.method === 'string' ? r.method.slice(0, 10) : 'GET',
@@ -51,8 +104,20 @@ export function sanitizeSsrRequest(raw: unknown): SsrRequest | undefined {
     fetches: num(r.fetches),
     fetchMs: num(r.fetchMs),
     headers,
+    ...(navigations.length ? { navigations } : {}),
     ...(r.aborted === true ? { aborted: true } : {}),
   };
+}
+
+export function cacheNote(call: HttpCall): string {
+  if (call.cacheStored) return 'stored in the transfer cache';
+  return call.cacheSkip ? `not cached: ${CACHE_SKIP_TEXT[call.cacheSkip]}` : '';
+}
+
+/** The server call a browser call repeated. */
+export function serverCallFor(call: HttpCall, serverCalls: HttpCall[]): HttpCall | undefined {
+  const key = `${call.method} ${pathOf(call.url)}`;
+  return serverCalls.find((c) => `${c.method} ${pathOf(c.url)}` === key);
 }
 
 function pathOf(url: string): string {
@@ -174,14 +239,35 @@ export function explainSsrRequestText(
   if (headers.length) {
     lines.push('', '### Response headers', ...headers.map(([k, v]) => `- ${k}: ${code(v)}`));
   }
+  if (r.navigations?.length) {
+    lines.push('', '### Router during the render');
+    for (const n of r.navigations) {
+      const parts = [
+        `- ${code(n.url)}${n.finalUrl ? ` to ${code(n.finalUrl)}` : ''}: ${n.outcome}${n.durationMs !== undefined ? ` in ${ms(n.durationMs)}` : ''}`,
+      ];
+      if (n.guards) {
+        parts.push(
+          `  - Guards${n.guards.names.length ? ` ${n.guards.names.map(code).join(', ')}` : ''}: ${n.guards.passed === false ? 'rejected' : n.guards.passed ? 'passed' : 'ran'}${n.guards.ms !== undefined ? ` in ${ms(n.guards.ms)}` : ''}`,
+        );
+      }
+      if (n.resolvers) {
+        parts.push(
+          `  - Resolvers${n.resolvers.names.length ? ` ${n.resolvers.names.map(code).join(', ')}` : ''}${n.resolvers.ms !== undefined ? `: ${ms(n.resolvers.ms)}` : ''}`,
+        );
+      }
+      if (n.lazyLoaded) parts.push(`  - Lazy loaded: ${n.lazyLoaded.map(code).join(', ')}`);
+      if (n.reason) parts.push(`  - Reason: ${code(n.reason)}`);
+      lines.push(...parts);
+    }
+  }
   if (story.serverCalls.length) {
     lines.push(
       '',
       '### Server calls',
-      ...story.serverCalls.map(
-        (c) =>
-          `- ${c.method} ${code(c.url)}: ${c.status || 'ERR'} in ${ms(c.durationMs)}${c.faulted ? ' (faulted by a rule)' : ''}${c.mocked ? ' (mocked by a rule)' : ''}${c.error ? `, ${code(c.error)}` : ''}`,
-      ),
+      ...story.serverCalls.map((c) => {
+        const note = cacheNote(c);
+        return `- ${c.method} ${code(c.url)}: ${c.status || 'ERR'} in ${ms(c.durationMs)}${c.faulted ? ' (faulted by a rule)' : ''}${c.mocked ? ' (mocked by a rule)' : ''}${c.error ? `, ${code(c.error)}` : ''}${note ? `; ${note}` : ''}`;
+      }),
     );
   } else if (r.renderMode === 'server') {
     lines.push('', 'The render made no HttpClient calls through `withPangular()`.');
@@ -211,9 +297,17 @@ export function explainSsrRequestText(
     if (story.refetched.length) {
       lines.push(
         `- ${story.refetched.length} call${story.refetched.length === 1 ? '' : 's'} ran again in the browser instead of reading the transfer cache:`,
-        ...story.refetched.map((c) => `  - ${c.method} ${code(c.url)}`),
-        '  The transfer cache skips non-GET requests unless `includePostRequests` is set, requests with `Authorization` or `Cookie` headers, `transferCache: false`, and anything the `filter` option rejects.',
+        ...story.refetched.map((c) => {
+          const server = serverCallFor(c, story.serverCalls);
+          const why = server?.cacheSkip ? `: ${CACHE_SKIP_TEXT[server.cacheSkip]}` : '';
+          return `  - ${c.method} ${code(c.url)}${why}`;
+        }),
       );
+      if (story.refetched.some((c) => !serverCallFor(c, story.serverCalls)?.cacheSkip)) {
+        lines.push(
+          '  The transfer cache skips non-GET requests unless `includePostRequests` is set, requests with `Authorization` or `Cookie` headers, `transferCache: false`, and anything the `filter` option rejects.',
+        );
+      }
     } else if (story.serverCalls.length) {
       lines.push('- No server call ran again in the browser.');
     }
