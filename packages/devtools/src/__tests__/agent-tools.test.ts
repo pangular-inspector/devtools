@@ -534,7 +534,28 @@ describe('agent tools', () => {
     await push('push-injector-tree', { pageId: 'p1', roots: [injectorRoot('A')], environment: [] });
     const text = await call('list-pages', '');
     expect(text).toMatch(/1 page\(s\) report/);
-    expect(text).toMatch(/\| `p1` \| unknown \| browser \| \d+s ago \| components, injectors \|/);
+    expect(text).toMatch(
+      /\| `p1` \| unknown \| {2}\| browser \| \d+s ago \| components, injectors \|/,
+    );
+  });
+
+  it('lists the component tree URL and title, and flags background tabs', async () => {
+    const { push, call } = await boot();
+    await push('push-component-tree', {
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+      url: 'http://localhost:4200/trips?token=abc.def.ghi',
+      title: 'Trips | Demo',
+    });
+    await push('report-page-visibility', { pageId: 'p1', hidden: true });
+    const text = await call('list-pages', '');
+    expect(text).toContain('| Page | URL | Title | Platform | Last report | Reports |');
+    expect(text).toMatch(
+      /\| `p1` \| `http:\/\/localhost:4200\/trips\?[^`]*` \| Trips \\\| Demo \| browser \| \d+s ago \(background\) \| components \|/,
+    );
+    expect(text).not.toContain('abc.def.ghi');
   });
 
   it('expires injector trees a page stopped reporting', async () => {
