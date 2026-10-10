@@ -152,7 +152,7 @@ export const serverRoutes: ServerRoute[] = [
     Open the <strong>SSR & HTTP</strong> tab and go to <strong>Fault injection</strong>.
   </ngmd-step>
   <ngmd-step title="Match a URL">
-    Enter a URL pattern, for example <code>/api/*</code>.
+    Enter a URL pattern, for example <code>/api/*</code>. To start from a call the app made, open it in the <strong>HTTP timeline</strong> and click <strong>Mock this request</strong>. That fills in the method, the URL pattern and, for a JSON response, the body.
   </ngmd-step>
   <ngmd-step title="Pick where it applies">
     <strong>SSR + client</strong>, <strong>SSR only</strong> or <strong>Client only</strong>.
