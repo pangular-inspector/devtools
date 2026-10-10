@@ -2403,7 +2403,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:explain-pipe',
       description:
-        'Explain one pipe by name: where it is declared or used, whether it is pure, live instance/call counts and last input/output when instrumentation is on, an experimental stale-value warning, `| async` usages that resubscribe on every check (for `async`), and any lint findings. Use this to answer "why is this pipe slow or stale?"',
+        'Explain one pipe by name: where it is declared or used, whether it is pure, live instance/call counts and last input/output when instrumentation is on, an experimental stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage (for `async`), and any lint findings. Use this to answer "why is this pipe slow or stale?"',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -2414,7 +2414,14 @@ const pangular = defineDevframe({
       },
       handler: async (args: { name?: string }) => {
         if (!args?.name) return { markdown: 'Pass a pipe `name`.' };
-        return { markdown: explainPipeText(args.name, ctx.cwd, pipesState.value() as PipesState) };
+        return {
+          markdown: explainPipeText(
+            args.name,
+            ctx.cwd,
+            pipesState.value() as PipesState,
+            pipePages.size,
+          ),
+        };
       },
     });
 
