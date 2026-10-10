@@ -63,9 +63,33 @@ Each document request that `ssrMiddleware` traced, newest first. A request is tr
 | Server calls | How many `HttpClient` calls the render made, and their total time.                                                         |
 | Notes        | **this page** on the request that served the selected page, and **aborted** when the connection closed early.              |
 
-The request that served the selected page opens on its own. Click another row to open it. The detail lists the request id, the total time, the bytes sent, the browser page that loaded the response, and each server call. **Fetched again in the browser** lists calls that ran on the server and then again after hydration, instead of reading the transfer cache.
+The request that served the selected page opens on its own. Click another row to open it. The detail lists the request id, the total time, the bytes sent, the browser page that loaded the response, the router during the render, and each server call. **Fetched again in the browser** lists calls that ran on the server and then again after hydration, instead of reading the transfer cache, each with the reason.
 
-The middleware gives each request an id. The id reaches the render in the `x-pangular-ssr-id` request header, so the interceptor tags each server call with it. It goes back to the browser in a `Server-Timing` header (`pangular;desc="<id>"`, `render;dur=...` and `fetch;dur=...`), so the overlay links the page to the render, and the browser's own Network panel shows the render and fetch times too.
+The middleware gives each request an id. The id reaches the render in the `x-pangular-ssr-id` request header, so the interceptor tags each server call with it. It goes back to the browser in a `Server-Timing` header (`pangular;desc="<id>"`, `render;dur=...`, `fetch;dur=...`, and `guards;dur=...` and `resolve;dur=...` when the router ran them), so the overlay links the page to the render, and the browser's own Network panel shows the same times.
+
+#### Router during the render
+
+Each navigation the router ran while rendering, usually one, plus one for each redirect. It shows the URL and outcome, the time spent in guards and whether they passed, the time spent in resolvers, the total, and the redirect or cancel reason. The times cover each phase as a whole, not each guard. This part needs `providePangularHttp()` in the app config.
+
+#### Transfer cache outcome
+
+Each server call is marked **cached** when Angular's transfer cache stored its response for hydration, or **not cached** with the first reason that applies:
+
+| Reason                 | When                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `transferCache: false` | The request opts out.                                                                                                    |
+| POST                   | A POST, unless `includePostRequests` is set or the request sets `transferCache`.                                         |
+| Method                 | Any method other than GET, HEAD and POST.                                                                                |
+| Auth headers           | The request sends `Authorization`, `Proxy-Authorization` or `Cookie`.                                                    |
+| Credentials            | `withCredentials`, or `credentials` set to `include` or `same-origin`.                                                   |
+| Request cache          | The request has `Cache-Control` `no-store`, `no-cache` or `private`, or `cache` set to `no-store` or `no-cache`.         |
+| Failed response        | The call failed. Errors are never stored.                                                                                |
+| Response cache         | The response has `Cache-Control` `no-store`, `no-cache` or `private`.                                                    |
+| Set-Cookie             | The response sets a cookie.                                                                                              |
+| Fault rule             | A fault rule answered on the server, before the transfer cache ran.                                                      |
+| Cache off or filter    | None of the above. The transfer cache is off, or `filter` or another `withHttpTransferCacheOptions` setting left it out. |
+
+The tab checks the TransferState after each server response, so **cached** is what Angular stored. The reason is worked out from the request and the response, in the order Angular checks them, with its default options. Options such as `includePostRequests` or `includeRequestsWithAuthHeaders` let a call through, so a skipped call only lists a reason that still applies.
 
 ### HTTP timeline
 
@@ -126,6 +150,7 @@ Each entry in the page's `{APP_ID}-state` script, with its size. The tab decodes
 | Part                  | Needs                                                                                            |
 | --------------------- | ------------------------------------------------------------------------------------------------ |
 | SSR requests          | `ssrMiddleware`, plus `withPangular()` for the server calls and the overlay for the linked page. |
+| Router timings        | `ssrMiddleware` and `providePangularHttp()`.                                                     |
 | HTTP timeline         | `withPangular()` and the overlay.                                                                |
 | Fault injection       | `withPangular()`.                                                                                |
 | Hydration stats       | The overlay.                                                                                     |
@@ -190,16 +215,16 @@ The interceptor works in development builds only. In production it passes reques
     Use a route with <code>RenderMode.Server</code>. Its request opens in <strong>SSR requests</strong>, marked <strong>this page</strong>.
   </ngmd-step>
   <ngmd-step title="Read the detail">
-    Calls under <strong>Fetched again in the browser</strong> ran twice. A POST, <code>transferCache: false</code>, or an <code>Authorization</code> or <code>Cookie</code> header keeps a call out of the cache.
+    Calls under <strong>Fetched again in the browser</strong> ran twice. Each one says why the transfer cache left it out, such as a POST or <code>transferCache: false</code>.
   </ngmd-step>
 </ngmd-workflow>
 
 ## Agent tools
 
-| Tool                           | What it answers                                                                                                                                                 | Arguments   |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `pangular:list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                          | `limit`     |
-| `pangular:explain-ssr-request` | One request end to end: timings, kept response headers, each server call, then the browser page with its hydration result and the calls the browser made again. | `id`, `url` |
+| Tool                           | What it answers                                                                                                                                                                                                                        | Arguments   |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `pangular:list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`     |
+| `pangular:explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url` |
 
 For the rest of this tab, agents read the `pangular:http` key with the `devframe_state_read` tool. See [Resources](../agents/resources.md).
 

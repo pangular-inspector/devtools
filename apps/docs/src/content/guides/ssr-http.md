@@ -123,7 +123,7 @@ app.use(devtools.ssrMiddleware);
 export const reqHandler = createNodeRequestHandler(app);
 ```
 
-`ssrMiddleware` is optional. It traces each server render for the **SSR requests** table and adds a `Server-Timing` header to the response. Put it before the Angular handler.
+`ssrMiddleware` is optional. It traces each server render for the **SSR requests** table and adds a `Server-Timing` header to the response. Put it before the Angular handler. With `providePangularHttp()` in the app config, each request also shows the router's guard and resolver times.
 
 This is adapted from the demo app's `src/server.ts`. It keeps the one-time code and the origin check on, which are the defaults. See [Angular CLI and Express](../getting-started/express.md) for every option.
 
