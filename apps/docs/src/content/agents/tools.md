@@ -110,7 +110,7 @@ Change detection cycles recorded with Angular's profiler: the slowest components
 | `record` | no       | `start` starts a fresh recording, `stop` stops it and keeps the cycles, `clear` empties it. Leave out to read. |
 | `limit`  | no       | Rows per list. Default 10, at most 50.                                                                         |
 
-Without `page`, it reads the page that is recording, and `record` goes to every connected page. The answer starts with the change detection mode of the page that last reported its injectors: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many.
+Without `page`, it reads the page that is recording, and `record` goes to every connected page. The answer starts with the change detection mode of the page it reports on: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many.
 
 ### inspect-signals
 

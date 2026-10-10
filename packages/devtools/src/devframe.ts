@@ -136,6 +136,7 @@ import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from '
 import {
   changeDetectionText,
   expireCdPages,
+  pickCdPage,
   toCdPage,
   type CdPage,
   type CdState,
@@ -1733,8 +1734,11 @@ const pangular = defineDevframe({
                 : 'Recording cleared.';
           return { markdown: next };
         }
-        const text = changeDetectionText(cdState.value() as CdState, args ?? {});
-        const injectors = args?.page ? injectorPages.get(args.page) : latestInjectorPage();
+        const cd = cdState.value() as CdState;
+        const text = changeDetectionText(cd, args ?? {});
+        // The zone mode comes from the same page as the recording, not the latest tab.
+        const zonePage = args?.page ?? pickCdPage(cd)?.pageId;
+        const injectors = zonePage ? injectorPages.get(zonePage) : latestInjectorPage();
         const mode = injectors ? zoneModeText(injectors.zone, injectors.pageId) : '';
         return { markdown: mode ? `${mode}\n\n${text}` : text };
       },
