@@ -148,7 +148,7 @@ Development-only changes to what the server sends for matching pages. Each one a
 
 Override HTTP calls the server makes with [Fault injection](#fault-injection) instead, on **SSR only**.
 
-To get a key for **Edit TransferState**, copy it from **TransferState payload**. HttpClient entries hold `b` (body), `s` (status), `st` (status text), `u` (URL) and `rt` (response type), so a changed body keeps the other fields.
+To edit an entry without typing its key, open it in **TransferState payload** and click **Edit in SSR overrides**. The form switches to **Edit TransferState entry** with the key, and the page path as the pattern, filled in. Focus moves to **New JSON value**. The value starts empty because the panel only has a redacted copy of the entry. Type the full JSON the server should send, since an empty value removes the entry. HttpClient entries hold `b` (body), `s` (status), `st` (status text), `u` (URL) and `rt` (response type), so a changed body keeps the other fields.
 
 The Prerender fallback mode can't be forced. The engine reads render modes from your server bundle, which the devtools can't change.
 
@@ -164,6 +164,8 @@ The Prerender fallback mode can't be forced. The engine reads render modes from 
 ### TransferState payload
 
 Each entry in the page's `{APP_ID}-state` script, with its size. The tab decodes HttpClient and Analog cache entries to status, URL and body. It labels `__nghData__` and `__nghDeferData__` as hydration annotations, and Analog server function results seeded during server rendering by function name.
+
+Open an entry to see its cache key, even when the row shows the request URL. **Copy** puts the key on the clipboard. If the `actions.http` write action is on, **Edit in SSR overrides** opens the [SSR overrides](#ssr-overrides) form for that key. The button is hidden for keys longer than 200 characters, the most an override keeps.
 
 ## Where the data comes from
 

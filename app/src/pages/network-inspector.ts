@@ -217,6 +217,20 @@ function pathOf(url: string): string {
   }
 }
 
+/**
+ * The path of a page, as an SSR override pattern. The query is left out because the panel only
+ * has a redacted copy of it, which would not match the real request.
+ */
+function pagePath(url: string): string {
+  try {
+    return new URL(url, 'http://x').pathname;
+  } catch {
+    return '';
+  }
+}
+
+/** The longest TransferState key `set-ssr-overrides` keeps (see `sanitizeSsrOverrides`). */
+const MAX_OVERRIDE_KEY = 200;
 const MAX_RULES = 50;
 const MAX_PATTERN = 500;
 const MAX_BODY = 100_000;
@@ -803,6 +817,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               <label>
                 TransferState key
                 <input
+                  id="override-key"
                   spellcheck="false"
                   autocomplete="off"
                   [value]="overrideDraft().key"
@@ -812,15 +827,30 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               <label>
                 <span>New JSON value <span class="hint">(empty removes the entry)</span></span>
                 <textarea
+                  id="override-value"
                   rows="3"
                   spellcheck="false"
                   [value]="overrideDraft().value"
                   (input)="patchOverride('value', $event)"
                   [attr.aria-invalid]="overrideValueError() ? 'true' : null"
-                  aria-describedby="override-value-error"
+                  [attr.aria-describedby]="
+                    overrideFromPayload()
+                      ? 'override-value-error override-value-note'
+                      : 'override-value-error'
+                  "
                 ></textarea>
               </label>
               <p id="override-value-error" class="field-error">{{ overrideValueError() }}</p>
+              @if (overrideFromPayload(); as from) {
+                <p id="override-value-note" class="muted small">
+                  Filled in from the TransferState payload. The value starts empty because the panel
+                  only shows a redacted copy, so type the JSON the server should send.
+                  @if (from === 'http') {
+                    For a cached HTTP response this is the whole cache record, not only the response
+                    body.
+                  }
+                </p>
+              }
             }
             @case ('client-render') {
               <p class="muted small">
@@ -1016,7 +1046,32 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                     }
                     <span class="entry-size">{{ entry.size }} B</span>
                   </summary>
-                  <pre>{{ entry.value | json }}</pre>
+                  <div class="entry-key-row">
+                    <span class="entry-key-label">Key</span>
+                    <code class="entry-key-text">{{ entry.key }}</code>
+                    <div class="entry-actions">
+                      <button
+                        type="button"
+                        class="ghost"
+                        [attr.aria-label]="'Copy key ' + entry.key"
+                        (click)="copyKey(entry.key)"
+                      >
+                        Copy
+                      </button>
+                      @if (canEditEntry(entry)) {
+                        <button
+                          type="button"
+                          class="ghost"
+                          [attr.aria-label]="'Edit in SSR overrides, key ' + entry.key"
+                          (click)="editEntry(entry)"
+                        >
+                          Edit in SSR overrides
+                        </button>
+                      }
+                    </div>
+                  </div>
+                  <!-- Focusable so a long value can be scrolled with the keyboard. -->
+                  <pre tabindex="0">{{ entry.value | json }}</pre>
                 </details>
               }
             </div>
@@ -1771,6 +1826,31 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     summary:hover .entry-key {
       color: var(--accent);
     }
+    .entry-key-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 8px;
+      min-width: 0;
+      margin: 0 0 8px;
+      padding: 0 4px;
+    }
+    .entry-key-label {
+      @include m.label;
+      flex: none;
+    }
+    .entry-key-text {
+      flex: 1 1 200px;
+      min-width: 0;
+      color: var(--text-strong);
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+    .entry-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
     .entry-size {
       flex: none;
       color: var(--text-2);
@@ -1810,6 +1890,8 @@ export class NetworkInspector {
   readonly rules = signal<HttpRule[]>([]);
   readonly overrides = signal<SsrOverride[]>([]);
   readonly overrideDraft = signal<OverrideDraft>({ ...EMPTY_OVERRIDE });
+  /** Set when the draft came from a TransferState entry, so the form can explain the empty value. */
+  readonly overrideFromPayload = signal<'http' | 'other' | null>(null);
   readonly overrideKindOptions: SelectOption<SsrOverrideKind>[] = [
     { value: 'render-error', label: 'Render error' },
     { value: 'client-render', label: 'Force Client render' },
@@ -2184,6 +2266,48 @@ export class NetworkInspector {
     this.overrideDraft.update((d) => ({ ...d, [key]: value }));
   }
 
+  async copyKey(key: string) {
+    try {
+      await navigator.clipboard.writeText(key);
+      this.message.set('Copied.');
+    } catch {
+      this.message.set('The clipboard is not available here.');
+    }
+  }
+
+  /** The edit needs HTTP writes, and the server drops keys longer than it accepts. */
+  canEditEntry(entry: PayloadEntry): boolean {
+    return this.canWrite() && entry.key.length <= MAX_OVERRIDE_KEY;
+  }
+
+  /**
+   * Opens the SSR overrides form as a TransferState edit for this entry. The value stays empty:
+   * the payload the panel holds is redacted and clipped, so copying it would write masks back.
+   */
+  editEntry(entry: PayloadEntry) {
+    if (!this.canEditEntry(entry)) return;
+    const page = this.selected();
+    this.overrideDraft.set({
+      ...EMPTY_OVERRIDE,
+      kind: 'state-edit',
+      pattern: page ? pagePath(page.initialUrl ?? page.url) : '',
+      key: entry.key,
+    });
+    this.overrideFromPayload.set(entry.http ? 'http' : 'other');
+    this.message.set('Editing the TransferState entry in SSR overrides.');
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement;
+        const target = host.querySelector<HTMLElement>(
+          this.overrideDraft().pattern ? '#override-value' : '#override-pattern',
+        );
+        target?.scrollIntoView?.({ block: 'center' });
+        target?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
   async addOverride(event: Event) {
     event.preventDefault();
     if (!this.overrideReady()) return;
@@ -2199,6 +2323,7 @@ export class NetworkInspector {
     };
     if (await this.saveOverrides([...this.overrides(), next], 'Override added. Reload the page.')) {
       this.overrideDraft.set({ ...EMPTY_OVERRIDE, kind: d.kind });
+      this.overrideFromPayload.set(null);
       this.host.nativeElement.querySelector<HTMLInputElement>('#override-pattern')?.focus();
     }
   }
