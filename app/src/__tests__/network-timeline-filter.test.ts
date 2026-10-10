@@ -79,6 +79,10 @@ describe('NetworkInspector timeline filters', () => {
     expect(rowIds()).toEqual(['c2']);
     expect(total()).toBe('1 of 6');
 
+    // A method and path query also finds server calls whose URL is absolute.
+    await type('get /api/cart');
+    expect(rowIds()).toEqual(['s2']);
+
     search().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await fixture.whenStable();
     expect(search().value).toBe('');

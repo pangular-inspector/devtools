@@ -1998,7 +1998,9 @@ export class NetworkInspector {
       (c) =>
         (side === 'all' || c.side === side) &&
         (!failedOnly || this.isFailed(c)) &&
-        (!query || `${c.method} ${c.url}`.toLowerCase().includes(query)),
+        (!query ||
+          `${c.method} ${c.url}`.toLowerCase().includes(query) ||
+          `${c.method} ${pathOf(c.url)}`.toLowerCase().includes(query)),
     );
   });
 
