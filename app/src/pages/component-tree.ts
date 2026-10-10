@@ -179,6 +179,30 @@ function bare(name: string): string {
           />
         }
         <span class="count">{{ countLabel() }}</span>
+        <button
+          type="button"
+          class="tree-action"
+          [disabled]="!!filter().trim()"
+          (click)="expandAll()"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m7 15 5 5 5-5" />
+            <path d="m7 9 5-5 5 5" />
+          </svg>
+          Expand all
+        </button>
+        <button
+          type="button"
+          class="tree-action"
+          [disabled]="!!filter().trim()"
+          (click)="collapseAll()"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m7 20 5-5 5 5" />
+            <path d="m7 4 5 5 5-5" />
+          </svg>
+          Collapse all
+        </button>
         @if (!native()) {
           <button
             type="button"
@@ -796,6 +820,12 @@ function bare(name: string): string {
     .page-select {
       flex: 0 1 220px;
       min-width: 0;
+    }
+    .tree-action:disabled,
+    .tree-action:disabled:hover {
+      background: var(--surface-2);
+      border-color: var(--border-strong);
+      opacity: 0.5;
     }
     .pick.on {
       background: var(--accent-soft);
@@ -1817,6 +1847,41 @@ export class ComponentTree {
     });
   }
 
+  expandAll() {
+    if (this.query()) return;
+    this.collapsed.set(new Set());
+    this.announcement.set('Expanded every component.');
+  }
+
+  collapseAll() {
+    if (this.query()) return;
+    const { map, parents } = this.index();
+    const previous = this.rovingId();
+    const next = new Set<string>();
+    for (const node of map.values()) if (node.children.length) next.add(node.id);
+    this.collapsed.set(next);
+    if (previous) {
+      const visible = new Set(this.rows().map((row) => row.node.id));
+      let id: string | undefined = previous;
+      while (id && !visible.has(id)) id = parents.get(id);
+      if (id) this.focusId.set(id);
+    }
+    this.announcement.set('Collapsed every component. Only the top level is shown.');
+  }
+
+  private expandSiblings(id: string) {
+    if (this.query()) return;
+    const parent = this.index().parents.get(id);
+    const siblings = parent
+      ? (this.index().map.get(parent)?.children ?? [])
+      : (this.page()?.roots ?? []);
+    this.collapsed.update((set) => {
+      const next = new Set(set);
+      for (const sibling of siblings) next.delete(sibling.id);
+      return next;
+    });
+  }
+
   highlight(id: string | null) {
     const client = this.rpc();
     if (!client) return;
@@ -1869,6 +1934,9 @@ export class ComponentTree {
       case 'Enter':
       case ' ':
         this.select(row.node.id);
+        break;
+      case '*':
+        this.expandSiblings(row.node.id);
         break;
       default:
         return;
