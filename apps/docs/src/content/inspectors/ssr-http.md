@@ -54,22 +54,37 @@ app.use(devtools.ssrMiddleware);
 
 Each document request that `ssrMiddleware` traced, newest first. A request is traced when it is a `GET` or `HEAD` that accepts `text/html`, and the answer is HTML or a redirect. Each row shows:
 
-| Column       | Value                                                                                                                      |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| Request      | The method and URL.                                                                                                        |
-| Status       | The status sent to the browser.                                                                                            |
-| Render mode  | **Server**, **Prerender** or **Client**, read from the `ng-server-context` attribute Angular puts on the root in the HTML. |
-| Render       | Time from the request arriving to the status and headers being sent.                                                       |
-| Server calls | How many `HttpClient` calls the render made, and their total time.                                                         |
-| Notes        | **this page** on the request that served the selected page, and **aborted** when the connection closed early.              |
+| Column       | Value                                                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------- |
+| Request      | The method and URL.                                                                                           |
+| Status       | The status sent to the browser.                                                                               |
+| Render mode  | What the response was. See [Render modes](#render-modes).                                                     |
+| Render       | Time from the request arriving to the status and headers being sent.                                          |
+| Server calls | How many `HttpClient` calls the render made, and their total time.                                            |
+| Notes        | **this page** on the request that served the selected page, and **aborted** when the connection closed early. |
 
 The request that served the selected page opens on its own. Click another row to open it. The detail lists the request id, the total time, the bytes sent, the browser page that loaded the response, the router during the render, and each server call. **Fetched again in the browser** lists calls that ran on the server and then again after hydration, instead of reading the transfer cache, each with the reason.
 
 The middleware gives each request an id. The id reaches the render in the `x-pangular-ssr-id` request header, so the interceptor tags each server call with it. It goes back to the browser in a `Server-Timing` header (`pangular;desc="<id>"`, `render;dur=...`, `fetch;dur=...`, and `guards;dur=...` and `resolve;dur=...` when the router ran them), so the overlay links the page to the render, and the browser's own Network panel shows the same times.
 
+#### Render modes
+
+The tab reads the render mode from the HTML first, then from the status:
+
+| Render mode      | When                                                                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Server**       | The HTML has `ng-server-context="ssr"`, whatever the status. A not-found page Angular rendered with status 404 counts as Server.         |
+| **Prerender**    | The HTML has `ng-server-context="ssg"`.                                                                                                  |
+| **Client**       | The engine sent the `index.csr.html` shell, an empty root element and the app's module script, for a `RenderMode.Client` route.          |
+| **Redirect**     | A 3xx with no page, from `redirectTo` in the routes or a guard that returned a `UrlTree` during the render.                              |
+| **Not rendered** | A status of 400 or more with no Angular markup. Angular gave up, for example because a guard rejected, and the server sent its own page. |
+| **Unknown**      | None of the above.                                                                                                                       |
+
+A redirect or a rejected guard can still have run the router on the server. **Router during the render** shows what it did.
+
 #### Router during the render
 
-Each navigation the router ran while rendering, usually one, plus one for each redirect. It shows the URL and outcome, the time spent in guards and whether they passed, redirected or rejected, the time spent in resolvers, the total, and the redirect or cancel reason. The times cover each phase as a whole, not each guard. This part needs `providePangularHttp()` in the app config.
+Up to five navigations the router ran while rendering. Most renders have one, plus one for each redirect. It shows the URL and outcome, the time spent in guards and whether they passed, redirected or rejected, the time spent in resolvers, the total, and the redirect or cancel reason. The times cover each phase as a whole, not each guard. This part needs `providePangularHttp()` in the app config.
 
 To see it in the demo app, load `/examples/ssr/product/3` with a full page load. Its guard calls an access API and its resolver loads the product from a slow API. Product 2 is sold out, so its guard redirects, and product 9 is unknown, so its guard rejects the navigation.
 
