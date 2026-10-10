@@ -337,9 +337,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                     @if (n.guards) {
                       <div>
                         <dt>Guards</dt>
-                        <dd [class.bad]="n.guards.passed === false">
+                        <dd [class.bad]="guardVerdict(n) === 'rejected'">
                           {{ msLabel(n.guards.ms)
-                          }}{{ n.guards.passed === false ? ', rejected' : '' }}
+                          }}{{ guardVerdict(n) ? ', ' + guardVerdict(n) : '' }}
                         </dd>
                       </div>
                     }
@@ -1797,6 +1797,12 @@ export class NetworkInspector {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** A guard that returns a UrlTree reports shouldActivate false, so a redirect is not a rejection. */
+  guardVerdict(nav: SsrNavigation): 'redirected' | 'rejected' | '' {
+    if (nav.guards?.passed !== false) return '';
+    return nav.outcome === 'redirected' ? 'redirected' : 'rejected';
   }
 
   msLabel(ms: number | undefined): string {

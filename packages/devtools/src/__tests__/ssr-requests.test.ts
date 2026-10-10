@@ -129,6 +129,16 @@ describe('ssrMiddleware', () => {
     expect(req.headers[SSR_REQUEST_HEADER]).toBeUndefined();
   });
 
+  it('does not call an HTML error page a Client render', () => {
+    const middleware = createSsrMiddleware();
+    const res = new FakeResponse();
+    middleware(request('/missing'), res as unknown as ServerResponse, () => {});
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/html');
+    res.end('<pre>Cannot GET /missing</pre>');
+    expect(recorded[0]).toMatchObject({ status: 404, renderMode: 'unknown' });
+  });
+
   it('does not call an HTML redirect with no body a Client render', () => {
     const middleware = createSsrMiddleware();
     const res = new FakeResponse();

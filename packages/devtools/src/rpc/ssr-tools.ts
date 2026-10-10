@@ -247,7 +247,7 @@ export function explainSsrRequestText(
       ];
       if (n.guards) {
         parts.push(
-          `  - Guards${n.guards.names.length ? ` ${n.guards.names.map(code).join(', ')}` : ''}: ${n.guards.passed === false ? 'rejected' : n.guards.passed ? 'passed' : 'ran'}${n.guards.ms !== undefined ? ` in ${ms(n.guards.ms)}` : ''}`,
+          `  - Guards${n.guards.names.length ? ` ${n.guards.names.map(code).join(', ')}` : ''}: ${n.guards.passed === false ? (n.outcome === 'redirected' ? 'redirected' : 'rejected') : n.guards.passed ? 'passed' : 'ran'}${n.guards.ms !== undefined ? ` in ${ms(n.guards.ms)}` : ''}`,
         );
       }
       if (n.resolvers) {

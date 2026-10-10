@@ -255,4 +255,18 @@ describe('explain-ssr-request with reasons and navigations', () => {
     );
     expect(text).not.toContain('anything the `filter` option rejects');
   });
+
+  it('calls a guard that returned a UrlTree redirected, not rejected', () => {
+    const nav = (outcome: string) =>
+      sanitizeSsrRequest({
+        ...request(),
+        navigations: [{ url: '/a', outcome, guards: { names: [], passed: false, ms: 5 } }],
+      })!;
+    expect(explainSsrRequestText([nav('redirected')], [], [], {})).toContain(
+      'Guards: redirected in 5 ms',
+    );
+    expect(explainSsrRequestText([nav('cancelled')], [], [], {})).toContain(
+      'Guards: rejected in 5 ms',
+    );
+  });
 });

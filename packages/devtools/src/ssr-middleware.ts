@@ -142,7 +142,10 @@ export function createSsrMiddleware(options: { skip?: string[] } = {}) {
         durationMs: Date.now() - at,
         renderMs: renderMs || Date.now() - at,
         bytes,
-        renderMode: /\btext\/html\b/.test(type) && sniff ? renderModeOf(sniff) : 'unknown',
+        renderMode:
+          /\btext\/html\b/.test(type) && sniff && res.statusCode < 400
+            ? renderModeOf(sniff)
+            : 'unknown',
         fetches: active.fetches,
         fetchMs: active.fetchMs,
         headers,
