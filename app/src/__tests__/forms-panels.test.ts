@@ -284,6 +284,72 @@ describe('FormsInspector fields', () => {
   });
 });
 
+describe('FormsInspector error summary', () => {
+  it('opens the field of an entry on the Fields tab, clearing a filter that hides it', async () => {
+    const invalid: CollectedForm = {
+      ...form,
+      root: {
+        ...form.root,
+        children: [
+          field('email'),
+          field('name', { status: 'INVALID', errors: [{ kind: 'required', message: 'required' }] }),
+        ],
+      },
+      errorSummary: [{ path: 'name', kind: 'required', message: 'is required' }],
+    };
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve('about name'), [invalid]),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const inspector = fixture.componentInstance;
+    inspector.filter.set('email');
+    inspector.active.set(new Set(['dirty']));
+    inspector.tab_.set('timeline');
+    await settle(fixture);
+
+    const entry = Array.from(host.querySelectorAll<HTMLButtonElement>('.summary-link')).find(
+      (b) => b.textContent?.replace(/\s+/g, ' ').trim() === 'Show field name: is required required',
+    );
+    expect(entry).toBeDefined();
+    entry!.click();
+    await settle(fixture);
+
+    expect(inspector.tab_()).toBe('fields');
+    expect(inspector.filter()).toBe('');
+    expect(inspector.active().size).toBe(0);
+    expect(inspector.fieldPath()).toBe('name');
+    expect(button(fixture, 'Show details for name').getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('app-forms-field-detail')).not.toBeNull();
+    expect(document.activeElement?.id).toBe('forms-field-heading');
+  });
+
+  it('keeps a filter that already shows the field', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(
+        () => Promise.resolve(''),
+        [{ ...form, errorSummary: [{ path: 'name', kind: 'required', message: 'is required' }] }],
+      ),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const inspector = fixture.componentInstance;
+    inspector.filter.set('nam');
+    await settle(fixture);
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('.summary-link')!
+      .click();
+    await settle(fixture);
+    expect(inspector.filter()).toBe('nam');
+    expect(inspector.fieldPath()).toBe('name');
+  });
+});
+
 describe('FormsInspector pick', () => {
   it('turns into Cancel picking and cancels from the button and Escape', async () => {
     const calls: Record<string, unknown>[] = [];

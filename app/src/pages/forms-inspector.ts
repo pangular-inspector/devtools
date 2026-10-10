@@ -2,6 +2,8 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -224,8 +226,12 @@ function countFields(node: FormFieldNode): number {
                 <ul>
                   @for (entry of form.errorSummary!; track $index) {
                     <li>
-                      <code>{{ entry.path || '(form)' }}</code> {{ entry.message }}
-                      <code class="kind-tag">{{ entry.kind }}</code>
+                      <button type="button" class="summary-link" (click)="showField(entry.path)">
+                        <span class="sr-only">Show field </span
+                        ><code>{{ entry.path || '(form)' }}</code
+                        ><span class="sr-only">:</span> {{ entry.message }}
+                        <code class="kind-tag">{{ entry.kind }}</code>
+                      </button>
                     </li>
                   }
                 </ul>
@@ -800,6 +806,29 @@ function countFields(node: FormFieldNode): number {
       color: var(--text);
       overflow-wrap: anywhere;
     }
+    .summary-link {
+      display: inline;
+      padding: 0;
+      border: none;
+      border-radius: 4px;
+      background: none;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .summary-link code:first-of-type {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .summary-link:hover code:first-of-type {
+      color: var(--accent-hover);
+    }
+    .summary-link:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
     .error-summary .kind-tag {
       margin-left: 6px;
       color: var(--text-2);
@@ -1306,6 +1335,7 @@ export class FormsInspector {
   private unsubscribe: (() => void) | null = null;
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
 
   readonly counts = computed(
     () =>
@@ -1485,6 +1515,27 @@ export class FormsInspector {
       host.querySelector<HTMLElement>('.table-scroll');
     this.fieldPath.set(null);
     row?.focus();
+  }
+
+  /** Opens a field from the error summary: Fields tab, filters that hide it cleared, detail focused. */
+  showField(path: string) {
+    this.tab_.set('fields');
+    const listed = () => this.rows().some((row) => row.node.path === path);
+    if (!listed()) this.filter.set('');
+    if (!listed()) this.active.set(new Set());
+    this.fieldPath.set(path);
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement;
+        const row = host.querySelector<HTMLElement>('button.field[aria-pressed="true"]');
+        row?.scrollIntoView?.({ block: 'nearest' });
+        const target =
+          host.querySelector<HTMLElement>('#forms-field-heading') ??
+          host.querySelector<HTMLElement>('.table-scroll');
+        target?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 
   toggleChip(chip: Chip) {
