@@ -129,6 +129,8 @@ import {
 import { sanitizeHydration, sanitizePayload, type PayloadSummary } from './http-payload.ts';
 import { redactCall } from './http-redact.ts';
 import { redactMessage, redactUrl } from './router.ts';
+import { isSsrRequestId, ssrRegistry } from './ssr-registry.ts';
+import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import {
   changeDetectionText,
   expireCdPages,
@@ -601,7 +603,12 @@ const pangular = defineDevframe({
     registry.dispose?.();
     registry.rules = on.http && config.actions.http ? (registry.rules ?? []) : [];
     const httpState = await my.rpc.sharedState('http', {
-      initialValue: { serverCalls: [], pages: [], rules: [...registry.rules] } as HttpState,
+      initialValue: {
+        serverCalls: [],
+        requests: [],
+        pages: [],
+        rules: [...registry.rules],
+      } as HttpState,
     });
     const httpPayloadState = await my.rpc.sharedState('http-payloads', {
       initialValue: { pages: {} } as HttpPayloadState,
@@ -626,6 +633,23 @@ const pangular = defineDevframe({
         if (dropped) draft.serverDropped = (draft.serverDropped ?? 0) + dropped;
       });
     };
+    const ssr = ssrRegistry();
+    ssr.record = on.http
+      ? (raw) => {
+          const request = sanitizeSsrRequest(raw);
+          if (!request) return;
+          // Server calls are batched, so flush them first to keep their order.
+          if (flushTimer) {
+            clearTimeout(flushTimer);
+            flushServerCalls();
+          }
+          httpState.mutate((draft) => {
+            draft.requests.push(request);
+            const extra = draft.requests.length - limits.httpCalls;
+            if (extra > 0) draft.requests.splice(0, extra);
+          });
+        }
+      : undefined;
     registry.record = on.http
       ? (call) => {
           pendingServerCalls.push(redactCall(call));
@@ -685,6 +709,11 @@ const pangular = defineDevframe({
               : calls,
           dropped:
             typeof page.dropped === 'number' && page.dropped > 0 ? Math.floor(page.dropped) : 0,
+          ...(isSsrRequestId(page.ssrRequestId)
+            ? { ssrRequestId: page.ssrRequestId }
+            : known?.ssrRequestId
+              ? { ssrRequestId: known.ssrRequestId }
+              : {}),
           firstSeenAt: known?.firstSeenAt ?? Date.now(),
           reportedAt: Date.now(),
         });
@@ -750,6 +779,7 @@ const pangular = defineDevframe({
         httpState.mutate((draft) => {
           draft.serverCalls = [];
           draft.serverDropped = 0;
+          draft.requests = [];
           draft.pages = [...httpPages.values()].sort((a, b) => a.firstSeenAt - b.firstSeenAt);
         });
         void my.rpc.broadcast({ method: 'http-clear', args: [], optional: true });
@@ -806,7 +836,49 @@ const pangular = defineDevframe({
       clearInterval(expiry);
       clearTimeout(flushTimer);
       registry.record = undefined;
+      ssr.record = undefined;
     };
+
+    const httpSnapshot = () => httpState.value() as HttpState;
+    agent.registerTool({
+      id: 'pangular:list-ssr-requests',
+      description:
+        'Recent document requests that the Angular SSR server answered, traced by `devtools.ssrMiddleware`: id, URL, status, render mode read from the HTML (Server, Prerender, Client), render time, how many server HttpClient calls the render made, and whether a connected page reported loading that response. Empty when the middleware is not installed.',
+      safety: 'read',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', description: 'How many requests to list (1-100, default 20).' },
+        },
+      },
+      handler: async (args: { limit?: number }) => {
+        const state = httpSnapshot();
+        return { markdown: listSsrRequestsText(state.requests, state.pages, args) };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:explain-ssr-request',
+      description:
+        'One SSR request from start to finish: status, render mode, render and fetch times, kept response headers, each server HttpClient call, then the browser page that loaded the response with its hydration result and any call the browser made again instead of reading the transfer cache. Picks the request by `id` (from list-ssr-requests), else the newest one for `url`, else the newest one.',
+      safety: 'read',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Request id from list-ssr-requests.' },
+          url: {
+            type: 'string',
+            description: 'Path and query of the page, such as /destinations.',
+          },
+        },
+      },
+      handler: async (args: { id?: string; url?: string }) => {
+        const state = httpSnapshot();
+        return {
+          markdown: explainSsrRequestText(state.requests, state.serverCalls, state.pages, args),
+        };
+      },
+    });
 
     register({
       name: 'forget-forms-page',

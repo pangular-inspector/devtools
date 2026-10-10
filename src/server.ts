@@ -19,6 +19,8 @@ const devtools = initPangularHub({
   auth,
 });
 app.use(devtools.nodeMiddleware);
+// Traces each SSR request for the SSR & HTTP tab and adds a Server-Timing header.
+app.use(devtools.ssrMiddleware);
 
 const products = [
   { id: 1, name: 'Signal lamp', price: 24, stock: 12 },
@@ -47,6 +49,13 @@ app.get('/api/products{/:id}', (req, res) => {
     if (product) res.json(product);
     else res.status(404).json({ error: 'No such product' });
   }, delay);
+});
+
+/** A POST for the SSR requests example; the transfer cache leaves POSTs out by default. */
+app.post('/api/quote', express.json({ limit: '1kb' }), (req, res) => {
+  const ids: unknown[] = Array.isArray(req.body?.ids) ? req.body.ids.slice(0, 20) : [];
+  const picked = products.filter((p) => ids.includes(p.id));
+  res.json({ items: picked.length, total: picked.reduce((sum, p) => sum + p.price, 0) });
 });
 
 /**

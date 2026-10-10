@@ -36,7 +36,36 @@ export const appConfig: ApplicationConfig = {
 
 SSR must run in the same Node process as the devtools server, such as the Express server with the hub mounted, or the Vite dev server with the plugin. The [overlay](../getting-started/overlay.md) must be loaded, because client calls, hydration and the payload reach the tab through it.
 
+To trace each server render, add `ssrMiddleware` after the hub and before the Angular handler:
+
+```ts {7}
+// src/server.ts
+const devtools = initPangularHub({
+  ws: {sidecar: true},
+});
+app.use(devtools.nodeMiddleware);
+// ... your API routes and static files
+app.use(devtools.ssrMiddleware);
+```
+
 ## What it shows
+
+### SSR requests
+
+Each document request that `ssrMiddleware` traced, newest first. A request is traced when it is a `GET` or `HEAD` that accepts `text/html`, and the answer is HTML or a redirect. Each row shows:
+
+| Column       | Value                                                                                                                      |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Request      | The method and URL.                                                                                                        |
+| Status       | The status sent to the browser.                                                                                            |
+| Render mode  | **Server**, **Prerender** or **Client**, read from the `ng-server-context` attribute Angular puts on the root in the HTML. |
+| Render       | Time from the request arriving to the status and headers being sent.                                                       |
+| Server calls | How many `HttpClient` calls the render made, and their total time.                                                         |
+| Notes        | **this page** on the request that served the selected page, and **aborted** when the connection closed early.              |
+
+The request that served the selected page opens on its own. Click another row to open it. The detail lists the request id, the total time, the bytes sent, the browser page that loaded the response, and each server call. **Fetched again in the browser** lists calls that ran on the server and then again after hydration, instead of reading the transfer cache.
+
+The middleware gives each request an id. The id reaches the render in the `x-pangular-ssr-id` request header, so the interceptor tags each server call with it. It goes back to the browser in a `Server-Timing` header (`pangular;desc="<id>"`, `render;dur=...` and `fetch;dur=...`), so the overlay links the page to the render, and the browser's own Network panel shows the render and fetch times too.
 
 ### HTTP timeline
 
@@ -94,13 +123,14 @@ Each entry in the page's `{APP_ID}-state` script, with its size. The tab decodes
 
 ### What each part needs
 
-| Part                  | Needs                                   |
-| --------------------- | --------------------------------------- |
-| HTTP timeline         | `withPangular()` and the overlay.       |
-| Fault injection       | `withPangular()`.                       |
-| Hydration stats       | The overlay.                            |
-| Hydration warnings    | `providePangularHttp()`.                |
-| TransferState payload | The overlay, on a server-rendered page. |
+| Part                  | Needs                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------ |
+| SSR requests          | `ssrMiddleware`, plus `withPangular()` for the server calls and the overlay for the linked page. |
+| HTTP timeline         | `withPangular()` and the overlay.                                                                |
+| Fault injection       | `withPangular()`.                                                                                |
+| Hydration stats       | The overlay.                                                                                     |
+| Hydration warnings    | `providePangularHttp()`.                                                                         |
+| TransferState payload | The overlay, on a server-rendered page.                                                          |
 
 ### Development builds
 
@@ -150,9 +180,28 @@ The interceptor works in development builds only. In production it passes reques
   </ngmd-step>
 </ngmd-workflow>
 
+### Find calls the transfer cache missed
+
+<ngmd-workflow>
+  <ngmd-step title="Add the middleware">
+    Add <code>app.use(devtools.ssrMiddleware)</code> before the Angular handler in <code>server.ts</code>.
+  </ngmd-step>
+  <ngmd-step title="Load a server-rendered page">
+    Use a route with <code>RenderMode.Server</code>. Its request opens in <strong>SSR requests</strong>, marked <strong>this page</strong>.
+  </ngmd-step>
+  <ngmd-step title="Read the detail">
+    Calls under <strong>Fetched again in the browser</strong> ran twice. A POST, <code>transferCache: false</code>, or an <code>Authorization</code> or <code>Cookie</code> header keeps a call out of the cache.
+  </ngmd-step>
+</ngmd-workflow>
+
 ## Agent tools
 
-There is no dedicated tool for this tab. Agents read its data with the `devframe_state_read` tool and the `pangular:http` key. See [Resources](../agents/resources.md).
+| Tool                           | What it answers                                                                                                                                                 | Arguments   |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `pangular:list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                          | `limit`     |
+| `pangular:explain-ssr-request` | One request end to end: timings, kept response headers, each server call, then the browser page with its hydration result and the calls the browser made again. | `id`, `url` |
+
+For the rest of this tab, agents read the `pangular:http` key with the `devframe_state_read` tool. See [Resources](../agents/resources.md).
 
 Two router tools cover related ground:
 
@@ -166,6 +215,12 @@ Two router tools cover related ground:
 <ngmd-callout type="warning" title="Only secrets that match a rule are redacted">
   Request URLs, page URLs, error messages, response previews and TransferState entries are redacted on the devtools server: secret-looking keys, JWTs, bearer tokens and secret query values. Other values are shown as they are, so don't expose the dev server beyond localhost. See <a href="../security.md">Security</a>.
 </ngmd-callout>
+
+### Static files are not traced
+
+Prerendered pages that `express.static` serves as files never reach the Angular handler, so they have no SSR request. Pages that the engine serves from its prerender output are traced with the **Prerender** render mode.
+
+The middleware records a request only while the `http` inspector is on. When it is off, `ssrMiddleware` passes every request through untouched and adds no header.
 
 ### Prerendered routes make no requests
 

@@ -32,6 +32,7 @@ import {
   type HttpCall,
   type HttpSide,
 } from './http-rules.ts';
+import { SSR_REQUEST_HEADER, activeSsrRequest, noteSsrFetch } from './ssr-registry.ts';
 
 export * from './http-rules.ts';
 export { decodePayload, type PayloadEntry, type PayloadSummary } from './http-payload.ts';
@@ -179,6 +180,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
   const side: HttpSide = isPlatformServer(inject(PLATFORM_ID)) ? 'server' : 'client';
   const request = side === 'server' ? inject(REQUEST, { optional: true }) : null;
   let pageUrl: string | undefined;
+  let requestId: string | undefined;
   if (request) {
     try {
       const url = new URL(request.url);
@@ -186,6 +188,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     } catch {
       pageUrl = undefined;
     }
+    requestId = activeSsrRequest(request.headers.get(SSR_REQUEST_HEADER));
   } else if (side === 'client') {
     pageUrl = location.pathname + location.search;
   }
@@ -202,19 +205,23 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     method: req.method,
     side,
     pageUrl,
+    ...(requestId ? { requestId } : {}),
     faulted: mocked && status >= 400,
     ...(mocked && status < 400 ? { mocked: true } : {}),
     ...(delay ? { delayMs: delay } : {}),
     ...(rule ? { ruleId: rule.id, rulePattern: rule.pattern } : {}),
   };
-  const done = (fields: Pick<HttpCall, 'status' | 'cacheHit'> & Partial<HttpCall>) =>
+  const done = (fields: Pick<HttpCall, 'status' | 'cacheHit'> & Partial<HttpCall>) => {
+    const durationMs = Date.now() - started;
+    if (requestId) noteSsrFetch(requestId, durationMs);
     record({
       id: `${side[0]}${Date.now().toString(36)}${++seq}`,
       at: started,
-      durationMs: Date.now() - started,
+      durationMs,
       ...base,
       ...fields,
     });
+  };
 
   let source: Observable<HttpEvent<unknown>>;
   if (status !== undefined) {

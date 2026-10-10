@@ -35,6 +35,8 @@ export interface HttpCall {
   ruleId?: string;
   rulePattern?: string;
   pageUrl?: string;
+  /** The SSR request this server call belongs to, set when `ssrMiddleware` traced the render. */
+  requestId?: string;
   at: number;
   error?: string;
   preview?: string;
@@ -175,6 +177,7 @@ export function sanitizeCalls(input: unknown, max = MAX_CALLS): HttpCall[] {
       ruleId: str(c.ruleId, 40),
       rulePattern: str(c.rulePattern, 500),
       pageUrl: str(c.pageUrl, 2000),
+      ...(str(c.requestId, 40) ? { requestId: str(c.requestId, 40) } : {}),
       at: num(c.at) ?? 0,
       error: str(c.error, 500),
       preview: str(c.preview, 2001),

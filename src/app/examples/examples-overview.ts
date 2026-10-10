@@ -196,6 +196,12 @@ export class ExamplesOverview {
       blurb: 'HttpClient calls made during SSR, the transfer cache and injected faults.',
     },
     {
+      path: 'ssr',
+      tab: 'SSR & HTTP',
+      title: 'SSR requests',
+      blurb: 'One render traced from the request to hydration, with calls the browser made again.',
+    },
+    {
       path: 'store',
       tab: 'Store',
       title: 'Scoped signal state',

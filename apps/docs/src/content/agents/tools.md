@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Fifty-one tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Fifty-three tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -311,6 +311,17 @@ It finds impure pipes used inside `@for`, `| json` left in templates, pure pipes
 | `name`   | yes      | The pipe name as used after `\|` in a template. |
 
 Live counts, input and output appear when recording is on in the [Pipes inspector](../inspectors/pipes.md).
+
+## SSR & HTTP
+
+These tools read the SSR requests that `ssrMiddleware` traced in your server. See [SSR requests](../inspectors/ssr-http.md#ssr-requests). Reads: page.
+
+| Tool                  | What it answers                                                                                                                                                 | Arguments   |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                          | `limit`     |
+| `explain-ssr-request` | One request end to end: timings, kept response headers, each server call, then the browser page with its hydration result and the calls the browser made again. | `id`, `url` |
+
+`explain-ssr-request` picks the request by `id`, else the newest one for `url`, else the newest one.
 
 ## Analog
 
