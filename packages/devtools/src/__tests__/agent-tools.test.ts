@@ -406,7 +406,9 @@ describe('agent tools', () => {
     ]);
     expect(matched[0].dependencies[0]).toMatchObject({ providedByName: 'Root' });
     expect(bySelector).not.toMatch(/app-root/);
-    expect(await call('inspect-providers', 'app-none')).toMatch(/No element injector.*app-none/);
+    expect(await call('inspect-providers', 'app-none')).toMatch(
+      /No element or environment injector.*app-none/,
+    );
 
     const byToken = await call('inspect-providers', '', { token: 'httpclient' });
     const answer = JSON.parse(byToken.slice(byToken.indexOf('{"')));
@@ -416,6 +418,99 @@ describe('agent tools', () => {
     expect(answer.injectedBy.map((hit: { id: string }) => hit.id)).toEqual(['card-1', 'card-2']);
     expect(await call('inspect-providers', '', { token: 'Http' })).toMatch(
       /Similar tokens: `HttpClient`/,
+    );
+  });
+
+  it('matches environment injectors by name or id in inspect-providers', async () => {
+    const { push, call } = await boot();
+    await push('push-injector-tree', {
+      pageId: 'p1',
+      roots: [
+        {
+          injector: {
+            id: 'app-1',
+            type: 'element',
+            name: 'app-root',
+            component: 'App',
+            providerCount: 0,
+            path: ['app-1', 'root-1', 'platform-1', 'inj-null'],
+          },
+          providers: [],
+          children: [],
+          dependencies: [{ from: 'App', token: 'Api', flags: [], providedBy: 'root-1' }],
+        },
+      ],
+      environment: [
+        {
+          injector: { id: 'platform-1', type: 'environment', name: 'Platform', providerCount: 1 },
+          providers: [{ token: 'PlatformRef', type: 'class', isViewProvider: false }],
+          children: [
+            {
+              injector: { id: 'root-1', type: 'environment', name: 'Root', providerCount: 2 },
+              providers: [
+                { token: 'Api', type: 'class', isViewProvider: false },
+                { token: 'HttpClient', type: 'class', isViewProvider: false },
+              ],
+              dependencies: [{ from: 'Api', token: 'HttpClient', flags: [], providedBy: 'root-1' }],
+              children: [
+                {
+                  injector: {
+                    id: 'route-1',
+                    type: 'environment',
+                    name: 'Route: admin',
+                    providerCount: 1,
+                  },
+                  providers: [{ token: 'AdminStore', type: 'class', isViewProvider: false }],
+                  dependencies: [
+                    { from: 'AdminStore', token: 'Api', flags: [], providedBy: 'root-1' },
+                  ],
+                  children: [],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const detail = (answer: string) => JSON.parse(answer.slice(answer.indexOf('[{')));
+
+    const route = await call('inspect-providers', 'route: ADMIN');
+    expect(route).toMatch(/Environment injectors on page `p1` matching `route: ADMIN` \(1\)/);
+    expect(route).not.toMatch(/Element injectors/);
+    const [admin] = detail(route);
+    expect(detail(route)).toHaveLength(1);
+    expect(admin.injector).toMatchObject({ id: 'route-1', name: 'Route: admin' });
+    expect(admin.providers).toEqual([
+      { token: 'AdminStore', type: 'class', isViewProvider: false },
+    ]);
+    expect(admin.dependencies).toEqual([
+      { from: 'AdminStore', token: 'Api', flags: [], providedBy: 'root-1', providedByName: 'Root' },
+    ]);
+    expect(admin.parents).toEqual([
+      { id: 'root-1', name: 'Root', provides: ['Api', 'HttpClient'] },
+      { id: 'platform-1', name: 'Platform', provides: ['PlatformRef'] },
+    ]);
+
+    const byId = detail(await call('inspect-providers', 'root-1'));
+    expect(byId.map((m: { injector: { id: string } }) => m.injector.id)).toEqual(['root-1']);
+    expect(detail(await call('inspect-providers', 'platform'))[0].injector.id).toBe('platform-1');
+
+    const element = await call('inspect-providers', 'App');
+    expect(element).toMatch(/Element injectors on page `p1` matching `App` \(1\)/);
+    expect(element).not.toMatch(/Environment injectors/);
+    expect(detail(element)[0].lookupPath.map((step: { name: string }) => step.name)).toEqual([
+      'app-root',
+      'Root',
+      'Platform',
+      'Null injector',
+    ]);
+
+    const scoped = await call('inspect-providers', 'Route: admin', { token: 'Api' });
+    const answer = JSON.parse(scoped.slice(scoped.indexOf('{"providedBy"')));
+    expect(answer.injectedBy.map((hit: { id: string }) => hit.id)).toEqual(['route-1']);
+
+    expect(await call('inspect-providers', 'Route: missing')).toMatch(
+      /No element or environment injector on page `p1` matches `Route: missing`.*Tags on the page: `app-root`\. Environment injectors: `Platform`, `Root`, `Route: admin`\./,
     );
   });
 

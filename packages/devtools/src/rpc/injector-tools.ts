@@ -27,6 +27,33 @@ function capped(text: string): string {
     : text;
 }
 
+/** Lower case with runs of spaces collapsed, so `route:  Admin` finds `Route: admin`. */
+function loose(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/** Environment injectors match by id or by name (`Root`, `Platform`, `Route: admin`). */
+function matchesEnvironment(node: InjectorTreeNode, selector: string): boolean {
+  const { injector } = node;
+  return (
+    injector.type === 'environment' &&
+    (injector.id === selector || loose(injector.name) === loose(selector))
+  );
+}
+
+/** Each environment injector's ancestors, nearest first, from the nesting of the report. */
+function environmentParents(
+  nodes: InjectorTreeNode[],
+  above: string[] = [],
+  out = new Map<string, string[]>(),
+): Map<string, string[]> {
+  for (const node of nodes) {
+    out.set(node.injector.id, above);
+    environmentParents(node.children, [node.injector.id, ...above], out);
+  }
+  return out;
+}
+
 function matchesSelector(node: InjectorTreeNode, selector: string): boolean {
   const { injector } = node;
   if (injector.type !== 'element') return false;
@@ -41,8 +68,8 @@ function matchesSelector(node: InjectorTreeNode, selector: string): boolean {
 
 /**
  * Answers `inspect-providers`: the whole tree when nothing narrows it, the
- * element injectors a selector matches with their lookup paths resolved, or
- * where a token is provided and injected.
+ * element or environment injectors a selector matches with their lookup paths
+ * resolved, or where a token is provided and injected.
  */
 export function inspectProvidersText(
   page: InjectorPage | undefined,
@@ -51,7 +78,8 @@ export function inspectProvidersText(
   if (!page?.roots.length) return NO_INJECTORS;
   const { pageId, roots, environment } = page;
   const elements = flatten(roots);
-  const all = [...elements, ...flatten(environment)];
+  const environments = flatten(environment);
+  const all = [...elements, ...environments];
   const byId = new Map(all.map((node) => [node.injector.id, node]));
   const nameOf = (id: string) =>
     id === NULL_INJECTOR_ID
@@ -71,31 +99,57 @@ export function inspectProvidersText(
     );
   }
 
-  const matched = selector ? elements.filter((node) => matchesSelector(node, selector)) : elements;
+  const matchedElements = selector
+    ? elements.filter((node) => matchesSelector(node, selector))
+    : [];
+  const matchedEnvironments = selector
+    ? environments.filter((node) => matchesEnvironment(node, selector))
+    : [];
+  const matched = [...matchedElements, ...matchedEnvironments];
   if (selector && !matched.length) {
-    const names = [...new Set(elements.map((node) => node.injector.name))].slice(0, 20);
-    return `No element injector on page \`${pageId}\` matches \`${selector}\`. Pass a tag name, a component or directive class name, or an injector id. Tags on the page: ${names.map((name) => `\`${name}\``).join(', ')}.${notes}`;
+    const list = (names: string[]) => names.map((name) => `\`${name}\``).join(', ');
+    const tags = [...new Set(elements.map((node) => node.injector.name))].slice(0, 20);
+    const envNames = [...new Set(environments.map((node) => node.injector.name))].slice(0, 10);
+    return `No element or environment injector on page \`${pageId}\` matches \`${selector}\`. Pass a tag name, a component or directive class name, an environment injector name, or an injector id. Tags on the page: ${list(tags)}. Environment injectors: ${envNames.length ? list(envNames) : 'none reported'}.${notes}`;
   }
 
   const sections: string[] = [];
-  if (selector) {
-    const detail = matched.map((node) => {
+  const namedDependencies = (node: InjectorTreeNode) =>
+    (node.dependencies ?? []).map((dep) =>
+      dep.providedBy ? { ...dep, providedByName: nameOf(dep.providedBy) } : dep,
+    );
+  const resolve = (ids: string[]) =>
+    ids.map((id) => ({
+      id,
+      name: nameOf(id),
+      provides: byId.get(id)?.providers.map((provider) => provider.token) ?? [],
+    }));
+
+  if (matchedElements.length) {
+    const detail = matchedElements.map((node) => {
       const { path, ...injector } = node.injector;
       return {
         injector,
         providers: node.providers,
-        dependencies: (node.dependencies ?? []).map((dep) =>
-          dep.providedBy ? { ...dep, providedByName: nameOf(dep.providedBy) } : dep,
-        ),
-        lookupPath: (path ?? []).map((id) => ({
-          id,
-          name: nameOf(id),
-          provides: byId.get(id)?.providers.map((provider) => provider.token) ?? [],
-        })),
+        dependencies: namedDependencies(node),
+        lookupPath: resolve(path ?? []),
       };
     });
     sections.push(
-      `Element injectors on page \`${pageId}\` matching \`${selector}\` (${matched.length}). \`lookupPath\` lists the injectors Angular asks, in order, with the tokens each one provides.\n\n${JSON.stringify(detail)}`,
+      `Element injectors on page \`${pageId}\` matching \`${selector}\` (${matchedElements.length}). \`lookupPath\` lists the injectors Angular asks, in order, with the tokens each one provides.\n\n${JSON.stringify(detail)}`,
+    );
+  }
+
+  if (matchedEnvironments.length) {
+    const parents = environmentParents(environment);
+    const detail = matchedEnvironments.map((node) => ({
+      injector: node.injector,
+      providers: node.providers,
+      dependencies: namedDependencies(node),
+      parents: resolve(parents.get(node.injector.id) ?? []),
+    }));
+    sections.push(
+      `Environment injectors on page \`${pageId}\` matching \`${selector}\` (${matchedEnvironments.length}). \`dependencies\` lists what the services this injector already created inject (\`from\` is the service, \`providedBy\` the injector that supplied it). \`parents\` lists the environment injectors Angular asks next, nearest first, with the tokens each one provides.\n\n${JSON.stringify(detail)}`,
     );
   }
 
