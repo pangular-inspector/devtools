@@ -80,14 +80,14 @@ The devtools keep their live data in shared-state keys. Every key is also listed
 
 This table covers the data that has no resource of its own.
 
-| Key                         | Content                                                             |
-| --------------------------- | ------------------------------------------------------------------- |
-| `pangular:http`             | The SSR & HTTP timeline, fault rules and hydration data             |
-| `pangular:http-payloads`    | The TransferState payload of each page, by page id                  |
-| `pangular:change-detection` | Change detection recordings, by page id                             |
-| `pangular:pipe-usage`       | Live pipe instances and recorded calls                              |
-| `pangular:analog`           | Analog page data and the server call log                            |
-| `pangular:routes`           | Declared but not filled. Use `get-routes` or `list-routes` instead. |
+| Key                         | Content                                                               |
+| --------------------------- | --------------------------------------------------------------------- |
+| `pangular:http`             | The SSR & HTTP timeline, SSR requests, fault rules and hydration data |
+| `pangular:http-payloads`    | The TransferState payload of each page, by page id                    |
+| `pangular:change-detection` | Change detection recordings, by page id                               |
+| `pangular:pipe-usage`       | Live pipe instances and recorded calls                                |
+| `pangular:analog`           | Analog page data and the server call log                              |
+| `pangular:routes`           | Declared but not filled. Use `get-routes` or `list-routes` instead.   |
 
 The list also includes the keys behind the six resources above (`pangular:component-tree`, `pangular:forms`, and so on).
 
