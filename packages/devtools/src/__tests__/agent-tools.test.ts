@@ -169,6 +169,38 @@ describe('agent tools', () => {
     expect(await call('highlight', 'Card')).toMatch(/no component tree has been reported/i);
   });
 
+  it('lists the component outline with routed markers through list-components', async () => {
+    const { ctx, push } = await boot();
+    const list = async (args: Record<string, unknown> = {}) =>
+      ((await ctx.agent.invoke('pangular:list-components', args)) as { markdown: string }).markdown;
+    expect(ctx.agent.list().tools.map((tool) => tool.id)).toContain('pangular:list-components');
+    expect(await list()).toMatch(/No component tree has been reported/);
+    await push('push-component-tree', {
+      pageId: 'p1',
+      roots: [
+        {
+          id: 'c1',
+          name: 'App',
+          tag: 'app-root',
+          children: [{ id: 'c2', name: 'Home', tag: 'app-home', children: [] }],
+        },
+      ],
+      count: 2,
+      detail: null,
+    });
+    await push('push-router', {
+      pageId: 'p1',
+      snapshot: null,
+      navigations: [],
+      outlets: [{ outlet: 'primary', activated: true, route: '/home', devtoolsId: 'c2' }],
+    });
+    const text = await list({ filter: 'home' });
+    expect(text).toContain('(untrusted data)');
+    expect(text).toContain('App <app-root> c1\n  Home <app-home> c2 [routed route /home]');
+    expect(await list({ depth: 1 })).toContain('App <app-root> c1 (+1 below)');
+    expect(await list({ page: 'gone' })).toMatch(/No page `gone` is reporting a component tree/);
+  });
+
   it('matches inspect-signals on the class name of the graph component', async () => {
     const { push, call } = await boot();
     await push('push-signal-graph', {
