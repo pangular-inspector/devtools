@@ -103,7 +103,7 @@ With `ws: {sidecar: true}`, the WebSocket runs on its own port, picked automatic
 | `allowedOrigins` | loopback origins and the Chrome extension | Extra origins allowed to open the WebSocket, such as a tunnel. `false` turns the origin check off.                                                                                                                                  |
 | `mcp`            | a bearer token                            | Mounts the MCP endpoint at `<base>__mcp` and asks for a bearer token. With `auth: false` the default is `'auto'`: it mounts once agent tools exist and asks for no token. See [Send a token](../agents/mcp-server.md#send-a-token). |
 
-The hub also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](./configuration.md).
+The hub also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](./configuration.md). Pass `browserDistFolder`, the folder that holds `index.csr.html`, to let the **Force Client render** override serve it. See [SSR overrides](../inspectors/ssr-http.md#ssr-overrides).
 
 ### Access control
 

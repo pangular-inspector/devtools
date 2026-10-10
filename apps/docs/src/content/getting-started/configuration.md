@@ -140,7 +140,7 @@ Actions are the writes that the panel and agents make to your app or the server.
 | `actions.forms`  | `true`  | Form writes: set value, fill, mark touched, untouched, dirty or pristine, touch all, revalidate, reset, enable, disable, submit and restore. Drops `form-action` and `fill-form`. |
 | `actions.router` | `true`  | Navigate, abort, replay and probe. Probe runs your app's `canMatch` guards. The `navigate` agent tool stays for `instrument` and `resolve-lazy` and refuses the other four.       |
 | `actions.ngrx`   | `true`  | Restoring NgRx state from the change log and dispatching `@ngrx/store` actions. Drops the `dispatch-ngrx-action` agent tool.                                                      |
-| `actions.http`   | `true`  | Editing fault injection rules and clearing the HTTP timeline.                                                                                                                     |
+| `actions.http`   | `true`  | Editing fault injection rules and SSR overrides, and clearing the HTTP timeline.                                                                                                  |
 | `actions.analog` | `true`  | The Analog request playground. Drops the `analog-call-api` agent tool.                                                                                                            |
 | `actions`        | `true`  | All of the above.                                                                                                                                                                 |
 
