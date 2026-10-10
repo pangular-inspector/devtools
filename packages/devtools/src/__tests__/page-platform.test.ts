@@ -81,6 +81,22 @@ describe('list-pages details', () => {
         components: [tree],
       }).get('ab12')?.url,
     ).toBe('http://x/tree');
+    // A stale HTTP report does not hide a fresh router URL.
+    expect(
+      pageDetails({
+        http: [{ pageId: 'ab12', reportedAt: 10_000 - PAGE_TTL_MS - 1, url: 'http://x/http' }],
+        router: [{ pageId: 'ab12', reportedAt: 9000, url: '/route' }],
+        components: [tree],
+      }).get('ab12')?.url,
+    ).toBe('/route');
+  });
+
+  it('keeps a pipe in a URL inside its table cell', () => {
+    const text = listPagesText(
+      summarizePages({ components: [{ pageId: 'ab12', reportedAt: 1000, url: '/q?a=1|2' }] }),
+      2000,
+    );
+    expect(text).toContain('| `ab12` | `/q?a=1\\|2` |');
   });
 
   it('clips long titles', () => {
