@@ -1,5 +1,6 @@
 import { redactFormText } from './forms.ts';
 import { redactMessage } from './forms-privacy.ts';
+import { childPath } from './forms-path.ts';
 import { tokenName, type DebugNg } from './injector-tree.ts';
 
 type AnyRecord = Record<string, any>;
@@ -83,9 +84,7 @@ function read<T>(fn: () => T, fallback: T): T {
   }
 }
 
-function join(path: string, key: string): string {
-  return path ? `${path}.${key}` : key;
-}
+const join = childPath;
 
 export function inferShape(value: unknown, path = '', depth = 0): Shape {
   if (typeof value === 'string') return { schema: { type: 'string' }, blocking: [] };

@@ -165,7 +165,7 @@ You can also open a form from its component in the [Components tab](./components
 
 ## Agent tools
 
-`form` is a form id like `Checkout.form@ab12`, or part of its label. `path` is a dotted field path, like `address.city`.
+`form` is a form id like `Checkout.form@ab12`, or part of its label. `path` is a dotted field path, like `address.city`. A literal dot in a control key is written `\.` and a literal backslash `\\`, so the control keyed `a.b` has the path `a\.b`. The panel and the tool output show the same escaped form.
 
 ### Read tools
 

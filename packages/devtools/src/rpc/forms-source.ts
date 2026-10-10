@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
+import { splitPath } from '../forms-path.ts';
 import { lineCounter, skipString, sourceRoots, stripComments, walkFiles } from './source-scan.ts';
 
 export interface SourceLine {
@@ -104,7 +105,10 @@ function fieldRules(
   at: (index: number) => SourceLine,
   out: SourceLine[],
 ) {
-  const field = new RegExp(`(\\.${escape(key)}\\b|\\b${escape(key)}\\s*:)`);
+  const literal = key.replace(/\\/g, '\\\\');
+  const field = new RegExp(
+    `(\\.${escape(key)}\\b|\\b${escape(key)}\\s*:|(['"])${escape(literal)}\\2\\s*:)`,
+  );
   let offset = 0;
   for (const text of scope.split('\n')) {
     if (out.length >= 10) return;
@@ -141,8 +145,7 @@ export function formSourceIn(
     ? new RegExp(`\\b${escape(property)}\\s*(?::[^=;]+)?=`).exec(scope)
     : null;
   result.form = at(body.start + (declared ? declared.index : 0));
-  const key = path
-    .split('.')
+  const key = splitPath(path)
     .filter((k) => !/^\d+$/.test(k))
     .pop();
   if (key) fieldRules(scope, body.start, key, at, result.rules);

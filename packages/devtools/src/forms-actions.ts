@@ -15,6 +15,7 @@ import {
   unmaskHint,
   type RedactReason,
 } from './forms-privacy.ts';
+import { childPath, splitPath } from './forms-path.ts';
 import { fieldPath, submitSetup } from './forms-read.ts';
 import { clip } from './text.ts';
 
@@ -109,7 +110,7 @@ export function secretInside(
   if (!value || typeof value !== 'object' || value instanceof Date || seen.has(value)) return null;
   seen.add(value);
   for (const [key, child] of Object.entries(value as AnyRecord)) {
-    const path = prefix ? `${prefix}.${key}` : key;
+    const path = childPath(prefix, key);
     if (!/^\d+$/.test(key) && isRedactedKey(key)) return path;
     const nested = secretInside(child, path, seen);
     if (nested) return nested;
@@ -134,7 +135,7 @@ export function keepSecrets(
 }
 
 function keysOf(path: string): string[] {
-  return path ? path.split('.') : [];
+  return splitPath(path);
 }
 
 export function valueAt(value: unknown, path: string): unknown {
@@ -156,11 +157,14 @@ function hasPath(value: unknown, path: string): boolean {
 }
 
 export function setAt(value: unknown, path: string, next: unknown): unknown {
-  const keys = keysOf(path);
+  return setIn(value, keysOf(path), next);
+}
+
+function setIn(value: unknown, keys: string[], next: unknown): unknown {
   if (!keys.length) return next;
   if (!value || typeof value !== 'object') return value;
   const copy: AnyRecord = Array.isArray(value) ? [...value] : { ...(value as AnyRecord) };
-  copy[keys[0]] = setAt(copy[keys[0]], keys.slice(1).join('.'), next);
+  copy[keys[0]] = setIn(copy[keys[0]], keys.slice(1), next);
   return copy;
 }
 
@@ -302,12 +306,12 @@ function secretOf(
   path: string,
   element: Element | null,
 ): { key: string; reason: RedactReason } | null {
-  const keys = path.split('.');
+  const keys = splitPath(path);
   for (const [i, key] of keys.entries()) {
     const reason = redactReason(key);
     if (reason) return { key, reason: i < keys.length - 1 ? 'parent' : reason };
   }
-  const key = keys.at(-1)!;
+  const key = keys.at(-1) ?? '';
   const reason = element && redactReason(key, element);
   return reason ? { key, reason } : null;
 }
@@ -386,7 +390,7 @@ export function guardedFields(
       return;
     }
     for (const [key, child] of childrenOf(found, current)) {
-      visit(child, currentPath ? `${currentPath}.${key}` : key);
+      visit(child, childPath(currentPath, key));
     }
   };
   visit(node, path);
@@ -502,7 +506,7 @@ function writeValue(
   const current = rawValue(found, node);
   const secret = secretInside(value);
   if (secret) {
-    const key = secret.split('.').pop()!;
+    const key = splitPath(secret).pop()!;
     const reason = redactReason(key) ?? 'key';
     return `contains the secret field "${secret}" (${REDACT_LABELS[reason]}). Pangular Inspector never writes secret fields; to write it, ${unmaskHint(reason, key)}`;
   }
@@ -573,7 +577,7 @@ function invalidPaths(found: FoundForm): string[] {
       if (ownErrors) out.push(path);
       for (const child of children) {
         const key = String(read(() => child['keyInParent'](), ''));
-        visit(child, path ? `${path}.${key}` : key, depth + 1);
+        visit(child, childPath(path, key), depth + 1);
       }
       return;
     }
@@ -584,7 +588,7 @@ function invalidPaths(found: FoundForm): string[] {
     const entries: [string, AnyRecord][] = Array.isArray(controls)
       ? controls.map((c, i) => [String(i), c])
       : Object.entries(controls);
-    for (const [key, child] of entries) visit(child, path ? `${path}.${key}` : key, depth + 1);
+    for (const [key, child] of entries) visit(child, childPath(path, key), depth + 1);
   };
   visit(found.root, '', 0);
   return out;
@@ -619,13 +623,17 @@ function directiveWith(ctx: ActionContext, element: Element | undefined, method:
 
 function expressionFor(found: FoundForm, path: string): string {
   if (!path) return '$form';
+  const keys = splitPath(path);
+  const quote = (key: string) => `'${key.replace(/[\\']/g, '\\$&')}'`;
   if (found.kind === 'signal') {
-    return `$form${path
-      .split('.')
-      .map((key) => (/^\d+$/.test(key) ? `[${key}]` : `.${key}`))
+    return `$form${keys
+      .map((key) =>
+        /^\d+$/.test(key) ? `[${key}]` : /[.\\]/.test(key) ? `[${quote(key)}]` : `.${key}`,
+      )
       .join('')}`;
   }
-  return `$form.get('${path.replace(/'/g, "\\'")}')`;
+  if (keys.some((key) => key.includes('.'))) return `$form.get([${keys.map(quote).join(',')}])`;
+  return `$form.get(${quote(keys.join('.'))})`;
 }
 
 function locate(ctx: ActionContext, selector: string): FormActionResult {

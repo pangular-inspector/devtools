@@ -1,3 +1,5 @@
+import { joinPath } from './forms-path.ts';
+
 type AnyRecord = Record<string, any>;
 
 export type ErrorSource =
@@ -107,7 +109,7 @@ export function fieldPath(node: AnyRecord): string {
     keys.unshift(String(read(() => current!['keyInParent'](), '?')));
     current = parent;
   }
-  return keys.join('.');
+  return joinPath(keys);
 }
 
 function originLevel(node: AnyRecord, error: unknown, raw: string): AnyRecord {

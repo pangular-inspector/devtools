@@ -1,5 +1,6 @@
 import { domFacts, submitDom, type DomFacts, type SubmitDom } from './forms-dom.ts';
 import { clip } from './text.ts';
+import { childPath, joinPath, splitPath } from './forms-path.ts';
 import type { WebMcpTool } from './forms-webmcp.ts';
 import {
   REDACTED,
@@ -548,14 +549,7 @@ export function serializeControl(
   node.children = entries
     .slice(0, MAX_CHILDREN)
     .map(([childKey, child]) =>
-      serializeControl(
-        child,
-        elements,
-        childKey,
-        path ? `${path}.${childKey}` : childKey,
-        depth + 1,
-        secret,
-      ),
+      serializeControl(child, elements, childKey, childPath(path, childKey), depth + 1, secret),
     );
   if (entries.length > MAX_CHILDREN) node.truncated = entries.length - MAX_CHILDREN;
   return node;
@@ -583,7 +577,7 @@ function issuePath(issue: AnyRecord): string | undefined {
   const keys = parts.map((part) =>
     part && typeof part === 'object' ? String((part as AnyRecord)['key']) : String(part),
   );
-  return keys.length ? keys.join('.') : undefined;
+  return keys.length ? joinPath(keys) : undefined;
 }
 
 function signalError(
@@ -613,7 +607,7 @@ export function errorSummaryOf(root: AnyRecord): FormErrorSummary[] {
   return errors.slice(0, 50).map((error) => {
     const target = read(() => error['fieldTree']() as AnyRecord, null);
     const path = target ? fieldPath(target) : '';
-    const secret = path.split('.').some((key) => isRedactedKey(key));
+    const secret = splitPath(path).some((key) => isRedactedKey(key));
     const { kind, message } = signalError(error, 'control', secret);
     return { path, kind, message };
   });
@@ -759,11 +753,11 @@ export function serializeField(
     (childKey) => created.has(childKey) || (value as AnyRecord)[childKey] !== undefined,
   );
   node.children = fieldKeys.slice(0, MAX_CHILDREN).map((childKey) => {
-    const childPath = path ? `${path}.${childKey}` : childKey;
+    const nextPath = childPath(path, childKey);
     const child = created.get(childKey);
     return child
-      ? serializeField(child, elements, childKey, childPath, depth + 1, secret)
-      : unmaterializedField((value as AnyRecord)[childKey], childKey, childPath, secret);
+      ? serializeField(child, elements, childKey, nextPath, depth + 1, secret)
+      : unmaterializedField((value as AnyRecord)[childKey], childKey, nextPath, secret);
   });
   if (fieldKeys.length > MAX_CHILDREN) node.truncated = fieldKeys.length - MAX_CHILDREN;
   return node;
@@ -1086,7 +1080,8 @@ function byUid(node: FormFieldNode, out = new Map<string, FormFieldNode>()) {
 }
 
 function parentPath(path: string): string {
-  return path.includes('.') ? path.slice(0, path.lastIndexOf('.')) : '';
+  const keys = splitPath(path);
+  return keys.length > 1 ? joinPath(keys.slice(0, -1)) : '';
 }
 
 export function diffForms(
@@ -1198,7 +1193,7 @@ export function controlPathOf(root: AnyRecord, target: AnyRecord): string {
     keys.unshift(key);
     current = parent;
   }
-  return keys.join('.');
+  return joinPath(keys);
 }
 
 export interface ControlEventOptions {
@@ -1219,7 +1214,7 @@ export function controlEventOf(
   const base = { formId, path, timestamp: now };
   const of = (key: string) => read(() => (source ?? event)[key], event[key]);
   if ('value' in event) {
-    const keys = [rootKey, ...(path ? path.split('.') : [])];
+    const keys = [rootKey, ...splitPath(path)];
     const key = keys[keys.length - 1];
     const secret = keys.slice(0, -1).some((k) => isRedactedKey(k));
     const value = isAbstractControl(source)
@@ -1290,7 +1285,7 @@ export function nodeAt(
   path: string,
   create = false,
 ): AnyRecord | null {
-  const keys = path ? path.split('.') : [];
+  const keys = splitPath(path);
   if (found.kind === 'signal' && create) {
     let tree: unknown = read(() => found.root['fieldTree'], null);
     for (const key of keys) {
@@ -1316,7 +1311,7 @@ export function findFieldElement(
   known: WeakMap<object, Element> = new WeakMap(),
 ): Element | null {
   let node: AnyRecord | null = found.root;
-  for (const key of path ? path.split('.') : []) {
+  for (const key of splitPath(path)) {
     node = node && childAt(node, found.kind, key);
   }
   if (!node) return null;
