@@ -393,4 +393,50 @@ describe('RouteCurrent', () => {
     expect(rows[0].textContent).toContain('routerOutletData {"user":"Ada"}');
     expect(rows[1].textContent).not.toContain('routerOutletData');
   });
+
+  const routed = page({
+    outlets: [
+      {
+        outlet: 'primary',
+        activated: true,
+        component: 'Shell',
+        route: '/shell',
+        devtoolsId: 'c7',
+        children: [
+          { outlet: 'side', activated: true, component: 'Filters', route: '/side' },
+          { outlet: 'modal', activated: false, devtoolsId: 'c9' },
+        ],
+      },
+    ],
+  });
+
+  function showButtons(fixture: ComponentFixture<unknown>) {
+    return Array.from(el(fixture).querySelectorAll<HTMLButtonElement>('.outlets li button'));
+  }
+
+  it('offers Show in Components only on activated outlets with a component id', async () => {
+    const fixture = mount(RouteCurrent, routed, offline);
+    await settle(fixture);
+    const buttons = showButtons(fixture);
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].textContent?.replace(/\s+/g, ' ').trim()).toBe('Show in Components: Shell');
+    expect(buttons[0].closest('li')?.textContent).toContain('Shell');
+  });
+
+  it('emits the component id when Show in Components is clicked', async () => {
+    const fixture = mount(RouteCurrent, routed, offline);
+    const shown: string[] = [];
+    fixture.componentInstance.showComponent.subscribe((id) => shown.push(id));
+    await settle(fixture);
+    showButtons(fixture)[0].click();
+    expect(shown).toEqual(['c7']);
+  });
+
+  it('hides Show in Components when the Components inspector is off', async () => {
+    const fixture = mount(RouteCurrent, routed, offline, {
+      configs: { pangular: { inspectors: { components: false } } },
+    });
+    await settle(fixture);
+    expect(showButtons(fixture)).toHaveLength(0);
+  });
 });
