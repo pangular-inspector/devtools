@@ -1850,7 +1850,7 @@ export class ComponentTree {
   expandAll() {
     if (this.query()) return;
     this.collapsed.set(new Set());
-    this.announcement.set('Expanded every component.');
+    this.announce('Expanded every component.');
   }
 
   collapseAll() {
@@ -1866,7 +1866,12 @@ export class ComponentTree {
       while (id && !visible.has(id)) id = parents.get(id);
       if (id) this.focusId.set(id);
     }
-    this.announcement.set('Collapsed every component. Only the top level is shown.');
+    this.announce('Collapsed every component. Only the top level is shown.');
+  }
+
+  /** Sets the live message, changing it slightly when it repeats so screen readers say it again. */
+  private announce(message: string) {
+    this.announcement.update((current) => (current === message ? `${message}\u00a0` : message));
   }
 
   private expandSiblings(id: string) {

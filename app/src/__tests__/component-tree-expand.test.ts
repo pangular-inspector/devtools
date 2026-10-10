@@ -116,6 +116,19 @@ describe('ComponentTree expand and collapse all', () => {
     expect(status(fixture)).toContain('Expanded every component');
   });
 
+  it('changes the status text when the same action repeats so it is read again', async () => {
+    const fixture = await setup();
+    button(fixture, 'Expand all').click();
+    await settle(fixture);
+    const raw = () => host(fixture).querySelector('p.sr-only[role="status"]')?.textContent;
+    const first = raw();
+    button(fixture, 'Expand all').click();
+    await settle(fixture);
+    const second = raw();
+    expect(second).toContain('Expanded every component');
+    expect(second).not.toBe(first);
+  });
+
   it('keeps the tabbable row visible by moving it to the nearest visible ancestor', async () => {
     const fixture = await setup();
     await key(fixture, 'list', 'ArrowDown');
