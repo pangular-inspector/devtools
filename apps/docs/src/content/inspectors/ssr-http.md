@@ -69,7 +69,9 @@ The middleware gives each request an id. The id reaches the render in the `x-pan
 
 #### Router during the render
 
-Each navigation the router ran while rendering, usually one, plus one for each redirect. It shows the URL and outcome, the time spent in guards and whether they passed, the time spent in resolvers, the total, and the redirect or cancel reason. The times cover each phase as a whole, not each guard. This part needs `providePangularHttp()` in the app config.
+Each navigation the router ran while rendering, usually one, plus one for each redirect. It shows the URL and outcome, the time spent in guards and whether they passed, redirected or rejected, the time spent in resolvers, the total, and the redirect or cancel reason. The times cover each phase as a whole, not each guard. This part needs `providePangularHttp()` in the app config.
+
+To see it in the demo app, load `/examples/ssr/product/3` with a full page load. Its guard calls an access API and its resolver loads the product from a slow API. Product 2 is sold out, so its guard redirects, and product 9 is unknown, so its guard rejects the navigation.
 
 #### Transfer cache outcome
 
