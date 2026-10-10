@@ -91,6 +91,7 @@ import {
   expirePipePages,
   isPipePageReport,
   mergePipePageReport,
+  pipeInstrumentRequest,
   type PipePageReport,
   type PipesState,
 } from './rpc/pipes-tools.ts';
@@ -436,13 +437,11 @@ const pangular = defineDevframe({
       name: 'request-instrument-pipes',
       type: 'action',
       jsonSerializable: true,
-      handler: (on: unknown) => {
-        void my.rpc.broadcast({
-          method: 'instrument-pipes',
-          args: [on !== false],
-          optional: true,
-        });
-        return { pages: pipePages.size };
+      handler: (message: unknown) => {
+        const request = pipeInstrumentRequest(message, pipePages);
+        void my.rpc.broadcast({ method: 'instrument-pipes', args: [request], optional: true });
+        if (!request.pageId) return { pages: request.on ? 0 : pipePages.size };
+        return { pages: pipePages.has(request.pageId) ? 1 : 0 };
       },
     });
 
