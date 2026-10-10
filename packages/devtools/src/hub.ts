@@ -20,7 +20,11 @@ export type { PangularConfig } from './config.ts';
 
 const PANGULAR_MCP_TOKEN_ENV = 'PANGULAR_MCP_TOKEN';
 
-export type PangularHubOptions = Partial<Omit<InitHubOptions, 'devframes' | 'ui'>> & PangularConfig;
+export type PangularHubOptions = Partial<Omit<InitHubOptions, 'devframes' | 'ui'>> &
+  PangularConfig & {
+    /** The app's browser build folder, so a forced Client render can serve `index.csr.html`. */
+    browserDistFolder?: string;
+  };
 
 function hubUiClientDir(): string | undefined {
   try {
@@ -107,7 +111,8 @@ function hubMcpFor(options: PangularHubOptions): InitHubOptions['mcp'] {
  * again after a rebuild gets a fresh hub, and the previous one is closed.
  */
 export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
-  const { config, rest } = pickPangularConfig(options);
+  const { browserDistFolder, ...hubOptions } = options;
+  const { config, rest } = pickPangularConfig(hubOptions);
   const hub = initHub({
     name: 'pangular',
     version: pkg.version,
@@ -122,7 +127,7 @@ export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
   let closing: Promise<void> | undefined;
   const own: PangularHub = {
     ...hub,
-    ssrMiddleware: createSsrMiddleware({ skip: [hub.base] }),
+    ssrMiddleware: createSsrMiddleware({ skip: [hub.base], browserDistFolder }),
     close: () => {
       if (hubs.get(hub.base) === own) hubs.delete(hub.base);
       return (closing ??= hub.close());

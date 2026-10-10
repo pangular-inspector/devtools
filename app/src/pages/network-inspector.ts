@@ -85,8 +85,43 @@ interface SsrRequest {
   fetchMs: number;
   headers: Record<string, string>;
   navigations?: SsrNavigation[];
+  overrides?: { id: string; kind: SsrOverrideKind; applied: boolean; note?: string }[];
   aborted?: boolean;
 }
+
+type SsrOverrideKind = 'render-error' | 'client-render' | 'state-edit';
+
+interface SsrOverride {
+  id: string;
+  kind: SsrOverrideKind;
+  pattern: string;
+  enabled: boolean;
+  message?: string;
+  key?: string;
+  value?: string;
+}
+
+interface OverrideDraft {
+  kind: SsrOverrideKind;
+  pattern: string;
+  message: string;
+  key: string;
+  value: string;
+}
+
+const EMPTY_OVERRIDE: OverrideDraft = {
+  kind: 'render-error',
+  pattern: '',
+  message: '',
+  key: '',
+  value: '',
+};
+
+const OVERRIDE_LABEL: Record<SsrOverrideKind, string> = {
+  'render-error': 'Render error',
+  'client-render': 'Client render',
+  'state-edit': 'TransferState edit',
+};
 
 const RENDER_MODE_LABEL: Record<SsrRequest['renderMode'], string> = {
   server: 'Server',
@@ -123,6 +158,7 @@ interface HydrationStats {
   skipHydrationHosts: string[];
   warnings: string[];
   warningsCaptured?: boolean;
+  stableMs?: number;
 }
 
 interface HttpPayload {
@@ -151,6 +187,7 @@ interface HttpState {
   requests?: SsrRequest[];
   pages: HttpPage[];
   rules: HttpRule[];
+  ssrOverrides?: SsrOverride[];
 }
 
 interface RuleDraft {
@@ -283,6 +320,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                         @if (req.id === selected()?.ssrRequestId) {
                           <span class="tag server">this page</span>
                         }
+                        @if (req.overrides?.length) {
+                          <span class="tag mock">overridden</span>
+                        }
                         @if (req.aborted) {
                           <span class="tag fault">aborted</span>
                         }
@@ -322,6 +362,21 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                   <dd>{{ requestPage()?.title || requestPage()?.url || 'not connected' }}</dd>
                 </div>
               </dl>
+              @if (req.overrides?.length) {
+                <h3>Overrides from the panel</h3>
+                <p class="muted small">
+                  This response was changed on purpose, so it is not what the app sends on its own.
+                </p>
+                @for (o of req.overrides; track o.id + o.kind) {
+                  <p class="request-call">
+                    <span class="tag mock">{{ overrideLabel(o.kind) }}</span>
+                    <span>{{ o.applied ? 'applied' : 'not applied' }}</span>
+                    @if (o.note) {
+                      <span class="muted">{{ o.note }}</span>
+                    }
+                  </p>
+                }
+              }
               @if (req.navigations?.length) {
                 <h3>Router during the render</h3>
                 @for (n of req.navigations; track $index) {
@@ -700,6 +755,132 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
         </ul>
       </section>
 
+      <section class="panel" aria-labelledby="overrides-heading">
+        <h2 id="overrides-heading">SSR overrides</h2>
+        <p class="muted small">
+          Development only. These change what the server sends for matching pages, from the next
+          full page load, and the request is marked <strong>overridden</strong>.
+        </p>
+        <form class="rule-form" (submit)="addOverride($event)">
+          <div class="field-group">
+            <span id="override-kind-label">Override</span>
+            <app-select
+              labelledBy="override-kind-label"
+              [options]="overrideKindOptions"
+              [value]="overrideDraft().kind"
+              (valueChange)="setOverrideDraft('kind', $event ?? 'render-error')"
+            />
+          </div>
+          <label>
+            <span>Page pattern <span class="hint">(substring or * glob)</span></span>
+            <input
+              id="override-pattern"
+              required
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="e.g. /examples/ssr"
+              [value]="overrideDraft().pattern"
+              (input)="patchOverride('pattern', $event)"
+            />
+          </label>
+          @switch (overrideDraft().kind) {
+            @case ('render-error') {
+              <p class="muted small">
+                Throws while the server renders, so it needs <code>providePangularHttp()</code> and
+                a page the engine renders. Prerendered files served as static files skip it.
+              </p>
+              <label>
+                Error message
+                <input
+                  spellcheck="false"
+                  placeholder="Simulated render error"
+                  [value]="overrideDraft().message"
+                  (input)="patchOverride('message', $event)"
+                />
+              </label>
+            }
+            @case ('state-edit') {
+              <label>
+                TransferState key
+                <input
+                  spellcheck="false"
+                  autocomplete="off"
+                  [value]="overrideDraft().key"
+                  (input)="patchOverride('key', $event)"
+                />
+              </label>
+              <label>
+                <span>New JSON value <span class="hint">(empty removes the entry)</span></span>
+                <textarea
+                  rows="3"
+                  spellcheck="false"
+                  [value]="overrideDraft().value"
+                  (input)="patchOverride('value', $event)"
+                  [attr.aria-invalid]="overrideValueError() ? 'true' : null"
+                  aria-describedby="override-value-error"
+                ></textarea>
+              </label>
+              <p id="override-value-error" class="field-error">{{ overrideValueError() }}</p>
+            }
+            @case ('client-render') {
+              <p class="muted small">
+                Serves <code>index.csr.html</code> instead of rendering. Needs
+                <code>browserDistFolder</code> in <code>initPangularHub()</code>.
+              </p>
+            }
+          }
+          <div class="form-actions">
+            <button
+              type="submit"
+              [disabled]="!canWrite() || !overrideReady()"
+              [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
+            >
+              Add override
+            </button>
+          </div>
+        </form>
+
+        <h3 class="rules-heading">Overrides ({{ overrides().length }})</h3>
+        <ul class="rules">
+          @for (o of overrides(); track o.id) {
+            <li [class.off]="!o.enabled">
+              <label class="inline">
+                <input
+                  type="checkbox"
+                  [checked]="o.enabled"
+                  [disabled]="!canWrite()"
+                  (change)="toggleOverride(o.id)"
+                  [attr.aria-label]="'Enable ' + overrideLabel(o.kind) + ' for ' + o.pattern"
+                />
+                <code class="rule-pattern" [title]="o.pattern"
+                  ><span class="rule-method">{{ overrideLabel(o.kind) }}</span>
+                  {{ o.pattern }}</code
+                >
+              </label>
+              <button
+                type="button"
+                class="link remove"
+                [disabled]="!canWrite()"
+                (click)="removeOverride(o.id)"
+                [attr.aria-label]="'Remove ' + overrideLabel(o.kind) + ' for ' + o.pattern"
+              >
+                Remove
+              </button>
+              <span class="rule-meta">
+                @if (o.message) {
+                  <span>{{ o.message }}</span>
+                }
+                @if (o.key) {
+                  <span>{{ o.value === undefined ? 'remove' : 'set' }} {{ o.key }}</span>
+                }
+              </span>
+            </li>
+          } @empty {
+            <li class="empty-rule">No overrides.</li>
+          }
+        </ul>
+      </section>
+
       <section class="panel" aria-labelledby="hydration-heading">
         <h2 id="hydration-heading">Hydration</h2>
         @if (selected()?.hydration; as h) {
@@ -723,6 +904,10 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             <div>
               <dt>Skipped components</dt>
               <dd>{{ h.componentsSkippedHydration ?? 'n/a' }}</dd>
+            </div>
+            <div>
+              <dt>App stable after</dt>
+              <dd>{{ h.stableMs === undefined ? 'n/a' : h.stableMs + ' ms' }}</dd>
             </div>
             <div>
               <dt>Incremental defer blocks</dt>
@@ -1623,6 +1808,31 @@ export class NetworkInspector {
   readonly serverDropped = signal(0);
   readonly requests = signal<SsrRequest[]>([]);
   readonly rules = signal<HttpRule[]>([]);
+  readonly overrides = signal<SsrOverride[]>([]);
+  readonly overrideDraft = signal<OverrideDraft>({ ...EMPTY_OVERRIDE });
+  readonly overrideKindOptions: SelectOption<SsrOverrideKind>[] = [
+    { value: 'render-error', label: 'Render error' },
+    { value: 'client-render', label: 'Force Client render' },
+    { value: 'state-edit', label: 'Edit TransferState entry' },
+  ];
+
+  readonly overrideValueError = computed(() => {
+    const value = this.overrideDraft().value.trim();
+    if (!value) return '';
+    try {
+      JSON.parse(value);
+      return '';
+    } catch {
+      return 'The value must be valid JSON.';
+    }
+  });
+
+  readonly overrideReady = computed(() => {
+    const d = this.overrideDraft();
+    if (!d.pattern.trim() || this.overrides().length >= 20) return false;
+    if (d.kind === 'state-edit') return !!d.key.trim() && !this.overrideValueError();
+    return true;
+  });
   private readonly hostPageId = hostPageId();
   readonly selectedPageId = linkedSignal<HttpPage[], string | null>({
     source: () => this.pages(),
@@ -1785,6 +1995,7 @@ export class NetworkInspector {
         this.requests.set([...(snapshot?.requests ?? [])].reverse());
         this.pages.set(snapshot?.pages ?? []);
         this.rules.set(snapshot?.rules ?? []);
+        this.overrides.set(snapshot?.ssrOverrides ?? []);
       };
       const applyPayloads = (value: unknown) =>
         this.payloads.set(
@@ -1957,6 +2168,64 @@ export class NetworkInspector {
       this.message.set('Timeline cleared.');
     } catch {
       this.message.set('Could not clear the timeline.');
+    }
+  }
+
+  overrideLabel(kind: SsrOverrideKind): string {
+    return OVERRIDE_LABEL[kind] ?? kind;
+  }
+
+  setOverrideDraft<K extends keyof OverrideDraft>(key: K, value: OverrideDraft[K]) {
+    this.overrideDraft.update((d) => ({ ...d, [key]: value }));
+  }
+
+  patchOverride(key: keyof OverrideDraft, event: Event) {
+    const value = (event.target as HTMLInputElement).value;
+    this.overrideDraft.update((d) => ({ ...d, [key]: value }));
+  }
+
+  async addOverride(event: Event) {
+    event.preventDefault();
+    if (!this.overrideReady()) return;
+    const d = this.overrideDraft();
+    const next: SsrOverride = {
+      id: `o${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      kind: d.kind,
+      pattern: d.pattern.trim(),
+      enabled: true,
+      ...(d.kind === 'render-error' && d.message.trim() ? { message: d.message.trim() } : {}),
+      ...(d.kind === 'state-edit' ? { key: d.key.trim() } : {}),
+      ...(d.kind === 'state-edit' && d.value.trim() ? { value: d.value.trim() } : {}),
+    };
+    if (await this.saveOverrides([...this.overrides(), next], 'Override added. Reload the page.')) {
+      this.overrideDraft.set({ ...EMPTY_OVERRIDE, kind: d.kind });
+      this.host.nativeElement.querySelector<HTMLInputElement>('#override-pattern')?.focus();
+    }
+  }
+
+  toggleOverride(id: string) {
+    void this.saveOverrides(
+      this.overrides().map((o) => (o.id === id ? { ...o, enabled: !o.enabled } : o)),
+      'Override updated. Reload the page.',
+    );
+  }
+
+  removeOverride(id: string) {
+    void this.saveOverrides(
+      this.overrides().filter((o) => o.id !== id),
+      'Override removed.',
+    );
+  }
+
+  private async saveOverrides(next: SsrOverride[], done: string): Promise<boolean> {
+    try {
+      const saved = await call(this.rpc(), 'set-ssr-overrides', next);
+      this.overrides.set(Array.isArray(saved) ? (saved as SsrOverride[]) : next);
+      this.message.set(done);
+      return true;
+    } catch {
+      this.message.set('Could not save the overrides.');
+      return false;
     }
   }
 

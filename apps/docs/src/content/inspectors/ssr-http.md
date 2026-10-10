@@ -136,9 +136,26 @@ A status of 400 or more fails the request with an `HttpErrorResponse`. A lower s
 
 The body follows the request's `responseType`. A `json` request gets the parsed JSON (or the raw string when it does not parse) with `content-type: application/json`. A `text` request gets the string with `text/plain`. A `blob` request gets a `Blob`, and an `arraybuffer` request an `ArrayBuffer`, both with `application/octet-stream`. The same value is the `error` of an injected failure.
 
+### SSR overrides
+
+Development-only changes to what the server sends for matching pages. Each one applies from the next full page load. The request that got one is marked **overridden**, and its detail lists **Overrides from the panel** with what each one did. They need `ssrMiddleware` and the `actions.http` write action, and they live in the memory of the server process, so a restart clears them.
+
+| Override                | What it does                                                                                                        | Needs                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| **Render error**        | Throws while the server renders a matching page, so you see what users get, such as a 500 page from your server.    | `providePangularHttp()`, and a page the engine renders. |
+| **Force Client render** | Serves `index.csr.html` instead of rendering, as `RenderMode.Client` would, without editing `app.routes.server.ts`. | `browserDistFolder` in `initPangularHub()`.             |
+| **Edit TransferState**  | Sets an entry of the `{APP_ID}-state` script to a JSON value, or removes it, before the HTML is sent.               | A page that has a TransferState script.                 |
+
+Override HTTP calls the server makes with [Fault injection](#fault-injection) instead, on **SSR only**.
+
+To get a key for **Edit TransferState**, copy it from **TransferState payload**. HttpClient entries hold `b` (body), `s` (status), `st` (status text), `u` (URL) and `rt` (response type), so a changed body keeps the other fields.
+
+The Prerender fallback mode can't be forced. The engine reads render modes from your server bundle, which the devtools can't change.
+
 ### Hydration
 
 - Whether hydration is on.
+- **App stable after**: the time from navigation start until the app first became stable, which is when hydration is done. It needs `providePangularHttp()`.
 - Hydrated components and nodes, skipped components, and incremental defer blocks.
 - DOM nodes hydrated and skipped, and `ngSkipHydration` hosts.
 - Mismatched components, with the expected and actual DOM.
@@ -172,6 +189,8 @@ Each entry in the page's `{APP_ID}-state` script, with its size. The tab decodes
 | Fault injection       | `withPangular()`.                                                                                |
 | Hydration stats       | The overlay.                                                                                     |
 | Hydration warnings    | `providePangularHttp()`.                                                                         |
+| App stable after      | `providePangularHttp()`.                                                                         |
+| SSR overrides         | `ssrMiddleware` and `actions.http`. See [SSR overrides](#ssr-overrides) for each kind.           |
 | TransferState payload | The overlay, on a server-rendered page.                                                          |
 
 ### Development builds

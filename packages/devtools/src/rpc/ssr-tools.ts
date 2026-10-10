@@ -2,6 +2,8 @@ import { CACHE_SKIP_TEXT } from '../config.ts';
 import type { HttpCall } from '../http-rules.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import type { SsrNavigation } from '../ssr-navigation.ts';
+import { MAX_SSR_OVERRIDES, SSR_OVERRIDE_KINDS, type SsrOverrideKind } from '../ssr-overrides.ts';
+import type { AppliedOverride } from '../ssr-registry.ts';
 import { isSsrRequestId, type SsrRenderMode, type SsrRequest } from '../ssr-registry.ts';
 import type { HttpPage } from '../types.ts';
 import { UNTRUSTED, code } from './forms-tools.ts';
@@ -41,6 +43,30 @@ function names(value: unknown): string[] {
 
 function phaseMs(value: unknown): { ms?: number } {
   return typeof value === 'number' && Number.isFinite(value) ? { ms: num(value) } : {};
+}
+
+const OVERRIDE_LABEL: Record<SsrOverrideKind, string> = {
+  'render-error': 'Render error',
+  'client-render': 'Forced Client render',
+  'state-edit': 'TransferState edit',
+};
+
+function sanitizeApplied(raw: unknown): AppliedOverride[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, MAX_SSR_OVERRIDES).flatMap((item): AppliedOverride[] => {
+    if (!item || typeof item !== 'object') return [];
+    const o = item as { [K in keyof AppliedOverride]?: unknown };
+    const kind = SSR_OVERRIDE_KINDS.find((k) => k === o.kind);
+    if (!kind || typeof o.id !== 'string') return [];
+    return [
+      {
+        id: o.id.slice(0, 40),
+        kind,
+        applied: o.applied === true,
+        ...(typeof o.note === 'string' ? { note: redactMessage(o.note) } : {}),
+      },
+    ];
+  });
 }
 
 function sanitizeNavigations(raw: unknown): SsrNavigation[] {
@@ -93,6 +119,7 @@ export function sanitizeSsrRequest(raw: unknown): SsrRequest | undefined {
   }
   const mode = r.renderMode;
   const navigations = sanitizeNavigations(r.navigations);
+  const overrides = sanitizeApplied(r.overrides);
   return {
     id: r.id,
     method: typeof r.method === 'string' ? r.method.slice(0, 10) : 'GET',
@@ -110,6 +137,7 @@ export function sanitizeSsrRequest(raw: unknown): SsrRequest | undefined {
     fetchMs: num(r.fetchMs),
     headers,
     ...(navigations.length ? { navigations } : {}),
+    ...(overrides.length ? { overrides } : {}),
     ...(r.aborted === true ? { aborted: true } : {}),
   };
 }
@@ -242,6 +270,17 @@ export function explainSsrRequestText(
     `- Render (arrival to headers): ${ms(r.renderMs)}; total ${ms(r.durationMs)}; ${size(r.bytes)} sent`,
     `- Server HttpClient calls: ${r.fetches}, ${ms(r.fetchMs)} in total`,
   ];
+  if (r.overrides?.length) {
+    lines.push(
+      '',
+      '### Overrides from the panel',
+      'This response was changed on purpose, so it is not what the app would send on its own.',
+      ...r.overrides.map(
+        (o) =>
+          `- ${OVERRIDE_LABEL[o.kind]}: ${o.applied ? 'applied' : 'not applied'}${o.note ? `, ${code(o.note)}` : ''}`,
+      ),
+    );
+  }
   const headers = Object.entries(r.headers);
   if (headers.length) {
     lines.push('', '### Response headers', ...headers.map(([k, v]) => `- ${k}: ${code(v)}`));
@@ -296,7 +335,11 @@ export function explainSsrRequestText(
         lines.push(`  - Mismatch in ${code(m.component)}`);
       }
       for (const w of h.warnings.slice(0, 5)) lines.push(`  - ${code(w)}`);
-    } else if (r.renderMode === 'server' || r.renderMode === 'prerender') {
+    }
+    if (h?.stableMs !== undefined) {
+      lines.push(`- App stable (hydration done) ${ms(h.stableMs)} after navigation start.`);
+    }
+    if (!h?.enabled && (r.renderMode === 'server' || r.renderMode === 'prerender')) {
       lines.push(
         '- Hydration: not active. Add `provideClientHydration()` to reuse the server DOM.',
       );

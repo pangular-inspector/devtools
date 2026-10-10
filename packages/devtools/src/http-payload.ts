@@ -135,6 +135,7 @@ export function sanitizeHydration(input: unknown): HydrationStats | null {
     skipHydrationHosts: strings(h.skipHydrationHosts, 200),
     warnings: strings(h.warnings, 1000),
     warningsCaptured: h.warningsCaptured === true,
+    ...(num(h.stableMs) !== undefined ? { stableMs: num(h.stableMs) } : {}),
   };
 }
 

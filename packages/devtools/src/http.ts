@@ -37,7 +37,14 @@ import {
   type HttpCall,
   type HttpSide,
 } from './http-rules.ts';
-import { SSR_REQUEST_HEADER, activeSsrRequest, noteSsrFetch } from './ssr-registry.ts';
+import {
+  SSR_REQUEST_HEADER,
+  activeSsrRequest,
+  noteOverride,
+  noteSsrFetch,
+  ssrRegistry,
+} from './ssr-registry.ts';
+import { matchingOverrides } from './ssr-overrides.ts';
 import { watchSsrNavigations } from './ssr-navigation.ts';
 
 export * from './http-rules.ts';
@@ -370,18 +377,47 @@ function watchServerNavigations() {
   const request = inject(REQUEST, { optional: true });
   const requestId = activeSsrRequest(request?.headers.get(SSR_REQUEST_HEADER));
   if (!requestId) return;
+  const url = new URL(request!.url);
+  const fault = matchingOverrides(
+    ssrRegistry().overrides,
+    url.pathname + url.search,
+    'render-error',
+  )[0];
+  if (fault) {
+    noteOverride(requestId, {
+      id: fault.id,
+      kind: 'render-error',
+      applied: true,
+      note: fault.message,
+    });
+    throw new Error(`[Pangular Inspector] ${fault.message}`);
+  }
   // Subscribe now: the initial navigation starts in an app initializer, before any microtask.
   inject(DestroyRef).onDestroy(watchSsrNavigations(requestId, inject(EnvironmentInjector)));
 }
 
 /**
- * Captures hydration warnings (NG05xx) before the overlay loads, and the
- * router's guard and resolver timings during a server render traced by
- * `ssrMiddleware`. Add it next to `provideHttpClient(withPangular())`.
+ * Captures hydration warnings (NG05xx) before the overlay loads. During a
+ * server render traced by `ssrMiddleware`, it also records the router's guard
+ * and resolver timings and applies render-error overrides from the panel.
+ * Add it next to `provideHttpClient(withPangular())`.
  */
 export function providePangularHttp(): EnvironmentProviders {
   return makeEnvironmentProviders([
     provideEnvironmentInitializer(captureHydrationWarnings),
     provideEnvironmentInitializer(watchServerNavigations),
+    provideEnvironmentInitializer(timeUntilStable),
   ]);
+}
+
+/** Milliseconds from navigation start until the app first became stable, the point hydration finishes. */
+function timeUntilStable() {
+  const platform = inject(PLATFORM_ID, { optional: true });
+  if (!devMode() || !platform || isPlatformServer(platform) || typeof performance === 'undefined') {
+    return;
+  }
+  const appRef = inject(ApplicationRef, { optional: true });
+  void appRef?.whenStable().then(() => {
+    httpRegistry().stableMs ??= Math.round(performance.now());
+  });
 }

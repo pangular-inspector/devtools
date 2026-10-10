@@ -64,6 +64,7 @@ function hydrationStats(
       .map((el) => el.tagName.toLowerCase()),
     warnings: [...(warnings ?? [])],
     warningsCaptured: Array.isArray(warnings),
+    ...(httpRegistry().stableMs !== undefined ? { stableMs: httpRegistry().stableMs } : {}),
   };
 }
 

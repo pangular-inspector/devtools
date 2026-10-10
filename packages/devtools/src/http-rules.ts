@@ -60,6 +60,8 @@ export interface HttpRegistry {
   /** The hub context whose setup installed `record` and `dispose`. */
   owner?: unknown;
   rulesOff?: boolean;
+  /** Browser only: navigation start until the app first became stable. */
+  stableMs?: number;
 }
 
 export const MAX_CALLS = 200;

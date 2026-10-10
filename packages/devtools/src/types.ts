@@ -1,6 +1,7 @@
 import type {} from 'devframe';
 import type { HttpCall, HttpRule } from './http-rules.ts';
 import type { SsrRequest } from './ssr-registry.ts';
+import type { SsrOverride } from './ssr-overrides.ts';
 import type { PayloadSummary } from './http-payload.ts';
 import type { HydrationMismatch } from './http-hydration.ts';
 
@@ -321,6 +322,8 @@ export interface HydrationStats {
   skipHydrationHosts: string[];
   warnings: string[];
   warningsCaptured: boolean;
+  /** Navigation start until the app first became stable, when `providePangularHttp()` is set up. */
+  stableMs?: number;
 }
 
 export interface HttpPage {
@@ -349,6 +352,8 @@ export interface HttpState {
   requests: SsrRequest[];
   pages: HttpPage[];
   rules: HttpRule[];
+  /** Dev-only overrides that change server responses: render errors, forced Client renders, TransferState edits. */
+  ssrOverrides: SsrOverride[];
 }
 
 /** TransferState payloads by page id, kept apart so call updates don't resend them. */
