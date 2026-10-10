@@ -482,6 +482,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'forget-http-page': 'http',
   'get-http-rules': 'http',
   'set-http-rules': 'http',
+  'set-ssr-overrides': 'http',
   'clear-http-calls': 'http',
 };
 

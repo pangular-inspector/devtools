@@ -1,4 +1,13 @@
 import type { SsrNavigation } from './ssr-navigation.ts';
+import type { SsrOverride, SsrOverrideKind } from './ssr-overrides.ts';
+
+export interface AppliedOverride {
+  id: string;
+  kind: SsrOverrideKind;
+  applied: boolean;
+  /** Why it did not apply, or what it changed. */
+  note?: string;
+}
 
 /** Request header that carries the SSR request id from `ssrMiddleware` into the render. */
 export const SSR_REQUEST_HEADER = 'x-pangular-ssr-id';
@@ -29,6 +38,8 @@ export interface SsrRequest {
   headers: Record<string, string>;
   /** Router navigations during the render, with guard and resolver timings, when `providePangularHttp()` is set up. */
   navigations?: SsrNavigation[];
+  /** SSR overrides from the panel that matched this request. */
+  overrides?: AppliedOverride[];
   /** The connection closed before the response finished. */
   aborted?: boolean;
 }
@@ -37,12 +48,20 @@ export interface ActiveRequest {
   fetches: number;
   fetchMs: number;
   navigations?: SsrNavigation[];
+  overrides?: AppliedOverride[];
 }
 
 export interface SsrRegistry {
   active: Map<string, ActiveRequest>;
   /** Set by the devframe server while the http inspector is on. */
   record?: (request: SsrRequest) => void;
+  /** Set by the devframe server while the http inspector and `actions.http` are on. */
+  overrides?: SsrOverride[];
+}
+
+export function noteOverride(id: string, applied: AppliedOverride) {
+  const active = ssrRegistry().active.get(id);
+  if (active) (active.overrides ??= []).push(applied);
 }
 
 export function ssrRegistry(): SsrRegistry {

@@ -130,6 +130,7 @@ import { sanitizeHydration, sanitizePayload, type PayloadSummary } from './http-
 import { redactCall } from './http-redact.ts';
 import { redactMessage, redactUrl } from './router.ts';
 import { isSsrRequestId, ssrRegistry } from './ssr-registry.ts';
+import { sanitizeSsrOverrides } from './ssr-overrides.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import {
   changeDetectionText,
@@ -608,8 +609,11 @@ const pangular = defineDevframe({
         requests: [],
         pages: [],
         rules: [...registry.rules],
+        ssrOverrides: [],
       } as HttpState,
     });
+    // Overrides change server responses, so they live only while this server runs.
+    ssrRegistry().overrides = [];
     const httpPayloadState = await my.rpc.sharedState('http-payloads', {
       initialValue: { pages: {} } as HttpPayloadState,
     });
@@ -768,6 +772,21 @@ const pangular = defineDevframe({
     });
 
     register({
+      name: 'set-ssr-overrides',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (input: unknown) => {
+        if (!config.actions.http) throw new Error(actionBlockedMessage('http'));
+        const overrides = sanitizeSsrOverrides(input);
+        ssrRegistry().overrides = overrides;
+        httpState.mutate((draft) => {
+          draft.ssrOverrides = overrides;
+        });
+        return overrides;
+      },
+    });
+
+    register({
       name: 'clear-http-calls',
       type: 'action',
       jsonSerializable: true,
@@ -837,6 +856,7 @@ const pangular = defineDevframe({
       clearTimeout(flushTimer);
       registry.record = undefined;
       ssr.record = undefined;
+      ssr.overrides = undefined;
     };
 
     const httpSnapshot = () => httpState.value() as HttpState;

@@ -1,9 +1,13 @@
 import type { IncomingMessage, OutgoingHttpHeaders, ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { editTransferState, matchingOverrides } from './ssr-overrides.ts';
 import {
   SSR_REQUEST_HEADER,
   SSR_TIMING_NAME,
   ssrRegistry,
+  noteOverride,
   type ActiveRequest,
   type SsrRenderMode,
   type SsrRequest,
@@ -63,7 +67,22 @@ function headerText(value: number | string | string[] | undefined): string | und
  * an id, sent to the render in a request header and back to the browser in
  * `Server-Timing`, so the panel can join the render to the page that loaded.
  */
-export function createSsrMiddleware(options: { skip?: string[] } = {}) {
+export interface SsrMiddlewareOptions {
+  skip?: string[];
+  /** The app's browser build folder, which holds `index.csr.html`. Needed to force a Client render. */
+  browserDistFolder?: string;
+}
+
+function readShell(folder: string | undefined): string | undefined {
+  if (!folder) return undefined;
+  try {
+    return readFileSync(join(folder, 'index.csr.html'), 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
   const skip = options.skip ?? [];
   return (req: IncomingMessage, res: ServerResponse, next: Next) => {
     const registry = ssrRegistry();
@@ -133,6 +152,51 @@ export function createSsrMiddleware(options: { skip?: string[] } = {}) {
       return (end as (...a: unknown[]) => ServerResponse).call(this, chunk, ...rest);
     } as typeof res.end;
 
+    // Holds the HTML until it ends, so the TransferState script can be rewritten before it is sent.
+    function bufferForEdits(list: ReturnType<typeof matchingOverrides>) {
+      const chunks: Buffer[] = [];
+      const flushEnd = res.end;
+      res.setHeader('x-pangular-override', 'state-edit');
+      res.write = function (this: ServerResponse, chunk: unknown) {
+        if (chunk !== undefined && chunk !== null && typeof chunk !== 'function') {
+          chunks.push(
+            typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk as Uint8Array),
+          );
+        }
+        return true;
+      } as typeof res.write;
+      res.end = function (this: ServerResponse, chunk?: unknown, ...rest: unknown[]) {
+        if (chunk !== undefined && chunk !== null && typeof chunk !== 'function') {
+          chunks.push(
+            typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk as Uint8Array),
+          );
+        }
+        const html = Buffer.concat(chunks).toString('utf8');
+        const isHtml = /\btext\/html\b/.test(headerText(res.getHeader('content-type')) ?? '');
+        const hasState = isHtml && /<script\b[^>]*\bid="[^"]*-state"/.test(html);
+        const edited = hasState ? editTransferState(html, list) : null;
+        // Error pages and redirects carry no TransferState, so an edit there is not worth a note.
+        for (const o of hasState ? list : []) {
+          const done = !!edited?.keys.includes(o.key ?? '');
+          noteOverride(id, {
+            id: o.id,
+            kind: 'state-edit',
+            applied: done,
+            note: done
+              ? `${o.value === undefined ? 'removed' : 'set'} ${o.key}`
+              : `no entry ${o.key} to remove`,
+          });
+        }
+        const out = edited ? edited.html : html;
+        if (!res.headersSent) {
+          res.removeHeader('content-length');
+          res.setHeader('content-length', Buffer.byteLength(out));
+        }
+        const last = rest.find((arg) => typeof arg === 'function');
+        return (flushEnd as (...a: unknown[]) => ServerResponse).call(this, out, last);
+      } as typeof res.end;
+    }
+
     const finish = (aborted: boolean) => {
       if (done) return;
       done = true;
@@ -162,12 +226,37 @@ export function createSsrMiddleware(options: { skip?: string[] } = {}) {
         fetchMs: active.fetchMs,
         headers,
         ...(active.navigations?.length ? { navigations: active.navigations } : {}),
+        ...(active.overrides?.length ? { overrides: active.overrides } : {}),
         ...(aborted ? { aborted: true } : {}),
       };
       registry.record?.(request);
     };
     res.once('finish', () => finish(false));
     res.once('close', () => finish(!res.writableFinished));
+
+    const url = req.url ?? '/';
+    const overrides = registry.overrides;
+    const forceClient = matchingOverrides(overrides, url, 'client-render')[0];
+    if (forceClient) {
+      const shell = readShell(options.browserDistFolder);
+      noteOverride(id, {
+        id: forceClient.id,
+        kind: 'client-render',
+        applied: !!shell,
+        note: shell
+          ? 'served index.csr.html instead of rendering'
+          : 'no index.csr.html: pass browserDistFolder to initPangularHub',
+      });
+      if (shell) {
+        res.statusCode = 200;
+        res.setHeader('content-type', 'text/html; charset=utf-8');
+        res.setHeader('x-pangular-override', 'client-render');
+        res.end(req.method === 'HEAD' ? undefined : shell);
+        return;
+      }
+    }
+    const edits = matchingOverrides(overrides, url, 'state-edit');
+    if (edits.length) bufferForEdits(edits);
     next();
   };
 }
