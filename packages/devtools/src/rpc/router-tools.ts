@@ -229,7 +229,8 @@ function isNavigation(value: unknown): boolean {
     optional(nav.earlier, isNumber) &&
     optional(nav.lazyLoaded, (v) => isNames(v)) &&
     optional(nav.reused, (v) => isNames(v)) &&
-    optional(nav.warnings, (v) => isNames(v, 10)) &&
+    // The page clips warnings to 300 and URLs to 2000 characters, then adds one `…`.
+    optional(nav.warnings, (v) => isNames(v, 10, 301)) &&
     optional(
       nav.checked,
       (v) =>
@@ -242,7 +243,7 @@ function isNavigation(value: unknown): boolean {
       (v) =>
         isRecord(v) &&
         isNumber((v as { count?: unknown }).count) &&
-        isNames((v as { urls?: unknown }).urls, 10, 2000),
+        isNames((v as { urls?: unknown }).urls, 10, 2001),
     ) &&
     optional(nav.runs, (v) => Array.isArray(v) && v.length <= 40 && v.every(isRun)) &&
     optional(
