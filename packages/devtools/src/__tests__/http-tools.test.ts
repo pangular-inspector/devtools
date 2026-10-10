@@ -177,6 +177,30 @@ describe('list-http-calls text', () => {
     expect(rowsOf(listHttpCallsText(state, { url: 'eyJhbGci' }, NOW))).toHaveLength(0);
   });
 
+  it('masks a secret in a matched rule pattern and keeps pipes inside their cell', () => {
+    const state = {
+      serverCalls: [],
+      pages: [
+        page({
+          calls: [
+            call({
+              url: '/api/a|b',
+              faulted: true,
+              ruleId: 'r-1',
+              rulePattern: '/api/reset?api_key=s3cr3t-value-123',
+            }),
+          ],
+        }),
+      ],
+    };
+    const text = listHttpCallsText(state, {}, NOW);
+    expect(text).not.toContain('s3cr3t-value-123');
+    expect(text).toContain('api_key=[redacted]');
+    const [row] = rowsOf(text);
+    expect(row).toContain('`/api/a\\|b`');
+    expect(row.split(/(?<!\\)\|/)).toHaveLength(8);
+  });
+
   it('caps the output and says how to narrow it', () => {
     const calls = Array.from({ length: 200 }, (_, i) =>
       call({ id: `c${i}`, url: `/api/${'x'.repeat(150)}/${i}`, at: NOW - i }),

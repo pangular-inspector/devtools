@@ -142,7 +142,7 @@ export function listHttpCallsText(
       `${call.durationMs} ms`,
       flags(call),
     ];
-    return `| ${cells.join(' | ')} |`;
+    return `| ${cells.map((cell) => cell.replace(/\|/g, '\\|')).join(' | ')} |`;
   });
 
   const lines = [
