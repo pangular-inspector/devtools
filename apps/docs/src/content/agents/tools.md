@@ -304,13 +304,22 @@ It finds impure pipes used inside `@for`, `| json` left in templates, pure pipes
 
 ### Explain a pipe
 
-`explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the last input and output, a stale-value warning, `| async` usages that resubscribe on every check, and lint findings. Reads: source, plus the page for live counts.
+`explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the last input and output, a stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage, and lint findings. Reads: source, plus the page for live counts.
 
 | Argument | Required | Value                                           |
 | -------- | -------- | ----------------------------------------------- |
 | `name`   | yes      | The pipe name as used after `\|` in a template. |
 
 Live counts, input and output appear when recording is on in the [Pipes inspector](../inspectors/pipes.md).
+
+The **Live** line tells these cases apart:
+
+| Case                                | What the tool says                                                    |
+| ----------------------------------- | --------------------------------------------------------------------- |
+| No page is connected                | There is no live data. The stdio server always reports this.          |
+| A page is connected, pipe not used  | No rendered component on the page uses the pipe.                      |
+| Pipe in use, recording off          | Instance count and components, plus a hint to click **Record calls**. |
+| Pipe in use, recording on, no calls | Instance count and components, and that no calls are recorded yet.    |
 
 ## SSR & HTTP
 
