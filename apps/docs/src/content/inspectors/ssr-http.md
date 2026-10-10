@@ -257,10 +257,11 @@ The interceptor works in development builds only. In production it passes reques
 
 ## Agent tools
 
-| Tool                           | What it answers                                                                                                                                                                                                                        | Arguments   |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `pangular:list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`     |
-| `pangular:explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url` |
+| Tool                           | What it answers                                                                                                                                                                                                                        | Arguments                                   |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `pangular:list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`                                     |
+| `pangular:explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url`                                 |
+| `pangular:list-http-calls`     | The app's HttpClient calls, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, transfer cache hit and the matched rule.                                                      | `page`, `url`, `failed`, `limit`, `preview` |
 
 For the rest of this tab, agents read the `pangular:http` key with the `devframe_state_read` tool. See [Resources](../agents/resources.md).
 

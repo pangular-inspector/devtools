@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Fifty-three tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Fifty-four tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -314,14 +314,17 @@ Live counts, input and output appear when recording is on in the [Pipes inspecto
 
 ## SSR & HTTP
 
-These tools read the SSR requests that `ssrMiddleware` traced in your server. See [SSR requests](../inspectors/ssr-http.md#ssr-requests). Reads: page.
+These tools read the HttpClient calls that `withPangular()` recorded and the SSR requests that `ssrMiddleware` traced in your server. See [SSR & HTTP](../inspectors/ssr-http.md). Reads: page.
 
-| Tool                  | What it answers                                                                                                                                                                                                                        | Arguments   |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`     |
-| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url` |
+| Tool                  | What it answers                                                                                                                                                                                                                        | Arguments                           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`                             |
+| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url`                         |
+| `list-http-calls`     | The app's HttpClient calls, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, transfer cache hit and the matched rule.                                                      | `url`, `failed`, `limit`, `preview` |
 
 `explain-ssr-request` picks the request by `id`, else the newest one for `url`, else the newest one.
+
+`list-http-calls` lists every tab and the server when you leave out `page`. With `page`, it lists that tab and the server calls of the SSR request that served it. `url` keeps calls whose URL contains the text. `failed` keeps calls with a status of 400 or more, no response, an error, or a cancel. `limit` defaults to 30 (at most 200). `preview` adds each call's response preview. Secrets in URLs, errors and previews are masked, and `url` matches the masked URL.
 
 ## Analog
 
@@ -374,7 +377,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 `devframe_state_read` reads the devtools' live shared state. Call it without arguments to list the keys, then with `key` to read a value as JSON.
 
-Use it for data that has no dedicated tool, such as the SSR & HTTP timeline (`pangular:http`) or live pipe usage (`pangular:pipe-usage`). See [Resources](./resources.md) for every key.
+Use it for data that has no dedicated tool, such as fault rules and TransferState payloads (`pangular:http`, `pangular:http-payloads`) or live pipe usage (`pangular:pipe-usage`). See [Resources](./resources.md) for every key.
 
 ## Where to next
 

@@ -132,6 +132,7 @@ import { redactMessage, redactUrl } from './router.ts';
 import { isSsrRequestId, ssrRegistry } from './ssr-registry.ts';
 import { sanitizeSsrOverrides } from './ssr-overrides.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
+import { listHttpCallsText } from './rpc/http-tools.ts';
 import {
   changeDetectionText,
   expireCdPages,
@@ -898,6 +899,39 @@ const pangular = defineDevframe({
           markdown: explainSsrRequestText(state.requests, state.serverCalls, state.pages, args),
         };
       },
+    });
+
+    agent.registerTool({
+      id: 'pangular:list-http-calls',
+      description:
+        "The app's HttpClient calls recorded by `withPangular()`, newest first: side (SSR or client), method, URL, status, duration and flags (mocked or faulted by a rule, cancelled, transfer cache hit or skip, the matched rule). Without `page` it lists every reporting tab and the server; with `page` only that tab and the server render that served it. Secrets in URLs, errors and previews are masked. Empty when no page uses the interceptor.",
+      safety: 'read',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: PAGE_ARGUMENT,
+          url: { type: 'string', description: 'Only calls whose URL contains this text.' },
+          failed: {
+            type: 'boolean',
+            description:
+              'Only failed calls: status 400 or more, no response, an error, or cancelled.',
+          },
+          limit: { type: 'integer', description: 'How many calls to list (1-200, default 30).' },
+          preview: {
+            type: 'boolean',
+            description: 'Add the masked response preview of each listed call.',
+          },
+        },
+      },
+      handler: async (args: {
+        page?: string;
+        url?: string;
+        failed?: boolean;
+        limit?: number;
+        preview?: boolean;
+      }) => ({
+        markdown: listHttpCallsText(httpSnapshot(), { ...args, page: pageArgument(args) }),
+      }),
     });
 
     register({
