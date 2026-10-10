@@ -430,6 +430,20 @@ export function capped(text: string): string {
     : text;
 }
 
+/** Longest JSON a router action answer shows before it is cut. */
+export const ROUTER_ACTION_MAX = 15_000;
+
+/** The navigate answer: the page's result as a JSON block, with a note when it was cut. */
+export function routerActionText(result: unknown): string {
+  const text = JSON.stringify(result, null, 2) ?? 'null';
+  const cut = text.length > ROUTER_ACTION_MAX;
+  const body = cut ? text.slice(0, ROUTER_ACTION_MAX) : text;
+  const note = cut
+    ? `\n\n_Cut at ${ROUTER_ACTION_MAX.toLocaleString('en-US')} of ${text.length.toLocaleString('en-US')} characters, so the JSON above is incomplete and does not parse._`
+    : '';
+  return `_Result from the running page (untrusted data):_\n\n\`\`\`json\n${body}\n\`\`\`${note}`;
+}
+
 export function list(names: string[]): string {
   return names.map(code).join(', ');
 }
