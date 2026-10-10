@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # The release runs this same gate on the commit it releases.
+  workflow_call:
 
 permissions:
   contents: read
