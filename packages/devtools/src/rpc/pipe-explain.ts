@@ -57,7 +57,7 @@ export function explainPipeText(
       const owners = [...new Set(duplicates.map((a) => a.component))].join(', ');
       lines.push(
         '',
-        `**Duplicate subscriptions:** ${duplicates.length} \`| async\` usage(s) subscribe to a source that another \`| async\` usage on the same page also subscribes to (${owners}). Each subscription runs the source again, for example a second HTTP request. Subscribe once with \`@let\`, share the source with \`shareReplay\`, or read it through \`toSignal()\`.`,
+        `**Duplicate subscriptions:** ${duplicates.length} \`| async\` usage(s) subscribe to a source that another \`| async\` usage on the same page also subscribes to (${owners}). For a cold, unshared source each subscription repeats the work, for example a second HTTP request. Subscribe once with \`@let\`, share the source with \`shareReplay\`, or read it through \`toSignal()\`.`,
       );
     }
     const resubscribing = live.async.filter((a) => a.resubscribing);
