@@ -1820,7 +1820,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-providers',
       description:
-        'Get the DI injectors a running page reported. With no arguments, returns the whole tree (element and environment injectors with their providers, and what the services each environment injector already created inject), cut off at 20,000 characters. `selector` returns only the matching element injectors, each with what it injects and its lookup path resolved to names and provided tokens. `token` returns which injectors provide that token and which components or services inject it. Each open tab reports its own tree; `page` picks one and defaults to the most recent. Says so when the page reported only part of a large tree.',
+        'Get the DI injectors a running page reported. With no arguments, returns the whole tree (element and environment injectors with their providers, and what the services each environment injector already created inject), cut off at 20,000 characters. `selector` returns only the matching injectors: element injectors with what they inject and their lookup path resolved to names and provided tokens, or environment injectors (Root, Platform, Route: admin) with their providers, what their created services inject, and their parent injectors. When nothing matches, the answer lists the tags and environment injector names on the page. `token` returns which injectors provide that token and which components or services inject it. Each open tab reports its own tree; `page` picks one and defaults to the most recent. Says so when the page reported only part of a large tree.',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -1828,7 +1828,7 @@ const pangular = defineDevframe({
           selector: {
             type: 'string',
             description:
-              'Optional. A tag name (app-card), a component or directive class name (CardComponent), or an injector id. Returns only the matching element injectors.',
+              'Optional. A tag name (app-card), a component or directive class name (CardComponent), an environment injector name (Root, Platform, Route: admin; case-insensitive), or an injector id. Returns only the matching injectors.',
           },
           token: {
             type: 'string',
