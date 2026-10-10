@@ -1,5 +1,5 @@
 import { isRedactedKey, REDACTED, redactMessage } from './forms-privacy.ts';
-import { clip } from './text.ts';
+import { clip, overflowKey } from './text.ts';
 
 export interface NgrxSignalStoreInfo {
   id: string;
@@ -273,7 +273,7 @@ export function serialize(value: unknown, options: SerializeOptions = {}): unkno
         }
         out[key] = walk(item, depth + 1);
       }
-      if (keys.length > maxKeys) out['…'] = `${keys.length - maxKeys} more keys`;
+      if (keys.length > maxKeys) out[overflowKey(out)] = `${keys.length - maxKeys} more keys`;
       return out;
     } finally {
       seen.delete(obj);
