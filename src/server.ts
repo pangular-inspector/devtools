@@ -17,6 +17,8 @@ const auth = process.env['PANGULAR_AUTH'] === 'true';
 const devtools = initPangularHub({
   ws: { sidecar: true },
   auth,
+  // Lets an SSR override serve index.csr.html to force a Client render.
+  browserDistFolder,
 });
 app.use(devtools.nodeMiddleware);
 // Traces each SSR request for the SSR & HTTP tab and adds a Server-Timing header.
