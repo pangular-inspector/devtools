@@ -129,6 +129,16 @@ describe('editTransferState', () => {
     expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
   });
 
+  it('edits the TransferState script, not a script with a data-id ending in -state', () => {
+    const other = '<script type="application/json" data-id="config-state">{"a":0}</script>';
+    const out = editTransferState(other + STATE_HTML, [
+      override({ kind: 'state-edit', key: 'a', value: '2' }),
+    ])!;
+    expect(out.html).toContain(other);
+    const json = /<script id="ng-state"[^>]*>([\s\S]*?)<\/script>/.exec(out.html)![1];
+    expect(JSON.parse(json)).toEqual({ a: 2, keep: 2 });
+  });
+
   it('returns null with no state script or nothing to change', () => {
     const edit = override({ kind: 'state-edit', key: 'missing' });
     expect(editTransferState('<html></html>', [edit])).toBeNull();
