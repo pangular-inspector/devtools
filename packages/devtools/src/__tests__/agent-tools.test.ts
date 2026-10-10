@@ -421,6 +421,24 @@ describe('agent tools', () => {
     );
   });
 
+  it('inspects environment injectors on a page that reports no element injectors', async () => {
+    const { push, call } = await boot();
+    await push('push-injector-tree', {
+      pageId: 'p1',
+      roots: [],
+      environment: [
+        {
+          injector: { id: 'root-1', type: 'environment', name: 'Root', providerCount: 1 },
+          providers: [{ token: 'HttpClient', type: 'class', isViewProvider: false }],
+          children: [],
+        },
+      ],
+    });
+    const text = await call('inspect-providers', 'Root');
+    expect(text).toContain('HttpClient');
+    expect(text).not.toContain('No injector data available');
+  });
+
   it('matches environment injectors by name or id in inspect-providers', async () => {
     const { push, call } = await boot();
     await push('push-injector-tree', {

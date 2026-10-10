@@ -75,7 +75,7 @@ export function inspectProvidersText(
   page: InjectorPage | undefined,
   args: InspectProvidersArgs,
 ): string {
-  if (!page?.roots.length) return NO_INJECTORS;
+  if (!page || (!page.roots.length && !page.environment.length)) return NO_INJECTORS;
   const { pageId, roots, environment } = page;
   const elements = flatten(roots);
   const environments = flatten(environment);
