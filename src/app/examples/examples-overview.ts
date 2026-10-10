@@ -202,6 +202,12 @@ export class ExamplesOverview {
       blurb: 'One render traced from the request to hydration, with calls the browser made again.',
     },
     {
+      path: 'ssr-guards',
+      tab: 'SSR & HTTP',
+      title: 'SSR guards and resolvers',
+      blurb: 'A guard and a resolver that call an API while the server renders, with a redirect.',
+    },
+    {
       path: 'store',
       tab: 'Store',
       title: 'Scoped signal state',
