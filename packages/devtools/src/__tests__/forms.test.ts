@@ -213,6 +213,23 @@ describe('reactive serialization', () => {
     );
   });
 
+  it('keeps an own "…" key when adding the overflow marker to a wide value', () => {
+    const wide = (extra: Record<string, unknown>) =>
+      Object.assign(extra, Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`k${i}`, i])));
+    const value = serializeFormValue(wide({ '…': 'mine' })) as Record<string, unknown>;
+    expect(value['…']).toBe('mine');
+    expect(value['… (2)']).toBe('6 more keys');
+
+    const taken = serializeFormValue(wide({ '…': 'x', '… (2)': 'y' })) as Record<string, unknown>;
+    expect(taken['…']).toBe('x');
+    expect(taken['… (2)']).toBe('y');
+    expect(taken['… (3)']).toBe('7 more keys');
+
+    const plain = serializeFormValue(wide({})) as Record<string, unknown>;
+    expect(plain['…']).toBe('5 more keys');
+    expect(Object.keys(plain)).toHaveLength(21);
+  });
+
   it('reads a signal-backed control through its field tree', () => {
     const inner = signupForm();
     const control = Object.assign(new FormControl(''), { fieldTree: inner.tree });

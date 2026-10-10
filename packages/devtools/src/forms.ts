@@ -1,5 +1,5 @@
 import { domFacts, submitDom, type DomFacts, type SubmitDom } from './forms-dom.ts';
-import { clip } from './text.ts';
+import { clip, overflowKey } from './text.ts';
 import { childPath, joinPath, splitPath } from './forms-path.ts';
 import type { WebMcpTool } from './forms-webmcp.ts';
 import {
@@ -341,7 +341,8 @@ export function serializeFormValue(value: unknown, depth = 0): unknown {
           depth + 1,
         );
   }
-  if (keys.length > MAX_VALUE_ITEMS) out['…'] = `${keys.length - MAX_VALUE_ITEMS} more keys`;
+  if (keys.length > MAX_VALUE_ITEMS)
+    out[overflowKey(out)] = `${keys.length - MAX_VALUE_ITEMS} more keys`;
   return out;
 }
 

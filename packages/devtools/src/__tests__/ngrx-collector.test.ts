@@ -1185,6 +1185,24 @@ describe('ngrx collector with Store DevTools', () => {
 });
 
 describe('serialize', () => {
+  it('keeps an own "…" key when adding the overflow marker', () => {
+    expect(serialize({ '…': 'mine', a: 1, b: 2 }, { maxKeys: 2 })).toEqual({
+      '…': 'mine',
+      a: 1,
+      '… (2)': '1 more keys',
+    });
+    expect(serialize({ '…': 'x', '… (2)': 'y', a: 1 }, { maxKeys: 2 })).toEqual({
+      '…': 'x',
+      '… (2)': 'y',
+      '… (3)': '1 more keys',
+    });
+    expect(serialize({ a: 1, b: 2, c: 3 }, { maxKeys: 2 })).toEqual({
+      a: 1,
+      b: 2,
+      '…': '1 more keys',
+    });
+  });
+
   it('handles Map, Set, Date, circular and depth limits', () => {
     const circular: Record<string, unknown> = { a: 1 };
     circular['self'] = circular;
