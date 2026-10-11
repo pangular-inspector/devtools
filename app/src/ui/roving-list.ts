@@ -21,7 +21,7 @@ const SELECTED =
 })
 export class RovingList {
   /** The CSS selector of the list's focusable items, such as `button.row`. */
-  readonly appRovingList = input.required<string>();
+  readonly appRovingList = input('');
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private current: HTMLElement | null = null;
@@ -38,8 +38,18 @@ export class RovingList {
     });
   }
 
+  /**
+   * Focus can move into the list while its view is still being created,
+   * before the selector input is set, so an unset selector matches nothing.
+   */
+  private isItem(element: HTMLElement | null): element is HTMLElement {
+    const selector = this.appRovingList();
+    return !!selector && !!element?.matches(selector);
+  }
+
   private items(): HTMLElement[] {
-    return [...this.host.querySelectorAll<HTMLElement>(this.appRovingList())];
+    const selector = this.appRovingList();
+    return selector ? [...this.host.querySelectorAll<HTMLElement>(selector)] : [];
   }
 
   /** Keeps exactly one item in the Tab order. */
@@ -56,7 +66,7 @@ export class RovingList {
 
   onFocusIn(event: FocusEvent) {
     const target = event.target as HTMLElement | null;
-    if (!target?.matches(this.appRovingList()) || target === this.current) return;
+    if (!this.isItem(target) || target === this.current) return;
     this.current?.setAttribute('tabindex', '-1');
     this.current = target;
     target.setAttribute('tabindex', '0');
@@ -65,7 +75,7 @@ export class RovingList {
   onKey(event: KeyboardEvent) {
     if (!KEYS.includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
     const target = event.target as HTMLElement | null;
-    if (!target?.matches(this.appRovingList())) return;
+    if (!this.isItem(target)) return;
     const items = this.items();
     const at = items.indexOf(target);
     if (at < 0) return;
