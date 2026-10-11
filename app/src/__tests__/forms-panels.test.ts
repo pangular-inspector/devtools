@@ -283,6 +283,23 @@ describe('FormsInspector fields', () => {
     expect(host.querySelector('app-forms-field-detail')).toBeNull();
     expect(document.activeElement).toBe(row);
   });
+
+  it('clears the field path filter on Escape', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput('rpc', fakeClient(fail, [form]));
+    await settle(fixture);
+    const box = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      'input[aria-label="Filter fields by path"]',
+    )!;
+    box.value = 'email';
+    box.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    expect(fixture.componentInstance.filter()).toBe('email');
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await settle(fixture);
+    expect(fixture.componentInstance.filter()).toBe('');
+    expect(box.value).toBe('');
+  });
 });
 
 describe('FormsInspector status pills', () => {

@@ -50,11 +50,12 @@ import type { ComponentFocus } from '../types/component-focus.types';
           <input
             #filterInput
             class="field"
-            type="text"
+            type="search"
             aria-label="Filter source routes"
             placeholder="Filter routes…"
             [value]="filter()"
             (input)="onFilterInput($event)"
+            (keydown.escape)="filter.set('')"
           />
           <button type="button" class="small" [attr.aria-busy]="loading()" (click)="refresh()">
             {{ loading() ? 'Scanning…' : 'Refresh' }}

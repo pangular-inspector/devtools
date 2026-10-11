@@ -289,3 +289,64 @@ describe('injector tree page selection', () => {
     expect(fixture.componentInstance.roots().map((n) => n.injector.name)).toEqual(['shared']);
   });
 });
+
+describe('injector search box focus', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function clickNamed(host: HTMLElement, name: string) {
+    const button = Array.from(host.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === name,
+    );
+    if (!button) throw new Error(`No button named ${name}`);
+    button.focus();
+    button.click();
+  }
+
+  it('keeps focus on the search box after Clear search in the live tree', async () => {
+    const fixture = await render({
+      roots: [
+        {
+          injector: { id: 'a', type: 'element', name: 'A', providerCount: 0, component: 'A' },
+          providers: [],
+          children: [],
+        },
+      ],
+      environment: [],
+    });
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.append(host);
+    fixture.componentInstance.query.set('zzz');
+    await fixture.whenStable();
+    clickNamed(host, 'Clear search');
+    await fixture.whenStable();
+    expect(fixture.componentInstance.query()).toBe('');
+    expect(document.activeElement).toBe(
+      host.querySelector('input[aria-label="Find a token, component or injector"]'),
+    );
+  });
+
+  it('keeps focus on the search box after Clear filter in the source scan', async () => {
+    const fixture = await render({});
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.append(host);
+    fixture.componentInstance.sourceProviders.set([
+      {
+        token: 'CartService',
+        source: 'CartService',
+        file: 'src/cart.ts',
+        line: 1,
+        type: 'injectable',
+      },
+    ]);
+    fixture.componentInstance.query.set('zzz');
+    await fixture.whenStable();
+    clickNamed(host, 'Clear filter');
+    await fixture.whenStable();
+    expect(host.textContent).toContain('CartService');
+    expect(document.activeElement).toBe(
+      host.querySelector('input[aria-label="Filter by token or file"]'),
+    );
+  });
+});

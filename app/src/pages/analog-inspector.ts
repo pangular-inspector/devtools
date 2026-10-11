@@ -408,6 +408,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                 placeholder="Filter by path or file"
                 [value]="filter()"
                 (input)="filter.set($any($event.target).value)"
+                (keydown.escape)="filter.set('')"
               />
             </div>
             <div class="explain-result" role="status">

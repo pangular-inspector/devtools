@@ -31,11 +31,12 @@ const PHASE_COLORS: Record<string, string> = {
       <input
         #filterInput
         class="field"
-        type="text"
+        type="search"
         aria-label="Filter navigations by URL"
         placeholder="Filter by URL"
         [value]="filter()"
         (input)="filter.set($any($event.target).value)"
+        (keydown.escape)="filter.set('')"
       />
       <label class="check">
         <input

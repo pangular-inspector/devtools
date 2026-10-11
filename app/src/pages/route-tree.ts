@@ -85,11 +85,12 @@ interface MatchResult {
       <input
         #filterInput
         class="field filter"
-        type="text"
+        type="search"
         aria-label="Filter routes"
         placeholder="Filter by path, component or file"
         [value]="filter()"
         (input)="filter.set($any($event.target).value)"
+        (keydown.escape)="filter.set('')"
       />
       @if (page().config) {
         <p class="muted summary">

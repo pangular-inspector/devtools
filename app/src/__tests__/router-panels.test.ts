@@ -3,6 +3,7 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { DevframeRpcClient } from 'devframe/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RouteCurrent } from '../pages/route-current';
+import { RouteInspector } from '../pages/route-inspector';
 import { RouteLint } from '../pages/route-lint';
 import { RouteTimeline } from '../pages/route-timeline';
 import { RouteTree } from '../pages/route-tree';
@@ -522,5 +523,60 @@ describe('RouteCurrent', () => {
     });
     await settle(fixture);
     expect(showButtons(fixture)).toHaveLength(0);
+  });
+});
+
+describe('Router filter boxes clear on Escape', () => {
+  async function typeThenEscape(
+    fixture: ComponentFixture<{ filter: () => string }>,
+    box: HTMLInputElement,
+  ) {
+    expect(box.type).toBe('search');
+    box.value = 'users';
+    box.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    expect(fixture.componentInstance.filter()).toBe('users');
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await settle(fixture);
+    expect(fixture.componentInstance.filter()).toBe('');
+    expect(box.value).toBe('');
+  }
+
+  it('clears the Routes filter', async () => {
+    const fixture = mount(
+      RouteTree,
+      page({ config: [{ id: 'r1', path: 'users', fullPath: 'users', kind: 'component' }] }),
+      offline,
+    );
+    await settle(fixture);
+    await typeThenEscape(fixture, el(fixture).querySelector<HTMLInputElement>('input.filter')!);
+  });
+
+  it('clears the navigation URL filter', async () => {
+    const fixture = mount(RouteTimeline, page({ navigations: [nav(1, '/users')] }), offline);
+    await settle(fixture);
+    await typeThenEscape(
+      fixture,
+      el(fixture).querySelector<HTMLInputElement>('input[aria-label="Filter navigations by URL"]')!,
+    );
+  });
+
+  it('clears the source routes filter', async () => {
+    const rpc = {
+      call: () => Promise.resolve([]),
+      callEvent: () => Promise.resolve(),
+      sharedState: () => Promise.resolve({ value: () => null, on: () => () => {} }),
+    };
+    const fixture = TestBed.createComponent(RouteInspector);
+    fixture.componentRef.setInput('rpc', {
+      connectionMeta: {},
+      scope: () => ({ rpc }),
+    } as unknown as DevframeRpcClient);
+    document.body.append(el(fixture));
+    await settle(fixture);
+    await typeThenEscape(
+      fixture,
+      el(fixture).querySelector<HTMLInputElement>('input[aria-label="Filter source routes"]')!,
+    );
   });
 });

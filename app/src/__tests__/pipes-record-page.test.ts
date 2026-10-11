@@ -56,3 +56,52 @@ describe('pipe recording request', () => {
     expect(requests).toEqual([{ on: false }]);
   });
 });
+
+describe('pipes filter box', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function withPipes() {
+    const rpc = {
+      call: (name: string) =>
+        Promise.resolve(
+          name === 'get-pipes'
+            ? [
+                {
+                  name: 'price',
+                  className: 'PricePipe',
+                  file: 'src/price.pipe.ts',
+                  line: 4,
+                  isStandalone: true,
+                  isPure: true,
+                },
+              ]
+            : [],
+        ),
+      callEvent: () => Promise.resolve(),
+      sharedState: () =>
+        Promise.resolve({
+          value: () => ({ pipes: [], async: [], reportedAt: 0, instrumented: [] }),
+          on: () => () => {},
+        }),
+    };
+    return { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
+  }
+
+  it('keeps focus on the search box after Clear filters', async () => {
+    const fixture = await render(withPipes());
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.append(host);
+    fixture.componentInstance.filter.set('zzz');
+    await fixture.whenStable();
+    const clear = Array.from(host.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Clear filters',
+    )!;
+    clear.focus();
+    clear.click();
+    await fixture.whenStable();
+    expect(host.textContent).not.toContain('No pipes match');
+    expect(document.activeElement).toBe(host.querySelector('input[type="search"]'));
+  });
+});
