@@ -320,6 +320,23 @@ describe('createCapacitorHook', () => {
     expect(JSON.stringify(hook.calls())).not.toContain('opaque-key-1');
   });
 
+  it('keeps CORS header values within the serialization limits', async () => {
+    const headers: Record<string, string> = {};
+    for (let i = 0; i < 500; i++) headers[`Access-Control-X-${i}`] = 'x'.repeat(400);
+    const { win, cap } = fakeCapacitor({
+      'CapacitorHttp.request': async () => ({ status: 200, headers }),
+    });
+    const hook = collect(win);
+
+    await cap.nativePromise('CapacitorHttp', 'request', { url: 'https://api.example.com/' });
+    await settle();
+
+    const kept = (hook.calls()[0].result as { headers: Record<string, string> }).headers;
+    expect(Object.keys(kept).length).toBeLessThan(500);
+    expect(Math.max(...Object.values(kept).map((v) => String(v).length))).toBeLessThanOrEqual(201);
+    expect(JSON.stringify(kept).length).toBeLessThan(500 * 400);
+  });
+
   it('masks secrets inside string bodies: JSON, form fields and JSON stored as a value', async () => {
     const { win, cap } = fakeCapacitor({
       'CapacitorHttp.request': async () => ({

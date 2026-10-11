@@ -52,27 +52,27 @@ function withUrlMasked(plugin: string, value: unknown): unknown {
 // CORS headers hold origins, methods and `true`, never a secret, but a name
 // such as `Access-Control-Allow-Credentials` reads like one.
 const PLAIN_HEADER = /^access-control-/i;
+// CORS values are short. A longer one is cut, so kept values stay small.
+const PLAIN_HEADER_TEXT = 200;
 
 /**
  * Masks a CapacitorHttp request or response, keeping the values of its CORS
- * headers. Other plugins' values are masked as they are.
+ * headers. The headers go through `maskedValue` with the rest, so its key and
+ * size limits decide which ones are kept; only the values of CORS headers that
+ * made it through are put back. Other plugins' values are masked as they are.
  */
 function maskedCall(plugin: string, value: unknown, limits: SerializeLimits): unknown {
+  const masked = maskedValue(value, limits);
   if (plugin !== 'CapacitorHttp' || !isObject(value) || !isObject(value['headers'])) {
-    return maskedValue(value, limits);
+    return masked;
   }
-  const kept: Record<string, string> = {};
-  const rest: Record<string, unknown> = {};
-  for (const [name, item] of Object.entries(value['headers'])) {
-    const plain = PLAIN_HEADER.test(name) && redactReason(name) !== 'config';
-    if (plain && typeof item === 'string') kept[name] = item;
-    else rest[name] = item;
-  }
-  const masked = maskedValue({ ...value, headers: rest }, limits);
   if (!isObject(masked) || !isObject(masked['headers'])) return masked;
-  const text = limits.text ?? 500;
-  for (const [name, item] of Object.entries(kept)) {
-    masked['headers'][name] = clip(redactText(item), text);
+  const headers = masked['headers'];
+  const text = Math.min(limits.text ?? 500, PLAIN_HEADER_TEXT);
+  for (const [name, item] of Object.entries(value['headers'])) {
+    if (!(name in headers) || typeof item !== 'string') continue;
+    if (!PLAIN_HEADER.test(name) || redactReason(name) === 'config') continue;
+    headers[name] = clip(redactText(item), text);
   }
   return masked;
 }
