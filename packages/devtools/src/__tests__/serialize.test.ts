@@ -28,6 +28,14 @@ describe('serialize', () => {
     expect(serialize('abcdef', { text: 3 })).toBe('abc…');
   });
 
+  it('keeps a real "…" key when the key limit adds its marker', () => {
+    expect(serialize({ '…': 'real', b: 2, c: 3 }, { keys: 2 })).toEqual({
+      '…': 'real',
+      b: 2,
+      '… (2)': '1 more',
+    });
+  });
+
   it('marks text cut by the redaction window when the text limit is larger', () => {
     const out = serialize('a'.repeat(70000), { text: 100000 }) as string;
     expect(out).toBe(`${'a'.repeat(65536)}…`);

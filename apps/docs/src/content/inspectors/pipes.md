@@ -77,7 +77,7 @@ Live discovery walks the rendered views with `ng.getComponent` and related debug
 
 ### Recording
 
-Click **Record calls** to count calls and keep the last input and output of each pipe. Recording patches each pipe's `transform` in the inspected page, on every connected tab. It covers the pipes found on the page. Click **Stop recording** when you are done.
+Click **Record calls** to count calls and keep the last input and output of each pipe. Recording patches each pipe's `transform` in one tab: the page the panel belongs to, or the page that reported last when the panel runs on its own. Other open tabs stay unpatched. It covers the pipes found on the page. **Stop recording** stops every tab that records. Click **Stop recording** when you are done.
 
 Each recording starts from zero, so a second recording measures one interaction on its own. The button switches to **Stop recording** once a page confirms that it is recording. If no page is connected, the tab says so and stays on **Record calls**.
 

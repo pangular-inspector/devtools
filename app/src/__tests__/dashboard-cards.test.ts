@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { componentsCard, routesCard, storeCard, zoneLabel } from '../pages/dashboard';
+import { resolvePangularConfig } from '@pangular-inspector/devtools/config';
+import {
+  componentsCard,
+  dashboardStats,
+  formsCard,
+  httpCard,
+  routesCard,
+  storeCard,
+  zoneLabel,
+} from '../pages/dashboard';
+
+const form = (id: string, status: string) => ({ id, root: { status } });
 
 describe('dashboard cards', () => {
   it('names the change detection mode the page reported', () => {
@@ -60,5 +71,80 @@ describe('dashboard cards', () => {
       value: 5,
       sub: '2 actions · 1 reducer · 1 signal store · 1 custom',
     });
+  });
+
+  it('counts the forms of the host page and the invalid ones', () => {
+    const state = {
+      forms: [
+        form('checkout@host', 'INVALID'),
+        form('search@host', 'VALID'),
+        form('login@host', 'PENDING'),
+        form('profile@other', 'INVALID'),
+      ],
+    };
+    expect(formsCard(state, 'host')).toEqual({ value: 3, sub: 'forms · 1 invalid' });
+    expect(formsCard(state, 'other')).toEqual({ value: 1, sub: 'form · 1 invalid' });
+  });
+
+  it('counts the forms of every page without a host page, like the Forms tab', () => {
+    const state = { forms: [form('a@one', 'INVALID'), form('b@two', 'INVALID')] };
+    expect(formsCard(state, null)).toEqual({ value: 2, sub: 'forms · 2 invalid' });
+  });
+
+  it('says when no form is reported', () => {
+    expect(formsCard({}, null)).toEqual({ value: 0, sub: 'no forms on the page yet' });
+    expect(formsCard({ forms: [form('a@other', 'VALID')] }, 'host')).toEqual({
+      value: 0,
+      sub: 'no forms on the page yet',
+    });
+  });
+
+  it('counts the calls of the host page with its server calls, and the failed ones', () => {
+    const state = {
+      serverCalls: [
+        { status: 200, pageUrl: '/trips' },
+        { status: 500, pageUrl: '/trips' },
+        { status: 404, pageUrl: '/other' },
+      ],
+      pages: [
+        {
+          pageId: 'host',
+          initialUrl: '/trips',
+          reportedAt: 1,
+          calls: [{ status: 200 }, { status: 0 }, { status: 0, cancelled: true }, { status: 302 }],
+        },
+        { pageId: 'newer', reportedAt: 5, calls: [{ status: 503 }] },
+      ],
+    };
+    expect(httpCard(state, 'host')).toEqual({ value: 6, sub: 'calls · 2 failed' });
+  });
+
+  it('counts the newest page without a host page', () => {
+    const state = {
+      pages: [
+        { pageId: 'old', reportedAt: 1, calls: [{ status: 200 }, { status: 200 }] },
+        { pageId: 'new', reportedAt: 9, calls: [{ status: 401 }] },
+      ],
+    };
+    expect(httpCard(state, null)).toEqual({ value: 1, sub: 'call · 1 failed' });
+  });
+
+  it('says when no call is recorded', () => {
+    expect(httpCard({}, null)).toEqual({ value: 0, sub: 'no calls recorded yet' });
+    expect(httpCard({ pages: [] }, 'host')).toEqual({ value: 0, sub: 'no calls recorded yet' });
+    expect(httpCard({ serverCalls: [{ status: 500 }], pages: [] }, 'host')).toEqual({
+      value: 0,
+      sub: 'no calls recorded yet',
+    });
+  });
+
+  it('shows the Forms and SSR & HTTP cards only while their inspectors are on', () => {
+    const tabs = (config: unknown) =>
+      dashboardStats(resolvePangularConfig(config)).map((stat) => stat.tab);
+    expect(tabs({})).toEqual(expect.arrayContaining(['forms', 'network']));
+    expect(tabs({ inspectors: { forms: false } })).not.toContain('forms');
+    expect(tabs({ inspectors: { forms: false } })).toContain('network');
+    expect(tabs({ inspectors: { http: false } })).not.toContain('network');
+    expect(tabs({ inspectors: { http: false } })).toContain('forms');
   });
 });

@@ -21,7 +21,7 @@ The route the page is on:
 - The navigation in flight, with an **Abort** button.
 - The document title, query params and fragment.
 - **Active routes**: each active route with its component, params, data, and guards and resolvers. Tags mark lazy routes, inherited params, and whether a data value is static, resolved or inherited. The title row says when the title is inherited.
-- **Outlets**: the outlet tree, with the inputs the router binds to each component and the `routerOutletData` each outlet passes (what the routed component reads with `inject(ROUTER_OUTLET_DATA)`). The data shows as a redacted preview of at most 300 characters.
+- **Outlets**: the outlet tree, with the inputs the router binds to each component and the `routerOutletData` each outlet passes (what the routed component reads with `inject(ROUTER_OUTLET_DATA)`). The data shows as a redacted preview of at most 300 characters. Each activated outlet has a **Show in Components** button that opens the [Components tab](./components.md) on the page the Router tab shows, with the routed component selected and scrolled into view. If the component is no longer on that page, the Components tab says so. The button is hidden when the Components inspector is off or the page reports no element for the routed component.
 
 ### Navigations
 
@@ -61,7 +61,7 @@ The live route config. The tab merges lazy children in once they load, and marks
 - Fill in the params of a route and click **Go** to navigate to it. With a param left empty, **Go** marks the empty field and names the params to fill in.
 - **Read lazy** reads the routes of a lazy route that has not loaded.
 
-The result of **Go** and **Read lazy** shows under the row you clicked.
+The result of **Go** and **Read lazy** shows under the row you clicked, and a screen reader announces it. Results and filled-in params belong to one page, so they are cleared when you pick another page.
 
 ### Setup
 

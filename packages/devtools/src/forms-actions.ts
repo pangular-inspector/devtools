@@ -628,7 +628,7 @@ function expressionFor(found: FoundForm, path: string): string {
   if (found.kind === 'signal') {
     return `$form${keys
       .map((key) =>
-        /^\d+$/.test(key) ? `[${key}]` : /[.\\]/.test(key) ? `[${quote(key)}]` : `.${key}`,
+        /^\d+$/.test(key) ? `[${key}]` : /^$|[.\\]/.test(key) ? `[${quote(key)}]` : `.${key}`,
       )
       .join('')}`;
   }

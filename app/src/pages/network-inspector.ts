@@ -22,6 +22,7 @@ import {
   isHttpRuleStatus,
   type CacheSkip,
 } from '@pangular-inspector/devtools/config';
+import { prettyJson } from '../format';
 import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 
@@ -217,6 +218,57 @@ function pathOf(url: string): string {
   }
 }
 
+const REDACTED_IN_URL = /\[redacted\]|%5Bredacted%5D/gi;
+
+/**
+ * A rule pattern for a recorded call: its path and query, without the origin, so it
+ * matches the relative client URL and the absolute SSR URL. A redacted value becomes
+ * `*`, because the real request carries the secret.
+ */
+function mockPattern(url: string): string {
+  return pathOf(url).replace(REDACTED_IN_URL, '*');
+}
+
+/** The preview as a mock body, when it is complete JSON (the rule form takes JSON only). */
+function jsonBody(preview: string): string | null {
+  const pretty = prettyJson(preview);
+  if (pretty !== null) return pretty;
+  try {
+    JSON.parse(preview);
+    return preview.trim();
+  } catch {
+    return null;
+  }
+}
+
+const STANDARD_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+
+/**
+ * The path of a page, as an SSR override pattern. The query is left out because the panel only
+ * has a redacted copy of it, which would not match the real request.
+ */
+function pagePath(url: string): string {
+  try {
+    return new URL(url, 'http://x').pathname;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * The page path as a prefilled override pattern. Patterns match anywhere in the URL, so the site
+ * root (`/`) would match every page; it is left empty for the user to fill in.
+ */
+function pagePattern(url: string): string {
+  const path = pagePath(url);
+  return path === '/' ? '' : path;
+}
+
+/** A part the server masked in a payload key, plain or URL-encoded. */
+const REDACTED_PART = /\[redacted\]|%5Bredacted%5D/i;
+
+/** The longest TransferState key `set-ssr-overrides` keeps (see `sanitizeSsrOverrides`). */
+const MAX_OVERRIDE_KEY = 200;
 const MAX_RULES = 50;
 const MAX_PATTERN = 500;
 const MAX_BODY = 100_000;
@@ -482,7 +534,43 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           what="HTTP calls"
           limit="httpCalls"
         />
-        @if (timeline().length) {
+        <div class="filters" role="group" aria-label="Filter the HTTP timeline">
+          <div class="search">
+            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              id="timeline-search"
+              type="search"
+              placeholder="Find a URL or method…"
+              aria-label="Find a URL or method"
+              autocomplete="off"
+              spellcheck="false"
+              [value]="callQuery()"
+              (input)="callQuery.set($any($event.target).value)"
+              (keydown.escape)="callQuery.set('')"
+            />
+          </div>
+          <app-select
+            class="side-filter"
+            ariaLabel="Side"
+            [options]="sideOptions"
+            [(value)]="sideFilter"
+          />
+          <label class="inline failed-toggle">
+            <input
+              type="checkbox"
+              [checked]="failedOnly()"
+              (change)="failedOnly.set($any($event.target).checked)"
+            />
+            Failed only
+          </label>
+          <span class="total" aria-live="polite"
+            >{{ visibleCalls().length }} of {{ timeline().length }}</span
+          >
+        </div>
+        @if (visibleCalls().length) {
           <div class="table-wrap">
             <table>
               <thead>
@@ -497,7 +585,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 </tr>
               </thead>
               <tbody>
-                @for (entry of timeline(); track entry.side + entry.id) {
+                @for (entry of visibleCalls(); track entry.side + entry.id) {
                   <tr
                     [class.selected]="selectedCall()?.id === entry.id"
                     (click)="openCall(entry.id)"
@@ -558,6 +646,20 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               </tbody>
             </table>
           </div>
+        } @else if (timeline().length) {
+          <div class="empty no-match" role="status">
+            <p>No requests match.</p>
+            <p class="muted small">
+              @if (callQuery().trim()) {
+                Nothing matches “{{ callQuery().trim() }}” with these filters.
+              } @else {
+                None of the {{ timeline().length }} requests fit these filters.
+              }
+            </p>
+            <div class="empty-actions">
+              <button type="button" (click)="clearCallFilters()">Clear filters</button>
+            </div>
+          </div>
         } @else {
           <div class="empty">
             <p>No requests yet.</p>
@@ -577,7 +679,29 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           >
             <div class="preview-head">
               <h3 id="preview-heading" tabindex="-1">Response preview</h3>
-              <button type="button" class="ghost" (click)="closePreview()">Close</button>
+              <div class="preview-actions">
+                @if (!detail.error && detail.preview) {
+                  <button
+                    type="button"
+                    class="ghost"
+                    [attr.aria-label]="'Copy the response of ' + detail.method + ' ' + detail.url"
+                    (click)="copyPreview(detail)"
+                  >
+                    Copy
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="ghost"
+                  aria-controls="rule-form"
+                  [disabled]="!canWrite()"
+                  [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
+                  (click)="mockCall(detail)"
+                >
+                  Mock this request
+                </button>
+                <button type="button" class="ghost" (click)="closePreview()">Close</button>
+              </div>
             </div>
             <p class="preview-meta">
               <span class="method">{{ detail.method }}</span>
@@ -595,9 +719,11 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 Matched rule <code>{{ pattern }}</code>
               </p>
             }
-            <pre [class.error]="!!detail.error && !detail.cancelled">{{
-              detail.error ?? detail.preview ?? '(no body)'
-            }}</pre>
+            <pre
+              class="preview-body"
+              tabindex="0"
+              [class.error]="!!detail.error && !detail.cancelled"
+              >{{ detail.error ?? previewText(detail) ?? '(no body)' }}</pre>
           </div>
         }
       </section>
@@ -607,7 +733,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
         @if (!canWrite()) {
           <p id="http-writes-off" class="muted small">{{ writesOff }}</p>
         }
-        <form class="rule-form" (submit)="addRule($event)">
+        <form id="rule-form" class="rule-form" (submit)="addRule($event)">
           <label>
             <span>URL pattern <span class="hint">(substring or * glob)</span></span>
             <input
@@ -625,7 +751,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               <span id="rule-method-label">Method</span>
               <app-select
                 labelledBy="rule-method-label"
-                [options]="methodOptions"
+                [options]="methodOptions()"
                 [value]="draft().method"
                 (valueChange)="setDraft('method', $event ?? '')"
               />
@@ -803,6 +929,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               <label>
                 TransferState key
                 <input
+                  id="override-key"
                   spellcheck="false"
                   autocomplete="off"
                   [value]="overrideDraft().key"
@@ -812,15 +939,30 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               <label>
                 <span>New JSON value <span class="hint">(empty removes the entry)</span></span>
                 <textarea
+                  id="override-value"
                   rows="3"
                   spellcheck="false"
                   [value]="overrideDraft().value"
                   (input)="patchOverride('value', $event)"
                   [attr.aria-invalid]="overrideValueError() ? 'true' : null"
-                  aria-describedby="override-value-error"
+                  [attr.aria-describedby]="
+                    overrideFromPayload()
+                      ? 'override-value-error override-value-note'
+                      : 'override-value-error'
+                  "
                 ></textarea>
               </label>
               <p id="override-value-error" class="field-error">{{ overrideValueError() }}</p>
+              @if (overrideFromPayload(); as from) {
+                <p id="override-value-note" class="muted small">
+                  Filled in from the TransferState payload. The value starts empty because the panel
+                  only shows a redacted copy, so type the JSON the server should send.
+                  @if (from === 'http') {
+                    For a cached HTTP response this is the whole cache record, not only the response
+                    body.
+                  }
+                </p>
+              }
             }
             @case ('client-render') {
               <p class="muted small">
@@ -1016,7 +1158,32 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                     }
                     <span class="entry-size">{{ entry.size }} B</span>
                   </summary>
-                  <pre>{{ entry.value | json }}</pre>
+                  <div class="entry-key-row">
+                    <span class="entry-key-label">Key</span>
+                    <code class="entry-key-text">{{ entry.key }}</code>
+                    <div class="entry-actions">
+                      <button
+                        type="button"
+                        class="ghost"
+                        [attr.aria-label]="'Copy key ' + entry.key"
+                        (click)="copyKey(entry.key)"
+                      >
+                        Copy
+                      </button>
+                      @if (canEditEntry(entry)) {
+                        <button
+                          type="button"
+                          class="ghost"
+                          [attr.aria-label]="'Edit in SSR overrides, key ' + entry.key"
+                          (click)="editEntry(entry)"
+                        >
+                          Edit in SSR overrides
+                        </button>
+                      }
+                    </div>
+                  </div>
+                  <!-- Focusable so a long value can be scrolled with the keyboard. -->
+                  <pre tabindex="0">{{ entry.value | json }}</pre>
                 </details>
               }
             </div>
@@ -1315,6 +1482,59 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       text-align: center;
       line-height: 1.5;
     }
+    .empty-actions {
+      display: flex;
+      justify-content: center;
+      margin-top: 8px;
+    }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin: 0 0 12px;
+    }
+    .search {
+      position: relative;
+      flex: 1 1 220px;
+      min-width: 0;
+    }
+    .search-icon {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      width: 14px;
+      height: 14px;
+      transform: translateY(-50%);
+      fill: none;
+      stroke: var(--text-3);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      pointer-events: none;
+    }
+    .search:focus-within .search-icon {
+      stroke: var(--accent);
+    }
+    .filters input[type='search'] {
+      height: var(--control-h);
+      padding-left: 34px;
+    }
+    .filters .side-filter {
+      flex: 0 0 140px;
+    }
+    .failed-toggle {
+      flex: none;
+      height: var(--control-h);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .total {
+      flex: none;
+      color: var(--text-2);
+      font-size: 12px;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
     .table-wrap {
       max-height: min(420px, 60vh);
       overflow: auto;
@@ -1528,10 +1748,19 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     }
     .preview-head {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 4px 8px;
       margin-bottom: 4px;
+    }
+    .preview-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    pre.preview-body {
+      max-height: 320px;
     }
     .preview-head h3 {
       margin: 0;
@@ -1771,6 +2000,31 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     summary:hover .entry-key {
       color: var(--accent);
     }
+    .entry-key-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 8px;
+      min-width: 0;
+      margin: 0 0 8px;
+      padding: 0 4px;
+    }
+    .entry-key-label {
+      @include m.label;
+      flex: none;
+    }
+    .entry-key-text {
+      flex: 1 1 200px;
+      min-width: 0;
+      color: var(--text-strong);
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+    .entry-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
     .entry-size {
       flex: none;
       color: var(--text-2);
@@ -1810,6 +2064,8 @@ export class NetworkInspector {
   readonly rules = signal<HttpRule[]>([]);
   readonly overrides = signal<SsrOverride[]>([]);
   readonly overrideDraft = signal<OverrideDraft>({ ...EMPTY_OVERRIDE });
+  /** Set when the draft came from a TransferState entry, so the form can explain the empty value. */
+  readonly overrideFromPayload = signal<'http' | 'other' | null>(null);
   readonly overrideKindOptions: SelectOption<SsrOverrideKind>[] = [
     { value: 'render-error', label: 'Render error' },
     { value: 'client-render', label: 'Force Client render' },
@@ -1878,8 +2134,32 @@ export class NetworkInspector {
     [...this.pageServerCalls(), ...(this.selected()?.calls ?? [])].sort((a, b) => b.at - a.at),
   );
 
+  readonly callQuery = signal('');
+  readonly sideFilter = signal<HttpSide | 'all' | null>('all');
+  readonly failedOnly = signal(false);
+  readonly sideOptions: SelectOption<HttpSide | 'all'>[] = [
+    { value: 'all', label: 'All sides' },
+    { value: 'server', label: 'SSR' },
+    { value: 'client', label: 'Client' },
+  ];
+
+  readonly visibleCalls = computed(() => {
+    const query = this.callQuery().trim().toLowerCase();
+    const side = this.sideFilter() ?? 'all';
+    const failedOnly = this.failedOnly();
+    return this.timeline().filter(
+      (c) =>
+        (side === 'all' || c.side === side) &&
+        (!failedOnly || this.isFailed(c)) &&
+        (!query ||
+          `${c.method} ${c.url}`.toLowerCase().includes(query) ||
+          `${c.method} ${pathOf(c.url)}`.toLowerCase().includes(query)),
+    );
+  });
+
+  /** Follows the visible rows, so the preview hides while filters hide its call. */
   readonly selectedCall = computed(
-    () => this.timeline().find((c) => c.id === this.selectedCallId()) ?? null,
+    () => this.visibleCalls().find((c) => c.id === this.selectedCallId()) ?? null,
   );
 
   readonly selectedRequest = computed(
@@ -2049,6 +2329,18 @@ export class NetworkInspector {
     return call.cancelled ? 'neutral' : this.statusTone(call.status);
   }
 
+  /** A failed call has a status of 400 or more, no status (ERR) or was cancelled. */
+  isFailed(call: HttpCall): boolean {
+    return !!call.cancelled || !call.status || call.status >= 400;
+  }
+
+  clearCallFilters() {
+    this.callQuery.set('');
+    this.sideFilter.set('all');
+    this.failedOnly.set(false);
+    this.host.nativeElement.querySelector<HTMLInputElement>('#timeline-search')?.focus();
+  }
+
   rulePatternOf(call: HttpCall): string | null {
     if (call.rulePattern) return call.rulePattern;
     if (!call.ruleId) return null;
@@ -2059,6 +2351,43 @@ export class NetworkInspector {
     this.selectedCallId.set(id);
     afterNextRender(
       () => this.host.nativeElement.querySelector<HTMLElement>('#preview-heading')?.focus(),
+      { injector: this.injector },
+    );
+  }
+
+  /** The preview as shown: JSON indented by 2 spaces, other text as recorded (both already redacted). */
+  previewText(call: HttpCall): string | undefined {
+    if (call.preview === undefined) return undefined;
+    return prettyJson(call.preview) ?? call.preview;
+  }
+
+  async copyPreview(call: HttpCall) {
+    const text = this.previewText(call);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      this.message.set('Copied.');
+    } catch {
+      this.message.set('The clipboard is not available here.');
+    }
+  }
+
+  /** Fills the fault rule form from a recorded call and moves focus to it. Nothing is saved. */
+  mockCall(call: HttpCall) {
+    const method = call.method.toUpperCase();
+    const pattern = mockPattern(call.url);
+    const body = call.error || !call.preview ? null : jsonBody(call.preview);
+    this.draft.set({ ...EMPTY_DRAFT, pattern, method, body: body ?? '' });
+    const what = `${method} ${pattern}`;
+    this.message.set(
+      body
+        ? `Filled in a rule for ${what} with the preview as its body. Check it, then add the rule.`
+        : call.preview && !call.error
+          ? `Filled in a rule for ${what}. The preview is not complete JSON, so it is not used as the body.`
+          : `Filled in a rule for ${what}. Set a status, a delay or a body, then add the rule.`,
+    );
+    afterNextRender(
+      () => this.host.nativeElement.querySelector<HTMLInputElement>('#rule-pattern')?.focus(),
       { injector: this.injector },
     );
   }
@@ -2102,10 +2431,13 @@ export class NetworkInspector {
     this.pages().map((page) => ({ value: page.pageId, label: page.title || page.url })),
   );
 
-  readonly methodOptions: SelectOption[] = [
-    { value: '', label: 'Any' },
-    ...['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => ({ value: m, label: m })),
-  ];
+  /** The usual methods, plus the draft's own when "Mock this request" filled in another one. */
+  readonly methodOptions = computed<SelectOption[]>(() => {
+    const draft = this.draft().method;
+    const methods =
+      draft && !STANDARD_METHODS.includes(draft) ? [...STANDARD_METHODS, draft] : STANDARD_METHODS;
+    return [{ value: '', label: 'Any' }, ...methods.map((m) => ({ value: m, label: m }))];
+  });
 
   readonly targetOptions: SelectOption<HttpRule['target']>[] = [
     { value: 'both', label: 'SSR + client' },
@@ -2116,6 +2448,7 @@ export class NetworkInspector {
   selectPage(pageId: string | null) {
     if (pageId) this.selectedPageId.set(pageId);
     this.selectedCallId.set(null);
+    this.overrideFromPayload.set(null);
   }
 
   setDraft<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
@@ -2177,11 +2510,66 @@ export class NetworkInspector {
 
   setOverrideDraft<K extends keyof OverrideDraft>(key: K, value: OverrideDraft[K]) {
     this.overrideDraft.update((d) => ({ ...d, [key]: value }));
+    // The "filled in from the payload" note only describes the entry the form was filled from.
+    if (key === 'kind' && value !== 'state-edit') this.overrideFromPayload.set(null);
   }
 
   patchOverride(key: keyof OverrideDraft, event: Event) {
     const value = (event.target as HTMLInputElement).value;
     this.overrideDraft.update((d) => ({ ...d, [key]: value }));
+    if (key === 'key') this.overrideFromPayload.set(null);
+  }
+
+  async copyKey(key: string) {
+    try {
+      await navigator.clipboard.writeText(key);
+      this.message.set('Copied.');
+    } catch {
+      this.message.set('The clipboard is not available here.');
+    }
+  }
+
+  /**
+   * The edit needs HTTP writes and a key the server keeps exactly: it trims keys and drops longer
+   * ones than it accepts. A key with a redacted part can never match the real one.
+   */
+  canEditEntry(entry: PayloadEntry): boolean {
+    const { key } = entry;
+    return (
+      this.canWrite() &&
+      !!key &&
+      key === key.trim() &&
+      key.length <= MAX_OVERRIDE_KEY &&
+      !REDACTED_PART.test(key)
+    );
+  }
+
+  /**
+   * Opens the SSR overrides form as a TransferState edit for this entry. The value stays empty:
+   * the payload the panel holds is redacted and clipped, so copying it would write masks back.
+   */
+  editEntry(entry: PayloadEntry) {
+    if (!this.canEditEntry(entry)) return;
+    const page = this.selected();
+    this.overrideDraft.set({
+      ...EMPTY_OVERRIDE,
+      kind: 'state-edit',
+      pattern: page ? pagePattern(page.initialUrl ?? page.url) : '',
+      key: entry.key,
+    });
+    this.overrideFromPayload.set(entry.http ? 'http' : 'other');
+    this.message.set('Editing the TransferState entry in SSR overrides.');
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement;
+        const target = host.querySelector<HTMLElement>(
+          this.overrideDraft().pattern ? '#override-value' : '#override-pattern',
+        );
+        target?.scrollIntoView?.({ block: 'center' });
+        target?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 
   async addOverride(event: Event) {
@@ -2199,6 +2587,7 @@ export class NetworkInspector {
     };
     if (await this.saveOverrides([...this.overrides(), next], 'Override added. Reload the page.')) {
       this.overrideDraft.set({ ...EMPTY_OVERRIDE, kind: d.kind });
+      this.overrideFromPayload.set(null);
       this.host.nativeElement.querySelector<HTMLInputElement>('#override-pattern')?.focus();
     }
   }

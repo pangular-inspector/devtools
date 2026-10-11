@@ -8,6 +8,7 @@ import {
   effect,
   inject,
   input,
+  linkedSignal,
   signal,
   viewChild,
 } from '@angular/core';
@@ -20,10 +21,12 @@ import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 import {
   pretty,
+  sameNgrxLog,
   short,
   type LiveStore,
   type NgrxActionOrigin,
   type NgrxLogEntry,
+  type NgrxLogKey,
   type NgrxPage,
   type NgrxState,
   type NgrxStoreEntry,
@@ -240,7 +243,17 @@ const CLASSIC_KINDS = new Set([
 
               <div class="facts">
                 <section class="fact" aria-labelledby="ngrx-state-heading">
-                  <h4 id="ngrx-state-heading">State</h4>
+                  <div class="fact-head">
+                    <h4 id="ngrx-state-heading">State</h4>
+                    <button
+                      type="button"
+                      class="btn copy"
+                      aria-label="Copy state"
+                      (click)="copyState()"
+                    >
+                      Copy
+                    </button>
+                  </div>
                   <pre #stateTree class="tree" tabindex="0" aria-labelledby="ngrx-state-heading">{{
                     stateText()
                   }}</pre>
@@ -585,7 +598,19 @@ const CLASSIC_KINDS = new Set([
           }
         </dl>
         @if (selected.source !== 'event') {
-          <div class="sub" role="heading" [attr.aria-level]="headingLevel + 1">State diff</div>
+          <div class="sub-head">
+            <div class="sub" role="heading" [attr.aria-level]="headingLevel + 1">State diff</div>
+            @if (selected.diff.length) {
+              <button
+                type="button"
+                class="btn copy"
+                [attr.aria-label]="'Copy the state diff of #' + selected.seq"
+                (click)="copyDiff(selected)"
+              >
+                Copy
+              </button>
+            }
+          </div>
           @if (selected.diff.length) {
             <ul class="diff">
               @for (change of selected.diff; track change.path) {
@@ -896,6 +921,32 @@ const CLASSIC_KINDS = new Set([
     }
     .sub {
       margin: 14px 0 8px;
+    }
+    .fact-head,
+    .sub-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+    .fact-head {
+      margin-bottom: 10px;
+    }
+    .fact-head h4 {
+      margin: 0;
+    }
+    .sub-head {
+      margin: 14px 0 8px;
+    }
+    .sub-head .sub {
+      margin: 0;
+    }
+    .btn.copy {
+      flex: none;
+      height: 26px;
+      padding: 0 10px;
+      font-size: 12px;
     }
     .pill {
       min-width: 20px;
@@ -1633,13 +1684,7 @@ export class StoreInspector {
   private readonly hostPageId = hostPageId();
   readonly maxLog = computed(() => panelConfig(this.rpc()).limits.changeLog);
   readonly selectedStoreId = signal<string | null>(null);
-  // Two selection cursors so clicking an event never swaps out the per-store
-  // change-log detail: the change log keeps its own highlighted row, the
-  // Events section keeps its own, and each shows its detail in-place.
-  readonly selectedChangeSeq = signal<number | null>(null);
-  readonly selectedEventSeq = signal<number | null>(null);
   private readonly focusEventSeq = signal<number | null>(null);
-  readonly confirmSeq = signal<number | null>(null);
   private readonly eventDetailHeading = viewChild<ElementRef<HTMLElement>>('eventDetailHeading');
   readonly busy = signal(false);
   private readonly focusLatest = signal(false);
@@ -1661,6 +1706,39 @@ export class StoreInspector {
       pages[0] ??
       null
     );
+  });
+
+  private readonly logKey = computed<NgrxLogKey>(() => {
+    const page = this.page();
+    return { pageId: page?.pageId ?? null, log: page?.log ?? [] };
+  });
+
+  /**
+   * Counts the change logs this view has shown. It moves on when `page()` switches to another
+   * page (including the fallback when the chosen page closes) and when the app reloads, which
+   * keeps the `pageId` but restarts `seq` at 1, so a seq picked before means another entry now.
+   */
+  private readonly logSession = linkedSignal<NgrxLogKey, number>({
+    source: this.logKey,
+    computation: (key, previous) =>
+      !previous ? 0 : sameNgrxLog(previous.source, key) ? previous.value : previous.value + 1,
+  });
+
+  // Two selection cursors so clicking an event never swaps out the per-store
+  // change-log detail: the change log keeps its own highlighted row, the
+  // Events section keeps its own, and each shows its detail in-place.
+  // All three are seqs, so they reset whenever the change log is another one.
+  readonly selectedChangeSeq = linkedSignal<number, number | null>({
+    source: this.logSession,
+    computation: () => null,
+  });
+  readonly selectedEventSeq = linkedSignal<number, number | null>({
+    source: this.logSession,
+    computation: () => null,
+  });
+  readonly confirmSeq = linkedSignal<number, number | null>({
+    source: this.logSession,
+    computation: () => null,
   });
 
   readonly pageOptions = computed<SelectOption[]>(() =>
@@ -1882,6 +1960,23 @@ export class StoreInspector {
     this.message.set('');
   }
 
+  copyState() {
+    return this.copyText(this.stateText());
+  }
+
+  copyDiff(entry: NgrxLogEntry) {
+    return this.copyText(pretty(entry.diff));
+  }
+
+  private async copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      this.message.set('Copied.');
+    } catch {
+      this.message.set('The clipboard is not available here.');
+    }
+  }
+
   askRestore(seq: number) {
     this.confirmSeq.set(seq);
     this.focusConfirm.set('cancel');
@@ -1961,6 +2056,7 @@ export class StoreInspector {
   private async send(request: Record<string, unknown>, offline: string) {
     const page = this.page();
     if (!page || this.busy()) return;
+    const session = this.logSession();
     this.busy.set(true);
     try {
       const result = (await call(this.rpc(), 'request-ngrx-action', {
@@ -1968,7 +2064,7 @@ export class StoreInspector {
         request,
       })) as { ok?: boolean; message?: string; error?: string; entry?: NgrxLogEntry } | null;
       this.message.set(result?.error ?? result?.message ?? 'Dispatched.');
-      if (result?.entry) {
+      if (result?.entry && this.logSession() === session) {
         this.selectedStoreId.set('store');
         this.selectedChangeSeq.set(result.entry.seq);
       }

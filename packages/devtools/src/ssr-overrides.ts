@@ -92,8 +92,9 @@ export function editTransferState(
 ): { html: string; keys: string[] } | null {
   if (!edits.length) return null;
   // Angular writes `<script id="{appId}-state" type="application/json">`; attribute order can vary.
+  // `\sid=` so an attribute such as `data-id` does not count as the id.
   const script =
-    /(<script\b(?=[^>]*\bid="[^"]*-state")(?=[^>]*type="application\/json")[^>]*>)([\s\S]*?)(<\/script>)/.exec(
+    /(<script\b(?=[^>]*\sid="[^"]*-state")(?=[^>]*type="application\/json")[^>]*>)([\s\S]*?)(<\/script>)/.exec(
       html,
     );
   if (!script) return null;

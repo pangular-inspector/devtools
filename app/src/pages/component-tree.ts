@@ -30,6 +30,7 @@ import {
   reconcileSelection,
 } from './component-tree-state';
 import { CdRecording, type CdPage } from './cd-recording';
+import type { ComponentFocus } from '../types/component-focus.types';
 
 interface SourceComponent {
   selector: string;
@@ -179,6 +180,30 @@ function bare(name: string): string {
           />
         }
         <span class="count">{{ countLabel() }}</span>
+        <button
+          type="button"
+          class="tree-action"
+          [disabled]="!!filter().trim()"
+          (click)="expandAll()"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m7 15 5 5 5-5" />
+            <path d="m7 9 5-5 5 5" />
+          </svg>
+          Expand all
+        </button>
+        <button
+          type="button"
+          class="tree-action"
+          [disabled]="!!filter().trim()"
+          (click)="collapseAll()"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m7 20 5-5 5 5" />
+            <path d="m7 4 5 5 5-5" />
+          </svg>
+          Collapse all
+        </button>
         @if (!native()) {
           <button
             type="button"
@@ -797,6 +822,12 @@ function bare(name: string): string {
       flex: 0 1 220px;
       min-width: 0;
     }
+    .tree-action:disabled,
+    .tree-action:disabled:hover {
+      background: var(--surface-2);
+      border-color: var(--border-strong);
+      opacity: 0.5;
+    }
     .pick.on {
       background: var(--accent-soft);
       border-color: var(--accent-line);
@@ -1341,7 +1372,7 @@ function bare(name: string): string {
 export class ComponentTree {
   readonly rpc = input<DevframeRpcClient | null>(null);
   readonly staticReport = computed(() => isStaticReport(this.rpc()));
-  readonly focus = input<{ id: string } | null>(null);
+  readonly focus = input<ComponentFocus | null>(null);
   readonly showForm = output<string>();
   readonly focusHandled = output<void>();
 
@@ -1538,9 +1569,18 @@ export class ComponentTree {
     });
     effect(() => {
       const focus = this.focus();
-      if (!focus || !this.live()) return;
+      if (!focus) return;
+      const shown = this.page()?.pageId ?? null;
+      // The focus names the page it came from, which may not be the one shown.
+      if (focus.pageId && shown !== focus.pageId && this.pages()[focus.pageId]) {
+        untracked(() => this.selectPage(focus.pageId!));
+        return;
+      }
+      if (!this.live()) return;
       untracked(() => {
-        if (this.index().map.has(focus.id)) this.reveal(focus.id);
+        const onPage = !focus.pageId || shown === focus.pageId;
+        if (onPage && this.index().map.has(focus.id)) this.reveal(focus.id);
+        else this.announcement.set('That component is no longer on the page.');
         this.focusHandled.emit();
       });
     });
@@ -1817,6 +1857,46 @@ export class ComponentTree {
     });
   }
 
+  expandAll() {
+    if (this.query()) return;
+    this.collapsed.set(new Set());
+    this.announce('Expanded every component.');
+  }
+
+  collapseAll() {
+    if (this.query()) return;
+    const { map, parents } = this.index();
+    const previous = this.rovingId();
+    const next = new Set<string>();
+    for (const node of map.values()) if (node.children.length) next.add(node.id);
+    this.collapsed.set(next);
+    if (previous) {
+      const visible = new Set(this.rows().map((row) => row.node.id));
+      let id: string | undefined = previous;
+      while (id && !visible.has(id)) id = parents.get(id);
+      if (id) this.focusId.set(id);
+    }
+    this.announce('Collapsed every component. Only the top level is shown.');
+  }
+
+  /** Sets the live message, changing it slightly when it repeats so screen readers say it again. */
+  private announce(message: string) {
+    this.announcement.update((current) => (current === message ? `${message}\u00a0` : message));
+  }
+
+  private expandSiblings(id: string) {
+    if (this.query()) return;
+    const parent = this.index().parents.get(id);
+    const siblings = parent
+      ? (this.index().map.get(parent)?.children ?? [])
+      : (this.page()?.roots ?? []);
+    this.collapsed.update((set) => {
+      const next = new Set(set);
+      for (const sibling of siblings) next.delete(sibling.id);
+      return next;
+    });
+  }
+
   highlight(id: string | null) {
     const client = this.rpc();
     if (!client) return;
@@ -1869,6 +1949,9 @@ export class ComponentTree {
       case 'Enter':
       case ' ':
         this.select(row.node.id);
+        break;
+      case '*':
+        this.expandSiblings(row.node.id);
         break;
       default:
         return;

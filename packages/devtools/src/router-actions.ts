@@ -732,19 +732,21 @@ function probe(router: AnyRecord, navigations: NavigationRecord[], url: string):
         );
       }
     });
-    setCaller('probe from DevTools', true);
-    const promise = read(
-      () => router['navigateByUrl'](url, { skipLocationChange: true }) as Promise<unknown>,
-      null,
-    );
-    targetId = navigationIdOf(router);
-    promise?.catch?.(() => {});
     timer = setTimeout(() => {
       subscription.unsubscribe();
       abortCurrent();
       markProbe(targetId);
       resolve({ error: 'The probe did not finish within 10s.' });
     }, WAIT_MS);
+    // Set before navigating: a skipped navigation (same URL) emits its event synchronously.
+    const current = navigationIdOf(router);
+    targetId = current < 0 ? current : current + 1;
+    setCaller('probe from DevTools', true);
+    const promise = read(
+      () => router['navigateByUrl'](url, { skipLocationChange: true }) as Promise<unknown>,
+      null,
+    );
+    promise?.catch?.(() => {});
   });
 }
 

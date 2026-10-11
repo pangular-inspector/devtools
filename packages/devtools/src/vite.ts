@@ -7,8 +7,7 @@ import { isLoopbackHostname } from 'devframe/utils/origin';
 import { PANGULAR_HUB_BASE, initPangularHub } from './hub.ts';
 import { analogMiddleware, setDevOrigin } from './analog-server-log.ts';
 import { analogConfig, setAnalogRoot } from './rpc/analog-scan.ts';
-import { stopAnalog } from './rpc/analog-register.ts';
-import { httpRegistry } from './http-rules.ts';
+import { releaseServerState } from './server-state.ts';
 import { extensionOrigin, isAllowedExtensionOrigin } from './extension-origin.ts';
 import { pickPangularConfig, resolvePangularConfig, type PangularConfig } from './config.ts';
 
@@ -204,11 +203,7 @@ export function hubUpgradeListener(
   };
 }
 
-export function releaseServerState(owner: unknown) {
-  const registry = httpRegistry();
-  if (registry.owner === owner) registry.dispose?.();
-  stopAnalog(owner);
-}
+export { releaseServerState } from './server-state.ts';
 
 export default function pangularVite(options: PangularViteOptions = {}): Plugin {
   const base = normalizeHubBase(options.base ?? PANGULAR_HUB_BASE);

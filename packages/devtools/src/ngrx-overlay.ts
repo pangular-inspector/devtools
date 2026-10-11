@@ -80,12 +80,19 @@ export function attachNgrx<H extends object = Element>(
         stores,
         classic,
         log,
+        since: sentSeq,
         ...(lost.updates.length ? { unrestorable: lost.updates } : {}),
       };
       const answer = (await my.rpc.call('push-ngrx-state', report)) as
         { seq?: unknown } | undefined;
+      const previous = sentSeq;
       sentSeq = typeof answer?.seq === 'number' ? answer.seq : collector.lastSeq();
       sentLost = lost.last;
+      // A lower seq means the server lost this page: resend the held log.
+      if (sentSeq < previous) {
+        sentLost = 0;
+        schedule();
+      }
     } catch {
       return;
     } finally {

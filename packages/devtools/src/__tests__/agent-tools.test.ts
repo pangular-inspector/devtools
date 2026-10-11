@@ -63,6 +63,38 @@ describe('agent tools', () => {
     expect(await push('ping-change-detection', 'p1')).toEqual({ known: false });
   });
 
+  it('report the zone mode of the page that recorded, not the latest tab', async () => {
+    vi.useFakeTimers();
+    const { push, call } = await boot();
+    await push('push-injector-tree', {
+      pageId: 'rec',
+      roots: [injectorRoot('app-root')],
+      environment: [],
+      zone: 'zone',
+    });
+    await push('push-change-detection', {
+      pageId: 'rec',
+      supported: true,
+      recording: true,
+      startedAt: 1,
+      dropped: 0,
+      cycles: [{ id: 1, at: 1, ms: 2, passes: 1, checks: 1, components: [] }],
+      components: [{ name: 'Cart', checks: 1, ms: 2, maxMs: 2, cycles: 1 }],
+      hosts: {},
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    await push('push-injector-tree', {
+      pageId: 'other',
+      roots: [injectorRoot('app-root')],
+      environment: [],
+      zone: 'zoneless',
+    });
+    const text = await call('change-detection', '');
+    expect(text).toMatch(/^Page `rec` /);
+    expect(text).not.toContain('`other`');
+    expect(await call('change-detection', '', { page: 'other' })).toMatch(/^Page `other` /);
+  });
+
   it('report the change detection mode and what services inject', async () => {
     const { push, call, injectorState } = await boot();
     const rootEnv = {
@@ -167,6 +199,38 @@ describe('agent tools', () => {
     expect(await call('highlight', '.promo')).toMatch(/only shows if the selector matches/);
     await push('forget-component-page', 'p1');
     expect(await call('highlight', 'Card')).toMatch(/no component tree has been reported/i);
+  });
+
+  it('lists the component outline with routed markers through list-components', async () => {
+    const { ctx, push } = await boot();
+    const list = async (args: Record<string, unknown> = {}) =>
+      ((await ctx.agent.invoke('pangular:list-components', args)) as { markdown: string }).markdown;
+    expect(ctx.agent.list().tools.map((tool) => tool.id)).toContain('pangular:list-components');
+    expect(await list()).toMatch(/No component tree has been reported/);
+    await push('push-component-tree', {
+      pageId: 'p1',
+      roots: [
+        {
+          id: 'c1',
+          name: 'App',
+          tag: 'app-root',
+          children: [{ id: 'c2', name: 'Home', tag: 'app-home', children: [] }],
+        },
+      ],
+      count: 2,
+      detail: null,
+    });
+    await push('push-router', {
+      pageId: 'p1',
+      snapshot: null,
+      navigations: [],
+      outlets: [{ outlet: 'primary', activated: true, route: '/home', devtoolsId: 'c2' }],
+    });
+    const text = await list({ filter: 'home' });
+    expect(text).toContain('(untrusted data)');
+    expect(text).toContain('App <app-root> c1\n  Home <app-home> c2 [routed route /home]');
+    expect(await list({ depth: 1 })).toContain('App <app-root> c1 (+1 below)');
+    expect(await list({ page: 'gone' })).toMatch(/No page `gone` is reporting a component tree/);
   });
 
   it('matches inspect-signals on the class name of the graph component', async () => {
@@ -406,7 +470,9 @@ describe('agent tools', () => {
     ]);
     expect(matched[0].dependencies[0]).toMatchObject({ providedByName: 'Root' });
     expect(bySelector).not.toMatch(/app-root/);
-    expect(await call('inspect-providers', 'app-none')).toMatch(/No element injector.*app-none/);
+    expect(await call('inspect-providers', 'app-none')).toMatch(
+      /No element or environment injector.*app-none/,
+    );
 
     const byToken = await call('inspect-providers', '', { token: 'httpclient' });
     const answer = JSON.parse(byToken.slice(byToken.indexOf('{"')));
@@ -416,6 +482,117 @@ describe('agent tools', () => {
     expect(answer.injectedBy.map((hit: { id: string }) => hit.id)).toEqual(['card-1', 'card-2']);
     expect(await call('inspect-providers', '', { token: 'Http' })).toMatch(
       /Similar tokens: `HttpClient`/,
+    );
+  });
+
+  it('inspects environment injectors on a page that reports no element injectors', async () => {
+    const { push, call } = await boot();
+    await push('push-injector-tree', {
+      pageId: 'p1',
+      roots: [],
+      environment: [
+        {
+          injector: { id: 'root-1', type: 'environment', name: 'Root', providerCount: 1 },
+          providers: [{ token: 'HttpClient', type: 'class', isViewProvider: false }],
+          children: [],
+        },
+      ],
+    });
+    const text = await call('inspect-providers', 'Root');
+    expect(text).toContain('HttpClient');
+    expect(text).not.toContain('No injector data available');
+  });
+
+  it('matches environment injectors by name or id in inspect-providers', async () => {
+    const { push, call } = await boot();
+    await push('push-injector-tree', {
+      pageId: 'p1',
+      roots: [
+        {
+          injector: {
+            id: 'app-1',
+            type: 'element',
+            name: 'app-root',
+            component: 'App',
+            providerCount: 0,
+            path: ['app-1', 'root-1', 'platform-1', 'inj-null'],
+          },
+          providers: [],
+          children: [],
+          dependencies: [{ from: 'App', token: 'Api', flags: [], providedBy: 'root-1' }],
+        },
+      ],
+      environment: [
+        {
+          injector: { id: 'platform-1', type: 'environment', name: 'Platform', providerCount: 1 },
+          providers: [{ token: 'PlatformRef', type: 'class', isViewProvider: false }],
+          children: [
+            {
+              injector: { id: 'root-1', type: 'environment', name: 'Root', providerCount: 2 },
+              providers: [
+                { token: 'Api', type: 'class', isViewProvider: false },
+                { token: 'HttpClient', type: 'class', isViewProvider: false },
+              ],
+              dependencies: [{ from: 'Api', token: 'HttpClient', flags: [], providedBy: 'root-1' }],
+              children: [
+                {
+                  injector: {
+                    id: 'route-1',
+                    type: 'environment',
+                    name: 'Route: admin',
+                    providerCount: 1,
+                  },
+                  providers: [{ token: 'AdminStore', type: 'class', isViewProvider: false }],
+                  dependencies: [
+                    { from: 'AdminStore', token: 'Api', flags: [], providedBy: 'root-1' },
+                  ],
+                  children: [],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const detail = (answer: string) => JSON.parse(answer.slice(answer.indexOf('[{')));
+
+    const route = await call('inspect-providers', 'route: ADMIN');
+    expect(route).toMatch(/Environment injectors on page `p1` matching `route: ADMIN` \(1\)/);
+    expect(route).not.toMatch(/Element injectors/);
+    const [admin] = detail(route);
+    expect(detail(route)).toHaveLength(1);
+    expect(admin.injector).toMatchObject({ id: 'route-1', name: 'Route: admin' });
+    expect(admin.providers).toEqual([
+      { token: 'AdminStore', type: 'class', isViewProvider: false },
+    ]);
+    expect(admin.dependencies).toEqual([
+      { from: 'AdminStore', token: 'Api', flags: [], providedBy: 'root-1', providedByName: 'Root' },
+    ]);
+    expect(admin.parents).toEqual([
+      { id: 'root-1', name: 'Root', provides: ['Api', 'HttpClient'] },
+      { id: 'platform-1', name: 'Platform', provides: ['PlatformRef'] },
+    ]);
+
+    const byId = detail(await call('inspect-providers', 'root-1'));
+    expect(byId.map((m: { injector: { id: string } }) => m.injector.id)).toEqual(['root-1']);
+    expect(detail(await call('inspect-providers', 'platform'))[0].injector.id).toBe('platform-1');
+
+    const element = await call('inspect-providers', 'App');
+    expect(element).toMatch(/Element injectors on page `p1` matching `App` \(1\)/);
+    expect(element).not.toMatch(/Environment injectors/);
+    expect(detail(element)[0].lookupPath.map((step: { name: string }) => step.name)).toEqual([
+      'app-root',
+      'Root',
+      'Platform',
+      'Null injector',
+    ]);
+
+    const scoped = await call('inspect-providers', 'Route: admin', { token: 'Api' });
+    const answer = JSON.parse(scoped.slice(scoped.indexOf('{"providedBy"')));
+    expect(answer.injectedBy.map((hit: { id: string }) => hit.id)).toEqual(['route-1']);
+
+    expect(await call('inspect-providers', 'Route: missing')).toMatch(
+      /No element or environment injector on page `p1` matches `Route: missing`.*Tags on the page: `app-root`\. Environment injectors: `Platform`, `Root`, `Route: admin`\./,
     );
   });
 
@@ -534,7 +711,65 @@ describe('agent tools', () => {
     await push('push-injector-tree', { pageId: 'p1', roots: [injectorRoot('A')], environment: [] });
     const text = await call('list-pages', '');
     expect(text).toMatch(/1 page\(s\) report/);
-    expect(text).toMatch(/\| `p1` \| unknown \| browser \| \d+s ago \| components, injectors \|/);
+    expect(text).toMatch(
+      /\| `p1` \| unknown \| {2}\| browser \| \d+s ago \| components, injectors \|/,
+    );
+  });
+
+  it('lists the component tree URL and title, and flags background tabs', async () => {
+    const { push, call } = await boot();
+    await push('push-component-tree', {
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+      url: 'http://localhost:4200/trips?token=abc.def.ghi',
+      title: 'Trips | Demo',
+    });
+    await push('report-page-visibility', { pageId: 'p1', hidden: true });
+    const text = await call('list-pages', '');
+    expect(text).toContain('| Page | URL | Title | Platform | Last report | Reports |');
+    expect(text).toMatch(
+      /\| `p1` \| `http:\/\/localhost:4200\/trips\?[^`]*` \| Trips \\\| Demo \| browser \| \d+s ago \(background\) \| components \|/,
+    );
+    expect(text).not.toContain('abc.def.ghi');
+  });
+
+  it('registers list-http-calls and answers from the calls a page pushed', async () => {
+    const { ctx, push } = await boot();
+    const tool = ctx.agent.list().tools.find((t) => t.id === 'pangular:list-http-calls');
+    expect(tool?.safety).toBe('read');
+    const list = async (args: Record<string, unknown> = {}) =>
+      ((await ctx.agent.invoke('pangular:list-http-calls', args)) as { markdown: string }).markdown;
+    expect(await list()).toMatch(/No HttpClient calls recorded/);
+    await push('push-http', {
+      pageId: 'p1',
+      url: '/items',
+      initialUrl: '/items',
+      title: 'Items',
+      hydration: null,
+      full: true,
+      calls: [
+        {
+          id: 'c1',
+          url: '/api/items?api_key=s3cr3t-value-123',
+          method: 'GET',
+          status: 500,
+          durationMs: 8,
+          side: 'client',
+          cacheHit: false,
+          faulted: true,
+          at: Date.now(),
+        },
+      ],
+      payload: { found: false, size: 0, entries: [] },
+    });
+    const text = await list({ failed: true });
+    expect(text).toMatch(/\| client \| GET `\/api\/items\?api_key=[^`]*` \| 500 \|/);
+    expect(text).not.toContain('s3cr3t-value-123');
+    expect(await list({ page: 'gone' })).toMatch(
+      /^No page `gone` is reporting HTTP calls\. Pages that report HTTP calls: `p1`/,
+    );
   });
 
   it('expires injector trees a page stopped reporting', async () => {

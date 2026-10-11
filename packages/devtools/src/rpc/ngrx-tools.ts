@@ -90,9 +90,14 @@ export function mergeNgrxReport(
   maxLog = MAX_LOG,
 ): number {
   const previous = pages.get(report.pageId);
-  const keep = previous && previous.session === report.session ? previous.log : [];
+  const known = previous?.session === report.session;
+  const keep = known ? previous.log : [];
   const lastSeq = keep.at(-1)?.seq ?? 0;
-  const fresh = report.log.filter((entry: NgrxLogEntry) => entry.seq > lastSeq);
+  // The page only sends entries after `since`; if this server forgot the page
+  // (forget-ngrx-page, expiry, restart), drop the partial log and answer 0 so
+  // the page resends everything it still holds.
+  const resync = !known && typeof report.since === 'number' && report.since > 0;
+  const fresh = resync ? [] : report.log.filter((entry: NgrxLogEntry) => entry.seq > lastSeq);
   const lost = new Map<number, NgrxUnrestorable>();
   for (const update of Array.isArray(report.unrestorable) ? report.unrestorable : []) {
     if (typeof update?.seq === 'number' && UNRESTORABLE.has(update.reason)) {
