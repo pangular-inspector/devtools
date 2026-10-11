@@ -201,7 +201,7 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
         }
         const html = Buffer.concat(chunks).toString('utf8');
         const isHtml = /\btext\/html\b/.test(headerText(res.getHeader('content-type')) ?? '');
-        const hasState = isHtml && /<script\b[^>]*\bid="[^"]*-state"/.test(html);
+        const hasState = isHtml && /<script\b[^>]*\sid="[^"]*-state"/.test(html);
         const edited = hasState ? editTransferState(html, list) : null;
         // Error pages and redirects carry no TransferState, so an edit there is not worth a note.
         for (const o of hasState ? list : []) {
