@@ -57,6 +57,7 @@ import {
   toComponentPage,
   truncationText,
 } from './rpc/component-tools.ts';
+import { LIST_COMPONENTS_DESCRIPTION, listComponentsText } from './rpc/component-outline.ts';
 import {
   explainFormsText,
   formsResourceText,
@@ -1719,6 +1720,38 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
+      id: 'pangular:list-components',
+      description: LIST_COMPONENTS_DESCRIPTION,
+      safety: 'read',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: PAGE_ARGUMENT,
+          filter: {
+            type: 'string',
+            description:
+              'Case-insensitive text to find in a class name, host tag or host directive. Matches keep their ancestors.',
+          },
+          depth: {
+            type: 'number',
+            description: 'Most levels to list, 1 for the roots only. Unlimited without it.',
+          },
+        },
+      },
+      handler: async (args: { page?: string; filter?: string; depth?: number }) => ({
+        markdown: listComponentsText(
+          componentPages.values(),
+          (pageId) => routerPages.get(pageId)?.outlets,
+          {
+            page: pageArgument(args),
+            filter: typeof args?.filter === 'string' ? args.filter : undefined,
+            depth: typeof args?.depth === 'number' ? args.depth : undefined,
+          },
+        ),
+      }),
+    });
+
+    agent.registerTool({
       id: 'pangular:defer-blocks',
       description:
         "List the `@defer` blocks the running page renders, read live through Angular's debug API: the owning component, state (placeholder, loading, complete, error), incremental hydration state (dehydrated, hydrated), triggers and whether it has @loading, @placeholder and @error blocks. Flags blocks that failed to load, blocks still on their placeholder after 10 seconds, blocks still dehydrated and `hydrate never` blocks. Each open tab reports its own list; `page` picks one. Says so when the page has no defer block util (production builds).",
@@ -1875,7 +1908,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-providers',
       description:
-        'Get the DI injectors a running page reported. With no arguments, returns the whole tree (element and environment injectors with their providers, and what the services each environment injector already created inject), cut off at 20,000 characters. `selector` returns only the matching element injectors, each with what it injects and its lookup path resolved to names and provided tokens. `token` returns which injectors provide that token and which components or services inject it. Each open tab reports its own tree; `page` picks one and defaults to the most recent. Says so when the page reported only part of a large tree.',
+        'Get the DI injectors a running page reported. With no arguments, returns the whole tree (element and environment injectors with their providers, and what the services each environment injector already created inject), cut off at 20,000 characters. `selector` returns only the matching injectors: element injectors with what they inject and their lookup path resolved to names and provided tokens, or environment injectors (Root, Platform, Route: admin) with their providers, what their created services inject, and their parent injectors. When nothing matches, the answer lists the tags and environment injector names on the page. `token` returns which injectors provide that token and which components or services inject it. Each open tab reports its own tree; `page` picks one and defaults to the most recent. Says so when the page reported only part of a large tree.',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -1883,7 +1916,7 @@ const pangular = defineDevframe({
           selector: {
             type: 'string',
             description:
-              'Optional. A tag name (app-card), a component or directive class name (CardComponent), or an injector id. Returns only the matching element injectors.',
+              'Optional. A tag name (app-card), a component or directive class name (CardComponent), an environment injector name (Root, Platform, Route: admin; case-insensitive), or an injector id. Returns only the matching injectors.',
           },
           token: {
             type: 'string',

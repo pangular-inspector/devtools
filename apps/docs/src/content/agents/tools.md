@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Fifty-four tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Fifty-five tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -93,6 +93,25 @@ The live detail of one component instance: inputs, outputs and whether a parent 
 
 A class name or tag that matches several instances answers for the first and lists the ids of all of them. When nothing matches and the page's tree stopped at a [limit](../inspectors/components.md#selection), `inspect-component` and `highlight` say which one, since the instance can be past it. Secret-looking values are redacted.
 
+### list-components
+
+The live component tree of one page as an indented outline, one line per instance: class name, host tag and instance id, as in `ProductCard <app-card> c12`. Reads: page.
+
+| Argument | Required | Value                                                                                                                       |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `filter` | no       | Text to find in a class name, host tag or host directive, ignoring case. The outline keeps the matches and their ancestors. |
+| `depth`  | no       | The most levels to list, `1` for the roots only. Unlimited by default.                                                      |
+
+Markers follow the id:
+
+| Marker                                | Meaning                                                                                                     |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `[routed route /products]`            | A router outlet shows this instance. A named outlet adds `outlet <name>`. It needs the Router inspector on. |
+| `[directives: RouterLinkActive, ...]` | The other directives on the host.                                                                           |
+| `(+3 below)`                          | `depth` hides 3 instances under this one.                                                                   |
+
+The outline carries no input or property values. Pass an id to `inspect-component` for those, or to `highlight` to show the instance. The answer stops at 20,000 characters and says how to narrow it, and it says when the page's tree stopped at a [limit](../inspectors/components.md#selection).
+
 ### defer-blocks
 
 The `@defer` blocks of each page: the component that holds each one, its state, its incremental hydration state, its triggers and whether it has `@loading`, `@placeholder` and `@error` blocks. A **Needs attention** list names blocks that failed to load and blocks still on their placeholder after 10 seconds. Reads: page.
@@ -145,11 +164,13 @@ With `root` or a route path, the tool switches the page's graph to the effects o
 
 The injectors a page reported. Element injectors list what each component injected and which injector supplied it. Environment injectors run from the platform down to the root and route injectors, and list what the services they already created inject. Reads: page.
 
-| Argument   | Required | Value                                                                                                                                                |
-| ---------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `selector` | no       | A tag name, a component or directive class name, or an injector id. Returns only the matching element injectors, each with its lookup path resolved. |
-| `token`    | no       | A token name, like `HttpClient`. Returns the injectors that provide it and the components or services that inject it.                                |
-| `pageId`   | no       | Same as `page`.                                                                                                                                      |
+| Argument   | Required | Value                                                                                                                                                                            |
+| ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `selector` | no       | A tag name, a component or directive class name, an environment injector name like `Root`, `Platform` or `Route: admin`, or an injector id. Returns only the matching injectors. |
+| `token`    | no       | A token name, like `HttpClient`. Returns the injectors that provide it and the components or services that inject it.                                                            |
+| `pageId`   | no       | Same as `page`.                                                                                                                                                                  |
+
+A `selector` that names an element injector returns it with its lookup path resolved to names and provided tokens. One that names an environment injector, in any case, returns that injector's providers, what the services it already created inject, and its parent injectors. When nothing matches, the answer lists the tags and environment injector names on the page to retry with.
 
 Without `selector` or `token`, the answer is the whole tree, cut off at 20,000 characters, and says which change detection mode the page runs. When the page has more than 2000 element injectors, the answer says that it holds only the first 2000.
 
