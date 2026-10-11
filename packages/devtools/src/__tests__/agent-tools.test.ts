@@ -1,6 +1,7 @@
 import { createHostContext } from 'devframe/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pangular from '../devframe.ts';
+import { UNTRUSTED } from '../rpc/forms-tools.ts';
 
 async function boot() {
   const host = {
@@ -36,6 +37,12 @@ const injectorRoot = (name: string) => ({
   providers: [],
   children: [],
 });
+
+/** The signal graph JSON behind the untrusted-data notice of inspect-signals. */
+const signalJson = (markdown: string) => {
+  expect(markdown.startsWith(UNTRUSTED)).toBe(true);
+  return JSON.parse(markdown.slice(UNTRUSTED.length));
+};
 
 const elementInjectors = (markdown: string) =>
   JSON.parse(markdown.split(/Element injectors:|Environment injectors:/)[1]!);
@@ -168,7 +175,7 @@ describe('agent tools', () => {
 
     // The payload matters, not how it is worded around.
     const signals = await call('inspect-signals', 'app-root');
-    expect(JSON.parse(signals)).toMatchObject({ nodes: [{ label: 'count' }] });
+    expect(signalJson(signals)).toMatchObject({ nodes: [{ label: 'count' }] });
 
     const other = await call('inspect-signals', 'app-other');
     expect(other).toMatch(/app-other/);
@@ -242,7 +249,7 @@ describe('agent tools', () => {
       componentSelector: 'app-card',
       component: { id: 'c2', name: 'Card', tag: 'app-card', path: 'app-root > app-card' },
     });
-    expect(JSON.parse(await call('inspect-signals', 'Card'))).toMatchObject({
+    expect(signalJson(await call('inspect-signals', 'Card'))).toMatchObject({
       component: { name: 'Card' },
     });
   });
@@ -263,11 +270,11 @@ describe('agent tools', () => {
       componentSelector: 'app-x',
       component: { id: 'c9', name: 'X', tag: 'app-x', path: 'app-root > app-x' },
     });
-    expect(JSON.parse(await call('inspect-signals', 'Card'))).toMatchObject({
+    expect(signalJson(await call('inspect-signals', 'Card'))).toMatchObject({
       pageId: 'p1',
       nodes: [{ label: 'open' }],
     });
-    expect(JSON.parse(await call('inspect-signals', 'c9'))).toMatchObject({ pageId: 'p2' });
+    expect(signalJson(await call('inspect-signals', 'c9'))).toMatchObject({ pageId: 'p2' });
     const missing = await call('inspect-signals', 'app-none');
     expect(missing).toMatch(/No signal graph for `app-none`/);
     expect(missing).toMatch(/app-x/);
@@ -297,11 +304,11 @@ describe('agent tools', () => {
       environments: card.environments,
       source: 'selected',
     });
-    expect(JSON.parse(await answer)).toMatchObject({
+    expect(signalJson(await answer)).toMatchObject({
       injector: { name: 'Root' },
       nodes: [{ label: 'persistTrips' }],
     });
-    expect(JSON.parse(await call('inspect-signals', 'inj-1'))).toMatchObject({
+    expect(signalJson(await call('inspect-signals', 'inj-1'))).toMatchObject({
       injector: { id: 'inj-1' },
     });
   });
@@ -344,7 +351,7 @@ describe('agent tools', () => {
       ...base,
       historyDelta: { 'resource:3': [{ epoch: 2, value: 'resolved', at: 2, source: 'sample' }] },
     });
-    const graph = JSON.parse(await call('inspect-signals', 'app-root'));
+    const graph = signalJson(await call('inspect-signals', 'app-root'));
     expect(graph.history['resource:3'].map((c: { value: string }) => c.value)).toEqual([
       'loading',
       'resolved',
@@ -385,7 +392,7 @@ describe('agent tools', () => {
     expect(Object.keys((await signalState())['pages'] as object)).toEqual(['p2']);
     expect(await signalState()).toMatchObject({ graph: { pageId: 'p2' } });
     expect(await push('ping-signal-graph', 'p3')).toEqual({ known: false });
-    expect(JSON.parse(await call('inspect-signals', 'app-root'))).toMatchObject({
+    expect(signalJson(await call('inspect-signals', 'app-root'))).toMatchObject({
       nodes: [{ label: 'second' }],
     });
 
@@ -680,7 +687,7 @@ describe('agent tools', () => {
     });
     await push('push-signal-graph', graph('p1', 'first'));
     await push('push-signal-graph', graph('p2', 'second'));
-    expect(JSON.parse(await call('inspect-signals', 'Card', { page: 'p1' }))).toMatchObject({
+    expect(signalJson(await call('inspect-signals', 'Card', { page: 'p1' }))).toMatchObject({
       pageId: 'p1',
       nodes: [{ label: 'first' }],
     });
@@ -767,8 +774,9 @@ describe('agent tools', () => {
     const text = await list({ failed: true });
     expect(text).toMatch(/\| client \| GET `\/api\/items\?api_key=[^`]*` \| 500 \|/);
     expect(text).not.toContain('s3cr3t-value-123');
+    // The other pages are listed with their URL, which comes from the page.
     expect(await list({ page: 'gone' })).toMatch(
-      /^No page `gone` is reporting HTTP calls\. Pages that report HTTP calls: `p1`/,
+      /^_Labels.*_\n\nNo page `gone` is reporting HTTP calls\. Pages that report HTTP calls: `p1`/,
     );
   });
 

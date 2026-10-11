@@ -1,5 +1,6 @@
 import type { ComponentPage, DeferBlockInfo, LiveComponentNode } from '../types.ts';
 import { redactMessage, redactUrl } from '../router.ts';
+import { untrusted } from './forms-tools.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
 
 export const COMPONENT_PAGE_TTL = PAGE_TTL_MS;
@@ -165,5 +166,5 @@ export function deferBlocksText(pages: ComponentPage[], now = Date.now()): strin
       ...(attention.length ? ['', 'Needs attention:', '', ...attention] : []),
     ].join('\n');
   });
-  return sections.join('\n\n');
+  return untrusted(sections.join('\n\n'));
 }
