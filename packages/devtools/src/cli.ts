@@ -5,6 +5,7 @@ import type { CAC, Command } from 'cac';
 import { defineDevframe } from 'devframe';
 import { createCac } from 'devframe/adapters/cac';
 import { createDevServer, resolveDevServerPort } from 'devframe/adapters/dev';
+import { createInteractiveAuth } from 'devframe/recipes/interactive-auth';
 import {
   accessLines,
   cliAccess,
@@ -69,7 +70,7 @@ export function guardReportOutDir(cli: CAC, invokedFrom = process.cwd()) {
   const build = cli.commands.find((command) => command.name === 'build');
   const run = build?.commandAction;
   if (!build || !run) return;
-  build.option('--force', 'Empty --out-dir even when it is not a previous report');
+  build.option('--force', 'Empty --outDir even when it is not a previous report');
   build.action(async (flags: { outDir: string; force?: boolean }) => {
     try {
       checkReportOutDir(flags.outDir, { force: flags.force, invokedFrom });
@@ -84,6 +85,7 @@ export function guardReportOutDir(cli: CAC, invokedFrom = process.cwd()) {
 
 export interface PangularCliFlags extends CliAccessFlags {
   root?: string;
+  proxyOrigin?: string;
   config?: string;
   readOnly?: boolean;
 }
@@ -174,17 +176,45 @@ export function cliHostOptions(command: string, access: CliAccess) {
   };
 }
 
+/** The path the overlay and the popup look for on the app's own origin. */
+const PROXY_PATH = '/__pangular/';
+
+/**
+ * The panel URL behind the app's dev server proxy, from `--proxy-origin`: the
+ * origin with `/__pangular/` when no path is given, or the given path.
+ */
+export function proxyPanelUrl(value: string): string {
+  const url = URL.canParse(value) ? new URL(value) : undefined;
+  if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
+    throw new Error(
+      `[pangular] --proxy-origin needs an http or https URL, such as http://localhost:4200, not "${value}".`,
+    );
+  }
+  const path = url.pathname === '/' ? PROXY_PATH : url.pathname.replace(/\/?$/, '/');
+  return `${url.origin}${path}`;
+}
+
+/**
+ * devframe's one-time code gate, with the code link printed for the app's
+ * origin. The link it prints by default only trusts the CLI's own port.
+ */
+export function proxyAuth(panelUrl: string) {
+  return (ctx: Parameters<typeof createInteractiveAuth>[0]) =>
+    createInteractiveAuth(ctx, { serverUrl: () => panelUrl });
+}
+
 /** The lines the dev server prints once it listens. */
 export function startupLines(
   origin: string,
   port: number,
-  options: { mcp: boolean; requestedPort?: number },
+  options: { mcp: boolean; requestedPort?: number; proxyUrl?: string },
 ): string[] {
   const base = origin.replace(/\/$/, '');
   const panel = `${base}/`;
   const lines = [
     `  pangular v${pkg.version}`,
     `  Panel: ${panel}`,
+    ...(options.proxyUrl ? [`  Panel on your app: ${options.proxyUrl}`] : []),
     `  Angular Native apps: ${panel}?view=angular-native`,
   ];
   if (options.mcp) lines.push(`  MCP:   ${base}/__mcp`);
@@ -211,6 +241,7 @@ export function createPangularCli(options: PangularCliOptions = {}) {
   let mcpOn = true;
   let access: CliAccess = { allowedOrigins: [], authTokens: [] };
   let listenHost = 'localhost';
+  let proxyUrl: string | undefined;
   const definition = defineDevframe({
     ...pangular,
     cli: { ...pangular.cli, command: 'pangular' },
@@ -267,6 +298,7 @@ export function createPangularCli(options: PangularCliOptions = {}) {
         requestedPort = flags.port === undefined ? undefined : Number(flags.port);
         mcpOn = flags.mcp !== false;
         listenHost = flags.host ?? 'localhost';
+        proxyUrl = flags.proxyOrigin ? proxyPanelUrl(flags.proxyOrigin) : undefined;
         // createCac's own dev action, plus the origins it does not forward.
         const port =
           requestedPort ??
@@ -277,9 +309,16 @@ export function createPangularCli(options: PangularCliOptions = {}) {
           flags: flags as Record<string, unknown>,
           mcp: flags.mcp ?? true,
           ...(access.allowedOrigins.length ? { allowedOrigins: access.allowedOrigins } : {}),
+          // devframe builds the handler from a function too; its dev server
+          // types only list the handler object. `--no-auth` still turns it off.
+          ...(proxyUrl ? { auth: proxyAuth(proxyUrl) as unknown as boolean } : {}),
           onReady,
         });
       };
+      defaultCommand.option(
+        '--proxy-origin <origin>',
+        "Your app's dev server origin that proxies /__pangular/ to this server, such as http://localhost:4200, so the one-time code link opens there",
+      );
       copyCommand(cli, defaultCommand, 'dev', 'Start a local dev server (the default)').action(run);
       defaultCommand.description = 'Same as dev';
       defaultCommand.action(async (args: string[], flags: PangularCliFlags) => {
@@ -304,7 +343,7 @@ export function createPangularCli(options: PangularCliOptions = {}) {
 
   const onReady = async ({ origin, port }: { origin: string; port: number }) => {
     log(
-      `\n${[...startupLines(origin, port, { mcp: mcpOn, requestedPort }), ...accessLines(access)].join('\n')}\n`,
+      `\n${[...startupLines(origin, port, { mcp: mcpOn, requestedPort, proxyUrl }), ...accessLines(access)].join('\n')}\n`,
     );
     const addresses = networkAddresses(listenHost);
     if (!addresses.length) return;

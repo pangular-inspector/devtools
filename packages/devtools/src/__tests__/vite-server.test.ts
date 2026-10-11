@@ -8,7 +8,7 @@ import { Duplex } from 'node:stream';
 import { createServer, type InlineConfig, type ViteDevServer } from 'vite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { httpRegistry } from '../http-rules.ts';
-import pangularVite from '../vite.ts';
+import pangularVite, { devtoolsUrl } from '../vite.ts';
 
 const servers: ViteDevServer[] = [];
 
@@ -112,6 +112,25 @@ afterEach(async () => {
 });
 
 describe('pangularVite on a real Vite server', () => {
+  it('adds the devtools URL to the URLs Vite prints', async () => {
+    const info = vi.fn();
+    const server = await devServer({
+      logLevel: 'info',
+      customLogger: {
+        info,
+        warn: () => undefined,
+        warnOnce: () => undefined,
+        error: () => undefined,
+        clearScreen: () => undefined,
+        hasErrorLogged: () => false,
+        hasWarned: false,
+      },
+    });
+    server.printUrls();
+    const printed = info.mock.calls.map(([message]) => String(message)).join('\n');
+    expect(printed).toContain(`Pangular Inspector: ${origin(server).url}/__devframes/`);
+  });
+
   it('shares the dev server socket and accepts loopback WebSocket upgrades', async () => {
     const server = await devServer();
     const meta = await connectionMeta(server);
@@ -184,5 +203,15 @@ describe('pangularVite on a real Vite server', () => {
     await connectionMeta(server);
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(typeof httpRegistry().record).toBe('function');
+  });
+});
+
+describe('devtoolsUrl', () => {
+  it('joins the local URL and the hub base', () => {
+    expect(devtoolsUrl('http://localhost:5173/', '/__devframes/')).toBe(
+      'http://localhost:5173/__devframes/',
+    );
+    expect(devtoolsUrl('http://localhost:5173/app/', 'tools')).toBe('http://localhost:5173/tools/');
+    expect(devtoolsUrl(undefined, '/__devframes/')).toBeUndefined();
   });
 });

@@ -15,8 +15,10 @@ The unified Angular devtools. Inspect Angular component trees, signals, dependen
 The package is published on npm as [`@pangular-inspector/devtools`](https://www.npmjs.com/package/@pangular-inspector/devtools).
 
 ```sh
-npm install @pangular-inspector/devtools devframe
+npm install -D @pangular-inspector/devtools
 ```
+
+An Angular SSR server imports the hub when it starts, so install the package as a dependency there (`npm install @pangular-inspector/devtools`).
 
 Then follow the [installation guide](./apps/docs/src/content/getting-started/installation.md) for your setup: Angular CLI with Express, Vite and Analog, the standalone CLI, [Angular Native](./apps/docs/src/content/guides/angular-native.md), or [Capacitor](./apps/docs/src/content/guides/capacitor.md). For a coding agent, run `npx @pangular-inspector/devtools mcp`.
 

@@ -69,11 +69,10 @@ export default defineConfig({
 
 The default export of `@pangular-inspector/devtools/devframe` uses the defaults. Call `createPangular()` to pass options:
 
-```ts {7-9}
+```ts {6-8}
 // src/server.ts
 import express from 'express';
-import {initDevframe} from 'devframe/initiate';
-import {createPangular} from '@pangular-inspector/devtools/devframe';
+import {createPangular, initDevframe} from '@pangular-inspector/devtools/devframe';
 
 const app = express();
 const devtools = initDevframe(createPangular({agent: {readOnly: true}}), {

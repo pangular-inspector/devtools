@@ -3107,4 +3107,11 @@ export function createPangular(options: PangularConfig = {}, host: PangularHostO
   });
 }
 
+/**
+ * devframe's `initDevframe()`, from the copy this package depends on, to mount
+ * the panel without the hub. A separate `devframe` install can resolve another
+ * version.
+ */
+export { initDevframe } from 'devframe/initiate';
+
 export default pangular;

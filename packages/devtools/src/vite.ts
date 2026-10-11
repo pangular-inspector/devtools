@@ -240,6 +240,15 @@ export function hubUpgradeListener(
 
 export { releaseServerState } from './server-state.ts';
 
+/**
+ * The full-page devtools URL on the origin of the dev server's first local
+ * URL. The hub answers at the root of the origin, not under Vite's `base`.
+ */
+export function devtoolsUrl(local: string | undefined, base: string): string | undefined {
+  if (!local || !URL.canParse(local)) return undefined;
+  return `${new URL(local).origin}${normalizeHubBase(base)}`;
+}
+
 export default function pangularVite(options: PangularViteOptions = {}): Plugin {
   const base = normalizeHubBase(options.base ?? PANGULAR_HUB_BASE);
   const { config } = pickPangularConfig(options);
@@ -278,6 +287,15 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
       httpServer?.once('listening', () => {
         setDevOrigin(server.resolvedUrls?.local[0]);
       });
+      // Add the devtools URL to the URLs Vite prints at startup.
+      const printUrls = server.printUrls?.bind(server);
+      if (printUrls) {
+        server.printUrls = () => {
+          printUrls();
+          const url = devtoolsUrl(server.resolvedUrls?.local[0], base);
+          if (url) logger.info(`  \u279C  Pangular Inspector: ${url}`);
+        };
+      }
       httpServer?.once('close', () => {
         void devtools.context
           .then(releaseServerState, () => undefined)

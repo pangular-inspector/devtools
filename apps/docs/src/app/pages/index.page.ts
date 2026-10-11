@@ -865,22 +865,22 @@ claude mcp add pangular -- \\
   readonly installCommands = [
     {
       pm: 'npm',
-      cmd: 'npm install @pangular-inspector/devtools devframe',
+      cmd: 'npm install @pangular-inspector/devtools',
       logo: 'https://cdn.simpleicons.org/npm/CB3837',
     },
     {
       pm: 'pnpm',
-      cmd: 'pnpm add @pangular-inspector/devtools devframe',
+      cmd: 'pnpm add @pangular-inspector/devtools',
       logo: 'https://cdn.simpleicons.org/pnpm/F69220',
     },
     {
       pm: 'yarn',
-      cmd: 'yarn add @pangular-inspector/devtools devframe',
+      cmd: 'yarn add @pangular-inspector/devtools',
       logo: 'https://cdn.simpleicons.org/yarn/2C8EBB',
     },
     {
       pm: 'bun',
-      cmd: 'bun add @pangular-inspector/devtools devframe',
+      cmd: 'bun add @pangular-inspector/devtools',
       logo: 'https://bun.sh/logo.svg',
     },
   ];
