@@ -1,5 +1,6 @@
 import { connectDevframe } from 'devframe/client';
 import { overlayPopup } from './overlay-popup.ts';
+import { overlayConnectOptions } from './overlay-connection.ts';
 export { registerNgrxSignals } from './ngrx-register.ts';
 import { attachAnalog } from './analog-runtime.ts';
 import { attachForms } from './forms-collector.ts';
@@ -207,12 +208,11 @@ function noServerError(bases: string | string[], cause: unknown): Error {
 
 async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) => boolean) {
   const bases = options.baseURL ?? DEFAULT_BASES;
-  const rpc = await connectDevframe({
-    baseURL: bases,
-    connectionMeta: options.connectionMeta as DevframeConnectionMeta | undefined,
-  }).catch((error: unknown) => {
-    throw noServerError(bases, error);
-  });
+  const rpc = await connectDevframe(overlayConnectOptions(options, DEFAULT_BASES)).catch(
+    (error: unknown) => {
+      throw noServerError(bases, error);
+    },
+  );
   if (!own(() => rpc.close?.())) return;
   const metaUrl = rpc.connection?.metaBaseUrl;
   if (metaUrl) {

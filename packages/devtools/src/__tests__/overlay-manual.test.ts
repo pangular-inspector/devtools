@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 interface ConnectOptions {
   baseURL?: string | string[];
   connectionMeta?: unknown;
+  sseOptions?: { fetch?: (input: string) => Promise<unknown> };
 }
 
 const connects: ConnectOptions[] = [];
@@ -142,6 +143,80 @@ describe.sequential('overlay connectionMeta', () => {
     expect(isSecretKey('voucherCode')).toBe(true);
     expect(calls).not.toContain('push-component-tree');
     expect(calls).toContain('push-injector-tree');
+  });
+});
+
+describe.sequential('overlay connection options', () => {
+  afterEach(() => {
+    delete (globalThis as { CapacitorWebFetch?: unknown }).CapacitorWebFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('refuses connectionMeta with a list of base URLs or none, before connecting', async () => {
+    const { initOverlay } = await loadManual();
+
+    await expect(
+      initOverlay({
+        baseURL: ['http://192.168.1.20:4000/', '/__pangular/'],
+        connectionMeta: serverMeta,
+      }),
+    ).rejects.toThrow('Pass one baseURL with connectionMeta');
+    await expect(initOverlay({ connectionMeta: serverMeta })).rejects.toThrow(
+      'Pass one baseURL with connectionMeta',
+    );
+    expect(connects).toEqual([]);
+  });
+
+  it('warns once when connectionMeta carries no devtools config', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { initOverlay } = await loadManual();
+    const baseURL = 'http://192.168.1.20:4000/__devframes/pangular/';
+
+    stops.push(await initOverlay({ baseURL, connectionMeta: serverMeta }));
+    stops.push(await initOverlay({ baseURL, connectionMeta: serverMeta }));
+    const noConfig = warn.mock.calls.filter(([message]) =>
+      String(message).includes('has no configs'),
+    );
+    expect(noConfig).toHaveLength(1);
+
+    warn.mockClear();
+    const withConfig = { ...serverMeta, configs: { pangular: {} } };
+    const fresh = await loadManual();
+    stops.push(await fresh.initOverlay({ baseURL, connectionMeta: withConfig }));
+    expect(warn.mock.calls.some(([message]) => String(message).includes('has no configs'))).toBe(
+      false,
+    );
+  });
+
+  it("streams server-sent events through Capacitor's own fetch when CapacitorHttp patched fetch", async () => {
+    const webFetch = vi.fn(function (this: unknown) {
+      return Promise.resolve(this);
+    });
+    (globalThis as { CapacitorWebFetch?: unknown }).CapacitorWebFetch = webFetch;
+    const { initOverlay } = await loadManual();
+    stops.push(
+      await initOverlay({
+        baseURL: 'http://192.168.1.20:4000/__devframes/pangular/',
+        connectionMeta: serverMeta,
+      }),
+    );
+
+    const sseFetch = connects[0].sseOptions?.fetch;
+    expect(sseFetch).toBeTypeOf('function');
+    // Bound to the window: a native fetch called on nothing throws "Illegal invocation".
+    await expect(sseFetch!('http://192.168.1.20:4000/__devframes/__sse')).resolves.toBe(globalThis);
+    expect(webFetch).toHaveBeenCalledWith('http://192.168.1.20:4000/__devframes/__sse');
+  });
+
+  it('leaves the SSE fetch to devframe without CapacitorHttp', async () => {
+    const { initOverlay } = await loadManual();
+    stops.push(
+      await initOverlay({
+        baseURL: 'http://192.168.1.20:4000/__devframes/pangular/',
+        connectionMeta: serverMeta,
+      }),
+    );
+    expect(connects[0].sseOptions).toBeUndefined();
   });
 });
 
