@@ -141,6 +141,22 @@ ${filler}
     expect(config.noSsrRoutes).toEqual(['/admin/**']);
   });
 
+  it('reads the top-level prerender block, not one nested under nitro', () => {
+    const root = makeProject(BASE_FILES, {
+      'vite.config.ts': `import analog from '@analogjs/platform';
+export default {
+  plugins: [
+    analog({
+      nitro: { prerender: { routes: ['/api/feed'] } },
+      prerender: { routes: ['/about'] },
+    }),
+  ],
+};
+`,
+    });
+    expect(analogConfig(root).prerender).toEqual(['/about']);
+  });
+
   it('reads build output as prerendered pages', () => {
     const root = makeProject(BASE_FILES);
     for (const page of ['', 'pricing']) {

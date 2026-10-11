@@ -561,6 +561,25 @@ function stripBlocks(source: string, keys: string[]): string {
   return out;
 }
 
+/**
+ * The `key: {` of the analog() options object itself, skipping the same key
+ * nested deeper, such as `nitro: { prerender: { ... } }`. `masked` is the
+ * analog(...) call with its strings blanked, so braces in strings don't count.
+ */
+function topLevelBlock(masked: string, key: string): RegExpExecArray | null {
+  const pattern = new RegExp(`\\b${key}\\s*:\\s*\\{`, 'g');
+  let depth = 0;
+  let at = 0;
+  for (let match = pattern.exec(masked); match; match = pattern.exec(masked)) {
+    for (; at < match.index; at++) {
+      if (masked[at] === '{') depth++;
+      else if (masked[at] === '}') depth--;
+    }
+    if (depth === 1) return match;
+  }
+  return null;
+}
+
 export function analogConfig(root: string): AnalogConfig {
   const file = configFile(root);
   const config: AnalogConfig = { apiPrefix: 'api', noSsrRoutes: [], routeRules: [] };
@@ -588,7 +607,7 @@ export function analogConfig(root: string): AnalogConfig {
   const prefix = options.match(/\bapiPrefix\s*:\s*['"`]([^'"`]*)['"`]/);
   if (prefix) config.apiPrefix = prefix[1];
   const masked = maskStrings(options);
-  const prerenderBlock = /\bprerender\s*:\s*\{/.exec(masked);
+  const prerenderBlock = topLevelBlock(masked, 'prerender');
   const prerender = prerenderBlock
     ? options
         .slice(
