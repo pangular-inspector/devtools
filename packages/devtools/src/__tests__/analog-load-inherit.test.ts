@@ -75,4 +75,35 @@ describe('Analog load() of a layout', () => {
     expect(resolveAnalogReport(project, report).load?.keys).toEqual(['items']);
     expect(loadFrom).toBe(0);
   });
+
+  it('credits the child when it resolves its own load, even to the same object', async () => {
+    const cached = { items: [1, 2] };
+    const routes: Routes = [
+      {
+        path: 'products',
+        children: [
+          analogRoute('/pages/products', '/src/app/pages/products.server.ts', {
+            path: '',
+            component: ProductsLayout,
+            resolve: { load: () => cached },
+            children: [
+              analogRoute('/pages/products/index', '/src/app/pages/products/index.server.ts', {
+                path: '',
+                component: ProductList,
+                resolve: { load: () => cached },
+              }),
+            ],
+          }),
+        ],
+      },
+    ];
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideRouter(routes)] });
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/products');
+    const { loadFrom } = chainOf(
+      router.routerState.snapshot.root as unknown as Record<string, any>,
+    );
+    expect(loadFrom).toBe(1);
+  });
 });
