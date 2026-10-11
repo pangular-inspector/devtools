@@ -135,8 +135,9 @@ function ruleProblem(args: SetHttpRuleArgs, body: string | undefined): string | 
   return undefined;
 }
 
+/** Only a missing body is left out: a JSON `null` is a body too and serializes to "null". */
 function bodyText(body: unknown): string | undefined {
-  if (body === undefined || body === null) return undefined;
+  if (body === undefined) return undefined;
   const text = typeof body === 'string' ? body : JSON.stringify(body);
   return text?.trim() || undefined;
 }

@@ -136,6 +136,17 @@ describe('HTTP rule agent tools', () => {
     expect(httpRegistry().rules).toEqual([rule()]);
   });
 
+  it('keeps a JSON null mock body as the only effect of a rule', async () => {
+    const { tool } = await boot();
+    expect(await tool('set-http-rule', { pattern: '/api/empty', body: null })).toMatch(
+      /^Added rule/,
+    );
+    expect(httpRegistry().rules).toEqual([
+      expect.objectContaining({ pattern: '/api/empty', status: 200, body: 'null' }),
+    ]);
+    expect(await tool('list-http-rules')).toMatch(/answers 200, body `null`/);
+  });
+
   it('refuses a new rule past the rule limit', () => {
     const full = Array.from({ length: MAX_RULES }, (_, i) => rule({ id: `r${i}` }));
     expect(upsertHttpRule(full, { pattern: '/a', status: 500 }, () => 'new')).toEqual({
