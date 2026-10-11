@@ -17,13 +17,13 @@ The tab appears in the panel while a Capacitor app reports. In the hub, the **Ca
 
 ### Environment
 
-| Field             | What it is                                                                                                    |
-| ----------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Platform**      | `Capacitor.getPlatform()`, and whether it is native or web.                                                   |
-| **Server URL**    | `Capacitor.getServerUrl()`: where the WebView loads the app from.                                             |
-| **CapacitorHttp** | On when CapacitorHttp sends `fetch` through the native layer.                                                 |
-| **Calls logged**  | **Native and web**, **Native only**, **Web only**, or **None on this platform**. See [Web calls](#web-calls). |
-| **User agent**    | The WebView's user agent.                                                                                     |
+| Field             | What it is                                                                                                                       |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Platform**      | `Capacitor.getPlatform()`, and whether it is native or web.                                                                      |
+| **Server URL**    | `Capacitor.getServerUrl()`: where the WebView loads the app from.                                                                |
+| **CapacitorHttp** | On when CapacitorHttp sends `fetch` through the native layer, as the native layer reports it. **Unknown** when it can't be read. |
+| **Calls logged**  | **Native and web**, **Native only**, **Web only**, or **None on this platform**. See [Web calls](#web-calls).                    |
+| **User agent**    | The WebView's user agent.                                                                                                        |
 
 The Capacitor version is not available at runtime, so the tab doesn't show it. When several Capacitor apps report, pick one with **Page**.
 
@@ -46,12 +46,12 @@ Search by plugin or method, and check **Only failed** to keep the calls that rej
 
 Every plugin the app imported or the native project has:
 
-| Column        | What it says                                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Available** | `Capacitor.isPluginAvailable()` on this platform.                                                                              |
-| **Imported**  | The app registered it with `registerPlugin()`, usually by importing its package.                                               |
-| **Native**    | The native project has it.                                                                                                     |
-| **Note**      | A plugin the app imports that is not available, with a hint to run `npx cap sync`, or a native plugin the app does not import. |
+| Column        | What it says                                                                                                                                                                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Available** | `Capacitor.isPluginAvailable()` on this platform.                                                                                                                                                                                                      |
+| **Imported**  | The app registered it with `registerPlugin()`, usually by importing its package. On iOS and Android this is **Unknown** unless the [Capacitor hook](#web-calls) loads before `@capacitor/core`, because the native layer lists every installed plugin. |
+| **Native**    | The native project has it.                                                                                                                                                                                                                             |
+| **Note**      | A plugin the app imports that is not available, with a hint to run `npx cap sync`, or a native plugin the app does not import. Plugins `@capacitor/core` registers itself, such as `WebView` and `CapacitorHttp`, get no hint.                         |
 
 ### Listeners
 

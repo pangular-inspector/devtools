@@ -54,4 +54,11 @@ it('installed before core, also logs calls a lazily loaded web implementation an
     }),
   ]);
   expect(readCapacitorInfo(globalThis as HookWindow)?.webCalls).toBe(true);
+  // The wrapped method looks like core's own, and the app's import is known.
+  expect(Preferences.get.name).toBe('get');
+  expect(String(Preferences.get)).toContain('[capacitor code]');
+  expect(
+    readCapacitorInfo(globalThis as HookWindow)?.plugins.find((p) => p.name === 'Preferences')
+      ?.registered,
+  ).toBe(true);
 });

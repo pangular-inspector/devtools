@@ -78,7 +78,8 @@ it('logs native calls made through a plugin registered before the hook started',
   expect(readCapacitorInfo(globalThis as HookWindow)?.plugins).toContainEqual({
     name: 'Camera',
     available: true,
-    registered: true,
+    // Started after core on Android: Capacitor.Plugins lists every native plugin.
+    registered: null,
     native: true,
     methods: ['getPhoto', 'pickLimitedLibraryPhotos'],
   });

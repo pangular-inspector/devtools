@@ -23,8 +23,12 @@ export interface CapacitorPluginInfo {
   name: string;
   /** `Capacitor.isPluginAvailable(name)` on this platform. */
   available: boolean;
-  /** The app registered it with `registerPlugin()` (imported its package). */
-  registered: boolean;
+  /**
+   * The app registered it with `registerPlugin()` (imported its package).
+   * `null` when that can't be told: on iOS and Android, `Capacitor.Plugins`
+   * lists every native plugin, so only the capacitor-hook entry knows.
+   */
+  registered: boolean | null;
   /** The native project has it (`Capacitor.PluginHeaders`). */
   native: boolean;
   /** Native methods from `Capacitor.PluginHeaders`, empty for a JS-only plugin. */
@@ -36,8 +40,11 @@ export interface CapacitorEnv {
   serverUrl: string;
   debug: boolean;
   logging: boolean;
-  /** CapacitorHttp patched `fetch` (the bridge keeps the original as `CapacitorWebFetch`). */
-  capacitorHttp: boolean;
+  /**
+   * Whether CapacitorHttp sends `fetch` through the native layer, as the
+   * native bridge decides it. `null` when that can't be read.
+   */
+  capacitorHttp: boolean | null;
   userAgent: string;
 }
 
@@ -103,6 +110,8 @@ interface CapacitorGlobal {
 type HookWindow = {
   Capacitor?: unknown;
   CapacitorWebFetch?: unknown;
+  CapacitorHttpAndroidInterface?: { isEnabled?: () => unknown };
+  prompt?: (message: string) => unknown;
   navigator?: { userAgent?: string };
   addEventListener?: (type: string, listener: (event: unknown) => void) => void;
   removeEventListener?: (type: string, listener: (event: unknown) => void) => void;
@@ -151,6 +160,39 @@ function eventNameOf(options: unknown): string {
   return typeof name === 'string' ? clip(name, 100) : '';
 }
 
+/** Plugins @capacitor/core registers itself, on every platform. */
+export const CORE_PLUGINS: ReadonlySet<string> = new Set([
+  'CapacitorCookies',
+  'CapacitorHttp',
+  'SystemBars',
+  'WebView',
+]);
+
+const capacitorHttpState = new WeakMap<object, boolean | null>();
+
+/**
+ * Asks the native layer whether CapacitorHttp is on, the way the native bridge
+ * does at startup: `CapacitorHttpAndroidInterface.isEnabled()` on Android, and
+ * a `prompt()` that the iOS WebView answers itself (it shows no dialog). Read
+ * once per page. `null` on any other platform.
+ */
+function capacitorHttpOn(win: HookWindow, cap: CapacitorGlobal, platform: string): boolean | null {
+  if (platform === 'web') return false;
+  const cached = capacitorHttpState.get(cap);
+  if (cached !== undefined) return cached;
+  let state: boolean | null = null;
+  if (
+    platform === 'android' &&
+    typeof win.CapacitorHttpAndroidInterface?.isEnabled === 'function'
+  ) {
+    state = read(() => win.CapacitorHttpAndroidInterface!.isEnabled!() === true, null);
+  } else if (platform === 'ios' && typeof win.prompt === 'function') {
+    state = read(() => win.prompt!(JSON.stringify({ type: 'CapacitorHttp' })) === 'true', null);
+  }
+  capacitorHttpState.set(cap, state);
+  return state;
+}
+
 function nativeMethods(cap: CapacitorGlobal): Map<string, string[]> {
   const methods = new Map<string, string[]>();
   for (const header of read(() => [...(cap.PluginHeaders ?? [])], [])) {
@@ -173,18 +215,28 @@ export function readCapacitorInfo(
   const platform = read(() => String(cap.getPlatform?.() ?? 'web'), 'web');
   const methods = nativeMethods(cap);
   // Only the keys: the values are plugin proxies, and reading them creates wrappers.
-  const registered = new Set(read(() => Object.keys(cap.Plugins ?? {}), []));
-  const names = [...new Set([...methods.keys(), ...registered])].sort().slice(0, MAX_PLUGINS);
+  const listed = read(() => Object.keys(cap.Plugins ?? {}), []);
+  const hook = win.__pangularCapacitorHook;
+  const native = read(() => cap.isNativePlatform?.() === true, platform !== 'web');
+  // On the web, Capacitor.Plugins holds only what registerPlugin() made. On
+  // iOS and Android the bridge lists every native plugin there too.
+  const registered: (name: string) => boolean | null =
+    hook?.webCalls() === true
+      ? (name) => hook.registered(name)
+      : native
+        ? () => null
+        : (name) => listed.includes(name);
+  const names = [...new Set([...methods.keys(), ...listed])].sort().slice(0, MAX_PLUGINS);
   return {
     platform: clip(platform, 50),
-    native: read(() => cap.isNativePlatform?.() === true, platform !== 'web'),
+    native,
     bridge: typeof cap.nativePromise === 'function',
     webCalls: win.__pangularCapacitorHook?.webCalls() ?? false,
     env: {
       serverUrl: clip(redactUrl(read(() => String(cap.getServerUrl?.() ?? ''), '')), 200),
       debug: cap.DEBUG === true,
       logging: cap.isLoggingEnabled === true,
-      capacitorHttp: typeof win.CapacitorWebFetch === 'function',
+      capacitorHttp: capacitorHttpOn(win, cap, native ? platform : 'web'),
       userAgent: clip(
         read(() => String(win.navigator?.userAgent ?? ''), ''),
         300,
@@ -193,7 +245,7 @@ export function readCapacitorInfo(
     plugins: names.map((name) => ({
       name: clip(name, 100),
       available: read(() => cap.isPluginAvailable?.(name) === true, false),
-      registered: registered.has(name),
+      registered: registered(name),
       native: methods.has(name),
       methods: (methods.get(name) ?? []).filter((m) => !LISTENER_METHODS.has(m)).sort(),
     })),
@@ -232,7 +284,12 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
   let revision = 0;
   let dropped = 0;
   let active = true;
-  let registerTrapped = false;
+  // Core assigned registerPlugin through the accessor: calls answered in
+  // JavaScript are logged, and the names it registered are known.
+  let coreRegistered = false;
+  const registeredNames = new Set<string>();
+  // Rejections already logged, so the unhandledrejection fallback skips them.
+  const loggedReasons = new WeakSet<object>();
   let wrapped: {
     cap: CapacitorGlobal;
     original: Partial<Record<BridgeName, Bridge>>;
@@ -300,6 +357,7 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
     if ('error' in outcome) {
       call.status = 'error';
       call.error = errorOf(outcome.error);
+      if (outcome.error && typeof outcome.error === 'object') loggedReasons.add(outcome.error);
       delete call.result;
     } else {
       call.status = 'ok';
@@ -309,13 +367,33 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
     touch(entry);
   };
 
-  /** Observes a returned promise on a branch of its own, which also handles its rejection. */
-  const follow = (entry: Entry | null, out: unknown) => {
-    if (!entry || !out || typeof (out as PromiseLike<unknown>).then !== 'function') return;
-    (out as PromiseLike<unknown>).then(
-      (result) => read(() => settle(entry, { result }), undefined),
-      (error) => read(() => settle(entry, { error }), undefined),
+  /**
+   * Logs the outcome of a returned promise and hands the app a promise that
+   * settles the same way. Observing `out` directly would mark its rejection as
+   * handled, so an app that leaves it unhandled would no longer see an
+   * `unhandledrejection`. Own properties, such as `remove` on the promise of
+   * `addListener`, are copied over.
+   */
+  const follow = (entry: Entry | null, out: unknown): unknown => {
+    if (!entry || !out || typeof (out as PromiseLike<unknown>).then !== 'function') return out;
+    const derived = Promise.resolve(out as PromiseLike<unknown>).then(
+      (result) => {
+        read(() => settle(entry, { result }), undefined);
+        return result;
+      },
+      (error: unknown) => {
+        read(() => settle(entry, { error }), undefined);
+        throw error;
+      },
     );
+    read(() => {
+      for (const key of Object.keys(out as object)) {
+        (derived as unknown as Record<string, unknown>)[key] = (out as Record<string, unknown>)[
+          key
+        ];
+      }
+    }, undefined);
+    return derived;
   };
 
   const skip = (plugin: unknown, method: unknown, args: unknown) =>
@@ -338,9 +416,42 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
         if (entry) read(() => settle(entry, { error }), undefined);
         throw error;
       }
-      follow(entry, out);
-      return out;
+      if (method === 'removeAllListeners' && entry) forgetListeners(plugin as string, out);
+      return follow(entry, out);
     };
+
+  /** `removeAllListeners` succeeded: the plugin's listeners are gone. */
+  const forgetListeners = (plugin: string, out: unknown) => {
+    if (!out || typeof (out as PromiseLike<unknown>).then !== 'function') return;
+    (out as PromiseLike<unknown>).then(
+      () => {
+        let changedAny = false;
+        for (const listener of listeners.values()) {
+          if (listener.plugin === plugin && !listener.removed) {
+            listener.removed = true;
+            changedAny = true;
+          }
+        }
+        if (changedAny) {
+          listenersRev = ++revision;
+          changed();
+        }
+      },
+      () => undefined,
+    );
+  };
+
+  /** Keeps a wrapper's `name` and `toString()`, which some code reads. */
+  const lookLike = <T extends Bridge>(wrapper: T, original: Bridge): T => {
+    read(() => {
+      Object.defineProperty(wrapper, 'name', { value: original.name, configurable: true });
+      Object.defineProperty(wrapper, 'toString', {
+        value: () => String(original),
+        configurable: true,
+      });
+    }, undefined);
+    return wrapper;
+  };
 
   const observeListener = (
     plugin: string,
@@ -448,7 +559,7 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
         ) {
           return member;
         }
-        return function (this: unknown, ...args: unknown[]) {
+        const wrapper = function (this: unknown, ...args: unknown[]) {
           const web = active && !goesNative(plugin, prop) && !skip(plugin, prop, args[0]);
           const entry = web
             ? read(() => begin(plugin, prop, 'promise', 'web', args[0]), null)
@@ -460,19 +571,21 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
             if (entry) read(() => settle(entry, { error }), undefined);
             throw error;
           }
-          follow(entry, out);
-          return out;
+          return follow(entry, out);
         };
+        return lookLike(wrapper, member as Bridge);
       },
     });
   };
 
   const wrapRegisterPlugin = (original: Bridge): Bridge =>
-    function (this: unknown, ...args: unknown[]) {
+    lookLike(function (this: unknown, ...args: unknown[]) {
       const proxy = original.apply(this, args);
       const plugin = args[0];
-      return typeof plugin === 'string' ? read(() => wrapPluginProxy(plugin, proxy), proxy) : proxy;
-    };
+      if (typeof plugin !== 'string') return proxy;
+      registeredNames.add(plugin);
+      return read(() => wrapPluginProxy(plugin, proxy), proxy);
+    }, original);
 
   /**
    * Places an accessor for `Capacitor.registerPlugin` before @capacitor/core
@@ -493,10 +606,10 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
         enumerable: true,
         get: () => current,
         set: (fn: unknown) => {
+          if (typeof fn === 'function') coreRegistered = true;
           current = typeof fn === 'function' ? wrapRegisterPlugin(fn as Bridge) : fn;
         },
       });
-      registerTrapped = true;
     }, undefined);
   };
 
@@ -512,21 +625,24 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
       const fn = bridge[name];
       if (typeof fn !== 'function') continue;
       original[name] = fn as Bridge;
-      installed[name] = wrappers[name](fn as Bridge);
+      installed[name] = lookLike(wrappers[name](fn as Bridge), fn as Bridge);
       bridge[name] = installed[name];
     }
     wrapped = { cap, original, installed };
   };
 
   // Without the registerPlugin accessor, core's own "not implemented"
-  // rejections are seen only when the app leaves them unhandled.
+  // rejections are seen only when the app leaves them unhandled. One the
+  // accessor logged already is skipped, and so is `then`, which code that
+  // checks for a promise reads off any object.
   const onUnhandled = (event: unknown) => {
-    if (!active || registerTrapped) return;
+    if (!active) return;
     read(() => {
       const reason = (event as { reason?: { code?: unknown; message?: unknown } }).reason;
-      if (reason?.code !== 'UNIMPLEMENTED' || typeof reason.message !== 'string') return;
+      if (!reason || typeof reason !== 'object' || loggedReasons.has(reason)) return;
+      if (reason.code !== 'UNIMPLEMENTED' || typeof reason.message !== 'string') return;
       const match = /^"([^".]+)(?:\.([^"(]+)\(\))?"/.exec(reason.message);
-      if (!match) return;
+      if (!match || match[2] === 'then') return;
       const entry = begin(match[1], match[2] ?? '(plugin)', 'promise', 'web', undefined);
       settle(entry, { error: reason });
     }, undefined);
@@ -538,8 +654,10 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
 
   const hook = {
     install,
-    /** Whether calls answered in JavaScript are logged too. */
-    webCalls: () => registerTrapped,
+    /** Whether calls answered in JavaScript are logged too: core registered through the accessor. */
+    webCalls: () => coreRegistered,
+    /** Whether the app registered `name`, as seen by the accessor. */
+    registered: (name: string) => registeredNames.has(name),
     setMaxCalls(next: number) {
       maxCalls = next;
       trim();

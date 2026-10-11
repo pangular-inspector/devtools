@@ -4,7 +4,7 @@ import type {
   CapacitorListener,
   CapacitorPluginInfo,
 } from '../capacitor-collector.ts';
-import { isUnimplemented } from '../capacitor-collector.ts';
+import { CORE_PLUGINS, isUnimplemented } from '../capacitor-collector.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import { hasSecretKey, maskedArgs, maskedResult } from '../capacitor-redact.ts';
 import { clip } from '../text.ts';
@@ -88,6 +88,14 @@ function finite(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function tristate(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
+}
+
+function yesNo(value: boolean | null): string {
+  return value === null ? 'unknown' : value ? 'yes' : 'no';
+}
+
 function toInfo(value: unknown): CapacitorInfo | null {
   if (!isObject(value) || !Array.isArray(value['plugins'])) return null;
   const plugins: CapacitorPluginInfo[] = [];
@@ -104,7 +112,7 @@ function toInfo(value: unknown): CapacitorInfo | null {
     plugins.push({
       name,
       available: plugin['available'] === true,
-      registered: plugin['registered'] === true,
+      registered: tristate(plugin['registered']),
       native: plugin['native'] === true,
       methods,
     });
@@ -119,7 +127,7 @@ function toInfo(value: unknown): CapacitorInfo | null {
       serverUrl: redactUrl(text(env['serverUrl'], 200) ?? ''),
       debug: env['debug'] === true,
       logging: env['logging'] === true,
-      capacitorHttp: env['capacitorHttp'] === true,
+      capacitorHttp: tristate(env['capacitorHttp']),
       userAgent: text(env['userAgent'], 300) ?? '',
     },
     plugins,
@@ -288,6 +296,44 @@ function view(page: CapacitorPage): CapacitorPageView {
   };
 }
 
+/**
+ * Applies one page's push to the shared state in place: the fields and calls
+ * that changed, and nothing else, so the update the panel gets stays small.
+ */
+export function patchCapacitorState(
+  draft: CapacitorState,
+  pages: Map<string, CapacitorPage>,
+  report: Pick<CapacitorReport, 'pageId' | 'full' | 'info' | 'listeners' | 'calls'>,
+): void {
+  const page = pages.get(report.pageId);
+  if (!page) {
+    delete draft.pages[report.pageId];
+    return;
+  }
+  const shown = draft.pages[report.pageId];
+  if (!shown || report.full) {
+    draft.pages[report.pageId] = view(page);
+    return;
+  }
+  if (shown.url !== page.url) shown.url = page.url;
+  if (shown.title !== page.title) shown.title = page.title;
+  shown.reportedAt = page.reportedAt;
+  const dropped = page.dropped + page.serverDropped;
+  if (shown.dropped !== dropped) shown.dropped = dropped;
+  if (report.info) shown.info = page.info;
+  if (report.listeners) shown.listeners = page.listeners;
+  for (let at = shown.calls.length - 1; at >= 0; at--) {
+    if (!page.calls.has(shown.calls[at].id)) shown.calls.splice(at, 1);
+  }
+  for (const call of report.calls) {
+    const stored = page.calls.get(call.id);
+    if (!stored) continue;
+    const at = shown.calls.findIndex((entry) => entry.id === call.id);
+    if (at === -1) shown.calls.push(stored);
+    else shown.calls[at] = stored;
+  }
+}
+
 export function capacitorState(pages: Map<string, CapacitorPage>): CapacitorState {
   return { pages: Object.fromEntries([...pages].map(([id, page]) => [id, view(page)])) };
 }
@@ -446,7 +492,7 @@ export function capacitorPluginsText(
     UNTRUSTED_CAPACITOR,
     '',
     pageLine(page),
-    `Server URL ${code(env.serverUrl || '(none)')}, CapacitorHttp ${env.capacitorHttp ? 'on' : 'off'}, native logging ${env.logging ? 'on' : 'off'}${env.debug ? ', debug on' : ''}.`,
+    `Server URL ${code(env.serverUrl || '(none)')}, CapacitorHttp ${env.capacitorHttp === null ? 'unknown' : env.capacitorHttp ? 'on' : 'off'}, native logging ${env.logging ? 'on' : 'off'}${env.debug ? ', debug on' : ''}.`,
     `User agent: ${code(env.userAgent || '(unknown)')}.`,
     '',
   ];
@@ -459,13 +505,13 @@ export function capacitorPluginsText(
     '| --- | --- | --- | --- | --- | --- |',
     ...info.plugins.map((plugin) => {
       const note =
-        plugin.registered && !plugin.available
+        plugin.registered === true && !plugin.available && !CORE_PLUGINS.has(plugin.name)
           ? 'Imported but not available here. Run `npx cap sync` if it should be native.'
-          : plugin.native && !plugin.registered
+          : plugin.native && plugin.registered === false
             ? 'Installed in the native project, not imported by the app.'
             : '';
       const methods = plugin.methods.length ? plugin.methods.map(code).join(', ') : '';
-      return `| ${code(plugin.name)} | ${plugin.available ? 'yes' : 'no'} | ${plugin.registered ? 'yes' : 'no'} | ${plugin.native ? 'yes' : 'no'} | ${methods} | ${note} |`;
+      return `| ${code(plugin.name)} | ${plugin.available ? 'yes' : 'no'} | ${yesNo(plugin.registered)} | ${plugin.native ? 'yes' : 'no'} | ${methods} | ${note} |`;
     }),
   );
   return lines.join('\n');

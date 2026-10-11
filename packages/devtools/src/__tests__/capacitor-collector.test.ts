@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   capacitorHook,
@@ -81,35 +83,72 @@ describe('readCapacitorInfo', () => {
         serverUrl: 'https://localhost',
         debug: true,
         logging: false,
-        capacitorHttp: false,
+        capacitorHttp: null,
         userAgent: 'Mozilla/5.0 (Android 15)',
       },
       plugins: [
-        { name: 'Barcode', available: false, registered: true, native: false, methods: [] },
+        { name: 'Barcode', available: false, registered: null, native: false, methods: [] },
         {
           name: 'Camera',
           available: true,
-          registered: true,
+          registered: null,
           native: true,
           methods: ['getPhoto'],
         },
         {
           name: 'Geolocation',
           available: true,
-          registered: false,
+          registered: null,
           native: true,
           methods: ['watchPosition'],
         },
-        { name: 'Preferences', available: true, registered: true, native: false, methods: [] },
+        { name: 'Preferences', available: true, registered: null, native: false, methods: [] },
       ],
     });
   });
 
-  it('says CapacitorHttp is on when the bridge kept the browser fetch', () => {
-    const { win } = fakeCapacitor();
-    expect(readCapacitorInfo({ ...win, CapacitorWebFetch: () => {} })?.env.capacitorHttp).toBe(
-      true,
-    );
+  it('reads CapacitorHttp the way the native bridge does, not from CapacitorWebFetch', () => {
+    const android = (enabled: boolean) => {
+      const { win } = fakeCapacitor();
+      return readCapacitorInfo({
+        ...win,
+        // The bridge sets it on every native launch, whatever the setting.
+        CapacitorWebFetch: () => {},
+        CapacitorHttpAndroidInterface: { isEnabled: () => enabled },
+      })?.env.capacitorHttp;
+    };
+    expect(android(false)).toBe(false);
+    expect(android(true)).toBe(true);
+
+    const prompt = vi.fn(() => 'true');
+    const { cap } = fakeCapacitor();
+    const ios: HookWindow = { Capacitor: { ...cap, getPlatform: () => 'ios' }, prompt };
+    expect(readCapacitorInfo(ios)?.env.capacitorHttp).toBe(true);
+    expect(readCapacitorInfo(ios)?.env.capacitorHttp).toBe(true);
+    // Asked once, with the payload the iOS WebView answers itself.
+    expect(prompt).toHaveBeenCalledTimes(1);
+    expect(prompt).toHaveBeenCalledWith('{"type":"CapacitorHttp"}');
+
+    const web = readCapacitorInfo({
+      Capacitor: { getPlatform: () => 'web', isNativePlatform: () => false, Plugins: {} },
+      prompt,
+    });
+    expect(web?.env.capacitorHttp).toBe(false);
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('knows which plugins the app imported only on the web, without the early hook', () => {
+    const web = readCapacitorInfo({
+      Capacitor: {
+        getPlatform: () => 'web',
+        isNativePlatform: () => false,
+        isPluginAvailable: () => false,
+        Plugins: { Preferences: {} },
+      },
+    });
+    expect(web?.plugins).toEqual([
+      { name: 'Preferences', available: false, registered: true, native: false, methods: [] },
+    ]);
   });
 
   it('is null on a page without Capacitor', () => {
@@ -270,22 +309,84 @@ describe('createCapacitorHook', () => {
     expect(text).toContain('Ann');
   });
 
-  it('hands the app the original promise, arguments and rejection', async () => {
+  it('hands the app the same arguments, result and rejection', async () => {
     const failure = new Error('denied');
     const { win, cap, nativePromise } = fakeCapacitor({
       'Camera.checkPermissions': () => Promise.reject(failure),
+      'Camera.getPhoto': async () => ({ format: 'png' }),
     });
     const original = cap.nativePromise;
     const options = { permissions: ['camera'] };
     collect(win);
 
-    const returned = cap.nativePromise('Camera', 'checkPermissions', options);
-    const fromBridge = nativePromise.mock.results[0].value;
-
+    const rejected = cap.nativePromise('Camera', 'checkPermissions', options);
     expect(cap.nativePromise).not.toBe(original);
-    expect(returned).toBe(fromBridge);
     expect(nativePromise.mock.calls[0][2]).toBe(options);
-    await expect(returned).rejects.toBe(failure);
+    await expect(rejected).rejects.toBe(failure);
+    await expect(cap.nativePromise('Camera', 'getPhoto', {})).resolves.toEqual({ format: 'png' });
+  });
+
+  it('copies own properties of a returned promise, such as remove', async () => {
+    const remove = vi.fn();
+    const { win, cap } = fakeCapacitor({
+      'Camera.getPhoto': () => Object.assign(Promise.resolve({}), { remove }),
+    });
+    collect(win);
+    const returned = cap.nativePromise('Camera', 'getPhoto', {}) as Promise<unknown> & {
+      remove?: unknown;
+    };
+    expect(returned.remove).toBe(remove);
+    await returned;
+  });
+
+  it('leaves a rejection the app does not handle unhandled, as it was without the hook', () => {
+    // In a child process: an unhandled rejection is the thing under test, and
+    // the test runner would report one as a failure.
+    const script = `
+      const { createCapacitorHook } = await import(${JSON.stringify(join(__dirname, '../capacitor-collector.ts'))});
+      let unhandled = 0;
+      process.on('unhandledRejection', () => unhandled++);
+      const failure = Object.assign(new Error('denied'), { code: 'DENIED' });
+      const cap = { nativePromise: () => Promise.reject(failure), nativeCallback: () => '1' };
+      const withHook = process.argv[2] === 'hook';
+      if (withHook) createCapacitorHook({ Capacitor: cap });
+      cap.nativePromise('Camera', 'getPhoto', {});
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      console.log(unhandled);
+    `;
+    const run = (mode: string) =>
+      execFileSync(process.execPath, ['--input-type=module', '-e', script, mode], {
+        encoding: 'utf8',
+        env: { ...process.env, NODE_NO_WARNINGS: '1' },
+      }).trim();
+    expect(run('plain')).toBe('1');
+    expect(run('hook')).toBe('1');
+  });
+
+  it('keeps the name and toString of the functions it wraps', () => {
+    const { win, cap } = fakeCapacitor();
+    const nativePromise = function nativePromise() {
+      return Promise.resolve();
+    };
+    cap.nativePromise = nativePromise as never;
+    collect(win);
+    expect(cap.nativePromise).not.toBe(nativePromise);
+    expect(cap.nativePromise.name).toBe('nativePromise');
+    expect(String(cap.nativePromise)).toBe(String(nativePromise));
+  });
+
+  it('marks the listeners of a plugin removed once removeAllListeners succeeds', async () => {
+    const { win, cap } = fakeCapacitor();
+    const hook = collect(win);
+    cap.nativeCallback('Network', 'addListener', { eventName: 'networkStatusChange' }, () => {});
+    cap.nativeCallback('Keyboard', 'addListener', { eventName: 'keyboardWillShow' }, () => {});
+
+    await cap.nativePromise('Network', 'removeAllListeners', {});
+    await settle();
+
+    const listeners = hook.snapshot().listeners ?? [];
+    expect(listeners.find((l) => l.plugin === 'Network')?.removed).toBe(true);
+    expect(listeners.find((l) => l.plugin === 'Keyboard')?.removed).toBeUndefined();
   });
 
   it('counts listener events and marks a removed listener', () => {
@@ -417,6 +518,39 @@ describe('createCapacitorHook', () => {
       status: 'error',
       error: { code: 'UNIMPLEMENTED' },
     });
+  });
+
+  it('logs an unhandled rejection it already logged as a call only once, and never a then', async () => {
+    const reason = {
+      message: '"Camera.getLimitedLibraryPhotos()" is not implemented on android',
+      code: 'UNIMPLEMENTED',
+    };
+    const { win, cap } = fakeCapacitor({
+      'Camera.getLimitedLibraryPhotos': () => Promise.reject(reason),
+    });
+    const target = new EventTarget();
+    const hookWin = Object.assign(win, {
+      addEventListener: target.addEventListener.bind(target),
+      removeEventListener: target.removeEventListener.bind(target),
+    });
+    const hook = collect(hookWin as HookWindow);
+    await cap.nativePromise('Camera', 'getLimitedLibraryPhotos', {}).catch(() => {});
+    await settle();
+    const fire = (r: unknown) =>
+      target.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason: r }));
+    fire(reason);
+    fire({ message: '"Camera.then()" is not implemented on android', code: 'UNIMPLEMENTED' });
+
+    expect(hook.calls().map((c) => c.method)).toEqual(['getLimitedLibraryPhotos']);
+  });
+
+  it('with no @capacitor/core after it, does not claim to log web calls', () => {
+    const win: HookWindow = {};
+    const hook = createCapacitorHook(win, { early: true });
+    hooks.push(hook);
+    expect(win.Capacitor).toBeDefined();
+    expect(hook.webCalls()).toBe(false);
+    expect(readCapacitorInfo(win)).toBeNull();
   });
 
   it('never creates window.Capacitor unless installed early on purpose', () => {
