@@ -120,6 +120,18 @@ export function otherMatchesText(hits: ComponentHit[], query: string): string {
 
 export const STUCK_PLACEHOLDER_MS = 10_000;
 
+/** Triggers that wait for the user, so a long wait on the placeholder is normal. */
+const USER_TRIGGER = /^on (viewport|interaction|hover)\b/;
+
+/**
+ * Whether a block waits only for the user: every main trigger (not `prefetch`
+ * or `hydrate`) is `on viewport`, `on interaction` or `on hover`.
+ */
+function waitsForUser(triggers: string[]): boolean {
+  const main = triggers.filter((trigger) => !/^(prefetch|hydrate) /.test(trigger));
+  return main.length > 0 && main.every((trigger) => USER_TRIGGER.test(trigger));
+}
+
 function deferNotes(block: DeferBlockInfo, now: number): string[] {
   const notes: string[] = [];
   const age = Math.max(0, Math.round((now - block.since) / 1000));
@@ -128,7 +140,11 @@ function deferNotes(block: DeferBlockInfo, now: number): string[] {
     (block.state === 'placeholder' || block.state === 'initial') &&
     age * 1000 >= STUCK_PLACEHOLDER_MS
   ) {
-    notes.push(`on its placeholder for ${age}s`);
+    notes.push(
+      waitsForUser(block.triggers)
+        ? `waiting for its trigger for ${age}s`
+        : `on its placeholder for ${age}s`,
+    );
   }
   if (block.hydrateNever) notes.push('hydrate never: the server HTML stays static');
   else if (block.hydration === 'dehydrated') notes.push('still dehydrated');

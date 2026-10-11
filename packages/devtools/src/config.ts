@@ -705,3 +705,51 @@ export function summarizePangularConfig(
   );
   return items;
 }
+
+// Change detection recording types. They live here, in an entry without
+// imports, so the panel shares them with the page instead of keeping copies.
+
+export interface CdCheck {
+  name: string;
+  checks: number;
+  /** Time in the component's own template and hooks, children excluded. */
+  ms: number;
+}
+
+export interface CdCycle {
+  id: number;
+  at: number;
+  ms: number;
+  /** How many times Angular synchronized the views in this tick. */
+  passes: number;
+  /** The output listener that ran last before the tick, when there was one. */
+  trigger?: string;
+  checks: number;
+  components: CdCheck[];
+}
+
+export interface CdComponentStat {
+  name: string;
+  checks: number;
+  ms: number;
+  maxMs: number;
+  cycles: number;
+}
+
+export interface CdRecording {
+  recording: boolean;
+  startedAt: number | null;
+  cycles: CdCycle[];
+  /** Older cycles removed at `limits.cdCycles`. */
+  dropped: number;
+  components: CdComponentStat[];
+  /** Checks per component host, keyed by the component tree's element id. */
+  hosts: Record<string, number>;
+}
+
+/** What a page pushes: its recording, with the page id and whether it can record. */
+export interface CdReport extends CdRecording {
+  pageId: string;
+  /** False when the page has no profiler hook to record with (before Angular 20). */
+  supported: boolean;
+}

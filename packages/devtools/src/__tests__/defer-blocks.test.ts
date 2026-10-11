@@ -156,16 +156,23 @@ describe('deferBlocksText', () => {
           info({ id: 'd3', state: 'placeholder', since: 25_000 }),
           info({ id: 'd4', hydration: 'dehydrated' }),
           info({ id: 'd5', hydrateNever: true, triggers: ['hydrate never'] }),
+          info({ id: 'd6', state: 'placeholder', since: 1000, triggers: ['on viewport'] }),
+          info({ id: 'd7', state: 'placeholder', since: 1000, triggers: ['on hover', 'on idle'] }),
+          info({ id: 'd8', state: 'placeholder', since: 1000, triggers: [] }),
         ]),
       ],
       30_000,
     );
-    expect(text).toContain('5 defer blocks');
+    expect(text).toContain('8 defer blocks');
     expect(text).toContain('`d1` in TripReviews (`c2`): failed to load. Triggers: on viewport');
     expect(text).toContain('`d2` in TripReviews (`c2`): on its placeholder for 29s');
     expect(text).not.toContain('`d3` in');
     expect(text).toMatch(/\| `d4` .*\| still dehydrated \|/);
     expect(text).toMatch(/\| `d5` .*hydrate never: the server HTML stays static/);
+    expect(text).not.toContain('`d6` in');
+    expect(text).toMatch(/\| `d6` .*\| waiting for its trigger for 29s \|/);
+    expect(text).toContain('`d7` in TripReviews (`c2`): on its placeholder for 29s');
+    expect(text).toContain('`d8` in TripReviews (`c2`): on its placeholder for 29s');
   });
 
   it('lists at most DEFER_ROWS blocks per page and says how many more are not shown', () => {

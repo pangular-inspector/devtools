@@ -67,6 +67,15 @@ describe('page highlight', () => {
     expect(box()?.style).toMatchObject({ top: '100px', height: '100px' });
   });
 
+  it('draws around the shadow root children of a display: contents host', () => {
+    document.body.innerHTML = '<app-card style="display: contents"></app-card>';
+    const card = document.querySelector('app-card')!;
+    card.attachShadow({ mode: 'open' }).innerHTML = '<div></div>';
+    place(card, { x: 0, y: 0, width: 0, height: 0 });
+    place(card.shadowRoot!.querySelector('div')!, { x: 5, y: 6, width: 70, height: 80 });
+    expect(highlightBox(card)).toEqual({ top: 6, left: 5, width: 70, height: 80 });
+  });
+
   it('draws nothing for a hidden host and says so', () => {
     document.body.innerHTML = '<app-tab hidden><div></div></app-tab>';
     const tab = document.querySelector('app-tab')!;
