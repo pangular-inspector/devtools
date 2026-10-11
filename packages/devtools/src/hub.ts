@@ -12,6 +12,7 @@ import { PANGULAR_EXTENSION_ORIGINS, isAllowedExtensionOrigin } from './extensio
 import { pickPangularConfig, type PangularConfig } from './config.ts';
 import { PANGULAR_LOGO_DATA_URI } from './brand.ts';
 import { createSsrMiddleware } from './ssr-middleware.ts';
+import { releaseServerState } from './server-state.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 export const PANGULAR_HUB_BASE = DEVFRAMES_HUB_BASE;
@@ -130,7 +131,10 @@ export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
     ssrMiddleware: createSsrMiddleware({ skip: [hub.base], browserDistFolder }),
     close: () => {
       if (hubs.get(hub.base) === own) hubs.delete(hub.base);
-      return (closing ??= hub.close());
+      // Stop the HTTP registry timers and SSR capture this hub installed, as Vite does.
+      return (closing ??= hub.context
+        .then(releaseServerState, () => undefined)
+        .finally(() => hub.close()));
     },
   };
   const previous = hubs.get(hub.base);
