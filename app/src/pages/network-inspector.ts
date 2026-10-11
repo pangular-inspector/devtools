@@ -482,7 +482,43 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           what="HTTP calls"
           limit="httpCalls"
         />
-        @if (timeline().length) {
+        <div class="filters" role="group" aria-label="Filter the HTTP timeline">
+          <div class="search">
+            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              id="timeline-search"
+              type="search"
+              placeholder="Find a URL or method…"
+              aria-label="Find a URL or method"
+              autocomplete="off"
+              spellcheck="false"
+              [value]="callQuery()"
+              (input)="callQuery.set($any($event.target).value)"
+              (keydown.escape)="callQuery.set('')"
+            />
+          </div>
+          <app-select
+            class="side-filter"
+            ariaLabel="Side"
+            [options]="sideOptions"
+            [(value)]="sideFilter"
+          />
+          <label class="inline failed-toggle">
+            <input
+              type="checkbox"
+              [checked]="failedOnly()"
+              (change)="failedOnly.set($any($event.target).checked)"
+            />
+            Failed only
+          </label>
+          <span class="total" aria-live="polite"
+            >{{ visibleCalls().length }} of {{ timeline().length }}</span
+          >
+        </div>
+        @if (visibleCalls().length) {
           <div class="table-wrap">
             <table>
               <thead>
@@ -497,7 +533,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 </tr>
               </thead>
               <tbody>
-                @for (entry of timeline(); track entry.side + entry.id) {
+                @for (entry of visibleCalls(); track entry.side + entry.id) {
                   <tr
                     [class.selected]="selectedCall()?.id === entry.id"
                     (click)="openCall(entry.id)"
@@ -557,6 +593,20 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 }
               </tbody>
             </table>
+          </div>
+        } @else if (timeline().length) {
+          <div class="empty no-match" role="status">
+            <p>No requests match.</p>
+            <p class="muted small">
+              @if (callQuery().trim()) {
+                Nothing matches “{{ callQuery().trim() }}” with these filters.
+              } @else {
+                None of the {{ timeline().length }} requests fit these filters.
+              }
+            </p>
+            <div class="empty-actions">
+              <button type="button" (click)="clearCallFilters()">Clear filters</button>
+            </div>
           </div>
         } @else {
           <div class="empty">
@@ -1315,6 +1365,59 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       text-align: center;
       line-height: 1.5;
     }
+    .empty-actions {
+      display: flex;
+      justify-content: center;
+      margin-top: 8px;
+    }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin: 0 0 12px;
+    }
+    .search {
+      position: relative;
+      flex: 1 1 220px;
+      min-width: 0;
+    }
+    .search-icon {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      width: 14px;
+      height: 14px;
+      transform: translateY(-50%);
+      fill: none;
+      stroke: var(--text-3);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      pointer-events: none;
+    }
+    .search:focus-within .search-icon {
+      stroke: var(--accent);
+    }
+    .filters input[type='search'] {
+      height: var(--control-h);
+      padding-left: 34px;
+    }
+    .filters .side-filter {
+      flex: 0 0 140px;
+    }
+    .failed-toggle {
+      flex: none;
+      height: var(--control-h);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .total {
+      flex: none;
+      color: var(--text-2);
+      font-size: 12px;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
     .table-wrap {
       max-height: min(420px, 60vh);
       overflow: auto;
@@ -1878,8 +1981,32 @@ export class NetworkInspector {
     [...this.pageServerCalls(), ...(this.selected()?.calls ?? [])].sort((a, b) => b.at - a.at),
   );
 
+  readonly callQuery = signal('');
+  readonly sideFilter = signal<HttpSide | 'all' | null>('all');
+  readonly failedOnly = signal(false);
+  readonly sideOptions: SelectOption<HttpSide | 'all'>[] = [
+    { value: 'all', label: 'All sides' },
+    { value: 'server', label: 'SSR' },
+    { value: 'client', label: 'Client' },
+  ];
+
+  readonly visibleCalls = computed(() => {
+    const query = this.callQuery().trim().toLowerCase();
+    const side = this.sideFilter() ?? 'all';
+    const failedOnly = this.failedOnly();
+    return this.timeline().filter(
+      (c) =>
+        (side === 'all' || c.side === side) &&
+        (!failedOnly || this.isFailed(c)) &&
+        (!query ||
+          `${c.method} ${c.url}`.toLowerCase().includes(query) ||
+          `${c.method} ${pathOf(c.url)}`.toLowerCase().includes(query)),
+    );
+  });
+
+  /** Follows the visible rows, so the preview hides while filters hide its call. */
   readonly selectedCall = computed(
-    () => this.timeline().find((c) => c.id === this.selectedCallId()) ?? null,
+    () => this.visibleCalls().find((c) => c.id === this.selectedCallId()) ?? null,
   );
 
   readonly selectedRequest = computed(
@@ -2047,6 +2174,18 @@ export class NetworkInspector {
 
   callTone(call: HttpCall): 'ok' | 'redirect' | 'bad' | 'neutral' {
     return call.cancelled ? 'neutral' : this.statusTone(call.status);
+  }
+
+  /** A failed call has a status of 400 or more, no status (ERR) or was cancelled. */
+  isFailed(call: HttpCall): boolean {
+    return !!call.cancelled || !call.status || call.status >= 400;
+  }
+
+  clearCallFilters() {
+    this.callQuery.set('');
+    this.sideFilter.set('all');
+    this.failedOnly.set(false);
+    this.host.nativeElement.querySelector<HTMLInputElement>('#timeline-search')?.focus();
   }
 
   rulePatternOf(call: HttpCall): string | null {
