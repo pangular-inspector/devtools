@@ -19,7 +19,7 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { ExtensionBridge, type SourceLocation } from '../extension-bridge';
 import { hostPageId } from '../page-id';
 import { pickPage } from '../live-pages';
-import { isAngularNativePage } from '../native-page';
+import { isNativePage } from '../native-page';
 import { isStaticReport } from '../rpc';
 import { Select, type SelectOption } from '../ui/select';
 import {
@@ -1433,7 +1433,7 @@ export class ComponentTree {
   );
 
   readonly live = computed(() => (this.page()?.roots.length ?? 0) > 0);
-  readonly native = computed(() => isAngularNativePage(this.page()));
+  readonly native = computed(() => isNativePage(this.page()));
   readonly devtoolsActions = computed(
     () => this.bridge.available && !!this.page() && !this.native() && !this.staticReport(),
   );

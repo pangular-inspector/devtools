@@ -8,6 +8,11 @@ export function isAngularNativePage(page: { platform?: string } | null | undefin
   return page?.platform === 'angular-native';
 }
 
+/** An app on a device or simulator, which has no DOM for browser-only controls. */
+export function isNativePage(page: { platform?: string } | null | undefined): boolean {
+  return isAngularNativePage(page) || page?.platform === 'nativescript';
+}
+
 export function angularNativePage(
   pages: Record<string, PlatformPage> | null | undefined,
   previous: string | null,

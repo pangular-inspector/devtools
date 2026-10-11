@@ -20,6 +20,7 @@ vi.mock('devframe/client', () => ({
     clients.push({ options });
     return {
       status: 'connected',
+      ensureTrusted: async () => true,
       connectionMeta,
       close: vi.fn(),
       scope: () => ({ rpc: { call: vi.fn(async () => undefined), register: vi.fn() } }),

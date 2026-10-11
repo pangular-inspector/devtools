@@ -176,7 +176,7 @@ export interface DeferBlockInfo {
   hydratedAt?: number;
 }
 
-export type PagePlatform = 'browser' | 'angular-native';
+export type PagePlatform = 'browser' | 'angular-native' | 'nativescript';
 
 export interface ComponentTreeReport {
   pageId: string;

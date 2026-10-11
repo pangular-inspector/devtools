@@ -102,8 +102,7 @@ export function angularNativeTree(
 const OUTLINE = { outlineWidth: 2, outlineStyle: 'solid', outlineColor: '#68b6ff' };
 
 let outlined: {
-  node: AngularNativeNode;
-  before: Record<string, unknown>;
+  restore: () => void;
   timer: ReturnType<typeof setTimeout>;
 } | null = null;
 
@@ -123,6 +122,44 @@ function writeStyle(node: AngularNativeNode, changes: Record<string, unknown>): 
 }
 
 /**
+ * Merge a React Native style array the way `StyleSheet.flatten` does: later
+ * entries win and falsy ones are skipped. Null when an entry is not an object,
+ * such as an old numeric style id.
+ */
+function flattenStyle(style: unknown): Record<string, unknown> | null {
+  if (!Array.isArray(style)) {
+    return style && typeof style === 'object' ? { ...(style as Record<string, unknown>) } : null;
+  }
+  const out: Record<string, unknown> = {};
+  for (const entry of style) {
+    if (!entry) continue;
+    const flat = flattenStyle(entry);
+    if (!flat) return null;
+    Object.assign(out, flat);
+  }
+  return out;
+}
+
+/**
+ * Outline a style array through one merged object, and put the array back on
+ * clear unless the app has set another style since.
+ */
+function outlineStyleArray(node: AngularNativeNode, style: unknown[]): (() => void) | null {
+  const host = node.host;
+  const flat = flattenStyle(style);
+  if (!host || !flat) return null;
+  const ownStyle = node.ownStyle;
+  const next = { ...flat, ...OUTLINE };
+  node.ownStyle = next;
+  host.setProp(node as never, 'style', next);
+  return () => {
+    if (node.props?.['style'] !== next) return;
+    node.ownStyle = ownStyle;
+    host.setProp(node as never, 'style', style);
+  };
+}
+
+/**
  * Outline one element through its inline style, which the engine applies
  * after the cascade, until `clearOutline()` or `durationMs`. Returns false when
  * the node cannot be outlined.
@@ -130,24 +167,31 @@ function writeStyle(node: AngularNativeNode, changes: Record<string, unknown>): 
 export function showOutline(node: AngularNativeNode, durationMs?: number): boolean {
   clearOutline();
   if (node.kind !== 'element') return false;
-  const style = (node.props?.['style'] ?? {}) as Record<string, unknown>;
-  const before = Object.fromEntries(Object.keys(OUTLINE).map((key) => [key, style[key]]));
-  if (!writeStyle(node, OUTLINE)) return false;
+  const current = node.props?.['style'];
+  let restore: (() => void) | null;
+  if (Array.isArray(current)) {
+    restore = outlineStyleArray(node, current);
+  } else {
+    const style = (current ?? {}) as Record<string, unknown>;
+    const before = Object.fromEntries(Object.keys(OUTLINE).map((key) => [key, style[key]]));
+    restore = writeStyle(node, OUTLINE) ? () => void writeStyle(node, before) : null;
+  }
+  if (!restore) return false;
   const timer = setTimeout(
     clearOutline,
     typeof durationMs === 'number' && durationMs > 0
       ? Math.min(durationMs, HIGHLIGHT_SAFETY_MS)
       : HIGHLIGHT_SAFETY_MS,
   );
-  outlined = { node, before, timer };
+  outlined = { restore, timer };
   return true;
 }
 
 /** Put back the style values the outlined element had. */
 export function clearOutline() {
   if (!outlined) return;
-  const { node, before, timer } = outlined;
+  const { restore, timer } = outlined;
   outlined = null;
   clearTimeout(timer);
-  writeStyle(node, before);
+  restore();
 }

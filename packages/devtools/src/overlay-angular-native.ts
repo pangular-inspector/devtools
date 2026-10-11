@@ -203,7 +203,13 @@ async function startSession(
     }
     lastTreeJson = json;
     treeSentAt = Date.now();
-    await my.rpc.call('push-component-tree', { ...report, pageId });
+    try {
+      await my.rpc.call('push-component-tree', { ...report, pageId });
+    } catch (error) {
+      // Sent again on the next tick.
+      if (lastTreeJson === json) lastTreeJson = '';
+      throw error;
+    }
   }
 
   const signalHistory = createSignalHistory(
@@ -280,7 +286,12 @@ async function startSession(
     }
     lastInjectorJson = json;
     injectorSentAt = Date.now();
-    await my.rpc.call('push-injector-tree', { ...report, pageId });
+    try {
+      await my.rpc.call('push-injector-tree', { ...report, pageId });
+    } catch (error) {
+      if (lastInjectorJson === json) lastInjectorJson = '';
+      throw error;
+    }
   }
 
   const ngrx = on.ngrx
@@ -316,9 +327,10 @@ async function startSession(
       request:
         string | { pageId?: string; id?: string; selector?: string; durationMs?: number } | null,
     ) => {
-      clearOutline();
       const wanted = typeof request === 'string' ? { selector: request } : request;
-      if (!wanted || (wanted.pageId && wanted.pageId !== pageId)) return;
+      if (wanted?.pageId && wanted.pageId !== pageId) return;
+      clearOutline();
+      if (!wanted) return;
       const host =
         typeof wanted.id === 'string'
           ? elementById<AngularNativeNode>(wanted.id, (h) => tree.isHost(h) && tree.connected(h))

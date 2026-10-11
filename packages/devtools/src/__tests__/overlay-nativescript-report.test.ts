@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const calls: { name: string; at: number }[] = [];
 let failTree = false;
 let failOnce: string | null = null;
+let known = true;
 
 vi.mock('@nativescript/core', () => ({
   Application: { getRootView: () => null },
@@ -12,6 +13,7 @@ vi.mock('@nativescript/core', () => ({
 vi.mock('devframe/client', () => ({
   connectDevframe: vi.fn(async () => ({
     status: 'connected',
+    ensureTrusted: async () => true,
     close: vi.fn(),
     scope: () => ({
       rpc: {
@@ -22,7 +24,7 @@ vi.mock('devframe/client', () => ({
             failOnce = null;
             throw new Error('rejected');
           }
-          return undefined;
+          return name.startsWith('ping-') ? { known } : undefined;
         }),
         register: vi.fn(),
       },
@@ -72,6 +74,7 @@ describe('NativeScript overlay reports', () => {
     calls.length = 0;
     failTree = false;
     failOnce = null;
+    known = true;
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
@@ -116,7 +119,7 @@ describe('NativeScript overlay reports', () => {
     },
   );
 
-  it('re-sends an unchanged tree within the page expiry at a slow interval', async () => {
+  it('checks an unchanged tree within the page expiry at a slow interval', async () => {
     const { initNativeScriptOverlay } = await import('../overlay-nativescript.ts');
     const dispose = initNativeScriptOverlay({
       baseURL: 'http://localhost:9999/',
@@ -125,10 +128,31 @@ describe('NativeScript overlay reports', () => {
     await vi.advanceTimersByTimeAsync(0);
     await flush();
     await vi.advanceTimersByTimeAsync(60_000);
-    const times = calls.filter((c) => c.name === 'push-component-tree').map((c) => c.at);
+    const times = calls
+      .filter((c) => c.name === 'push-component-tree' || c.name === 'ping-component-tree')
+      .map((c) => c.at);
     const gaps = times.slice(1).map((at, i) => at - times[i]);
     expect(times.length).toBeGreaterThan(2);
     expect(Math.max(...gaps)).toBeLessThanOrEqual(15_000);
+    dispose();
+  });
+
+  it('pings an unchanged tree on keepalive and sends it again only when the server lost it', async () => {
+    const { initNativeScriptOverlay } = await import('../overlay-nativescript.ts');
+    const dispose = initNativeScriptOverlay({
+      baseURL: 'http://localhost:9999/',
+      intervalMs: 5000,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    await flush();
+    await vi.advanceTimersByTimeAsync(15_000);
+    const count = (name: string) => calls.filter((c) => c.name === name).length;
+    expect(count('push-component-tree')).toBe(1);
+    expect(count('ping-component-tree')).toBeGreaterThan(0);
+
+    known = false;
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(count('push-component-tree')).toBeGreaterThan(1);
     dispose();
   });
 });

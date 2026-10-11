@@ -243,6 +243,33 @@ describe('showOutline', () => {
     expect(second.props['style']).toEqual({});
   });
 
+  it('outlines a style array through a merged object and puts the array back', () => {
+    const node = el('view');
+    const base = { flex: 1, outlineWidth: 1 };
+    const style = [base, null, [{ padding: 4 }]];
+    node.props['style'] = style;
+    expect(showOutline(asNode(node))).toBe(true);
+    expect(node.props['style']).toEqual({
+      flex: 1,
+      padding: 4,
+      outlineWidth: 2,
+      outlineStyle: 'solid',
+      outlineColor: '#68b6ff',
+    });
+    clearOutline();
+    expect(node.props['style']).toBe(style);
+  });
+
+  it('leaves a style the app set during the outline in place', () => {
+    const node = el('view');
+    node.props['style'] = [{ flex: 1 }];
+    showOutline(asNode(node));
+    const replaced = [{ flex: 2 }];
+    node.props['style'] = replaced;
+    clearOutline();
+    expect(node.props['style']).toBe(replaced);
+  });
+
   it('skips anchors and nodes without an engine', () => {
     expect(showOutline(asNode(anchor()))).toBe(false);
     const bare = el('view');
@@ -521,6 +548,53 @@ describe('initAngularNativeOverlay', () => {
     expect(second.props['style']).toEqual({});
     dispose();
   });
+
+  it("keeps its outline when a highlight request names another app's page", async () => {
+    const { root, second, ng } = fixture();
+    g['ng'] = ng;
+    const session = fakeRpc();
+    connectDevframe.mockResolvedValue(session.rpc);
+    const { initAngularNativeOverlay } = await import('../overlay-angular-native.ts');
+    const dispose = initAngularNativeOverlay({ root: asNode(root), intervalMs: 1000 });
+    await vi.waitFor(() => expect(session.handlers.has('highlight-in-page')).toBe(true));
+    session.handlers.get('highlight-in-page')?.({ id: elementId(second) });
+    session.handlers.get('highlight-in-page')?.({ pageId: 'other', id: 'x' });
+    expect(second.props['style']).toMatchObject({ outlineWidth: 2 });
+    session.handlers.get('highlight-in-page')?.('');
+    expect(second.props['style']).toEqual({});
+    dispose();
+  });
+
+  it.each(['push-component-tree', 'push-injector-tree'])(
+    'sends an unchanged %s again on the next tick after it was rejected',
+    async (name) => {
+      const { root, ng } = fixture();
+      g['ng'] = ng;
+      const session = fakeRpc();
+      const scope = session.rpc.scope;
+      let rejected = false;
+      session.rpc.scope = () => {
+        const scoped = scope();
+        const call = scoped.rpc.call;
+        scoped.rpc.call = vi.fn(async (method: string, arg: unknown) => {
+          const answer = await call(method, arg);
+          if (method === name && !rejected) {
+            rejected = true;
+            throw new Error('socket down');
+          }
+          return answer;
+        });
+        return scoped;
+      };
+      connectDevframe.mockResolvedValue(session.rpc);
+      const { initAngularNativeOverlay } = await import('../overlay-angular-native.ts');
+      const dispose = initAngularNativeOverlay({ root: asNode(root), intervalMs: 1000 });
+      await vi.waitFor(() => expect(rejected).toBe(true));
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(session.calls.filter(([method]) => method === name)).toHaveLength(2);
+      dispose();
+    },
+  );
 
   it('does nothing without a WebSocket global', async () => {
     delete g['WebSocket'];

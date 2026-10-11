@@ -16,9 +16,13 @@ import { setRedaction } from './forms-privacy.ts';
 import { hostBySelector } from './host-tree.ts';
 import { collectInjectorTree } from './injector-tree.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
+import { HIGHLIGHT_SAFETY_MS } from './page-highlight.ts';
+import { attachPipes } from './pipes-collector.ts';
+import type { NgDebugApi } from './pipes-runtime.ts';
 import {
   collectSignalGraph,
   graphKey,
+  graphValue,
   toSignalTarget,
   type SignalDebugNg,
   type SignalTarget,
@@ -36,10 +40,18 @@ import { newPageId } from './page-id.ts';
 
 type DebugNg = SignalDebugNg<NativeView> & ComponentDebugNg<NativeView> & NativeScriptDebugNg;
 
+type Rpc = Awaited<ReturnType<typeof connectDevframe>>;
+
+const TRUST_TIMEOUT_MS = 5000;
+/** How long a highlight stays when the request names no duration. */
+const FLASH_MS = 2000;
+
+class UntrustedError extends Error {}
+
 export interface NativeScriptOverlayOptions {
   /** Absolute URL of the devtools server. Defaults to `defaultDevtoolsBaseURL()`. */
   baseURL?: string;
-  /** How often the app reports, in milliseconds. */
+  /** How often the app reports, in milliseconds. Defaults to the server's `limits.refreshMs`. */
   intervalMs?: number;
   /** How long to wait before trying the server again after a failure, in milliseconds. */
   retryMs?: number;
@@ -71,7 +83,9 @@ export function initNativeScriptOverlay(options: NativeScriptOverlayOptions = {}
   // The server and the app restart independently of each other, and the
   // devframe client has no reconnect of its own, so a session that fails or
   // drops is replaced after a pause for as long as the overlay is alive.
-  const intervalMs = options.intervalMs ?? 3000;
+  // The page id outlives the sessions, so the panel keeps the app selected
+  // and no ghost page is left behind when the socket reconnects.
+  const pageId = newPageId();
   const retryMs = options.retryMs ?? 5000;
   let disposed = false;
   let session: (() => void) | undefined;
@@ -88,7 +102,7 @@ export function initNativeScriptOverlay(options: NativeScriptOverlayOptions = {}
     }, retryMs);
   };
   const start = () => {
-    connect(baseURL, intervalMs, again).then(
+    connect(baseURL, pageId, options.intervalMs, again).then(
       (dispose) => {
         if (disposed) {
           dispose();
@@ -98,10 +112,12 @@ export function initNativeScriptOverlay(options: NativeScriptOverlayOptions = {}
         unreachable = false;
         console.log(`[pangular] Connected to the devtools server at ${baseURL}`);
       },
-      () => {
+      (error: unknown) => {
         if (!unreachable) {
           console.warn(
-            `[pangular] Could not reach the devtools server at ${baseURL}; retrying every ${retryMs}ms.`,
+            error instanceof UntrustedError
+              ? `[pangular] The devtools server at ${baseURL} did not accept the app. Start it with --no-auth. Retrying every ${retryMs}ms.`
+              : `[pangular] Could not reach the devtools server at ${baseURL}; retrying every ${retryMs}ms.`,
           );
         }
         unreachable = true;
@@ -119,7 +135,12 @@ export function initNativeScriptOverlay(options: NativeScriptOverlayOptions = {}
   };
 }
 
-async function connect(baseURL: string, intervalMs: number, onDisconnected: () => void) {
+async function connect(
+  baseURL: string,
+  pageId: string,
+  intervalMs: number | undefined,
+  onDisconnected: () => void,
+) {
   // SSE is out: the NativeScript fetch has no streaming body.
   // Closing the socket on purpose also fires the close event.
   let closing = false;
@@ -138,15 +159,19 @@ async function connect(baseURL: string, intervalMs: number, onDisconnected: () =
     },
   });
   try {
-    const stop = await startSession(rpc, intervalMs);
+    const trusted = await rpc.ensureTrusted(TRUST_TIMEOUT_MS).catch(() => false);
+    if (!trusted) throw new UntrustedError();
+    const stop = await startSession(rpc, pageId, intervalMs);
     if (dead) {
       closing = true;
-      stop();
+      stop(false);
       return () => {};
     }
     return () => {
       closing = true;
-      stop();
+      // A dropped socket takes no more calls, so only a live one is told to
+      // forget the page.
+      stop(!dead);
     };
   } catch (error) {
     closing = true;
@@ -156,14 +181,22 @@ async function connect(baseURL: string, intervalMs: number, onDisconnected: () =
 }
 
 async function startSession(
-  rpc: Awaited<ReturnType<typeof connectDevframe>>,
-  intervalMs: number,
-): Promise<() => void> {
+  rpc: Rpc,
+  pageId: string,
+  intervalMs: number | undefined,
+): Promise<(forget: boolean) => void> {
   const my = rpc.scope('pangular');
-  setRedaction(configFromConnection(rpc.connectionMeta).redaction);
-  const pageId = newPageId();
+  const config = configFromConnection(rpc.connectionMeta);
+  const tickMs = intervalMs ?? config.limits.refreshMs;
+  setRedaction(config.redaction);
+  const title = `NativeScript (${isAndroid ? 'Android' : 'iOS'})`;
 
   const tree = nativeScriptTree(angularDebugApi, () => Application.getRootView() as NativeView);
+
+  const pingKnows = async (name: string) => {
+    const answer = (await my.rpc.call(name, pageId)) as { known?: boolean } | undefined;
+    return answer?.known !== false;
+  };
 
   let componentTarget: string | null = null;
   let lastTreeJson = '';
@@ -171,25 +204,33 @@ async function startSession(
   async function pushTree(force = false) {
     const ng = angularDebugApi();
     if (!ng) return;
-    const report = collectComponentTree(ng, { tree, selectedId: componentTarget });
+    const report = {
+      ...collectComponentTree(ng, { tree, selectedId: componentTarget }),
+      url: '/',
+      title,
+      platform: 'nativescript' as const,
+    };
     const json = JSON.stringify(report);
-    if (!force && json === lastTreeJson && !keepaliveDue(treeSentAt, intervalMs)) return;
-    const previous = { json: lastTreeJson, sentAt: treeSentAt };
+    if (!force && json === lastTreeJson) {
+      if (!keepaliveDue(treeSentAt, tickMs)) return;
+      treeSentAt = Date.now();
+      if (await pingKnows('ping-component-tree')) return;
+    }
     lastTreeJson = json;
     treeSentAt = Date.now();
     try {
       await my.rpc.call('push-component-tree', { ...report, pageId });
     } catch (error) {
-      if (lastTreeJson === json) {
-        lastTreeJson = previous.json;
-        treeSentAt = previous.sentAt;
-      }
+      // Sent again on the next tick.
+      if (lastTreeJson === json) lastTreeJson = '';
       throw error;
     }
   }
 
-  const signalHistory = createSignalHistory((value, name) =>
-    serializeNamed(name, value, { budget: 1000 }),
+  const signalHistory = createSignalHistory(
+    (value, name) => serializeNamed(name, value, { budget: 1000 }),
+    Date.now,
+    (value, name) => graphValue(name, value),
   );
   const restoreSignalHook = await installSignalWriteHook(signalHistory.onWrite);
 
@@ -202,20 +243,38 @@ async function startSession(
     const graph = collectSignalGraph(angularDebugApi(), signalTarget, tree);
     if (!graph) return;
     const key = graphKey(graph);
-    if (!force && key === lastSignalKey && !keepaliveDue(signalSentAt, intervalMs)) return;
+    if (!force && key === lastSignalKey) {
+      if (!keepaliveDue(signalSentAt, tickMs)) return;
+      signalSentAt = Date.now();
+      if (await pingKnows('ping-signal-graph')) return;
+    }
     lastSignalKey = key;
     signalSentAt = Date.now();
     const owner = graph.component?.id ?? '';
     const full = force || !historyDelta || owner !== historyFor;
     historyFor = owner;
+    const statuses = (graph.resources ?? [])
+      .filter((r) => r.status)
+      .map((r) => ({
+        id: r.id,
+        kind: 'resource' as const,
+        label: r.name,
+        epoch: r.epoch,
+        value: r.status,
+      }));
     const { changes: history, rollback } = signalHistory.collectDeltaWithRollback(
-      graph.nodes,
+      [...graph.nodes, ...statuses],
       full,
     );
+    for (const item of [...graph.nodes, ...(graph.resources ?? [])]) {
+      const changes = signalHistory.changesOf(item.id);
+      if (changes) item.changes = changes;
+    }
     let answer: { delta?: boolean } | undefined;
     try {
       answer = (await my.rpc.call('push-signal-graph', {
         ...graph,
+        ...(restoreSignalHook ? {} : { writeHook: false as const }),
         pageId,
         ...(full ? { history } : { historyDelta: history }),
       })) as { delta?: boolean } | undefined;
@@ -235,28 +294,39 @@ async function startSession(
     if (!ng) return;
     const report = collectInjectorTree(ng, tree);
     const json = JSON.stringify(report);
-    if (json === lastInjectorJson && !keepaliveDue(injectorSentAt, intervalMs)) return;
-    const previous = { json: lastInjectorJson, sentAt: injectorSentAt };
+    if (json === lastInjectorJson) {
+      if (!keepaliveDue(injectorSentAt, tickMs)) return;
+      injectorSentAt = Date.now();
+      if (await pingKnows('ping-injector-tree')) return;
+    }
     lastInjectorJson = json;
     injectorSentAt = Date.now();
     try {
       await my.rpc.call('push-injector-tree', { ...report, pageId });
     } catch (error) {
-      if (lastInjectorJson === json) {
-        lastInjectorJson = previous.json;
-        injectorSentAt = previous.sentAt;
-      }
+      if (lastInjectorJson === json) lastInjectorJson = '';
       throw error;
     }
   }
 
-  const ngrx = attachNgrx(my, pageId, angularDebugApi, undefined, {
+  const ngrx = attachNgrx(my, pageId, angularDebugApi, config.limits.changeLog, {
     tree,
-    describe: () => ({ url: '/', title: `NativeScript (${isAndroid ? 'Android' : 'iOS'})` }),
+    describe: () => ({ url: '/', title }),
   });
 
+  const pipes = config.inspectors.pipes
+    ? attachPipes(my, pageId, () => angularDebugApi() as NgDebugApi | undefined, { tree })
+    : null;
+
+  const collectors = [
+    pushTree,
+    pushSignalGraph,
+    pushInjectorTree,
+    () => ngrx.push(),
+    ...(pipes ? [async () => pipes.push()] : []),
+  ];
   const report = async () => {
-    for (const collect of [pushTree, pushSignalGraph, pushInjectorTree, () => ngrx.push()]) {
+    for (const collect of collectors) {
       await collect().catch((error: unknown) => console.warn('[pangular] report failed', error));
     }
   };
@@ -265,25 +335,27 @@ async function startSession(
     report().catch((error) => console.warn('[pangular] report failed', error));
   };
   tick();
-  const interval = setInterval(tick, intervalMs);
+  const interval = setInterval(tick, tickMs);
 
   my.rpc.register({
     name: 'highlight-in-page',
     type: 'event',
     jsonSerializable: true,
-    handler: (selector: string | { pageId?: string; id?: string } | null) => {
-      if (selector && typeof selector === 'object') {
-        if (selector.pageId && selector.pageId !== pageId) return;
-        const host =
-          typeof selector.id === 'string'
-            ? elementById(selector.id, (h) => tree.isHost(h) && tree.connected(h))
+    handler: (
+      request:
+        string | { pageId?: string; id?: string; selector?: string; durationMs?: number } | null,
+    ) => {
+      const wanted = typeof request === 'string' ? { selector: request } : request;
+      if (wanted?.pageId && wanted.pageId !== pageId) return;
+      clearFlash();
+      if (!wanted) return;
+      const host =
+        typeof wanted.id === 'string'
+          ? elementById<NativeView>(wanted.id, (h) => tree.isHost(h) && tree.connected(h))
+          : typeof wanted.selector === 'string' && wanted.selector
+            ? hostBySelector(tree, wanted.selector)
             : null;
-        if (tree.isHost(host)) flash(renderedView(host));
-        return;
-      }
-      if (typeof selector !== 'string' || !selector) return;
-      const host = hostBySelector(tree, selector);
-      if (host) flash(renderedView(host));
+      if (host && tree.isHost(host)) flash(renderedView(host), wanted.durationMs);
     },
   });
 
@@ -316,15 +388,22 @@ async function startSession(
     },
   });
 
-  return () => {
+  return (forget) => {
     clearInterval(interval);
+    clearFlash();
     restoreSignalHook?.();
     ngrx.stop();
+    pipes?.stop();
+    if (!forget) {
+      rpc.close?.();
+      return;
+    }
     void Promise.allSettled([
       my.rpc.call('forget-component-page', pageId),
       my.rpc.call('forget-signal-page', pageId),
       my.rpc.call('forget-injector-page', pageId),
       my.rpc.call('forget-ngrx-page', pageId),
+      ...(pipes ? [my.rpc.call('forget-pipes-page', pageId)] : []),
     ]).finally(() => rpc.close?.());
   };
 }
@@ -352,24 +431,39 @@ function withTextGlobal<T>(fn: () => T): T {
   }
 }
 
-const flashing = new WeakMap<
-  NativeView,
-  { borderWidth: unknown; borderColor: unknown; timer: ReturnType<typeof setTimeout> }
->();
+let flashed: {
+  view: NativeView;
+  borderWidth: unknown;
+  borderColor: unknown;
+  timer: ReturnType<typeof setTimeout>;
+} | null = null;
 
-/** Outline a view for two seconds, keeping the border it had for when that ends. */
-function flash(view: NativeView) {
-  const active = flashing.get(view);
-  if (active) clearTimeout(active.timer);
-  const { borderWidth, borderColor } = active ?? view;
+/**
+ * Outline a view for `durationMs` (two seconds by default), keeping the border
+ * it had for when that ends or the next request clears it.
+ */
+function flash(view: NativeView, durationMs?: number) {
+  clearFlash();
+  const { borderWidth, borderColor } = view;
   view.borderWidth = 2;
   view.borderColor = '#68b6ff';
-  const timer = setTimeout(() => {
-    flashing.delete(view);
-    view.borderWidth = borderWidth;
-    view.borderColor = borderColor;
-  }, 2000);
-  flashing.set(view, { borderWidth, borderColor, timer });
+  const timer = setTimeout(
+    clearFlash,
+    typeof durationMs === 'number' && durationMs > 0
+      ? Math.min(durationMs, HIGHLIGHT_SAFETY_MS)
+      : FLASH_MS,
+  );
+  flashed = { view, borderWidth, borderColor, timer };
+}
+
+/** Put back the border the outlined view had. */
+function clearFlash() {
+  if (!flashed) return;
+  const { view, borderWidth, borderColor, timer } = flashed;
+  flashed = null;
+  clearTimeout(timer);
+  view.borderWidth = borderWidth;
+  view.borderColor = borderColor;
 }
 
 /**

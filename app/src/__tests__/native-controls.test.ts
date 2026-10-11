@@ -1,7 +1,7 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { DevframeRpcClient } from 'devframe/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { isAngularNativePage } from '../native-page';
+import { isAngularNativePage, isNativePage } from '../native-page';
 import { ComponentTree } from '../pages/component-tree';
 
 function fakeClient(pages: Record<string, unknown>): DevframeRpcClient {
@@ -84,6 +84,14 @@ describe('browser-only controls', () => {
     expect(isAngularNativePage(null)).toBe(false);
   });
 
+  it('treats Angular Native and NativeScript pages as native, and only those', () => {
+    expect(isNativePage({ platform: 'angular-native' })).toBe(true);
+    expect(isNativePage({ platform: 'nativescript' })).toBe(true);
+    expect(isAngularNativePage({ platform: 'nativescript' })).toBe(false);
+    expect(isNativePage({ platform: 'browser' })).toBe(false);
+    expect(isNativePage(null)).toBe(false);
+  });
+
   it('shows the component picker and change detection recording for a browser page', async () => {
     const fixture = await render();
     expect(buttons(fixture)).toContain('Pick component on page');
@@ -91,15 +99,18 @@ describe('browser-only controls', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('#cd-heading')).not.toBeNull();
   });
 
-  it('hides them for an Angular Native page and keeps the tree', async () => {
-    const fixture = await render('angular-native');
-    const host = fixture.nativeElement as HTMLElement;
-    expect(buttons(fixture)).not.toContain('Pick component on page');
-    expect(buttons(fixture)).not.toContain('Record');
-    expect(host.querySelector('#cd-heading')).toBeNull();
-    expect(host.textContent).toContain('App');
-    expect(host.querySelector('input[type="search"]')).not.toBeNull();
-  });
+  it.each(['angular-native', 'nativescript'])(
+    'hides them for a %s page and keeps the tree',
+    async (platform) => {
+      const fixture = await render(platform);
+      const host = fixture.nativeElement as HTMLElement;
+      expect(buttons(fixture)).not.toContain('Pick component on page');
+      expect(buttons(fixture)).not.toContain('Record');
+      expect(host.querySelector('#cd-heading')).toBeNull();
+      expect(host.textContent).toContain('App');
+      expect(host.querySelector('input[type="search"]')).not.toBeNull();
+    },
+  );
 
   it('cancels a pick on its own page when the dropdown shows another page', async () => {
     const { client, calls } = liveClient({ p1: page('p1'), p2: page('p2') });

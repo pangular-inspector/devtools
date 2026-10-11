@@ -24,6 +24,7 @@ vi.mock('@nativescript/core', () => ({
 vi.mock('devframe/client', () => ({
   connectDevframe: vi.fn(async () => ({
     status: 'connected',
+    ensureTrusted: async () => true,
     close: vi.fn(),
     scope: () => ({
       rpc: {

@@ -6,11 +6,12 @@ import { listPagesText, pageDetails, summarizePages } from '../rpc/pages.ts';
 const report = { pageId: 'ab12', roots: [], count: 0, detail: null };
 
 describe('page platform', () => {
-  it('keeps the Angular Native platform of a component report', () => {
-    expect(toComponentPage({ ...report, platform: 'angular-native' }, 1).platform).toBe(
-      'angular-native',
-    );
-  });
+  it.each(['angular-native', 'nativescript'] as const)(
+    'keeps the %s platform of a component report',
+    (platform) => {
+      expect(toComponentPage({ ...report, platform }, 1).platform).toBe(platform);
+    },
+  );
 
   it('leaves a browser page, or an unknown platform, without one', () => {
     expect(toComponentPage(report, 1)).not.toHaveProperty('platform');
@@ -24,17 +25,20 @@ describe('page platform', () => {
       components: [
         { pageId: 'ab12', reportedAt: 2000, url: '/', platform: 'angular-native' },
         { pageId: 'cd34', reportedAt: 1000, url: '/trips' },
+        { pageId: 'ns56', reportedAt: 500, url: '/', platform: 'nativescript' },
       ],
       signals: [{ pageId: 'ab12', reportedAt: 2500 }],
     });
     expect(pages.map((page) => [page.pageId, page.platform])).toEqual([
       ['ab12', 'angular-native'],
       ['cd34', undefined],
+      ['ns56', 'nativescript'],
     ]);
     const text = listPagesText(pages, 3000);
     expect(text).toContain('| Page | URL | Title | Platform | Last report | Reports |');
     expect(text).toContain('| `ab12` | `/` |  | Angular Native | 1s ago | components, signals |');
     expect(text).toContain('| `cd34` | `/trips` |  | browser | 2s ago | components |');
+    expect(text).toContain('| `ns56` | `/` |  | NativeScript | 3s ago | components |');
   });
 });
 

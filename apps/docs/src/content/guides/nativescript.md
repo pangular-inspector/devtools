@@ -93,7 +93,7 @@ Call it before `runNativeScriptAngularApp()`. The injector inspector relies on *
 | Android emulator | `http://10.0.2.2:9999/`  |
 | Physical device  | Pass `{ baseURL }`       |
 
-For a physical device, pass the address of your machine as `baseURL`, and allow plain HTTP to that address in `Info.plist` and `AndroidManifest.xml`.
+For a physical device, pass the address of your machine as `baseURL`. Android 9 and later and iOS App Transport Security block plain `http` to a LAN address, so allow it for development builds: set `android:usesCleartextTraffic="true"` in `AndroidManifest.xml`, and add an `NSAppTransportSecurity` exception for the address in `Info.plist`.
 
 ## Step 4: Run the devtools server
 

@@ -21,16 +21,17 @@ This page describes what the overlay shows and how it works. To add it to an app
 | Signals    | The signal graph of the selected component, with its write history.                                                                             |
 | Injectors  | Element injectors and environment injectors with their providers.                                                                               |
 | NgRx       | Live `@ngrx/signals` and `@ngrx/store` state and the change log. The store list names the app `NativeScript (iOS)` or `NativeScript (Android)`. |
+| Pipes      | The pipes in use, with their instances and the components that use them.                                                                        |
 
-The source scans (routes, pipes, NgRx declarations) come from the server, so they work as with the [Standalone CLI](./cli.md). The Pipes, Router, Forms, SSR & HTTP and change detection tabs show no live data for a NativeScript app, and there is no in-app popup.
+The source scans (routes, pipes, NgRx declarations) come from the server, so they work as with the [Standalone CLI](./cli.md). The Router, Forms, SSR & HTTP and change detection tabs show no live data for a NativeScript app, and there is no in-app popup.
 
-### Controls without an effect
+### Hidden controls
 
-The panel treats a NativeScript app like a browser page and hides none of its controls. Two of them have nothing to work with:
+Some controls only work with the [browser overlay](./overlay.md), so the panel hides them while the Components tab shows a NativeScript app:
 
-| Control                    | Why it does nothing                                               |
+| Control                    | Why it is hidden                                                  |
 | -------------------------- | ----------------------------------------------------------------- |
-| **Pick component on page** | The NativeScript overlay does not listen for a pick.              |
+| **Pick component on page** | Picking listens for a click on a DOM element.                     |
 | **Change detection** block | The NativeScript overlay does not record change detection cycles. |
 
 Hovering a row still outlines the component on the device.
@@ -46,7 +47,7 @@ The live data shows in the same tabs as a browser page.
 
 The **NativeScript** dock (`?view=nativescript`) shows no live data. It is a setup card, **Inspect NativeScript apps**, with the setup steps and a link to the [setup guide](../guides/nativescript.md).
 
-The overlay sends no platform marker, so `list-pages` lists a NativeScript app with the `browser` platform. See [Agent tools](../agents/tools.md#list-pages).
+The overlay marks its component reports with `platform: 'nativescript'`, the URL `/` and the title `NativeScript (iOS)` or `NativeScript (Android)`. `list-pages` lists the app with the `NativeScript` platform. See [Agent tools](../agents/tools.md#list-pages).
 
 ## Requirements
 
@@ -54,7 +55,7 @@ The overlay sends no platform marker, so `list-pages` lists a NativeScript app w
 - `@nativescript/core`, an optional peer dependency of the package. The overlay reads the root view and the platform from it.
 - A `WebSocket` global. The NativeScript runtime has none, so import `@valor/nativescript-websockets` first in `src/polyfills.ts`. Without it, the overlay logs a warning that names the package and does not start.
 - `initNativeScriptOverlay()` called before `runNativeScriptAngularApp()`, so the injector inspector gets its provider lists. See [How it works](#how-it-works).
-- A server started with `--no-auth`, since the app cannot enter the one-time code the panel asks for.
+- A server started with `--no-auth`, since the app cannot enter the one-time code the panel asks for. Against a server with auth on, the overlay logs a warning that says to start it with `--no-auth`, and tries again every `retryMs`.
 
 ## Set up
 
@@ -64,11 +65,11 @@ The overlay sends no platform marker, so `list-pages` lists a NativeScript app w
 
 `initNativeScriptOverlay()` takes an optional object:
 
-| Option       | Default                    | What it does                                                                  |
-| ------------ | -------------------------- | ----------------------------------------------------------------------------- |
-| `baseURL`    | `defaultDevtoolsBaseURL()` | Absolute URL of the devtools server.                                          |
-| `intervalMs` | `3000`                     | How often the app reports, in milliseconds.                                   |
-| `retryMs`    | `5000`                     | How long to wait before connecting again after a failure or a dropped socket. |
+| Option       | Default                         | What it does                                                                  |
+| ------------ | ------------------------------- | ----------------------------------------------------------------------------- |
+| `baseURL`    | `defaultDevtoolsBaseURL()`      | Absolute URL of the devtools server.                                          |
+| `intervalMs` | The server's `limits.refreshMs` | How often the app reports, in milliseconds.                                   |
+| `retryMs`    | `5000`                          | How long to wait before connecting again after a failure or a dropped socket. |
 
 `defaultDevtoolsBaseURL(port = 9999)` is exported from the same entry point and picks the address by platform:
 
@@ -79,7 +80,7 @@ The overlay sends no platform marker, so `list-pages` lists a NativeScript app w
 
 `10.0.2.2` is how the Android emulator reaches its host. A physical device needs your machine's LAN address as `baseURL`.
 
-`initNativeScriptOverlay()` returns a function that stops the overlay and tells the server to forget the app's component, signal, injector and NgRx reports.
+`initNativeScriptOverlay()` returns a function that stops the overlay and tells the server to forget the app's component, signal, injector, NgRx and pipe reports.
 
 ## How it works
 
@@ -87,8 +88,8 @@ The overlay sends no platform marker, so `list-pages` lists a NativeScript app w
 - **Injector profiler**: *Angular wires the profiler that backs the provider lists only when a `window` global exists as the platform is created. The overlay defines `window` until *Angular publishes `ng.getComponent`, then removes it. If `window` or `ng` already exist, it leaves them alone.
 - **Web shims**: the devframe client reads `location` and `navigator`. The overlay defines them from `baseURL` when the runtime has none, and leaves them in place.
 - **Transport**: the overlay connects over a WebSocket only, since the NativeScript `fetch` has no streaming body.
-- **Reporting**: the app collects every `intervalMs` and sends a report when it changed, or on every fourth tick as a keepalive. When the connection fails or drops, it logs one warning and tries again every `retryMs`. Each new connection reports under a new page id.
-- **Highlight**: when the panel or the `highlight` agent tool points at a component, the overlay sets a 2 px `#68b6ff` border on the first view under the host that draws something, and restores the previous border after two seconds.
+- **Reporting**: the app collects every `intervalMs` and sends a report when it changed. When a report has not changed for a while, the app asks the server whether it still holds it, and sends it again only if not. When the connection fails or drops, it logs one warning and tries again every `retryMs`. The app keeps one page id for as long as the overlay runs, so a reconnect does not show it as a new page.
+- **Highlight**: when the panel or the `highlight` agent tool points at a component, the overlay sets a 2 px `#68b6ff` border on the first view under the host that draws something. It restores the previous border when the pointer leaves the row, after the duration the `highlight` tool asks for, or after two seconds.
 
 ## FAQ
 
