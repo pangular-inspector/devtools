@@ -118,9 +118,11 @@ Without `page`, it reads the page that is recording, and `record` goes to every 
 
 The signal graph the page reported: nodes (`signal`, `computed`, `linkedSignal`, `effect`), dependency edges, the component or injector they belong to, and recent value history per node. Reads: page.
 
-| Argument   | Required | Value                                                                                                                              |
-| ---------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `selector` | yes      | Host tag, class name or instance id of the component, like `app-root`. Or `root`, or a route path like `/admin` or `Route: admin`. |
+| Argument   | Required | Value                                                                                                                                                        |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `selector` | yes      | Host tag, class name or instance id of the component, like `app-root`. Or `root`, or a route path like `/admin` or `Route: admin`.                           |
+| `node`     | no       | A node id or label. The answer holds only that node, or every node with that label, with its direct producers and consumers and their resources and history. |
+| `history`  | no       | `false` leaves out the value history. Defaults to `true`.                                                                                                    |
 
 The answer also holds:
 
@@ -130,6 +132,8 @@ The answer also holds:
 | `environments` | The root and route injectors the page can report, with `id` and `name`.                                                       |
 | `changes`      | On a node or resource, every change since the page first saw it. The history keeps the last 50.                               |
 | `nodeCount`    | Set when Angular reported more than the 400 nodes the page keeps.                                                             |
+
+The answer is cut at 20,000 characters. A graph that is too long first keeps fewer history entries per node, then keeps the first nodes that fit. A note under the JSON says how many history entries and nodes it left out. Pass `node` or `history: false` to see the rest.
 
 With `root` or a route path, the tool switches the page's graph to the effects of that injector and waits up to 1.5 seconds for it. If no injector matches, the answer lists the ones the page knows. On Angular 20.0, the answer says the live graph needs Angular 20.1 or later.
 
@@ -215,6 +219,8 @@ Use `explain-navigation` for "why was I redirected". Pass `perf: true` for "why 
 | `probe`        | Runs the real matcher for `url` without navigating. It runs `canMatch` and may load lazy chunks. | `url`                                                                                                   |
 | `instrument`   | Turns per-guard and per-resolver recording on or off.                                            | `on`                                                                                                    |
 | `resolve-lazy` | Reads the routes of an unloaded lazy route without registering them.                             | `routeId`, from `list-routes`                                                                           |
+
+The page's result comes back as a JSON block cut at 15,000 characters. A cut result ends with a note saying so.
 
 `action` is required. Only same-origin URLs that start with `/` are accepted. With `actions.router` set to `false`, `navigate`, `abort`, `replay` and `probe` answer **Navigating is turned off in the devtools config (actions.router).** `instrument` and `resolve-lazy` still work. `agent.readOnly` drops the whole tool.
 

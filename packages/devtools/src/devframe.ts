@@ -10,6 +10,7 @@ import { explainPipeText } from './rpc/pipe-explain.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
 import { getBuildMeta } from './rpc/build-meta.ts';
 import { getSignals } from './rpc/get-signals.ts';
+import { SIGNAL_TOOL_MAX, signalGraphText, type InspectSignalsArgs } from './rpc/signal-tools.ts';
 import { injectorMatches, isEnvironmentRequest } from './signal-graph.ts';
 import { getProviders } from './rpc/get-providers.ts';
 import { getNgrxStore, scanNgrxStore } from './rpc/get-ngrx-store.ts';
@@ -102,6 +103,7 @@ import {
   isRouterReport,
   mergeRouterReport,
   noPage,
+  routerActionText,
   routerResourceText,
   touchRouterPage,
   type RouterPage,
@@ -1745,7 +1747,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-signals',
       description:
-        "Get the signal graph the running page last reported: signal nodes (signal, computed, linkedSignal, effect), their dependency edges, `component` (instance id, class name, host tag and host path) or `injector` (an environment injector), `resources` (each resource(), httpResource() or rxResource() folded into one entry with status, isLoading, params, value, error and the ids of its internal nodes), `environments` (root and route injectors the page can report), and `history` (recent value changes per node id and status changes per resource id; `write` entries are exact, `sample` entries come from polling and `missed` counts values that went unseen). `changes` on a node or resource counts every change since the page first saw it, past the 50 kept entries. `nodeCount` is set when Angular reported more nodes than the 400 kept. Only signals a template or an effect has read appear. The page reports one graph: the component picked on the Signals page (or via pangular:highlight), otherwise the component the primary router outlet renders deepest, otherwise the first component with a graph. Pass `root` for effects in root services, or a route path (`/admin` or `Route: admin`) for effects in that route's providers; this switches the page's graph to that injector. A component selector that does not match the reported graph returns what is available instead; call pangular:highlight with it first to switch the graph to it.",
+        "Get the signal graph the running page last reported: signal nodes (signal, computed, linkedSignal, effect), their dependency edges, `component` (instance id, class name, host tag and host path) or `injector` (an environment injector), `resources` (each resource(), httpResource() or rxResource() folded into one entry with status, isLoading, params, value, error and the ids of its internal nodes), `environments` (root and route injectors the page can report), and `history` (recent value changes per node id and status changes per resource id; `write` entries are exact, `sample` entries come from polling and `missed` counts values that went unseen). `changes` on a node or resource counts every change since the page first saw it, past the 50 kept entries. `nodeCount` is set when Angular reported more nodes than the 400 kept. Only signals a template or an effect has read appear. The page reports one graph: the component picked on the Signals page (or via pangular:highlight), otherwise the component the primary router outlet renders deepest, otherwise the first component with a graph. Pass `root` for effects in root services, or a route path (`/admin` or `Route: admin`) for effects in that route's providers; this switches the page's graph to that injector. A component selector that does not match the reported graph returns what is available instead; call pangular:highlight with it first to switch the graph to it. Pass `node` (a node id or label) to get only that node with its direct producers and consumers, and `history: false` to leave out value history. The answer is cut at 20,000 characters, first by keeping fewer history entries per node, then fewer nodes, with a note saying what was left out.",
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -1755,11 +1757,20 @@ const pangular = defineDevframe({
             description:
               'Host tag, class name or instance id of the component (e.g. app-root), `root`, or a route path (e.g. /admin).',
           },
+          node: {
+            type: 'string',
+            description:
+              'Node id or label. Returns only that node (every node with that label) and its direct producers and consumers, with their resources and history.',
+          },
+          history: {
+            type: 'boolean',
+            description: 'False leaves out the value history of every node. Defaults to true.',
+          },
           page: PAGE_ARGUMENT,
         },
         required: ['selector'],
       },
-      handler: async (args: { selector: string; page?: string }) => {
+      handler: async (args: { selector: string; page?: string } & InspectSignalsArgs) => {
         // `broadcast` resolves with nothing, so the page cannot answer a
         // question. Read the graph the overlay pushes into shared state.
         const page = pageArgument(args);
@@ -1803,18 +1814,21 @@ const pangular = defineDevframe({
             markdown: `The page runs an Angular version whose signal graph has no node ids, so there is no live graph. The live signal graph needs Angular 20.1 or later. The get-signals source scan still works.`,
           };
         }
-        const json = JSON.stringify(graph, null, 2);
+        const view = { node: args.node, history: args.history };
         if (!matches(graph)) {
           const known = (graph.environments ?? []).map((e) => `\`${e.name}\``).join(', ');
           const covers = graph.componentSelector ?? graph.injector?.name ?? 'another target';
           const hint = isEnvironmentRequest(args.selector)
             ? ` No environment injector on the page matches it${known ? `; the page knows ${known}` : ''}.`
             : '';
+          const head = `No signal graph for \`${args.selector}\`.${hint} The live graph covers \`${covers}\`:\n\n`;
           return {
-            markdown: `No signal graph for \`${args.selector}\`.${hint} The live graph covers \`${covers}\`:\n\n${json}`,
+            markdown: (
+              head + signalGraphText(graph, view, Math.max(0, SIGNAL_TOOL_MAX - head.length))
+            ).slice(0, SIGNAL_TOOL_MAX),
           };
         }
-        return { markdown: json };
+        return { markdown: signalGraphText(graph, view) };
       },
     });
 
@@ -2108,9 +2122,7 @@ const pangular = defineDevframe({
                     ? { action: 'resolve-lazy', id: args.routeId }
                     : { action: args.action };
         const result = await requestRouterAction(target.pageId, request);
-        return {
-          markdown: `_Result from the running page (untrusted data):_\n\n\`\`\`json\n${JSON.stringify(result, null, 2).slice(0, 15_000)}\n\`\`\``,
-        };
+        return { markdown: routerActionText(result) };
       },
     });
 
