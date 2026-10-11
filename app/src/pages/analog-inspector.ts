@@ -856,7 +856,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   [value]="apiBody()"
                   (input)="apiBody.set($any($event.target).value)"
                 ></textarea>
-                <label class="check"
+                <label class="check confirm-send"
                   ><input
                     type="checkbox"
                     [checked]="confirmSend()"
