@@ -52,6 +52,7 @@ describe('initPangularHub with pairing tokens', () => {
   afterEach(async () => {
     for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   async function serve(auth: NonNullable<Parameters<typeof initPangularHub>[0]>['auth']) {
@@ -74,7 +75,8 @@ describe('initPangularHub with pairing tokens', () => {
     return `http://127.0.0.1:${port}/__devframes/pangular/`;
   }
 
-  async function trusted(baseURL: string, authToken: string) {
+  // A refused client waits out the whole timeout, so keep it short.
+  async function trusted(baseURL: string, authToken: string, timeout = 1000) {
     const rpc = await connectDevframe({
       baseURL,
       authToken,
@@ -83,12 +85,12 @@ describe('initPangularHub with pairing tokens', () => {
       webmcp: false,
     });
     cleanups.push(() => rpc.close?.());
-    return rpc.ensureTrusted(3000).catch(() => false);
+    return rpc.ensureTrusted(timeout).catch(() => false);
   }
 
   it('trusts a client that sends a matching token at once', async () => {
     const baseURL = await serve({ tokens: [TOKEN] });
-    expect(await trusted(baseURL, TOKEN)).toBe(true);
+    expect(await trusted(baseURL, TOKEN, 3000)).toBe(true);
   });
 
   it('leaves a wrong token to the one-time code', async () => {

@@ -347,6 +347,16 @@ describe('Capacitor view across pages and updates', () => {
     expect(rows[1]).toBe('Camera Yes Unknown Yes');
   });
 
+  it('says how many older calls were dropped and which limit to raise', async () => {
+    const fixture = TestBed.createComponent(App);
+    await settle(fixture);
+    connection.resolve(fakeClient({ cap1: page({ dropped: 12 }) }).client);
+    await settle(fixture);
+    const note = host(fixture).querySelector('app-limit-note')?.textContent ?? '';
+    expect(note).toContain('12 older entries were dropped');
+    expect(note).toContain('limits.capacitorCalls');
+  });
+
   it('shows no setup steps before it knows whether an app reports', async () => {
     const fixture = TestBed.createComponent(App);
     await settle(fixture);

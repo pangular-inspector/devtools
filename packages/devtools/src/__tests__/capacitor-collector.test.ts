@@ -7,7 +7,6 @@ import {
   createCapacitorHook,
   isUnimplemented,
   readCapacitorInfo,
-  type CapacitorCall,
   type CapacitorHook,
 } from '../capacitor-collector.ts';
 import { setRedaction } from '../forms-privacy.ts';

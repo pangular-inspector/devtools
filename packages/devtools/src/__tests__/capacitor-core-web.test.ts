@@ -4,9 +4,7 @@
 import { afterEach, expect, it } from 'vitest';
 import {
   createCapacitorHook,
-  isUnimplemented,
   readCapacitorInfo,
-  type CapacitorCall,
   type CapacitorHook,
 } from '../capacitor-collector.ts';
 
