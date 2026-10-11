@@ -1,5 +1,6 @@
 import type { NgrxPageRecord, NgrxPages } from './ngrx-tools.ts';
 import type { NgrxLogEntry, NgrxSignalStoreInfo } from '../ngrx-shared.ts';
+import { unknownPageText } from './pages.ts';
 
 /**
  * `inspectSignalStoreText`/`signalStoreHistoryText` output is capped to this
@@ -24,6 +25,15 @@ function json(value: unknown): string {
 function pagesOf(pages: NgrxPages, pageId?: string): NgrxPageRecord[] {
   const all = [...pages.values()].sort((a, b) => b.reportedAt - a.reportedAt);
   return pageId ? all.filter((p) => p.pageId === pageId) : all;
+}
+
+/**
+ * The answer when no page matches. An unknown `page` lists the tabs that do report
+ * NgRx state, like the other page tools; with no tab reporting at all it is `NO_DATA`.
+ */
+function noMatchText(pages: NgrxPages, pageId?: string): string {
+  if (pageId && pages.size) return unknownPageText(pageId, [...pages.values()], 'NgRx state');
+  return pageId ? `No page ${code(pageId)} is reporting NgRx state.\n\n${NO_DATA}` : NO_DATA;
 }
 
 function storeLabel(store: NgrxSignalStoreInfo): string {
@@ -119,9 +129,7 @@ export function inspectSignalStoreText(
   storeId?: string,
 ): string {
   const matching = pagesOf(pages, pageId);
-  if (!matching.length) {
-    return pageId ? `No page ${code(pageId)} is reporting NgRx state.\n\n${NO_DATA}` : NO_DATA;
-  }
+  if (!matching.length) return noMatchText(pages, pageId);
   if (storeId) {
     for (const page of matching) {
       const store = page.stores.find((s) => s.id === storeId);
@@ -181,9 +189,7 @@ export function signalStoreHistoryText(
   since?: number,
 ): string {
   const matching = pagesOf(pages, pageId);
-  if (!matching.length) {
-    return pageId ? `No page ${code(pageId)} is reporting NgRx state.\n\n${NO_DATA}` : NO_DATA;
-  }
+  if (!matching.length) return noMatchText(pages, pageId);
   if (typeof since === 'number' && matching.length > 1) {
     return `Pass \`page\` to identify a single page when using \`since\`; sequence numbers are per-page and cannot be compared across pages.`;
   }

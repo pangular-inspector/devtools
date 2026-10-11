@@ -1,5 +1,7 @@
+import { isRedactedKey } from './forms-privacy.ts';
 import type { HydrationMismatch } from './http-hydration.ts';
 import { redactStrings } from './http-redact.ts';
+import { redactJsonText } from './json-text-redact.ts';
 import { redactText, redactUrl } from './router.ts';
 import { serialize } from './serialize.ts';
 import type { HydrationStats } from './types.ts';
@@ -28,8 +30,19 @@ const MAX_VALUE_CHARS = 20_000;
 
 const VALUE_LIMITS = { depth: 12, keys: 200, items: 200, text: MAX_VALUE_CHARS, budget: 50_000 };
 
+/**
+ * Masks the value of an entry. Text bodies and entries the page clipped to a
+ * string can hold JSON, so their `"key": value` pairs are masked by key too.
+ */
 function safe(value: unknown): unknown {
-  return clip(redactStrings(serialize(value, VALUE_LIMITS)));
+  return clip(redactStrings(maskJsonText(serialize(value, VALUE_LIMITS))));
+}
+
+function maskJsonText(value: unknown): unknown {
+  if (typeof value === 'string') return redactJsonText(value, isRedactedKey);
+  if (Array.isArray(value)) return value.map(maskJsonText);
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, maskJsonText(item)]));
 }
 
 function clip(value: unknown): unknown {
