@@ -7,10 +7,19 @@ const angular = Number(require('@angular/core/package.json').version.split('.')[
 
 const pageSide = [
   'analog-scan',
+  'cd-recorder',
+  'change-detection',
+  'component-tree',
+  'defer-blocks',
+  'defer-blocks-real',
   'forms',
   'forms-tools',
+  'host-tree',
   'http',
   'http-cache-key',
+  'http-server',
+  'injector-tree',
+  'injector-tree-real',
   'ngrx-collector',
   'pipes-collector',
   'pipes-runtime',
@@ -26,6 +35,8 @@ const pageSide = [
   'router-setup-real',
   'router-shared-guards',
   'signal-graph-real',
+  'signal-peek',
+  'signal-resources',
 ];
 
 const signalForms = [

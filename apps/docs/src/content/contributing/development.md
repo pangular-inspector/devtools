@@ -174,29 +174,32 @@ pnpm commit:check                   # Commit messages on your branch
   </ngmd-step>
 </ngmd-workflow>
 
-A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`.
+A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`. A `node-22` job runs `pnpm test:devtools` on Node.js 22, the oldest version `engines.node` allows.
 
 ### Angular compatibility
 
-`.github/workflows/compat.yml` runs the page-side tests on the oldest and newest Angular versions the peer range allows. It runs on pushes to `main`, every Monday at 06:00 UTC, and on demand from the **Actions** tab. It doesn't run on pull requests.
+`.github/workflows/compat.yml` runs the page-side tests on the oldest and newest Angular versions the peer range allows, and on the `next` prerelease. It runs on pushes to `main`, every Monday at 06:00 UTC, and on demand from the **Actions** tab. It doesn't run on pull requests.
 
 | Job          | Angular range | Node.js |
 | ------------ | ------------- | ------- |
 | Angular 20.0 | `~20.0.0`     | 22      |
 | Angular 21   | `^21.0.0`     | 22      |
 | Angular 22   | `^22.0.0`     | 22      |
+| Angular next | `next`        | 22      |
 
-Each job appends `overrides` for the `@angular/*` runtime packages to `pnpm-workspace.yaml`, reinstalls, and runs `vitest` with `packages/devtools/vitest.compat.config.ts`. That config picks the tests that render a real Angular app and leaves out the panel and server tests. It adds the Signal Forms tests on Angular 22 and later, and loads `zone.js` before Angular 21, where `TestBed` still expects it. A test that needs a feature from a later release checks the version with `angularAtLeast()` from `src/__tests__/angular-version.ts` and skips on older ones.
+The `next` job installs the `next` dist-tag, so a renamed `ɵ` API shows up before the next major ships. It runs with `continue-on-error`: a failure marks the job red but not the workflow.
+
+Each job appends `overrides` for the `@angular/*` runtime packages to `pnpm-workspace.yaml`, reinstalls, and runs `vitest` with `packages/devtools/vitest.compat.config.ts`. That config picks the tests that render a real Angular app or read Angular's private debug APIs, including the `*-real` tests that boot a real app where the main tests use fakes, and leaves out the panel tests and most server tests. It adds the Signal Forms tests on Angular 22 and later, and loads `zone.js` before Angular 21, where `TestBed` still expects it. A test that needs a feature from a later release checks the version with `angularAtLeast()` from `src/__tests__/angular-version.ts` and skips on older ones.
 
 To reproduce a job, add the same `overrides` block to `pnpm-workspace.yaml`, run `pnpm install --no-frozen-lockfile`, then `pnpm exec vitest run --root packages/devtools --config vitest.compat.config.ts`. Don't commit the changed lockfile.
 
 ### Pull request checks
 
-Two more workflows run on pull requests. Both only warn. They never fail the pull request.
+Two more workflows run on pull requests. Only a pull request title that breaks the commit format fails one; everything else they find is a warning.
 
 | Workflow         | File                                   | What it checks                                                                                                                                                  |
 | ---------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Commit message` | `.github/workflows/commit-message.yml` | The pull request title and every commit message. The title becomes the commit on `main` when the pull request is squash merged.                                 |
+| `Commit message` | `.github/workflows/commit-message.yml` | The pull request title and every commit message. The title becomes the commit on `main` when the pull request is squash merged, so a bad title fails the check. |
 | `Docs check`     | `.github/workflows/docs-check.yml`     | That a change to `packages/devtools/src/`, `app/src/` or the top-level files in `extension/` also changes a page in `apps/docs/src/content`. Tests don't count. |
 
 If a code change needs no docs change, add the `no-docs` label to the pull request and say why in the description. The `Docs check` workflow then skips the warning.

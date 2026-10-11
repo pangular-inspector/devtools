@@ -410,6 +410,14 @@ export function pickPangularConfig<T extends PangularConfig>(
   return { config: { inspectors, agent, actions, redaction, limits }, rest };
 }
 
+/** Form actions that work without a `formId`: they act on the page, not on one form. */
+export const FORMLESS_FORM_ACTIONS: readonly string[] = [
+  'locate',
+  'pick',
+  'cancel-pick',
+  'instrument',
+];
+
 /** Form actions that change the form or its validity, as opposed to reading or focusing it. */
 export const FORM_WRITE_ACTIONS: readonly string[] = [
   'set-value',
@@ -515,6 +523,15 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'clear-http-calls': 'http',
   'push-capacitor': 'capacitor',
   'forget-capacitor-page': 'capacitor',
+  'push-analog': 'analog',
+  'forget-analog-page': 'analog',
+  'analog-clear-calls': 'analog',
+  'analog-project': 'analog',
+  'analog-explain-url': 'analog',
+  'analog-lint': 'analog',
+  'analog-render': 'analog',
+  'analog-text': 'analog',
+  'analog-call-api': 'analog',
 };
 
 /**
@@ -727,4 +744,52 @@ export function summarizePangularConfig(
       .map((key) => LIMIT_LABEL[key](config.limits[key])),
   );
   return items;
+}
+
+// Change detection recording types. They live here, in an entry without
+// imports, so the panel shares them with the page instead of keeping copies.
+
+export interface CdCheck {
+  name: string;
+  checks: number;
+  /** Time in the component's own template and hooks, children excluded. */
+  ms: number;
+}
+
+export interface CdCycle {
+  id: number;
+  at: number;
+  ms: number;
+  /** How many times Angular synchronized the views in this tick. */
+  passes: number;
+  /** The output listener that ran last before the tick, when there was one. */
+  trigger?: string;
+  checks: number;
+  components: CdCheck[];
+}
+
+export interface CdComponentStat {
+  name: string;
+  checks: number;
+  ms: number;
+  maxMs: number;
+  cycles: number;
+}
+
+export interface CdRecording {
+  recording: boolean;
+  startedAt: number | null;
+  cycles: CdCycle[];
+  /** Older cycles removed at `limits.cdCycles`. */
+  dropped: number;
+  components: CdComponentStat[];
+  /** Checks per component host, keyed by the component tree's element id. */
+  hosts: Record<string, number>;
+}
+
+/** What a page pushes: its recording, with the page id and whether it can record. */
+export interface CdReport extends CdRecording {
+  pageId: string;
+  /** False when the page has no profiler hook to record with (before Angular 20). */
+  supported: boolean;
 }

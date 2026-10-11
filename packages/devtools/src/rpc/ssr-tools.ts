@@ -21,6 +21,7 @@ const MODE_LABEL: Record<SsrRenderMode, string> = {
 const KEPT_HEADERS = new Set([
   'content-type',
   'content-length',
+  'content-encoding',
   'cache-control',
   'location',
   'vary',
@@ -138,6 +139,7 @@ export function sanitizeSsrRequest(raw: unknown): SsrRequest | undefined {
     headers,
     ...(navigations.length ? { navigations } : {}),
     ...(overrides.length ? { overrides } : {}),
+    ...(r.compressedBeforeTrace === true ? { compressedBeforeTrace: true } : {}),
     ...(r.aborted === true ? { aborted: true } : {}),
   };
 }
@@ -272,6 +274,13 @@ export function explainSsrRequestText(
     `- Render (arrival to headers): ${ms(r.renderMs)}; total ${ms(r.durationMs)}; ${size(r.bytes)} sent`,
     `- Server HttpClient calls: ${r.fetches}, ${ms(r.fetchMs)} in total`,
   ];
+  // The final Content-Encoding is also set when compression runs after ssrMiddleware, as it should.
+  if (r.compressedBeforeTrace) {
+    const encoding = r.headers['content-encoding'] ?? 'unknown encoding';
+    lines.push(
+      `- The body was already compressed (${code(encoding)}) when \`ssrMiddleware\` saw it, so the render mode can't be read and TransferState edits can't apply. In \`server.ts\`, mount \`ssrMiddleware\` after \`compression()\`.`,
+    );
+  }
   if (r.overrides?.length) {
     lines.push(
       '',

@@ -129,6 +129,17 @@ describe('Signal Forms internals', () => {
     node = byKey(serializeField(tree()))['name'];
     expect(node.changed).toBe(true);
   });
+
+  it('reports an edit past the display limits of the value as changed', () => {
+    const long = 'x'.repeat(300);
+    const tree = signalForm({ bio: long });
+    tree.bio();
+    serializeField(tree());
+    tree.bio().markAsDirty();
+    expect(byKey(serializeField(tree()))['bio'].changed).toBe(false);
+    tree.bio().value.set(`${long.slice(0, 250)}y${long.slice(251)}`);
+    expect(byKey(serializeField(tree()))['bio'].changed).toBe(true);
+  });
 });
 
 describe('reactive internals', () => {

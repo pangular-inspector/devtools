@@ -28,7 +28,7 @@ jobs:
       - name: Pull request title
         env:
           TITLE: ${{ github.event.pull_request.title }}
-        run: node scripts/commit-message.mjs --title "$TITLE" --warn
+        run: node scripts/commit-message.mjs --title "$TITLE"
 
       - name: Commit messages
         env:

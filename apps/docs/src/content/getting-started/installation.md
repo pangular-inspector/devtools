@@ -46,29 +46,38 @@ Some features need a later Angular release than 20.0. The inspector pages list t
 ## Install the package
 
 ```bash group="install" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220" active
-pnpm add @pangular-inspector/devtools devframe
+pnpm add -D @pangular-inspector/devtools
 ```
 
 ```bash group="install" name="npm" image="https://cdn.simpleicons.org/npm/CB3837"
-npm install @pangular-inspector/devtools devframe
+npm install -D @pangular-inspector/devtools
 ```
 
 ```bash group="install" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
-yarn add @pangular-inspector/devtools devframe
+yarn add -D @pangular-inspector/devtools
 ```
 
 ```bash group="install" name="bun" image="https://bun.sh/logo.svg"
-bun add @pangular-inspector/devtools devframe
+bun add -D @pangular-inspector/devtools
 ```
 
-MCP agent support (`@devframes/agentic`) is included. You don't install it separately.
+MCP agent support (`@devframes/agentic`) and Devframe itself are included. You don't install them separately.
+
+### Dependency or dev dependency
+
+| Setup                                      | Install it as                                                                                                                                                                                          |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Vite or Analog                             | A dev dependency. The Vite plugin only runs in the dev server.                                                                                                                                         |
+| Client-only Angular CLI app                | A dev dependency. The CLI runs next to `ng serve`, and the overlay import only runs in development builds.                                                                                             |
+| Standalone CLI                             | A dev dependency, or no install at all with `npx`.                                                                                                                                                     |
+| Angular SSR with Express or another server | A dependency, because `server.ts` imports the hub when the production server starts. To keep it a dev dependency, import the hub only in development, with a dynamic `import()` behind your own check. |
 
 ### Entry points
 
 | Import                                                | Use it for                                                                                                 |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `@pangular-inspector/devtools/hub`                    | `initPangularHub()`, the server middleware for an Express app.                                             |
-| `@pangular-inspector/devtools/vite`                   | The Vite plugin for Analog apps.                                                                           |
+| `@pangular-inspector/devtools/vite`                   | The Vite plugin for a Vite-based Angular app, such as an Analog app.                                       |
 | `@pangular-inspector/devtools/overlay`                | The browser script that collects live data from your page.                                                 |
 | `@pangular-inspector/devtools/overlay-manual`         | The same script, started only when you call `initOverlay`. See [Set up Capacitor](../guides/capacitor.md). |
 | `@pangular-inspector/devtools/capacitor-hook`         | Logs Capacitor plugin calls from app start. See [Capacitor](../inspectors/capacitor.md#web-calls).         |
@@ -77,7 +86,7 @@ MCP agent support (`@devframes/agentic`) is included. You don't install it separ
 | `@pangular-inspector/devtools/popup`                  | The floating button and panel on your page.                                                                |
 | `@pangular-inspector/devtools/http`                   | The HTTP interceptor and hydration hooks for the SSR & HTTP tab.                                           |
 | `@pangular-inspector/devtools/config`                 | The `PangularConfig` type and its defaults. See [Configuration](./configuration.md).                       |
-| `@pangular-inspector/devtools/devframe`               | The devframe definition, for custom hosts.                                                                 |
+| `@pangular-inspector/devtools/devframe`               | The devframe definition and `initDevframe()`, for custom hosts.                                            |
 
 ### The CLI binary
 
@@ -172,7 +181,7 @@ An app created with `ng new --ssr=false` only runs `ng serve`. Run the standalon
 
 <ngmd-workflow>
   <ngmd-step title="Start the devtools server">
-    Run <code>npx pangular dev --port 9999</code> from the root of your workspace. It serves the panel, the connection and the WebSocket at the root of port 9999.
+    Run <code>npx pangular dev --port 9999 --proxy-origin http://localhost:4200</code> from the root of your workspace. It serves the panel, the connection and the WebSocket at the root of port 9999. <code>--proxy-origin</code> names the origin of <code>ng serve</code>, so the CLI prints its links for <code>http://localhost:4200/__pangular/</code>.
   </ngmd-step>
   <ngmd-step title="Add the proxy config">
     Save the <code>proxy.conf.json</code> above next to <code>angular.json</code>. It strips the <code>/__pangular</code> prefix, and <code>"ws": true</code> forwards the WebSocket the overlay and the panel connect over.
@@ -184,7 +193,7 @@ An app created with `ng new --ssr=false` only runs `ng serve`. Run the standalon
     Import the overlay in <code>main.ts</code>, as in the <strong>Angular CLI</strong> tab above.
   </ngmd-step>
   <ngmd-step title="Enter the one-time code">
-    When your app connects, the CLI prints a code and a link like <code>http://localhost:9999/#devframe_otp=123456</code>. That link only trusts port 9999. Open the same code on your app's origin instead, <code>http://localhost:4200/__pangular/#devframe_otp=123456</code>. If the panel was already open, reload your app.
+    When your app connects, the CLI prints a code and a link like <code>http://localhost:4200/__pangular/#devframe_otp=123456</code>. Open the link, then reload your app if the panel was already open. Without <code>--proxy-origin</code>, the link points at port 9999, which only trusts port 9999. Then open the same code on your app's origin instead.
   </ngmd-step>
 </ngmd-workflow>
 
@@ -220,7 +229,7 @@ The [Chrome extension](./chrome-extension.md) adds a panel to Chrome DevTools. I
 
 <ngmd-workflow>
   <ngmd-step title="Start your app in development mode">
-    Run <code>ng serve</code> for an Angular CLI app, or the Vite dev server for an Analog app.
+    Run <code>ng serve</code> for an Angular CLI app, or the Vite dev server for an Analog app. For a client-only app, keep <code>pangular dev</code> running next to <code>ng serve</code>.
   </ngmd-step>
   <ngmd-step title="Look for the button">
     An amber button appears in the bottom-right corner of the page. The overlay adds it.
@@ -229,15 +238,15 @@ The [Chrome extension](./chrome-extension.md) adds a panel to Chrome DevTools. I
     Click the button. The header shows <strong>Live</strong> once the panel is connected.
   </ngmd-step>
   <ngmd-step title="Open the full-page viewer">
-    Go to <code>/__devframes/</code> on the same server to see the devtools on their own page.
+    Go to <code>/__devframes/</code> on the same server to see the devtools on their own page. For a client-only app, the full-page viewer is at <code>/__pangular/</code> on your app's origin.
   </ngmd-step>
 </ngmd-workflow>
 
 ## FAQ
 
 <ngmd-accordion>
-  <ngmd-accordion-item title="Why install devframe next to the package?" open>
-    The devtools are built on Devframe. Some setups import from <code>devframe</code> directly, for example <code>initDevframe</code> from <code>devframe/initiate</code> to <a href="./express.md#mount-only-the-panel">mount only the panel</a>. Package managers like pnpm only resolve imports of direct dependencies.
+  <ngmd-accordion-item title="Do I need to install devframe?" open>
+    No. The package depends on Devframe and re-exports <code>initDevframe</code> from <code>&#64;pangular-inspector/devtools/devframe</code>, for example to <a href="./express.md#mount-only-the-panel">mount only the panel</a>. Import it from there, so the panel and the devframe definition come from the same Devframe copy.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Where does the package need to be installed?">
     Wherever your server part runs. An Express app imports the hub in <code>server.ts</code>, so the package must be installed where that server starts. The overlay import in <code>main.ts</code> only runs in development builds.

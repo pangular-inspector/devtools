@@ -69,11 +69,10 @@ export default defineConfig({
 
 The default export of `@pangular-inspector/devtools/devframe` uses the defaults. Call `createPangular()` to pass options:
 
-```ts {7-9}
+```ts {6-8}
 // src/server.ts
 import express from 'express';
-import {initDevframe} from 'devframe/initiate';
-import {createPangular} from '@pangular-inspector/devtools/devframe';
+import {createPangular, initDevframe} from '@pangular-inspector/devtools/devframe';
 
 const app = express();
 const devtools = initDevframe(createPangular({agent: {readOnly: true}}), {
@@ -147,6 +146,8 @@ Actions are the writes that the panel and agents make to your app or the server.
 | `actions`        | `true`  | All of the above.                                                                                                                                                                                              |
 
 Pass `actions: false` to block every action, or an object to block some. Keys you leave out of the object stay on.
+
+`actions.forms` leaves the panel's **Record details** and **Store as global** on. They don't change the form: **Record details** wraps form methods to record who called them, and **Store as global** sets `$form` and `$control` in the page console only when the page has not defined them itself.
 
 The server refuses a blocked action. The panel disables its controls and shows a note that names the option, for example: **Navigating and clearing navigations is turned off in the devtools config (actions.router).**
 

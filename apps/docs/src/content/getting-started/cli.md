@@ -102,21 +102,22 @@ When the server is ready, it prints the version, the panel URL, the panel URL fo
   MCP:   http://localhost:9999/__mcp
 ```
 
-If you pass no `--port` and port 9999 is taken, it also prints the port it uses instead. It also lists the extra allowed origins and a short hash of each pairing token, never the token.
+With `--proxy-origin`, it also prints **Panel on your app**, the panel URL on your app's origin. If you pass no `--port` and port 9999 is taken, it also prints the port it uses instead. It also lists the extra allowed origins and a short hash of each pairing token, never the token.
 
 When the server listens on your network (`--host 0.0.0.0` or a network address), it also prints the network URLs and an `initOverlay()` call to paste into an app on a device, with the server's whole connection info, its config included. See [Set up Capacitor](../guides/capacitor.md).
 
 ### Dev server flags
 
-| Flag                        | What it does                                                                                                                                                                |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--port <port>`             | Port to listen on. The default is 9999. If it is taken, a random free port is used.                                                                                         |
-| `--host <host>`             | Host to bind to. The default is `localhost`.                                                                                                                                |
-| `--open`, `--no-open`       | Open the browser on start, or not.                                                                                                                                          |
-| `--no-auth`                 | Turn off the one-time code the server asks for.                                                                                                                             |
-| `--mcp`, `--no-mcp`         | Mount the MCP endpoint at `/__mcp`, or not. It is on by default.                                                                                                            |
-| `--allowed-origin <origin>` | An extra origin allowed to reach the server, such as `http://192.168.1.20:8100`. Repeat it for more.                                                                        |
-| `--auth-token <token>`      | A [pairing token](../security.md#pairing-tokens) a client may send instead of the one-time code. Repeat it for more. Prefer the `PANGULAR_AUTH_TOKEN` environment variable. |
+| Flag                        | What it does                                                                                                                                                                                                                                                               |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--port <port>`             | Port to listen on. The default is 9999. If it is taken, a random free port is used.                                                                                                                                                                                        |
+| `--host <host>`             | Host to bind to. The default is `localhost`.                                                                                                                                                                                                                               |
+| `--open`, `--no-open`       | Open the browser on start, or not.                                                                                                                                                                                                                                         |
+| `--no-auth`                 | Turn off the one-time code the server asks for.                                                                                                                                                                                                                            |
+| `--mcp`, `--no-mcp`         | Mount the MCP endpoint at `/__mcp`, or not. It is on by default.                                                                                                                                                                                                           |
+| `--allowed-origin <origin>` | An extra origin allowed to reach the server, such as `http://192.168.1.20:8100`. Repeat it for more.                                                                                                                                                                       |
+| `--proxy-origin <origin>`   | The origin of your app's dev server when it proxies `/__pangular/` to this server, such as `http://localhost:4200`. The panel URL on that origin and the one-time code link point there. See [Client-only Angular CLI app](./installation.md#client-only-angular-cli-app). |
+| `--auth-token <token>`      | A [pairing token](../security.md#pairing-tokens) a client may send instead of the one-time code. Repeat it for more. Prefer the `PANGULAR_AUTH_TOKEN` environment variable.                                                                                                |
 
 <ngmd-callout type="warning" title="Keep it on localhost">
   The server binds to <code>localhost</code> by default and asks for a one-time code. Changing <code>--host</code> or passing <code>--no-auth</code> widens who can reach it. See <a href="../security.md">Access and redaction</a>.

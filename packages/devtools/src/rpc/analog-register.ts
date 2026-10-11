@@ -49,6 +49,12 @@ const MAX_BODY = 2000;
 let disposeAnalog: (() => void) | undefined;
 let analogOwner: unknown;
 let findServerFn: ((id: string) => AnalogServerFn | undefined) | undefined;
+let reportingPages: (() => { pageId: string; reportedAt: number }[]) | undefined;
+
+/** The pages that sent an Analog report, for `list-pages`. */
+export function analogPages(): { pageId: string; reportedAt: number }[] {
+  return reportingPages?.() ?? [];
+}
 
 /** Adds the name and file of each Analog server function seeded into a TransferState payload. */
 export function nameServerFns(payload: PayloadSummary): PayloadSummary {
@@ -192,7 +198,10 @@ export async function registerAnalog(
     clearInterval(expiry);
     stopCalls();
     findServerFn = undefined;
+    reportingPages = undefined;
   };
+  reportingPages = () =>
+    current().pages.map((p) => ({ pageId: p.pageId, reportedAt: seenAt.get(p.pageId) ?? 0 }));
 
   let cache: { at: number; project: AnalogProject } | null = null;
   const project = () => {
@@ -246,7 +255,8 @@ export async function registerAnalog(
     name: 'analog-lint',
     type: 'query',
     jsonSerializable: true,
-    handler: () => analogLint(project(), current()),
+    handler: (page: unknown) =>
+      analogLint(project(), current(), typeof page === 'string' ? page : undefined),
   });
   my.rpc.register({
     name: 'analog-render',
@@ -350,13 +360,22 @@ export async function registerAnalog(
       type: 'object',
       required: ['path'],
       properties: {
-        path: { type: 'string' },
+        path: {
+          type: 'string',
+          description:
+            'Path on the dev server, starting with a single /, with an optional query string, e.g. /api/v1/hello?id=1. Not a full URL: the request always goes to the dev server.',
+        },
         method: {
           type: 'string',
           enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
+          description: 'HTTP method. Defaults to GET.',
         },
-        body: { description: 'JSON body.' },
-        confirm: { type: 'boolean' },
+        body: { description: 'Request body, sent as JSON with content-type application/json.' },
+        confirm: {
+          type: 'boolean',
+          description:
+            'Must be true for POST, PUT, PATCH and DELETE, which can change data. Not needed for GET, HEAD and OPTIONS.',
+        },
       },
     },
     handler: async (args: ApiRequest) => {
@@ -395,9 +414,10 @@ export async function registerAnalog(
   ctx.agent.registerTool({
     id: 'pangular:analog-lint',
     description:
-      'Analog checks: two files for one URL, sibling [param] files, missing default export, layout without router-outlet, .server.ts without load, action or server functions, or without a page, redirect mistakes, bad API method suffix, duplicate API routes, routes outside the API prefix, prerender entries that match nothing, frontmatter errors, duplicate slugs, plus live problems (load fetched twice, seeded server function read called again, hydration errors, restart needed, API 404/405).',
+      'Analog checks: two files for one URL, sibling [param] files, missing default export, layout without router-outlet, .server.ts without load, action or server functions, or without a page, redirect mistakes, bad API method suffix, duplicate API routes, routes outside the API prefix, prerender entries that match nothing, frontmatter errors, duplicate slugs, plus live problems (load fetched twice, seeded server function read called again, hydration errors, restart needed, API 404/405). Hydration errors and restart hints come from one page: `page`, or the most recent one.',
     safety: 'read',
-    inputSchema: { type: 'object', properties: {} },
-    handler: async () => text(analogLintText(project(), current())),
+    inputSchema: { type: 'object', properties: { page } },
+    handler: async (args: { page?: string }) =>
+      text(analogLintText(project(), current(), args?.page)),
   });
 }

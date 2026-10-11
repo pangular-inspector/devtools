@@ -522,6 +522,28 @@ describe('agent tools', () => {
     ]);
   });
 
+  it('drops the previous history when a delta push belongs to another injector', async () => {
+    const { push, call } = await boot();
+    const nodes = [{ id: '3', kind: 'signal', label: 'count', epoch: 2 }];
+    await push('push-signal-graph', {
+      pageId: 'p1',
+      nodes,
+      edges: [],
+      injector: { id: 'inj-1', name: 'Root' },
+      history: { '3': [{ epoch: 1, value: 'root', at: 1, source: 'initial' }] },
+    });
+    const answer = await push('push-signal-graph', {
+      pageId: 'p1',
+      nodes,
+      edges: [],
+      injector: { id: 'inj-2', name: 'Route: admin' },
+      historyDelta: { '3': [{ epoch: 2, value: 'admin', at: 2, source: 'sample' }] },
+    });
+    expect(answer).toEqual({ delta: false });
+    const graph = signalJson(await call('inspect-signals', '/admin'));
+    expect(graph.history['3'].map((c: { value: string }) => c.value)).toEqual(['admin']);
+  });
+
   it('forgets a signal page on request and moves the shown graph to the latest remaining page', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const { ctx, push, call } = await boot();

@@ -1,5 +1,5 @@
 import type { NgrxPageRecord, NgrxPages } from './ngrx-tools.ts';
-import type { NgrxLogEntry, NgrxSignalStoreInfo } from '../ngrx-shared.ts';
+import { moreChangesText, type NgrxLogEntry, type NgrxSignalStoreInfo } from '../ngrx-shared.ts';
 import { unknownPageText } from './pages.ts';
 
 /**
@@ -170,7 +170,7 @@ function entryLine(entry: NgrxLogEntry, showPage?: string): string {
           (d) =>
             `${d.path} ${d.op}${'before' in d ? ` ${JSON.stringify(d.before)}` : ''}${'before' in d && 'after' in d ? ' →' : ''}${'after' in d ? ` ${JSON.stringify(d.after)}` : ''}`,
         )
-        .join('; ')
+        .join('; ') + (entry.diffTruncated ? `; ${moreChangesText(entry.diffTruncated)}` : '')
     : 'no state change';
   const kind = entry.source === 'store' ? 'action' : 'call';
   return `- #${entry.seq} ${when}${page}: ${kind} ${code(entry.type)}${duration} on ${code(entry.storeId)}${caused}${restorable}: ${diffText}`;

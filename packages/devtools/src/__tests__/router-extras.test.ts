@@ -97,6 +97,26 @@ describe('lint rules', () => {
     expect(rules).toEqual(expect.arrayContaining(['email-in-url', 'redirect-from-query']));
   });
 
+  it('masks the email address in the email-in-url finding', () => {
+    const navigations = [nav(1, { url: '/invite/ada@example.com?cc=bob@example.org' })];
+    const finding = lintRoutes(page({ config: [node('/x', { title: 'X' })], navigations })).find(
+      (f) => f.rule === 'email-in-url',
+    )!;
+    expect(finding.route).toBe('/invite/[email]?cc=[email]');
+    expect(JSON.stringify(finding)).not.toContain('example');
+  });
+
+  it('masks the email address in the redirect-from-query finding', () => {
+    const navigations = [
+      nav(1, { url: '/invite/ada@example.com', from: '/login?next=%2Finvite%2Fada%40example.com' }),
+    ];
+    const finding = lintRoutes(page({ config: [node('/x', { title: 'X' })], navigations })).find(
+      (f) => f.rule === 'redirect-from-query',
+    )!;
+    expect(finding.route).toBe('/invite/[email]');
+    expect(JSON.stringify(finding)).not.toContain('example');
+  });
+
   it('only warns about chunks loaded before guards for loadChildren routes', () => {
     const config = [
       node('/admin', {

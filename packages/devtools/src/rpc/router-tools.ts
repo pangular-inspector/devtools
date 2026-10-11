@@ -7,6 +7,7 @@ import { fixedTtl, type PageTtl } from './page-ttl.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 import { unknownPageText } from './pages.ts';
 import { droppedNote } from '../timeline-limits.ts';
+import { RESOURCE_UNTRUSTED, withUntrustedNotice } from './resource-text.ts';
 import {
   describeLoop,
   detectLoops,
@@ -785,6 +786,7 @@ export function explainNavigationText(
   state: RouterState,
   args: { page?: string; url?: string; limit?: number; perf?: boolean; id?: number },
   now = Date.now(),
+  maxNavigations = MAX_NAVIGATIONS,
 ): string {
   const page = pickPage(state, args.page);
   if (!page) return noPage(args.page, state);
@@ -794,7 +796,7 @@ export function explainNavigationText(
     );
   }
   const requested = Number.isFinite(args.limit) ? Math.floor(args.limit as number) : 5;
-  const limit = Math.max(1, Math.min(requested, MAX_NAVIGATIONS));
+  const limit = Math.max(1, Math.min(requested, maxNavigations));
   const needle = args.url?.toLowerCase();
   const matching = page.navigations.filter(
     (nav) =>
@@ -810,7 +812,7 @@ export function explainNavigationText(
   }
   const recent = matching.slice(-limit).reverse();
   const loops = loopsOf(page).filter((loop) => recent.some((nav) => loop.ids.includes(nav.id)));
-  const header = `Most recent ${recent.length} of ${matching.length} navigation(s), newest first. Guards lists the candidates: canDeactivate guards of the page being left (marked "leaving") and canActivate/canActivateChild guards of the target; without per-guard instrumentation the router reports one result for all of them. Turn instrumentation on (navigate tool, action "instrument") to see each guard's verdict.${page.instrumented ? ' Instrumentation is on.' : ''}`;
+  const header = `Most recent ${recent.length} of ${matching.length} navigation(s), newest first. Guards lists the candidates: canDeactivate guards of the page being left (marked "leaving") and canActivate/canActivateChild guards of the target; without per-guard instrumentation the router reports one result for all of them. ${page.instrumented ? 'Instrumentation is on, so each guard and resolver run is listed with its verdict.' : 'Instrumentation is off: turn it on (navigate tool, action "instrument") to see each guard\'s verdict.'}`;
   return capped(
     `${UNTRUSTED}\n\n${header}\n\n${loopsText(loops)}${recent.map((nav) => describeNavigation(nav, page)).join('\n')}${droppedNote(page.dropped, 'navigations', 'navigations')}${otherPages(state, page)}${freshness(page, now)}`,
   );
@@ -830,9 +832,10 @@ function slim(nav: NavigationRecord) {
 }
 
 export function routerResourceText(state: RouterState): string {
-  const json = JSON.stringify(state);
+  const json = JSON.stringify(withUntrustedNotice(state));
   if (json.length <= MAX_RESOURCE_CHARS) return json;
   const out = {
+    _untrusted: RESOURCE_UNTRUSTED,
     truncated: true,
     note: 'The router state is too large for this resource. Use inspect-route, explain-navigation and list-routes instead.',
     pages: [] as {

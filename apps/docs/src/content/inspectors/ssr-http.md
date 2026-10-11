@@ -48,6 +48,8 @@ app.use(devtools.nodeMiddleware);
 app.use(devtools.ssrMiddleware);
 ```
 
+If the server uses `compression()`, mount `ssrMiddleware` after it. Mounted the other way round, the body is already compressed when `ssrMiddleware` sees it, so the render mode can't be read and **Edit TransferState** can't apply. The request detail then says so.
+
 ## What it shows
 
 ### SSR requests
@@ -112,7 +114,7 @@ The tab checks the TransferState after each server response, so **cached** is wh
 
 Every `HttpClient` request, tagged **SSR** or **Client**. Each row shows the method, the URL, the page that made it, the status, the time, and notes:
 
-- **transfer cache**: the TransferState cache answered it. A client request counts as a hit only when its method, response type, URL, body and params match the entry Angular stored.
+- **transfer cache**: the TransferState cache answered it. Only client requests get it, because the server never reads the cache; a server call shows its [transfer cache outcome](#transfer-cache-outcome) instead. A client request counts as a hit only when its method, response type, URL, body and params match the entry Angular stored, and Angular would cache it: no `transferCache: false`, auth headers, credentials or no-cache request.
 - **delayed N ms**: a fault rule held it back.
 - **mocked**: a fault rule answered it with a status below 400.
 - **faulted**: a fault rule failed it with a status of 400 or more.
@@ -136,7 +138,7 @@ Click a row for a response preview. The preview opens under the timeline and tak
 
 Add a rule with these fields:
 
-- **URL pattern**: a substring, or a glob where `*` matches anything. `/api/*` matches both relative and absolute URLs.
+- **URL pattern**: a substring, or a glob where `*` matches anything. `/api/*` matches both relative and absolute URLs. The pattern can match anywhere in the URL, so `/api` also matches `/apiv2` and `/search?next=/api`. Start it with `^` to anchor it at the start of the path: `^/api/` matches `/api/heroes` and `http://localhost:4000/api/heroes`, but not `/v1/api/heroes`.
 - **Method**: any, or one method.
 - **Apply on**: SSR + client, SSR only, or client only.
 - **Status**: **None**, or a status from the list. The list has the standard 2xx to 5xx statuses, plus `499` (nginx) and `520` to `524` (Cloudflare). Type the code, for example `503`, to jump to it.
@@ -150,7 +152,7 @@ The body follows the request's `responseType`. A `json` request gets the parsed 
 
 ### SSR overrides
 
-Development-only changes to what the server sends for matching pages. Each one applies from the next full page load. The request that got one is marked **overridden**, and its detail lists **Overrides from the panel** with what each one did. They need `ssrMiddleware` and the `actions.http` write action, and they live in the memory of the server process, so a restart clears them.
+Development-only changes to what the server sends for matching pages. Each one applies from the next full page load. The request that got one is marked **overridden**, and its detail lists **Overrides from the panel** with what each one did. They need `ssrMiddleware` and the `actions.http` write action, and they live in the memory of the server process, so a restart clears them. The page pattern matches the page path and query like a fault rule's [URL pattern](#fault-injection), and a leading `^` anchors it at the start of the path.
 
 | Override                | What it does                                                                                                        | Needs                                                   |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |

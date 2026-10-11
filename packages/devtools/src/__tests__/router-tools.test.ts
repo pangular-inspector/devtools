@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RESOURCE_UNTRUSTED } from '../rpc/resource-text.ts';
 import {
   applyRouterEvent,
   droppedNavigations,
@@ -467,12 +468,21 @@ describe('router tool text', () => {
     expect(inspectRouteText(two, { page: 'zzzz' }, 1_000)).toContain('No page `zzzz`');
   });
 
+  it('leads the resource with the untrusted notice', () => {
+    const parsed = JSON.parse(routerResourceText(state({ snapshot, navigations: [nav(1)] })));
+    expect(Object.keys(parsed)[0]).toBe('_untrusted');
+    expect(parsed._untrusted).toBe(RESOURCE_UNTRUSTED);
+    expect(parsed.pages[0].pageId).toBe('aaaa');
+  });
+
   it('keeps the resource valid JSON when it is too large', () => {
     const big = route('', { data: { blob: 'x'.repeat(120_000) } });
     const parsed = JSON.parse(
       routerResourceText(state({ snapshot: { ...snapshot, root: big }, navigations: [nav(1)] })),
     );
     expect(parsed.truncated).toBe(true);
+    expect(Object.keys(parsed)[0]).toBe('_untrusted');
+    expect(parsed._untrusted).toBe(RESOURCE_UNTRUSTED);
     expect(parsed.pages[0]).toMatchObject({ pageId: 'aaaa', url: '/users/42?tab=posts' });
     expect(parsed.pages[0].navigations).toHaveLength(1);
 

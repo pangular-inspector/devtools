@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
+import { gzipSync } from 'node:zlib';
 import { join } from 'node:path';
 import {
   ApplicationRef,
@@ -228,6 +229,84 @@ describe('ssrMiddleware overrides', () => {
         note: 'could not edit the TransferState script for a',
       }),
     ]);
+  });
+
+  it('leaves a compressed body alone and says to mount the middleware after compression', () => {
+    ssrRegistry().overrides = [override({ kind: 'state-edit', key: 'a', value: '{"b":2}' })];
+    const res = new FakeResponse();
+    createSsrMiddleware()(request(), res as unknown as ServerResponse, () => {});
+    res.setHeader('content-type', 'text/html');
+    res.setHeader('content-encoding', 'gzip');
+    const gzipped = gzipSync(STATE_HTML);
+    res.end(gzipped);
+    expect(res.body).toBe(gzipped.toString());
+    expect(recorded[0]).toMatchObject({
+      renderMode: 'unknown',
+      compressedBeforeTrace: true,
+      headers: { 'content-encoding': 'gzip' },
+      overrides: [
+        { kind: 'state-edit', applied: false, note: expect.stringContaining('after compression') },
+      ],
+    });
+    const text = explainSsrRequestText([sanitizeSsrRequest(recorded[0])!], [], [], {});
+    expect(text).toContain('mount `ssrMiddleware` after');
+  });
+
+  it('sees a Content-Encoding passed only to writeHead and sends the bytes untouched', () => {
+    ssrRegistry().overrides = [override({ kind: 'state-edit', key: 'a', value: '{"b":2}' })];
+    const gzipped = gzipSync(STATE_HTML);
+    for (const passed of [
+      { 'Content-Encoding': 'gzip' },
+      ['Content-Encoding', 'gzip'],
+      [['content-encoding', 'gzip']],
+    ]) {
+      recorded.length = 0;
+      const res = new FakeResponse();
+      let sent: unknown;
+      const end = res.end;
+      res.end = function (this: FakeResponse, chunk?: string | Buffer) {
+        sent = chunk;
+        return end.call(this, chunk);
+      };
+      createSsrMiddleware()(request(), res as unknown as ServerResponse, () => {});
+      res.setHeader('content-type', 'text/html');
+      res.setHeader('content-encoding', 'identity');
+      (res.writeHead as (...a: unknown[]) => unknown)(200, passed);
+      res.end(gzipped);
+      expect(Buffer.isBuffer(sent) && sent.equals(gzipped)).toBe(true);
+      expect(recorded[0]).toMatchObject({
+        compressedBeforeTrace: true,
+        overrides: [{ applied: false, note: expect.stringContaining('after compression') }],
+      });
+    }
+  });
+
+  it('reads and edits the HTML when compression() is mounted before the middleware', () => {
+    ssrRegistry().overrides = [override({ kind: 'state-edit', key: 'a', value: '{"b":2}' })];
+    const res = new FakeResponse();
+    // Like compression(): its header is set during writeHead, and the body is encoded on the way out.
+    const writeHead = res.writeHead;
+    res.writeHead = function (this: FakeResponse, ...args: Parameters<FakeResponse['writeHead']>) {
+      this.setHeader('content-encoding', 'gzip');
+      return writeHead.apply(this, args);
+    };
+    const end = res.end;
+    res.end = function (this: FakeResponse, chunk?: string | Buffer) {
+      if (!this.headersSent) this.writeHead(this.statusCode);
+      return end.call(this, chunk === undefined ? chunk : gzipSync(chunk));
+    };
+    createSsrMiddleware()(request(), res as unknown as ServerResponse, () => {});
+    res.setHeader('content-type', 'text/html');
+    res.end(STATE_HTML);
+    expect(res.sentHeaders['content-encoding']).toBe('gzip');
+    expect(recorded[0]).toMatchObject({
+      renderMode: 'server',
+      headers: { 'content-encoding': 'gzip' },
+      overrides: [{ kind: 'state-edit', applied: true, note: 'set a' }],
+    });
+    expect(recorded[0].compressedBeforeTrace).toBeUndefined();
+    const text = explainSsrRequestText([sanitizeSsrRequest(recorded[0])!], [], [], {});
+    expect(text).not.toContain('already compressed');
   });
 
   it('rewrites the TransferState script before the response is sent', () => {

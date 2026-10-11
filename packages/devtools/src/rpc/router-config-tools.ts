@@ -44,6 +44,13 @@ export interface LintFinding {
 }
 
 const MAX_LIST = 400;
+const EMAIL_IN_URL = /[^/?&=]+@[^/?&=]+\.[a-z]{2,}/i;
+
+/** `url` with each email address in it, plain or with `@` encoded as
+ * `%40`, replaced by `[email]`. */
+function maskEmails(url: string): string {
+  return url.replace(/[^/?&=]+(?:@|%40)[^/?&=]+\.[a-z]{2,}/gi, '[email]');
+}
 
 function walk(
   nodes: RouteNode[] | undefined,
@@ -367,6 +374,8 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
     primary.forEach((node, index) => {
       const own = parts(node.path);
       if (own.length !== 1 || !own[0].startsWith(':') || node.guards?.canMatch) return;
+      // Children don't stop it: when the URL ends at this route, Angular matches it with no
+      // child activated (recognize's NoLeftoversInUrl) and never backtracks to the literal.
       for (const later of primary.slice(index + 1)) {
         const laterParts = parts(later.path);
         if (laterParts.length === 1 && !laterParts[0].startsWith(':') && laterParts[0] !== '**') {
@@ -387,9 +396,10 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
           rule: 'empty-redirect-prefix',
           severity: 'error',
           route: node.fullPath,
-          message: "An empty-path redirect without pathMatch 'full' matches every URL.",
-          fix: "Add pathMatch: 'full'.",
-          angular: 'throws',
+          message:
+            "An empty-path redirect with pathMatch 'prefix' matches every URL, so every navigation is redirected.",
+          fix: "Use pathMatch: 'full'.",
+          angular: 'silent',
         });
       }
     }
@@ -527,12 +537,12 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
       });
     }
   }
-  const emailed = page.navigations.find((nav) => /[^/?&=]+@[^/?&=]+\.[a-z]{2,}/i.test(nav.url));
+  const emailed = page.navigations.find((nav) => EMAIL_IN_URL.test(nav.url));
   if (emailed) {
     findings.push({
       rule: 'email-in-url',
       severity: 'warning',
-      route: emailed.url,
+      route: maskEmails(emailed.url),
       message: 'An email address appears in a URL; URLs end up in history, logs and referrers.',
       fix: 'Pass it in navigation state or a service instead.',
       angular: 'silent',
@@ -557,8 +567,8 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
       findings.push({
         rule: 'redirect-from-query',
         severity: 'info',
-        route: target,
-        message: `Navigation #${nav.id} went to a URL taken from a query param of ${code(from)}.`,
+        route: maskEmails(target),
+        message: `Navigation #${nav.id} went to a URL taken from a query param of ${code(maskEmails(from))}.`,
         fix: 'Validate return URLs against an allow list before navigating.',
         angular: 'silent',
       });

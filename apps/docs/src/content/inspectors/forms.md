@@ -9,7 +9,7 @@ description: Every form on the page with each field's state and errors, a change
 
 # Forms
 
-The Forms tab reads the forms of the running page, in development builds only. It covers Signal Forms, reactive forms and template-driven forms. Actions you run from the tab go back to the page and run there.
+The Forms tab reads the forms of the running page, in development builds only. It covers Signal Forms, reactive forms and template-driven forms. Actions you run from the tab go back to the page and run there. Forms inside open shadow roots, such as `ViewEncapsulation.ShadowDom` components, are included.
 
 ## What it shows
 
@@ -64,7 +64,7 @@ Each error says where it comes from:
 
 ### Field details
 
-Click a field to open its details below the table. Click the field again, or **Close**, to hide them. From there, set a value, or click **Focus**, **Touch**, **Revalidate** or **Store as global**. **Store as global** stores the form as `$form`, and the field as `$control`, in the page console.
+Click a field to open its details below the table. Click the field again, or **Close**, to hide them. From there, set a value, or click **Focus**, **Touch**, **Revalidate** or **Store as global**. **Store as global** stores the form as `$form`, and the field as `$control`, in the page console. If the page defined `$form` or `$control` itself, it refuses and leaves them as they are.
 
 ### Timeline view
 
@@ -179,7 +179,7 @@ You can also open a form from its component in the [Components tab](./components
 
 ## Agent tools
 
-`form` is a form id like `Checkout.form@ab12`, or part of its label. `path` is a dotted field path, like `address.city`. A literal dot in a control key is written `\.` and a literal backslash `\\`, so the control keyed `a.b` has the path `a\.b`. An empty key is written `\e`, so it is never confused with the whole form, whose path is empty. The panel and the tool output show the same escaped form.
+`form` is a form id like `Checkout.form@ab12`, or part of its label. A form keeps its id while it is on the page. A form that is destroyed and created again, for example when you leave a route and come back, gets the same id back. `~2`, `~3` and so on tell apart forms with the same label that are on the page at the same time. `path` is a dotted field path, like `address.city`. A literal dot in a control key is written `\.` and a literal backslash `\\`, so the control keyed `a.b` has the path `a\.b`. An empty key is written `\e`, so it is never confused with the whole form, whose path is empty. The panel and the tool output show the same escaped form.
 
 ### Read tools
 
@@ -219,6 +219,8 @@ In the tab, the button turns into **Confirm reset**, **Confirm submit** or **Con
 ### Fields that are not written
 
 The actions don't write secret fields unless you unmask them. See [Access and redaction](../security.md#opt-fields-in-or-out). For Signal Forms, they skip hidden, readonly and rule-disabled fields too. They write disabled reactive fields only with `force`.
+
+In `user` mode, a write to a `date`, `datetime-local`, `time`, `month` or `week` input takes a value in the input's own format, like `2026-03-14`, or a date or timestamp, which is written in UTC like Signal Forms does. A value that is not a date fails and leaves the field as it was.
 
 ### WebMCP is best effort
 

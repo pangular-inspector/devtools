@@ -178,11 +178,11 @@ For install commands, use a code group so readers pick their package manager. Li
 
 ````md
 ```bash group="install" name="pnpm" active
-pnpm add @pangular-inspector/devtools devframe
+pnpm add @pangular-inspector/devtools
 ```
 
 ```bash group="install" name="npm"
-npm install @pangular-inspector/devtools devframe
+npm install @pangular-inspector/devtools
 ```
 ````
 

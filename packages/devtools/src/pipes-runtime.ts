@@ -205,6 +205,10 @@ export interface PipeCall {
   args: unknown[];
   result: unknown;
   caller?: string;
+  /** How long `transform` ran, in milliseconds. */
+  ms: number;
+  /** Set when `transform` threw; the error is rethrown to the app unchanged. */
+  error?: { thrown: unknown };
 }
 
 /** What `addPipe` needs: both `PipeSlot` and `PipeUsage` satisfy this. */
@@ -214,25 +218,36 @@ export interface PipeInstance {
 }
 
 export interface PipeInstrumentation {
-  /** Patches `slot`'s prototype once; a no-op if already patched. */
+  /** Patches `slot`'s prototype once (and its own `transform`, if it has one);
+   * a no-op if already patched. */
   addPipe(slot: PipeInstance): void;
   stop(): void;
 }
 
 const WRAPPED = Symbol('pangular-pipe-wrapped');
 
+const now: () => number =
+  typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? () => performance.now()
+    : () => Date.now();
+
 /** Patches each distinct pipe class's `transform` once, the same technique
  * `forms-instrument.ts`'s `instrumentForms` uses for `FormControl` methods:
  * since `pipeInstance.transform` is a live lookup at the `ɵɵpipeBind*` call
  * site, our wrapper is invoked whenever Angular actually calls it (i.e. for
  * an impure pipe every check, for a pure one only when memoization decided
- * the argument changed). */
+ * the argument changed). A `transform` declared as a class field lives on
+ * each instance instead, so that one is patched per instance. */
 export function instrumentPipes(
   onCall: (call: PipeCall) => void,
   preferred: ReadonlySet<string> = new Set(),
 ): PipeInstrumentation {
   const seenProtos = new WeakSet<object>();
+  const seenInstances = new WeakSet<object>();
   const restores: (() => void)[] = [];
+  // A subclass inherits its parent's patched `transform`, so the name comes
+  // from the instance that runs rather than from the class that was patched.
+  const names = new WeakMap<object, string>();
   // A pipe instance is created by one template call site, so its caller
   // never changes: resolving it once per instance keeps the (costly) stack
   // capture off the hot path of every later `transform` call.
@@ -240,44 +255,79 @@ export function instrumentPipes(
 
   const callerOf = (instance: AnyRecord): string | undefined => {
     if (callers.has(instance)) return callers.get(instance);
-    // Drop the "Error" header and this wrapper's own frame.
+    // Drop the "Error" header and the frames of `callerOf`, `report` and the wrapper.
     const stack = new Error().stack?.split('\n');
-    const caller = stack ? callerFrom(['', ...stack.slice(3)].join('\n'), preferred) : undefined;
+    const caller = stack ? callerFrom(['', ...stack.slice(4)].join('\n'), preferred) : undefined;
     callers.set(instance, caller);
     return caller;
   };
 
+  const report = (
+    instance: AnyRecord,
+    name: string,
+    args: unknown[],
+    result: unknown,
+    ms: number,
+    error?: { thrown: unknown },
+  ) => {
+    try {
+      onCall({
+        name: names.get(instance) ?? name,
+        instance,
+        args,
+        result,
+        caller: callerOf(instance),
+        ms,
+        ...(error ? { error } : {}),
+      });
+    } catch {
+      // never break the app
+    }
+  };
+
+  /** Replaces `owner.transform` with a timing wrapper; returns false when
+   * there is nothing to patch. */
+  const patch = (owner: AnyRecord, name: string): boolean => {
+    const original = owner['transform'];
+    if (typeof original !== 'function' || (original as any)[WRAPPED]) return false;
+    const wrapper = function (this: AnyRecord, ...args: unknown[]) {
+      const start = now();
+      let result: unknown;
+      try {
+        result = original.apply(this, args);
+      } catch (thrown) {
+        report(this, name, args, undefined, now() - start, { thrown });
+        throw thrown;
+      }
+      report(this, name, args, result, now() - start);
+      return result;
+    };
+    Object.defineProperty(wrapper, WRAPPED, { value: true });
+    try {
+      owner['transform'] = wrapper;
+    } catch {
+      return false;
+    }
+    restores.push(() => {
+      if (owner['transform'] === wrapper) owner['transform'] = original;
+    });
+    return true;
+  };
+
   return {
     addPipe(slot) {
-      const proto = Object.getPrototypeOf(slot.instance);
+      const instance = slot.instance;
+      if (!names.has(instance)) names.set(instance, slot.name);
+      if (!seenInstances.has(instance)) {
+        seenInstances.add(instance);
+        if (read(() => Object.prototype.hasOwnProperty.call(instance, 'transform'), false)) {
+          patch(instance, slot.name);
+        }
+      }
+      const proto = Object.getPrototypeOf(instance);
       if (!proto || seenProtos.has(proto)) return;
       seenProtos.add(proto);
-      const original = proto.transform;
-      if (typeof original !== 'function' || (original as any)[WRAPPED]) return;
-      const wrapper = function (this: AnyRecord, ...args: unknown[]) {
-        const result = original.apply(this, args);
-        try {
-          onCall({
-            name: slot.name,
-            instance: this,
-            args,
-            result,
-            caller: callerOf(this),
-          });
-        } catch {
-          // never break the app
-        }
-        return result;
-      };
-      Object.defineProperty(wrapper, WRAPPED, { value: true });
-      try {
-        proto.transform = wrapper;
-      } catch {
-        return;
-      }
-      restores.push(() => {
-        if (proto.transform === wrapper) proto.transform = original;
-      });
+      patch(proto, slot.name);
     },
     stop() {
       for (const restore of restores.splice(0).reverse()) restore();

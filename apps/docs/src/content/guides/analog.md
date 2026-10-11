@@ -32,7 +32,7 @@ This guide adds the devtools to an *Analog app. Everything runs on the *Vite dev
 
 <ngmd-workflow>
   <ngmd-step title="Install the package">
-    Add <code>@pangular-inspector/devtools</code> and <code>devframe</code>.
+    Add <code>@pangular-inspector/devtools</code> as a dev dependency.
   </ngmd-step>
   <ngmd-step title="Add the Vite plugin">
     Register it next to <code>analog()</code> in <code>vite.config.ts</code>.
@@ -48,19 +48,19 @@ This guide adds the devtools to an *Analog app. Everything runs on the *Vite dev
 ## Step 1: Install
 
 ```bash group="install" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220" active
-pnpm add @pangular-inspector/devtools devframe
+pnpm add -D @pangular-inspector/devtools
 ```
 
 ```bash group="install" name="npm" image="https://cdn.simpleicons.org/npm/CB3837"
-npm install @pangular-inspector/devtools devframe
+npm install -D @pangular-inspector/devtools
 ```
 
 ```bash group="install" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
-yarn add @pangular-inspector/devtools devframe
+yarn add -D @pangular-inspector/devtools
 ```
 
 ```bash group="install" name="bun" image="https://bun.sh/logo.svg"
-bun add @pangular-inspector/devtools devframe
+bun add -D @pangular-inspector/devtools
 ```
 
 ## Step 2: Add the Vite plugin

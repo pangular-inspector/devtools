@@ -22,14 +22,19 @@ interface RpcScope {
 
 type HydrationScan = ReturnType<typeof scanHydration>;
 
+/** How long a scan is reused when `ngDevMode` has no counters to tell when hydration changed. */
+const RESCAN_MS = 5000;
+
 export function createHydrationScanner(scan: () => HydrationScan = () => scanHydration(document)) {
   let cached: HydrationScan | null = null;
   let key = '';
   let scans = 0;
-  return (counters: Record<string, unknown> | undefined): HydrationScan => {
+  return (counters: Record<string, unknown> | undefined, now = Date.now()): HydrationScan => {
+    // Without counters (`ngDevMode` is plain `true`), a time bucket stands in for them, so
+    // nodes that incremental hydration reaches later still show up.
     const next = counters
       ? `${counters['hydratedNodes']}:${counters['componentsSkippedHydration']}:${counters['deferBlocksWithIncrementalHydration']}`
-      : '';
+      : `t${Math.floor(now / RESCAN_MS)}`;
     if (cached && scans >= 3 && next === key) return cached;
     cached = scan();
     key = next;

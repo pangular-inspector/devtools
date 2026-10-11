@@ -42,6 +42,10 @@ export function lintPipesText(cwd: string): string {
   return lines.join('\n');
 }
 
+/** Impure built-ins left out of `impure-pipe-in-for`: `x$ | async` in a loop
+ * is idiomatic and cheap, and `json` has a rule of its own. */
+const EXEMPT_IN_FOR = new Set(['async', 'json']);
+
 export function lintPipes(cwd: string): PipeLintFinding[] {
   const files: { content: string; relPath: string; fullPath: string }[] = [];
   for (const root of sourceRoots(cwd)) {
@@ -60,7 +64,9 @@ export function lintPipes(cwd: string): PipeLintFinding[] {
   }
 
   const purity: PurityMap = new Map();
-  for (const [name, meta] of BUILTIN_PIPES) purity.set(name, meta.isPure);
+  for (const [name, meta] of BUILTIN_PIPES) {
+    if (!EXEMPT_IN_FOR.has(name)) purity.set(name, meta.isPure);
+  }
   for (const { content } of files) {
     for (const scope of classScopes(maskStrings(stripComments(content)), stripComments(content))) {
       if (scope.kind === 'pipe' && scope.pipeName) {
@@ -122,10 +128,108 @@ function forBlocks(text: string): { start: number; end: number }[] {
   return blocks;
 }
 
+const VOID_ELEMENTS = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'source',
+  'track',
+  'wbr',
+]);
+
+/** Index just past the `>` that closes the start tag opened at `open`,
+ * skipping quoted attribute values. */
+function startTagEnd(text: string, open: number): number {
+  for (let i = open + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"' || ch === "'") {
+      const close = text.indexOf(ch, i + 1);
+      if (close === -1) return text.length;
+      i = close;
+    } else if (ch === '>') return i + 1;
+  }
+  return text.length;
+}
+
+/** `text` with every quoted attribute value inside a start tag blanked to
+ * spaces, so offsets stay the same but a `*ngFor` or `</li>` inside a value
+ * such as `title="..."` is never read as markup. */
+function maskAttributeValues(text: string): string {
+  const chars = text.split('');
+  const starts = /<[A-Za-z][\w:-]*/g;
+  let tag: RegExpExecArray | null;
+  while ((tag = starts.exec(text)) !== null) {
+    let i = tag.index + 1;
+    for (; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '"' || ch === "'") {
+        const close = text.indexOf(ch, i + 1);
+        const stop = close === -1 ? text.length : close;
+        for (let j = i + 1; j < stop; j++) chars[j] = ' ';
+        i = stop;
+      } else if (ch === '>') break;
+    }
+    starts.lastIndex = i + 1;
+  }
+  return chars.join('');
+}
+
+/** Spans of every element that carries `*ngFor`, from its start tag (whose
+ * bindings also run per row) to its matching end tag. */
+function ngForBlocks(source: string): { start: number; end: number }[] {
+  const blocks: { start: number; end: number }[] = [];
+  const text = maskAttributeValues(source);
+  // Walk start tags from the front, skipping quoted values, so a `<` inside
+  // an attribute such as `[hidden]="n < 2"` is never taken for a tag.
+  const starts = /<([A-Za-z][\w:-]*)/g;
+  let tag: RegExpExecArray | null;
+  while ((tag = starts.exec(text)) !== null) {
+    const open = tag.index;
+    const headEnd = startTagEnd(text, open);
+    starts.lastIndex = headEnd;
+    if (!/\s\*ngFor\s*=/.test(text.slice(open, headEnd))) continue;
+    const name = tag[1].toLowerCase();
+    if (text[headEnd - 2] === '/' || VOID_ELEMENTS.has(name)) {
+      blocks.push({ start: open, end: headEnd });
+      continue;
+    }
+    const tags = new RegExp(`<(/?)${tag[1]}(?=[\\s/>])`, 'gi');
+    tags.lastIndex = headEnd;
+    let depth = 1;
+    let end = text.length;
+    let next: RegExpExecArray | null;
+    while ((next = tags.exec(text)) !== null) {
+      if (next[1]) {
+        if (--depth === 0) {
+          end = next.index;
+          break;
+        }
+      } else {
+        const nestedEnd = startTagEnd(text, next.index);
+        if (text[nestedEnd - 2] !== '/') depth++;
+        tags.lastIndex = nestedEnd;
+      }
+    }
+    blocks.push({ start: open, end });
+  }
+  return blocks;
+}
+
 function impurePipeInForFindings(template: TemplateSource, purity: PurityMap): PipeLintFinding[] {
   const findings: PipeLintFinding[] = [];
   const seen = new Set<number>();
-  for (const block of forBlocks(template.text)) {
+  const blocks = [
+    ...forBlocks(template.text).map((block) => ({ ...block, loop: 'an @for block' })),
+    ...ngForBlocks(template.text).map((block) => ({ ...block, loop: 'an *ngFor element' })),
+  ];
+  for (const block of blocks) {
     const body = template.text.slice(block.start, block.end);
     for (const { name, index } of pipeUsesIn(body)) {
       if (seen.has(block.start + index)) continue;
@@ -138,7 +242,7 @@ function impurePipeInForFindings(template: TemplateSource, purity: PurityMap): P
         pipe: name,
         file: template.file,
         line: template.lineAt(template.baseOffset + block.start + index),
-        message: `Impure pipe ${JSON.stringify(name)} runs on every change-detection pass, inside an @for block — potentially once per row, every check.`,
+        message: `Impure pipe ${JSON.stringify(name)} runs on every change-detection pass, inside ${block.loop} — potentially once per row, every check.`,
         fix: 'Precompute the value on the item before the loop, use a pure pipe, or memoize the transform yourself.',
       });
     }

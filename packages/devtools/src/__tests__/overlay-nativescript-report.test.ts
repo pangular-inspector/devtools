@@ -4,6 +4,7 @@ const calls: { name: string; at: number }[] = [];
 let failTree = false;
 let failOnce: string | null = null;
 let known = true;
+let injectorKnown = true;
 
 vi.mock('@nativescript/core', () => ({
   Application: { getRootView: () => null },
@@ -20,6 +21,7 @@ vi.mock('devframe/client', () => ({
         call: vi.fn(async (name: string) => {
           calls.push({ name, at: Date.now() });
           if (failTree && name === 'push-component-tree') throw new Error('rejected');
+          if (name === 'ping-injector-tree') return { known: injectorKnown };
           if (failOnce === name) {
             failOnce = null;
             throw new Error('rejected');
@@ -75,6 +77,7 @@ describe('NativeScript overlay reports', () => {
     failTree = false;
     failOnce = null;
     known = true;
+    injectorKnown = true;
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
@@ -118,6 +121,25 @@ describe('NativeScript overlay reports', () => {
       dispose();
     },
   );
+
+  it('pings for an unchanged injector tree and sends it again only when the server lost it', async () => {
+    const { initNativeScriptOverlay } = await import('../overlay-nativescript.ts');
+    const dispose = initNativeScriptOverlay({
+      baseURL: 'http://localhost:9999/',
+      intervalMs: 5000,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    await flush();
+    await vi.advanceTimersByTimeAsync(60_000);
+    const count = (name: string) => calls.filter((c) => c.name === name).length;
+    expect(count('push-injector-tree')).toBe(1);
+    expect(count('ping-injector-tree')).toBeGreaterThan(0);
+
+    injectorKnown = false;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(count('push-injector-tree')).toBeGreaterThan(1);
+    dispose();
+  });
 
   it('checks an unchanged tree within the page expiry at a slow interval', async () => {
     const { initNativeScriptOverlay } = await import('../overlay-nativescript.ts');

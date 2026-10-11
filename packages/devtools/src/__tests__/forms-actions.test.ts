@@ -710,3 +710,106 @@ describe('request validation', () => {
     expect(isFormAction({ action: 'focus', path: 'x'.repeat(600) })).toBe(false);
   });
 });
+
+class Booking {
+  model = signal({ day: null as Date | null });
+  form = form(this.model);
+  reactive = new FormGroup({
+    on: new FormControl(''),
+    at: new FormControl(''),
+    month: new FormControl(''),
+  });
+}
+Component({
+  selector: 'booking-form',
+  imports: [FormField, FormRoot, ReactiveFormsModule],
+  template: `
+    <form [formRoot]="form"><input id="day" type="date" [formField]="form.day" /></form>
+    <form [formGroup]="reactive">
+      <input id="on" type="date" formControlName="on" />
+      <input id="at" type="time" formControlName="at" />
+      <input id="month" type="month" formControlName="month" />
+    </form>
+  `,
+})(Booking);
+
+describe('user-mode writes to date and time inputs', () => {
+  it('writes dates in the input format and refuses values that are not dates', async () => {
+    const fixture = await render(Booking);
+    const ctx = contextFor(fixture.nativeElement);
+    const ids = new Map<string, string>([...ctx.forms].map(([id, f]) => [f.kind, id]));
+    const set = (kind: string, path: string, value: unknown) =>
+      runFormAction(ctx, {
+        action: 'set-value',
+        formId: ids.get(kind),
+        path,
+        value,
+        mode: 'user',
+      });
+    const app = fixture.componentInstance;
+
+    expect(await set('signal', 'day', new Date(Date.UTC(2026, 2, 14)))).toMatchObject({
+      ok: true,
+    });
+    expect(app.model().day?.toISOString()).toBe('2026-03-14T00:00:00.000Z');
+
+    expect(await set('reactive', 'on', '2026-03-14T09:30:00Z')).toMatchObject({ ok: true });
+    expect(app.reactive.controls.on.value).toBe('2026-03-14');
+    expect(await set('reactive', 'on', '2026-04-01')).toMatchObject({ ok: true });
+    expect(app.reactive.controls.on.value).toBe('2026-04-01');
+
+    const bad = await set('reactive', 'on', 'next tuesday');
+    expect(bad.ok).toBe(false);
+    expect(bad.error).toContain('not a valid date value');
+    expect(app.reactive.controls.on.value).toBe('2026-04-01');
+    expect((fixture.nativeElement.querySelector('#on') as HTMLInputElement).value).toBe(
+      '2026-04-01',
+    );
+
+    expect(await set('reactive', 'at', '09:45')).toMatchObject({ ok: true });
+    expect(app.reactive.controls.at.value).toBe('09:45');
+
+    expect(await set('reactive', 'month', Date.UTC(2026, 2, 14))).toMatchObject({ ok: true });
+    expect(app.reactive.controls.month.value).toBe('2026-03');
+  });
+});
+
+describe('form action guards', () => {
+  it('needs a formId for actions on a form', async () => {
+    const fixture = await render(Signup);
+    const ctx = contextFor(fixture.nativeElement);
+    const result = await runFormAction(ctx, { action: 'touch-all' });
+    expect(result).toMatchObject({ ok: false, error: 'touch-all needs a formId.' });
+    expect(fixture.componentInstance.form.touched).toBe(false);
+  });
+
+  it('does not overwrite a $form the page defined itself, unless forced', async () => {
+    const fixture = await render(Signup);
+    const ctx = contextFor(fixture.nativeElement);
+    const w = window as any;
+    const own = { mine: true };
+    w.$form = own;
+    try {
+      const refused = await runFormAction(ctx, { action: 'store-as-global', formId: 'form-1' });
+      expect(refused.ok).toBe(false);
+      expect(refused.error).toContain('already defines $form');
+      expect(w.$form).toBe(own);
+      const forced = await runFormAction(ctx, {
+        action: 'store-as-global',
+        formId: 'form-1',
+        force: true,
+      });
+      expect(forced.ok).toBe(true);
+      expect(w.$form).toBe(fixture.componentInstance.form);
+      const again = await runFormAction(ctx, {
+        action: 'store-as-global',
+        formId: 'form-1',
+        path: 'name',
+      });
+      expect(again.ok).toBe(true);
+    } finally {
+      delete w.$form;
+      delete w.$control;
+    }
+  });
+});

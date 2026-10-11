@@ -16,6 +16,7 @@ import {
   findRouters,
   redactMessage,
   redactUrl,
+  resetNavigations,
   setGeneration,
   setNavigationLimit,
   snapshotRouter,
@@ -50,6 +51,7 @@ import {
   collectSignalGraph,
   graphKey,
   graphValue,
+  signalOwner,
   toSignalTarget,
   type SignalTarget,
 } from './signal-graph.ts';
@@ -318,7 +320,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     }
     lastSignalKey = key;
     signalSentAt = Date.now();
-    const owner = graph.component?.id ?? '';
+    const owner = signalOwner(graph);
     const full = force || !historyDelta || owner !== historyFor;
     historyFor = owner;
     const statuses = (graph.resources ?? [])
@@ -417,7 +419,6 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   let configTruncated = 0;
   let setup: RouterSetup | undefined;
   let sentGeneration = -1;
-  let routerMisses = 0;
   const routerScan = createScanBackoff();
   let lastRouterPayload = '';
   let lastRouterPushAt = 0;
@@ -463,15 +464,17 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   }
 
   function attachRouter(ng: RouterDebugApi) {
+    if (!routerScan.due()) return;
     const roots = Array.from(document.querySelectorAll('[ng-version]'));
-    if (!roots.length && !routerScan.due()) return;
     const candidates = roots.length ? roots : findAngularElements().slice(0, 1);
     const routers = findRouters(ng, candidates);
     if (!routers.length) {
-      if (candidates.some((root) => read(() => !!ng?.getComponent?.(root), false))) routerMisses++;
-      else if (!roots.length) routerScan.miss();
+      // A root that is not bootstrapped yet is cheap to check again on the next push.
+      const bootstrapped = candidates.some((root) => read(() => !!ng?.getComponent?.(root), false));
+      if (bootstrapped || !roots.length) routerScan.miss();
       return;
     }
+    routerScan.reset();
     router = routers[0];
     routerCount = routers.length;
     routerRoot = candidates[0] ?? null;
@@ -483,10 +486,39 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     routerCleanup.push(capturePreloads(preloaderOf(ng, routerRoot), preloads, scheduleRouterPush));
   }
 
+  /** True when the watched router was destroyed or its root left the page (HMR, re-bootstrap). */
+  function routerGone(): boolean {
+    if (!router) return false;
+    if (read(() => router!['disposed'] === true, false)) return true;
+    return !!routerRoot && !routerRoot.isConnected;
+  }
+
+  function detachRouter() {
+    for (const cleanup of routerCleanup) cleanup();
+    routerCleanup = [];
+    stopInstrument?.();
+    stopInstrument = null;
+    router = null;
+    routerCount = 0;
+    routerRoot = null;
+    // A new router counts navigation ids from 1 again, so old records would take its events.
+    resetNavigations(navigations);
+    preloads.length = 0;
+    config = undefined;
+    configTruncated = 0;
+    setup = undefined;
+    sentGeneration = -1;
+    lastRouterPayload = '';
+    routerDomDirty = true;
+    outlets = [];
+    links = [];
+  }
+
   async function pushRouter() {
     try {
       const ng = getNg() as RouterDebugApi | undefined;
-      if (!router && routerMisses < 3 && ng) attachRouter(ng);
+      if (routerGone()) detachRouter();
+      if (!router && ng) attachRouter(ng);
       const snapshot = router ? snapshotRouter(router) : null;
       const report: Record<string, unknown> = { pageId, snapshot, navigations };
       const dropped = droppedNavigations(navigations);

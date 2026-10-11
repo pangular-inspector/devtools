@@ -1,8 +1,17 @@
 import { existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { defineDevframe } from 'devframe';
 import { createCac } from 'devframe/adapters/cac';
+import { getInstanceInternals, initDevframe } from 'devframe/initiate';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { checkReportOutDir, createPangularCli, guardReportOutDir, startupLines } from '../cli.ts';
+import {
+  checkReportOutDir,
+  createPangularCli,
+  guardReportOutDir,
+  proxyAuth,
+  proxyPanelUrl,
+  startupLines,
+} from '../cli.ts';
 import { fixtureDir } from '../rpc/__tests__/fixture-dir.ts';
 
 function project() {
@@ -141,5 +150,67 @@ describe('pangular dev startup', () => {
       '  Angular Native apps: http://127.0.0.1:4321/?view=angular-native',
       '  Port 9999 is taken, so the server uses port 4321.',
     ]);
+  });
+});
+
+describe('pangular dev --proxy-origin', () => {
+  it('points at /__pangular/ on the app origin unless a path is given', () => {
+    expect(proxyPanelUrl('http://localhost:4200')).toBe('http://localhost:4200/__pangular/');
+    expect(proxyPanelUrl('http://localhost:4200/')).toBe('http://localhost:4200/__pangular/');
+    expect(proxyPanelUrl('https://app.test:8443/tools')).toBe('https://app.test:8443/tools/');
+    expect(proxyPanelUrl('http://localhost:4200/devtools/?x=1#y')).toBe(
+      'http://localhost:4200/devtools/',
+    );
+  });
+
+  it('refuses a value that is not an http or https URL', () => {
+    for (const value of ['localhost:4200', '4200', 'ftp://localhost:4200']) {
+      expect(() => proxyPanelUrl(value)).toThrow(/--proxy-origin needs an http or https URL/);
+    }
+  });
+
+  it('prints the panel URL on the app origin', () => {
+    const lines = startupLines('http://localhost:9999', 9999, {
+      mcp: false,
+      proxyUrl: 'http://localhost:4200/__pangular/',
+    });
+    expect(lines.slice(1, 3)).toEqual([
+      '  Panel: http://localhost:9999/',
+      '  Panel on your app: http://localhost:4200/__pangular/',
+    ]);
+  });
+
+  it('prints the one-time code link for the app origin', async () => {
+    const instance = initDevframe(
+      defineDevframe({
+        id: 'proxy-auth',
+        name: 'Proxy auth',
+        version: '0.0.0',
+        packageName: 'proxy-auth',
+        homepage: 'https://pangular-inspector.dev',
+        description: 'Proxy auth test',
+        setup() {},
+      }),
+      {
+        base: '/__pangular/',
+        ws: false,
+        auth: proxyAuth('http://localhost:4200/__pangular/') as unknown as boolean,
+      },
+    );
+    await instance.ready;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const auth = getInstanceInternals(instance).authHandler as { printBanner?: () => void };
+    auth.printBanner?.();
+    expect(log.mock.calls.flat().join('\n')).toContain(
+      'http://localhost:4200/__pangular/#devframe_otp=',
+    );
+    await instance.close();
+  });
+
+  it('describes --outDir in the --force help', () => {
+    const { cli } = createPangularCli({ env: {} });
+    const build = cli.commands.find((command) => command.name === 'build');
+    const force = build?.options.find((option) => option.name === 'force');
+    expect(force?.description).toContain('--outDir');
   });
 });

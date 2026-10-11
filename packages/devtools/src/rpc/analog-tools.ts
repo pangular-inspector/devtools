@@ -145,10 +145,21 @@ export function loadEndpointUrl(
 ): string {
   let path = `/${apiPrefix}/_analog${analogEndpoint(file)}`.replace(/\/{2,}/g, '/');
   for (const [name, value] of Object.entries(params)) {
-    if (name !== '**') path = path.replace(`[${name}]`, value);
+    if (name !== '**') path = path.replace(`[${name}]`, encodeURIComponent(value));
   }
-  const rest = params['**'] ?? Object.values(params).at(-1) ?? '';
-  return path.replace('**', rest);
+  if (!path.includes('**')) return path;
+  const catchAll = file.match(/\[\[?\.{3}([^\]]+)\]\]?/)?.[1];
+  const rest = params['**'] ?? (catchAll ? params[catchAll] : undefined) ?? '';
+  return path.replace('**', rest.split('/').map(encodeSegment).join('/'));
+}
+
+/** Catch-all values hold the URL's own segments, so decode before encoding. */
+function encodeSegment(part: string): string {
+  try {
+    return encodeURIComponent(decodeURIComponent(part));
+  } catch {
+    return encodeURIComponent(part);
+  }
 }
 
 function kindLabel(route: AnalogRoute): string {
@@ -638,7 +649,15 @@ function hasHandler(project: AnalogProject, call: AnalogCall): boolean {
   });
 }
 
-export function analogLint(project: AnalogProject, state: AnalogState): AnalogLintFinding[] {
+/**
+ * Static findings, live call findings and the findings of one page: `page`,
+ * or the most recent page when it is left out.
+ */
+export function analogLint(
+  project: AnalogProject,
+  state: AnalogState,
+  page?: string,
+): AnalogLintFinding[] {
   if (!project.analog) return [];
   const findings = lintAnalog(project);
   const dupes = new Map(duplicateLoads(state.calls).map((d) => [d.route, d]));
@@ -662,7 +681,7 @@ export function analogLint(project: AnalogProject, state: AnalogState): AnalogLi
       fix: 'The browser read did not use the TransferState seed. Read it with injectServerFn and the same input on both sides, and check provideClientHydration().',
     });
   }
-  const report = state.pages[0];
+  const report = pickPage(state, page);
   if (report) {
     for (const path of restartNeeded(project, report)) {
       findings.push({
@@ -701,16 +720,31 @@ export function analogLint(project: AnalogProject, state: AnalogState): AnalogLi
   return findings;
 }
 
-export function analogLintText(project: AnalogProject, state: AnalogState): string {
+export function analogLintText(project: AnalogProject, state: AnalogState, page?: string): string {
   if (!project.analog) return NOT_ANALOG;
-  const findings = analogLint(project, state);
-  if (!findings.length) return 'No Analog problems found.';
+  const findings = analogLint(project, state, page);
+  const missing = page && !state.pages.some((p) => p.pageId === page) ? page : undefined;
+  if (!findings.length && !missing) return 'No Analog problems found.';
   const order = { error: 0, warning: 1, info: 2 };
-  return `${UNTRUSTED}\n\n${findings
+  const lines = findings
     .sort((a, b) => order[a.severity] - order[b.severity])
     .map(
       (f) =>
         `- **${f.severity}** ${f.rule}${f.file ? ` in ${code(f.file)}` : ''}${f.path ? ` at ${code(f.path)}` : ''}: ${f.message} Fix: ${f.fix}`,
-    )
-    .join('\n')}`;
+    );
+  if (missing) {
+    lines.unshift(unknownLintPage(missing, state.pages), '');
+    if (!findings.length) lines.push('No problems found in the files or API calls.');
+  }
+  return `${UNTRUSTED}\n\n${lines.join('\n')}`;
+}
+
+/** Says that `page` sends no Analog report, so its hydration errors and restart checks are left out. */
+function unknownLintPage(page: string, pages: readonly AnalogRuntimeReport[]): string {
+  const known = pages.map((p) => `${code(p.pageId)} (${code(p.url)})`).join(', ');
+  return `No page ${code(page)} is reporting Analog data, so its hydration errors and restart checks are left out. ${
+    known
+      ? `Pages that report Analog data: ${known}. Pass one of these ids as \`page\`, or leave \`page\` out for the most recent.`
+      : 'No page reports Analog data right now.'
+  }`;
 }

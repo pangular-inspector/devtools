@@ -74,9 +74,17 @@ export function providerKind(provider: unknown): ProviderInfo['type'] {
   return 'unknown';
 }
 
+/**
+ * Angular's own element tokens (`ElementRef`, `Injector`, `DestroyRef` and so
+ * on) carry a `__NG_ELEMENT_ID__` factory or a negative marker. Angular also
+ * stamps a non-negative bloom id on every token a component or directive
+ * provides, so a number of zero or more is an app provider.
+ */
 function isBuiltInElementToken(record: ProviderRecord): boolean {
+  if (record.provider !== record.token) return false;
   const token = record.token as { __NG_ELEMENT_ID__?: unknown } | null;
-  return record.provider === record.token && !!token && '__NG_ELEMENT_ID__' in token;
+  const id = token?.__NG_ELEMENT_ID__;
+  return typeof id === 'function' || (typeof id === 'number' && id < 0);
 }
 
 type RecordReader = (injector: unknown) => ProviderRecord[];
@@ -201,10 +209,10 @@ export function dependenciesOf<H extends object = Element>(
     }
     return path;
   };
-  for (const ctor of owners) {
-    if (typeof ctor !== 'function') continue;
+  for (const owner of owners) {
+    if (typeof owner !== 'function' && (!owner || typeof owner !== 'object')) continue;
     try {
-      const result = ng.ɵgetDependenciesFromInjectable?.(injector, ctor);
+      const result = ng.ɵgetDependenciesFromInjectable?.(injector, owner);
       for (const dep of result?.dependencies ?? []) {
         if (dep.token === undefined) continue;
         const flags = Object.entries(dep.flags ?? {})
@@ -214,7 +222,7 @@ export function dependenciesOf<H extends object = Element>(
           dep.providedIn ?? listedOnPath(ng, lookupPath(), records, dep.token, dep.flags ?? {});
         const by = providedIn ? injectorRef(ng, providedIn, hosts) : null;
         const info: DependencyInfo = {
-          from: className(ctor),
+          from: tokenName(owner),
           token: tokenName(dep.token),
           flags,
           providedBy: by?.id ?? null,
@@ -288,7 +296,10 @@ function environmentDependencies<H extends object>(
   const seen = new Set<string>();
   for (const [token, record] of ownRecords(injector)) {
     if (out.length >= MAX_SERVICE_DEPENDENCIES) break;
-    if (typeof token !== 'function' || typeof record.factory !== 'function') continue;
+    // Class tokens and InjectionTokens built by a factory (`useFactory`,
+    // `useClass`, or an InjectionToken's own `factory`).
+    if (!token || (typeof token !== 'function' && typeof token !== 'object')) continue;
+    if (typeof record.factory !== 'function') continue;
     if (record.multi || !isCreated(record)) continue;
     let deps = known.get(token);
     if (!deps) {

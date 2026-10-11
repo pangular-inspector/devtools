@@ -124,6 +124,106 @@ describe('createDeferTracker', () => {
       { hydrateNever: true, hydration: 'not-configured' },
     ]);
   });
+
+  it('keeps blocks without a hostNode, known by their position under the root', () => {
+    const { reviews, instances } = page();
+    const section = reviews.querySelector('section')!;
+    let clock = 1000;
+    let raw: unknown[] = [
+      { ...block({ rootNodes: [section] }), type: undefined },
+      { ...block({ state: 'complete' }), type: undefined },
+    ];
+    const ng: DeferDebugNg = {
+      getComponent: (el) => instances.get(el) ?? null,
+      ɵgetDeferBlocks: () => raw,
+    };
+    const tracker = createDeferTracker(() => clock);
+    const first = tracker.collect(ng)!;
+    expect(first).toHaveLength(2);
+    expect(first[0]).toMatchObject({ state: 'placeholder', owner: { name: 'TripReviews' } });
+    expect(first[1].owner).toBeUndefined();
+
+    clock = 2000;
+    raw = [
+      { ...block({ state: 'complete', rootNodes: [section] }), type: undefined },
+      { ...block({ state: 'complete' }), type: undefined },
+    ];
+    const second = tracker.collect(ng)!;
+    expect(second.map((b) => b.id)).toEqual(first.map((b) => b.id));
+    expect(second[0]).toMatchObject({ state: 'complete', since: 2000 });
+    expect(second[1].since).toBe(1000);
+  });
+
+  it('keeps a block without a hostNode on its id and timing when a block appears before it', () => {
+    const { reviews, anchor, instances } = page();
+    const section = reviews.querySelector('section')!;
+    let clock = 1000;
+    let raw: unknown[] = [{ ...block({ rootNodes: [section] }), type: undefined }];
+    const ng: DeferDebugNg = {
+      getComponent: (el) => instances.get(el) ?? null,
+      ɵgetDeferBlocks: () => raw,
+    };
+    const tracker = createDeferTracker(() => clock);
+    const [first] = tracker.collect(ng)!;
+
+    clock = 2000;
+    const added = document.createElement('p');
+    reviews.insertBefore(added, section);
+    reviews.insertBefore(document.createComment('container'), section);
+    raw = [
+      { ...block({ rootNodes: [added] }), type: undefined },
+      { ...block({ rootNodes: [section] }), type: undefined },
+    ];
+    const second = tracker.collect(ng)!;
+    expect(second[1]).toMatchObject({ id: first.id, since: 1000 });
+    expect(second[0].id).not.toBe(first.id);
+    expect(second[0].since).toBe(2000);
+
+    clock = 3000;
+    const content = document.createElement('div');
+    reviews.replaceChild(content, section);
+    raw = [
+      { ...block({ rootNodes: [added] }), type: undefined },
+      { ...block({ state: 'complete', rootNodes: [content] }), type: undefined },
+    ];
+    const third = tracker.collect(ng)!;
+    expect(content.nextSibling).toBe(anchor);
+    expect(third[1]).toMatchObject({ id: first.id, state: 'complete', since: 3000 });
+    expect(third[0].id).toBe(second[0].id);
+  });
+
+  it('keeps the id of a block without a hostNode or a placeholder once it renders', () => {
+    const { reviews, anchor, instances } = page();
+    const section = reviews.querySelector('section')!;
+    let clock = 1000;
+    const empty = { placeholderBlock: { exists: false, minimumTime: null } };
+    let raw: unknown[] = [
+      { ...block({ ...empty, state: 'initial' }), type: undefined },
+      { ...block({ ...empty, state: 'initial' }), type: undefined },
+    ];
+    const ng: DeferDebugNg = {
+      getComponent: (el) => instances.get(el) ?? null,
+      ɵgetDeferBlocks: () => raw,
+    };
+    const tracker = createDeferTracker(() => clock);
+    const first = tracker.collect(ng)!;
+
+    clock = 2000;
+    raw = [
+      { ...block({ ...empty, state: 'complete', rootNodes: [section] }), type: undefined },
+      { ...block({ ...empty, state: 'initial' }), type: undefined },
+    ];
+    const second = tracker.collect(ng)!;
+    expect(section.nextSibling).toBe(anchor);
+    expect(second.map((b) => b.id)).toEqual(first.map((b) => b.id));
+    expect(second[0]).toMatchObject({ state: 'complete', since: 2000 });
+    expect(second[1]).toMatchObject({ state: 'initial', since: 1000 });
+
+    clock = 3000;
+    const third = tracker.collect(ng)!;
+    expect(third.map((b) => b.id)).toEqual(first.map((b) => b.id));
+    expect(third[0].since).toBe(2000);
+  });
 });
 
 describe('deferBlocksText', () => {
@@ -156,16 +256,23 @@ describe('deferBlocksText', () => {
           info({ id: 'd3', state: 'placeholder', since: 25_000 }),
           info({ id: 'd4', hydration: 'dehydrated' }),
           info({ id: 'd5', hydrateNever: true, triggers: ['hydrate never'] }),
+          info({ id: 'd6', state: 'placeholder', since: 1000, triggers: ['on viewport'] }),
+          info({ id: 'd7', state: 'placeholder', since: 1000, triggers: ['on hover', 'on idle'] }),
+          info({ id: 'd8', state: 'placeholder', since: 1000, triggers: [] }),
         ]),
       ],
       30_000,
     );
-    expect(text).toContain('5 defer blocks');
+    expect(text).toContain('8 defer blocks');
     expect(text).toContain('`d1` in TripReviews (`c2`): failed to load. Triggers: on viewport');
     expect(text).toContain('`d2` in TripReviews (`c2`): on its placeholder for 29s');
     expect(text).not.toContain('`d3` in');
     expect(text).toMatch(/\| `d4` .*\| still dehydrated \|/);
     expect(text).toMatch(/\| `d5` .*hydrate never: the server HTML stays static/);
+    expect(text).not.toContain('`d6` in');
+    expect(text).toMatch(/\| `d6` .*\| waiting for its trigger for 29s \|/);
+    expect(text).toContain('`d7` in TripReviews (`c2`): on its placeholder for 29s');
+    expect(text).toContain('`d8` in TripReviews (`c2`): on its placeholder for 29s');
   });
 
   it('lists at most DEFER_ROWS blocks per page and says how many more are not shown', () => {

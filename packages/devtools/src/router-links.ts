@@ -161,7 +161,11 @@ function isLinkActive(value: unknown): value is AnyRecord {
  */
 export function linksOf(ng: RouterDebugApi, router: AnyRecord): LinkInfo[] {
   if (typeof document === 'undefined' || !ng.getDirectives) return [];
-  const elements = Array.from(document.querySelectorAll('a, button, [routerlink], [routerLink]'));
+  const elements = Array.from(
+    document.querySelectorAll(
+      'a, button, [routerlink], [routerLink], [routerlinkactive], [routerLinkActive]',
+    ),
+  );
   const out: LinkInfo[] = [];
   for (const element of elements) {
     if (out.length >= MAX_LINKS) break;

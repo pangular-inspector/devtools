@@ -114,6 +114,7 @@ interface Finding {
   severity: 'error' | 'warning' | 'info';
   file?: string;
   path?: string;
+  relatedFile?: string;
   message: string;
   fix: string;
 }
@@ -354,9 +355,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
           <span class="label">Server calls</span>
           <span class="value">{{ allCalls().length }}</span>
         </div>
-        <div class="stat" [attr.data-tone]="findings().length ? 'warn' : 'good'">
+        <div class="stat" [attr.data-tone]="lintTone() || 'good'">
           <span class="label">Issues</span>
-          <span class="value">{{ findings().length }}</span>
+          <span class="value">{{ lintCount().errors + lintCount().warnings }}</span>
         </div>
         @if (page(); as p) {
           <div class="stat wide">
@@ -1289,6 +1290,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
     .stat[data-tone='good'] .value {
       color: var(--ok);
     }
+    .stat[data-tone='bad'] .value {
+      color: var(--danger-text);
+    }
 
     .tabs {
       display: inline-flex;
@@ -1347,6 +1351,11 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
     [role='tab'][aria-selected='true'] .count[data-tone='warn'] {
       background: color-mix(in srgb, var(--warn) 12%, transparent);
       color: var(--warn-text);
+    }
+    .count[data-tone='bad'],
+    [role='tab'][aria-selected='true'] .count[data-tone='bad'] {
+      background: color-mix(in srgb, var(--danger) 12%, transparent);
+      color: var(--danger-text);
     }
 
     .panel {
@@ -2355,8 +2364,20 @@ export class AnalogInspector {
     }
     return Array.from(cards.values()).sort((a, b) => order[a.severity] - order[b.severity]);
   });
+  /** Errors and warnings; info findings are advice, so they are not counted. */
+  readonly lintCount = computed(() => {
+    const findings = this.findings();
+    return {
+      errors: findings.filter((f) => f.severity === 'error').length,
+      warnings: findings.filter((f) => f.severity === 'warning').length,
+    };
+  });
+  readonly lintTone = computed(() => {
+    const { errors, warnings } = this.lintCount();
+    return errors ? 'bad' : warnings ? 'warn' : '';
+  });
   readonly views = computed(() => {
-    const errors = this.findings().length;
+    const { errors, warnings } = this.lintCount();
     return [
       { id: 'routes' as View, label: 'Routes', count: this.pageCount(), tone: '' },
       { id: 'server' as View, label: 'Server', count: this.allCalls().length, tone: '' },
@@ -2367,7 +2388,7 @@ export class AnalogInspector {
         count: this.project()?.content.length ?? 0,
         tone: '',
       },
-      { id: 'lint' as View, label: 'Lint', count: errors, tone: errors ? 'warn' : '' },
+      { id: 'lint' as View, label: 'Lint', count: errors + warnings, tone: this.lintTone() },
     ];
   });
 
@@ -2423,7 +2444,7 @@ export class AnalogInspector {
     if (!client) return;
     const run = ++this.refreshRun;
     const [findings, render] = await Promise.all([
-      call<Finding[]>(client, 'analog-lint'),
+      call<Finding[]>(client, 'analog-lint', this.hostPageId ?? undefined),
       call<{ rows: RenderRow[]; plan: PrerenderPlan }>(client, 'analog-render'),
     ]);
     if (run !== this.refreshRun) return;
@@ -2519,7 +2540,7 @@ export class AnalogInspector {
     const finding = this.findings().find(
       (f) => f.rule === 'content-shadows-page' && f.file === file,
     );
-    return finding?.message.match(/(\/\S+\.page\.ts)/)?.[1];
+    return finding?.relatedFile;
   }
 
   contentUrl(file: string): string | undefined {

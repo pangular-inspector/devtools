@@ -14,6 +14,9 @@ import type { ComponentFocus } from '../types/component-focus.types';
 interface RouteRow {
   route: ActiveRoute;
   depth: number;
+  label: string;
+  /** What a screen reader hears for the nesting the indent shows, on child rows. */
+  nesting?: string;
 }
 
 interface OutletRow {
@@ -95,7 +98,10 @@ interface OutletRow {
             @for (row of rows(); track $index) {
               <tr>
                 <td class="path" [style.padding-left.px]="14 + row.depth * 16">
-                  {{ row.depth === 0 && !row.route.path ? '(root)' : '/' + row.route.path }}
+                  {{ row.label }}
+                  @if (row.nesting) {
+                    <span class="visually-hidden">, {{ row.nesting }}</span>
+                  }
                   @if (row.route.outlet !== 'primary') {
                     <span class="tag">{{ row.route.outlet }}</span>
                   }
@@ -350,9 +356,11 @@ export class RouteCurrent {
 
   readonly rows = computed(() => {
     const rows: RouteRow[] = [];
-    const visit = (route: ActiveRoute, depth: number) => {
-      rows.push({ route, depth });
-      for (const child of route.children) visit(child, depth + 1);
+    const visit = (route: ActiveRoute, depth: number, parent?: string) => {
+      const label = depth === 0 && !route.path ? '(root)' : '/' + route.path;
+      const nesting = parent === undefined ? undefined : `level ${depth + 1}, child of ${parent}`;
+      rows.push({ route, depth, label, nesting });
+      for (const child of route.children) visit(child, depth + 1, label);
     };
     const root = this.page().snapshot?.root;
     if (root) visit(root, 0);

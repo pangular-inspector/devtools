@@ -304,6 +304,7 @@ async function startSession(
     try {
       await my.rpc.call('push-injector-tree', { ...report, pageId });
     } catch (error) {
+      // Sent again on the next tick, even when the page did not change.
       if (lastInjectorJson === json) lastInjectorJson = '';
       throw error;
     }

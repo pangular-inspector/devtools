@@ -32,7 +32,7 @@ This guide adds the devtools to an [Angular Native](https://ng-native.com) app. 
 
 <ngmd-workflow>
   <ngmd-step title="Install the packages">
-    Add <code>&#64;pangular-inspector/devtools</code> and <code>devframe</code>. A bare React Native app also needs a <code>URL</code> polyfill.
+    Add <code>&#64;pangular-inspector/devtools</code>. A bare React Native app also needs a <code>URL</code> polyfill.
   </ngmd-step>
   <ngmd-step title="Start the overlay">
     Call <code>initAngularNativeOverlay()</code> in <code>src/main.ts</code>, after <code>mount()</code>, with the root node it returns.
@@ -48,19 +48,19 @@ This guide adds the devtools to an [Angular Native](https://ng-native.com) app. 
 ## Step 1: Install
 
 ```bash group="install" name="npm" image="https://cdn.simpleicons.org/npm/CB3837" active
-npm install @pangular-inspector/devtools devframe
+npm install @pangular-inspector/devtools
 ```
 
 ```bash group="install" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220"
-pnpm add @pangular-inspector/devtools devframe
+pnpm add @pangular-inspector/devtools
 ```
 
 ```bash group="install" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
-yarn add @pangular-inspector/devtools devframe
+yarn add @pangular-inspector/devtools
 ```
 
 ```bash group="install" name="bun" image="https://bun.sh/logo.svg"
-bun add @pangular-inspector/devtools devframe
+bun add @pangular-inspector/devtools
 ```
 
 ### WebSocket and URL

@@ -718,6 +718,41 @@ describe('RouteCurrent page switch', () => {
 });
 
 describe('RouteCurrent', () => {
+  it('tells screen readers how each active route is nested', async () => {
+    const fixture = mount(
+      RouteCurrent,
+      page({
+        snapshot: {
+          ...page().snapshot!,
+          root: {
+            path: '',
+            url: '',
+            outlet: 'primary',
+            params: {},
+            data: {},
+            children: [
+              {
+                path: 'users',
+                url: 'users',
+                outlet: 'primary',
+                params: {},
+                data: {},
+                children: [
+                  { path: ':id', url: '7', outlet: 'primary', params: {}, data: {}, children: [] },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+      offline,
+    );
+    await settle(fixture);
+    const cells = Array.from(el(fixture).querySelectorAll('td.path'));
+    const hidden = cells.map((cell) => cell.querySelector('.visually-hidden')?.textContent ?? '');
+    expect(hidden).toEqual(['', ', level 2, child of (root)', ', level 3, child of /users']);
+  });
+
   it('reports an unreachable page on Abort instead of #undefined', async () => {
     const fixture = mount(
       RouteCurrent,

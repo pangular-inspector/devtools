@@ -53,4 +53,37 @@ describe('defer blocks', () => {
     expect(badge.classList.contains('defer-state')).toBe(true);
     expect(badge.classList.contains('defer-state-complete')).toBe(true);
   });
+
+  it('keeps a row without an owner focusable, marked aria-disabled', async () => {
+    const fixture = TestBed.createComponent(ComponentTree);
+    const page = {
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+      reportedAt: 1000,
+      deferBlocks: [
+        {
+          id: 'd1',
+          state: 'placeholder',
+          hydration: 'not-configured',
+          triggers: [],
+          rootIds: [],
+        },
+      ],
+    };
+    fixture.componentRef.setInput('rpc', client({ p1: page }));
+    for (let i = 0; i < 3; i++) {
+      await new Promise((resolve) => setTimeout(resolve));
+      await fixture.whenStable();
+    }
+    const row = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '.defer-row',
+    )!;
+    expect(row.disabled).toBe(false);
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    row.click();
+    await fixture.whenStable();
+    expect(row.textContent).toContain('Unknown component');
+  });
 });

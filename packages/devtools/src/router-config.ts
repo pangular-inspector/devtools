@@ -7,6 +7,7 @@ import {
   nameOf,
   read,
   resolversOf,
+  WRAPPED,
   type AnyRecord,
   type RouteGuards,
 } from './router.ts';
@@ -208,19 +209,70 @@ export function activeIds(router: AnyRecord): string[] {
   return out;
 }
 
+const SIGNATURE_GUARDS = [
+  'canActivate',
+  'canActivateChild',
+  'canDeactivate',
+  'canMatch',
+  'canLoad',
+];
+
+const guardIds = new WeakMap<object, number>();
+let nextGuardId = 0;
+
 /**
- * Counts config changes: a new config array (resetConfig, HMR) or a lazy
- * route whose children or component finished loading.
+ * A stable id per guard function, class or token, so swapping one guard for
+ * another at the same index changes the signature. Instrumentation wraps
+ * guards in place, so the id is taken from the app's own function.
+ */
+function guardId(entry: unknown): string {
+  if ((typeof entry !== 'function' && typeof entry !== 'object') || entry === null) {
+    return typeof entry;
+  }
+  const own = ((entry as AnyRecord)[WRAPPED] as object | undefined) ?? entry;
+  let id = guardIds.get(own);
+  if (id === undefined) guardIds.set(own, (id = ++nextGuardId));
+  return String(id);
+}
+
+/** What an in-place edit of a route changes: its path, redirect and guards. */
+function routeShape(route: AnyRecord): string {
+  return read(() => {
+    const redirect = route['redirectTo'];
+    const guards = SIGNATURE_GUARDS.map((kind) => {
+      const list = route[kind];
+      return Array.isArray(list) ? list.map(guardId).join('+') : '-';
+    });
+    return `${String(route['path'] ?? '')}|${typeof redirect === 'string' ? redirect : typeof redirect}|${guards.join(',')}`;
+  }, '');
+}
+
+/** A short FNV-1a hash, so the signature stays small however big the config is. */
+function hashInto(hash: number, text: string): number {
+  let next = hash;
+  for (let i = 0; i < text.length; i++) {
+    next ^= text.charCodeAt(i);
+    next = Math.imul(next, 0x01000193);
+  }
+  return next >>> 0;
+}
+
+/**
+ * Counts config changes: a new config array (resetConfig, HMR), a lazy route
+ * whose children or component finished loading, or a route whose path,
+ * redirect or guards were edited in place.
  */
 export function configSignature(router: AnyRecord): string {
   const config = read(() => router['config'] as AnyRecord[], []);
   let loaded = 0;
   let total = 0;
+  let shape = 0x811c9dc5;
   const visit = (routes: AnyRecord[], depth: number) => {
     if (!Array.isArray(routes) || depth > MAX_DEPTH || total > MAX_NODES) return;
     for (const route of routes) {
       total++;
       if (read(() => !!route['_loadedRoutes'] || !!route['_loadedComponent'], false)) loaded++;
+      shape = hashInto(shape, `${depth}:${routeShape(route)};`);
       visit(
         read(() => route['children'] as AnyRecord[], []),
         depth + 1,
@@ -232,7 +284,7 @@ export function configSignature(router: AnyRecord): string {
     }
   };
   visit(config, 0);
-  return `${total}:${loaded}`;
+  return `${total}:${loaded}:${shape.toString(36)}`;
 }
 
 export class ConfigTracker {

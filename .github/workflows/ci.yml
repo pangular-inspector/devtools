@@ -64,6 +64,23 @@ jobs:
       - name: Smoke-test the CLI
         run: node bin.mjs --help
 
+  node-22:
+    name: Package tests on Node.js 22
+    # `engines.node` allows 22, while the build job runs the `.nvmrc` version.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          node-version: 22
+
+      - name: Test devtools package
+        run: pnpm test:devtools
+
   axe:
     runs-on: ubuntu-latest
     timeout-minutes: 15

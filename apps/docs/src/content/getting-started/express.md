@@ -19,7 +19,7 @@ In an *Angular app with server-side rendering, the devtools run inside your Expr
 
 <ngmd-workflow>
   <ngmd-step title="Install the package">
-    Add <code>&#64;pangular-inspector/devtools</code> and <code>devframe</code>. See <a href="./installation.md">Installation</a>.
+    Add <code>&#64;pangular-inspector/devtools</code> as a dependency, because <code>server.ts</code> imports it. See <a href="./installation.md#dependency-or-dev-dependency">Installation</a>.
   </ngmd-step>
   <ngmd-step title="Mount the hub">
     Add <code>initPangularHub()</code> to <code>server.ts</code>, before your other routes.
@@ -232,6 +232,19 @@ export const appConfig: ApplicationConfig = {
 
 Register `withPangular()` before your own interceptors, for example `provideHttpClient(withPangular(), withInterceptors([authInterceptor]))`. It then records requests as the app makes them, and fault rules apply before anything else.
 
+### Trace each server render
+
+To fill the **SSR requests** table, add the hub's `ssrMiddleware` after the hub middleware and before the Angular handler:
+
+```ts {4}
+// src/server.ts
+const devtools = initPangularHub({ws: false});
+app.use(devtools.nodeMiddleware);
+app.use(devtools.ssrMiddleware);
+```
+
+It is optional. It also adds a `Server-Timing` header to each traced response. If the server uses `compression()`, mount `ssrMiddleware` after it. See [SSR & HTTP](../inspectors/ssr-http.md).
+
 ### Run SSR in the same process
 
 SSR and the devtools middleware must run in the same Express process. Otherwise the server-side calls never reach the tab.
@@ -240,12 +253,11 @@ The [SSR & HTTP guide](../guides/ssr-http.md) covers interceptor order and fault
 
 ## Mount only the panel
 
-To mount only the devtools panel without the dock, use `initDevframe()` from `devframe/initiate`:
+To mount only the devtools panel without the dock, use `initDevframe()`. The devframe entry point re-exports it from the Devframe copy the package depends on:
 
 ```ts
 // src/server.ts
-import {initDevframe} from 'devframe/initiate';
-import pangular from '@pangular-inspector/devtools/devframe';
+import pangular, {initDevframe} from '@pangular-inspector/devtools/devframe';
 
 const devtools = initDevframe(pangular, {base: '/__pangular/'});
 app.use(devtools.nodeMiddleware);

@@ -85,10 +85,10 @@ Hover or focus a row to highlight the block in the page. Click it to select the 
 
 ### Change detection
 
-Below the tree and the defer blocks, the **Change detection** section records change detection cycles with Angular's profiler. Click **Record**, use the app, then click **Stop recording**. **Clear** empties the recording.
+Below the tree and the defer blocks, the **Change detection** section records change detection cycles with Angular's profiler. Click **Record**, use the app, then click **Stop recording**. **Clear** empties the recording. Each new recording starts empty, but a start sent while the page records, such as an agent's `record: "start"`, keeps the cycles recorded so far.
 
 - **Slowest components**: each component class with its check count, its self time (its own template and hooks, children excluded) and its slowest single check.
-- **Latest cycles**, newest first: the start time, the duration, how many components Angular checked, how many sync passes it ran, the output listener that ran before the cycle, and the slowest component in it.
+- **Latest cycles**, newest first: the start time, the duration, how many components Angular checked, how many sync passes it ran, the output listener that ran just before the cycle (an output that ended more than 50 ms before the cycle is not counted), and the slowest component in it.
 - Tree rows show how many times each instance was checked while recording.
 
 Recording is off by default. While it is off, the page registers no profiler for it. The page keeps the last 200 cycles, set with [`limits.cdCycles`](../getting-started/configuration.md#limits). Recording needs Angular 20 or later. On older versions, the section says so. Times come from a development build, so they are higher than in production.
@@ -156,9 +156,11 @@ On Angular 20 and later, the page reads the tree about 250 ms after Angular runs
     The page highlights the component under the pointer.
   </ngmd-step>
   <ngmd-step title="Click it">
-    The tab selects the component that hosts the element you clicked, and opens its details.
+    The tab selects the component that hosts the element you clicked, and opens its details. On a touch screen, tap it.
   </ngmd-step>
 </ngmd-workflow>
+
+While picking, presses and clicks in the app don't reach it, so menus and drag handles stay as they are.
 
 Press Escape, in the app or in the panel, or click **Cancel pick** to stop. Picking also stops after 15 seconds.
 
@@ -224,6 +226,10 @@ Live data reads `window.ng`. Production builds remove it, so the tab falls back 
 ### Values are shortened
 
 Input and property values stop at 3 levels of nesting, 30 keys or items, and 300 characters. Past that, the devtools cut the value and mark it. Each block lists up to 60 inputs, outputs, properties or listeners.
+
+### No `@let` values
+
+`@let` values live in the template's view, not on the component, and Angular's debug API does not expose them. **Properties** doesn't list them. To see one, move it into a `computed()` on the component.
 
 ### Secrets are redacted
 

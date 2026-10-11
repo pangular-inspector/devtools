@@ -18,6 +18,8 @@ interface Track {
   label: string;
   kind: string;
   changes: SignalChange[];
+  /** Writes since the last flush, serialized off Angular's set path. */
+  pending: { epoch: number; value: unknown; at: number }[];
 }
 
 function append(list: SignalChange[], change: SignalChange) {
@@ -38,29 +40,69 @@ export function createSignalHistory(
   const sent = new Map<string, number>();
   let trackSeq = 0;
 
+  const dirty = new Set<Track>();
+  let flushQueued = false;
+
+  function flush() {
+    flushQueued = false;
+    for (const track of dirty) {
+      for (const write of track.pending) {
+        try {
+          append(track.changes, {
+            ...write,
+            value: serialize(write.value, track.label),
+            source: 'write',
+          });
+        } catch {
+          continue;
+        }
+      }
+      track.pending = [];
+    }
+    dirty.clear();
+  }
+
+  function evictTrack() {
+    for (const [id, track] of tracks) {
+      if (!track.ref.deref()) {
+        tracks.delete(id);
+        return;
+      }
+    }
+    // Writes move a track to the end, so the first one is the least recently written.
+    tracks.delete(tracks.keys().next().value!);
+  }
+
   function onWrite(node: RawSignalNode) {
     // Unnamed writes can't be matched to a graph node; snapshots still cover them.
     if (!node.debugName) return;
     const id = trackIds.get(node);
     let track = id ? tracks.get(id) : undefined;
-    if (!track) {
+    if (track) {
+      tracks.delete(id!);
+      tracks.set(id!, track);
+    } else {
       const newId = `w${++trackSeq}`;
       track = {
         ref: new WeakRef(node),
         label: node.debugName,
         kind: node.kind ?? 'signal',
         changes: [],
+        pending: [],
       };
       trackIds.set(node, newId);
       tracks.set(newId, track);
-      if (tracks.size > MAX_TRACKS) tracks.delete(tracks.keys().next().value!);
+      if (tracks.size > MAX_TRACKS) evictTrack();
     }
-    append(track.changes, {
-      epoch: node.version ?? 0,
-      value: serialize(node.value, node.debugName),
-      at: now(),
-      source: 'write',
-    });
+    // Keep the raw value and serialize it in a microtask: hot signals don't pay for it inside
+    // Angular's set path, and a burst of writes serializes only the entries the list keeps.
+    track.pending.push({ epoch: node.version ?? 0, value: node.value, at: now() });
+    if (track.pending.length > MAX_CHANGES) track.pending.shift();
+    dirty.add(track);
+    if (!flushQueued) {
+      flushQueued = true;
+      void Promise.resolve().then(flush);
+    }
   }
 
   function sameValue(raw: RawSignalNode, node: SignalGraphNode): boolean {
@@ -103,6 +145,7 @@ export function createSignalHistory(
   }
 
   function collect(nodes: SignalGraphNode[]): Record<string, SignalChange[]> {
+    flush();
     const taken = new Set(bound.values());
     const out: Record<string, SignalChange[]> = {};
     for (const node of nodes) {

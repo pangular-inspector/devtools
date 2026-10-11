@@ -1,6 +1,6 @@
 ---
 title: Vite and Analog
-description: Add the devtools Vite plugin to an Analog app.
+description: Add the devtools Vite plugin to an Analog app or another Vite-based Angular app.
 ---
 
 <ngmd-hero title="Vite and Analog" logo="/logos/vite-mark.svg" gradient>
@@ -9,13 +9,13 @@ description: Add the devtools Vite plugin to an Analog app.
 
 # Vite and Analog
 
-For *Analog apps, add the *Vite plugin next to `analog()` and load the overlay in `main.ts`. The plugin mounts the devtools hub on the Vite dev server.
+For *Analog apps, add the *Vite plugin next to `analog()` and load the overlay in `main.ts`. The plugin mounts the devtools hub on the Vite dev server. It works the same in any Angular app built with its own `vite.config.ts`, not only in Analog. If you serve your app with `ng serve`, this plugin does not apply, because the Angular CLI dev server does not accept Vite plugins. See [Angular CLI apps](#angular-cli-apps).
 
 ## Setup at a glance
 
 <ngmd-workflow>
   <ngmd-step title="Install the package">
-    Add <code>&#64;pangular-inspector/devtools</code> and <code>devframe</code>. See <a href="./installation.md">Installation</a>.
+    Add <code>&#64;pangular-inspector/devtools</code> as a dev dependency. See <a href="./installation.md">Installation</a>.
   </ngmd-step>
   <ngmd-step title="Add the plugin">
     Register <code>pangular()</code> after <code>analog()</code> in <code>vite.config.ts</code>.
@@ -67,6 +67,8 @@ bootstrapApplication(App, appConfig).then(() => {
 | Floating button   | Bottom-right corner of your page       |
 | Full-page viewer  | `/__devframes/` on the Vite dev server |
 | HTTP MCP endpoint | `/__devframes/__mcp`                   |
+
+When the dev server starts, Vite prints the full-page viewer URL under its own URLs, on a line labeled `Pangular Inspector`.
 
 ## What the plugin does
 

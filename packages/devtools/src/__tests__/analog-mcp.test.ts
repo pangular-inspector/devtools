@@ -15,6 +15,7 @@ import {
 } from '../rpc/analog-tools.ts';
 import { scanAnalog } from '../rpc/analog-scan.ts';
 import type { AnalogRuntimeReport } from '../analog-runtime.ts';
+import { redactAnalogReport } from '../analog-redact.ts';
 import { BASE_FILES, BROKEN_FILES, makeProject } from './analog-fixture.ts';
 
 function local(ctx: { rpc: unknown }, name: string): Promise<unknown> {
@@ -151,6 +152,76 @@ describe('Analog MCP tools', () => {
     expect(text).toContain('NG0500');
     expect(text).toContain('`/dashboard`');
     expect(text).toContain('restart the dev server');
+  });
+
+  it('clips oversized report fields and still masks tokens in them', () => {
+    const jwt = 'eyJhbGciOiJI.eyJzdWIiOiIx.c2lnbmF0dXJl';
+    const long = 'x'.repeat(20_000);
+    const out = redactAnalogReport({
+      ...report,
+      url: `/a?token=${jwt}&q=${long}`,
+      chain: [{ path: long, file: `/src/${long}`, serverFile: `/src/${long}` }],
+      load: { preview: `${jwt} ${long}`, bytes: 1, keys: [long] },
+      hydrationErrors: [`NG0500 Bearer ${jwt} ${long}`],
+      configPaths: [long],
+    });
+    expect(out.url.length).toBeLessThanOrEqual(2001);
+    expect(out.url).not.toContain(jwt);
+    expect(out.chain[0].path.length).toBeLessThanOrEqual(501);
+    expect(out.chain[0].file!.length).toBeLessThanOrEqual(501);
+    expect(out.chain[0].serverFile!.length).toBeLessThanOrEqual(501);
+    expect(out.load!.preview.length).toBeLessThanOrEqual(1002);
+    expect(out.load!.preview).not.toContain(jwt);
+    expect(out.load!.keys[0].length).toBeLessThanOrEqual(501);
+    expect(out.hydrationErrors[0].length).toBeLessThanOrEqual(301);
+    expect(out.hydrationErrors[0]).not.toContain(jwt);
+    expect(out.configPaths[0].length).toBeLessThanOrEqual(501);
+  });
+
+  it('masks a JWT that the first cut splits in its claims', () => {
+    const jwt = (claims: string) =>
+      `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(claims).toString('base64url')}.c2lnbmF0dXJl`;
+    const first = jwt(JSON.stringify({ sub: 'a'.repeat(380) }));
+    const second = jwt(JSON.stringify({ sub: 'secretUser', pad: 'b'.repeat(200) }));
+    const error = `Hydration failed: token ${first} then ${second}`;
+    expect(error.indexOf(second)).toBeLessThan(600);
+    expect(error.indexOf(second) + second.length).toBeGreaterThan(600);
+    const out = redactAnalogReport({ ...report, hydrationErrors: [error] });
+    expect(out.hydrationErrors[0]).not.toContain('eyJ');
+  });
+
+  it('analog-lint reads hydration errors from the page it is asked about', async () => {
+    const { ctx, call, push } = await boot(makeProject(BASE_FILES));
+    await push('push-analog', { ...report, pageId: 'pgA', hydrationErrors: ['NG0500: from A'] });
+    await push('push-analog', { ...report, pageId: 'pgB', hydrationErrors: ['NG0501: from B'] });
+    expect(await call('analog-lint')).toContain('from B');
+    const lintA = await call('analog-lint', { page: 'pgA' });
+    expect(lintA).toContain('from A');
+    expect(lintA).not.toContain('from B');
+    const rpc = ctx.rpc as unknown as {
+      invokeLocal: (name: string, ...args: unknown[]) => Promise<{ message: string }[]>;
+    };
+    const findings = await rpc.invokeLocal('pangular:analog-lint', 'pgA');
+    expect(findings.map((f) => f.message)).toContain('NG0500: from A');
+    expect(findings.map((f) => f.message)).not.toContain('NG0501: from B');
+  });
+
+  it('analog-lint says when the page it is asked about sends no report', async () => {
+    const { call, push } = await boot(makeProject(BASE_FILES));
+    await push('push-analog', { ...report, pageId: 'p1', hydrationErrors: ['NG0500'] });
+    const text = await call('analog-lint', { page: 'stale' });
+    expect(text).not.toContain('No Analog problems found.');
+    expect(text).toContain('No page `stale` is reporting Analog data');
+    expect(text).toContain('`p1`');
+    expect(await call('analog-lint')).toContain('NG0500');
+  });
+
+  it('list-pages names pages that send Analog reports', async () => {
+    const { call, push } = await boot(makeProject(BASE_FILES));
+    await push('push-analog', report);
+    const text = await call('list-pages');
+    expect(text).toContain('pg1');
+    expect(text).toContain('analog');
   });
 
   it('analog-current-page masks tokens in the url, load preview and hydration errors', async () => {
@@ -536,6 +607,15 @@ export default {
     expect(loadEndpointUrl('/src/app/pages/docs/[...slug].page.ts', 'api', { '**': 'a/b' })).toBe(
       '/api/_analog/pages/docs/a/b',
     );
+    expect(loadEndpointUrl('/src/app/pages/products/[id].page.ts', 'api', { id: 'a/b?c' })).toBe(
+      '/api/_analog/pages/products/a%2Fb%3Fc',
+    );
+    expect(
+      loadEndpointUrl('/src/app/pages/[org]/shop/[[...path]].page.ts', 'api', {
+        org: 'acme',
+        path: 'x/caf%C3%A9 au lait',
+      }),
+    ).toBe('/api/_analog/pages/acme/shop/x/caf%C3%A9%20au%20lait');
   });
 
   it('forgets closed pages, clears calls and shares duplicate loads', async () => {

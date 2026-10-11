@@ -395,4 +395,54 @@ describe('SignalInspector', () => {
       expect(box.value).toBe('');
     });
   });
+
+  describe('relations, filters and write hints', () => {
+    const linked = {
+      ...graph,
+      nodes: [
+        { id: '1', kind: 'signal', epoch: 2, value: 1 },
+        { id: '2', kind: 'computed', label: 'double', epoch: 1, value: 2 },
+        { id: '3', kind: 'signal', label: 'query', epoch: 3, value: 'x' },
+      ],
+      edges: [{ consumer: 1, producer: 0 }],
+      history: {
+        '3': [
+          { epoch: 1, value: 'a', at: 1, source: 'initial' },
+          { epoch: 3, value: 'x', at: 2, source: 'sample', missed: 1 },
+        ],
+      },
+      resources: [{ id: 'resource:9', name: 'trips', named: true, epoch: 1, nodeIds: [] }],
+    };
+
+    it('lists producers and consumers from the edges', async () => {
+      const fixture = await render(linked);
+      const page = fixture.componentInstance;
+      const [unnamed, double] = linked.nodes as never[];
+      expect(page.getDependencies(double).map((n: { id: string }) => n.id)).toEqual(['1']);
+      expect(page.getConsumers(unnamed).map((n: { id: string }) => n.id)).toEqual(['2']);
+      expect(page.getDependencies(unnamed)).toEqual([]);
+    });
+
+    it('matches resources by kind only on a prefix of three letters or more', async () => {
+      const fixture = await render(linked);
+      const page = fixture.componentInstance;
+      page.filter.set('e');
+      expect(page.filteredResources()).toEqual([]);
+      page.filter.set('res');
+      expect(page.filteredResources().map((r) => r.id)).toEqual(['resource:9']);
+      page.filter.set('trip');
+      expect(page.filteredResources().map((r) => r.id)).toEqual(['resource:9']);
+    });
+
+    it('explains why an unnamed signal or a sampled-only history has no set entries', async () => {
+      const fixture = await render(linked);
+      const page = fixture.componentInstance;
+      page.selectedId.set('1');
+      expect(page.writeHint()).toMatch(/has no name.*debugName/);
+      page.selectedId.set('3');
+      expect(page.writeHint()).toMatch(/Every change here was sampled/);
+      page.selectedId.set('2');
+      expect(page.writeHint()).toBe('');
+    });
+  });
 });

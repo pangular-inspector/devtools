@@ -17,6 +17,7 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { pickPage, type ReportedPage } from '../live-pages';
 import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
+import { zoneLabel } from './dashboard';
 
 interface ProviderInfo {
   token: string;
@@ -71,6 +72,7 @@ interface InjectorPage {
   roots?: unknown;
   environment?: unknown;
   truncated?: unknown;
+  zone?: unknown;
   reportedAt?: unknown;
 }
 
@@ -79,6 +81,9 @@ interface InjectorTreeState extends InjectorPage {
 }
 
 const NULL_ID = 'inj-null';
+const MAX_PROVIDED_BY = 12;
+/** How long typing must pause before the search result is announced. */
+const SEARCH_ANNOUNCE_MS = 600;
 
 // Text tones: these color the kind letter and badge on a 14 to 16% tint of
 // themselves, so they use the stronger `-text` tokens.
@@ -181,6 +186,9 @@ function isTree(value: unknown): value is InjectorNode[] {
           />
           With providers
         </label>
+        @if (zone(); as zone) {
+          <span class="total">Change detection: {{ zone }}</span>
+        }
       </div>
 
       @if (truncated()) {
@@ -198,7 +206,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       }
 
       @if (providedBy().length) {
-        <div class="where" role="status">
+        <div class="where">
           <span class="where-label">Provided by</span>
           @for (hit of providedBy(); track hit.id) {
             <button type="button" class="chip" (click)="reveal(hit.id)">
@@ -207,9 +215,12 @@ function isTree(value: unknown): value is InjectorNode[] {
               <span class="chip-tokens">{{ hit.tokens }}</span>
             </button>
           }
+          @if (providedByMore(); as more) {
+            <span class="more">+{{ more }} more</span>
+          }
         </div>
       } @else if (query().trim() && !rows().length) {
-        <div class="where muted" role="status">
+        <div class="where muted">
           Nothing here matches “{{ query().trim() }}”.
           <button type="button" class="link" (click)="clearQuery()">Clear search</button>
         </div>
@@ -793,6 +804,10 @@ function isTree(value: unknown): value is InjectorNode[] {
     .chip-tokens {
       color: var(--text-2);
       @include m.truncate;
+    }
+    .more {
+      color: var(--text-2);
+      font-size: 12px;
     }
     .link {
       padding: 0;
@@ -1383,6 +1398,10 @@ export class DiInspector {
     return isTree(environment) ? environment : [];
   });
   readonly truncated = computed(() => this.shownPage()?.truncated === true);
+  readonly zone = computed(() => {
+    const zone = this.shownPage()?.zone;
+    return typeof zone === 'string' ? zoneLabel(zone) : null;
+  });
 
   private readonly multiPage = computed(
     () => !this.hostPage && Object.keys(this.treePages()).length > 1,
@@ -1516,7 +1535,8 @@ export class DiInspector {
     });
   });
 
-  readonly providedBy = computed(() => {
+  /** Every injector that provides a token matching the search. */
+  private readonly providerHits = computed(() => {
     const q = this.normalizedQuery();
     if (!q) return [];
     const hits: { id: string; label: string; kind: string; tokens: string }[] = [];
@@ -1530,8 +1550,12 @@ export class DiInspector {
         tokens: tokens.map((t) => t.token).join(', '),
       });
     }
-    return hits.slice(0, 12);
+    return hits;
   });
+  readonly providedBy = computed(() => this.providerHits().slice(0, MAX_PROVIDED_BY));
+  readonly providedByMore = computed(() =>
+    Math.max(0, this.providerHits().length - MAX_PROVIDED_BY),
+  );
 
   readonly groupedProviders = computed(() => {
     const q = this.normalizedQuery();
@@ -1554,13 +1578,40 @@ export class DiInspector {
     this.groupedProviders().reduce((sum, g) => sum + g.items.length, 0),
   );
 
+  /** What a screen reader hears about the search results. */
+  private readonly searchSummary = computed(() => {
+    const query = this.query().trim();
+    if (!query) return '';
+    const hits = this.providerHits().length;
+    if (hits === 1) return `1 injector provides “${query}”.`;
+    if (hits > 1) return `${hits} injectors provide “${query}”.`;
+    if (!this.rows().length) return `Nothing here matches “${query}”.`;
+    return `No injector provides “${query}”.`;
+  });
+
   private readonly normalizedQuery = computed(() => this.query().trim().toLowerCase());
 
   private readonly destroyRef = inject(DestroyRef);
   private stopTree: (() => void) | null = null;
   private treeLoad = 0;
 
+  private lastSearchMessage = '';
+
   constructor() {
+    // One summary once typing pauses, instead of a live region that reads every keystroke.
+    effect((onCleanup) => {
+      const message = this.searchSummary();
+      if (!message) {
+        this.lastSearchMessage = '';
+        return;
+      }
+      if (message === this.lastSearchMessage) return;
+      const timer = setTimeout(() => {
+        this.lastSearchMessage = message;
+        this.announcement.set(message);
+      }, SEARCH_ANNOUNCE_MS);
+      onCleanup(() => clearTimeout(timer));
+    });
     effect(() => {
       const client = this.rpc();
       if (!client) return;

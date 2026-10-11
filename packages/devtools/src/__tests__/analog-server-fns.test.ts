@@ -72,6 +72,16 @@ describe('Analog server functions', () => {
     expect(serverFnsOf('/a.server.ts', 'export const load = async () => ({});')).toEqual([]);
   });
 
+  it('reads server functions called with type arguments', () => {
+    const source = `import { serverFn } from '@analogjs/router/server';
+export const getItem = serverFn<{ id: string }>(async () => null);
+export const listItems = serverFn<Array<Item>, Item[]>({ method: 'PUT' }, async () => []);
+`;
+    expect(
+      serverFnsOf('/src/app/items.server.ts', source).map((f) => `${f.method} ${f.name}`),
+    ).toEqual(['GET getItem', 'PUT listItems']);
+  });
+
   it('scans every .server.ts under src and stops false lint warnings for them', () => {
     const project = scanAnalog(makeProject(BASE_FILES, FN_FILES));
     expect(project.serverFns.map((f) => `${f.name} ${f.file}`).sort()).toEqual([

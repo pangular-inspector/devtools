@@ -56,6 +56,9 @@ Component({
       >Partial</a
     >
     <a routerLink="/invite/k7m2q">Invite</a>
+    <ul>
+      <li routerLinkActive="on"><a routerLink="/a/child">Nested</a></li>
+    </ul>
     @if (nullOptions) {
       <a routerLink="/b" routerLinkActive="on" [routerLinkActiveOptions]="$any(null)">Never</a>
     }
@@ -126,6 +129,14 @@ describe('router audit fixes on a real Router', () => {
     });
     expect(matchOptionsOf({ fragment: 'exact' })).toMatchObject({ fragment: 'exact' });
     expect(matchOptionsOf(null)).toBeNull();
+  });
+
+  it('finds RouterLinkActive on a parent of the RouterLink', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/a/child');
+    harness.detectChanges();
+    const parent = linksOf(ng(), router as never).find((l) => l.element === 'li');
+    expect(parent).toMatchObject({ linkActive: true, activeClasses: ['on'] });
   });
 
   it.skipIf(!angularAtLeast('22.0.0'))(

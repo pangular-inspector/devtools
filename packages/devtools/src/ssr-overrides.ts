@@ -1,10 +1,12 @@
+import { urlGlobMatch } from './url-glob.ts';
+
 export const SSR_OVERRIDE_KINDS = ['render-error', 'client-render', 'state-edit'] as const;
 export type SsrOverrideKind = (typeof SSR_OVERRIDE_KINDS)[number];
 
 export interface SsrOverride {
   id: string;
   kind: SsrOverrideKind;
-  /** Substring of the page path and query, or a glob where `*` matches anything. */
+  /** Substring of the page path and query, or a glob where `*` matches anything; a leading `^` anchors it at the path start. */
   pattern: string;
   enabled: boolean;
   /** render-error: the message the render throws. */
@@ -58,23 +60,14 @@ export function sanitizeSsrOverrides(input: unknown): SsrOverride[] {
   return out;
 }
 
-function globMatch(text: string, pattern: string): boolean {
-  let at = 0;
-  for (const part of pattern.split('*')) {
-    if (!part) continue;
-    const found = text.indexOf(part, at);
-    if (found < 0) return false;
-    at = found + part.length;
-  }
-  return true;
-}
-
 export function matchingOverrides(
   overrides: readonly SsrOverride[] | undefined,
   url: string,
   kind: SsrOverrideKind,
 ): SsrOverride[] {
-  return (overrides ?? []).filter((o) => o.enabled && o.kind === kind && globMatch(url, o.pattern));
+  return (overrides ?? []).filter(
+    (o) => o.enabled && o.kind === kind && urlGlobMatch(url, o.pattern),
+  );
 }
 
 /** Escapes the JSON the way Angular writes the TransferState script, so it can't close the tag. */

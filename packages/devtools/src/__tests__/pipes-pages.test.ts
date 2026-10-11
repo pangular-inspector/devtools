@@ -132,6 +132,86 @@ describe('pipe page targets', () => {
       false,
     );
   });
+  it('rejects a report whose call or stale finding is malformed', () => {
+    const report = page('tab-1');
+    const withPipe = (extra: Record<string, unknown>) => ({
+      ...report,
+      pipes: [{ ...report.pipes[0], ...extra }],
+    });
+    expect(isPipePageReport(withPipe({ call: { callCount: 1, totalMs: 2 } }))).toBe(true);
+    expect(isPipePageReport(withPipe({ call: { callCount: '1' } }))).toBe(false);
+    expect(isPipePageReport(withPipe({ call: { callCount: 1, lastArgs: 'x' } }))).toBe(false);
+    expect(
+      isPipePageReport(withPipe({ call: { callCount: 1, instances: [{ callCount: 1 }] } })),
+    ).toBe(false);
+    expect(isPipePageReport(withPipe({ stale: { detectedAt: 'now' } }))).toBe(false);
+  });
+
+  it('clamps oversized call values and lists before keeping a report', () => {
+    const pages = new Map();
+    const huge = 'x'.repeat(10_000);
+    const report = page('tab-1');
+    report.pipes[0].call = {
+      callCount: 1,
+      lastArgs: Array.from({ length: 50 }, () => huge),
+      lastResult: huge,
+      lastCaller: huge,
+      instances: Array.from({ length: 40 }, () => ({ component: 'X', callCount: 1 })),
+    };
+    report.async = Array.from({ length: 500 }, () => report.async![0]);
+    const state = mergePipePageReport(pages, report, 1000);
+    const call = state.pipes[0].call!;
+    expect(call.lastArgs!.length).toBeLessThanOrEqual(10);
+    expect((call.lastArgs![0] as string).length).toBeLessThan(1000);
+    expect((call.lastResult as string).length).toBeLessThan(1000);
+    expect(call.lastCaller!.length).toBeLessThan(1000);
+    expect(call.instances!.length).toBeLessThanOrEqual(10);
+    expect(call.instanceTotal).toBe(40);
+    report.pipes[0].call.instanceTotal = 90;
+    expect(mergePipePageReport(pages, report, 1001).pipes[0].call!.instanceTotal).toBe(90);
+    expect(state.async).toHaveLength(200);
+    expect(state.asyncTotal).toBe(500);
+  });
+
+  it('sums time and errors across pages and splits the state by page', () => {
+    const pages = new Map();
+    const a = page('tab-1');
+    a.pipes[0].call = { callCount: 2, totalMs: 3, maxMs: 2, lastMs: 1 };
+    const b = page('tab-2');
+    b.pipes[0].call = {
+      callCount: 1,
+      totalMs: 5,
+      maxMs: 5,
+      lastMs: 5,
+      errorCount: 1,
+      lastError: 'boom',
+    };
+    mergePipePageReport(pages, a, 1000);
+    const state = mergePipePageReport(pages, b, 1001);
+    expect(state.pipes[0].call).toMatchObject({
+      callCount: 3,
+      totalMs: 8,
+      maxMs: 5,
+      errorCount: 1,
+      lastError: 'boom',
+    });
+    expect(state.pages?.map((p) => p.pageId)).toEqual(['tab-1', 'tab-2']);
+    expect(state.pages?.[0].pipes[0].call?.callCount).toBe(2);
+    expect(state.pages?.[1].async).toHaveLength(3);
+  });
+
+  it('keeps the stale check marked off only when every page has it off', () => {
+    const off = page('tab-1');
+    off.pipes[0].staleCheck = 'unavailable';
+    const pages = new Map();
+    expect(mergePipePageReport(pages, off, 1000).pipes[0].staleCheck).toBe('unavailable');
+    expect(mergePipePageReport(pages, page('tab-2'), 1001).pipes[0].staleCheck).toBeUndefined();
+  });
+
+  it('does not repeat the data by page when only one page reports', () => {
+    const state = mergePipePageReport(new Map(), page('tab-1'), 1000);
+    expect(state.pages).toBeUndefined();
+  });
 });
 
 describe('pipe recording requests', () => {

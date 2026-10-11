@@ -84,7 +84,7 @@ Markdown files under `src/content`, with title, URL, slug, date and file. The ta
 
 ### Lint
 
-Checks grouped by rule, each with a fix. Each card lists where the rule fired and the detail for that spot, like the hydration error text, the failing request or both files of a duplicate URL:
+Checks grouped by rule, each with a fix. The count on the tab adds up errors and warnings and turns red when there is an error. Info findings, like a route outside the API prefix, are not counted. Hydration errors and restart hints come from the page the panel is open on. Each card lists where the rule fired and the detail for that spot, like the hydration error text, the failing request or both files of a duplicate URL:
 
 - Two files for one URL, and sibling `[param]` files.
 - Missing default exports, and layouts without `<router-outlet>`.
@@ -186,7 +186,7 @@ The tab reads every `routeRules` entry in `vite.config`. A rule like `/blog/**` 
 | `pangular:analog-render-modes`     |                                                | The render mode of each page, and what the last request did.            |
 | `pangular:analog-prerender-plan`   |                                                | The prerender plan.                                                     |
 | `pangular:analog-content`          | `filter`                                       | Markdown files with slug, frontmatter, route and parse errors.          |
-| `pangular:analog-lint`             |                                                | The Analog checks.                                                      |
+| `pangular:analog-lint`             | `page`                                         | The Analog checks.                                                      |
 
 `analog-current-page` is the only place that shows the `load()` data a page received. See [Tools](../agents/tools.md).
 

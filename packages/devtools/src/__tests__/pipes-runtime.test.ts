@@ -12,6 +12,7 @@ import {
   readBoundArg,
   scanPipeViews,
   staleCheckFor,
+  type PipeCall,
 } from '../pipes-runtime.ts';
 
 try {
@@ -258,5 +259,66 @@ describe('pipe discovery through the view tree', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(readBoundArg(usages[1], second!)).toBe('three');
+  });
+});
+
+describe('instrumentPipes edge cases', () => {
+  it('records the time a call took and a transform that throws, then rethrows', () => {
+    class Failing {
+      transform(value: number) {
+        if (value < 0) throw new Error('negative');
+        return value * 2;
+      }
+    }
+    const instance = new Failing();
+    const calls: PipeCall[] = [];
+    const instrumentation = instrumentPipes((call) => calls.push(call));
+    instrumentation.addPipe({ name: 'double', instance });
+
+    expect(instance.transform(2)).toBe(4);
+    expect(() => instance.transform(-1)).toThrow('negative');
+    expect(calls).toHaveLength(2);
+    expect(calls[0].ms).toBeGreaterThanOrEqual(0);
+    expect(calls[0].error).toBeUndefined();
+    expect(calls[1]).toMatchObject({ name: 'double', args: [-1] });
+    expect((calls[1].error?.thrown as Error).message).toBe('negative');
+    instrumentation.stop();
+  });
+
+  it('reports a subclass call under the subclass pipe name', () => {
+    class Base {
+      transform(value: string) {
+        return value;
+      }
+    }
+    class Child extends Base {}
+    const base = new Base();
+    const child = new Child();
+    const calls: PipeCall[] = [];
+    const instrumentation = instrumentPipes((call) => calls.push(call));
+    instrumentation.addPipe({ name: 'base', instance: base });
+    instrumentation.addPipe({ name: 'child', instance: child });
+
+    child.transform('x');
+    base.transform('y');
+    expect(calls.map((c) => c.name)).toEqual(['child', 'base']);
+    instrumentation.stop();
+  });
+
+  it('patches a transform declared as a class field and restores it on stop', () => {
+    class Arrow {
+      transform = (value: string) => value.toUpperCase();
+    }
+    const instance = new Arrow();
+    const original = instance.transform;
+    const calls: PipeCall[] = [];
+    const instrumentation = instrumentPipes((call) => calls.push(call));
+    instrumentation.addPipe({ name: 'arrow', instance });
+
+    expect(instance.transform('a')).toBe('A');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ name: 'arrow', result: 'A' });
+    instrumentation.stop();
+    expect(instance.transform).toBe(original);
   });
 });

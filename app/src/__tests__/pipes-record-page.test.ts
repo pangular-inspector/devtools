@@ -105,3 +105,109 @@ describe('pipes filter box', () => {
     expect(document.activeElement).toBe(host.querySelector('input[type="search"]'));
   });
 });
+
+describe('pipes live data per page', () => {
+  afterEach(() => {
+    scopeToPage(null);
+    document.body.innerHTML = '';
+  });
+
+  const live = (count: number) => ({
+    name: 'price',
+    className: 'PricePipe',
+    isPure: true,
+    instanceCount: count,
+    components: [{ name: 'Cart', count }],
+  });
+
+  function withPages(snapshot: unknown) {
+    const rpc = {
+      call: (name: string) =>
+        Promise.resolve(
+          name === 'get-pipes'
+            ? [
+                {
+                  name: 'price',
+                  className: 'PricePipe',
+                  file: 'src/price.pipe.ts',
+                  line: 4,
+                  isStandalone: true,
+                  isPure: true,
+                  builtin: false,
+                  usageCount: 2,
+                  usages: [
+                    { file: 'src/cart.html', line: 3 },
+                    { file: 'src/total.html', line: 7 },
+                  ],
+                },
+              ]
+            : [],
+        ),
+      callEvent: () => Promise.resolve(),
+      sharedState: () => Promise.resolve({ value: () => snapshot, on: () => () => {} }),
+    };
+    return { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
+  }
+
+  it('shows only the page the panel belongs to when several pages report', async () => {
+    scopeToPage('B');
+    const fixture = await render(
+      withPages({
+        pipes: [live(5)],
+        async: [],
+        reportedAt: 0,
+        instrumented: [],
+        pages: [
+          { pageId: 'A', pipes: [live(3)], async: [] },
+          { pageId: 'B', pipes: [live(2)], async: [] },
+        ],
+      }),
+    );
+    expect(fixture.componentInstance.liveFor('price')?.instanceCount).toBe(2);
+  });
+
+  it('lists the template usages of a custom pipe', async () => {
+    const fixture = await render(
+      withPages({ pipes: [], async: [], reportedAt: 0, instrumented: [] }),
+    );
+    const component = fixture.componentInstance;
+    component.selected.set(component.pipes()[0]);
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.textContent).toContain('Used in templates');
+    expect(host.textContent).toContain('src/total.html:7');
+    expect(host.textContent).toContain('2 uses');
+  });
+
+  it('names the component and caller of each called instance', async () => {
+    const fixture = await render(
+      withPages({
+        pipes: [
+          {
+            ...live(2),
+            call: {
+              callCount: 3,
+              totalMs: 1.5,
+              maxMs: 1,
+              lastMs: 0.5,
+              instances: [
+                { component: 'Cart', callCount: 2, lastCaller: 'Cart.total (cart.ts:4)' },
+                { component: 'Summary', callCount: 1, target: { pageId: 'A', id: 's1' } },
+              ],
+            },
+          },
+        ],
+        async: [],
+        reportedAt: 0,
+        instrumented: [],
+      }),
+    );
+    const component = fixture.componentInstance;
+    component.selected.set(component.pipes()[0]);
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.textContent).toContain('Cart.total (cart.ts:4)');
+    expect(host.textContent).toContain('1.50 ms total');
+    expect(host.querySelector('button[aria-label="Highlight Summary on the page"]')).not.toBeNull();
+  });
+});

@@ -21,6 +21,8 @@ import { LimitNote } from '../ui/limit-note';
 import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
 import {
+  changeCountText,
+  moreChangesText,
   pretty,
   sameNgrxLog,
   short,
@@ -396,12 +398,7 @@ const CLASSIC_KINDS = new Set([
                             @if (entry.origin) {
                               <span class="tag">{{ entry.origin }}</span>
                             }
-                            {{
-                              entry.diff.length === 0
-                                ? 'no change'
-                                : entry.diff.length +
-                                  (entry.diff.length === 1 ? ' change' : ' changes')
-                            }}
+                            {{ changesLabel(entry) }}
                             ·
                             {{ formatTime(entry.timestamp) }}
                             @if (entry.durationMs !== undefined) {
@@ -643,6 +640,9 @@ const CLASSIC_KINDS = new Set([
                 </li>
               }
             </ul>
+            @if (selected.diffTruncated) {
+              <p class="muted">{{ moreChanges(selected.diffTruncated) }}</p>
+            }
           } @else {
             <p class="muted">The state did not change.</p>
           }
@@ -2122,6 +2122,10 @@ export class StoreInspector {
   originText(origin: NgrxActionOrigin) {
     return ORIGIN_TEXT[origin] ?? origin;
   }
+
+  readonly changesLabel = changeCountText;
+
+  readonly moreChanges = moreChangesText;
 
   opLabel(op: string) {
     return op === 'add' ? 'added' : op === 'remove' ? 'removed' : 'changed';

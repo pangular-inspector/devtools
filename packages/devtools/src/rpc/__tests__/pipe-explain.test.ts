@@ -112,6 +112,39 @@ describe('explainPipeText', () => {
     expect(text).not.toContain('\\"');
   });
 
+  it('reports time spent in transform and the errors it threw', () => {
+    const live = state(
+      ['page-1'],
+      [
+        {
+          ...usage('appPrice', 'PricePipe'),
+          call: {
+            callCount: 4,
+            totalMs: 8,
+            maxMs: 5,
+            lastMs: 1,
+            errorCount: 1,
+            lastError: 'bad price',
+          },
+        },
+      ],
+    );
+    const text = explainPipeText('appPrice', fixture(), live, 1);
+    expect(text).toContain(
+      'Time in transform: 8.00 ms total, 2.00 ms on average, 5.00 ms at most, 1.00 ms last call.',
+    );
+    expect(text).toContain('**Threw** 1 time(s), last error: `bad price`.');
+  });
+
+  it('says when the stale check could not read the template', () => {
+    const live = state(
+      ['page-1'],
+      [{ ...usage('appPrice', 'PricePipe'), staleCheck: 'unavailable' }],
+    );
+    const text = explainPipeText('appPrice', fixture(), live, 1);
+    expect(text).toContain('The stale-argument check is off for this pipe');
+  });
+
   it('lists the components with duplicate async subscriptions', () => {
     const asyncUsage = (component: string, duplicate: boolean): AsyncUsageInfo => ({
       component,

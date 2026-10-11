@@ -112,6 +112,51 @@ describe('Analog route rules', () => {
     });
   });
 
+  it('reads options past a long nitro block and prerender routes only inside prerender', () => {
+    const filler = Array.from({ length: 300 }, (_, i) => `      key${i}: 'value ${i} )',`).join(
+      '\n',
+    );
+    const root = makeProject(BASE_FILES, {
+      'vite.config.ts': `import analog from '@analogjs/platform';
+export default {
+  plugins: [
+    analog({
+      sitemap: { routes: ['/not-prerendered'] },
+      nitro: {
+        storage: {
+${filler}
+        },
+      },
+      prerender: { sitemap: { host: 'https://example.com' }, routes: ['/late'] },
+      apiPrefix: 'v2',
+      routeRules: { '/admin/**': { ssr: false } },
+    }),
+  ],
+};
+`,
+    });
+    const config = analogConfig(root);
+    expect(config.apiPrefix).toBe('v2');
+    expect(config.prerender).toEqual(['/late']);
+    expect(config.noSsrRoutes).toEqual(['/admin/**']);
+  });
+
+  it('reads the top-level prerender block, not one nested under nitro', () => {
+    const root = makeProject(BASE_FILES, {
+      'vite.config.ts': `import analog from '@analogjs/platform';
+export default {
+  plugins: [
+    analog({
+      nitro: { prerender: { routes: ['/api/feed'] } },
+      prerender: { routes: ['/about'] },
+    }),
+  ],
+};
+`,
+    });
+    expect(analogConfig(root).prerender).toEqual(['/about']);
+  });
+
   it('reads build output as prerendered pages', () => {
     const root = makeProject(BASE_FILES);
     for (const page of ['', 'pricing']) {
@@ -179,7 +224,11 @@ describe('Analog route rules', () => {
       'src/content/blog/first.md': '---\ntitle: First\n---\n',
     });
     const finding = lintAnalog(scanAnalog(root)).find((f) => f.rule === 'content-shadows-page');
-    expect(finding).toMatchObject({ file: '/src/content/blog/first.md', path: '/blog/first' });
+    expect(finding).toMatchObject({
+      file: '/src/content/blog/first.md',
+      path: '/blog/first',
+      relatedFile: '/src/app/pages/blog/[slug].page.ts',
+    });
     const fallback = makeProject(BASE_FILES, {
       'src/app/pages/help/[...slug].page.ts': `import { Component } from '@angular/core';\n@Component({ template: '' })\nexport default class NotFound {}\n`,
       'src/content/help/faq.md': '---\ntitle: FAQ\n---\n',

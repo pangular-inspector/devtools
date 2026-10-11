@@ -14,6 +14,11 @@ export function createScanBackoff(maxSkip = 32) {
       wait--;
       return false;
     },
+    /** The scan found a router: scan right away the next time one is needed. */
+    reset(): void {
+      skip = 0;
+      wait = 0;
+    },
     /** The scan found nothing: wait longer before the next one. */
     miss(): void {
       skip = Math.min(maxSkip, skip ? skip * 2 : 1);

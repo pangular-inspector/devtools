@@ -9,7 +9,14 @@ import {
 import { zoneModeOf } from '../zone-mode.ts';
 
 class ElementRef {
-  static __NG_ELEMENT_ID__ = 1;
+  static __NG_ELEMENT_ID__ = () => null;
+}
+class Injector {
+  static __NG_ELEMENT_ID__ = -1;
+}
+/** Angular stamps a bloom id on every class an element provides. */
+class CardState {
+  static __NG_ELEMENT_ID__ = 0;
 }
 class Store {}
 class Logger {}
@@ -63,6 +70,8 @@ function fakeNg() {
         if (inj.el === card)
           return [
             { token: ElementRef, provider: ElementRef },
+            { token: Injector, provider: Injector },
+            { token: CardState, provider: CardState },
             {
               token: Logger,
               provider: { provide: Logger, useFactory: () => 0 },
@@ -98,8 +107,11 @@ describe('collectInjectorTree', () => {
   it('drops built-in element tokens and names provider kinds', () => {
     const { ng } = fakeNg();
     const card = collectInjectorTree(ng).roots[0].children[0];
-    expect(card.providers).toEqual([{ token: 'Logger', type: 'factory', isViewProvider: true }]);
-    expect(card.injector.providerCount).toBe(1);
+    expect(card.providers).toEqual([
+      { token: 'CardState', type: 'class', isViewProvider: false },
+      { token: 'Logger', type: 'factory', isViewProvider: true },
+    ]);
+    expect(card.injector.providerCount).toBe(2);
   });
 
   it('builds the environment chain from the platform down', () => {
@@ -317,6 +329,35 @@ describe('collectInjectorTree', () => {
     expect(asked).toEqual([Api, Http]);
     collectInjectorTree(ng);
     expect(asked).toEqual([Api, Http]);
+  });
+
+  it('lists what InjectionTokens built by a factory inject, skipping multi and pending ones', () => {
+    const { ng } = fakeNg();
+    class Http {}
+    const CONFIG = { _desc: 'CONFIG', toString: () => 'InjectionToken CONFIG' };
+    const LATER = { _desc: 'LATER', toString: () => 'InjectionToken LATER' };
+    const HOOKS = { _desc: 'HOOKS', toString: () => 'InjectionToken HOOKS' };
+    const rootEnv = ng.ɵgetInjectorResolutionPath({ kind: 'node' })[1];
+    rootEnv.records = new Map<unknown, unknown>([
+      [CONFIG, { factory: () => ({ url: '/api' }), value: { url: '/api' } }],
+      [LATER, { factory: () => 1, value: {} }],
+      [HOOKS, { factory: () => [], value: [], multi: [] }],
+      [API_URL, { factory: undefined, value: '/api' }],
+    ]);
+    const asked: unknown[] = [];
+    const lookup = ng.ɵgetDependenciesFromInjectable;
+    ng.ɵgetDependenciesFromInjectable = (inj: any, token: unknown) => {
+      if (inj.kind === 'node') return lookup(inj, token);
+      asked.push(token);
+      return token === CONFIG
+        ? { dependencies: [{ token: Http, flags: {}, providedIn: rootEnv }] }
+        : { dependencies: [] };
+    };
+    const root = collectInjectorTree(ng).environment[0].children[0];
+    expect(root.dependencies).toEqual([
+      { from: 'CONFIG', token: 'Http', flags: [], providedBy: root.injector.id },
+    ]);
+    expect(asked).toEqual([CONFIG]);
   });
 
   it('lists a service dependency once when the service injects it several times', () => {

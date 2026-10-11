@@ -34,6 +34,21 @@ function read<T>(fn: () => T, fallback: T): T {
   }
 }
 
+/** The container comment after a block's root nodes, or failing that its first root node. */
+function anchorOf(roots: unknown[]): Node | null {
+  const nodes = roots.filter((node): node is Node => node instanceof Node);
+  const after = nodes.at(-1)?.nextSibling;
+  return after instanceof Comment ? after : (nodes[0] ?? null);
+}
+
+function isDeferBlock(raw: unknown): raw is RawDeferBlock & { state: string } {
+  if (!raw || typeof raw !== 'object') return false;
+  const block = raw as RawDeferBlock;
+  return (
+    typeof block.state === 'string' && (typeof block.type !== 'number' || block.type === DEFER_TYPE)
+  );
+}
+
 function timeOf(value: unknown): number | null {
   return typeof value === 'number' ? value : null;
 }
@@ -41,12 +56,44 @@ function timeOf(value: unknown): number | null {
 /**
  * Reads `@defer` blocks through `ng.ɵgetControlFlowBlocks` (Angular 22+) or
  * `ng.ɵgetDeferBlocks` (earlier). Ids stay stable between collections, and
- * the tracker remembers when each block changed state or hydrated.
+ * the tracker remembers when each block changed state or hydrated. When
+ * Angular gives no `hostNode` (Angular 20), a block is known by the comment
+ * Angular places right after its root nodes, which stays put while the block
+ * moves from placeholder to content. Only a block with no root nodes falls
+ * back to its position among such blocks under its Angular root. When such a
+ * block renders and gains an anchor, the anchor takes over its id and timing
+ * as long as the block list under that root kept its length.
  */
 export function createDeferTracker(now: () => number = Date.now) {
   const ids = new WeakMap<object, string>();
   const seen = new WeakMap<object, { key: string; since: number; hydratedAt?: number }>();
+  const byPosition = new WeakMap<Element, object[]>();
+  const lastHosts = new WeakMap<Element, object[]>();
   let nextId = 0;
+
+  const positionKey = (root: Element, index: number) => {
+    let keys = byPosition.get(root);
+    if (!keys) {
+      keys = [];
+      byPosition.set(root, keys);
+    }
+    return (keys[index] ??= {});
+  };
+
+  /** Moves a positional block's id and timing onto the anchor it now has. */
+  const adopt = (root: Element, anchor: Node, index: number, count: number) => {
+    if (ids.has(anchor)) return;
+    const last = lastHosts.get(root);
+    const keys = byPosition.get(root);
+    const previous = last?.length === count ? last[index] : undefined;
+    const slot = previous && keys ? keys.indexOf(previous) : -1;
+    if (!previous || !keys || slot === -1) return;
+    keys.splice(slot, 1);
+    const id = ids.get(previous);
+    const record = seen.get(previous);
+    if (id) ids.set(anchor, id);
+    if (record) seen.set(anchor, record);
+  };
 
   const idOf = (host: object) => {
     let id = ids.get(host);
@@ -57,8 +104,8 @@ export function createDeferTracker(now: () => number = Date.now) {
     return id;
   };
 
-  const ownerOf = (ng: DeferDebugNg, host: Node): DeferBlockInfo['owner'] => {
-    const parent = host instanceof Element ? host : host.parentElement;
+  const ownerOf = (ng: DeferDebugNg, host: Node | null): DeferBlockInfo['owner'] => {
+    const parent = !host ? null : host instanceof Element ? host : host.parentElement;
     const owner = parent ? componentHostOf(ng, parent) : null;
     const instance = owner ? read(() => ng.getComponent?.(owner), null) : null;
     const ctor = (instance as { constructor?: unknown } | null)?.constructor;
@@ -75,12 +122,19 @@ export function createDeferTracker(now: () => number = Date.now) {
       const out: DeferBlockInfo[] = [];
       for (const root of angularRoots(doc)) {
         const blocks = read(() => util.call(ng, root) ?? [], [] as unknown[]);
-        for (const raw of blocks as RawDeferBlock[]) {
+        const valid = Array.isArray(blocks) ? blocks.filter(isDeferBlock) : [];
+        const order: object[] = [];
+        let position = 0;
+        for (const [index, raw] of valid.entries()) {
           if (out.length >= MAX_BLOCKS) return out;
-          if (!raw || typeof raw !== 'object' || typeof raw.state !== 'string') continue;
-          if (typeof raw.type === 'number' && raw.type !== DEFER_TYPE) continue;
-          const host = raw.hostNode;
-          if (!(host instanceof Node) || hosts.has(host)) continue;
+          const roots: unknown[] = Array.isArray(raw.rootNodes) ? raw.rootNodes : [];
+          const hostNode = raw.hostNode instanceof Node ? raw.hostNode : anchorOf(roots);
+          if (hostNode && !(raw.hostNode instanceof Node)) {
+            adopt(root, hostNode, index, valid.length);
+          }
+          const host = hostNode ?? positionKey(root, position++);
+          order.push(host);
+          if (hosts.has(host)) continue;
           hosts.add(host);
           const hydration = HYDRATION.has(raw.incrementalHydrationState as string)
             ? (raw.incrementalHydrationState as DeferBlockInfo['hydration'])
@@ -100,7 +154,6 @@ export function createDeferTracker(now: () => number = Date.now) {
           }
           seen.set(host, record);
 
-          const roots = Array.isArray(raw.rootNodes) ? raw.rootNodes : [];
           const block: DeferBlockInfo = {
             id: idOf(host),
             state: raw.state,
@@ -113,7 +166,10 @@ export function createDeferTracker(now: () => number = Date.now) {
               .slice(0, MAX_ROOT_IDS)
               .map((el) => elementId(el)),
           };
-          const owner = ownerOf(ng, host);
+          const owner = ownerOf(
+            ng,
+            raw.hostNode instanceof Node ? raw.hostNode : (hostNode?.parentNode ?? null),
+          );
           if (owner) block.owner = owner;
           if (triggers.includes('hydrate never')) block.hydrateNever = true;
           if (raw.loadingBlock?.exists) {
@@ -128,6 +184,7 @@ export function createDeferTracker(now: () => number = Date.now) {
           if (record.hydratedAt !== undefined) block.hydratedAt = record.hydratedAt;
           out.push(block);
         }
+        lastHosts.set(root, order);
       }
       return out;
     },
