@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import pangular from '../devframe.ts';
 import type { CollectedForm } from '../forms.ts';
 import { UNTRUSTED, untrusted } from '../rpc/forms-tools.ts';
+import { deferBlocksText } from '../rpc/component-tools.ts';
 import { listHttpCallsText } from '../rpc/http-tools.ts';
+import { MAX_TOOL_CHARS } from '../rpc/router-tools.ts';
 import { dispatchResultText } from '../rpc/ngrx-tools.ts';
 import { unknownPageText } from '../rpc/pages.ts';
 import type { ComponentDetail, LiveComponentNode } from '../types.ts';
@@ -66,6 +68,35 @@ describe('untrusted-data notice on agent tools that return page text', () => {
     expectNoticeFirst(await call('inspect-component', { selector: 'c2' }));
   });
 
+  it('inspect-component keeps the notice first and inside the cap for a large detail', async () => {
+    const { ctx, push, call } = await boot();
+    const big: ComponentDetail = {
+      id: 'c2',
+      name: 'Card',
+      tag: 'app-card',
+      path: 'app-root > app-card',
+      inputs: [],
+      outputs: [],
+      properties: Array.from({ length: 60 }, (_, i) => ({
+        name: `p${i}`,
+        prop: `p${i}`,
+        value: `${INJECTED} ${'x'.repeat(2_000)}`,
+      })),
+      listeners: [],
+      directives: [],
+      dependencies: [],
+    };
+    await push('push-component-tree', { pageId: 'p1', roots, count: 2, detail: null });
+    vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: Broadcast) => {
+      if (!options.method.endsWith('inspect-component-in-page')) return;
+      setTimeout(() => void push('push-component-tree', { pageId: 'p1', roots, detail: big }), 10);
+    }) as never);
+    const capped = await call('inspect-component', { selector: 'c2' });
+    expectNoticeFirst(capped);
+    expect(capped.length).toBeLessThanOrEqual(MAX_TOOL_CHARS);
+    expect(capped).toContain('show only the start of their JSON');
+  });
+
   it('inspect-signals puts the notice before the signal values and stays inside the cap', async () => {
     const { push, call } = await boot();
     await push('push-signal-graph', {
@@ -126,6 +157,35 @@ describe('untrusted-data notice on agent tools that return page text', () => {
       ],
     });
     expectNoticeFirst(await call('defer-blocks'));
+  });
+
+  it('defer-blocks keeps the notice first when the answer is cut at the cap', () => {
+    const blocks = Array.from({ length: 50 }, (_, i) => ({
+      id: `d${i}`,
+      owner: { id: `c${i}`, name: 'Card', tag: 'app-card' },
+      state: 'complete',
+      hydration: 'not-configured' as const,
+      triggers: [`${INJECTED} ${'y'.repeat(600)}`],
+      hasErrorBlock: true,
+      rootIds: [],
+      since: 0,
+    }));
+    const text = deferBlocksText(
+      [
+        {
+          pageId: 'p1',
+          roots,
+          count: 2,
+          detail: null,
+          reportedAt: 0,
+          deferBlocks: blocks,
+        } as never,
+      ],
+      0,
+    );
+    expectNoticeFirst(text);
+    expect(text.length).toBeLessThanOrEqual(MAX_TOOL_CHARS);
+    expect(text).toContain('(truncated;');
   });
 
   it('explain-pipe puts the notice before the last input and output', async () => {

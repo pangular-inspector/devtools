@@ -1,4 +1,4 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { Component, computed, input, linkedSignal } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
 import { LimitNote } from '../ui/limit-note';
@@ -577,9 +577,15 @@ export class RouteTimeline {
   protected readonly navigationOff = actionBlockedMessage('router');
 
   readonly phases = PHASES;
-  readonly filter = signal('');
-  readonly onlyProblems = signal(false);
-  readonly message = signal('');
+  private readonly pageId = computed(() => this.page().pageId);
+  // The component stays mounted when the page picker switches pages, so filters and messages
+  // start over whenever the pageId changes.
+  readonly filter = linkedSignal<string, string>({ source: this.pageId, computation: () => '' });
+  readonly onlyProblems = linkedSignal<string, boolean>({
+    source: this.pageId,
+    computation: () => false,
+  });
+  readonly message = linkedSignal<string, string>({ source: this.pageId, computation: () => '' });
 
   readonly loops = computed(() => this.page().loops ?? []);
 
@@ -678,10 +684,22 @@ export class RouteTimeline {
 
   readonly time = time;
 
+  /** Counts instrument toggles so only the latest answer touches the checkbox. */
+  private instrumentSeq = 0;
+
   async toggleInstrument(event: Event) {
     const checkbox = event.target as HTMLInputElement;
     const on = checkbox.checked;
-    const result = await routerAction(this.rpc(), this.page().pageId, { action: 'instrument', on });
+    const pageId = this.pageId();
+    const seq = ++this.instrumentSeq;
+    const result = await routerAction(this.rpc(), pageId, { action: 'instrument', on });
+    // A newer toggle owns the checkbox now; this late answer must not undo it.
+    if (seq !== this.instrumentSeq) return;
+    if (pageId !== this.pageId()) {
+      // The answer is for the page the user left; show this page's state instead.
+      checkbox.checked = !!this.page().instrumented;
+      return;
+    }
     if (result['error']) {
       checkbox.checked = !!this.page().instrumented;
       this.message.set(String(result['error']));
@@ -703,10 +721,12 @@ export class RouteTimeline {
 
   async replay(nav: NavigationRecord) {
     this.message.set(`Replaying #${nav.id}…`);
-    const result = await routerAction(this.rpc(), this.page().pageId, {
+    const pageId = this.pageId();
+    const result = await routerAction(this.rpc(), pageId, {
       action: 'replay',
       id: nav.id,
     });
+    if (pageId !== this.pageId()) return;
     if (result['error']) {
       this.message.set(String(result['error']));
       return;
@@ -718,19 +738,18 @@ export class RouteTimeline {
   }
 
   async copy(nav: NavigationRecord) {
-    const text = await routerCall<string>(this.rpc(), 'router-export', {
-      pageId: this.page().pageId,
-      id: nav.id,
-    });
+    const pageId = this.pageId();
+    const text = await routerCall<string>(this.rpc(), 'router-export', { pageId, id: nav.id });
+    if (pageId !== this.pageId()) return;
     if (!text) {
       this.message.set('Could not build the repro.');
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
-      this.message.set(`Copied a markdown repro of #${nav.id}.`);
+      if (pageId === this.pageId()) this.message.set(`Copied a markdown repro of #${nav.id}.`);
     } catch {
-      this.message.set('The clipboard is not available here.');
+      if (pageId === this.pageId()) this.message.set('The clipboard is not available here.');
     }
   }
 
