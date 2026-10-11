@@ -566,7 +566,65 @@ describe('agent tools', () => {
     await push('push-injector-tree', { pageId: 'p1', roots: [injectorRoot('A')], environment: [] });
     const text = await call('list-pages', '');
     expect(text).toMatch(/1 page\(s\) report/);
-    expect(text).toMatch(/\| `p1` \| unknown \| browser \| \d+s ago \| components, injectors \|/);
+    expect(text).toMatch(
+      /\| `p1` \| unknown \| {2}\| browser \| \d+s ago \| components, injectors \|/,
+    );
+  });
+
+  it('lists the component tree URL and title, and flags background tabs', async () => {
+    const { push, call } = await boot();
+    await push('push-component-tree', {
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+      url: 'http://localhost:4200/trips?token=abc.def.ghi',
+      title: 'Trips | Demo',
+    });
+    await push('report-page-visibility', { pageId: 'p1', hidden: true });
+    const text = await call('list-pages', '');
+    expect(text).toContain('| Page | URL | Title | Platform | Last report | Reports |');
+    expect(text).toMatch(
+      /\| `p1` \| `http:\/\/localhost:4200\/trips\?[^`]*` \| Trips \\\| Demo \| browser \| \d+s ago \(background\) \| components \|/,
+    );
+    expect(text).not.toContain('abc.def.ghi');
+  });
+
+  it('registers list-http-calls and answers from the calls a page pushed', async () => {
+    const { ctx, push } = await boot();
+    const tool = ctx.agent.list().tools.find((t) => t.id === 'pangular:list-http-calls');
+    expect(tool?.safety).toBe('read');
+    const list = async (args: Record<string, unknown> = {}) =>
+      ((await ctx.agent.invoke('pangular:list-http-calls', args)) as { markdown: string }).markdown;
+    expect(await list()).toMatch(/No HttpClient calls recorded/);
+    await push('push-http', {
+      pageId: 'p1',
+      url: '/items',
+      initialUrl: '/items',
+      title: 'Items',
+      hydration: null,
+      full: true,
+      calls: [
+        {
+          id: 'c1',
+          url: '/api/items?api_key=s3cr3t-value-123',
+          method: 'GET',
+          status: 500,
+          durationMs: 8,
+          side: 'client',
+          cacheHit: false,
+          faulted: true,
+          at: Date.now(),
+        },
+      ],
+      payload: { found: false, size: 0, entries: [] },
+    });
+    const text = await list({ failed: true });
+    expect(text).toMatch(/\| client \| GET `\/api\/items\?api_key=[^`]*` \| 500 \|/);
+    expect(text).not.toContain('s3cr3t-value-123');
+    expect(await list({ page: 'gone' })).toMatch(
+      /^No page `gone` is reporting HTTP calls\. Pages that report HTTP calls: `p1`/,
+    );
   });
 
   it('expires injector trees a page stopped reporting', async () => {
