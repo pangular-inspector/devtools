@@ -202,7 +202,8 @@ describe('inspect-signals tool with a long selector', () => {
     await push('push-signal-graph', { pageId: 'p1', ...bigGraph() });
     const text = await call('inspect-signals', { selector: 'x'.repeat(19_800) });
     expect(text.length).toBeLessThanOrEqual(SIGNAL_TOOL_MAX);
-    expect(text).toMatch(/^No signal graph for `x{200}…`/);
+    // The answer starts with the untrusted-data notice, then the heading.
+    expect(text).toMatch(/No signal graph for `x{200}…`/);
     expect(text).toMatch(/Cut to fit [\d,]+ characters/);
   });
 });
