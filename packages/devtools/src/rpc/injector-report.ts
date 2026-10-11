@@ -68,13 +68,15 @@ function valid<T>(
  * Checks an injector tree a page pushed before it reaches the panel and
  * agents. Malformed nodes are dropped with their children, malformed
  * providers and dependencies are dropped, long strings are clipped, and the
- * tree is cut at `MAX_REPORTED_INJECTORS` nodes, with `truncated` set.
+ * tree is cut with `truncated` set: element injectors at `MAX_INJECTOR_NODES`,
+ * then environment injectors at what is left of `MAX_REPORTED_INJECTORS`, so
+ * environment injectors never push element injectors out.
  */
 export function sanitizeInjectorTree(
   roots: unknown,
   environment: unknown,
 ): { roots: InjectorTreeNode[]; environment: InjectorTreeNode[]; truncated: boolean } {
-  let budget = MAX_REPORTED_INJECTORS;
+  let budget = MAX_INJECTOR_NODES;
   let truncated = false;
   const nodes = (list: unknown, depth: number): InjectorTreeNode[] => {
     const out: InjectorTreeNode[] = [];
@@ -109,7 +111,8 @@ export function sanitizeInjectorTree(
     }
     return out;
   };
-  const environmentNodes = nodes(environment, 0);
   const rootNodes = nodes(roots, 0);
+  budget += MAX_REPORTED_INJECTORS - MAX_INJECTOR_NODES;
+  const environmentNodes = nodes(environment, 0);
   return { roots: rootNodes, environment: environmentNodes, truncated };
 }

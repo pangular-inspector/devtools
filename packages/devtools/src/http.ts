@@ -129,13 +129,16 @@ function readTransferEntries(doc: Document): TransferEntry[] {
 }
 
 /**
- * True the first time a GET or HEAD response matches a TransferState entry,
- * so hits are detected even when another interceptor sits between this one
- * and the transfer cache. HttpClient entries match on Angular's cache key
- * (method, response type, URL, body and params); Analog entries on the URL.
+ * True the first time a GET or HEAD response, or a POST that opted into the
+ * transfer cache, matches a TransferState entry, so hits are detected even
+ * when another interceptor sits between this one and the transfer cache.
+ * HttpClient entries match on Angular's cache key (method, response type,
+ * URL, body and params); Analog entries on the URL, for GET and HEAD only,
+ * since a URL alone can't tell POST bodies apart.
  */
 export function claimTransferEntry(req: HttpRequest<unknown>): boolean {
-  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+  const post = req.method === 'POST' && !!req.transferCache;
+  if (req.method !== 'GET' && req.method !== 'HEAD' && !post) return false;
   if (typeof document === 'undefined') return false;
   transferEntries ??= readTransferEntries(document);
   const keys = new Set(transferCacheKeys(req));
@@ -143,7 +146,7 @@ export function claimTransferEntry(req: HttpRequest<unknown>): boolean {
   const index = transferEntries.findIndex(
     (entry, i) =>
       !claimedTransfer.has(i) &&
-      (entry.url === undefined ? keys.has(entry.key) : urls.has(entry.url)),
+      (entry.url === undefined ? keys.has(entry.key) : !post && urls.has(entry.url)),
   );
   if (index < 0) return false;
   claimedTransfer.add(index);

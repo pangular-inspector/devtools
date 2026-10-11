@@ -252,6 +252,35 @@ describe('ssrMiddleware overrides', () => {
     expect(text).toContain('mount `ssrMiddleware` after');
   });
 
+  it('sees a Content-Encoding passed only to writeHead and sends the bytes untouched', () => {
+    ssrRegistry().overrides = [override({ kind: 'state-edit', key: 'a', value: '{"b":2}' })];
+    const gzipped = gzipSync(STATE_HTML);
+    for (const passed of [
+      { 'Content-Encoding': 'gzip' },
+      ['Content-Encoding', 'gzip'],
+      [['content-encoding', 'gzip']],
+    ]) {
+      recorded.length = 0;
+      const res = new FakeResponse();
+      let sent: unknown;
+      const end = res.end;
+      res.end = function (this: FakeResponse, chunk?: string | Buffer) {
+        sent = chunk;
+        return end.call(this, chunk);
+      };
+      createSsrMiddleware()(request(), res as unknown as ServerResponse, () => {});
+      res.setHeader('content-type', 'text/html');
+      res.setHeader('content-encoding', 'identity');
+      (res.writeHead as (...a: unknown[]) => unknown)(200, passed);
+      res.end(gzipped);
+      expect(Buffer.isBuffer(sent) && sent.equals(gzipped)).toBe(true);
+      expect(recorded[0]).toMatchObject({
+        compressedBeforeTrace: true,
+        overrides: [{ applied: false, note: expect.stringContaining('after compression') }],
+      });
+    }
+  });
+
   it('reads and edits the HTML when compression() is mounted before the middleware', () => {
     ssrRegistry().overrides = [override({ kind: 'state-edit', key: 'a', value: '{"b":2}' })];
     const res = new FakeResponse();

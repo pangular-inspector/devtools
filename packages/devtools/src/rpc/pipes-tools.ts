@@ -274,6 +274,11 @@ export function clampPipePageReport(report: PipePageReport): PipePageReport {
         ...(pipe.call.instances
           ? { instances: pipe.call.instances.slice(0, MAX_REPORT_INSTANCES).map(clampCall) }
           : {}),
+        ...(pipe.call.instances && pipe.call.instances.length > MAX_REPORT_INSTANCES
+          ? {
+              instanceTotal: Math.max(pipe.call.instanceTotal ?? 0, pipe.call.instances.length),
+            }
+          : {}),
       },
       ...(pipe.stale ? { stale: { detectedAt: pipe.stale.detectedAt } } : {}),
     })),

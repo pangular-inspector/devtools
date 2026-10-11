@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_INJECTOR_NODES } from '../../injector-tree.ts';
 import { MAX_REPORTED_INJECTORS, sanitizeInjectorTree } from '../injector-report.ts';
 
 const node = (name: string, extra: Record<string, unknown> = {}) => ({
@@ -79,11 +80,23 @@ describe('sanitizeInjectorTree', () => {
     expect(root.providers[0].token.length).toBe(500);
   });
 
-  it('caps the node count and says the tree was cut', () => {
-    const roots = Array.from({ length: MAX_REPORTED_INJECTORS + 10 }, (_, i) => node(`n${i}`));
-    const tree = sanitizeInjectorTree(roots, [node('Root')]);
+  it('caps element injectors, then gives environment injectors what is left', () => {
+    const many = (n: number, prefix: string) =>
+      Array.from({ length: n }, (_, i) => node(`${prefix}${i}`));
+    const tree = sanitizeInjectorTree(many(MAX_INJECTOR_NODES + 10, 'n'), [node('Root')]);
+    expect(tree.roots).toHaveLength(MAX_INJECTOR_NODES);
     expect(tree.environment).toHaveLength(1);
-    expect(tree.roots).toHaveLength(MAX_REPORTED_INJECTORS - 1);
     expect(tree.truncated).toBe(true);
+
+    const crowded = sanitizeInjectorTree(many(10, 'n'), many(MAX_REPORTED_INJECTORS, 'e'));
+    expect(crowded.roots).toHaveLength(10);
+    expect(crowded.environment).toHaveLength(MAX_REPORTED_INJECTORS - 10);
+    expect(crowded.truncated).toBe(true);
+
+    const full = sanitizeInjectorTree(
+      many(MAX_INJECTOR_NODES, 'n'),
+      many(MAX_REPORTED_INJECTORS - MAX_INJECTOR_NODES, 'e'),
+    );
+    expect(full.truncated).toBe(false);
   });
 });

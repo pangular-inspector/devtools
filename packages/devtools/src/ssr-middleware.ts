@@ -67,9 +67,31 @@ function headerText(value: number | string | string[] | undefined): string | und
 export const COMPRESSED_NOTE =
   'the body was already compressed: mount ssrMiddleware after compression';
 
+/**
+ * The value the headers passed to writeHead give `name`, which wins over one set with setHeader.
+ * Node takes an object, a flat `[name, value, ...]` array or `[name, value]` pairs.
+ */
+function passedHeader(args: unknown[], name: string): string | undefined {
+  const headers = args.find((arg, i) => i > 0 && arg && typeof arg === 'object');
+  if (!headers) return undefined;
+  if (Array.isArray(headers)) {
+    const flat: unknown[] = Array.isArray(headers[0]) ? headers.flat() : headers;
+    let value: string | undefined;
+    for (let i = 0; i + 1 < flat.length; i += 2) {
+      if (String(flat[i]).toLowerCase() === name) {
+        value = headerText(flat[i + 1] as string | string[]);
+      }
+    }
+    return value;
+  }
+  const object = headers as OutgoingHttpHeaders;
+  const key = Object.keys(object).find((k) => k.toLowerCase() === name);
+  return key === undefined ? undefined : headerText(object[key]);
+}
+
 /** True when the body is encoded, so its bytes can't be read as HTML. */
-function encoded(res: ServerResponse): boolean {
-  const value = headerText(res.getHeader('content-encoding'))?.trim().toLowerCase();
+function encoded(res: ServerResponse, passed?: string): boolean {
+  const value = (passed ?? headerText(res.getHeader('content-encoding')))?.trim().toLowerCase();
   return !!value && value !== 'identity';
 }
 
@@ -120,7 +142,7 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
 
     const writeHead = res.writeHead;
     res.writeHead = function (this: ServerResponse, ...args: unknown[]) {
-      encodedAtHead ??= encoded(res);
+      encodedAtHead ??= encoded(res, passedHeader(args, 'content-encoding'));
       if (!renderMs) {
         renderMs = Date.now() - at;
         const timing = [
@@ -244,7 +266,8 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
                   : `could not edit the TransferState script for ${o.key}`,
           });
         }
-        const out = compressed ? body : edited ? edited.html : html;
+        // Bytes that were not edited go out as they came, in case they were not UTF-8 text.
+        const out = edited ? edited.html : body;
         if (!res.headersSent) {
           res.removeHeader('content-length');
           res.setHeader('content-length', Buffer.byteLength(out));

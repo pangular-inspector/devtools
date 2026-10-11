@@ -559,6 +559,18 @@ describe('interceptor', () => {
     expect(httpRegistry().calls?.map((c) => c.cacheHit)).toEqual([true, false]);
   });
 
+  it('counts an opted-in POST delivered later as a cache hit only for the same body', async () => {
+    const post = (body: unknown) =>
+      new HttpRequest('POST', '/api/search', body, { transferCache: true });
+    document.body.innerHTML = stateScript(post({ q: 'a' }));
+    const send = (req: HttpRequest<unknown>) =>
+      new Promise<void>((resolve) => run(req, later([])).subscribe({ complete: resolve }));
+    await send(post({ q: 'b' }));
+    await send(new HttpRequest('POST', '/api/search', { q: 'a' }));
+    await send(post({ q: 'a' }));
+    expect(httpRegistry().calls?.map((c) => c.cacheHit)).toEqual([false, false, true]);
+  });
+
   it('does not count a request with other params as a cache hit', async () => {
     const page = (n: number) =>
       new HttpRequest('GET', '/api/feed', null, {

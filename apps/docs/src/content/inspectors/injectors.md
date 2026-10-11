@@ -135,7 +135,7 @@ See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
 ### Up to 2000 element injectors
 
-The page reports at most 2000 element injectors. Past that, a notice above the tree says so, and a lookup path or a provider can point to an injector that isn't listed. `inspect-providers` says it too. Environment injectors have no cap.
+The page reports at most 2000 element injectors. Past that, a notice above the tree says so, and a lookup path or a provider can point to an injector that isn't listed. `inspect-providers` says it too. Environment injectors are kept after them, up to 2500 injectors in all, so they never push element injectors out.
 
 ### Some injectors can't be highlighted
 

@@ -166,6 +166,9 @@ describe('pipe page targets', () => {
     expect((call.lastResult as string).length).toBeLessThan(1000);
     expect(call.lastCaller!.length).toBeLessThan(1000);
     expect(call.instances!.length).toBeLessThanOrEqual(10);
+    expect(call.instanceTotal).toBe(40);
+    report.pipes[0].call.instanceTotal = 90;
+    expect(mergePipePageReport(pages, report, 1001).pipes[0].call!.instanceTotal).toBe(90);
     expect(state.async).toHaveLength(200);
     expect(state.asyncTotal).toBe(500);
   });
