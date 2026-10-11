@@ -172,6 +172,16 @@ describe('NetworkInspector timeline filters', () => {
     expect(status()).toBe('7 of 7');
   });
 
+  it('announces a filter change again when the counts stay the same', async () => {
+    const raw = () => host().querySelector('.filters [role="status"]')!.textContent!;
+    await type('products');
+    const first = raw();
+    expect(first.trim()).toBe('2 of 6');
+    await type('product');
+    expect(raw().trim()).toBe('2 of 6');
+    expect(raw()).not.toBe(first);
+  });
+
   it('keeps the empty state when there are no calls at all', async () => {
     fixture.componentInstance.serverCalls.set([]);
     fixture.componentInstance.pages.set([]);

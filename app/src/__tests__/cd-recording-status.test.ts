@@ -102,4 +102,12 @@ describe('CdRecording status', () => {
     expect(live()).toBe('Could not reach the page.');
     expect(visible()).toBe('Could not reach the page.');
   });
+
+  it('reports a failure, not success, when there is no connection to clear through', async () => {
+    fixture.componentRef.setInput('rpc', null);
+    await show(false, 3);
+    await click('Clear');
+    expect(live()).toBe('Could not reach the page.');
+    expect(live()).not.toContain('Cleared');
+  });
 });

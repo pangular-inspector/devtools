@@ -317,6 +317,7 @@ export class CdRecording {
   ) {
     this.message.set(pending);
     try {
+      if (!this.rpc()) throw new Error('no client');
       await call(this.rpc(), 'request-change-detection-record', {
         pageId: this.pageId(),
         ...request,

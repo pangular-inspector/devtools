@@ -2165,8 +2165,13 @@ export class NetworkInspector {
     this.callQuery();
     this.sideFilter();
     this.failedOnly();
-    return untracked(() => `${this.visibleCalls().length} of ${this.timeline().length}`);
+    // A filter change that keeps the same counts still gets announced: the text flips a
+    // trailing no-break space so the live region sees a change.
+    this.filterFlip = !this.filterFlip;
+    const text = untracked(() => `${this.visibleCalls().length} of ${this.timeline().length}`);
+    return this.filterFlip ? `${text}\u00a0` : text;
   });
+  private filterFlip = true;
 
   /** Follows the visible rows, so the preview hides while filters hide its call. */
   readonly selectedCall = computed(
