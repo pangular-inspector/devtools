@@ -61,7 +61,7 @@ export function countNodes(node: FormFieldNode, test: (n: FormFieldNode) => numb
 
 /** The staleness note for an answer about `forms`, judged by the pages they came from. */
 export function freshness(state: FormsState, now: number, forms: CollectedForm[]): string {
-  const times = forms.map((f) => state.pagesReportedAt?.[f.id.split('@')[1] ?? '']);
+  const times = forms.map((f) => state.pagesReportedAt?.[f.id.slice(f.id.indexOf('@') + 1)]);
   const reportedAt = times.every((t): t is number => t !== undefined)
     ? Math.min(...times)
     : state.reportedAt;

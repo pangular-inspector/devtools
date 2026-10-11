@@ -70,4 +70,16 @@ describe('forms staleness note with a background tab', () => {
     expect(inspectFormsText(state, { page: 'bg' }, now)).toContain(STALE);
     expect(explainFormsText(state, { page: 'bg' }, now)).toContain(STALE);
   });
+  it('reads the report time of a page id that contains @', () => {
+    const atPages = new Map();
+    mergePageReport(atPages, { pageId: 'old', forms: [form('old')], events: [] }, 0, 200, ttl);
+    const fresh = mergePageReport(
+      atPages,
+      { pageId: 'a@old', forms: [form('a@old')], events: [] },
+      now,
+      200,
+      ttl,
+    );
+    expect(inspectFormsText(fresh, { form: 'form-1@a@old' }, now)).not.toContain(STALE);
+  });
 });
