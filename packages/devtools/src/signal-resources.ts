@@ -115,7 +115,8 @@ function groupsOf(nodes: SignalGraphNode[], edges: SignalGraphEdge[]): Group[] {
     if (!valid(e)) continue;
     const a = parsed[e.consumer];
     const b = parsed[e.producer];
-    if (a && b && a.name === b.name) union(e.consumer, e.producer);
+    // extRequest reads the user's params, which may read another resource.
+    if (a && b && a.name === b.name && a.part !== 'extRequest') union(e.consumer, e.producer);
   }
   // httpResource signals have plain names: `_statusCode` and friends read the
   // resource's own signals, and its `stream` is read by the resource value.

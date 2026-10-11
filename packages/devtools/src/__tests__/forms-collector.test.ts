@@ -11,6 +11,8 @@ import {
   required,
 } from '@angular/forms/signals';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachForms, setupErrorOf } from '../forms-collector.ts';
 import type { FormEvent } from '../forms.ts';
@@ -61,6 +63,18 @@ Component({
   imports: [FormField, FormRoot],
   template: `<form [formRoot]="form"><input id="sname" [formField]="form.name" /><button>Go</button></form>`,
 })(SignUp);
+
+class Tasks {
+  model = signal({ name: '', items: [{ n: -1 }] });
+  form = form(this.model, (p) => required(p.name), {
+    submission: { action: async () => undefined },
+  });
+}
+Component({
+  selector: 'tasks-form',
+  imports: [FormField, FormRoot],
+  template: `<form [formRoot]="form"><input id="tname" [formField]="form.name" /><button>Go</button></form>`,
+})(Tasks);
 
 function harness(maxEvents?: number) {
   const calls: { name: string; args: any[] }[] = [];
@@ -180,6 +194,35 @@ describe('forms collector', () => {
     expect(flag.set).toBe(original.flag);
     expect(model.set).toBe(original.set);
     expect(model.update).toBe(original.update);
+  });
+
+  it('lets array fields be collected once they are removed, while the form stays', async () => {
+    setFlagsFromString('--expose-gc');
+    const gc = runInNewContext('gc') as () => void;
+    const fixture = await mount(Tasks);
+    const { model, form: tree } = fixture.componentInstance as any;
+    const h = harness();
+    const refs: WeakRef<object>[] = [];
+    for (let i = 0; i < 10; i++) {
+      model.update((m: any) => ({ ...m, items: [...m.items, { n: i }] }));
+      const node = tree.items[model().items.length - 1]();
+      refs.push(new WeakRef(node));
+      h.collector.push();
+      await tick(0);
+      model.update((m: any) => ({ ...m, items: m.items.slice(0, -1) }));
+      tree.items().structure.materializedChildren();
+      h.collector.push();
+      await tick(0);
+    }
+    await tick(0);
+    gc();
+    gc();
+    expect(refs.slice(0, -1).filter((ref) => ref.deref())).toHaveLength(0);
+
+    const formEl = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+    formEl.requestSubmit();
+    await tick();
+    expect(h.lastEvents().filter((e) => e.type === 'submit')).toHaveLength(1);
   });
 
   it('wraps a Signal Form again when a new one appears after the old one left', async () => {

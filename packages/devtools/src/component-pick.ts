@@ -28,15 +28,18 @@ export function startComponentPick(options: PickOptions): {
   const popup = doc.getElementById(POPUP_ROOT_ID);
   const ownElement = (target: EventTarget | null) =>
     target instanceof Element && !!popup && popup.contains(target);
-  const hostOf = (target: EventTarget | null) =>
-    target instanceof Element && !ownElement(target)
-      ? componentHostOf(options.getNg(), target)
-      : null;
+  // At the document, an event from inside a shadow root targets its host, so
+  // the element under the pointer is the first entry of the composed path.
+  const hostOf = (event: Event) => {
+    if (ownElement(event.target)) return null;
+    const target = event.composedPath()[0] ?? event.target;
+    return target instanceof Element ? componentHostOf(options.getNg(), target) : null;
+  };
 
   let finish: (result: ComponentPickResult) => void = () => {};
   const result = new Promise<ComponentPickResult>((resolve) => {
     const onHover = (event: Event) => {
-      const host = hostOf(event.target);
+      const host = hostOf(event);
       if (host instanceof HTMLElement) options.highlight.show(host);
       else options.highlight.clear();
     };
@@ -47,7 +50,7 @@ export function startComponentPick(options: PickOptions): {
       if (ownElement(event.target)) return;
       event.preventDefault();
       event.stopPropagation();
-      const host = hostOf(event.target);
+      const host = hostOf(event);
       const instance = host ? options.getNg()?.getComponent?.(host) : null;
       const ctor = (instance as { constructor?: unknown } | null)?.constructor;
       finish(

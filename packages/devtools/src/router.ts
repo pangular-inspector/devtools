@@ -1,3 +1,4 @@
+import { redactCredentials } from './credential-redact.ts';
 import { JWT } from './forms-privacy.ts';
 import { REDACTED, isSensitive, serializeFormValue } from './forms.ts';
 import { clip } from './text.ts';
@@ -235,7 +236,8 @@ function segmentForm(secret: string): string {
 
 /**
  * Hides the values of secret-looking query, matrix and fragment keys
- * (`?token=…`, `;api_key=…`, `#access_token=…`), JWTs and bearer tokens, and
+ * (`?token=…`, `;api_key=…`, `#access_token=…`), URL passwords, `Authorization`
+ * credentials (`Basic`, `Digest`, `Token`), JWTs and bearer tokens, and
  * any of the given secret route param values, wherever they appear in a URL or
  * a message. In `url` mode a value runs to the next separator and long opaque
  * tokens (not UUIDs or ULIDs) are hidden too; in messages it also stops at quotes.
@@ -246,7 +248,7 @@ export function redactText(
   mode: 'url' | 'text' = 'text',
   depth = 0,
 ): string {
-  let out = text.replace(
+  let out = redactCredentials(text, REDACTED).replace(
     mode === 'url' ? URL_PAIR : TEXT_PAIR,
     (match, sep: string, key: string, value: string) => {
       if (isSecretKey(decode(key))) return `${sep}${key}=${REDACTED}`;
@@ -826,6 +828,17 @@ export function trimNavigations(navigations: NavigationRecord[], max: number) {
   if (extra <= 0) return;
   navigations.splice(0, extra);
   droppedNavigationCounts.set(navigations, droppedNavigations(navigations) + extra);
+}
+
+/**
+ * Empties the list for the panel's Clear button and forgets the dropped count.
+ * A navigation still in progress stays, so its later events and any action
+ * waiting for its outcome still find it.
+ */
+export function clearNavigations(navigations: NavigationRecord[]) {
+  const pending = navigations.filter((nav) => nav.outcome === 'pending');
+  navigations.splice(0, navigations.length, ...pending);
+  droppedNavigationCounts.delete(navigations);
 }
 
 /** How many navigations `trimNavigations` removed from this list. */

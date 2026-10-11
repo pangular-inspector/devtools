@@ -14,7 +14,7 @@ The palette lives in `app/src/styles/_palette.scss` and becomes CSS variables in
 );
 ```
 
-Accents available: `amber` (default), `ember`, `gold`. Add one by extending `$accents` in `_palette.scss`, with a `light` map (`base`, `hover`, `ink`) whose `base` passes 4.5:1 on `--surface-3` in the light theme. Light neutrals and status colors are `$neutrals-light` and `$status-light`.
+Accents available: `amber` (default), `ember`, `gold`. Add one by extending `$accents` in `_palette.scss` with `base`, `hover`, `ink` and `text`, plus a `light` map with the same keys whose `base` passes 4.5:1 on `--surface-3` in the light theme. Light neutrals and status colors are `$neutrals-light` and `$status-light`. The text-on-tint colors are `$status-text` and `$status-text-light`, plus each accent's `text`.
 
 Always use the variables, never hex values:
 
@@ -27,15 +27,18 @@ Always use the variables, never hex values:
 | `--accent`, `--accent-hover`, `--accent-ink`      | Primary actions and selection; `--accent-ink` is text on an accent fill |
 | `--accent-soft`, `--accent-line`                  | Selected backgrounds, focus glow, accent borders                        |
 | `--ok`, `--warn`, `--danger`                      | Status                                                                  |
+| `--ok-text`, `--warn-text`, `--danger-text`       | Text on a tint of the matching status color (pills, badges, chips)      |
+| `--accent-text`                                   | Text on an accent tint; brand views set their own value                 |
 | `--radius`, `--radius-sm`                         | Cards, controls                                                         |
 | `--control-h`                                     | 34px, the height of every input, select and button                      |
 | `--ease`, `--font-mono`                           | Motion curve, code and tokens                                           |
 
-Brand colors belong only to the brand they represent: NgRx keeps its purple on the NgRx view, the Angular view uses the Angular gradient for its logo and title, and Analog, NativeScript and Capacitor use their own colors on their pages. Each one has a darker light-theme value (`VIEW_ACCENT_LIGHT` in `app/src/app.ts`). Everything else is amber.
+Brand colors belong only to the brand they represent: NgRx keeps its purple on the NgRx view, the Angular view uses the Angular gradient for its logo and title, and Analog, NativeScript and Capacitor use their own colors on their pages. Each one has a dark and a light value in `app/src/view-accents.ts`: `accent` replaces `--accent` on that view, and `text` replaces `--accent-text` and must keep 4.5:1 on its own tint over every surface and selected row (`app/src/__tests__/tint-contrast.test.ts` checks it). Everything else is amber.
 
 ## Shared building blocks
 
-- **SCSS mixins** in `app/src/styles/_mixins.scss`, used with `@use 'mixins' as m;` in component styles: `m.focus-ring($offset)`, `m.field-focus`, `m.panel($level)`, `m.label`, `m.soft($color)`, `m.truncate`, `m.enter($duration)`, and `m.light` for a light-theme override of a page-only color (it covers both `data-theme='light'` and the system preference).
+- **SCSS mixins** in `app/src/styles/_mixins.scss`, used with `@use 'mixins' as m;` in component styles: `m.focus-ring($offset)`, `m.field-focus`, `m.panel($level)`, `m.label`, `m.tint($tone)`, `m.soft($color)`, `m.truncate`, `m.enter($duration)`, and `m.light` for a light-theme override of a page-only color (it covers both `data-theme='light'` and the system preference).
+- **Tinted pills**: a status or accent pill, badge or chip uses `@include m.tint(ok)` (or `warn`, `danger`, `accent`). It tints the background with the tone and sets the text to `--<tone>-text`, which keeps 4.5:1 when the pill sits on a hovered or selected row. A hand-written tint uses the `-text` token for its text, never the base tone. Keep `m.soft($color)` for page-only colors, and check them yourself.
 - **Dropdown**: `app/src/ui/select.ts` (`<app-select [options] [(value)] ariaLabel|labelledBy>`). Never use a native `<select>`; the system popup ignores the theme.
 - **Tab icons**: `app/src/pages/tab-icon.ts`, Lucide-style 24px strokes. Add a case when you add a tab.
 - **Global baselines** in `_base.scss`: tabular numbers, textarea sizing, focus fallback, reduced motion.

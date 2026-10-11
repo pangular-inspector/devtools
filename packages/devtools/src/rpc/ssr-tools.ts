@@ -214,7 +214,9 @@ export function listSsrRequestsText(
   now = Date.now(),
 ): string {
   if (!requests.length) return NO_REQUESTS;
-  const limit = Math.min(Math.max(Math.floor(args.limit ?? 20), 1), 100);
+  // Agents send strings, NaN and null too: anything that is not a finite number is the default.
+  const asked = Number(args.limit ?? 20);
+  const limit = Math.min(Math.max(Math.floor(Number.isFinite(asked) ? asked : 20), 1), 100);
   const recent = [...requests].sort((a, b) => b.at - a.at).slice(0, limit);
   const rows = recent.map((r) => {
     const linked = pages.some((p) => p.ssrRequestId === r.id) ? 'yes' : 'no';

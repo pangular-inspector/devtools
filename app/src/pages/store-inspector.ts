@@ -95,11 +95,13 @@ const CLASSIC_KINDS = new Set([
   template: `
     <div class="toolbar">
       <input
+        #filterInput
         type="search"
         placeholder="Filter stores, changes and declarations…"
         aria-label="Filter stores, changes and source declarations"
         [value]="filter()"
         (input)="filter.set($any($event.target).value)"
+        (keydown.escape)="filter.set('')"
       />
       @if (pages().length > 1) {
         <span class="visually-hidden" id="ngrx-page-label">Page</span>
@@ -1692,6 +1694,7 @@ export class StoreInspector {
   private readonly cancelButton = viewChild<ElementRef<HTMLButtonElement>>('cancelButton');
   private readonly restoreButton = viewChild<ElementRef<HTMLButtonElement>>('restoreButton');
   private readonly stateTree = viewChild<ElementRef<HTMLElement>>('stateTree');
+  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
   private readonly latestButton = viewChild<ElementRef<HTMLButtonElement>>('latestButton');
   readonly message = signal('');
 
@@ -2075,9 +2078,11 @@ export class StoreInspector {
     }
   }
 
+  /** Clears the filters from a no-match state and keeps focus on the filter box. */
   clearFilters() {
     this.filter.set('');
     this.kind.set(null);
+    this.filterInput()?.nativeElement.focus();
   }
 
   changeCount(id: string): number {

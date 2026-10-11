@@ -46,6 +46,30 @@ describe('groupResources', () => {
     ]);
   });
 
+  it('keeps an unnamed resource whose params read another unnamed resource apart from it', () => {
+    const nodes = [
+      node('1', 'computed', 'Resource.value', 'Ada'),
+      node('2', 'linkedSignal', 'Resource.state'),
+      node('3', 'linkedSignal', 'Resource.extRequest'),
+      node('4', 'computed', 'Resource.value', ['Ada post']),
+      node('5', 'linkedSignal', 'Resource.state'),
+      node('6', 'linkedSignal', 'Resource.extRequest'),
+    ];
+    const edges: SignalGraphEdge[] = [
+      { consumer: 0, producer: 1 },
+      { consumer: 1, producer: 2 },
+      { consumer: 3, producer: 4 },
+      { consumer: 4, producer: 5 },
+      // The second resource's params read the first resource's value.
+      { consumer: 5, producer: 0 },
+    ];
+    const resources = groupResources(nodes, edges, [], serialize);
+    expect(resources.map((r) => [r.name, r.value, r.nodeIds])).toEqual([
+      ['resource 1', 'Ada', ['1', '2', '3']],
+      ['resource 2', ['Ada post'], ['4', '5', '6']],
+    ]);
+  });
+
   it('derives status from the graph when no instance holds the resource', () => {
     const nodes = [
       node('1', 'computed', 'Resource#trips.value', '(threw an error)'),

@@ -108,7 +108,11 @@ export function chainOf(root: AnyRecord | null): {
     if (meta) {
       chain.push({ path: `/${segments.join('/')}`, ...fileOfEndpoint(meta.endpointKey) });
       const load = read(() => node!['data']?.['load'], undefined);
-      if (load !== undefined && (loadFrom === undefined || !isEmptyObject(load))) {
+      // An empty-path child inherits its parent's resolved data, so the same
+      // object again is the parent's load(), unless this route resolves its own.
+      const own = read(() => !!config?.['resolve']?.['load'], false);
+      const inherited = load === data && !own;
+      if (load !== undefined && !inherited && (loadFrom === undefined || !isEmptyObject(load))) {
         data = load;
         loadFrom = chain.length - 1;
       }

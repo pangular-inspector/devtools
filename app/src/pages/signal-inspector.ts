@@ -10,6 +10,8 @@ import {
   input,
   linkedSignal,
   signal,
+  untracked,
+  viewChild,
 } from '@angular/core';
 import { DatePipe, JsonPipe, NgTemplateOutlet } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
@@ -83,6 +85,15 @@ interface LiveNode {
 }
 
 const FOLLOW = 'follow';
+
+// Older servers send only the newest graph, without the per-page map.
+function graphPagesOf(state: {
+  graph?: SignalGraph | null;
+  pages: Record<string, SignalGraph>;
+}): Record<string, SignalGraph> {
+  if (Object.keys(state.pages).length) return state.pages;
+  return state.graph ? { [state.graph.pageId ?? '']: state.graph } : {};
+}
 const ENV = 'env:';
 const MAX_HISTORY = 50;
 
@@ -143,11 +154,13 @@ const KIND_COLORS: Record<string, string> = {
   template: `
     <div class="toolbar">
       <input
-        type="text"
+        #filterInput
+        type="search"
         placeholder="Filter by name or kind…"
         aria-label="Filter signals by name or kind"
         [value]="filter()"
         (input)="filter.set($any($event.target).value)"
+        (keydown.escape)="filter.set('')"
       />
       @if (pageOptions().length > 1) {
         <div class="picker page-picker">
@@ -222,7 +235,7 @@ const KIND_COLORS: Record<string, string> = {
         left out.
       </p>
     }
-    @if (kindCounts().length) {
+    @if (kindChips().length) {
       <div class="kinds" role="group" aria-label="Filter by kind">
         <button
           type="button"
@@ -233,7 +246,7 @@ const KIND_COLORS: Record<string, string> = {
         >
           All <span class="count">{{ kindTotal() }}</span>
         </button>
-        @for (group of kindCounts(); track group.kind) {
+        @for (group of kindChips(); track group.kind) {
           <button
             type="button"
             class="kind-chip"
@@ -1006,7 +1019,7 @@ const KIND_COLORS: Record<string, string> = {
       font-variant-numeric: tabular-nums;
     }
     .changed-badge {
-      @include m.soft(var(--warn));
+      @include m.tint(warn);
     }
     .detail-panel {
       margin-top: 8px;
@@ -1057,13 +1070,13 @@ const KIND_COLORS: Record<string, string> = {
       border-radius: 99px;
     }
     .tone-ok {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .tone-warn {
-      @include m.soft(var(--warn));
+      @include m.tint(warn);
     }
     .tone-danger {
-      @include m.soft(var(--danger));
+      @include m.tint(danger);
     }
     .tone-neutral {
       color: var(--text-2);
@@ -1222,6 +1235,7 @@ export class SignalInspector {
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
   private readonly injector = inject(Injector);
   private readonly pageId = hostPageId();
   private readonly cleanups: (() => void)[] = [];
@@ -1235,12 +1249,7 @@ export class SignalInspector {
   readonly chosenPageId = signal<string | null>(null);
   readonly announcement = signal('');
 
-  // Older servers send only the newest graph, without the per-page map.
-  private readonly graphPages = computed<Record<string, SignalGraph>>(() => {
-    const { graph, pages } = this.graphState();
-    if (Object.keys(pages).length) return pages;
-    return graph ? { [graph.pageId ?? '']: graph } : {};
-  });
+  private readonly graphPages = computed(() => graphPagesOf(this.graphState()));
 
   // The newest graph comes as `graph`; a page that reports later never takes over.
   readonly shownPageId = linkedSignal<
@@ -1296,7 +1305,6 @@ export class SignalInspector {
   sourceSignals = signal<SourceSignal[]>([]);
   sourceLoaded = signal(false);
   filter = signal('');
-  kind = signal<string | null>(null);
   readonly resources = computed(() => this.graph()?.resources ?? []);
   private readonly internalIds = computed(
     () => new Set(this.resources().flatMap((r) => r.nodeIds)),
@@ -1313,6 +1321,20 @@ export class SignalInspector {
     const counts = new Map<string, number>();
     for (const k of kinds) counts.set(k, (counts.get(k) ?? 0) + 1);
     return [...counts].map(([kind, count]) => ({ kind, count }));
+  });
+  // A kind picked on another graph stays only when this graph has it too.
+  kind = linkedSignal<string | null, string | null>({
+    source: this.graphOwner,
+    computation: (_owner, previous) => {
+      const kind = previous?.value ?? null;
+      return kind && untracked(this.kindCounts).some((g) => g.kind === kind) ? kind : null;
+    },
+  });
+  // An active kind with no matches still gets a pressed chip, so the filter stays visible.
+  kindChips = computed(() => {
+    const counts = this.kindCounts();
+    const kind = this.kind();
+    return kind && !counts.some((g) => g.kind === kind) ? [...counts, { kind, count: 0 }] : counts;
   });
   kindTotal = computed(() => this.kindCounts().reduce((sum, g) => sum + g.count, 0));
   selectedId = linkedSignal<string | null, string | null>({
@@ -1452,8 +1474,9 @@ export class SignalInspector {
           pages?: Record<string, SignalGraph>;
         } | null;
         const pages = next?.pages && typeof next.pages === 'object' ? next.pages : {};
-        this.notePageGone(pages);
-        this.graphState.set({ graph: next?.graph ?? null, pages });
+        const state = { graph: next?.graph ?? null, pages };
+        this.notePageGone(graphPagesOf(state));
+        this.graphState.set(state);
       };
       apply(state.value());
       this.cleanups.push(state.on('updated', apply));
@@ -1475,6 +1498,14 @@ export class SignalInspector {
   }
 
   private notePageGone(pages: Record<string, SignalGraph>) {
+    const gone = Object.keys(this.graphPages()).filter((pageId) => !pages[pageId]);
+    if (gone.length) {
+      this.pickedByPage.update((all) => {
+        const next = { ...all };
+        for (const pageId of gone) delete next[pageId];
+        return next;
+      });
+    }
     const chosen = this.chosenPageId();
     if (!chosen || pages[chosen]) return;
     const label = this.pageOptions().find((o) => o.value === chosen)?.label ?? 'The chosen page';
@@ -1529,7 +1560,13 @@ export class SignalInspector {
     }
   }
 
+  /** Clears the filters from a no-match state and keeps focus on the filter box. */
   clearFilters() {
+    this.resetFilters();
+    this.filterInput()?.nativeElement.focus();
+  }
+
+  private resetFilters() {
     this.filter.set('');
     this.kind.set(null);
   }
@@ -1545,7 +1582,7 @@ export class SignalInspector {
     const hidden = resource
       ? !this.filteredResources().some((r) => r.id === id)
       : !this.filteredNodes().some((n) => n.id === id);
-    if (hidden) this.clearFilters();
+    if (hidden) this.resetFilters();
     this.jumpedPast.set(hidden ? { id, label: resource?.name ?? node.label ?? node.id } : null);
     this.selectedId.set(id);
     this.showInternals.set(!!resource);

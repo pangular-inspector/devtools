@@ -354,6 +354,18 @@ export function createNgrxCollector<H extends object = Element>(
   };
 
   /**
+   * Logs writes still waiting for the microtask above right away, so a method
+   * call or restore that follows in the same tick gets its own entry and its
+   * change does not also land in that `patchState` entry.
+   */
+  const flushPending = (t: Tracked) => {
+    const before = t.pendingBefore;
+    if (!before) return;
+    t.pendingBefore = null;
+    finish(t, 'patchState', undefined, before);
+  };
+
+  /**
    * Appends one `signal-store` entry per patchState call, picked up through
    * `watchState()`. Dedicated to that path (not reused through `finish()`) so
    * it stays small and so it does not trip the per-method noop throttle.
@@ -463,6 +475,7 @@ export function createNgrxCollector<H extends object = Element>(
       apply(target, thisArg, args) {
         info.calls++;
         const outer = t.depth === 0;
+        if (outer) flushPending(t);
         const before = outer ? snapshot(t) : null;
         const frame = { name, args, startedAt: now(), fired: 0 };
         t.methodStack.push(frame);
@@ -1249,6 +1262,7 @@ export function createNgrxCollector<H extends object = Element>(
       const t = entry.tracked;
       if (!tracked.has(t.instance)) return { error: 'This store no longer exists on the page.' };
       if (!t.writable) return { error: 'This store state is read-only.' };
+      flushPending(t);
       const before = snapshot(t);
       const patch: Record<PropertyKey, unknown> = {};
       for (const key of t.stateKeys) {

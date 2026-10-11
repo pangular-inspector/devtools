@@ -376,4 +376,30 @@ describe('StoreInspector source declarations', () => {
     }
     expect(nodes.querySelector('[role="status"]')).not.toBeNull();
   });
+
+  it('keeps focus on the filter box after Clear filters', async () => {
+    const { fixture } = await mount([entry(1)]);
+    document.body.append(root(fixture));
+    const box = root(fixture).querySelector<HTMLInputElement>('input[type="search"]')!;
+    type(box, 'zzz');
+    await settle(fixture);
+    const clear = button(fixture, 'Clear filters')!;
+    clear.focus();
+    clear.click();
+    await settle(fixture);
+    expect(button(fixture, 'Clear filters')).toBeUndefined();
+    expect(fixture.componentInstance.filter()).toBe('');
+    expect(document.activeElement).toBe(box);
+  });
+
+  it('clears the filter box on Escape', async () => {
+    const { fixture } = await mount([entry(1)]);
+    const box = root(fixture).querySelector<HTMLInputElement>('input[type="search"]')!;
+    type(box, 'cart');
+    await settle(fixture);
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await settle(fixture);
+    expect(fixture.componentInstance.filter()).toBe('');
+    expect(box.value).toBe('');
+  });
 });

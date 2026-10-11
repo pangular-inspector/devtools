@@ -199,6 +199,8 @@ Use the arrow keys, Home and End to move through the tree. The right arrow expan
 
 After **Collapse all**, the row you return to with Tab is the closest visible parent of the row you were on.
 
+Press Escape in the filter box to clear it. When the filter matches nothing, **Clear filter** clears it and moves focus back to the filter box.
+
 ## Agent tools
 
 | Tool or resource             | Kind     | What it does                                                                                                                                                                          |
