@@ -231,6 +231,7 @@ const config: NgmdConfig = {
       label: 'Community',
       items: [
         {label: 'Get involved', href: '/community'},
+        {label: 'Roadmap', href: '/roadmap', status: 'new'},
         {label: 'Sponsors', href: '/sponsors'},
         {label: 'Press kit', href: '/press-kit'},
       ],
