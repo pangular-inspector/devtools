@@ -857,6 +857,16 @@ export function clearNavigations(navigations: NavigationRecord[]) {
   droppedNavigationCounts.delete(navigations);
 }
 
+/**
+ * Empties the list, pending navigations included, and forgets the dropped count.
+ * Used when the overlay lets go of a router: a new router counts its navigation
+ * ids from 1 again, so old records would take its events.
+ */
+export function resetNavigations(navigations: NavigationRecord[]) {
+  navigations.length = 0;
+  droppedNavigationCounts.delete(navigations);
+}
+
 /** How many navigations `trimNavigations` removed from this list. */
 export function droppedNavigations(navigations: NavigationRecord[]): number {
   return droppedNavigationCounts.get(navigations) ?? 0;

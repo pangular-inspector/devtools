@@ -57,6 +57,15 @@ describe('router lint', () => {
     expect(rules([node('/:id'), node('/new')])).toHaveLength(1);
   });
 
+  it('flags an unloaded loadComponent param route, but not unloaded loadChildren', () => {
+    const rules = (config: RouteNode[]) =>
+      lintRoutes(page({ config })).filter((f) => f.rule === 'param-shadows-literal');
+    const lazyComponent = node('/:id', { lazy: 'unloaded', component: undefined });
+    expect(rules([lazyComponent, node('/new')])).toHaveLength(1);
+    const lazyChildren = node('/:id', { kind: 'lazy', lazy: 'unloaded', component: undefined });
+    expect(rules([lazyChildren, node('/new')])).toHaveLength(0);
+  });
+
   it('says Angular stays silent about an empty-path prefix redirect', () => {
     const config = [
       node('/', { path: '', kind: 'redirect', redirectTo: 'home', pathMatch: 'prefix' }),

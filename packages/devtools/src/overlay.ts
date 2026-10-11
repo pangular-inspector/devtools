@@ -16,6 +16,7 @@ import {
   findRouters,
   redactMessage,
   redactUrl,
+  resetNavigations,
   setGeneration,
   setNavigationLimit,
   snapshotRouter,
@@ -497,6 +498,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     router = null;
     routerCount = 0;
     routerRoot = null;
+    // A new router counts navigation ids from 1 again, so old records would take its events.
+    resetNavigations(navigations);
+    preloads.length = 0;
     config = undefined;
     configTruncated = 0;
     setup = undefined;

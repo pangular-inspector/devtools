@@ -4,6 +4,7 @@ import { PANGULAR_INSPECTORS } from '../config.ts';
 import { createScanBackoff } from '../router-attach.ts';
 
 const calls: string[] = [];
+const routerReports: { navigations: { id: number; url: string; outcome: string }[] }[] = [];
 
 vi.mock('devframe/client', () => ({
   connectDevframe: async () => ({
@@ -18,8 +19,9 @@ vi.mock('devframe/client', () => ({
     },
     scope: () => ({
       rpc: {
-        call: async (name: string) => {
+        call: async (name: string, arg: unknown) => {
           calls.push(name);
+          if (name === 'push-router') routerReports.push(JSON.parse(JSON.stringify(arg)));
           return undefined;
         },
         register: () => {},
@@ -140,6 +142,36 @@ describe('overlay router lookup after the router goes away', () => {
       await vi.advanceTimersByTimeAsync(2_000);
       expect(first.listeners.size).toBe(0);
       expect(second.listeners.size).toBeGreaterThan(0);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('does not fold the new router navigation ids into the old router records', async () => {
+    const emit = (router: ReturnType<typeof fakeRouter>, event: Record<string, unknown>) => {
+      for (const listener of router.listeners) (listener as (event: unknown) => void)(event);
+    };
+    const first = fakeRouter();
+    current = first;
+    routerReports.length = 0;
+    const { initOverlay } = await import('../overlay.ts');
+    const dispose = await initOverlay();
+    try {
+      await vi.advanceTimersByTimeAsync(2_000);
+      emit(first, { type: 0, id: 1, url: '/a' });
+      emit(first, { type: 1, id: 1, url: '/a', urlAfterRedirects: '/a' });
+      await vi.advanceTimersByTimeAsync(2_000);
+      const second = fakeRouter();
+      first.disposed = true;
+      current = second;
+      await vi.advanceTimersByTimeAsync(2_000);
+      emit(second, { type: 0, id: 1, url: '/b' });
+      emit(second, { type: 1, id: 1, url: '/b', urlAfterRedirects: '/b' });
+      await vi.advanceTimersByTimeAsync(2_000);
+      const last = routerReports.at(-1)!;
+      expect(last.navigations.map(({ id, url, outcome }) => ({ id, url, outcome }))).toEqual([
+        { id: 1, url: '/b', outcome: 'succeeded' },
+      ]);
     } finally {
       dispose();
     }

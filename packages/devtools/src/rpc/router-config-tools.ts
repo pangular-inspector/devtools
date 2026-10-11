@@ -371,7 +371,7 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
       // children to match, so the router backtracks to the later literal route.
       const endsHere = node.children?.length
         ? node.children.some((child) => child.path === '')
-        : node.lazy !== 'unloaded';
+        : !(node.kind === 'lazy' && node.lazy === 'unloaded');
       if (!endsHere) return;
       for (const later of primary.slice(index + 1)) {
         const laterParts = parts(later.path);
