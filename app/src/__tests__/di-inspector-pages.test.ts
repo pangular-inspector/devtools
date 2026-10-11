@@ -169,6 +169,95 @@ describe('injector tree loading and row actions', () => {
   });
 });
 
+describe('injector tree selection that leaves the page', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  const element = (id: string, name: string) => ({
+    injector: { id, type: 'element', name, providerCount: 0, component: name },
+    providers: [],
+    children: [],
+  });
+
+  async function live(first: unknown) {
+    const listeners: ((value: unknown) => void)[] = [];
+    const rpc = {
+      call: () => Promise.resolve([]),
+      callEvent: () => Promise.resolve(),
+      sharedState: () =>
+        Promise.resolve({
+          value: () => first,
+          on: (_: string, listener: (value: unknown) => void) => {
+            listeners.push(listener);
+            return () => {};
+          },
+        }),
+    };
+    const client = { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
+    const fixture = TestBed.createComponent(DiInspector);
+    fixture.componentRef.setInput('rpc', client);
+    document.body.append(fixture.nativeElement);
+    const settle = async () => {
+      for (let i = 0; i < 3; i++) {
+        await new Promise((resolve) => setTimeout(resolve));
+        await fixture.whenStable();
+      }
+    };
+    await settle();
+    const push = async (value: unknown) => {
+      listeners.forEach((listener) => listener(value));
+      await settle();
+    };
+    return { fixture, push, el: fixture.nativeElement as HTMLElement };
+  }
+
+  it('shows a gone note and announces it instead of silently selecting another injector', async () => {
+    const { fixture, push, el } = await live({
+      roots: [element('a', 'app-a'), element('b', 'app-b')],
+      environment: [],
+    });
+    const status = el.querySelector('[role="status"].sr-only');
+    expect(status?.textContent?.trim()).toBe('');
+    fixture.componentInstance.select('b');
+    await fixture.whenStable();
+    expect(el.querySelector('#di-detail-title')?.textContent).toContain('<app-b>');
+
+    await push({ roots: [element('a', 'app-a')], environment: [] });
+    expect(fixture.componentInstance.selected()).toBeNull();
+    expect(el.querySelector('#di-detail-title')?.textContent).toContain('<app-b>');
+    expect(el.textContent).toContain('This injector is no longer on the page');
+    expect(el.querySelector('.row[aria-selected="true"]')).toBeNull();
+    expect(el.querySelector('[role="status"].sr-only')).toBe(status);
+    expect(status?.textContent?.trim()).toBe('The selected injector is no longer on the page.');
+
+    const show = Array.from(el.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Show <app-a>'),
+    );
+    vi.stubGlobal('CSS', { escape: (value: string) => value });
+    Element.prototype.scrollIntoView ??= () => {};
+    show!.click();
+    await fixture.whenStable();
+    vi.unstubAllGlobals();
+    expect(fixture.componentInstance.selected()?.injector.id).toBe('a');
+    expect(el.textContent).not.toContain('This injector is no longer on the page');
+
+    // A second injector going away changes the status text, so it is read out again.
+    const before = status?.textContent;
+    await push({ roots: [element('d', 'app-d')], environment: [] });
+    expect(status?.textContent?.trim()).toBe('The selected injector is no longer on the page.');
+    expect(status?.textContent).not.toBe(before);
+  });
+
+  it('still shows the first injector while nothing is chosen', async () => {
+    const { fixture, push } = await live({ roots: [element('a', 'app-a')], environment: [] });
+    expect(fixture.componentInstance.selected()?.injector.id).toBe('a');
+    await push({ roots: [element('c', 'app-c')], environment: [] });
+    expect(fixture.componentInstance.selected()?.injector.id).toBe('c');
+    expect(fixture.componentInstance.gone()).toBeNull();
+  });
+});
+
 describe('injector tree page selection', () => {
   afterEach(() => {
     scopeToPage(null);

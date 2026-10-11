@@ -225,6 +225,32 @@ export function currentPipes(pages: Pages): PipesState {
   return stateOf(pages);
 }
 
+export interface PipeInstrumentRequest {
+  /** The page to patch; without one, `on: false` stops every page. */
+  pageId?: string;
+  on: boolean;
+}
+
+/**
+ * Reads a `request-instrument-pipes` message: `{ pageId, on }`, or a bare
+ * boolean from an older panel. Starting without a page id picks the page that
+ * reported most recently, so one request never patches every open tab.
+ */
+export function pipeInstrumentRequest(message: unknown, pages: Pages): PipeInstrumentRequest {
+  const record = isRecord(message) ? (message as Record<string, unknown>) : undefined;
+  const on = record ? record['on'] !== false : message !== false;
+  const asked = record?.['pageId'];
+  if (typeof asked === 'string' && asked.length > 0 && asked.length < 50) {
+    return { pageId: asked, on };
+  }
+  if (!on) return { on };
+  let latest: (PipePageReport & { reportedAt: number }) | undefined;
+  for (const page of pages.values()) {
+    if (!latest || page.reportedAt > latest.reportedAt) latest = page;
+  }
+  return latest ? { pageId: latest.pageId, on } : { on };
+}
+
 export function expirePipePages(
   pages: Pages,
   now = Date.now(),
