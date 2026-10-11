@@ -535,7 +535,12 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           what="HTTP calls"
           limit="httpCalls"
         />
-        <div class="filters" role="group" aria-label="Filter the HTTP timeline">
+        <div
+          class="filters"
+          role="group"
+          aria-label="Filter the HTTP timeline"
+          [class.no-calls]="!timeline().length"
+        >
           <div class="search">
             <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="11" cy="11" r="7" />
@@ -719,9 +724,12 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 Matched rule <code>{{ pattern }}</code>
               </p>
             }
+            <!-- A named region, so the focusable scroll box says what it holds. -->
             <pre
               class="preview-body"
               tabindex="0"
+              role="region"
+              [attr.aria-label]="detail.error ? 'Response error' : 'Response body'"
               [class.error]="!!detail.error && !detail.cancelled"
               >{{ detail.error ?? previewText(detail) ?? '(no body)' }}</pre>
           </div>
@@ -760,6 +768,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               <span id="rule-target-label">Apply on</span>
               <app-select
                 labelledBy="rule-target-label"
+                [describedBy]="draftMocksOnServer() ? 'rule-ssr-note' : ''"
                 [options]="targetOptions"
                 [value]="draft().target"
                 (valueChange)="setDraft('target', $event ?? 'both')"
@@ -771,6 +780,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               <span id="rule-status-label">Status</span>
               <app-select
                 labelledBy="rule-status-label"
+                [describedBy]="draftMocksOnServer() ? 'rule-ssr-note' : ''"
                 [options]="statusOptions"
                 [value]="draft().status"
                 (valueChange)="setDraft('status', $event ?? '')"
@@ -803,7 +813,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           </label>
           <p id="body-error" class="field-error">{{ bodyError() }}</p>
           @if (draftMocksOnServer()) {
-            <p class="muted small">
+            <p id="rule-ssr-note" class="muted small">
               SSR mocks are not transferred to the client: the browser requests the URL again and
               gets the real response unless the rule also applies on the client.
             </p>
@@ -820,7 +830,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           </div>
         </form>
 
-        <h3 class="rules-heading">Rules ({{ rules().length }})</h3>
+        <h3 id="rule-list-heading" class="rules-heading" tabindex="-1">
+          Rules ({{ rules().length }})
+        </h3>
         <ul class="rules">
           @for (rule of rules(); track rule.id) {
             <li [class.off]="!rule.enabled">
@@ -841,6 +853,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               <button
                 type="button"
                 class="link remove"
+                data-remove-rule
                 [disabled]="!canWrite()"
                 [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
                 (click)="removeRule(rule.id)"
@@ -892,6 +905,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             <span id="override-kind-label">Override</span>
             <app-select
               labelledBy="override-kind-label"
+              [describedBy]="overrideDraft().kind === 'state-edit' ? '' : 'override-kind-help'"
               [options]="overrideKindOptions"
               [value]="overrideDraft().kind"
               (valueChange)="setOverrideDraft('kind', $event ?? 'render-error')"
@@ -911,7 +925,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           </label>
           @switch (overrideDraft().kind) {
             @case ('render-error') {
-              <p class="muted small">
+              <p id="override-kind-help" class="muted small">
                 Throws while the server renders, so it needs <code>providePangularHttp()</code> and
                 a page the engine renders. Prerendered files served as static files skip it.
               </p>
@@ -920,6 +934,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 <input
                   spellcheck="false"
                   placeholder="Simulated render error"
+                  aria-describedby="override-kind-help"
                   [value]="overrideDraft().message"
                   (input)="patchOverride('message', $event)"
                 />
@@ -965,7 +980,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               }
             }
             @case ('client-render') {
-              <p class="muted small">
+              <p id="override-kind-help" class="muted small">
                 Serves <code>index.csr.html</code> instead of rendering. Needs
                 <code>browserDistFolder</code> in <code>initPangularHub()</code>.
               </p>
@@ -982,7 +997,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           </div>
         </form>
 
-        <h3 class="rules-heading">Overrides ({{ overrides().length }})</h3>
+        <h3 id="override-list-heading" class="rules-heading" tabindex="-1">
+          Overrides ({{ overrides().length }})
+        </h3>
         <ul class="rules">
           @for (o of overrides(); track o.id) {
             <li [class.off]="!o.enabled">
@@ -1002,6 +1019,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               <button
                 type="button"
                 class="link remove"
+                data-remove-override
                 [disabled]="!canWrite()"
                 (click)="removeOverride(o.id)"
                 [attr.aria-label]="'Remove ' + overrideLabel(o.kind) + ' for ' + o.pattern"
@@ -1183,7 +1201,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                     </div>
                   </div>
                   <!-- Focusable so a long value can be scrolled with the keyboard. -->
-                  <pre tabindex="0">{{ entry.value | json }}</pre>
+                  <pre tabindex="0" role="region" [attr.aria-label]="'Value of ' + entry.key">{{
+                    entry.value | json
+                  }}</pre>
                 </details>
               }
             </div>
@@ -1534,6 +1554,10 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       font-size: 12px;
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
+    }
+    /* "0 of 0" says nothing before the first call; the empty state below explains it. */
+    .filters.no-calls .total {
+      display: none;
     }
     .table-wrap {
       max-height: min(420px, 60vh);
@@ -2500,14 +2524,13 @@ export class NetworkInspector {
     );
   }
 
-  removeRule(id: string) {
-    const rule = this.rules().find((r) => r.id === id);
-    if (!rule) return;
-    void this.saveRules(
-      this.rules().filter((r) => r.id !== id),
-      'Rule removed.',
-      rule,
-    );
+  async removeRule(id: string) {
+    const index = this.rules().findIndex((r) => r.id === id);
+    if (index < 0) return;
+    const rest = this.rules().filter((r) => r.id !== id);
+    if (await this.saveRules(rest, 'Rule removed.', this.rules()[index])) {
+      this.focusAfterRemove('[data-remove-rule]', index, '#rule-list-heading');
+    }
   }
 
   async clearCalls() {
@@ -2615,10 +2638,44 @@ export class NetworkInspector {
     );
   }
 
-  removeOverride(id: string) {
-    void this.saveOverrides(
-      this.overrides().filter((o) => o.id !== id),
-      'Override removed.',
+  async removeOverride(id: string) {
+    const index = this.overrides().findIndex((o) => o.id === id);
+    if (index < 0) return;
+    const rest = this.overrides().filter((o) => o.id !== id);
+    if (await this.saveOverrides(rest, 'Override removed.')) {
+      this.focusAfterRemove('[data-remove-override]', index, '#override-list-heading');
+    }
+  }
+
+  /**
+   * The removed row's button is gone, so focus moves to the Remove button that took its place,
+   * the one before it when the last row went, or the list heading when the list is empty.
+   */
+  private focusAfterRemove(buttons: string, index: number, heading: string) {
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement;
+        const remaining = host.querySelectorAll<HTMLElement>(buttons);
+        const next = remaining[Math.min(index, remaining.length - 1)];
+        (next ?? host.querySelector<HTMLElement>(heading))?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  /** Clears a repeated message first, so the live region speaks again for the same text. */
+  private announce(text: string) {
+    if (this.message() !== text) {
+      this.message.set(text);
+      return;
+    }
+    this.message.set('');
+    // A newer message set before the render wins over this restore.
+    afterNextRender(
+      () => {
+        if (this.message() === '') this.message.set(text);
+      },
+      { injector: this.injector },
     );
   }
 
@@ -2626,7 +2683,7 @@ export class NetworkInspector {
     try {
       const saved = await call(this.rpc(), 'set-ssr-overrides', next);
       this.overrides.set(Array.isArray(saved) ? (saved as SsrOverride[]) : next);
-      this.message.set(done);
+      this.announce(done);
       return true;
     } catch {
       this.message.set('Could not save the overrides.');
@@ -2638,7 +2695,7 @@ export class NetworkInspector {
     try {
       const saved = await call(this.rpc(), 'set-http-rules', rules);
       this.rules.set(Array.isArray(saved) ? (saved as HttpRule[]) : rules);
-      this.message.set(
+      this.announce(
         changed.target === 'client' ? done : `${done} Reload the page to apply it to SSR.`,
       );
       return true;

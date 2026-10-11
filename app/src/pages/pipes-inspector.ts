@@ -2,6 +2,8 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -266,7 +268,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
         <section id="pipe-detail" class="detail" aria-labelledby="pipe-detail-title">
           @if (selected(); as p) {
             <header class="detail-head">
-              <h2 id="pipe-detail-title" class="mono">{{ p.name }}</h2>
+              <h2 id="pipe-detail-title" class="mono" tabindex="-1">{{ p.name }}</h2>
               <span class="chip" [class.impure]="!p.isPure">{{
                 p.isPure ? 'pure' : 'impure'
               }}</span>
@@ -468,7 +470,17 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
               <div class="finding-head">
                 <span class="severity" [attr.data-tone]="f.severity">{{ f.severity }}</span>
                 <code class="mono rule">{{ f.rule }}</code>
-                <span class="where mono">{{ f.pipe }} · {{ f.file }}:{{ f.line }}</span>
+                @let target = pipeFor(f);
+                <span class="where mono">
+                  @if (target) {
+                    <button type="button" class="pipe-link" (click)="showPipe(target)">
+                      <span class="sr-only">Show pipe </span>{{ f.pipe }}
+                    </button>
+                  } @else {
+                    {{ f.pipe }}
+                  }
+                  · {{ f.file }}:{{ f.line }}
+                </span>
               </div>
               <p class="finding-message">{{ f.message }}</p>
               <p class="finding-fix"><span class="fix-label">Fix</span> {{ f.fix }}</p>
@@ -783,6 +795,13 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       font-size: 15px;
       font-weight: 600;
       overflow-wrap: anywhere;
+      border-radius: 4px;
+    }
+    .detail-head h2:focus {
+      outline: none;
+    }
+    .detail-head h2:focus-visible {
+      @include m.focus-ring;
     }
     .block {
       padding: 14px 16px;
@@ -990,6 +1009,27 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       font-size: 11px;
       overflow-wrap: anywhere;
     }
+    button.pipe-link {
+      display: inline;
+      height: auto;
+      padding: 0;
+      border: 0;
+      border-radius: 4px;
+      background: none;
+      color: var(--accent);
+      font: inherit;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      white-space: normal;
+    }
+    button.pipe-link:hover:not(:disabled) {
+      border-color: transparent;
+      background: none;
+      color: var(--accent-hover);
+    }
+    button.pipe-link:focus-visible {
+      @include m.focus-ring;
+    }
     .finding-message {
       margin: 6px 0 0;
       color: var(--text);
@@ -1057,6 +1097,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
 export class PipesInspector {
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
 
   rpc = input<DevframeRpcClient | null>(null);
@@ -1088,21 +1129,15 @@ export class PipesInspector {
   private readonly liveByName = computed(() => new Map(this.live().map((p) => [p.name, p])));
 
   filtered = computed(() => {
-    const q = this.filter().trim().toLowerCase();
+    const q = this.filter();
     const kind = this.kind() ?? 'all';
-    const live = this.liveByName();
-    return this.pipes().filter((p) => {
-      if (kind === 'custom' && p.builtin) return false;
-      if (kind === 'builtin' && !p.builtin) return false;
-      if (kind === 'impure' && p.isPure) return false;
-      if (kind === 'live' && !live.has(p.name)) return false;
-      return (
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        p.className.toLowerCase().includes(q) ||
-        p.file.toLowerCase().includes(q)
-      );
-    });
+    return this.pipes().filter((p) => this.fitsKind(p, kind) && this.fitsQuery(p, q));
+  });
+
+  private readonly pipesByName = computed(() => {
+    const byName = new Map<string, PipeInfo[]>();
+    for (const p of this.pipes()) byName.set(p.name, [...(byName.get(p.name) ?? []), p]);
+    return byName;
   });
 
   private unsubscribe?: () => void;
@@ -1237,6 +1272,48 @@ export class PipesInspector {
 
   select(pipe: PipeInfo) {
     this.selected.set(this.isSelected(pipe) ? null : pipe);
+  }
+
+  /** The listed pipe a lint finding is about: the one declared in the finding's file, or else
+   * the first pipe with that name. Null when the pipe is not in the list. */
+  pipeFor(finding: PipeLintFinding): PipeInfo | null {
+    const matches = this.pipesByName().get(finding.pipe);
+    if (!matches?.length) return null;
+    return matches.find((p) => p.file === finding.file) ?? matches[0];
+  }
+
+  /** Selects a pipe from a lint finding, clearing only the filters that hide it, then scrolls
+   * its row into view and moves focus to the detail heading. */
+  showPipe(pipe: PipeInfo) {
+    if (!this.fitsQuery(pipe, this.filter())) this.filter.set('');
+    if (!this.fitsKind(pipe, this.kind() ?? 'all')) this.kind.set('all');
+    this.selected.set(pipe);
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement;
+        host.querySelector<HTMLElement>('.row.selected')?.scrollIntoView?.({ block: 'nearest' });
+        host.querySelector<HTMLElement>('#pipe-detail-title')?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private fitsKind(p: PipeInfo, kind: PipeKind): boolean {
+    if (kind === 'custom') return !p.builtin;
+    if (kind === 'builtin') return !!p.builtin;
+    if (kind === 'impure') return !p.isPure;
+    if (kind === 'live') return this.liveByName().has(p.name);
+    return true;
+  }
+
+  private fitsQuery(p: PipeInfo, filter: string): boolean {
+    const q = filter.trim().toLowerCase();
+    return (
+      !q ||
+      p.name.toLowerCase().includes(q) ||
+      p.className.toLowerCase().includes(q) ||
+      p.file.toLowerCase().includes(q)
+    );
   }
 
   clearFilters() {

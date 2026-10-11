@@ -90,6 +90,8 @@ What submit does, and why it might do nothing. It also shows what the form sends
 
 Form bugs and model-aware accessibility checks, each with a fix. For generic accessibility checks, run axe on the page.
 
+A finding about one field shows its path, such as `at address.zip`. Click the path to open that field, the same way an **Error summary** entry does: the tab switches to the **Fields** view, opens the field's [details](#field-details) and moves focus to them. Findings about the whole form have no path.
+
 If the devtools server does not answer, the Submit view, the Lint view and the field details say so and offer **Try again**.
 
 ### Actions bar
