@@ -722,6 +722,8 @@ export class Dashboard {
         mark('ready');
         this.stopLive.push(state.on('updated', (value: unknown) => target(value as T)));
       } catch {
+        // A failure from an older connection must not mark the current one's card.
+        if (this.destroyRef.destroyed || this.rpc() !== client) return;
         target(null as T);
         mark('error');
       }
