@@ -221,6 +221,139 @@ describe('Capacitor view', () => {
   });
 });
 
+describe('Capacitor view across pages and updates', () => {
+  beforeEach(() => history.replaceState(null, '', '/?view=capacitor'));
+
+  const web = (extra: Partial<CapacitorPage> = {}) =>
+    page({
+      pageId: 'desk',
+      title: 'Desktop',
+      url: '/home',
+      calls: [],
+      info: { ...page().info, platform: 'web', native: false, bridge: false },
+      ...extra,
+    });
+  const shownTitle = (fixture: ComponentFixture<unknown>) =>
+    host(fixture).querySelector('.page-picker .value')?.textContent?.trim();
+  const options = async (fixture: ComponentFixture<unknown>) => {
+    host(fixture).querySelector<HTMLButtonElement>('.page-picker [role="combobox"]')!.click();
+    await settle(fixture);
+    return [...host(fixture).querySelectorAll('.page-picker [role="option"]')];
+  };
+
+  it('starts on the device, keeps the picked page while others report, and falls back when it goes', async () => {
+    const fixture = TestBed.createComponent(App);
+    await settle(fixture);
+    const { client, report } = fakeClient({});
+    connection.resolve(client);
+    await settle(fixture);
+
+    report({ cap1: page({ reportedAt: 1_000 }), desk: web({ reportedAt: 2_000 }) });
+    await settle(fixture);
+    expect(shownTitle(fixture)).toBe('Trips');
+
+    let listed = await options(fixture);
+    expect(listed.map((o) => o.querySelector('.label')?.textContent)).toEqual(['Desktop', 'Trips']);
+    (listed[0] as HTMLElement).click();
+    await settle(fixture);
+    expect(shownTitle(fixture)).toBe('Desktop');
+
+    // The device reports again and is now the newest: the panel stays put, in the same order.
+    report({ cap1: page({ reportedAt: 9_000 }), desk: web({ reportedAt: 2_000 }) });
+    await settle(fixture);
+    expect(shownTitle(fixture)).toBe('Desktop');
+    listed = await options(fixture);
+    expect(listed.map((o) => o.querySelector('.label')?.textContent)).toEqual(['Desktop', 'Trips']);
+
+    report({ cap1: page({ reportedAt: 9_500 }) });
+    await settle(fixture);
+    expect(text(fixture)).toContain('Plugin calls');
+    expect(host(fixture).querySelectorAll('.calls .call')).toHaveLength(3);
+  });
+
+  it('announces the count when a filter changes, not when the app makes a call', async () => {
+    const fixture = TestBed.createComponent(App);
+    await settle(fixture);
+    const { client, report } = fakeClient({ cap1: page() });
+    connection.resolve(client);
+    await settle(fixture);
+    const status = () =>
+      host(fixture).querySelector('app-capacitor-inspector .sr-only[role="status"]')!.textContent;
+    const before = status();
+
+    report({ cap1: page({ calls: [...page().calls, call(4)] }) });
+    await settle(fixture);
+    expect(host(fixture).querySelectorAll('.calls .call')).toHaveLength(4);
+    expect(status()).toBe(before);
+
+    host(fixture).querySelector<HTMLInputElement>('.check input')!.click();
+    await settle(fixture);
+    expect(status()?.trim()).toBe('2 of 4 calls shown');
+  });
+
+  it('moves between calls with the arrow keys, Home and End', async () => {
+    const fixture = TestBed.createComponent(App);
+    await settle(fixture);
+    connection.resolve(fakeClient({ cap1: page() }).client);
+    await settle(fixture);
+    const rows = [...host(fixture).querySelectorAll<HTMLButtonElement>('.calls .call')];
+    const list = host(fixture).querySelector('.calls')!;
+    const press = (key: string) =>
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    rows[0].focus();
+    press('ArrowDown');
+    expect(document.activeElement).toBe(rows[1]);
+    press('End');
+    expect(document.activeElement).toBe(rows[2]);
+    press('ArrowDown');
+    expect(document.activeElement).toBe(rows[2]);
+    press('ArrowUp');
+    expect(document.activeElement).toBe(rows[1]);
+    press('Home');
+    expect(document.activeElement).toBe(rows[0]);
+    expect(list.contains(document.activeElement)).toBe(true);
+  });
+
+  it('shows unknown states as Unknown and no sync hint for core plugins', async () => {
+    const fixture = TestBed.createComponent(App);
+    await settle(fixture);
+    const info = page().info;
+    connection.resolve(
+      fakeClient({
+        cap1: page({
+          info: {
+            ...info,
+            env: { ...info.env, capacitorHttp: null },
+            plugins: [
+              { name: 'WebView', available: false, registered: true, native: false, methods: [] },
+              { name: 'Camera', available: true, registered: null, native: true, methods: [] },
+            ],
+          },
+        }),
+      }).client,
+    );
+    await settle(fixture);
+    const env = host(fixture).querySelector('section[aria-labelledby="cap-env-title"]')!;
+    expect(env.textContent).toMatch(/CapacitorHttp\s*Unknown/);
+    const rows = [
+      ...host(fixture).querySelectorAll('section[aria-labelledby="cap-plugins-title"] tbody tr'),
+    ].map((row) =>
+      [...row.children]
+        .map((cell) => cell.textContent?.trim())
+        .join(' ')
+        .trim(),
+    );
+    expect(rows[0]).toBe('WebView No Yes No');
+    expect(rows[1]).toBe('Camera Yes Unknown Yes');
+  });
+
+  it('shows no setup steps before it knows whether an app reports', async () => {
+    const fixture = TestBed.createComponent(App);
+    await settle(fixture);
+    expect(host(fixture).querySelector('#soon-title')).toBeNull();
+  });
+});
+
 describe('Capacitor tab in the panel', () => {
   it('appears only while a Capacitor app reports', async () => {
     const fixture = TestBed.createComponent(App);

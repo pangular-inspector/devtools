@@ -1,4 +1,17 @@
-import { Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  input,
+  linkedSignal,
+  signal,
+  untracked,
+} from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { time } from '../format';
 import { hostPageId } from '../page-id';
@@ -6,8 +19,12 @@ import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 import { panelConfig } from '../devtools-config';
 import {
+  CORE_PLUGINS,
   capacitorPages,
+  defaultCapacitorPage,
+  inFirstSeenOrder,
   isUnimplemented,
+  yesNo,
   type CapacitorCall,
   type CapacitorPage,
 } from './capacitor-types';
@@ -71,7 +88,15 @@ function json(value: unknown): string {
           </div>
           <div>
             <dt>CapacitorHttp</dt>
-            <dd>{{ page.info.env.capacitorHttp ? 'On' : 'Off' }}</dd>
+            <dd>
+              {{
+                page.info.env.capacitorHttp === null
+                  ? 'Unknown'
+                  : page.info.env.capacitorHttp
+                    ? 'On'
+                    : 'Off'
+              }}
+            </dd>
           </div>
           <div>
             <dt>Calls logged</dt>
@@ -147,15 +172,20 @@ function json(value: unknown): string {
             </div>
           } @else {
             <div class="split">
-              <ol class="calls" aria-label="Plugin calls, newest first">
+              <ol
+                class="calls"
+                aria-label="Plugin calls, newest first"
+                (keydown)="onListKey($event)"
+              >
                 @for (call of shownCalls(); track call.id) {
                   <li>
                     <button
                       type="button"
                       class="call"
+                      data-cap-call
                       [class.selected]="selected()?.id === call.id"
                       [attr.aria-pressed]="selected()?.id === call.id"
-                      (click)="selectedCallId.set(call.id)"
+                      (click)="select(call.id)"
                     >
                       <time class="when">{{ time(call.startedAt) }}</time>
                       <code class="name">{{ call.plugin }}.{{ call.method }}()</code>
@@ -172,7 +202,7 @@ function json(value: unknown): string {
                 }
               </ol>
               @if (selected(); as call) {
-                <section class="detail" aria-labelledby="cap-detail-title">
+                <section class="detail" id="cap-detail" aria-labelledby="cap-detail-title">
                   <h3 id="cap-detail-title">
                     <code>{{ call.plugin }}.{{ call.method }}()</code>
                   </h3>
@@ -227,12 +257,16 @@ function json(value: unknown): string {
                       <code>{{ plugin.name }}</code>
                     </th>
                     <td>{{ plugin.available ? 'Yes' : 'No' }}</td>
-                    <td>{{ plugin.registered ? 'Yes' : 'No' }}</td>
+                    <td>{{ yesNo(plugin.registered) }}</td>
                     <td>{{ plugin.native ? 'Yes' : 'No' }}</td>
                     <td>
-                      @if (plugin.registered && !plugin.available) {
+                      @if (
+                        plugin.registered === true &&
+                        !plugin.available &&
+                        !corePlugins.has(plugin.name)
+                      ) {
                         Not available here. Run <code>npx cap sync</code> if it should be native.
-                      } @else if (plugin.native && !plugin.registered) {
+                      } @else if (plugin.native && plugin.registered === false) {
                         Installed, not imported by the app.
                       }
                     </td>
@@ -290,6 +324,7 @@ function json(value: unknown): string {
 
     :host {
       display: block;
+      font-size: 13px;
     }
     .intro {
       margin: 0 0 16px;
@@ -598,23 +633,35 @@ function json(value: unknown): string {
 export class CapacitorInspector {
   readonly rpc = input<DevframeRpcClient | null>(null);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  private readonly seen = new Map<string, number>();
+  private readonly hostPageId = hostPageId();
   private unsubscribe?: () => void;
 
   protected readonly time = time;
   protected readonly json = json;
   protected readonly guideUrl = GUIDE_URL;
+  protected readonly yesNo = yesNo;
+  protected readonly corePlugins = CORE_PLUGINS;
   readonly pages = signal<CapacitorPage[]>([]);
   readonly loaded = signal(false);
   readonly failed = signal(false);
-  readonly selectedPageId = signal<string | null>(hostPageId());
+  /** Keeps the picked page while it reports, and falls back once it is gone. */
+  readonly selectedPageId = linkedSignal<CapacitorPage[], string | null>({
+    source: () => this.pages(),
+    computation: (pages, previous) =>
+      previous?.value && pages.some((page) => page.pageId === previous.value)
+        ? previous.value
+        : defaultCapacitorPage(pages, this.hostPageId),
+  });
   readonly selectedCallId = signal<number | null>(null);
   readonly filter = signal('');
   readonly onlyFailed = signal(false);
 
   readonly page = computed(() => {
-    const pages = this.pages();
     const wanted = this.selectedPageId();
-    return pages.find((page) => page.pageId === wanted) ?? pages[0] ?? null;
+    return this.pages().find((page) => page.pageId === wanted) ?? null;
   });
   readonly pageOptions = computed<SelectOption[]>(() =>
     this.pages().map((page) => ({
@@ -644,10 +691,24 @@ export class CapacitorInspector {
     const calls = this.shownCalls();
     return calls.find((call) => call.id === this.selectedCallId()) ?? null;
   });
+  /**
+   * The count, announced only when a filter changes. The visible count also
+   * changes with every call the app makes, which would make a screen reader
+   * talk while the user uses the app.
+   */
   readonly announcement = computed(() => {
-    const page = this.page();
-    return page ? `${this.shownCalls().length} of ${page.calls.length} calls shown` : '';
+    this.filter();
+    this.onlyFailed();
+    // The same counts after a filter change are still announced: a trailing
+    // no-break space flips so the live region sees a change.
+    this.announceFlip = !this.announceFlip;
+    const text = untracked(() => {
+      const page = this.page();
+      return page ? `${this.shownCalls().length} of ${page.calls.length} calls shown` : '';
+    });
+    return text && this.announceFlip ? `${text}\u00a0` : text;
   });
+  private announceFlip = true;
 
   constructor() {
     effect(() => {
@@ -660,6 +721,38 @@ export class CapacitorInspector {
   retry() {
     const client = this.rpc();
     if (client) void this.load(client);
+  }
+
+  select(id: number) {
+    this.selectedCallId.set(id);
+    // On a narrow panel the detail sits below the list, out of sight.
+    afterNextRender(
+      () => {
+        if (!globalThis.matchMedia?.('(max-width: 880px)').matches) return;
+        this.host.nativeElement
+          .querySelector('#cap-detail')
+          ?.scrollIntoView?.({ block: 'nearest' });
+      },
+      { injector: this.injector },
+    );
+  }
+
+  /** Arrow keys, Home and End move between calls. */
+  onListKey(event: KeyboardEvent) {
+    const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
+    if (!keys.includes(event.key)) return;
+    const rows = Array.from(
+      this.host.nativeElement.querySelectorAll<HTMLButtonElement>('[data-cap-call]'),
+    );
+    if (!rows.length) return;
+    const at = rows.indexOf(document.activeElement as HTMLButtonElement);
+    let next = at;
+    if (event.key === 'ArrowDown') next = Math.min(at + 1, rows.length - 1);
+    else if (event.key === 'ArrowUp') next = Math.max(at - 1, 0);
+    else if (event.key === 'Home') next = 0;
+    else next = rows.length - 1;
+    event.preventDefault();
+    rows[next]?.focus();
   }
 
   clearFilters() {
@@ -688,7 +781,8 @@ export class CapacitorInspector {
     try {
       const state = await client.scope('pangular').rpc.sharedState('capacitor');
       if (this.destroyRef.destroyed) return;
-      const apply = (value: unknown) => this.pages.set(capacitorPages(value));
+      const apply = (value: unknown) =>
+        this.pages.set(inFirstSeenOrder(capacitorPages(value), this.seen));
       apply(state.value());
       this.unsubscribe?.();
       this.unsubscribe = state.on('updated', apply);

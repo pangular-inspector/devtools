@@ -796,6 +796,8 @@ export class App implements OnInit, OnDestroy {
   readonly analogKnown = signal(false);
   /** Whether a Capacitor app reports, so the Capacitor tab has something to show. */
   readonly capacitorReporting = signal(false);
+  /** Whether the panel has read the Capacitor state yet, so the setup steps don't flash first. */
+  readonly capacitorKnown = signal(false);
   readonly nativePageId = signal<string | null>(null);
   readonly nativeKnown = signal(false);
   protected readonly scopeKey = computed(() =>
@@ -806,7 +808,9 @@ export class App implements OnInit, OnDestroy {
     if (view === 'analog') return this.analogKnown() && !this.analog() ? NOT_ANALOG : undefined;
     if (view === 'nativescript') return NATIVESCRIPT_SETUP;
     if (view === 'capacitor') {
-      return this.config().inspectors.capacitor && !this.capacitorReporting()
+      return this.config().inspectors.capacitor &&
+        this.capacitorKnown() &&
+        !this.capacitorReporting()
         ? CAPACITOR_SETUP
         : undefined;
     }
@@ -1080,6 +1084,7 @@ export class App implements OnInit, OnDestroy {
       const apply = (value: unknown) => {
         const reporting = capacitorPages(value).length > 0;
         this.capacitorReporting.set(reporting);
+        this.capacitorKnown.set(true);
         if (reporting && this.restoreCapacitor && tabEnabled('capacitor', this.config())) {
           this.restoreCapacitor = false;
           this.tab.set('capacitor');
@@ -1091,6 +1096,7 @@ export class App implements OnInit, OnDestroy {
       this.stopCapacitor = state.on('updated', apply);
     } catch {
       this.capacitorReporting.set(false);
+      this.capacitorKnown.set(true);
     }
   }
 
