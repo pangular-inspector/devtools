@@ -222,11 +222,13 @@ const REDACTED_IN_URL = /\[redacted\]|%5Bredacted%5D/gi;
 
 /**
  * A rule pattern for a recorded call: its path and query, without the origin, so it
- * matches the relative client URL and the absolute SSR URL. A redacted value becomes
- * `*`, because the real request carries the secret.
+ * matches the relative client URL and the absolute SSR URL. A relative URL stays as
+ * recorded, since `api/x` never contains `/api/x`. A redacted value becomes `*`,
+ * because the real request carries the secret.
  */
 function mockPattern(url: string): string {
-  return pathOf(url).replace(REDACTED_IN_URL, '*');
+  const absolute = /^([a-z][a-z\d+.-]*:|\/\/)/i.test(url);
+  return (absolute ? pathOf(url) : url).replace(REDACTED_IN_URL, '*');
 }
 
 /** The preview as a mock body, when it is complete JSON (the rule form takes JSON only). */
