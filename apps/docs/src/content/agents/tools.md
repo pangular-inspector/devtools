@@ -449,7 +449,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 ### Call a server route <ngmd-badge variant="alpha">Action</ngmd-badge>
 
-`analog-call-api` sends a request to a route on the running dev server, like `GET /api/v1/hello`, and returns the status, time and body. Secret keys, tokens and `Bearer` values in the body are masked. Reads: Vite plugin.
+`analog-call-api` sends a request to a route on the running dev server, like `GET /api/v1/hello`, and returns the status, time and body. `path` is a path on the dev server that starts with a single `/`, not a full URL. `POST`, `PUT`, `PATCH` and `DELETE` need `confirm: true`. Secret keys, tokens and `Bearer` values in the body are masked. Reads: Vite plugin.
 
 | Argument  | Required | Value                                                         |
 | --------- | -------- | ------------------------------------------------------------- |

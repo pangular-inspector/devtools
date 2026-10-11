@@ -407,6 +407,9 @@ describe('forms collector', () => {
       ]),
     ).toContain('Bearer [redacted]');
     expect(setupErrorOf(['plain error'])).toBeNull();
+    expect(setupErrorOf(['NG1050: not a forms code'])).toBeNull();
+    expect(setupErrorOf(['XNG01050 inside a longer token'])).toBeNull();
+    expect(setupErrorOf(['NG010500 too many digits'])).toBeNull();
     expect(
       setupErrorOf([
         new Error(

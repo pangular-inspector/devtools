@@ -128,10 +128,82 @@ function forBlocks(text: string): { start: number; end: number }[] {
   return blocks;
 }
 
+const VOID_ELEMENTS = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'source',
+  'track',
+  'wbr',
+]);
+
+/** Index just past the `>` that closes the start tag opened at `open`,
+ * skipping quoted attribute values. */
+function startTagEnd(text: string, open: number): number {
+  for (let i = open + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"' || ch === "'") {
+      const close = text.indexOf(ch, i + 1);
+      if (close === -1) return text.length;
+      i = close;
+    } else if (ch === '>') return i + 1;
+  }
+  return text.length;
+}
+
+/** Spans of every element that carries `*ngFor`, from its start tag (whose
+ * bindings also run per row) to its matching end tag. */
+function ngForBlocks(text: string): { start: number; end: number }[] {
+  const blocks: { start: number; end: number }[] = [];
+  const re = /\*ngFor\s*=/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    const open = text.lastIndexOf('<', match.index);
+    const tag = open === -1 ? null : /^<([A-Za-z][\w:-]*)/.exec(text.slice(open));
+    if (!tag) continue;
+    const name = tag[1].toLowerCase();
+    const headEnd = startTagEnd(text, open);
+    if (text[headEnd - 2] === '/' || VOID_ELEMENTS.has(name)) {
+      blocks.push({ start: open, end: headEnd });
+      continue;
+    }
+    const tags = new RegExp(`<(/?)${tag[1]}(?=[\\s/>])`, 'gi');
+    tags.lastIndex = headEnd;
+    let depth = 1;
+    let end = text.length;
+    let next: RegExpExecArray | null;
+    while ((next = tags.exec(text)) !== null) {
+      if (next[1]) {
+        if (--depth === 0) {
+          end = next.index;
+          break;
+        }
+      } else {
+        const nestedEnd = startTagEnd(text, next.index);
+        if (text[nestedEnd - 2] !== '/') depth++;
+        tags.lastIndex = nestedEnd;
+      }
+    }
+    blocks.push({ start: open, end });
+  }
+  return blocks;
+}
+
 function impurePipeInForFindings(template: TemplateSource, purity: PurityMap): PipeLintFinding[] {
   const findings: PipeLintFinding[] = [];
   const seen = new Set<number>();
-  for (const block of forBlocks(template.text)) {
+  const blocks = [
+    ...forBlocks(template.text).map((block) => ({ ...block, loop: 'an @for block' })),
+    ...ngForBlocks(template.text).map((block) => ({ ...block, loop: 'an *ngFor element' })),
+  ];
+  for (const block of blocks) {
     const body = template.text.slice(block.start, block.end);
     for (const { name, index } of pipeUsesIn(body)) {
       if (seen.has(block.start + index)) continue;
@@ -144,7 +216,7 @@ function impurePipeInForFindings(template: TemplateSource, purity: PurityMap): P
         pipe: name,
         file: template.file,
         line: template.lineAt(template.baseOffset + block.start + index),
-        message: `Impure pipe ${JSON.stringify(name)} runs on every change-detection pass, inside an @for block — potentially once per row, every check.`,
+        message: `Impure pipe ${JSON.stringify(name)} runs on every change-detection pass, inside ${block.loop} — potentially once per row, every check.`,
         fix: 'Precompute the value on the item before the loop, use a pure pipe, or memoize the transform yourself.',
       });
     }

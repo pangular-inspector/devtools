@@ -352,10 +352,12 @@ function captureHydrationWarnings() {
     console[level] = (...args: unknown[]) => {
       try {
         const text = args.map(textOf).join(' ');
-        const warning = redactMessage(text.slice(0, 5000)).slice(0, 1000);
-        if (isHydrationMessage(text) && !warnings.includes(warning)) {
-          warnings.push(warning);
-          if (warnings.length > MAX_WARNINGS) warnings.shift();
+        if (isHydrationMessage(text)) {
+          const warning = redactMessage(text.slice(0, 5000)).slice(0, 1000);
+          if (!warnings.includes(warning)) {
+            warnings.push(warning);
+            if (warnings.length > MAX_WARNINGS) warnings.shift();
+          }
         }
       } catch {}
       original.apply(console, args);

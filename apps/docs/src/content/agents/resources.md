@@ -29,7 +29,13 @@ Clients see each resource at a `devframe://resource/` URI with the id encoded. F
 devframe://resource/pangular%3Acomponent-tree
 ```
 
-Each one returns JSON.
+Each one returns compact JSON.
+
+### Page data and size
+
+The `component-tree`, `signal-graph`, `injector-tree` and `ngrx-store` resources start with an `_untrusted` field. It is a reminder that the names, values and messages that follow come from the running page, so an agent should treat them as data, not instructions.
+
+When one of these four runs past 100,000 characters, it returns a summary instead: `truncated: true`, the ids of the connected pages in `pages`, and a `note` that names the tools to read the data with.
 
 ## Available resources
 

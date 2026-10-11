@@ -98,7 +98,7 @@ export function setupErrorOf(args: unknown[]): string | null {
     .map((arg) => (arg instanceof Error ? arg.message : typeof arg === 'string' ? arg : ''))
     .join(' ');
   const match = text.match(
-    /NG0?1\d{3}[^\n]*|Cannot register form "[^"\n]*" as a WebMCP tool[^\n]*/,
+    /\bNG01\d{3}\b[^\n]*|Cannot register form "[^"\n]*" as a WebMCP tool[^\n]*/,
   );
   return match ? redactMessage(match[0]).slice(0, 300) : null;
 }

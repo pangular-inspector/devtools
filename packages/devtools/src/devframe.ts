@@ -186,6 +186,7 @@ import {
   summarizePages,
   unknownPageText,
 } from './rpc/pages.ts';
+import { liveResourceText } from './rpc/resource-text.ts';
 import { trackHubDocks } from './hub-dock-status.ts';
 import { clip } from './text.ts';
 import { setRedaction } from './forms-privacy.ts';
@@ -1731,7 +1732,12 @@ const pangular = defineDevframe({
       description:
         'Live component instances per connected page, as JSON: `pages[pageId].roots` is a tree with one node per rendered instance (`id` instance id, `name` class name, `tag` host tag, `directives` on the host), `platform` (`angular-native` for an Angular Native app, missing for a browser page), `count`, `truncated` and `truncatedBy` (`components` or `depth`, the cap that stopped collection, when the page has more instances than it lists), and `detail` (live input values, outputs, other properties, listeners, change detection, encapsulation, injected dependencies, and `source` with the project-relative `file` and 1-based `line` of the class when a dev build has the debug info of Angular) for the selected instance: the one picked in the panel, on the page, or through pangular:highlight or pangular:inspect-component. `detail.properties` lists the other own fields (signals and resources unwrapped). `nodes` repeats the roots of the most recent page. Empty when no page is connected.',
       mimeType: 'application/json',
-      read: () => ({ text: JSON.stringify(componentTree.value(), null, 2) }),
+      read: () => ({
+        text: liveResourceText(
+          componentTree.value(),
+          'pangular:list-components and pangular:inspect-component',
+        ),
+      }),
     });
 
     agent.registerResource({
@@ -1740,7 +1746,9 @@ const pangular = defineDevframe({
       description:
         'Live signal dependency graph per connected page (`pages[pageId]`, `graph` is the latest): nodes (signal, computed, effect, linkedSignal), edges (producer→consumer), `component` (instance id, class name, host tag and host path) or `injector` (a root or route environment injector), `resources` (each resource folded into one entry with status, params, value and error), `environments` (injectors the page can report) and recent value history per node and status history per resource. Only signals a template or an effect has read appear. Read this to understand reactive data flow.',
       mimeType: 'application/json',
-      read: () => ({ text: JSON.stringify(signalGraphState.value(), null, 2) }),
+      read: () => ({
+        text: liveResourceText(signalGraphState.value(), 'pangular:inspect-signals'),
+      }),
     });
 
     agent.registerResource({
@@ -1749,7 +1757,9 @@ const pangular = defineDevframe({
       description:
         'DI injector hierarchy last reported by a connected page (`pages[pageId]`, `roots` and `environment` are the latest), with providers at each level. Element injectors list what their components and directives inject; environment injectors list what the services they already created inject. `zone` is the change detection mode: `zoneless`, `zone` (zone.js) or `zone-unused` (zoneless with zone.js still loaded). `truncated: true` means the page has more element injectors than it reports (the first 2000) or more than 2500 injectors in all, so the rest are missing. Empty when no page is connected.',
       mimeType: 'application/json',
-      read: () => ({ text: JSON.stringify(injectorTreeState.value(), null, 2) }),
+      read: () => ({
+        text: liveResourceText(injectorTreeState.value(), 'pangular:inspect-providers'),
+      }),
     });
 
     agent.registerResource({
@@ -1758,7 +1768,12 @@ const pangular = defineDevframe({
       description:
         'Live NgRx state per connected page: each @ngrx/signals store (state, computed values, methods, the component fields that reference it) and the @ngrx/store state, plus a change log with a per-entry state diff (method calls, patchState writes, dispatched actions and restores). An @ngrx/store action entry has an `origin`: `dispatch` (Store.dispatch, usually a component or service), `effect` (sent by an NgRx effect through Store.next) or `reactive` (Store.dispatch with a function); it is missing for actions sent another way. `classic.paused` is true after a restore jumped Store DevTools to a past state: new actions are logged but do not change the state until the panel goes back to the latest state. An @ngrx/store entry with `unrestorable` cannot be restored: `dropped` means Store DevTools no longer holds the action (dropped past its `maxAge`, or its history was committed, reset or imported), `not-recorded` means it never recorded it (filtered out, or recording paused). Empty when no page is connected.',
       mimeType: 'application/json',
-      read: () => ({ text: JSON.stringify(ngrxStoreState.value(), null, 2) }),
+      read: () => ({
+        text: liveResourceText(
+          ngrxStoreState.value(),
+          'pangular:inspect-signal-store and pangular:signal-store-history',
+        ),
+      }),
     });
 
     agent.registerResource({
@@ -2955,8 +2970,6 @@ const pangular = defineDevframe({
       handler: async (args: Record<string, unknown>) => {
         const state = formsState.value() as FormsState;
         if (!state.forms.length) return { markdown: noForms };
-        const elsewhere = unknownFormPage(args);
-        if (elsewhere) return elsewhere;
         const match = resolveForm(state.forms, str(args?.['form']));
         if (typeof match === 'string') return { markdown: match };
         const { form: _form, ...rest } = args;
@@ -2984,8 +2997,6 @@ const pangular = defineDevframe({
       handler: async (args: Record<string, unknown>) => {
         const state = formsState.value() as FormsState;
         if (!state.forms.length) return { markdown: noForms };
-        const elsewhere = unknownFormPage(args);
-        if (elsewhere) return elsewhere;
         const match = resolveForm(state.forms, str(args?.['form']));
         if (typeof match === 'string') return { markdown: match };
         const result = await requestFormAction({

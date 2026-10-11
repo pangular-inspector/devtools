@@ -350,13 +350,22 @@ export async function registerAnalog(
       type: 'object',
       required: ['path'],
       properties: {
-        path: { type: 'string' },
+        path: {
+          type: 'string',
+          description:
+            'Path on the dev server, starting with a single /, with an optional query string, e.g. /api/v1/hello?id=1. Not a full URL: the request always goes to the dev server.',
+        },
         method: {
           type: 'string',
           enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
+          description: 'HTTP method. Defaults to GET.',
         },
-        body: { description: 'JSON body.' },
-        confirm: { type: 'boolean' },
+        body: { description: 'Request body, sent as JSON with content-type application/json.' },
+        confirm: {
+          type: 'boolean',
+          description:
+            'Must be true for POST, PUT, PATCH and DELETE, which can change data. Not needed for GET, HEAD and OPTIONS.',
+        },
       },
     },
     handler: async (args: ApiRequest) => {
