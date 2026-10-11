@@ -145,7 +145,8 @@ export function serialize(value: unknown, limits: SerializeLimits = {}): unknown
         }
         setKey(out, safeKey(key, out), walkNamed(key, item, level + 1));
       }
-      if (keys.length > maxKeys) out['…'] = `${keys.length - maxKeys} more`;
+      // Through safeKey, so the marker never replaces a real `…` key.
+      if (keys.length > maxKeys) setKey(out, safeKey('…', out), `${keys.length - maxKeys} more`);
       return out;
     } finally {
       path.delete(v);
