@@ -848,6 +848,9 @@ const pangular = defineDevframe({
       if (stale.length) forgetSignalPages(stale.map(([id]) => id));
       if (expireComponentPages(componentPages, Date.now(), liveTtl)) applyComponentPages();
       if (expireCdPages(cdPages, Date.now(), liveTtl)) applyCd();
+      for (const id of goneCdPages) {
+        if (!componentPages.has(id) && !injectorPages.has(id)) goneCdPages.delete(id);
+      }
       const staleInjectors = [...injectorPages].filter(
         ([id, p]) => Date.now() - p.reportedAt > liveTtl(id),
       );
@@ -1190,6 +1193,26 @@ const pangular = defineDevframe({
       },
     });
 
+    // A tab whose connection dropped gets no change detection record request,
+    // so its report goes at once and the tool does not count it as connected
+    // until it reports again. Bound from the component, injector and change
+    // detection reports, the ones the tool reads tabs from.
+    const cdPages = new Map<string, CdPage>();
+    const goneCdPages = new Set<string>();
+    let applyCd = () => {};
+    const cdSessions = trackPageSessions(ctx.rpc, (pageIds) => {
+      let removed = false;
+      for (const pageId of pageIds) {
+        goneCdPages.add(pageId);
+        removed = cdPages.delete(pageId) || removed;
+      }
+      if (removed) applyCd();
+    });
+    const cdSeen = (pageId: string) => {
+      cdSessions.bind(pageId);
+      goneCdPages.delete(pageId);
+    };
+
     register({
       name: 'push-component-tree',
       type: 'action',
@@ -1197,16 +1220,16 @@ const pangular = defineDevframe({
       handler: (report: unknown) => {
         if (!isComponentReport(report)) return;
         componentPages.set(report.pageId, toComponentPage(report));
+        cdSeen(report.pageId);
         applyComponentPages();
         for (const check of [...componentWaiters]) check();
       },
     });
 
-    const cdPages = new Map<string, CdPage>();
     const cdState = await my.rpc.sharedState('change-detection', {
       initialValue: { pages: {} } as CdState,
     });
-    const applyCd = () =>
+    applyCd = () =>
       cdState.mutate((draft) => {
         draft.pages = Object.fromEntries(cdPages);
       });
@@ -1228,6 +1251,7 @@ const pangular = defineDevframe({
         const page = toCdPage(report, limits.cdCycles);
         if (!page) return;
         cdPages.set(page.pageId, page);
+        cdSeen(page.pageId);
         applyCd();
       },
     });
@@ -1240,6 +1264,7 @@ const pangular = defineDevframe({
         const page = typeof pageId === 'string' ? cdPages.get(pageId) : undefined;
         if (!page) return { known: false };
         cdPages.set(page.pageId, { ...page, reportedAt: Date.now() });
+        cdSeen(page.pageId);
         return { known: true };
       },
     });
@@ -1270,6 +1295,7 @@ const pangular = defineDevframe({
         const page = typeof pageId === 'string' ? componentPages.get(pageId) : undefined;
         if (!page) return { known: false };
         componentPages.set(page.pageId, { ...page, reportedAt: Date.now() });
+        cdSeen(page.pageId);
         return { known: true };
       },
     });
@@ -1469,6 +1495,7 @@ const pangular = defineDevframe({
           ...(zone ? { zone } : {}),
           reportedAt: Date.now(),
         });
+        cdSeen(pageId);
         applyInjectorPages();
       },
     });
@@ -1481,6 +1508,7 @@ const pangular = defineDevframe({
         const page = typeof pageId === 'string' ? injectorPages.get(pageId) : undefined;
         if (!page) return { known: false };
         injectorPages.set(page.pageId, { ...page, reportedAt: Date.now() });
+        cdSeen(page.pageId);
         return { known: true };
       },
     });
@@ -1887,10 +1915,13 @@ const pangular = defineDevframe({
       handler: async (args: { record?: string; page?: string; limit?: number }) => {
         const unknown =
           args?.page &&
-          cdUnknownPageText(args.page, cdState.value() as CdState, [
-            ...componentPages.values(),
-            ...injectorPages.values(),
-          ]);
+          cdUnknownPageText(
+            args.page,
+            cdState.value() as CdState,
+            [...componentPages.values(), ...injectorPages.values()].filter(
+              (page) => !goneCdPages.has(page.pageId),
+            ),
+          );
         if (unknown) return { markdown: unknown };
         if (args?.record === 'start' || args?.record === 'stop' || args?.record === 'clear') {
           requestCdRecord({
