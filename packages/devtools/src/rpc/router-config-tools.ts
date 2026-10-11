@@ -46,6 +46,12 @@ export interface LintFinding {
 const MAX_LIST = 400;
 const EMAIL_IN_URL = /[^/?&=]+@[^/?&=]+\.[a-z]{2,}/i;
 
+/** `url` with each email address in it, plain or with `@` encoded as
+ * `%40`, replaced by `[email]`. */
+function maskEmails(url: string): string {
+  return url.replace(/[^/?&=]+(?:@|%40)[^/?&=]+\.[a-z]{2,}/gi, '[email]');
+}
+
 function walk(
   nodes: RouteNode[] | undefined,
   visit: (node: RouteNode, parents: RouteNode[]) => void,
@@ -533,7 +539,7 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
     findings.push({
       rule: 'email-in-url',
       severity: 'warning',
-      route: emailed.url.replace(new RegExp(EMAIL_IN_URL.source, 'gi'), '[email]'),
+      route: maskEmails(emailed.url),
       message: 'An email address appears in a URL; URLs end up in history, logs and referrers.',
       fix: 'Pass it in navigation state or a service instead.',
       angular: 'silent',
@@ -558,8 +564,8 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
       findings.push({
         rule: 'redirect-from-query',
         severity: 'info',
-        route: target,
-        message: `Navigation #${nav.id} went to a URL taken from a query param of ${code(from)}.`,
+        route: maskEmails(target),
+        message: `Navigation #${nav.id} went to a URL taken from a query param of ${code(maskEmails(from))}.`,
         fix: 'Validate return URLs against an allow list before navigating.',
         angular: 'silent',
       });
