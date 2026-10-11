@@ -110,6 +110,24 @@ describe('RouteTimeline Clear', () => {
     answer({ ok: true });
     await settle(fixture);
     expect(status(fixture)).not.toContain('Navigations cleared.');
+    expect(status(fixture)).not.toContain('Clearing');
+  });
+
+  it('says it is clearing first, so a second clear in a row is announced again', async () => {
+    let answer!: (value: unknown) => void;
+    const fixture = mount(
+      page({ navigations }),
+      () => new Promise((resolve) => (answer = resolve)),
+    );
+    await settle(fixture);
+    for (let i = 0; i < 2; i++) {
+      clearButton(fixture).click();
+      await settle(fixture);
+      expect(status(fixture)).toBe('Clearing navigations…');
+      answer({ ok: true });
+      await settle(fixture);
+      expect(status(fixture)).toBe('Navigations cleared.');
+    }
   });
 
   it('is off, with the note, when router actions are turned off', async () => {

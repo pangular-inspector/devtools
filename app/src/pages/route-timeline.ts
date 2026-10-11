@@ -774,6 +774,9 @@ export class RouteTimeline {
   async clearNavigations() {
     const client = this.rpc();
     const pageId = this.pageId();
+    const clearing = 'Clearing navigations…';
+    // A new message first, so a second clear in a row is announced too.
+    this.message.set(clearing);
     let text: string;
     try {
       if (!client) throw new Error('No connection');
@@ -784,6 +787,7 @@ export class RouteTimeline {
     }
     // The answer is about the page the user may have left; keep it off the page now shown.
     if (pageId === this.pageId()) this.message.set(text);
+    else if (this.message() === clearing) this.message.set('');
   }
 
   exportJson() {
