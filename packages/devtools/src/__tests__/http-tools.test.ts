@@ -150,6 +150,16 @@ describe('list-http-calls text', () => {
     expect(isFailedCall(call())).toBe(false);
   });
 
+  it('falls back to the default limit when `limit` is not a number', () => {
+    for (const limit of ['abc', Number.NaN, null, Infinity]) {
+      const text = listHttpCallsText(mixed(), { limit: limit as never }, NOW);
+      expect(rowsOf(text)).toHaveLength(7);
+      expect(text).not.toContain('none match');
+    }
+    expect(rowsOf(listHttpCallsText(mixed(), { limit: '2' as never }, NOW))).toHaveLength(2);
+    expect(rowsOf(listHttpCallsText(mixed(), { limit: -5 }, NOW))).toHaveLength(1);
+  });
+
   it('adds response previews only when asked', () => {
     expect(listHttpCallsText(mixed(), {}, NOW)).not.toContain('Response previews');
     const text = listHttpCallsText(mixed(), { preview: true }, NOW);

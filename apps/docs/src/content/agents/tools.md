@@ -112,7 +112,7 @@ Markers follow the id:
 | `[directives: RouterLinkActive, ...]` | The other directives on the host.                                                                           |
 | `(+3 below)`                          | `depth` hides 3 instances under this one.                                                                   |
 
-The outline carries no input or property values. Pass an id to `inspect-component` for those, or to `highlight` to show the instance. The answer stops at 20,000 characters and says how to narrow it, and it says when the page's tree stopped at a [limit](../inspectors/components.md#selection).
+Without `page`, it lists the most recent tab that has a component tree and names the other tabs that have one. The outline carries no input or property values. Pass an id to `inspect-component` for those, or to `highlight` to show the instance. The answer stops at 20,000 characters and says how to narrow it, and it says when the page's tree stopped at a [limit](../inspectors/components.md#selection).
 
 ### defer-blocks
 
@@ -135,7 +135,7 @@ Change detection cycles recorded with Angular's profiler: the slowest components
 | `record` | no       | `start` starts a fresh recording, `stop` stops it and keeps the cycles, `clear` empties it. Leave out to read. |
 | `limit`  | no       | Rows per list. Default 10, at most 50.                                                                         |
 
-Without `page`, it reads the page that is recording, and `record` goes to every connected page. The answer starts with the change detection mode of the page it reports on: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many.
+Without `page`, it reads the page that is recording, and `record` goes to every connected page. A `page` that names no connected tab gets the list of connected tabs. A connected tab that has not recorded yet gets a hint to start a recording there. The answer starts with the change detection mode of the page it reports on: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many.
 
 ### inspect-signals
 

@@ -70,6 +70,73 @@ describe('agent tools', () => {
     expect(await push('ping-change-detection', 'p1')).toEqual({ known: false });
   });
 
+  it('answer change detection for an unknown page with the connected tabs', async () => {
+    const { push, call } = await boot();
+    await push('push-injector-tree', {
+      pageId: 'live',
+      roots: [injectorRoot('app-root')],
+      environment: [],
+      zone: 'zone',
+    });
+    const reading = await call('change-detection', '', { page: 'gone' });
+    expect(reading).toMatch(
+      /^No page `gone` is reporting change detection\. Pages that report change detection: `live`\./,
+    );
+    // Recording on a closed tab is not reported as started.
+    const recording = await call('change-detection', '', { page: 'gone', record: 'start' });
+    expect(recording).toMatch(/^No page `gone` is reporting change detection/);
+    expect(recording).not.toMatch(/Recording started/);
+    // A connected tab that has not recorded yet can still start a recording.
+    expect(await call('change-detection', '', { page: 'live', record: 'start' })).toMatch(
+      /Recording started/,
+    );
+    expect(await call('change-detection', '', { page: 'live' })).toContain(
+      'Page `live` has no change detection recording yet.',
+    );
+  });
+
+  it('treat a tab whose connection dropped as unknown to change detection', async () => {
+    const { ctx, push, call } = await boot();
+    const host = ctx.rpc as unknown as {
+      getCurrentRpcSession: () => unknown;
+      _emitSessionDisconnected: (meta: { id: number }) => void;
+    };
+    const cdReport = (pageId: string) => ({
+      pageId,
+      supported: true,
+      recording: true,
+      startedAt: 1,
+      dropped: 0,
+      cycles: [{ id: 1, at: 1, ms: 2, passes: 1, checks: 1, components: [] }],
+      components: [{ name: 'Cart', checks: 1, ms: 2, maxMs: 2, cycles: 1 }],
+      hosts: {},
+    });
+    host.getCurrentRpcSession = () => ({ meta: { id: 1 } });
+    await push('push-injector-tree', {
+      pageId: 'tab-1',
+      roots: [injectorRoot('app-root')],
+      environment: [],
+      zone: 'zone',
+    });
+    await push('push-change-detection', cdReport('tab-1'));
+    host.getCurrentRpcSession = () => ({ meta: { id: 2 } });
+    await push('push-change-detection', cdReport('tab-2'));
+
+    // tab-1 stays loaded but its connection drops: no record request reaches it.
+    host._emitSessionDisconnected({ id: 1 });
+    const start = await call('change-detection', '', { page: 'tab-1', record: 'start' });
+    expect(start).toMatch(/^No page `tab-1` is reporting change detection/);
+    expect(start).toContain('`tab-2`');
+    expect(await call('change-detection', '', { page: 'tab-1' })).toMatch(/^No page `tab-1`/);
+
+    // Once it reports again on a new connection, it is known again.
+    host.getCurrentRpcSession = () => ({ meta: { id: 3 } });
+    await push('ping-injector-tree', 'tab-1');
+    expect(await call('change-detection', '', { page: 'tab-1', record: 'start' })).toMatch(
+      /Recording started/,
+    );
+  });
+
   it('report the zone mode of the page that recorded, not the latest tab', async () => {
     vi.useFakeTimers();
     const { push, call } = await boot();

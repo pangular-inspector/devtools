@@ -148,6 +148,14 @@ describe('signalGraphText', () => {
     );
   });
 
+  it('keeps the note and no stray JSON when the budget is smaller than the note', () => {
+    const text = signalGraphText(bigGraph(20, 50), {}, 300);
+    expect(text).toMatch(/^_Cut to fit 300 characters/);
+    expect(text).toContain('No part of the graph fits.');
+    expect(text).toContain('Pass `node`');
+    expect(text).not.toContain('"nodes"');
+  });
+
   it('drops history with `history: false`', () => {
     const view = JSON.parse(signalGraphText(smallGraph(), { history: false })) as SignalGraph;
     expect(view.history).toBeUndefined();
@@ -185,6 +193,18 @@ describe('inspect-signals tool', () => {
     expect(text.startsWith(`${UNTRUSTED}\n\nNo signal graph for \`app-other\``)).toBe(true);
     expect(text.length).toBeLessThanOrEqual(SIGNAL_TOOL_MAX);
     expect(text).toMatch(/Cut to fit/);
+  });
+});
+
+describe('inspect-signals tool with a long selector', () => {
+  it('keeps the cut note when the selector it echoes is long', async () => {
+    const { push, call } = await boot();
+    await push('push-signal-graph', { pageId: 'p1', ...bigGraph() });
+    const text = await call('inspect-signals', { selector: 'x'.repeat(19_800) });
+    expect(text.length).toBeLessThanOrEqual(SIGNAL_TOOL_MAX);
+    // The answer starts with the untrusted-data notice, then the heading.
+    expect(text).toMatch(/No signal graph for `x{200}…`/);
+    expect(text).toMatch(/Cut to fit [\d,]+ characters/);
   });
 });
 
