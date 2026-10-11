@@ -604,7 +604,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       background: var(--text-3);
     }
     .record.on {
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
     }
     .record.on .rec-dot {
       background: var(--accent);
@@ -740,10 +740,10 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
     }
     .chip.impure,
     .chip.warn {
-      @include m.soft(var(--warn));
+      @include m.tint(warn);
     }
     .chip.live {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .pill {
       display: inline-flex;
@@ -974,10 +974,10 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       text-transform: uppercase;
     }
     .severity[data-tone='warning'] {
-      @include m.soft(var(--warn));
+      @include m.tint(warn);
     }
     .severity[data-tone='error'] {
-      @include m.soft(var(--danger));
+      @include m.tint(danger);
     }
     .rule {
       color: var(--accent);

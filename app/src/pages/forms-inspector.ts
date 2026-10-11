@@ -697,7 +697,7 @@ function countFields(node: FormFieldNode): number {
       border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
       border-radius: 99px;
       background: color-mix(in srgb, var(--danger) 12%, var(--surface));
-      color: var(--danger);
+      color: var(--danger-text);
       font-size: 11px;
       font-weight: 600;
       line-height: 18px;
@@ -878,7 +878,7 @@ function countFields(node: FormFieldNode): number {
       border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
       border-radius: 99px;
       background: color-mix(in srgb, var(--ok) 12%, var(--surface));
-      color: var(--ok);
+      color: var(--ok-text);
       font-size: 11px;
       font-weight: 600;
       letter-spacing: 0.04em;
@@ -891,12 +891,12 @@ function countFields(node: FormFieldNode): number {
     .badge[data-status='INVALID'] {
       border-color: color-mix(in srgb, var(--danger) 30%, transparent);
       background: color-mix(in srgb, var(--danger) 12%, var(--surface));
-      color: var(--danger);
+      color: var(--danger-text);
     }
     .badge[data-status='PENDING'] {
       border-color: color-mix(in srgb, var(--warn) 30%, transparent);
       background: color-mix(in srgb, var(--warn) 12%, var(--surface));
-      color: var(--warn);
+      color: var(--warn-text);
     }
     .badge[data-status='DISABLED'] {
       border-color: var(--border-strong);
@@ -1209,7 +1209,7 @@ function countFields(node: FormFieldNode): number {
     .flags span.warn {
       border-color: color-mix(in srgb, var(--warn) 30%, transparent);
       background: color-mix(in srgb, var(--warn) 12%, var(--surface));
-      color: var(--warn);
+      color: var(--warn-text);
     }
     .errors {
       min-width: 180px;

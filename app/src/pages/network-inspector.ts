@@ -1219,7 +1219,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       flex-direction: column;
       align-items: flex-start;
       gap: 4px;
-      @include m.soft(var(--danger));
+      @include m.tint(danger);
     }
     .state.error strong {
       font-weight: 600;
@@ -1696,13 +1696,13 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       white-space: nowrap;
     }
     .tag.server {
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
     }
     .tag.fault {
-      @include m.soft(var(--danger));
+      @include m.tint(danger);
     }
     .tag.mock {
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
     }
     .tag.rule-ref {
       gap: 4px;
@@ -1713,10 +1713,10 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       font-family: var(--font-mono);
     }
     .tag.on {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .tag.off-tag {
-      @include m.soft(var(--warn));
+      @include m.tint(warn);
     }
     pre {
       margin: 0;

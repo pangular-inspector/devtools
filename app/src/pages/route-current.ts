@@ -254,7 +254,7 @@ interface OutletRow {
       border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
       border-radius: var(--radius-sm);
       background: color-mix(in srgb, var(--warn) 10%, transparent);
-      color: var(--warn);
+      color: var(--warn-text);
       font-size: 13px;
     }
     .pending-text {

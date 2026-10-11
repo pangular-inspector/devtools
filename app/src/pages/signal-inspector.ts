@@ -1006,7 +1006,7 @@ const KIND_COLORS: Record<string, string> = {
       font-variant-numeric: tabular-nums;
     }
     .changed-badge {
-      @include m.soft(var(--warn));
+      @include m.tint(warn);
     }
     .detail-panel {
       margin-top: 8px;
@@ -1057,13 +1057,13 @@ const KIND_COLORS: Record<string, string> = {
       border-radius: 99px;
     }
     .tone-ok {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .tone-warn {
-      @include m.soft(var(--warn));
+      @include m.tint(warn);
     }
     .tone-danger {
-      @include m.soft(var(--danger));
+      @include m.tint(danger);
     }
     .tone-neutral {
       color: var(--text-2);

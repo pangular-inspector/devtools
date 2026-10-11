@@ -148,7 +148,7 @@ import {
       border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
       border-radius: 99px;
       background: color-mix(in srgb, var(--ok) 12%, transparent);
-      color: var(--ok);
+      color: var(--ok-text);
     }
     .findings {
       display: grid;

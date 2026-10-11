@@ -198,7 +198,7 @@ export class FormsSubmit {
       margin-bottom: 4px;
       border-radius: 50%;
       background: color-mix(in srgb, var(--ok) 12%, transparent);
-      color: var(--ok);
+      color: var(--ok-text);
     }
     .summary {
       margin: 0;

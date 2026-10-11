@@ -63,10 +63,12 @@ type TreeView = 'element' | 'environment';
 
 const NULL_ID = 'inj-null';
 
+// Text tones: these color the kind letter and badge on a 14 to 16% tint of
+// themselves, so they use the stronger `-text` tokens.
 const KIND_TONE: Record<string, string> = {
-  component: 'var(--accent)',
+  component: 'var(--accent-text)',
   directive: 'var(--directive)',
-  environment: 'var(--ok)',
+  environment: 'var(--ok-text)',
   null: 'var(--text-3)',
 };
 
@@ -527,7 +529,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       font-size: 13px;
 
       @include m.light {
-        --directive: #1d4ed8;
+        --directive: #1e40af;
       }
     }
     .mono {
@@ -889,7 +891,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       font-size: 11px;
     }
     .count.provides {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .count svg {
       width: 11px;
@@ -1067,7 +1069,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       line-height: 16px;
     }
     .kind-flag {
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
     }
     .dep-meta {
       display: flex;
@@ -1251,7 +1253,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       font-size: 11px;
       padding: 1px 8px;
       border-radius: 99px;
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
       border-width: 1px;
       border-style: solid;
     }

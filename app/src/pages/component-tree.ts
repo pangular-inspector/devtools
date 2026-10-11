@@ -873,14 +873,14 @@ function bare(name: string): string {
       line-height: 18px;
     }
     .defer-state-complete {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .defer-state-error {
-      @include m.soft(var(--danger));
+      @include m.tint(danger);
     }
     .defer-state-loading,
     .defer-state-placeholder {
-      @include m.soft(var(--warn));
+      @include m.tint(warn);
     }
     .triggers {
       min-width: 0;
@@ -1067,7 +1067,7 @@ function bare(name: string): string {
     .badge {
       padding: 2px 8px;
       border-radius: 99px;
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.06em;
@@ -1185,7 +1185,7 @@ function bare(name: string): string {
       font-size: 12px;
     }
     .chip.on {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .chip-note {
       color: var(--text-2);
@@ -1318,14 +1318,14 @@ function bare(name: string): string {
       flex: none;
       padding: 1px 8px;
       border-radius: 99px;
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
     .kind-flag.directive {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .row-main {
       display: flex;

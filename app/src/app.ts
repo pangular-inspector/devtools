@@ -163,6 +163,7 @@ function readView(): View | null {
   selector: 'app-root',
   host: {
     '[style.--accent]': 'viewAccent()',
+    '[style.--accent-text]': 'viewAccent()',
     '(window:message)': 'inspectFromPanel($event)',
   },
   imports: [

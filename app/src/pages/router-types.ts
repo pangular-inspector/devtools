@@ -279,17 +279,17 @@ export const SHARED_STYLES = `
   .badge[data-tone='good'] {
     border-color: color-mix(in srgb, var(--ok) 30%, transparent);
     background: color-mix(in srgb, var(--ok) 12%, transparent);
-    color: var(--ok);
+    color: var(--ok-text);
   }
   .badge[data-tone='warn'] {
     border-color: color-mix(in srgb, var(--warn) 30%, transparent);
     background: color-mix(in srgb, var(--warn) 12%, transparent);
-    color: var(--warn);
+    color: var(--warn-text);
   }
   .badge[data-tone='bad'] {
     border-color: color-mix(in srgb, var(--danger) 30%, transparent);
     background: color-mix(in srgb, var(--danger) 12%, transparent);
-    color: var(--danger);
+    color: var(--danger-text);
   }
   button.small {
     display: inline-flex;

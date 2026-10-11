@@ -329,17 +329,17 @@ export const FORMS_STYLES = `
   .tag[data-tone='ok'] {
     border-color: color-mix(in srgb, var(--ok) 30%, transparent);
     background: color-mix(in srgb, var(--ok) 12%, var(--surface));
-    color: var(--ok);
+    color: var(--ok-text);
   }
   .tag[data-tone='warn'] {
     border-color: color-mix(in srgb, var(--warn) 30%, transparent);
     background: color-mix(in srgb, var(--warn) 12%, var(--surface));
-    color: var(--warn);
+    color: var(--warn-text);
   }
   .tag[data-tone='bad'] {
     border-color: color-mix(in srgb, var(--danger) 30%, transparent);
     background: color-mix(in srgb, var(--danger) 12%, var(--surface));
-    color: var(--danger);
+    color: var(--danger-text);
   }
   .status {
     margin: 0;
