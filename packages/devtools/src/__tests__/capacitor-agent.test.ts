@@ -1,9 +1,11 @@
 import { createHostContext } from 'devframe/node';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import pangular, { createPangular } from '../devframe.ts';
 import {
+  capacitorState,
   expireCapacitorPages,
   mergeCapacitorReport,
+  patchCapacitorState,
   toCapacitorReport,
   type CapacitorCall,
   type CapacitorInfo,
@@ -328,5 +330,74 @@ describe('capacitor page store', () => {
       calls: [call(1), { id: 'two' }, { ...call(3), status: 'weird' }],
     });
     expect(parsed?.calls.map((c) => c.id)).toEqual([1]);
+  });
+});
+
+describe('capacitor pages over time', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('drops a page that stopped reporting', async () => {
+    vi.useFakeTimers();
+    const { push, state } = await boot();
+    await push('push-capacitor', report());
+    expect(Object.keys((await state()).pages)).toEqual(['cap1']);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect((await state()).pages).toEqual({});
+  });
+
+  it('drops a page the moment its connection closes', async () => {
+    const { ctx, push, state } = await boot();
+    const host = ctx.rpc as unknown as {
+      getCurrentRpcSession: () => unknown;
+      _emitSessionDisconnected: (meta: { id: number }) => void;
+    };
+    host.getCurrentRpcSession = () => ({ meta: { id: 1 } });
+    await push('push-capacitor', report());
+    host.getCurrentRpcSession = () => ({ meta: { id: 2 } });
+    await push('push-capacitor', report({ pageId: 'cap2' }));
+
+    host._emitSessionDisconnected({ id: 1 });
+    expect(Object.keys((await state()).pages)).toEqual(['cap2']);
+  });
+});
+
+describe('patchCapacitorState', () => {
+  it('changes only the calls a push carries, and keeps the rest as they were', () => {
+    const pages = new Map<string, CapacitorPage>();
+    mergeCapacitorReport(pages, report({ calls: [call(1), call(2, { status: 'pending' })] }), 50);
+    const draft = capacitorState(pages);
+    const shown = draft.pages['cap1'];
+    const first = shown.calls[0];
+    const info = shown.info;
+
+    const partial = report({
+      full: false,
+      info: undefined,
+      listeners: undefined,
+      calls: [call(2)],
+    });
+    mergeCapacitorReport(pages, partial, 50);
+    patchCapacitorState(draft, pages, partial);
+
+    expect(draft.pages['cap1']).toBe(shown);
+    expect(shown.calls[0]).toBe(first);
+    expect(shown.info).toBe(info);
+    expect(shown.calls.map((c) => [c.id, c.status])).toEqual([
+      [1, 'ok'],
+      [2, 'ok'],
+    ]);
+  });
+
+  it('removes the calls the server dropped to stay under the limit', () => {
+    const pages = new Map<string, CapacitorPage>();
+    mergeCapacitorReport(pages, report({ calls: [call(1), call(2)] }), 2);
+    const draft = capacitorState(pages);
+    const partial = report({ full: false, info: undefined, calls: [call(3)] });
+    mergeCapacitorReport(pages, partial, 2);
+    patchCapacitorState(draft, pages, partial);
+
+    expect(draft.pages['cap1'].calls.map((c) => c.id)).toEqual([2, 3]);
+    expect(draft.pages['cap1'].dropped).toBe(1);
   });
 });

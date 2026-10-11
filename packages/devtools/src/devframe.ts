@@ -10,6 +10,7 @@ import {
   capacitorState,
   expireCapacitorPages,
   mergeCapacitorReport,
+  patchCapacitorState,
   toCapacitorReport,
   type CapacitorPage,
   type CapacitorState,
@@ -525,7 +526,9 @@ const pangular = defineDevframe({
         if (!report) return { known: true };
         capacitorSessions.bind(report.pageId);
         const answer = mergeCapacitorReport(capacitorPages, report, limits.capacitorCalls);
-        if (answer.known) applyCapacitor();
+        if (answer.known) {
+          capacitorShared.mutate((draft) => patchCapacitorState(draft, capacitorPages, report));
+        }
         return answer;
       },
     });

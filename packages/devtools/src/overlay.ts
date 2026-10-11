@@ -373,7 +373,11 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   const pipes = on.pipes ? attachPipes(my, pageId, getNg) : null;
   const http = on.http ? attachHttp(my, pageId, tickMs) : null;
   const capacitor = on.capacitor
-    ? attachCapacitor(my, pageId, { maxCalls: limits.capacitorCalls, devtoolsUrl: metaUrl })
+    ? attachCapacitor(my, pageId, {
+        maxCalls: limits.capacitorCalls,
+        tickMs: limits.refreshMs,
+        devtoolsUrl: metaUrl,
+      })
     : null;
   const cd = on.components
     ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs)

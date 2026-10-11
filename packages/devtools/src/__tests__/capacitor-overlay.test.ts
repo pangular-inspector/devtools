@@ -177,4 +177,117 @@ describe('attachCapacitor', () => {
     expect(hook.calls().map((call) => call.plugin)).toEqual(['SplashScreen', 'StatusBar']);
     hook.stop();
   });
+
+  it('starts reporting when Capacitor shows up a little after the overlay, and counts dropped calls', async () => {
+    const rpc = fakeRpc();
+    const win: { Capacitor?: ReturnType<typeof fakeCapacitor> } = {};
+    const capacitor = attachCapacitor(rpc.my, 'cap1', { maxCalls: 2, tickMs: 1000, win });
+    stops.push(capacitor.stop);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(rpc.pushes()).toEqual([]);
+
+    win.Capacitor = fakeCapacitor();
+    await vi.advanceTimersByTimeAsync(1000);
+    for (const method of ['get', 'set', 'remove']) {
+      await win.Capacitor.nativePromise('Preferences', method, {});
+    }
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(rpc.pushes().flatMap((r) => r.calls.map((c) => c.method))).toContain('remove');
+    expect(rpc.pushes().at(-1)?.dropped).toBe(1);
+  });
+
+  it('gives up on a page without Capacitor after a few checks, wrapping nothing', async () => {
+    const rpc = fakeRpc();
+    const win: { Capacitor?: unknown; __pangularCapacitorHook?: unknown } = {};
+    const capacitor = attachCapacitor(rpc.my, 'cap1', { maxCalls: 50, tickMs: 1000, win });
+    stops.push(capacitor.stop);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(vi.getTimerCount()).toBe(0);
+
+    win.Capacitor = fakeCapacitor();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(rpc.calls).toEqual([]);
+    expect(win.__pangularCapacitorHook).toBeUndefined();
+
+    capacitor.leave();
+    // Nothing went out, so there is nothing to forget.
+    expect(rpc.calls).toEqual([]);
+  });
+
+  it('backs off after a failed push instead of resending at once', async () => {
+    const rpc = fakeRpc();
+    rpc.my.rpc.call.mockImplementation(async (name: string, arg: unknown) => {
+      rpc.calls.push([name, arg]);
+      throw new Error('socket closed');
+    });
+    const cap = fakeCapacitor();
+    attach(rpc, { Capacitor: cap });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(rpc.pushes()).toHaveLength(1);
+
+    // A change right after the failure waits for the backoff.
+    await cap.nativePromise('Preferences', 'get', {});
+    await vi.advanceTimersByTimeAsync(900);
+    expect(rpc.pushes()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(rpc.pushes()).toHaveLength(2);
+
+    // The waits double: about 2s, then 4s.
+    await vi.advanceTimersByTimeAsync(1_700);
+    expect(rpc.pushes()).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(rpc.pushes()).toHaveLength(3);
+  });
+
+  it('stops pushing when the server has no push-capacitor function', async () => {
+    const rpc = fakeRpc();
+    rpc.my.rpc.call.mockImplementation(async (name: string, arg: unknown) => {
+      rpc.calls.push([name, arg]);
+      throw new Error('[birpc] function "pangular:push-capacitor" not found');
+    });
+    const cap = fakeCapacitor();
+    attach(rpc, { Capacitor: cap });
+    await vi.advanceTimersByTimeAsync(0);
+    await cap.nativePromise('Preferences', 'get', {});
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(rpc.pushes()).toHaveLength(1);
+  });
+
+  it('pauses while the tab is hidden', async () => {
+    const rpc = fakeRpc();
+    const events = new EventTarget();
+    const doc = {
+      visibilityState: 'hidden' as DocumentVisibilityState,
+      addEventListener: events.addEventListener.bind(events),
+      removeEventListener: events.removeEventListener.bind(events),
+    };
+    const capacitor = attachCapacitor(rpc.my, 'cap1', {
+      maxCalls: 50,
+      win: { Capacitor: fakeCapacitor() },
+      doc,
+    });
+    stops.push(capacitor.stop);
+    await vi.advanceTimersByTimeAsync(0);
+    const first = rpc.pushes().length;
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(rpc.pushes()).toHaveLength(first);
+
+    doc.visibilityState = 'visible';
+    events.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(rpc.pushes().length).toBeGreaterThan(first);
+  });
+
+  it("runs its timers and pushes outside Angular's zone", async () => {
+    const run = vi.fn((fn: () => unknown) => fn());
+    vi.stubGlobal('Zone', { root: { run } });
+    try {
+      attach(fakeRpc(), { Capacitor: fakeCapacitor() });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(run.mock.calls.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
