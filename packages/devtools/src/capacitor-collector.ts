@@ -112,6 +112,8 @@ type HookWindow = {
   CapacitorWebFetch?: unknown;
   CapacitorHttpAndroidInterface?: { isEnabled?: () => unknown };
   prompt?: (message: string) => unknown;
+  /** The iOS native bridge, which answers the CapacitorHttp `prompt()`. */
+  webkit?: { messageHandlers?: { bridge?: unknown } };
   navigator?: { userAgent?: string };
   addEventListener?: (type: string, listener: (event: unknown) => void) => void;
   removeEventListener?: (type: string, listener: (event: unknown) => void) => void;
@@ -173,8 +175,10 @@ const capacitorHttpState = new WeakMap<object, boolean | null>();
 /**
  * Asks the native layer whether CapacitorHttp is on, the way the native bridge
  * does at startup: `CapacitorHttpAndroidInterface.isEnabled()` on Android, and
- * a `prompt()` that the iOS WebView answers itself (it shows no dialog). Read
- * once per page. `null` on any other platform.
+ * a `prompt()` that the iOS WebView answers itself (it shows no dialog). The
+ * prompt is sent only when the iOS bridge is there: a custom platform named
+ * `ios` in a desktop browser would open a real dialog. Read once per page.
+ * `null` on any other platform.
  */
 function capacitorHttpOn(win: HookWindow, cap: CapacitorGlobal, platform: string): boolean | null {
   if (platform === 'web') return false;
@@ -186,7 +190,11 @@ function capacitorHttpOn(win: HookWindow, cap: CapacitorGlobal, platform: string
     typeof win.CapacitorHttpAndroidInterface?.isEnabled === 'function'
   ) {
     state = read(() => win.CapacitorHttpAndroidInterface!.isEnabled!() === true, null);
-  } else if (platform === 'ios' && typeof win.prompt === 'function') {
+  } else if (
+    platform === 'ios' &&
+    !!win.webkit?.messageHandlers?.bridge &&
+    typeof win.prompt === 'function'
+  ) {
     state = read(() => win.prompt!(JSON.stringify({ type: 'CapacitorHttp' })) === 'true', null);
   }
   capacitorHttpState.set(cap, state);

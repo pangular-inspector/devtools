@@ -121,7 +121,11 @@ describe('readCapacitorInfo', () => {
 
     const prompt = vi.fn(() => 'true');
     const { cap } = fakeCapacitor();
-    const ios: HookWindow = { Capacitor: { ...cap, getPlatform: () => 'ios' }, prompt };
+    const ios: HookWindow = {
+      Capacitor: { ...cap, getPlatform: () => 'ios' },
+      prompt,
+      webkit: { messageHandlers: { bridge: {} } },
+    };
     expect(readCapacitorInfo(ios)?.env.capacitorHttp).toBe(true);
     expect(readCapacitorInfo(ios)?.env.capacitorHttp).toBe(true);
     // Asked once, with the payload the iOS WebView answers itself.
@@ -134,6 +138,17 @@ describe('readCapacitorInfo', () => {
     });
     expect(web?.env.capacitorHttp).toBe(false);
     expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens no dialog for a custom platform named ios without the iOS bridge', () => {
+    const prompt = vi.fn(() => null);
+    // What @capacitor/core sets up for CapacitorCustomPlatform {name: 'ios'} in a desktop browser.
+    const info = readCapacitorInfo({
+      Capacitor: { getPlatform: () => 'ios', isNativePlatform: () => true, Plugins: {} },
+      prompt,
+    });
+    expect(prompt).not.toHaveBeenCalled();
+    expect(info?.env.capacitorHttp).toBeNull();
   });
 
   it('knows which plugins the app imported only on the web, without the early hook', () => {
