@@ -684,11 +684,17 @@ export class RouteTimeline {
 
   readonly time = time;
 
+  /** Counts instrument toggles so only the latest answer touches the checkbox. */
+  private instrumentSeq = 0;
+
   async toggleInstrument(event: Event) {
     const checkbox = event.target as HTMLInputElement;
     const on = checkbox.checked;
     const pageId = this.pageId();
+    const seq = ++this.instrumentSeq;
     const result = await routerAction(this.rpc(), pageId, { action: 'instrument', on });
+    // A newer toggle owns the checkbox now; this late answer must not undo it.
+    if (seq !== this.instrumentSeq) return;
     if (pageId !== this.pageId()) {
       // The answer is for the page the user left; show this page's state instead.
       checkbox.checked = !!this.page().instrumented;

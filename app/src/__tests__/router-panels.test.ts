@@ -469,6 +469,40 @@ describe('RouteTimeline guard recording', () => {
   });
 });
 
+describe('RouteTimeline guard recording across pages', () => {
+  function checkbox(fixture: ComponentFixture<unknown>) {
+    return Array.from(el(fixture).querySelectorAll<HTMLInputElement>('input[type=checkbox]')).find(
+      (input) => input.parentElement?.textContent?.includes('Record each guard'),
+    )!;
+  }
+
+  it('does not let a late answer from the page left behind undo a newer toggle', async () => {
+    const answers: Array<(value: unknown) => void> = [];
+    const fixture = mount(
+      RouteTimeline,
+      page({ pageId: 'a', instrumented: false }),
+      () => new Promise((resolve) => answers.push(resolve)),
+    );
+    await settle(fixture);
+    checkbox(fixture).click();
+
+    fixture.componentRef.setInput('page', page({ pageId: 'b', instrumented: false }));
+    await settle(fixture);
+    const input = checkbox(fixture);
+    if (input.checked) input.click();
+    input.click();
+    expect(input.checked).toBe(true);
+
+    answers[0]({ ok: true });
+    await settle(fixture);
+    expect(input.checked).toBe(true);
+
+    for (const answer of answers.slice(1)) answer({ ok: true });
+    await settle(fixture);
+    expect(input.checked).toBe(true);
+  });
+});
+
 describe('RouteTimeline replay', () => {
   it('turns Replay off for redacted and absolute URLs, with a note', async () => {
     const calls: unknown[] = [];
