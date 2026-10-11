@@ -47,6 +47,8 @@ Signal stores get a **Change log**. The classic Store gets an **Action log**. Ea
 
 Open an entry to see its arguments, or the action and its **Origin** for the classic Store, and a **State diff** with the value before and after each change. The diff lists up to 50 changes. A method-call entry also shows its **Duration**, in milliseconds. An entry caused by a dispatched event shows the event under **Caused by event**. An action entry also has **Dispatch again**. **Copy** next to **State diff** copies that entry's diff in the same format as **State**, one object per change with its `path`, `op`, `before` and `after`. An entry that changed nothing has no diff to copy.
 
+Entry numbers start at 1 again when the app reloads. So when the app reloads, or the selected page closes and the tab shows another one, the open entry closes and a pending **Restore** confirmation is cancelled.
+
 ### Events
 
 When a page dispatches at least one `@ngrx/signals/events` event, an **Events** section lists them: the event type, its payload and the time. This section covers every store on the page, not only the selected one. Open an event to see its full payload in the same detail panel as the change log.

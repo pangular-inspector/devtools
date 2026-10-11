@@ -1,7 +1,8 @@
 import '@angular/compiler';
 import { EventEmitter } from 'node:events';
 import { mkdtempSync, writeFileSync } from 'node:fs';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -232,6 +233,30 @@ describe('ssrMiddleware overrides', () => {
       renderMode: 'server',
       overrides: [{ kind: 'state-edit', applied: true, note: 'set a' }],
     });
+  });
+
+  it('still calls write and end callbacks while it holds the HTML for an edit', async () => {
+    ssrRegistry().overrides = [override({ kind: 'state-edit', key: 'a', value: '{"b":2}' })];
+    const calls: string[] = [];
+    const middleware = createSsrMiddleware();
+    const server = createServer((req, res) => {
+      middleware(req, res, () => {});
+      res.setHeader('content-type', 'text/html');
+      res.write(STATE_HTML, () => calls.push('write'));
+      res.end(() => calls.push('end'));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const response = await fetch(`http://127.0.0.1:${port}/examples/ssr`, {
+        headers: { accept: 'text/html' },
+      });
+      expect(await response.text()).toContain('{"a":{"b":2},"keep":2}');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(calls).toEqual(['write', 'end']);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 
   it('does not report an edit on a page without TransferState, such as an error page', () => {
