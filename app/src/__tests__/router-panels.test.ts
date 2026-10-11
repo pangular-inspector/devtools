@@ -7,6 +7,7 @@ import { RouteLint } from '../pages/route-lint';
 import { RouteTimeline } from '../pages/route-timeline';
 import { RouteTree } from '../pages/route-tree';
 import type { NavigationRecord, RouterPage } from '../pages/router-types';
+import type { ComponentFocus } from '../types/component-focus.types';
 
 type Call = (name: string, arg: Record<string, unknown>) => Promise<unknown>;
 
@@ -423,13 +424,13 @@ describe('RouteCurrent', () => {
     expect(buttons[0].closest('li')?.textContent).toContain('Shell');
   });
 
-  it('emits the component id when Show in Components is clicked', async () => {
+  it('emits the component id and its page when Show in Components is clicked', async () => {
     const fixture = mount(RouteCurrent, routed, offline);
-    const shown: string[] = [];
-    fixture.componentInstance.showComponent.subscribe((id) => shown.push(id));
+    const shown: ComponentFocus[] = [];
+    fixture.componentInstance.showComponent.subscribe((focus) => shown.push(focus));
     await settle(fixture);
     showButtons(fixture)[0].click();
-    expect(shown).toEqual(['c7']);
+    expect(shown).toEqual([{ pageId: 'p1', id: 'c7' }]);
   });
 
   it('hides Show in Components when the Components inspector is off', async () => {

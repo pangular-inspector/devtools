@@ -12,6 +12,7 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { isStaticReport } from '../rpc';
 import { LiveRoute } from './live-route';
 import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types';
+import type { ComponentFocus } from '../types/component-focus.types';
 
 @Component({
   selector: 'app-route-inspector',
@@ -236,7 +237,7 @@ import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types'
 })
 export class RouteInspector {
   rpc = input<DevframeRpcClient | null>(null);
-  readonly showComponent = output<string>();
+  readonly showComponent = output<ComponentFocus>();
   staticReport = computed(() => isStaticReport(this.rpc()));
 
   routes = signal<SourceRoute[]>([]);

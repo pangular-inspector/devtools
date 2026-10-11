@@ -24,6 +24,7 @@ import { StoreInspector } from './pages/store-inspector';
 import { FormsInspector } from './pages/forms-inspector';
 import { PipesInspector } from './pages/pipes-inspector';
 import type { Tab, Tabs } from './types/tab.types';
+import type { ComponentFocus } from './types/component-focus.types';
 import { AnalogInspector } from './pages/analog-inspector';
 import { NetworkInspector } from './pages/network-inspector';
 import { ComingSoon, type ComingSoonInfo } from './pages/coming-soon';
@@ -985,7 +986,7 @@ export class App implements OnInit, OnDestroy {
 
   formFocus = signal<{ id: string } | null>(null);
   // Belongs to the Components tab that received it, so leaving the tab drops it.
-  readonly componentFocus = linkedSignal<Tab, { id: string } | null>({
+  readonly componentFocus = linkedSignal<Tab, ComponentFocus | null>({
     source: this.tab,
     computation: () => null,
   });
@@ -995,11 +996,11 @@ export class App implements OnInit, OnDestroy {
     this.switchTab('forms');
   }
 
-  showComponent(id: string) {
+  showComponent(focus: ComponentFocus) {
     if (!this.config().inspectors.components) return;
     // Switch first: the focus belongs to the tab, so the switch would clear it.
     this.switchTab('components');
-    this.componentFocus.set({ id });
+    this.componentFocus.set(focus);
   }
 
   inspectFromPanel({ source, origin, data }: MessageEvent<unknown>) {

@@ -9,6 +9,7 @@ import {
   type OutletInfo,
   type RouterPage,
 } from './router-types';
+import type { ComponentFocus } from '../types/component-focus.types';
 
 interface RouteRow {
   route: ActiveRoute;
@@ -173,7 +174,9 @@ interface OutletRow {
                   <button
                     type="button"
                     class="small show-component"
-                    (click)="showComponent.emit(row.outlet.devtoolsId)"
+                    (click)="
+                      showComponent.emit({ pageId: page().pageId, id: row.outlet.devtoolsId })
+                    "
                   >
                     Show in Components<span class="visually-hidden"
                       >:
@@ -337,8 +340,8 @@ export class RouteCurrent {
   readonly navigationAllowed = computed(() => actionAllowed(this.rpc(), 'router'));
   protected readonly navigationOff = actionBlockedMessage('router');
   readonly componentsOn = computed(() => panelConfig(this.rpc()).inspectors.components);
-  /** The devtools id of a routed component to select in the Components tab. */
-  readonly showComponent = output<string>();
+  /** A routed component, and the page it is on, to select in the Components tab. */
+  readonly showComponent = output<ComponentFocus>();
 
   readonly message = signal('');
 

@@ -21,7 +21,7 @@ The route the page is on:
 - The navigation in flight, with an **Abort** button.
 - The document title, query params and fragment.
 - **Active routes**: each active route with its component, params, data, and guards and resolvers. Tags mark lazy routes, inherited params, and whether a data value is static, resolved or inherited. The title row says when the title is inherited.
-- **Outlets**: the outlet tree, with the inputs the router binds to each component and the `routerOutletData` each outlet passes (what the routed component reads with `inject(ROUTER_OUTLET_DATA)`). The data shows as a redacted preview of at most 300 characters. Each activated outlet has a **Show in Components** button that opens the [Components tab](./components.md) with the routed component selected and scrolled into view. The button is hidden when the Components inspector is off or the page reports no element for the routed component.
+- **Outlets**: the outlet tree, with the inputs the router binds to each component and the `routerOutletData` each outlet passes (what the routed component reads with `inject(ROUTER_OUTLET_DATA)`). The data shows as a redacted preview of at most 300 characters. Each activated outlet has a **Show in Components** button that opens the [Components tab](./components.md) on the page the Router tab shows, with the routed component selected and scrolled into view. If the component is no longer on that page, the Components tab says so. The button is hidden when the Components inspector is off or the page reports no element for the routed component.
 
 ### Navigations
 

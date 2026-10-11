@@ -30,6 +30,7 @@ import {
   reconcileSelection,
 } from './component-tree-state';
 import { CdRecording, type CdPage } from './cd-recording';
+import type { ComponentFocus } from '../types/component-focus.types';
 
 interface SourceComponent {
   selector: string;
@@ -1341,7 +1342,7 @@ function bare(name: string): string {
 export class ComponentTree {
   readonly rpc = input<DevframeRpcClient | null>(null);
   readonly staticReport = computed(() => isStaticReport(this.rpc()));
-  readonly focus = input<{ id: string } | null>(null);
+  readonly focus = input<ComponentFocus | null>(null);
   readonly showForm = output<string>();
   readonly focusHandled = output<void>();
 
@@ -1538,9 +1539,18 @@ export class ComponentTree {
     });
     effect(() => {
       const focus = this.focus();
-      if (!focus || !this.live()) return;
+      if (!focus) return;
+      const shown = this.page()?.pageId ?? null;
+      // The focus names the page it came from, which may not be the one shown.
+      if (focus.pageId && shown !== focus.pageId && this.pages()[focus.pageId]) {
+        untracked(() => this.selectPage(focus.pageId!));
+        return;
+      }
+      if (!this.live()) return;
       untracked(() => {
-        if (this.index().map.has(focus.id)) this.reveal(focus.id);
+        const onPage = !focus.pageId || shown === focus.pageId;
+        if (onPage && this.index().map.has(focus.id)) this.reveal(focus.id);
+        else this.announcement.set('That component is no longer on the page.');
         this.focusHandled.emit();
       });
     });

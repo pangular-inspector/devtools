@@ -18,6 +18,7 @@ import { RouteTimeline } from './route-timeline';
 import { RouteTree } from './route-tree';
 import type { RouterPage, SourceRoute } from './router-types';
 import { Select } from '../ui/select';
+import type { ComponentFocus } from '../types/component-focus.types';
 
 const TABS = [
   { id: 'current', label: 'Current' },
@@ -272,7 +273,7 @@ type TabId = (typeof TABS)[number]['id'];
 export class LiveRoute {
   rpc = input<DevframeRpcClient | null>(null);
   sources = input<SourceRoute[]>([]);
-  readonly showComponent = output<string>();
+  readonly showComponent = output<ComponentFocus>();
 
   readonly tabs = TABS;
   readonly selected = signal<TabId>('current');
