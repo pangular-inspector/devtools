@@ -35,6 +35,7 @@ import {
   type PreloadRecord,
 } from './router-actions.ts';
 import { createSignalHistory, installSignalWriteHook } from './signal-history.ts';
+import { registerSignalPeek } from './signal-peek.ts';
 export { installSignalWriteHook } from './signal-history.ts';
 import { collectComponentTree, componentHostOf } from './component-tree.ts';
 import { startComponentPick } from './component-pick.ts';
@@ -595,6 +596,12 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       void pushSignalGraph(true).catch(() => {});
     },
   });
+  registerSignalPeek(
+    my.rpc,
+    pageId,
+    (target) => collectSignalGraph(getNg(), target),
+    signalHistory,
+  );
 
   my.rpc.register({
     name: 'inspect-component-in-page',
