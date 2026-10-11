@@ -93,6 +93,8 @@ The live detail of one component instance: inputs, outputs and whether a parent 
 
 A class name or tag that matches several instances answers for the first and lists the ids of all of them. When nothing matches and the page's tree stopped at a [limit](../inspectors/components.md#selection), `inspect-component` and `highlight` say which one, since the instance can be past it. Secret-looking values are redacted.
 
+The answer stops at 20,000 characters. Past that, each value longer than 1,000 characters shows only the start of its JSON, then each list (inputs, outputs, properties, listeners, directives, injected services, and the inputs and outputs of each directive) keeps fewer entries. A note names the cut values and says how many entries are not shown. The `detail` of the `component-tree` resource has every value in full.
+
 ### list-components
 
 The live component tree of one page as an indented outline, one line per instance: class name, host tag and instance id, as in `ProductCard <app-card> c12`. Reads: page.
@@ -121,6 +123,8 @@ The `@defer` blocks of each page: the component that holds each one, its state, 
 | `pageId` | no       | Same as `page`. |
 
 Without a development build, the page has no util to read defer blocks, and the answer says so.
+
+Each page lists at most 50 blocks in the table and 50 under **Needs attention**, with a note on how many more are not shown. The whole answer stops at 20,000 characters. If several tabs report, pass `page` to read one. The **Defer blocks** list on the [Components](../inspectors/components.md#defer-blocks) page has every block.
 
 ### change-detection
 
@@ -154,7 +158,7 @@ The answer also holds:
 
 The answer is cut at 20,000 characters. A graph that is too long first keeps fewer history entries per node, then keeps the first nodes that fit. A note under the JSON says how many history entries and nodes it left out. Pass `node` or `history: false` to see the rest.
 
-With `root` or a route path, the tool switches the page's graph to the effects of that injector and waits up to 1.5 seconds for it. If no injector matches, the answer lists the ones the page knows. On Angular 20.0, the answer says the live graph needs Angular 20.1 or later.
+With `root` or a route path, the tool asks the page for the effects of that injector and waits up to 1.5 seconds for the answer. It reads that graph once and leaves the Signals page on the target it shows. If no injector matches, the answer lists the ones the page knows. On Angular 20.0, the answer says the live graph needs Angular 20.1 or later.
 
 <ngmd-callout type="tip" title="One graph per page">
   The page reports one graph: the component picked on the Signals page or with <code>highlight</code>, otherwise the deepest component in the primary router outlet. Call <code>highlight</code> first to switch the graph to another component. Only signals a template or an effect has read appear.
@@ -284,13 +288,26 @@ Two arguments come up in almost every tool:
 | Tool                     | What it answers                                                                                                                                                                                                                                                                                                         | Arguments                                      |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | `inspect-forms`          | Without arguments, each form with its status and error count, plus WebMCP tool state for Signal Forms that set `experimentalWebMcpTool`. With `form`, its field tree: value, status, touched, dirty and errors, and a `webMcp` entry with the tool name, inputs, registration status, blocking fields and recent calls. | `form`, `path`, `onlyInvalid`, `includeValues` |
-| `explain-form-invalid`   | Which fields make a form invalid, and why: the failing validator, its message, the value and whether it was touched. Without `form`, every invalid or pending form.                                                                                                                                                     | `form`                                         |
+| `explain-form-invalid`   | Which fields make a form invalid, and why: the failing validator, its message, the value and whether it was touched. Without `form`, every invalid or pending form.                                                                                                                                                     | `form`, `path`                                 |
 | `explain-field`          | One field: where each error comes from, why validation is skipped, the binding and DOM facts like the label and visible error text.                                                                                                                                                                                     | `form`, `path`, or `selector` (a CSS selector) |
 | `explain-submit`         | What submit does, and why it might do nothing.                                                                                                                                                                                                                                                                          | `form`                                         |
-| `form-payload`           | What the form sends: `value` against `getRawValue()`, fields that are sent without validation, and which fields the user changed.                                                                                                                                                                                       | `form`                                         |
+| `form-payload`           | What the form sends: `value` against `getRawValue()`, fields that are sent without validation, and which fields the user changed.                                                                                                                                                                                       | `form`, `path`                                 |
 | `explain-custom-control` | How a field is bound to its element, and what is wrong with the binding, such as value drift or a missing `setDisabledState`.                                                                                                                                                                                           | `form`, `path`                                 |
 
 For "why is this form invalid", call `explain-form-invalid` first. The tools redact passwords and other secret-looking values.
+
+Answers about large forms are cut to keep an agent's context small. Each cut ends with a note on what was left out and how to narrow the answer:
+
+| Tool                   | Cap                                                                                                                                                                                                                                                                                                                         | Narrow with                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `inspect-forms`        | As many fields per form as fit in 20,000 characters, at most 200, taken level by level from the start of the tree. A group that lost fields carries `notShown` with the count. Values, error messages and metadata over 300 characters are cut. If not even one field fits, each form shows only its status and `notShown`. | `path`, `form` or `onlyInvalid`               |
+| `explain-form-invalid` | 100 problems per form, then `… and N more not shown`.                                                                                                                                                                                                                                                                       | `path`                                        |
+| `form-payload`         | 8,000 characters per value.                                                                                                                                                                                                                                                                                                 | `path`                                        |
+| `export-form`          | The same field cap as `inspect-forms` for a snapshot. A fixture, header included, fits in 20,000 characters, and its header lists at most 20 failing fields.                                                                                                                                                                | `inspect-forms` or `form-payload` with `path` |
+| `lint-forms`           | 100 findings.                                                                                                                                                                                                                                                                                                               | `form`                                        |
+| `form-diff`            | 100 changed fields.                                                                                                                                                                                                                                                                                                         | `form` or a later `since` marker              |
+
+With `path`, `inspect-forms`, `explain-form-invalid` and `form-payload` start at that group or field, so a cut part of the form can be read one group at a time.
 
 ### Track changes
 

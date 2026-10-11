@@ -97,6 +97,33 @@ describe('component agent tools', () => {
     expect(again).toContain('2 instances match `app-card`');
   });
 
+  it('inspect-component cuts a detail over 20,000 characters and says what it left out', async () => {
+    const { ctx, push, call } = await boot();
+    await push('push-component-tree', { pageId: 'p1', roots, count: 3, detail: null });
+    const huge: ComponentDetail = {
+      ...detailOf('c2'),
+      properties: Array.from({ length: 60 }, (_, n) => ({
+        name: `p${n}`,
+        prop: `p${n}`,
+        value: 'x'.repeat(5_000),
+      })),
+    };
+    vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: Broadcast) => {
+      if (!options.method.endsWith('inspect-component-in-page')) return;
+      const { pageId } = options.args[0] as { pageId: string };
+      setTimeout(
+        () => void push('push-component-tree', { pageId, roots, count: 3, detail: huge }),
+        10,
+      );
+    }) as never);
+
+    const text = await call('inspect-component', { selector: 'c2' });
+    expect(text.length).toBeLessThanOrEqual(20_000);
+    expect(text).toContain('instance `c2` on page `p1`');
+    expect(text).toContain('60 values are longer than 1,000 characters');
+    expect(text).toMatch(/Each list shows its first \d+ entries: \d+ more properties not shown\./);
+  });
+
   it('inspect-component says when nothing matches or the page does not answer', async () => {
     const { ctx, push, call } = await boot();
     expect(await call('inspect-component', { selector: 'Card' })).toMatch(
