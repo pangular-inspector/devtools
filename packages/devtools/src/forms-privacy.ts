@@ -86,10 +86,36 @@ const SECRET_PAIRS = new Set([
 ]);
 
 /**
- * Secret only as the whole key: a `card` or `cc` field holds a card number,
- * while `cardTitle` or `ccList` (email CC) do not.
+ * `card` and `cc` mark a card number wherever they appear (`paymentCard`,
+ * `ccExpiry`), except before one of these words: `cardTitle` is a UI card
+ * and `ccList` an email CC.
  */
-const SECRET_WHOLE_KEYS = new Set(['card', 'cc']);
+const CARD_WORDS = new Set(['card', 'cc']);
+const HARMLESS_AFTER_CARD = new Set([
+  'title',
+  'id',
+  'list',
+  'type',
+  'count',
+  'style',
+  'layout',
+  'header',
+  'footer',
+  'body',
+  'class',
+  'image',
+  'color',
+  'variant',
+  'size',
+  'width',
+  'height',
+  'index',
+  'grid',
+  'view',
+  'email',
+  'address',
+  'recipient',
+]);
 
 const SECRET_AUTOCOMPLETE = /password|one-time-code|cc-/i;
 const MASK_MARKERS = '.sentry-mask, .rr-mask, [data-private], [data-pangular="mask"]';
@@ -156,8 +182,9 @@ function containsName(words: string[], name: string): boolean {
 export function isSecretKey(key: string): boolean {
   const words = wordsOf(key).map(singular);
   if (words.some((word) => SECRET_WORDS.has(word))) return true;
-  const whole = words.join('');
-  if (SECRET_PAIRS.has(whole) || SECRET_WHOLE_KEYS.has(whole)) return true;
+  if (SECRET_PAIRS.has(words.join(''))) return true;
+  if (words.some((word, i) => CARD_WORDS.has(word) && !HARMLESS_AFTER_CARD.has(words[i + 1] ?? '')))
+    return true;
   if (words.some((word, i) => i > 0 && SECRET_PAIRS.has(words[i - 1] + word))) return true;
   return secretNames.some((name) => containsName(words, name));
 }

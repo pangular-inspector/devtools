@@ -99,10 +99,10 @@ const devtools = initPangularHub({
 app.use(devtools.nodeMiddleware);
 ```
 
-A list keeps loopback origins and the Pangular Inspector extension. See [Chrome extension](#chrome-extension).
+A list keeps loopback origins and the Pangular Inspector extension. So does a custom origin registry passed as `allowedOrigins`: the hub accepts the published extension before it asks the registry. See [Chrome extension](#chrome-extension).
 
 <ngmd-callout type="warning" title="Turning the checks off">
-  Pass <code>auth: false</code> only on a machine only you use. Keep it on when you allow a tunnel origin: the origin check does not tell who is on the other end of the tunnel. <code>allowedOrigins: false</code> turns the origin check off. Keep the check on for your own apps.
+  Pass <code>auth: false</code> only on a machine only you use. Keep it on when you allow a tunnel origin: the origin check does not tell who is on the other end of the tunnel. <code>allowedOrigins: false</code> turns the origin check off, and the hub prints a warning once when it starts. Keep the check on for your own apps.
 </ngmd-callout>
 
 ### Standalone CLI
@@ -192,7 +192,7 @@ A refused write names the reason and the unmask that lifts it. The panel, `form-
 
 <ngmd-accordion>
   <ngmd-accordion-item title="The full list of secret words">
-    password, passwd, passphrase, passcode, pass, pwd, secret, token, otp, totp, pin, cvv, cvc, csc, ssn, iban, credential, credentials, cookie, authorization, jwt, signature, sig, salt, nonce, privkey, dsn and sid. Names are split on camelCase and punctuation, so <code>userPassword</code> and <code>card_number</code> both match. The pairs apiKey, privateKey, secretKey, accessKey, ccNum, ccNumber, ccExp, cardNumber, cardNo, cardCvc, cardExp, creditCard, debitCard, mfaCode, recoveryCode, recoveryKey, securityCode, sessionId, sessionKey, authHeader, authKey, authCode and basicAuth match as well, and so does a name that is only bearer, card or cc. <code>cardTitle</code>, <code>cardId</code> and <code>ccList</code> stay readable. <code>auth</code> on its own is not secret, so an <code>auth</code> state slice stays readable, but credentials inside it are still masked by value (see <a href="#credentials-inside-values">Credentials inside values</a>). Every inspector uses this list.
+    password, passwd, passphrase, passcode, pass, pwd, secret, token, otp, totp, pin, cvv, cvc, csc, ssn, iban, credential, credentials, cookie, authorization, jwt, signature, sig, salt, nonce, privkey, dsn and sid. Names are split on camelCase and punctuation, so <code>userPassword</code> and <code>card_number</code> both match. The pairs apiKey, privateKey, secretKey, accessKey, ccNum, ccNumber, ccExp, cardNumber, cardNo, cardCvc, cardExp, creditCard, debitCard, mfaCode, recoveryCode, recoveryKey, securityCode, sessionId, sessionKey, authHeader, authKey, authCode and basicAuth match as well, and so does a name that is only bearer. A name with the word card or cc matches too, such as <code>paymentCard</code> or <code>ccExpiry</code>, unless the next word names a UI or email field, so <code>cardTitle</code>, <code>cardId</code>, <code>cardType</code> and <code>ccList</code> stay readable. <code>auth</code> on its own is not secret, so an <code>auth</code> state slice stays readable, but credentials inside it are still masked by value (see <a href="#credentials-inside-values">Credentials inside values</a>). Every inspector uses this list.
   </ngmd-accordion-item>
 </ngmd-accordion>
 
@@ -232,6 +232,8 @@ A secret route param is known from the route config before a navigation is recog
 ### Components, signals, NgRx and pipes
 
 Component inputs, signal values, NgRx state, and pipe inputs, outputs and async values use the same secret names and the same `mask` and `unmask` lists as forms. A value whose name looks secret is replaced with `[redacted]`. JWTs, bearer tokens and `key=value` pairs under secret keys (such as `token=abc123` or `password=…&user=a`) inside strings and error messages are replaced too, NgRx strings and errors included, and so are tokens used as object keys. The URL and title of the NgRx page, and the request URL of an `httpResource`, are redacted like router URLs.
+
+These values are read without running code on the page. A getter shows as `[Getter]` instead of its value, and a value that throws when it is read shows as `[Unreadable]`. An object seen again inside itself shows as `[Circular]`. An error shows as `Name: message`, and an error with a `cause` shows one level of the cause next to its message.
 
 ### Analog
 

@@ -188,6 +188,14 @@ describe('secret key names', () => {
     'cardCvc',
     'mfaCode',
     'recoveryCodes',
+    'paymentCard',
+    'savedCard',
+    'cardInfo',
+    'giftCardCode',
+    'ccExpiry',
+    'cardExpiration',
+    'billingCc',
+    'cardPan',
   ];
   const kept = [
     'author',
@@ -205,6 +213,8 @@ describe('secret key names', () => {
     'cardTitle',
     'cardId',
     'ccList',
+    'cardType',
+    'ccEmails',
     'accessibility',
     'design',
     'consider',
