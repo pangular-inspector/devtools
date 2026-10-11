@@ -263,7 +263,7 @@ The overlay looks for `/__pangular/` too. Without the hub, every tab sits in one
     The page could not reach the hub. Check that the hub middleware is mounted before <code>express.static</code> and the SSR handler, and that <code>base</code> matches the path the overlay uses. See <a href="./overlay.md#no-devtools-server-found">No devtools server found</a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel says Disconnected">
-    Check that the server is running and that the hub middleware is mounted before <code>express.static</code> and the SSR handler. Then reload the page.
+    Check that the server is running and that the hub middleware is mounted before <code>express.static</code> and the SSR handler. The panel keeps trying to connect; click <strong>Retry now</strong> to try at once.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel connects but shows no data">
     With <code>auth</code> on, a browser reads data only after it exchanges the one-time code the server printed. On a machine only you use, pass <code>auth: false</code>.

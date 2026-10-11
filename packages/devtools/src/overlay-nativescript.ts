@@ -32,6 +32,7 @@ import {
   type NativeScriptDebugNg,
   type NativeView,
 } from './overlay-nativescript-views.ts';
+import { newPageId } from './page-id.ts';
 
 type DebugNg = SignalDebugNg<NativeView> & ComponentDebugNg<NativeView> & NativeScriptDebugNg;
 
@@ -160,7 +161,7 @@ async function startSession(
 ): Promise<() => void> {
   const my = rpc.scope('pangular');
   setRedaction(configFromConnection(rpc.connectionMeta).redaction);
-  const pageId = Math.random().toString(36).slice(2, 6);
+  const pageId = newPageId();
 
   const tree = nativeScriptTree(angularDebugApi, () => Application.getRootView() as NativeView);
 

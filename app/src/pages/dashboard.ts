@@ -236,9 +236,12 @@ export function httpCard(state: HttpSnapshot | null, hostPageId: string | null):
             @if (staticReport()) {
               Run <code>pangular build</code> again to rebuild the report.
             } @else {
-              Check that the dev server is running, then reload the panel.
+              Check that the dev server is running.
             }
           </p>
+          @if (!staticReport()) {
+            <button type="button" class="retry" (click)="loadMeta()">Try again</button>
+          }
         }
       </div>
       <ul class="chips" [class.pending]="metaState() === 'loading'">
@@ -353,6 +356,27 @@ export function httpCard(state: HttpSnapshot | null, hostPageId: string | null):
       color: var(--text-2);
       font-size: 13px;
       line-height: 1.5;
+    }
+    .retry {
+      display: inline-flex;
+      margin-top: 8px;
+      align-items: center;
+      height: var(--control-h);
+      padding: 0 14px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text);
+      font: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      &:hover {
+        background: var(--surface-3);
+        border-color: var(--accent-line);
+      }
+      &:focus-visible {
+        @include m.focus-ring;
+      }
     }
     .chips {
       display: flex;
@@ -658,24 +682,34 @@ export class Dashboard {
     return out;
   });
 
+  /** Reads the project details, again after a failure when Try again is pressed. */
+  loadMeta(client = this.rpc()) {
+    if (!client) return;
+    this.metaState.set('loading');
+    client
+      .scope('pangular')
+      .rpc.call('build-meta')
+      .then((m) => {
+        if (this.rpc() !== client) return;
+        this.meta.set(m as BuildMeta);
+        this.metaState.set('ready');
+      })
+      .catch(() => {
+        if (this.rpc() === client) this.metaState.set('error');
+      });
+  }
+
   constructor() {
     effect(() => {
       const client = this.rpc();
       if (!client) return;
 
       const my = client.scope('pangular');
-      this.metaState.set('loading');
       this.states.set({});
       this.rows.set({});
       this.formsState.set(null);
       this.httpState.set(null);
-      my.rpc
-        .call('build-meta')
-        .then((m) => {
-          this.meta.set(m as BuildMeta);
-          this.metaState.set('ready');
-        })
-        .catch(() => this.metaState.set('error'));
+      this.loadMeta(client);
       const config = panelConfig(client);
       const on = (tab: StatTab) => tabEnabled(tab, config);
       if (on('components')) this.load(my.rpc.call('get-components'), 'components');

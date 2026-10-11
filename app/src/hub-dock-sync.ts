@@ -1,5 +1,6 @@
+import { hubDockId } from '@pangular-inspector/devtools/config';
+
 const CLIENT_CONTEXT_KEY = '__DEVFRAME_HUB_CLIENT_CONTEXT__';
-const DOCK_PREFIX = 'pangular:';
 
 interface DockState {
   events: { on: (event: 'entry:activated', listener: () => void) => () => void };
@@ -41,12 +42,11 @@ export function followHubDocks<T extends string>(
   }
   const offs = views.map(
     (view) =>
-      ctx.docks
-        .getStateById(DOCK_PREFIX + view)
-        ?.events.on('entry:activated', () => onView(view)) ?? (() => {}),
+      ctx.docks.getStateById(hubDockId(view))?.events.on('entry:activated', () => onView(view)) ??
+      (() => {}),
   );
   const selected = ctx.docks.selectedId;
-  const current = views.find((view) => DOCK_PREFIX + view === selected);
+  const current = views.find((view) => hubDockId(view) === selected);
   if (current) onView(current);
   return () => offs.forEach((off) => off());
 }
@@ -60,7 +60,7 @@ export async function selectHubDock(view: string): Promise<boolean> {
   const ctx = hubContext();
   if (!ctx) return false;
   try {
-    return await ctx.docks.switchEntry(DOCK_PREFIX + view);
+    return await ctx.docks.switchEntry(hubDockId(view));
   } catch {
     return false;
   }

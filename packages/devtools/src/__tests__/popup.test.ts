@@ -122,6 +122,31 @@ describe.sequential('devtools popup', () => {
     expect(panel.classList.contains('open')).toBe(false);
   });
 
+  it('moves focus into the panel when a keyboard opens it', async () => {
+    await loadPopup(true);
+    const { fab } = parts();
+    fab.focus();
+    // A click from the keyboard has no pointer, so its detail is 0.
+    fab.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+    await vi.waitFor(() => expect(frame().src).not.toBe(''));
+    frame().dispatchEvent(new Event('load'));
+
+    const shadow = document.getElementById('pangular-popup-root')!.shadowRoot!;
+    expect(shadow.activeElement).toBe(frame());
+  });
+
+  it('leaves focus alone when a pointer opens the panel', async () => {
+    await loadPopup(true);
+    const { fab } = parts();
+    fab.focus();
+    fab.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    await vi.waitFor(() => expect(frame().src).not.toBe(''));
+    frame().dispatchEvent(new Event('load'));
+
+    const shadow = document.getElementById('pangular-popup-root')!.shadowRoot!;
+    expect(shadow.activeElement).toBe(fab);
+  });
+
   it('moves the launcher with the arrow keys and remembers where it went', async () => {
     await loadPopup();
     const { fab } = parts();
@@ -221,6 +246,29 @@ describe.sequential('devtools popup', () => {
     expect(shadow.querySelector('[role="status"]')!.textContent).toBe('No devtools server found');
     expect(frame().hidden).toBe(true);
     expect(frame().getAttribute('src')).toBeNull();
+  });
+
+  it('looks for the server again from Try again, without a reload', async () => {
+    let up = false;
+    await loadPopup(() => (up ? json() : spaFallback()));
+    parts().fab.click();
+    const shadow = document.getElementById('pangular-popup-root')!.shadowRoot!;
+    const missing = shadow.querySelector<HTMLElement>('.missing')!;
+    await vi.waitFor(() => expect(missing.hidden).toBe(false));
+
+    const retry = shadow.querySelector<HTMLButtonElement>('.missing button')!;
+    expect(retry.textContent).toBe('Try again');
+    const looked = vi.mocked(fetch).mock.calls.length;
+    retry.focus();
+    retry.click();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(looked * 2));
+    expect(missing.hidden).toBe(false);
+    expect(shadow.activeElement).toBe(retry);
+
+    up = true;
+    retry.click();
+    await vi.waitFor(() => expect(missing.hidden).toBe(true));
+    expect(frame().src).toBe(`${location.origin}/__devframes/`);
   });
 
   it('keeps the floating panel inside a narrow window', async () => {
@@ -399,11 +447,22 @@ describe.sequential('devtools popup', () => {
 
   describe('theme sync', () => {
     const root = () => document.getElementById('pangular-popup-root')!;
-    const send = (data: unknown, source: MessageEventSource | null = frame().contentWindow) =>
-      window.dispatchEvent(new MessageEvent('message', { data, source }));
+    /** jsdom gives a frame in a shadow root no window, so the panel gets a stand-in. */
+    const panelWindow = { postMessage: () => {} } as unknown as Window;
+    Object.defineProperty(panelWindow, 'parent', { value: window });
+    const open = async () => {
+      await openedSrc();
+      Object.defineProperty(frame(), 'contentWindow', { get: () => panelWindow });
+    };
+    const send = (
+      data: unknown,
+      source: MessageEventSource | null = panelWindow,
+      origin = location.origin,
+    ) => window.dispatchEvent(new MessageEvent('message', { data, source, origin }));
 
     it('follows the theme the panel posts and restores it on the next open', async () => {
       await loadPopup(true);
+      await open();
       send({ type: 'pangular:theme-change', theme: 'light' });
 
       expect(root().dataset['theme']).toBe('light');
@@ -415,6 +474,7 @@ describe.sequential('devtools popup', () => {
 
     it('pins dark when the panel switches back, so a light system does not win', async () => {
       await loadPopup(true);
+      await open();
       send({ type: 'pangular:theme-change', theme: 'light' });
       send({ type: 'pangular:theme-change', theme: 'dark' });
 
@@ -428,6 +488,28 @@ describe.sequential('devtools popup', () => {
       send({ type: 'other', theme: 'light' });
 
       expect(root().dataset['theme']).toBeUndefined();
+    });
+
+    it('follows a frame inside the panel, such as a hub dock', async () => {
+      await loadPopup(true);
+      await open();
+      const dock = {} as Window;
+      Object.defineProperty(dock, 'parent', { value: panelWindow });
+      send({ type: 'pangular:theme-change', theme: 'light' }, dock);
+
+      expect(root().dataset['theme']).toBe('light');
+    });
+
+    it('ignores other frames on the page and messages from another origin', async () => {
+      await loadPopup(true);
+      await open();
+      const stray = document.createElement('iframe');
+      document.body.appendChild(stray);
+      send({ type: 'pangular:theme-change', theme: 'light' }, stray.contentWindow);
+      send({ type: 'pangular:theme-change', theme: 'light' }, undefined, 'https://evil.test');
+
+      expect(root().dataset['theme']).toBeUndefined();
+      expect(stored().theme).toBeUndefined();
     });
   });
 });

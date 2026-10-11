@@ -13,6 +13,29 @@ export const PANGULAR_INSPECTORS = [
 
 export type PangularInspector = (typeof PANGULAR_INSPECTORS)[number];
 
+/**
+ * The hub docks that open one view of the panel. The hub registers them and
+ * the panel follows them, so both read this one list.
+ */
+export const HUB_VIEWS = [
+  'angular',
+  'ngrx',
+  'analog',
+  'angular-native',
+  'nativescript',
+  'capacitor',
+] as const;
+
+export type HubView = (typeof HUB_VIEWS)[number];
+
+/** The view name that opens the full panel, with every tab. */
+export const HUB_ALL_TOOLS = 'all';
+
+/** The hub dock id of a view (a `HUB_VIEWS` entry or `HUB_ALL_TOOLS`). */
+export function hubDockId(view: string): string {
+  return `pangular:${view}`;
+}
+
 export const PANGULAR_ACTIONS = ['forms', 'router', 'ngrx', 'http', 'analog'] as const;
 
 export type PangularAction = (typeof PANGULAR_ACTIONS)[number];

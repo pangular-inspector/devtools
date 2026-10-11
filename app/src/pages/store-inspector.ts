@@ -18,6 +18,7 @@ import { hostPageId } from '../page-id';
 import { rpcCall as call } from '../rpc';
 import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
 import { LimitNote } from '../ui/limit-note';
+import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
 import {
   pretty,
@@ -91,7 +92,7 @@ const CLASSIC_KINDS = new Set([
 
 @Component({
   selector: 'app-store-inspector',
-  imports: [LimitNote, Select, NgTemplateOutlet],
+  imports: [LimitNote, RovingList, Select, NgTemplateOutlet],
   template: `
     <div class="toolbar">
       <input
@@ -132,6 +133,10 @@ const CLASSIC_KINDS = new Set([
           <p class="empty-title">Could not load the live store state.</p>
           <p class="hint">Check that the dev server with Pangular Inspector is still running.</p>
           <button type="button" class="btn" (click)="retry()">Retry</button>
+        </div>
+      } @else if (!stateLoaded()) {
+        <div class="empty" role="status">
+          <p class="empty-title">Loading…</p>
         </div>
       } @else if (!page()) {
         <div class="empty">
@@ -359,7 +364,11 @@ const CLASSIC_KINDS = new Set([
                   limit="changeLog"
                 />
                 <div class="log-layout">
-                  <ul class="log-list" [attr.aria-label]="current.classic ? 'Actions' : 'Changes'">
+                  <ul
+                    class="log-list"
+                    appRovingList="button.log-item"
+                    [attr.aria-label]="current.classic ? 'Actions' : 'Changes'"
+                  >
                     @for (entry of storeLog(); track entry.seq) {
                       <li>
                         <button
@@ -496,7 +505,7 @@ const CLASSIC_KINDS = new Set([
         <p class="intro">
           Events dispatched through &#64;ngrx/signals/events, across every store on this page.
         </p>
-        <ul class="events-list" aria-label="Dispatched events">
+        <ul class="events-list" appRovingList="button.event-item" aria-label="Dispatched events">
           @for (evt of pageEvents(); track evt.seq) {
             <li>
               <button
@@ -1682,6 +1691,8 @@ export class StoreInspector {
   readonly sourceLoaded = signal(false);
   readonly pages = signal<NgrxPage[]>([]);
   readonly failed = signal(false);
+  /** Whether the shared state has arrived, so the empty message doesn't show first. */
+  readonly stateLoaded = signal(false);
   readonly selectedPageId = signal<string | null>(null);
   private readonly hostPageId = hostPageId();
   readonly maxLog = computed(() => panelConfig(this.rpc()).limits.changeLog);
@@ -1927,6 +1938,8 @@ export class StoreInspector {
       const apply = (value: unknown) => {
         const next = value as Partial<NgrxState> | undefined;
         this.pages.set(Array.isArray(next?.pages) ? next.pages : []);
+        // A state the client hasn't loaded from the server yet says nothing.
+        if (value !== undefined) this.stateLoaded.set(true);
       };
       apply(state.value());
       this.unsubscribe?.();

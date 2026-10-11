@@ -25,6 +25,7 @@ import {
 } from '@pangular-inspector/devtools/config';
 import { prettyJson } from '../format';
 import { LimitNote } from '../ui/limit-note';
+import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
 
 type HttpSide = 'client' | 'server';
@@ -286,7 +287,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
 
 @Component({
   selector: 'app-network-inspector',
-  imports: [JsonPipe, LimitNote, Select],
+  imports: [JsonPipe, LimitNote, RovingList, Select],
   template: `
     @if (loading()) {
       <div class="state" role="status">
@@ -296,10 +297,8 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     } @else if (failed()) {
       <div class="state error" role="alert">
         <strong>Could not reach the devtools server.</strong>
-        <span
-          >Check that the app's dev server is running with the devtools plugin, then reopen this
-          panel.</span
-        >
+        <span>Check that the app's dev server is running with the devtools plugin.</span>
+        <button type="button" (click)="retry()">Try again</button>
       </div>
     }
 
@@ -591,7 +590,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                   <th scope="col">Notes</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody appRovingList="button[data-call-id]">
                 @for (entry of visibleCalls(); track entry.side + entry.id) {
                   <tr
                     [class.selected]="selectedCall()?.id === entry.id"
@@ -1248,6 +1247,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     }
     .state.error span {
       color: var(--text);
+    }
+    .state.error button {
+      margin-top: 4px;
     }
     .spinner {
       width: 14px;
@@ -2332,6 +2334,11 @@ export class NetworkInspector {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  retry() {
+    const client = this.rpc();
+    if (client) void this.load(client);
   }
 
   /** A guard that returns a UrlTree reports shouldActivate false, so a redirect is not a rejection. */

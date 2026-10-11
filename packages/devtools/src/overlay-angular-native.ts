@@ -26,6 +26,7 @@ import {
 } from './signal-graph.ts';
 import { createSignalHistory, installSignalWriteHook } from './signal-history.ts';
 import { registerSignalPeek } from './signal-peek.ts';
+import { newPageId } from './page-id.ts';
 
 export type { AngularNativeNode } from './overlay-angular-native-views.ts';
 
@@ -70,7 +71,7 @@ export function initAngularNativeOverlay(options: AngularNativeOverlayOptions): 
 
   const root = options.root;
   const getRoot = typeof root === 'function' ? root : () => root;
-  const pageId = Math.random().toString(36).slice(2, 6);
+  const pageId = newPageId();
   let disposed = false;
   let session: (() => void) | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;

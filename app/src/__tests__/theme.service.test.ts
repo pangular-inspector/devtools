@@ -2,7 +2,7 @@
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ThemeService } from '../theme.service';
+import { ThemeService, themeTargets } from '../theme.service';
 
 try {
   TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -133,5 +133,53 @@ describe('ThemeService', () => {
 
     flip(true);
     expect(svc.current()).toBe('dark');
+  });
+});
+
+describe('themeTargets', () => {
+  /** A window stand-in: `origin` readable as on a same origin page, or throwing. */
+  function fakeWindow(origin: string | null, parent?: Window, referrer = '') {
+    const win = {
+      document: { referrer },
+      location: {
+        get origin(): string {
+          if (origin === null) throw new DOMException('Blocked', 'SecurityError');
+          return origin;
+        },
+      },
+    } as unknown as Window & { parent: Window };
+    win.parent = parent ?? win;
+    return win;
+  }
+
+  it('names each ancestor by the origins the browser lists, never "*"', () => {
+    const top = fakeWindow(null);
+    const parent = fakeWindow(null, top);
+    const panel = fakeWindow('http://localhost:4000', parent);
+    const origins = ['http://localhost:4000', 'https://host.test'];
+    Object.assign(panel.location, {
+      ancestorOrigins: { item: (i: number) => origins[i] ?? null, length: 2 },
+    });
+
+    expect(themeTargets(panel)).toEqual([
+      { win: parent, origin: 'http://localhost:4000' },
+      { win: top, origin: 'https://host.test' },
+    ]);
+  });
+
+  it('falls back to a same origin read, then the referrer for the parent', () => {
+    const top = fakeWindow(null);
+    const parent = fakeWindow(null, top);
+    const panel = fakeWindow('http://localhost:4000', parent, 'https://embedder.test/page');
+
+    expect(themeTargets(panel)).toEqual([{ win: parent, origin: 'https://embedder.test' }]);
+
+    const sameOrigin = fakeWindow('http://localhost:4000', top);
+    const inner = fakeWindow('http://localhost:4000', sameOrigin);
+    expect(themeTargets(inner)).toEqual([{ win: sameOrigin, origin: 'http://localhost:4000' }]);
+  });
+
+  it('sends nothing from a top level page', () => {
+    expect(themeTargets(fakeWindow('http://localhost:4000'))).toEqual([]);
   });
 });

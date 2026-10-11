@@ -32,6 +32,14 @@ const TAB_INSPECTOR: Partial<Record<Tab, PangularInspector>> = {
   capacitor: 'capacitor',
 };
 
+/** The `inspectors` key that turns a tab on or off, if any. */
+export function tabInspector(tab: Tab): PangularInspector | undefined {
+  return TAB_INSPECTOR[tab];
+}
+
+export const INSPECTORS_DOCS_URL =
+  'https://pangular-inspector.dev/getting-started/configuration/#inspectors-and-agent-tools';
+
 export function tabEnabled(tab: Tab, config: ResolvedPangularConfig): boolean {
   const inspector = TAB_INSPECTOR[tab];
   return !inspector || config.inspectors[inspector];

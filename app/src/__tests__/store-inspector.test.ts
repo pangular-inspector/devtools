@@ -403,3 +403,37 @@ describe('StoreInspector source declarations', () => {
     expect(box.value).toBe('');
   });
 });
+
+describe('StoreInspector before the shared state arrives', () => {
+  it('says it is loading, then shows the empty state once the server answers', async () => {
+    let value: unknown = undefined;
+    let push: (next: unknown) => void = () => {};
+    const rpc = {
+      call: () => Promise.resolve([]),
+      callEvent: () => Promise.resolve(),
+      sharedState: () =>
+        Promise.resolve({
+          value: () => value,
+          on: (_: string, listener: (next: unknown) => void) => {
+            push = listener;
+            return () => {};
+          },
+        }),
+    };
+    const client = { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
+    const fixture = TestBed.createComponent(StoreInspector);
+    fixture.componentRef.setInput('rpc', client);
+    await settle(fixture);
+    const text = () => (fixture.nativeElement as HTMLElement).textContent ?? '';
+
+    const status = (fixture.nativeElement as HTMLElement).querySelector('.empty[role="status"]');
+    expect(status?.textContent).toContain('Loading…');
+    expect(text()).not.toContain('No page is reporting NgRx state yet.');
+
+    value = { pages: [] };
+    push(value);
+    await settle(fixture);
+    expect(text()).not.toContain('Loading…');
+    expect(text()).toContain('No page is reporting NgRx state yet.');
+  });
+});

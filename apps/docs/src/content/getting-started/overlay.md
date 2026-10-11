@@ -257,7 +257,7 @@ See [Restore NgRx signal state](../guides/ngrx-signals-restore.md).
 
 ## No devtools server found
 
-If no path answers, the overlay logs an error that starts with `[pangular] No devtools server found` and lists the paths it tried. The floating button still appears, and its panel says **No devtools server found** with a link to the setup guide.
+If no path answers, the overlay logs an error that starts with `[pangular] No devtools server found` and lists the paths it tried. Without a `baseURL`, it tries next to the page, then `/__pangular/`, `/__devframes/pangular/` and `/__devframe/`. The floating button still appears, and its panel says **No devtools server found** with a **Try again** button and a link to the setup guide.
 
 Common causes:
 

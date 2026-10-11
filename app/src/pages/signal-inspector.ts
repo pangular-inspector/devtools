@@ -17,6 +17,7 @@ import { DatePipe, JsonPipe, NgTemplateOutlet } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { pickPage, type ReportedPage } from '../live-pages';
 import { hostPageId } from '../page-id';
+import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
 
 interface SignalNode {
@@ -150,7 +151,7 @@ const KIND_COLORS: Record<string, string> = {
 
 @Component({
   selector: 'app-signal-inspector',
-  imports: [DatePipe, JsonPipe, NgTemplateOutlet, Select],
+  imports: [DatePipe, JsonPipe, NgTemplateOutlet, RovingList, Select],
   template: `
     <div class="toolbar">
       <input
@@ -466,7 +467,7 @@ const KIND_COLORS: Record<string, string> = {
 
     @if (graph() && (visibleNodes().length || !filteredResources().length)) {
       <h2 class="list-heading">Signals</h2>
-      <ul class="nodes" role="list">
+      <ul class="nodes" role="list" appRovingList="button.node-card">
         @for (node of filteredNodes(); track node.id) {
           <li>
             <button

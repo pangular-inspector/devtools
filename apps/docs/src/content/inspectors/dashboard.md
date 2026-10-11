@@ -98,7 +98,7 @@ The Forms and SSR & HTTP cards read the live page only, and update while it runs
 
 ## Limits and gotchas
 
-If the project block says **Project details unavailable**, check that the dev server is running, then reload the panel.
+If the project block says **Project details unavailable**, check that the dev server is running, then click **Try again**.
 
 ## FAQ
 

@@ -1,5 +1,5 @@
 export { registerNgrxSignals } from './ngrx-register.ts';
-import { POPUP_ROOT_ID, SETUP_URL, insideDevtoolsPanel } from './panel-frame.ts';
+import { DEVTOOLS_BASES, POPUP_ROOT_ID, SETUP_URL, insideDevtoolsPanel } from './panel-frame.ts';
 // In-page floating devtools popup. Renders an iframe pointing at the devtools SPA.
 
 let popupRoot: HTMLElement | null = null;
@@ -58,7 +58,6 @@ function saveState(state: PopupState) {
 }
 
 const HUB_BASE = '/__devframes/';
-const PANEL_BASES = ['/__pangular/', '/__devframes/pangular/', '/__devframe/', '/'];
 
 /** The devtools URL the overlay connected to, which beats the default paths. */
 let frameBase: string | undefined;
@@ -102,9 +101,11 @@ async function findTarget(): Promise<string | null> {
   }
   const origin = location.origin;
   if (await servesJson(`${origin}${HUB_BASE}__connection.json`)) return `${origin}${HUB_BASE}`;
-  for (const base of PANEL_BASES) {
+  // The same places the overlay looks, once each: `./` can be the site root.
+  const bases = new Set(DEVTOOLS_BASES.map((base) => new URL(base, location.href).href));
+  for (const base of bases) {
     for (const file of ['__devframe/__connection.json', '__connection.json']) {
-      if (await servesJson(`${origin}${base}${file}`)) return panelUrl(`${origin}${base}`);
+      if (await servesJson(`${base}${file}`)) return panelUrl(base);
     }
   }
   return null;
@@ -274,7 +275,19 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
   newTab.classList.add('sr-only');
   newTab.textContent = ' (opens in a new tab)';
   setupLink.append(newTab);
-  missing.append(missingTitle, missingHint, setupLink);
+  const retryBtn = document.createElement('button');
+  retryBtn.type = 'button';
+  retryBtn.classList.add('retry');
+  retryBtn.textContent = 'Try again';
+  // The server may have started since; look for it again without a reload.
+  retryBtn.addEventListener('click', () => {
+    pendingFocus = true;
+    load();
+  });
+  const missingActions = document.createElement('p');
+  missingActions.classList.add('missing-actions');
+  missingActions.append(retryBtn, setupLink);
+  missing.append(missingTitle, missingHint, missingActions);
 
   panel.append(toolbar, iframe, missing, missingStatus);
 
@@ -496,6 +509,18 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
     .missing .missing-title { font-size: 15px; font-weight: 600; color: var(--_text-str); }
     .missing a { color: var(--_accent); }
     .missing a:focus-visible { outline: 2px solid var(--_text-str); outline-offset: 2px; }
+    .missing .missing-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+    .retry {
+      font: inherit;
+      padding: 4px 12px;
+      border: 1px solid var(--_border);
+      border-radius: 6px;
+      background: var(--_surface);
+      color: var(--_text-str);
+      cursor: pointer;
+    }
+    .retry:hover { background: var(--_hover-bg); color: var(--_hover-fg); }
+    .retry:focus-visible { outline: 2px solid var(--_text-str); outline-offset: 2px; }
   `;
 
   fab.classList.add('fab');
@@ -671,11 +696,16 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
     // Closing hides the panel, so focus would fall to the body. Only take it
     // back when it was inside the popup: the host page may own it.
     if (!isOpen && popupRoot?.contains(document.activeElement)) fab.focus();
+    if (!isOpen) pendingFocus = false;
     if (isOpen && !loaded) load();
   }
 
   let loaded = false;
   let loads = 0;
+  /** Whether the frame finished loading its current `src`. */
+  let frameReady = false;
+  /** Set when a keyboard opened the panel before its content was there to focus. */
+  let pendingFocus = false;
   function load() {
     loaded = true;
     const run = ++loads;
@@ -685,8 +715,42 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
       missing.hidden = src !== null;
       missingStatus.textContent = src === null ? 'No devtools server found' : '';
       if (src === null) loaded = false;
-      else if (iframe.src !== src) iframe.src = src;
+      else if (iframe.src !== src) {
+        frameReady = false;
+        iframe.src = src;
+      }
+      if (pendingFocus && (src === null || frameReady)) focusPanel();
     });
+  }
+  iframe.addEventListener('load', () => {
+    frameReady = true;
+    if (pendingFocus) focusPanel();
+  });
+
+  function focusWhenReady() {
+    if (loaded && (frameReady || !missing.hidden)) focusPanel();
+    else pendingFocus = true;
+  }
+
+  /** Moves focus into the open panel: its content, the frame, or the setup link. */
+  function focusPanel() {
+    pendingFocus = false;
+    if (!isOpen) return;
+    if (!missing.hidden) {
+      // After Try again finds nothing, focus stays on the button.
+      if (!missing.contains(shadow.activeElement)) setupLink.focus();
+      return;
+    }
+    try {
+      const main = iframe.contentDocument?.querySelector<HTMLElement>('main');
+      if (main) {
+        main.focus();
+        return;
+      }
+    } catch {
+      // a cross origin frame: focus the frame itself
+    }
+    iframe.focus();
   }
   retarget = () => {
     loaded = false;
@@ -767,12 +831,15 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
 
   // Keyboard activation of a button fires `click` with no pointer events, so
   // the toggle stays on `click` rather than on `pointerup`.
-  fab.addEventListener('click', () => {
+  fab.addEventListener('click', (event) => {
     if (suppressClick) {
       suppressClick = false;
       return;
     }
     togglePanel();
+    // A keyboard click has no pointer position, and its user expects focus to
+    // follow into the panel they opened.
+    if (isOpen && event.detail === 0) focusWhenReady();
   });
 
   /** Positions the launcher, keeping it fully on screen. */
@@ -824,8 +891,24 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
     }
   };
   if (state.theme) popupRoot.dataset['theme'] = state.theme;
+  /** The panel's frame, or a frame inside it such as a hub dock, at the panel's origin. */
+  const fromPanel = (e: MessageEvent) => {
+    const panelWindow = iframe.contentWindow;
+    if (!panelWindow || !e.source || !iframe.src) return false;
+    try {
+      if (e.origin !== new URL(iframe.src).origin) return false;
+      let w = e.source as Window;
+      while (w !== panelWindow) {
+        if (w === w.parent) return false;
+        w = w.parent;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const onThemeMessage = (e: MessageEvent) => {
-    if (e.source === window) return;
+    if (!fromPanel(e)) return;
     const msg = e.data as { type?: unknown; theme?: unknown } | null;
     if (msg?.type !== 'pangular:theme-change') return;
     applyPopupTheme(msg.theme);

@@ -38,13 +38,11 @@ export class ThemeService {
       try {
         channel?.postMessage(theme);
       } catch {}
-      try {
-        let w: Window = window;
-        while (w !== w.parent) {
-          w = w.parent;
-          w.postMessage({ type: 'pangular:theme-change', theme }, '*');
-        }
-      } catch {}
+      for (const { win, origin } of themeTargets()) {
+        try {
+          win.postMessage({ type: 'pangular:theme-change', theme }, origin);
+        } catch {}
+      }
     });
 
     const onMessage = (e: MessageEvent) => {
@@ -92,5 +90,50 @@ function getHubColorRoot(): Element | null {
     return window.frameElement?.closest('.devframes-color-root') ?? null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * The windows above the panel with the origin each may be sent to, nearest
+ * first. An ancestor whose origin is unknown gets nothing, so the theme never
+ * goes to a page the panel cannot name.
+ */
+export function themeTargets(win: Window = window): { win: Window; origin: string }[] {
+  const targets: { win: Window; origin: string }[] = [];
+  let listed: DOMStringList | undefined;
+  try {
+    listed = win.location.ancestorOrigins;
+  } catch {}
+  let current = win;
+  try {
+    for (let depth = 0; current !== current.parent; depth++) {
+      current = current.parent;
+      const origin = ancestorOrigin(win, current, depth, listed);
+      if (origin) targets.push({ win: current, origin });
+    }
+  } catch {}
+  return targets;
+}
+
+function ancestorOrigin(
+  win: Window,
+  ancestor: Window,
+  depth: number,
+  listed: DOMStringList | undefined,
+): string | undefined {
+  const known = (origin: string | null | undefined) =>
+    origin && origin !== 'null' ? origin : undefined;
+  const fromList = known(listed?.item(depth));
+  if (fromList) return fromList;
+  try {
+    // Readable only when the ancestor shares the panel's origin.
+    const own = known(ancestor.location.origin);
+    if (own) return own;
+  } catch {}
+  if (depth > 0) return undefined;
+  try {
+    return known(new URL(win.document.referrer).origin);
+  } catch {
+    return undefined;
   }
 }

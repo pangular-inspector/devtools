@@ -131,7 +131,7 @@ interface PangularConfig {
 
 `agent.tools` has the same keys as `inspectors`. An inspector that is off has no agent tools, whatever `agent.tools` says.
 
-If you open a tab that is turned off, the panel says so and names the `inspectors` option. With `inspectors.components` set to `false`, the [Chrome extension](./chrome-extension.md) does not follow the **Elements** panel.
+If you open a tab that is turned off, the panel says so, shows the option that turns it back on, such as `inspectors: {ngrx: true}`, and links to this section. With `inspectors.components` set to `false`, the [Chrome extension](./chrome-extension.md) does not follow the **Elements** panel.
 
 ### Actions
 

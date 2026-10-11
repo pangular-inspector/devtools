@@ -126,6 +126,7 @@ describe.sequential('overlay connectionMeta', () => {
       './__connection.json',
       '/__pangular/__connection.json',
       '/__devframes/pangular/__connection.json',
+      '/__devframe/__connection.json',
     ]);
   });
 

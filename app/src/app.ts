@@ -35,27 +35,24 @@ import { styleHubRail } from './hub-rail-style';
 import { ThemeService } from './theme.service';
 import { followHubDocks, inHub, selectHubDock } from './hub-dock-sync';
 import { fullPanelHref, isPlainClick } from './full-panel';
-import { panelConfig, tabEnabled } from './devtools-config';
+import { INSPECTORS_DOCS_URL, panelConfig, tabEnabled, tabInspector } from './devtools-config';
 import { hostPageId, scopeToPage } from './page-id';
 import { angularNativePage, type PlatformPage } from './native-page';
 import { initialTab, storeTab, storedTab } from './tab-memory';
 import { detectBaseURL } from './base-url';
 import { clearHighlightsOnHide } from './rpc';
 import { viewAccent } from './view-accents';
+import {
+  HUB_ALL_TOOLS,
+  HUB_VIEWS,
+  hubDockId,
+  type HubView,
+} from '@pangular-inspector/devtools/config';
 
-const HUB_VIEWS = [
-  'angular',
-  'ngrx',
-  'analog',
-  'angular-native',
-  'nativescript',
-  'capacitor',
-] as const;
-
-type View = (typeof HUB_VIEWS)[number];
+type View = HubView;
 
 /** The hub dock that opens this panel without a view, with every tab. */
-const ALL_TOOLS = 'all';
+const ALL_TOOLS = HUB_ALL_TOOLS;
 const HUB_DOCKS = [ALL_TOOLS, ...HUB_VIEWS] as const;
 
 const VIEW_TITLE: Record<View, string> = {
@@ -155,6 +152,9 @@ const NO_ANGULAR_NATIVE: ComingSoonInfo = {
     href: 'https://pangular-inspector.dev/guides/angular-native/',
   },
 };
+
+/** How long the panel waits before each retry while it can't reach the server. */
+const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000];
 
 function readView(): View | null {
   const view = new URLSearchParams(location.search).get('view');
@@ -360,6 +360,7 @@ function readView(): View | null {
         [class.fade-start]="navFade().start"
         [class.fade-end]="navFade().end"
         (scroll)="measureNav()"
+        (keydown)="onNavKey($event)"
       >
         @if (availableTabs().length > 1) {
           @for (t of tabs(); track t.id) {
@@ -367,6 +368,7 @@ function readView(): View | null {
               type="button"
               [class.active]="tab() === t.id"
               [attr.aria-current]="tab() === t.id ? 'page' : null"
+              [attr.tabindex]="rovingTab() === t.id ? 0 : -1"
               (click)="switchTab(t.id)"
             >
               <app-tab-icon [name]="t.id" />
@@ -399,9 +401,13 @@ function readView(): View | null {
     <main #main tabindex="-1" [attr.aria-label]="mainLabel()">
       <p class="background-note" role="status">{{ backgroundNote() }}</p>
       @if (connectionFailed()) {
-        <p class="connection-error" role="alert">
-          Can't reach the devtools server. Check that the dev server is running, then reload.
-        </p>
+        <div class="connection-error" role="alert">
+          <p>
+            Can't reach the devtools server. Check that the dev server is running. The panel keeps
+            trying to connect.
+          </p>
+          <button type="button" (click)="retryConnection()">Retry now</button>
+        </div>
       } @else if (comingSoon(); as info) {
         <app-coming-soon [info]="info" />
       } @else if (view() === 'angular-native' && !nativePageId()) {
@@ -409,6 +415,12 @@ function readView(): View | null {
       } @else if (!tabEnabled(tab(), config())) {
         <p class="turned-off">
           This inspector is turned off in the devtools config (<code>inspectors</code>).
+          @if (turnOnSnippet(); as snippet) {
+            To turn it on, set <code>{{ snippet }}</code> in the devtools options.
+          }
+          <a [href]="inspectorsDocsUrl" target="_blank" rel="noopener noreferrer"
+            >About inspectors</a
+          >
         </p>
       } @else {
         @for (scope of [scopeKey()]; track scope) {
@@ -785,6 +797,16 @@ function readView(): View | null {
       background: var(--surface);
       color: var(--text);
     }
+    .turned-off a {
+      color: var(--accent);
+      border-radius: 2px;
+      &:focus-visible {
+        @include m.focus-ring;
+      }
+    }
+    .turned-off code {
+      font-family: var(--font-mono);
+    }
     .connection-error {
       max-width: 60ch;
       margin: 0;
@@ -793,6 +815,29 @@ function readView(): View | null {
       border-radius: var(--radius);
       background: var(--surface);
       color: var(--text);
+      p {
+        margin: 0 0 10px;
+      }
+      button {
+        display: inline-flex;
+        align-items: center;
+        height: var(--control-h);
+        padding: 0 14px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-sm);
+        background: var(--surface-2);
+        color: var(--text);
+        font: inherit;
+        font-weight: 500;
+        cursor: pointer;
+        &:hover {
+          background: var(--surface-3);
+          border-color: var(--accent-line);
+        }
+        &:focus-visible {
+          @include m.focus-ring;
+        }
+      }
     }
     @media (max-width: 720px) {
       header {
@@ -873,6 +918,12 @@ export class App implements OnInit, OnDestroy {
   });
   readonly config = computed(() => panelConfig(this.rpc()));
   protected readonly tabEnabled = tabEnabled;
+  protected readonly inspectorsDocsUrl = INSPECTORS_DOCS_URL;
+  /** The option that turns the current tab back on, such as `inspectors: {ngrx: true}`. */
+  protected readonly turnOnSnippet = computed(() => {
+    const inspector = tabInspector(this.tab());
+    return inspector ? `inspectors: {${inspector}: true}` : null;
+  });
   protected readonly availableTabs = computed(() => {
     if (this.comingSoon()) return [];
     const view = this.view();
@@ -894,6 +945,33 @@ export class App implements OnInit, OnDestroy {
     const tab = this.tab();
     return tabs.filter((t) => t.id === 'dashboard' || t.id === tab);
   });
+
+  /** The one tab button in the Tab order; the arrow keys reach the others. */
+  protected readonly rovingTab = computed(() => {
+    const tabs = this.tabs();
+    const tab = this.tab();
+    return tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id;
+  });
+
+  /** Arrow keys, Home and End move focus along the tab bar; Enter or Space opens a tab. */
+  onNavKey(event: KeyboardEvent) {
+    const nav = this.nav()?.nativeElement;
+    if (!nav || event.altKey || event.ctrlKey || event.metaKey) return;
+    const buttons = [...nav.querySelectorAll<HTMLButtonElement>('button')];
+    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (index < 0) return;
+    const last = buttons.length - 1;
+    const moves: Record<string, number> = {
+      ArrowRight: index === last ? 0 : index + 1,
+      ArrowLeft: index === 0 ? last : index - 1,
+      Home: 0,
+      End: last,
+    };
+    const next = Object.hasOwn(moves, event.key) ? moves[event.key] : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    buttons[next].focus();
+  }
 
   /** The link from a hub view to the full panel, on the tab that shows the same content. */
   protected readonly fullPanelLink = computed(() => {
@@ -1010,9 +1088,31 @@ export class App implements OnInit, OnDestroy {
     }
 
     this.stopHighlights = clearHighlightsOnHide(() => this.rpc());
+    this.connect();
+  }
+
+  private connecting = false;
+  private retries = 0;
+  private retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Connects to the devframe server, and keeps trying with backoff while it can't. */
+  private connect() {
+    if (this.connecting || this.rpc()) return;
+    this.connecting = true;
+    clearTimeout(this.retryTimer);
     const baseURL = detectBaseURL();
     connectDevframe(baseURL ? { baseURL } : {}).then(
       (client) => {
+        this.connecting = false;
+        if (this.destroyed) {
+          client.close?.();
+          return;
+        }
+        this.retries = 0;
+        this.connectionFailed.set(false);
+        // Retry now disappears with the error, so its focus moves to the tabs.
+        if (this.refocusOnConnect) this.focusCurrentTab();
+        this.refocusOnConnect = false;
         this.rpc.set(client);
         this.connected.set(true);
         void this.watchVisibility(client);
@@ -1043,14 +1143,32 @@ export class App implements OnInit, OnDestroy {
         });
       },
       () => {
+        this.connecting = false;
+        if (this.destroyed) return;
         this.connectionFailed.set(true);
         this.analogKnown.set(true);
         this.nativeKnown.set(true);
+        // A dev server that starts slowly or restarts answers a moment later.
+        const delay = RETRY_DELAYS_MS[Math.min(this.retries++, RETRY_DELAYS_MS.length - 1)];
+        this.retryTimer = setTimeout(() => this.connect(), delay);
       },
     );
   }
 
+  /** Tries the connection again at once, instead of waiting for the next retry. */
+  retryConnection() {
+    this.retries = 0;
+    this.refocusOnConnect = true;
+    this.connect();
+  }
+
+  private refocusOnConnect = false;
+
+  private destroyed = false;
+
   ngOnDestroy() {
+    this.destroyed = true;
+    clearTimeout(this.retryTimer);
     this.stopNative();
     this.stopCapacitor();
     this.stopFollowing();
@@ -1245,7 +1363,7 @@ export class App implements OnInit, OnDestroy {
       return;
     }
     try {
-      await client.call('hub:docks:activate', { dockId: `pangular:${view}` });
+      await client.call('hub:docks:activate', { dockId: hubDockId(view) });
       this.keepFocus();
       this.showView(view);
     } catch {

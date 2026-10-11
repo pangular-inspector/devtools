@@ -25,6 +25,7 @@ async function mount() {
   document.body.append(fixture.nativeElement);
   const inspector = fixture.componentInstance;
   inspector.sourceLoaded.set(true);
+  inspector.stateLoaded.set(true);
   inspector.pages.set([
     {
       pageId: 'p1',

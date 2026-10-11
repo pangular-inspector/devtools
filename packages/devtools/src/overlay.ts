@@ -64,8 +64,9 @@ import {
 } from './change-detection.ts';
 import { attachChangeDetection } from './cd-overlay.ts';
 import { createScanBackoff } from './router-attach.ts';
-import { SETUP_URL } from './panel-frame.ts';
+import { DEVTOOLS_BASES, SETUP_URL } from './panel-frame.ts';
 import { clearHighlight, showHighlight } from './page-highlight.ts';
+import { newPageId } from './page-id.ts';
 
 declare global {
   interface Window {
@@ -96,7 +97,7 @@ function storePageId(id: string) {
 }
 
 async function claimPageId(): Promise<{ id: string; release: () => void }> {
-  const fresh = Math.random().toString(36).slice(2, 6);
+  const fresh = newPageId();
   let id = storedPageId() ?? fresh;
   if (typeof BroadcastChannel === 'undefined') {
     storePageId(id);
@@ -201,8 +202,9 @@ export async function disposeOverlay(): Promise<void> {
 }
 
 // `connectDevframe()` alone looks for the connection next to the page, which
-// misses the documented `/__pangular/` mount in a host app.
-const DEFAULT_BASES = ['./', '/__pangular/', '/__devframes/pangular/'];
+// misses the documented `/__pangular/` mount in a host app. The floating
+// button looks in the same places.
+const DEFAULT_BASES = DEVTOOLS_BASES;
 
 const SERVER_HINT =
   'Mount initPangularHub() or the pangular() Vite plugin in your dev server, before the SSR handler. ' +

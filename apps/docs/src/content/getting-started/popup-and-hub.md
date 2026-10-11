@@ -18,9 +18,9 @@ When the overlay loads, a floating button appears in the bottom-right corner of 
 Importing the [overlay](./overlay.md) adds the button. The first time the panel opens, it looks for the devtools server:
 
 1. If the overlay connected, it uses that path. When the path is `<base>pangular/` and a hub answers at `<base>`, it opens the hub.
-2. Otherwise it checks for the hub at `/__devframes/`, then for the devtools alone at `/__pangular/` and `/__devframes/pangular/`.
+2. Otherwise it checks for the hub at `/__devframes/`, then for the devtools alone in the places the overlay looks: next to the page, `/__pangular/`, `/__devframes/pangular/` and `/__devframe/`.
 
-A path counts only when it answers with JSON. If nothing answers, the panel says **No devtools server found** and looks again the next time it opens.
+A path counts only when it answers with JSON. If nothing answers, the panel says **No devtools server found** with a **Try again** button, and looks again the next time it opens.
 
 ### Create it yourself
 
@@ -87,14 +87,17 @@ The button and the panel sit in the browser top layer, like a `<dialog>`, a popo
 
 ### Keyboard and mouse
 
-| Action                    | How                                               |
-| ------------------------- | ------------------------------------------------- |
-| Close the panel           | <kbd>Escape</kbd>, outside a search box with text |
-| Move the floating panel   | Drag its toolbar                                  |
-| Reset the panel position  | Double-click its toolbar                          |
-| Move the button           | Drag it, or focus it and use the arrow keys       |
-| Move the button further   | Hold <kbd>Shift</kbd> with the arrow keys         |
-| Reset the button position | Double-click it                                   |
+| Action                    | How                                                                                                                                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Open the panel            | Click the button, or focus it and press <kbd>Enter</kbd> or <kbd>Space</kbd>; from the keyboard, focus moves into the panel                                                         |
+| Move between tabs         | Arrow keys, <kbd>Home</kbd> and <kbd>End</kbd> in the tab bar, then <kbd>Enter</kbd> to open a tab                                                                                  |
+| Move through a long list  | <kbd>↑</kbd>, <kbd>↓</kbd>, <kbd>Home</kbd> and <kbd>End</kbd> in the SSR & HTTP timeline, the Store changes and events, and the Signals list. Each list is one <kbd>Tab</kbd> stop |
+| Close the panel           | <kbd>Escape</kbd>, outside a search box with text                                                                                                                                   |
+| Move the floating panel   | Drag its toolbar                                                                                                                                                                    |
+| Reset the panel position  | Double-click its toolbar                                                                                                                                                            |
+| Move the button           | Drag it, or focus it and use the arrow keys                                                                                                                                         |
+| Move the button further   | Hold <kbd>Shift</kbd> with the arrow keys                                                                                                                                           |
+| Reset the button position | Double-click it                                                                                                                                                                     |
 
 In a search box that has text, <kbd>Escape</kbd> clears the box and leaves the panel open. Press it again to close the panel.
 
@@ -104,7 +107,7 @@ The panel saves its position, size and dock mode in `localStorage` under `pangul
 
 ### Theme
 
-The panel follows the color scheme of the hub, which follows your system unless you pick light or dark in the hub. Without the hub, the panel follows your system. The popup frame around the panel switches with it and saves the last theme with the layout.
+The panel follows the color scheme of the hub, which follows your system unless you pick light or dark in the hub. Without the hub, the panel follows your system. The popup frame around the panel switches with it and saves the last theme with the layout. It takes the theme only from the panel's own frame, so other frames on your page cannot change it.
 
 ## The hub
 
@@ -186,7 +189,7 @@ The panel header shows the state of the connection:
 | **Connecting…**  | The panel is trying to reach the server. |
 | **Disconnected** | The server is gone.                      |
 
-If the panel cannot reach the server, check that the dev server is running, then reload.
+If the panel cannot reach the server when it opens, it says so and tries again after 1, 2, 5 and then every 10 seconds, so a dev server that starts slowly or restarts connects without a reload. Click **Retry now** to try at once.
 
 ### Tabs in the background
 
