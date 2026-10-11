@@ -172,7 +172,7 @@ describe('Analog panel', () => {
     expect(el.querySelector('#analog-confirm-hint')!.textContent).toContain('POST');
     await submit('form.playground');
     expect(sent).toHaveLength(0);
-    el.querySelector<HTMLInputElement>('.check input')!.dispatchEvent(new Event('change'));
+    el.querySelector<HTMLInputElement>('.confirm-send input')!.dispatchEvent(new Event('change'));
     await settle();
     expect(button.disabled).toBe(false);
     await submit('form.playground');

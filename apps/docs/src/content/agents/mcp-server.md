@@ -208,7 +208,7 @@ The server registers tools with a colon, as `pangular:get-routes`. MCP clients s
 
 ### Read and action tools
 
-The server marks read-only tools as read-only for your client. Six tools act on the app, so the server does not mark them:
+The server marks read-only tools as read-only for your client. Eight tools act on the app, so the server does not mark them:
 
 | Tool                   | Reference                                                          |
 | ---------------------- | ------------------------------------------------------------------ |
@@ -217,6 +217,8 @@ The server marks read-only tools as read-only for your client. Six tools act on 
 | `dispatch-ngrx-action` | [Dispatch an action](./tools.md#dispatch-an-action)                |
 | `form-action`          | [Act on a form](./tools.md#act-on-a-form)                          |
 | `fill-form`            | [Act on a form](./tools.md#act-on-a-form)                          |
+| `set-http-rule`        | [Fault rules](./tools.md#fault-rules)                              |
+| `remove-http-rule`     | [Fault rules](./tools.md#fault-rules)                              |
 | `analog-call-api`      | [Call a server route](./tools.md#call-a-server-route)              |
 
 Your client can ask you before it runs them. To drop them from the server, set `agent.readOnly`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).

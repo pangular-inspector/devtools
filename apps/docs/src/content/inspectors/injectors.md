@@ -22,6 +22,12 @@ A switch at the top picks the view:
 
 Each row shows a kind letter (`C`, `D` or `E`), the tag or injector name, the component or directive classes, and icons with the number of injected and provided tokens.
 
+### Page picker
+
+When more than one open page reports an injector tree, a **Page** picker appears in the toolbar. It lists each page by title, or by URL when the page has no title. The tab starts on the page that reported last, and stays on the page you choose when another page reports later. Each page keeps its own selected injector and expanded rows, and hovering a row highlights the element in the chosen page.
+
+If the chosen page closes, the tab moves to the page that reported last and announces the change to screen readers. When the panel opens framed by a page, such as the popup on that page, the tab shows that page only and has no **Page** picker.
+
 ### Search and filters
 
 - Search for a token, component, directive or injector. When a token matches, **Provided by** chips list the injectors that provide it. Click one to jump there.

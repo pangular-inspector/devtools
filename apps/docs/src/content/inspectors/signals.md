@@ -152,7 +152,7 @@ Entries are sampled instead of exact in these cases:
 
 ### Switch the graph from an agent
 
-The `pangular:highlight` tool also switches the graph to the component it highlights. Calling `pangular:inspect-signals` with `root` or a route path switches it to that injector. The picker does not show either choice.
+The `pangular:highlight` tool also switches the graph to the component it highlights. The picker does not show that choice. Calling `pangular:inspect-signals` with `root` or a route path reads that injector's graph once and does not change what the Signals page shows.
 
 ### Find a stuck effect in a root service
 

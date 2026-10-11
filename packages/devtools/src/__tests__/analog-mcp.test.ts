@@ -11,6 +11,7 @@ import {
   resolveAnalogReport,
   ruleMatches,
   type AnalogState,
+  UNTRUSTED,
 } from '../rpc/analog-tools.ts';
 import { scanAnalog } from '../rpc/analog-scan.ts';
 import type { AnalogRuntimeReport } from '../analog-runtime.ts';
@@ -268,7 +269,8 @@ describe('Analog MCP tools', () => {
     );
     setDevOrigin(`${origin}/`);
     const get = await call('analog-call-api', { path: '/api/v1/hello' });
-    expect(get).toContain('GET /api/v1/hello: 200');
+    // The response body is the route's own output, so it sits behind the notice.
+    expect(get.startsWith(`${UNTRUSTED}\n\nGET /api/v1/hello: 200`)).toBe(true);
     expect(get).toContain('"method":"GET"');
     expect(
       await call('analog-call-api', { path: '/api/v1/products', method: 'POST', body: { a: 1 } }),

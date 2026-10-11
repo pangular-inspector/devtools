@@ -118,7 +118,7 @@ export function listHttpCallsText(
   ].filter(Boolean);
 
   if (!shown.length) {
-    return `${rows.length} call${rows.length === 1 ? '' : 's'} recorded for ${scope}, none match ${filters.join(' and ')}.`;
+    return `${UNTRUSTED_HTTP}\n\n${rows.length} call${rows.length === 1 ? '' : 's'} recorded for ${scope}, none match ${filters.join(' and ')}.`;
   }
 
   const showPage = !args.page && pages.length > 1;

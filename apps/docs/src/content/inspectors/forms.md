@@ -181,19 +181,19 @@ You can also open a form from its component in the [Components tab](./components
 
 ### Read tools
 
-| Tool                              | What it does                                                                                                                     |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:explain-form-invalid`   | Start here. Every invalid or pending form, with each failing field's value, validator, message and touched state.                |
-| `pangular:inspect-forms`          | The forms with status and error counts, and WebMCP tool state. With `form`, the field tree. Narrow with `path` or `onlyInvalid`. |
-| `pangular:explain-field`          | One field: error sources, skip reasons, pending values, binding, visible errors, and source lines.                               |
-| `pangular:explain-submit`         | What submit does, and why it might do nothing.                                                                                   |
-| `pangular:form-payload`           | What the form sends: value against raw value, and unvalidated fields.                                                            |
-| `pangular:form-history`           | The change timeline with origins. Returns a marker.                                                                              |
-| `pangular:form-diff`              | The net change since a marker.                                                                                                   |
-| `pangular:lint-forms`             | Form bugs and accessibility checks.                                                                                              |
-| `pangular:explain-custom-control` | How a field binds to its element, and what is wrong with the binding.                                                            |
-| `pangular:export-form`            | A JSON snapshot or a test fixture.                                                                                               |
-| `pangular:wait-for-form`          | Waits until the form is settled, valid, not pending or submitted.                                                                |
+| Tool                              | What it does                                                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:explain-form-invalid`   | Start here. Every invalid or pending form, with each failing field's value, validator, message and touched state. Narrow with `path`. |
+| `pangular:inspect-forms`          | The forms with status and error counts, and WebMCP tool state. With `form`, the field tree. Narrow with `path` or `onlyInvalid`.      |
+| `pangular:explain-field`          | One field: error sources, skip reasons, pending values, binding, visible errors, and source lines.                                    |
+| `pangular:explain-submit`         | What submit does, and why it might do nothing.                                                                                        |
+| `pangular:form-payload`           | What the form sends: value against raw value, and unvalidated fields. Narrow with `path`.                                             |
+| `pangular:form-history`           | The change timeline with origins. Returns a marker.                                                                                   |
+| `pangular:form-diff`              | The net change since a marker.                                                                                                        |
+| `pangular:lint-forms`             | Form bugs and accessibility checks.                                                                                                   |
+| `pangular:explain-custom-control` | How a field binds to its element, and what is wrong with the binding.                                                                 |
+| `pangular:export-form`            | A JSON snapshot or a test fixture.                                                                                                    |
+| `pangular:wait-for-form`          | Waits until the form is settled, valid, not pending or submitted.                                                                     |
 
 ### Write tools
 
@@ -239,6 +239,10 @@ Without a browser that provides `modelContext`, Angular registers no tool. The [
 </ngmd-workflow>
 
 If you load `/examples/forms` directly, the form registers before the overlay loads. The block then says **registered before the inspector attached**, and the call is not recorded. In a browser with its own `modelContext`, the demo uses it, and **Fill as an agent** asks you to call `sign_up` from your agent.
+
+### Large forms in agent answers
+
+The agent tools cut answers about large forms, so one form cannot fill an agent's context. A cut answer says how many fields or lines it left out and how to narrow the answer, for example with `path`, `form` or a later `since` marker. See [Tools](../agents/tools.md#read-form-state) for each limit.
 
 ### Snapshot limits
 
