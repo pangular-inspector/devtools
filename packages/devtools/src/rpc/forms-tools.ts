@@ -18,6 +18,7 @@ import {
   pathHint,
 } from './forms-cap.ts';
 import { fixedTtl, type PageTtl } from './page-ttl.ts';
+import { clip } from '../text.ts';
 
 export interface FormsState {
   forms: CollectedForm[];
@@ -267,13 +268,54 @@ export function inspectFormsText(
   });
   // Keep room for the notes after the JSON.
   const room = MAX_TOOL_CHARS - 2_000;
-  const rendered = fitFields((fields) => renderTrees(pruned, fields), room);
-  const json = capText(rendered.text, NARROW_TREE, room);
-  const notes = [...rendered.notes, ...missing];
+  const rendered = fitFields(
+    (fields) => renderTrees(pruned, fields),
+    room,
+    () => treesTooLarge(pruned, room),
+  );
+  const json = rendered.text;
+  const notes = [...capNotes(rendered.notes), ...capNotes(missing)];
   return `${UNTRUSTED}\n\n${json}${notes.length ? `\n\n${notes.join('\n')}` : ''}${stale}`;
 }
 
 const NARROW_TREE = 'narrow it down with `form`, `path` or `onlyInvalid`';
+const MAX_NOTES = 5;
+
+function capNotes(notes: string[]): string[] {
+  return notes.length > MAX_NOTES
+    ? [
+        ...notes.slice(0, MAX_NOTES),
+        `_… and ${notes.length - MAX_NOTES} more notes not shown; ${NARROW_TREE}._`,
+      ]
+    : notes;
+}
+
+/**
+ * The answer when not even one field per form fits: one short record per form,
+ * as many as fit, so the JSON still parses.
+ */
+function treesTooLarge(
+  pruned: { form: CollectedForm; root: FormFieldNode | null }[],
+  room: number,
+): { text: string; notes: string[] } {
+  const records = pruned.map(({ form: f, root }) => ({
+    id: clip(f.id, 200),
+    label: clip(f.label, 200),
+    kind: f.kind,
+    status: root?.status,
+    root: null,
+    notShown: root ? countNodes(root, () => 1) : 0,
+  }));
+  let kept = records.length;
+  while (kept > 0 && JSON.stringify(records.slice(0, kept)).length > room) kept--;
+  const left = records.length - kept;
+  return {
+    text: JSON.stringify(records.slice(0, kept)),
+    notes: [
+      `_Not even one field per form fits in ${room} characters, so each form shows only its status and \`notShown\` field count${left ? `, and ${left} more form(s) are not shown` : ''}. ${NARROW_TREE[0].toUpperCase()}${NARROW_TREE.slice(1)}, or call explain-field for one field._`,
+    ],
+  };
+}
 
 function renderTrees(
   pruned: { form: CollectedForm; root: FormFieldNode | null }[],
@@ -281,9 +323,13 @@ function renderTrees(
 ): { text: string; notes: string[] } {
   const notes: string[] = [];
   let clipped = 0;
+  let trimmed = 0;
   const trees = pruned.map(({ form: f, root }) => {
     const capped = root && capFieldTree(root, fields);
-    if (capped) clipped += capped.clipped;
+    if (capped) {
+      clipped += capped.clipped;
+      trimmed += capped.trimmed;
+    }
     if (capped && capped.shown < capped.total) {
       notes.push(
         `_${f.id}: showing ${capped.shown} of ${capped.total} fields; ${capped.total - capped.shown} more not shown. Groups that lost fields carry \`notShown\`. Pass \`path\` to start the tree at a group or field${pathHint(capped.cut)}, or \`onlyInvalid\` to keep only failing fields._`,
@@ -301,6 +347,11 @@ function renderTrees(
   if (clipped) {
     notes.push(
       `_${clipped} value(s) longer than ${MAX_FIELD_VALUE_CHARS} characters are cut and end in …. A group's value is also split across its fields; use form-payload with \`path\` to read a longer value._`,
+    );
+  }
+  if (trimmed) {
+    notes.push(
+      `_Long error messages, metadata and other text in ${trimmed} field(s) are cut at ${MAX_FIELD_VALUE_CHARS} characters; call explain-field with \`path\` for one field._`,
     );
   }
   return { text: JSON.stringify(trees), notes };

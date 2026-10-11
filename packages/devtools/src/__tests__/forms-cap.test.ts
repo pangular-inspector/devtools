@@ -242,3 +242,85 @@ describe('lint-forms size cap', () => {
     expect(text).toMatch(/- … and \d+ more not shown; pass `form` to lint one form\.$/);
   });
 });
+
+describe('answers that must stay parseable', () => {
+  /** One field whose own errors are far larger than the whole budget, even with each text cut. */
+  function hugeField(): CollectedForm {
+    const params = Object.fromEntries(
+      Array.from({ length: 50 }, (_, i) => [`p${i}`, 'q'.repeat(1000)]),
+    );
+    // The form itself (the one field always shown) carries the cross-field errors.
+    return {
+      ...bigForm(0),
+      root: {
+        ...group('', [control('email')]),
+        status: 'INVALID',
+        errors: Array.from({ length: 50 }, (_, i) => ({
+          kind: `rule${i}`,
+          message: 'm'.repeat(100_000),
+          params,
+        })),
+        metadata: Array.from({ length: 50 }, () => ({ note: 'n'.repeat(100_000) })),
+      },
+    };
+  }
+
+  it('cuts long error messages and metadata in a field tree', () => {
+    const form = bigForm(0);
+    form.root.children = [
+      control('email', {
+        status: 'INVALID',
+        errors: [{ kind: 'email', message: 'm'.repeat(100_000) }],
+        metadata: [{ note: 'n'.repeat(100_000) }],
+      }),
+    ];
+    const text = inspectFormsText(stateOf(form), { form: 'Orders' });
+    const [tree] = json(text);
+    const email = tree.root.children[0];
+    expect(email.errors[0].message).toHaveLength(301);
+    expect(email.metadata[0].note).toHaveLength(301);
+    expect(text).toContain(
+      '_Long error messages, metadata and other text in 1 field(s) are cut at 300 characters; call explain-field with `path` for one field._',
+    );
+  });
+
+  it('inspect-forms returns parseable JSON when one field does not fit', () => {
+    const text = inspectFormsText(stateOf(hugeField()), { form: 'Orders' });
+    expect(text.length).toBeLessThan(FORM_TOOL_MAX_CHARS);
+    const [record] = json(text);
+    expect(record).toMatchObject({ id: 'Orders.form@p1', root: null, notShown: 2 });
+    expect(text).toContain('_Not even one field per form fits in 18000 characters');
+    expect(text).not.toContain('truncated at');
+  });
+
+  it('inspect-forms clips a huge label instead of cutting the JSON', () => {
+    const form = { ...bigForm(1), label: 'L'.repeat(50_000) };
+    const text = inspectFormsText(stateOf(form), { form: 'Orders.form@p1' });
+    expect(text.length).toBeLessThan(FORM_TOOL_MAX_CHARS);
+    expect(json(text)[0].label).toHaveLength(201);
+  });
+
+  it('export-form returns a parseable snapshot when one field does not fit', () => {
+    const text = exportFormText(stateOf(hugeField()), { form: 'Orders' });
+    const snapshot = JSON.parse(/```json\n([\s\S]*)\n```/.exec(text)![1]);
+    expect(snapshot.root).toEqual({ path: '', status: 'INVALID', notShown: 2 });
+    expect(text).toContain('not even one field fits');
+    expect(text.length).toBeLessThan(FORM_TOOL_MAX_CHARS + 1_000);
+  });
+
+  it('form-payload handles a path to a field without a value', () => {
+    const form = bigForm(1);
+    form.root.children![0].value = undefined;
+    const text = formPayloadText(stateOf(form), { form: 'Orders', path: 'name' });
+    expect(text).toContain('form.value at `name`: undefined');
+    expect(text).not.toContain('Secret values');
+  });
+
+  it('export-form keeps a fixture header and body within the budget together', () => {
+    const text = exportFormText(stateOf(bigForm(400, true)), { form: 'Orders', format: 'fixture' });
+    const code = /```ts\n([\s\S]*)\n```/.exec(text)![1];
+    expect(code.length).toBeLessThanOrEqual(FORM_TOOL_MAX_CHARS);
+    expect(code).toContain('items.0.a required, ');
+    expect(code).toContain('and 1980 more not shown (call explain-form-invalid for all)');
+  });
+});

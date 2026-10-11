@@ -1,5 +1,5 @@
 import type { FormFieldNode } from '../forms.ts';
-import { clip } from '../text.ts';
+import { clip, overflowKey } from '../text.ts';
 
 /** Size caps for the forms agent tools, so a large form cannot flood an agent's context. */
 export const FORM_TOOL_MAX_CHARS = 20_000;
@@ -26,6 +26,8 @@ export interface CappedTree {
   cut: string[];
   /** How many values were cut to `valueChars`. */
   clipped: number;
+  /** How many fields had other long text (error messages, metadata) cut to `valueChars`. */
+  trimmed: number;
 }
 
 function count(node: FormFieldNode): number {
@@ -40,6 +42,30 @@ export function clipValue(value: unknown, max = MAX_FIELD_VALUE_CHARS): unknown 
 }
 
 const VALUE_KEYS = ['value', 'defaultValue', 'uncommitted'] as const;
+/** Properties kept whole: the field's identity, its value (cut separately) and its children. */
+const WHOLE_KEYS = new Set<string>(['key', 'path', 'children', 'modelDrift', ...VALUE_KEYS]);
+const MAX_TEXT_ITEMS = 20;
+const MAX_TEXT_DEPTH = 4;
+
+/** `value` with long strings cut to `max`, long arrays and objects cut to 20 entries, and deep nesting folded. */
+export function trimText(value: unknown, max = MAX_FIELD_VALUE_CHARS, depth = 0): unknown {
+  if (typeof value === 'string') return clip(value, max);
+  if (!value || typeof value !== 'object') return value;
+  if (depth >= MAX_TEXT_DEPTH) return Array.isArray(value) ? `[${value.length} items]` : '{…}';
+  if (Array.isArray(value)) {
+    const items = value.slice(0, MAX_TEXT_ITEMS).map((item) => trimText(item, max, depth + 1));
+    if (value.length > MAX_TEXT_ITEMS) items.push(`… ${value.length - MAX_TEXT_ITEMS} more`);
+    return items;
+  }
+  const keys = Object.keys(value);
+  const out: Record<string, unknown> = {};
+  for (const key of keys.slice(0, MAX_TEXT_ITEMS)) {
+    out[clip(key, max)] = trimText((value as Record<string, unknown>)[key], max, depth + 1);
+  }
+  if (keys.length > MAX_TEXT_ITEMS)
+    out[overflowKey(out)] = `${keys.length - MAX_TEXT_ITEMS} more keys`;
+  return out;
+}
 
 /**
  * Keeps the first `max` fields of `root` in breadth-first order, so the shape
@@ -66,8 +92,20 @@ export function capFieldTree(
     if (out !== value) clipped++;
     return out;
   };
+  let trimmed = 0;
   const copy = (node: FormFieldNode, depth: number): CappedFieldNode => {
     const out: CappedFieldNode = { ...node };
+    let changed = false;
+    for (const [key, value] of Object.entries(node)) {
+      if (WHOLE_KEYS.has(key) || !value || typeof value === 'number' || typeof value === 'boolean')
+        continue;
+      const short = trimText(value, valueChars);
+      if (JSON.stringify(short) !== JSON.stringify(value)) {
+        (out as unknown as Record<string, unknown>)[key] = short;
+        changed = true;
+      }
+    }
+    if (changed) trimmed++;
     for (const key of VALUE_KEYS) {
       if (key in out) out[key] = clipOne(out[key]);
     }
@@ -95,16 +133,19 @@ export function capFieldTree(
     total: count(root),
     cut: cut.sort((a, b) => a.depth - b.depth).map((c) => c.path),
     clipped,
+    trimmed,
   };
 }
 
 /**
  * The render with the most fields per form, up to `max`, whose `text` fits in
- * `room` characters, found by bisection. Falls back to one field per form.
+ * `room` characters, found by bisection. When even one field per form does not
+ * fit, returns `fallback()`, which must fit on its own.
  */
 export function fitFields<T extends { text: string }>(
   render: (fields: number) => T,
   room: number,
+  fallback: () => T,
   max = MAX_FORM_FIELDS,
 ): T {
   const full = render(max);
@@ -112,6 +153,7 @@ export function fitFields<T extends { text: string }>(
   let low = 1;
   let high = max - 1;
   let best = render(low);
+  if (best.text.length > room) return fallback();
   while (low < high) {
     const mid = Math.ceil((low + high) / 2);
     const attempt = render(mid);

@@ -26,6 +26,7 @@ import {
   MAX_FORM_LINES,
   MAX_FORM_VALUE_CHARS,
   capFieldTree,
+  type CappedTree,
   capLines,
   capText,
   fitFields,
@@ -389,7 +390,8 @@ export function formPayloadText(state: FormsState, args: FieldArgs, now = Date.n
       ? `Changed by the user: ${list(p.changed)}.`
       : 'No field changed since it was created or last reset.',
   );
-  if (JSON.stringify(p.raw).includes(REDACTED)) lines.push('Secret values show as [redacted].');
+  if ((JSON.stringify(p.raw) ?? '').includes(REDACTED))
+    lines.push('Secret values show as [redacted].');
   return `${UNTRUSTED}\n\n${lines.join('\n')}${freshness(state, now, [form])}`;
 }
 
@@ -586,45 +588,83 @@ export function exportFormText(
   if (typeof form === 'string') return form;
   const p = payloadOf(form);
   const { invalid } = blockingLeaves(form.root);
-  const header = [
-    `// ${form.label} (${form.kind}) captured ${new Date(state.reportedAt).toISOString()}`,
-    `// status ${form.root.status}${invalid.length ? `; errors: ${invalid.map((n) => `${n.path || '(form)'} ${n.errors.map((e) => e.kind).join('+')}`).join(', ')}` : ''}`,
-    '// Secret values are [redacted]; replace them before running.',
-  ].join('\n');
   if (args.format !== 'fixture') {
     const raw = JSON.stringify(p.raw) ?? '';
     const value = raw.length > MAX_FORM_VALUE_CHARS ? clip(raw, MAX_FORM_VALUE_CHARS) : p.raw;
-    const { tree, text: json } = fitFields((fields) => {
-      const tree = capFieldTree(form.root, fields);
-      const text = literal({
+    const snapshot = (root: unknown) =>
+      literal({
         id: form.id,
-        label: form.label,
+        label: clip(form.label, MAX_FIELD_VALUE_CHARS),
         kind: form.kind,
         status: form.root.status,
         value,
-        root: tree.root,
+        root,
       });
-      return { tree, text };
-    }, FORM_TOOL_MAX_CHARS);
+    const total = countFields(form.root);
+    const { tree, text: json } = fitFields<{ tree: CappedTree | null; text: string }>(
+      (fields) => {
+        const tree = capFieldTree(form.root, fields);
+        return { tree, text: snapshot(tree.root) };
+      },
+      FORM_TOOL_MAX_CHARS,
+      () => ({
+        tree: null,
+        text: snapshot({ path: '', status: form.root.status, notShown: total }),
+      }),
+    );
     const cuts = [
-      ...(tree.shown < tree.total
+      ...(!tree
+        ? [`not even one field fits, so the tree shows only \`notShown\` (${total} fields)`]
+        : []),
+      ...(tree?.trimmed
+        ? [`long text in ${tree.trimmed} field(s) cut at ${MAX_FIELD_VALUE_CHARS} characters`]
+        : []),
+      ...(tree && tree.shown < tree.total
         ? [
             `showing ${tree.shown} of ${tree.total} fields (groups that lost fields carry \`notShown\`)`,
           ]
         : []),
-      ...(tree.clipped
+      ...(tree?.clipped
         ? [`${tree.clipped} field value(s) cut at ${MAX_FIELD_VALUE_CHARS} characters`]
         : []),
       ...(value !== p.raw ? [`value cut at ${MAX_FORM_VALUE_CHARS} characters`] : []),
     ];
     const note = cuts.length ? `\n\n_Snapshot cut: ${cuts.join('; ')}. ${EXPORT_NARROW}._` : '';
-    return `${UNTRUSTED}\n\n\`\`\`json\n${capText(json, EXPORT_NARROW)}\n\`\`\`${note}`;
+    return `${UNTRUSTED}\n\n\`\`\`json\n${json}\n\`\`\`${note}`;
   }
   const body =
     form.kind === 'signal'
       ? `const model = signal(${literal(p.raw)});\n// const f = form(model, schema);\n// expect(f().valid()).toBe(${form.root.status === 'VALID'});`
       : `form.${p.excluded.length ? 'patchValue' : 'setValue'}(${literal(p.raw)});\n${p.excluded.map((path) => `form.get('${path}')?.disable();`).join('\n')}\nexpect(form.status).toBe('${form.root.status}');`;
-  return `${UNTRUSTED}\n\n\`\`\`ts\n${header}\n${capText(body, EXPORT_NARROW)}\n\`\`\``;
+  const header = fixtureHeader(form, invalid, state.reportedAt);
+  // Header and body share the budget; keep room for the truncation note.
+  const room = Math.max(0, FORM_TOOL_MAX_CHARS - header.length - 1 - 200);
+  return `${UNTRUSTED}\n\n\`\`\`ts\n${header}\n${capText(body, EXPORT_NARROW, room)}\n\`\`\``;
+}
+
+const MAX_HEADER_ERRORS = 20;
+
+function countFields(node: FormFieldNode): number {
+  let total = 0;
+  walk(node, () => total++);
+  return total;
+}
+
+/** The comment above a fixture: label, status and up to 20 failing fields, on one line each. */
+function fixtureHeader(form: CollectedForm, invalid: FormFieldNode[], reportedAt: number): string {
+  const line = (text: string) => clip(text.replace(/\s+/g, ' '), MAX_FIELD_VALUE_CHARS);
+  const errors = invalid
+    .slice(0, MAX_HEADER_ERRORS)
+    .map((n) => line(`${n.path || '(form)'} ${n.errors.map((e) => e.kind).join('+')}`));
+  const more =
+    invalid.length > MAX_HEADER_ERRORS
+      ? ` and ${invalid.length - MAX_HEADER_ERRORS} more not shown (call explain-form-invalid for all)`
+      : '';
+  return [
+    `// ${line(form.label)} (${form.kind}) captured ${new Date(reportedAt).toISOString()}`,
+    `// status ${form.root.status}${errors.length ? `; errors: ${errors.join(', ')}${more}` : ''}`,
+    '// Secret values are [redacted]; replace them before running.',
+  ].join('\n');
 }
 
 const EXPORT_NARROW =

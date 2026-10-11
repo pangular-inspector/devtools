@@ -242,7 +242,7 @@ If you load `/examples/forms` directly, the form registers before the overlay lo
 
 ### Large forms in agent answers
 
-The agent tools cut answers about large forms, so one form cannot fill an agent's context. A cut answer says how many fields or lines it left out and which `path` to pass to read them. See [Tools](../agents/tools.md#read-form-state) for each limit.
+The agent tools cut answers about large forms, so one form cannot fill an agent's context. A cut answer says how many fields or lines it left out and how to narrow the answer, for example with `path`, `form` or a later `since` marker. See [Tools](../agents/tools.md#read-form-state) for each limit.
 
 ### Snapshot limits
 
