@@ -1,4 +1,5 @@
 import { connectDevframe } from 'devframe/client';
+import { overlayPopup } from './overlay-popup.ts';
 export { registerNgrxSignals } from './ngrx-register.ts';
 import { attachAnalog } from './analog-runtime.ts';
 import { attachForms } from './forms-collector.ts';
@@ -61,7 +62,7 @@ import {
 } from './change-detection.ts';
 import { attachChangeDetection } from './cd-overlay.ts';
 import { createScanBackoff } from './router-attach.ts';
-import { SETUP_URL, insideDevtoolsPanel } from './panel-frame.ts';
+import { SETUP_URL } from './panel-frame.ts';
 import { clearHighlight, showHighlight } from './page-highlight.ts';
 
 declare global {
@@ -119,12 +120,30 @@ async function claimPageId(): Promise<{ id: string; release: () => void }> {
   return { id, release: () => channel.close() };
 }
 
-interface OverlayOptions {
+type DevframeConnectionMeta = NonNullable<
+  NonNullable<Parameters<typeof connectDevframe>[0]>['connectionMeta']
+>;
+
+/**
+ * The content of a devtools server's `__connection.json`. `configs` is loose,
+ * so the whole file, with its `pangular` config, can be passed as it is.
+ */
+export type OverlayConnectionMeta = Omit<DevframeConnectionMeta, 'configs'> & {
+  configs?: Record<string, unknown>;
+};
+
+export interface OverlayOptions {
+  /** Where the devtools server is, or a list of places to try in order. */
   baseURL?: string | string[];
+  /**
+   * The server's `__connection.json`, passed in so the overlay does not fetch
+   * it. Use it when the page runs on another origin than the server, such as a
+   * Capacitor WebView, where that fetch is blocked.
+   */
+  connectionMeta?: OverlayConnectionMeta;
 }
 
 let current: { stop: () => void } | null = null;
-let popup: Promise<typeof import('./popup.ts')> | undefined;
 
 /**
  * Starts the overlay and resolves with its dispose. Only one overlay runs per
@@ -168,7 +187,7 @@ export function initOverlay(options: OverlayOptions = {}): Promise<() => void> {
 /** Stops the running overlay and removes the floating devtools button. */
 export async function disposeOverlay(): Promise<void> {
   current?.stop();
-  const loaded = await popup?.catch(() => undefined);
+  const loaded = await overlayPopup()?.catch(() => undefined);
   await loaded?.hideDevtools();
 }
 
@@ -188,13 +207,18 @@ function noServerError(bases: string | string[], cause: unknown): Error {
 
 async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) => boolean) {
   const bases = options.baseURL ?? DEFAULT_BASES;
-  const rpc = await connectDevframe({ baseURL: bases }).catch((error: unknown) => {
+  const rpc = await connectDevframe({
+    baseURL: bases,
+    connectionMeta: options.connectionMeta as DevframeConnectionMeta | undefined,
+  }).catch((error: unknown) => {
     throw noServerError(bases, error);
   });
   if (!own(() => rpc.close?.())) return;
   const metaUrl = rpc.connection?.metaBaseUrl;
   if (metaUrl) {
-    void popup?.then((m) => m.useDevtoolsBase(new URL('.', metaUrl).href)).catch(() => {});
+    void overlayPopup()
+      ?.then((m) => m.useDevtoolsBase(new URL('.', metaUrl).href))
+      .catch(() => {});
   }
   const my = rpc.scope('pangular');
   const devtoolsConfig = configFromConnection(rpc.connectionMeta);
@@ -753,15 +777,4 @@ function read<T>(fn: () => T, fallback: T): T {
 
 function getNg(): any {
   return (window as any).ng;
-}
-
-// Auto-init when loaded as a script (skip during test environment)
-if (
-  typeof document !== 'undefined' &&
-  !(typeof process !== 'undefined' && process.env?.['VITEST']) &&
-  !insideDevtoolsPanel()
-) {
-  initOverlay().catch(console.error);
-  popup = import('./popup.ts');
-  popup.then((m) => m.showDevtools()).catch(console.error);
 }

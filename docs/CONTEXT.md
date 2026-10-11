@@ -17,7 +17,7 @@ The short id a page claims when the overlay starts, kept in `sessionStorage` so 
 _Avoid_: tab id, session id, client id
 
 **Overlay**:
-The script the app imports in `main.ts` in development only (`@pangular-inspector/devtools/overlay`). It finds the server, starts the collectors and adds the floating button. It reads the page; it never changes it on its own.
+The script the app imports in `main.ts` in development only (`@pangular-inspector/devtools/overlay`). It finds the server, starts the collectors and adds the floating button. `@pangular-inspector/devtools/overlay-manual` is the same script without the start on import or the button; the app calls `initOverlay()`, for example with `connectionMeta` in a Capacitor WebView. It reads the page; it never changes it on its own.
 _Avoid_: content script, agent, injected script
 
 **Collector**:
@@ -45,7 +45,7 @@ The server part an app mounts: `initPangularHub()` for Express, or the Vite plug
 _Avoid_: server (too broad), middleware, proxy
 
 **Dock**:
-The rail of entries the hub shows (Angular, NgRx, Analog, Angular Native, and the Coming Soon placeholders), each opening a view of the panel (`hub-docks.ts`).
+The rail of entries the hub shows (Angular, NgRx, Analog, Angular Native, NativeScript and Capacitor), each opening a view of the panel (`hub-docks.ts`).
 _Avoid_: sidebar, menu, tab bar
 
 **Panel**:

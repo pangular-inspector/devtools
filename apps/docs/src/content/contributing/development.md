@@ -51,7 +51,8 @@ app/                          # Devtools UI SPA (Angular + Vite)
 packages/
   devtools/                   # Publishable npm package
     src/devframe.ts           # defineDevframe(): the tool definition
-    src/overlay.ts            # Client script running in the user's page
+    src/overlay.ts            # Client script running in the user's page (the overlay-manual entry)
+    src/overlay-auto.ts       # The overlay entry: starts the overlay and the floating button on import
     src/rpc/                  # Node-side RPC functions and agent tools
 extension/                    # Chrome DevTools extension
 examples/analog/              # Analog demo app

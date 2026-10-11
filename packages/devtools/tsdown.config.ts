@@ -1,18 +1,22 @@
 import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-  entry: [
-    'src/devframe.ts',
-    'src/config.ts',
-    'src/popup.ts',
-    'src/overlay.ts',
-    'src/overlay-nativescript.ts',
-    'src/overlay-angular-native.ts',
-    'src/vite.ts',
-    'src/http.ts',
-    'src/hub.ts',
-    'src/cli.ts',
-  ],
+  // Named after the package exports: `overlay` is the entry that starts on
+  // import (`overlay-auto.ts`), `overlay-manual` the one that waits for
+  // `initOverlay()` (`overlay.ts`).
+  entry: {
+    devframe: 'src/devframe.ts',
+    config: 'src/config.ts',
+    popup: 'src/popup.ts',
+    overlay: 'src/overlay-auto.ts',
+    'overlay-manual': 'src/overlay.ts',
+    'overlay-nativescript': 'src/overlay-nativescript.ts',
+    'overlay-angular-native': 'src/overlay-angular-native.ts',
+    vite: 'src/vite.ts',
+    http: 'src/http.ts',
+    hub: 'src/hub.ts',
+    cli: 'src/cli.ts',
+  },
   external: [/^@angular\//, /^@nativescript\//, /^rxjs/],
   format: 'esm',
   platform: 'node',

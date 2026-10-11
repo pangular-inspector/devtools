@@ -1,0 +1,203 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+interface ConnectOptions {
+  baseURL?: string | string[];
+  connectionMeta?: unknown;
+}
+
+const connects: ConnectOptions[] = [];
+const calls: string[] = [];
+
+// The real `setupDevframeConnection` decides whether `__connection.json` is
+// fetched, so the tests check devframe's behaviour, not only what is passed in.
+vi.mock('devframe/client', async (importOriginal) => {
+  const real = await importOriginal<typeof import('devframe/client')>();
+  return {
+    ...real,
+    connectDevframe: vi.fn(async (options: ConnectOptions) => {
+      connects.push(options);
+      const connection = await real.setupDevframeConnection(
+        options as Parameters<typeof real.setupDevframeConnection>[0],
+      );
+      return {
+        close: vi.fn(),
+        connectionMeta: connection.connectionMeta,
+        connection: { metaBaseUrl: connection.metaBaseUrl },
+        scope: () => ({
+          rpc: {
+            call: vi.fn(async (name: string) => {
+              calls.push(name);
+              return undefined;
+            }),
+            register: vi.fn(),
+          },
+        }),
+      };
+    }),
+  };
+});
+
+const DEVFRAME_GLOBALS = [
+  '__DEVFRAME_CONNECTION__',
+  '__DEVFRAME_CONNECTION_META__',
+  '__DEVFRAME_CONNECTION_AUTH_TOKEN__',
+];
+
+const serverMeta = { backend: 'sse', sse: { path: '/__devframes/__sse' } } as const;
+
+const stops: (() => void)[] = [];
+const fetches: string[] = [];
+
+const popupRoot = () => document.getElementById('pangular-popup-root');
+
+const flush = async () => {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+};
+
+async function loadManual() {
+  vi.resetModules();
+  return import('../overlay.ts');
+}
+
+async function loadAuto() {
+  vi.resetModules();
+  return import('../overlay-auto.ts');
+}
+
+beforeEach(() => {
+  connects.length = 0;
+  calls.length = 0;
+  fetches.length = 0;
+  document.body.innerHTML = '';
+  for (const key of DEVFRAME_GLOBALS) delete (globalThis as Record<string, unknown>)[key];
+  vi.stubGlobal('BroadcastChannel', undefined);
+  // A cross-origin `__connection.json` fails the way a WebView's blocked fetch does.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      fetches.push(String(url));
+      throw new TypeError('Failed to fetch');
+    }),
+  );
+});
+
+afterEach(async () => {
+  stops.splice(0).forEach((stop) => stop());
+  const { disposeOverlay } = await import('../overlay.ts');
+  await disposeOverlay();
+  sessionStorage.clear();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+
+describe.sequential('overlay connectionMeta', () => {
+  it('connects with the given connection info and never fetches __connection.json', async () => {
+    const { initOverlay } = await loadManual();
+    stops.push(
+      await initOverlay({
+        baseURL: 'http://192.168.1.20:4000/__devframes/pangular/',
+        connectionMeta: serverMeta,
+      }),
+    );
+
+    expect(fetches).toEqual([]);
+    expect(connects).toEqual([
+      { baseURL: 'http://192.168.1.20:4000/__devframes/pangular/', connectionMeta: serverMeta },
+    ]);
+  });
+
+  it('fetches __connection.json from the default paths when none is given', async () => {
+    const { initOverlay } = await loadManual();
+
+    await expect(initOverlay()).rejects.toThrow('No devtools server found');
+    expect(connects[0].connectionMeta).toBeUndefined();
+    expect(fetches).toEqual([
+      './__connection.json',
+      '/__pangular/__connection.json',
+      '/__devframes/pangular/__connection.json',
+    ]);
+  });
+
+  it('applies the devtools config carried in the given connection info', async () => {
+    const { initOverlay } = await loadManual();
+    stops.push(
+      await initOverlay({
+        baseURL: 'http://192.168.1.20:4000/__devframes/pangular/',
+        connectionMeta: {
+          ...serverMeta,
+          configs: {
+            pangular: {
+              inspectors: { components: false },
+              redaction: { secretNames: ['voucher'] },
+            },
+          },
+        },
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // The overlay's own module instance, loaded after `vi.resetModules()`.
+    const { isSecretKey } = await import('../forms-privacy.ts');
+
+    expect(isSecretKey('voucherCode')).toBe(true);
+    expect(calls).not.toContain('push-component-tree');
+    expect(calls).toContain('push-injector-tree');
+  });
+});
+
+describe.sequential('overlay entries', () => {
+  // Lets the auto-start run, as it does outside the test runner.
+  beforeEach(() => vi.stubEnv('VITEST', ''));
+
+  it('the manual entry starts nothing and adds no button on import', async () => {
+    await loadManual();
+    await flush();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(connects).toHaveLength(0);
+    expect(popupRoot()).toBeNull();
+  });
+
+  it('the manual initOverlay connects without adding the floating button', async () => {
+    const { initOverlay } = await loadManual();
+    stops.push(
+      await initOverlay({
+        baseURL: 'http://192.168.1.20:4000/__devframes/pangular/',
+        connectionMeta: serverMeta,
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(connects).toHaveLength(1);
+    expect(popupRoot()).toBeNull();
+  });
+
+  it('the default entry starts one overlay and the floating button on import', async () => {
+    await loadAuto();
+
+    await vi.waitFor(() => {
+      expect(connects).toHaveLength(1);
+      expect(popupRoot()).not.toBeNull();
+    });
+  });
+
+  it('the default entry exports the same API as the manual one', async () => {
+    const auto = await loadAuto();
+    const manual = await import('../overlay.ts');
+
+    expect(Object.keys(auto).sort()).toEqual(Object.keys(manual).sort());
+    expect(auto.initOverlay).toBe(manual.initOverlay);
+    expect(auto.disposeOverlay).toBe(manual.disposeOverlay);
+    expect(auto.registerNgrxSignals).toBe(manual.registerNgrxSignals);
+  });
+
+  it('disposeOverlay from the manual entry removes the button the default entry added', async () => {
+    await loadAuto();
+    await vi.waitFor(() => expect(popupRoot()).not.toBeNull());
+    const { disposeOverlay } = await import('../overlay.ts');
+
+    await disposeOverlay();
+
+    expect(popupRoot()).toBeNull();
+  });
+});
