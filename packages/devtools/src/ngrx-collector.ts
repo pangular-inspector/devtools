@@ -5,6 +5,7 @@ import { className, tokenName } from './injector-tree.ts';
 import {
   diff,
   dispatchProblem,
+  NGRX_DIFF_MORE_CAP,
   referenceDiff,
   serialize,
   serializeSlice,
@@ -170,23 +171,50 @@ function envScope<H extends object>(ng: NgrxDebugNg<H>, injector: AnyRecord): st
   return typeof source === 'string' && source ? source : 'environment';
 }
 
-function snapshotDiff(before: Snapshot, after: Snapshot, keys: PropertyKey[]): NgrxDiffEntry[] {
+/** The kept diff rows, and how many more changes were counted past them. */
+interface Changes {
+  diff: NgrxDiffEntry[];
+  more: number;
+}
+
+/** `diffTruncated` for an entry, set only when changes were left out. */
+function truncated(more: number): { diffTruncated?: number } {
+  return more > 0 ? { diffTruncated: Math.min(more, NGRX_DIFF_MORE_CAP) } : {};
+}
+
+function snapshotDiff(before: Snapshot, after: Snapshot, keys: PropertyKey[]): Changes {
   const out: NgrxDiffEntry[] = [];
+  const overflow = { more: 0 };
   for (const key of keys) {
-    if (out.length >= MAX_DIFF) break;
+    if (out.length >= MAX_DIFF && overflow.more >= NGRX_DIFF_MORE_CAP) break;
     if (before[key] === after[key]) continue;
     const root = String(key);
     if (typeof key === 'string' && isRedactedKey(key)) {
-      out.push({ path: root, op: 'change', before: REDACTED, after: REDACTED });
+      if (out.length < MAX_DIFF) {
+        out.push({ path: root, op: 'change', before: REDACTED, after: REDACTED });
+      } else overflow.more++;
       continue;
     }
+    const counted = overflow.more;
     const found = diff(
       serializeSlice(key, before[key]),
       serializeSlice(key, after[key]),
       MAX_DIFF - out.length,
+      undefined,
+      overflow,
     );
-    if (!found.length) {
-      out.push(...referenceDiff(before[key], after[key], root, SMALL, MAX_DIFF - out.length));
+    if (!found.length && overflow.more === counted) {
+      out.push(
+        ...referenceDiff(
+          before[key],
+          after[key],
+          root,
+          SMALL,
+          MAX_DIFF - out.length,
+          undefined,
+          overflow,
+        ),
+      );
       continue;
     }
     for (const entry of found) {
@@ -204,7 +232,7 @@ function snapshotDiff(before: Snapshot, after: Snapshot, keys: PropertyKey[]): N
       });
     }
   }
-  return out;
+  return { diff: out, more: overflow.more };
 }
 
 function syncValue(observable: AnyRecord | null | undefined): unknown {
@@ -315,7 +343,7 @@ export function createNgrxCollector<H extends object = Element>(
     // noop entry). Otherwise the next real `watchState` firing would diff
     // against stale state.
     if (t.watched) t.lastWatched = after;
-    if (!changes.length) {
+    if (!changes.diff.length) {
       if (!logNoop) return;
       const noopAt = Date.now();
       if (noopAt - (t.lastNoop.get(type) ?? 0) < NOOP_GAP_MS) return;
@@ -328,7 +356,8 @@ export function createNgrxCollector<H extends object = Element>(
         type,
         ...(args ? { args: args.map((a) => serialize(a, SMALL)) } : {}),
         timestamp: Date.now(),
-        diff: changes,
+        diff: changes.diff,
+        ...truncated(changes.more),
         restorable: t.writable,
         ...(causedByEvent ? { causedByEvent } : {}),
         ...(durationMs !== undefined ? { durationMs } : {}),
@@ -383,7 +412,7 @@ export function createNgrxCollector<H extends object = Element>(
     // microtask-fallback path, where `finish()` runs after dispatch returns).
     const causedByEvent = currentDispatchedEvent ?? pendingEventByInstance.get(t.instance);
     if (!currentDispatchedEvent && causedByEvent) pendingEventByInstance.delete(t.instance);
-    if (!changes.length) return;
+    if (!changes.diff.length) return;
     const type = call?.name ?? 'patchState';
     const isRestore = /^Restore #\d+/.test(type);
     const durationMs = call && !isRestore ? Math.round(now() - call.startedAt) : undefined;
@@ -396,7 +425,8 @@ export function createNgrxCollector<H extends object = Element>(
           ? { args: call.args.map((a) => serialize(a, SMALL)) }
           : {}),
         timestamp: Date.now(),
-        diff: changes,
+        diff: changes.diff,
+        ...truncated(changes.more),
         restorable: t.writable,
         ...(causedByEvent ? { causedByEvent } : {}),
         ...(durationMs !== undefined ? { durationMs } : {}),
@@ -735,6 +765,15 @@ export function createNgrxCollector<H extends object = Element>(
     return fromSource !== undefined ? fromSource : syncValue(store);
   };
 
+  /**
+   * The serialized classic state. `last` already holds `serialize(lastRaw)`, so the
+   * state is serialized again only when the store emitted a new object since then.
+   */
+  const classicSnapshot = (c: Classic): unknown => {
+    const raw = classicState(c.store);
+    return Object.is(raw, c.lastRaw) ? c.last : serialize(raw);
+  };
+
   const logClassic = (
     c: Classic,
     type: string,
@@ -743,14 +782,15 @@ export function createNgrxCollector<H extends object = Element>(
   ): NgrxLogEntry => {
     const raw = classicState(c.store);
     const next = serialize(raw);
-    let changes = diff(c.last, next, MAX_DIFF).map((entry) => ({
+    const overflow = { more: 0 };
+    let changes = diff(c.last, next, MAX_DIFF, undefined, overflow).map((entry) => ({
       ...entry,
       ...('before' in entry ? { before: serialize(entry.before, SMALL) } : {}),
       ...('after' in entry ? { after: serialize(entry.after, SMALL) } : {}),
     }));
-    if (!changes.length && !Object.is(c.lastRaw, raw)) {
-      changes = referenceDiff(c.lastRaw, raw, '', SMALL, MAX_DIFF).map((entry) =>
-        entry.path ? entry : { ...entry, path: '(root)' },
+    if (!changes.length && !overflow.more && !Object.is(c.lastRaw, raw)) {
+      changes = referenceDiff(c.lastRaw, raw, '', SMALL, MAX_DIFF, undefined, overflow).map(
+        (entry) => (entry.path ? entry : { ...entry, path: '(root)' }),
       );
     }
     const origin =
@@ -771,6 +811,7 @@ export function createNgrxCollector<H extends object = Element>(
         ...(origin ? { origin } : {}),
         timestamp: Date.now(),
         diff: changes,
+        ...truncated(overflow.more),
         restorable: held,
         ...(c.devtools && !held ? { unrestorable: 'not-recorded' as const } : {}),
       },
@@ -1161,7 +1202,7 @@ export function createNgrxCollector<H extends object = Element>(
       stores,
       classic: classic
         ? {
-            state: serialize(classicState(classic.store)),
+            state: classicSnapshot(classic),
             devtools: !!classic.devtools,
             scope: classic.scope,
             ...(isPaused(classic.devtools) ? { paused: true } : {}),

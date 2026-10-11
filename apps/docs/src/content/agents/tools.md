@@ -193,7 +193,7 @@ With `storeId`, the full state of one store: state, computed values, `withEntiti
 
 ### signal-store-history
 
-The change log for a page's stores, oldest first: `@ngrx/signals` state diffs (method calls and `patchState` writes, each with a per-key diff), classic `@ngrx/store` actions, and `@ngrx/signals/events` dispatched events. A method-call entry carries a duration in milliseconds. With `watchState` registered, it is the time from the start of the method to that patch; without it, the time the whole call took. A signal-store entry carries the event that caused it when the change happened while that event was being dispatched.
+The change log for a page's stores, oldest first: `@ngrx/signals` state diffs (method calls and `patchState` writes, each with a per-key diff), classic `@ngrx/store` actions, and `@ngrx/signals/events` dispatched events. A method-call entry carries a duration in milliseconds. With `watchState` registered, it is the time from the start of the method to that patch; without it, the time the whole call took. A signal-store entry carries the event that caused it when the change happened while that event was being dispatched. Each entry lists up to 50 changes; when there were more, it ends with how many were left out, such as `12 more changes not shown`.
 
 | Argument  | Required | Value                                                                                                                                                            |
 | --------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |

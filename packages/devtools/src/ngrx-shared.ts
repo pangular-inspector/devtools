@@ -103,6 +103,29 @@ export interface NgrxLogEntry {
    */
   causedByEvent?: { type: string; payload?: unknown };
   unrestorable?: NgrxUnrestorable;
+  /**
+   * How many more changes the state went through than `diff` holds (it keeps at most
+   * 50). Counted up to {@link NGRX_DIFF_MORE_CAP}, so at the cap it is a lower bound.
+   * Absent when `diff` is complete.
+   */
+  diffTruncated?: number;
+}
+
+/** The most changes counted past a full `diff`; `diffTruncated` stops there. */
+export const NGRX_DIFF_MORE_CAP = 1000;
+
+/** "12 more changes not shown", or "1000+ more…" at the cap. */
+export function moreChangesText(count: number): string {
+  const n = count >= NGRX_DIFF_MORE_CAP ? `${NGRX_DIFF_MORE_CAP}+` : String(count);
+  return `${n} more ${count === 1 ? 'change' : 'changes'} not shown`;
+}
+
+/**
+ * Counts the changes `diff` and `referenceDiff` find past their `limit`, up to
+ * {@link NGRX_DIFF_MORE_CAP}, without building or serializing them.
+ */
+export interface DiffOverflow {
+  more: number;
 }
 
 export interface NgrxUnrestorableUpdate {
@@ -297,10 +320,20 @@ function isPlain(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+/** Deep equality of serialized (JSON-like) values, without building strings. */
 function same(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return false;
-  return JSON.stringify(a) === JSON.stringify(b);
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    const y = b as unknown[];
+    return a.length === y.length && a.every((item, i) => same(item, y[i]));
+  }
+  const x = a as Record<string, unknown>;
+  const y = b as Record<string, unknown>;
+  const keys = Object.keys(x);
+  if (keys.length !== Object.keys(y).length) return false;
+  return keys.every((key) => Object.hasOwn(y, key) && same(x[key], y[key]));
 }
 
 function join(path: string, key: string | number): string {
@@ -310,34 +343,45 @@ function join(path: string, key: string | number): string {
   return safe.startsWith('"') ? `${path}[${safe}]` : `${path}.${safe}`;
 }
 
-export function diff(before: unknown, after: unknown, limit = 50, maxDepth = 6): NgrxDiffEntry[] {
+export function diff(
+  before: unknown,
+  after: unknown,
+  limit = 50,
+  maxDepth = 6,
+  overflow?: DiffOverflow,
+): NgrxDiffEntry[] {
   const out: NgrxDiffEntry[] = [];
+  const full = () => out.length >= limit && (!overflow || overflow.more >= NGRX_DIFF_MORE_CAP);
+  const emit = (entry: NgrxDiffEntry) => {
+    if (out.length < limit) out.push(entry);
+    else if (overflow) overflow.more++;
+  };
   const walk = (a: unknown, b: unknown, path: string, depth: number) => {
-    if (out.length >= limit || same(a, b)) return;
+    if (full() || same(a, b)) return;
     const bothArrays = Array.isArray(a) && Array.isArray(b);
     const bothObjects = isPlain(a) && isPlain(b) && !(TYPE_KEY in a) && !(TYPE_KEY in b);
     if (depth >= maxDepth || (!bothArrays && !bothObjects)) {
-      out.push({ path: path || '(root)', op: 'change', before: a, after: b });
+      emit({ path: path || '(root)', op: 'change', before: a, after: b });
       return;
     }
     if (bothArrays) {
       const x = a as unknown[];
       const y = b as unknown[];
       for (let i = 0; i < Math.max(x.length, y.length); i++) {
-        if (i >= x.length) out.push({ path: join(path, i), op: 'add', after: y[i] });
-        else if (i >= y.length) out.push({ path: join(path, i), op: 'remove', before: x[i] });
+        if (i >= x.length) emit({ path: join(path, i), op: 'add', after: y[i] });
+        else if (i >= y.length) emit({ path: join(path, i), op: 'remove', before: x[i] });
         else walk(x[i], y[i], join(path, i), depth + 1);
-        if (out.length >= limit) return;
+        if (full()) return;
       }
       return;
     }
     const x = a as Record<string, unknown>;
     const y = b as Record<string, unknown>;
     for (const key of new Set([...Object.keys(x), ...Object.keys(y)])) {
-      if (!(key in y)) out.push({ path: join(path, key), op: 'remove', before: x[key] });
-      else if (!(key in x)) out.push({ path: join(path, key), op: 'add', after: y[key] });
+      if (!(key in y)) emit({ path: join(path, key), op: 'remove', before: x[key] });
+      else if (!(key in x)) emit({ path: join(path, key), op: 'add', after: y[key] });
       else walk(x[key], y[key], join(path, key), depth + 1);
-      if (out.length >= limit) return;
+      if (full()) return;
     }
   };
   walk(before, after, '', 0);
@@ -365,53 +409,65 @@ export function referenceDiff(
   options: SerializeOptions,
   limit = 50,
   maxDepth = 12,
+  overflow?: DiffOverflow,
 ): NgrxDiffEntry[] {
   const out: NgrxDiffEntry[] = [];
+  let found = 0;
   const show = (value: unknown) => serialize(value, options);
+  const full = () => out.length >= limit && (!overflow || overflow.more >= NGRX_DIFF_MORE_CAP);
+  // Builds (and serializes) an entry only when it is kept; past `limit` it is only counted.
+  const emit = (entry: () => NgrxDiffEntry) => {
+    found++;
+    if (out.length < limit) out.push(entry());
+    else if (overflow) overflow.more++;
+  };
   const walk = (a: unknown, b: unknown, at: string, depth: number) => {
-    if (out.length >= limit || Object.is(a, b)) return;
+    if (full() || Object.is(a, b)) return;
     const arrays = Array.isArray(a) && Array.isArray(b);
     const records = isRecord(a) && isRecord(b);
     if (depth >= maxDepth || (!arrays && !records)) {
-      out.push({ path: at, op: 'change', before: show(a), after: show(b) });
+      emit(() => ({ path: at, op: 'change', before: show(a), after: show(b) }));
       return;
     }
-    const start = out.length;
+    const start = found;
     if (arrays) {
       const x = a as unknown[];
       const y = b as unknown[];
-      for (let i = 0; i < Math.max(x.length, y.length) && out.length < limit; i++) {
-        if (i >= x.length) out.push({ path: join(at, i), op: 'add', after: show(field(y, i)) });
-        else if (i >= y.length) {
-          out.push({ path: join(at, i), op: 'remove', before: show(field(x, i)) });
+      for (let i = 0; i < Math.max(x.length, y.length) && !full(); i++) {
+        if (i >= x.length) {
+          emit(() => ({ path: join(at, i), op: 'add', after: show(field(y, i)) }));
+        } else if (i >= y.length) {
+          emit(() => ({ path: join(at, i), op: 'remove', before: show(field(x, i)) }));
         } else walk(field(x, i), field(y, i), join(at, i), depth + 1);
       }
     } else {
       const x = a as Record<string, unknown>;
       const y = b as Record<string, unknown>;
       for (const key of new Set([...Object.keys(x), ...Object.keys(y)])) {
-        if (out.length >= limit) break;
+        if (full()) break;
         const secret = isRedactedKey(key);
         if (!(key in y)) {
-          out.push({
+          emit(() => ({
             path: join(at, key),
             op: 'remove',
             before: secret ? REDACTED : show(field(x, key)),
-          });
+          }));
         } else if (!(key in x)) {
-          out.push({
+          emit(() => ({
             path: join(at, key),
             op: 'add',
             after: secret ? REDACTED : show(field(y, key)),
-          });
+          }));
         } else if (secret) {
           if (!Object.is(field(x, key), field(y, key))) {
-            out.push({ path: join(at, key), op: 'change', before: REDACTED, after: REDACTED });
+            emit(() => ({ path: join(at, key), op: 'change', before: REDACTED, after: REDACTED }));
           }
         } else walk(field(x, key), field(y, key), join(at, key), depth + 1);
       }
     }
-    if (out.length === start) out.push({ path: at, op: 'change', before: show(a), after: show(b) });
+    if (found === start) {
+      emit(() => ({ path: at, op: 'change', before: show(a), after: show(b) }));
+    }
   };
   walk(before, after, path, 0);
   return out;
