@@ -15,9 +15,8 @@
 //
 // Every wrapper returns what the original returned and passes every argument
 // through as it is.
-import { REDACTED } from './forms-privacy.ts';
+import { hasSecretKey, maskedArgs, maskedResult } from './capacitor-redact.ts';
 import { redactMessage, redactUrl } from './router.ts';
-import { isSecretName, serialize } from './serialize.ts';
 import { clip } from './text.ts';
 
 export interface CapacitorPluginInfo {
@@ -129,10 +128,6 @@ function read<T>(fn: () => T, fallback: T): T {
   }
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
 function capacitorOf(win: HookWindow): CapacitorGlobal | null {
   const cap = win.Capacitor;
   return cap && typeof cap === 'object' ? (cap as CapacitorGlobal) : null;
@@ -154,33 +149,6 @@ function errorOf(error: unknown): CapacitorCallError {
 function eventNameOf(options: unknown): string {
   const name = (options as { eventName?: unknown } | null)?.eventName;
   return typeof name === 'string' ? clip(name, 100) : '';
-}
-
-/** `{key: 'authToken', value}`, as Preferences and secure storage plugins take it. */
-function hasSecretKey(args: unknown): boolean {
-  return isObject(args) && typeof args['key'] === 'string' && isSecretName(args['key']);
-}
-
-const value = (input: unknown) => serialize(input, VALUE_LIMITS);
-
-function argsValue(plugin: string, args: unknown): unknown {
-  if (!isObject(args)) return value(args);
-  let masked: Record<string, unknown> = args;
-  if (hasSecretKey(args) && 'value' in args) masked = { ...masked, value: REDACTED };
-  if (plugin === 'CapacitorHttp' && typeof args['url'] === 'string') {
-    masked = { ...masked, url: redactUrl(args['url']) };
-  }
-  return value(masked);
-}
-
-function resultValue(plugin: string, secretKey: boolean, result: unknown): unknown {
-  if (!isObject(result)) return value(result);
-  let masked: Record<string, unknown> = result;
-  if (secretKey && 'value' in result) masked = { ...masked, value: REDACTED };
-  if (plugin === 'CapacitorHttp' && typeof result['url'] === 'string') {
-    masked = { ...masked, url: redactUrl(result['url']) };
-  }
-  return value(masked);
 }
 
 function nativeMethods(cap: CapacitorGlobal): Map<string, string[]> {
@@ -308,7 +276,7 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
         method: clip(method, 100),
         kind,
         via,
-        args: argsValue(plugin, args),
+        args: maskedArgs(plugin, args, VALUE_LIMITS),
         status: 'pending',
         startedAt: Date.now(),
       },
@@ -335,7 +303,7 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
       delete call.result;
     } else {
       call.status = 'ok';
-      call.result = resultValue(call.plugin, entry.secretKey, outcome.result);
+      call.result = maskedResult(call.plugin, entry.secretKey, outcome.result, VALUE_LIMITS);
       delete call.error;
     }
     touch(entry);

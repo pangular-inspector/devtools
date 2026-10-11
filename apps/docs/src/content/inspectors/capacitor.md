@@ -101,9 +101,12 @@ The overlay usually starts after bootstrap, so calls your app makes at startup, 
 Arguments, results and errors are masked like other live values, on the page and again on the server with its own [`redaction`](../getting-started/configuration.md#redaction) config:
 
 - Fields with a secret-looking name, JWTs and bearer tokens are masked.
-- The `value` next to a secret-looking `key`, as in `Preferences.set({key: 'authToken', value})`, is masked in the arguments and in the result.
+- Strings are masked like HTTP bodies before they are cut: a JSON string or a form body (`password=...`) has its secret fields masked.
+- A `value` stored under a secret-looking `key` is masked in the arguments and in the result, as in `Preferences.set({key: 'authToken', value})`. Only this shape is recognised: the name has to be in a field called `key`, next to a field called `value`.
 - CapacitorHttp request URLs are masked like the URLs in **SSR & HTTP**, and secret headers are masked by name.
 - Long strings, such as base64 photos, are cut.
+
+Values that no rule recognizes as secret are shown as they are.
 
 The overlay leaves its own requests to the devtools server out of the log.
 

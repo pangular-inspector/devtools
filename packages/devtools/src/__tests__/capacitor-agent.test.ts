@@ -165,6 +165,56 @@ describe('list-capacitor-calls', () => {
     expect(all).toMatch(/`Preferences.get\(\)` \| web \|/);
   });
 
+  it("masks a value stored under a key the server's secretNames name, in arguments and result", async () => {
+    const { push, tool } = await boot(createPangular({ redaction: { secretNames: ['voucher'] } }));
+    await push(
+      'push-capacitor',
+      report({
+        calls: [
+          call(1, {
+            plugin: 'Preferences',
+            method: 'set',
+            args: { key: 'voucherCode', value: 'SAVE-50' },
+            result: undefined,
+          }),
+          call(2, {
+            plugin: 'Preferences',
+            method: 'get',
+            args: { key: 'voucherCode' },
+            result: { value: 'SAVE-60' },
+          }),
+        ],
+      }),
+    );
+    const all = await tool();
+    expect(all).not.toContain('SAVE-50');
+    expect(all).not.toContain('SAVE-60');
+    expect(all).toContain('voucherCode');
+  });
+
+  it('masks string bodies the page sent unmasked, and the page URL and title', async () => {
+    const { push, state } = await boot();
+    await push(
+      'push-capacitor',
+      report({
+        url: '/reset?token=opaque-reset-token-123',
+        title: 'Bearer abc.def.ghi',
+        calls: [
+          call(1, {
+            plugin: 'CapacitorHttp',
+            method: 'request',
+            args: { data: '{"password":"hunter2"}', url: 'https://x.example/?api_key=k-1' },
+            result: { data: 'refresh_token=r-2&ok=1' },
+          }),
+        ],
+      }),
+    );
+    const text = JSON.stringify((await state()).pages);
+    for (const secret of ['hunter2', 'k-1', 'r-2', 'opaque-reset-token-123', 'abc.def.ghi']) {
+      expect(text).not.toContain(secret);
+    }
+  });
+
   it("masks secrets with the server's own redaction, even when the page did not", async () => {
     const { push, tool } = await boot(createPangular({ redaction: { secretNames: ['voucher'] } }));
     await push(

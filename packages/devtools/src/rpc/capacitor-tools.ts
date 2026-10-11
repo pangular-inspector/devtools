@@ -6,7 +6,7 @@ import type {
 } from '../capacitor-collector.ts';
 import { isUnimplemented } from '../capacitor-collector.ts';
 import { redactMessage, redactUrl } from '../router.ts';
-import { serialize } from '../serialize.ts';
+import { hasSecretKey, maskedArgs, maskedResult } from '../capacitor-redact.ts';
 import { clip } from '../text.ts';
 import { code } from './forms-tools.ts';
 import { unknownPageText } from './pages.ts';
@@ -145,7 +145,7 @@ function toCall(value: unknown): CapacitorCall | null {
     method,
     kind: kind as CapacitorCall['kind'],
     via: value['via'] === 'web' ? 'web' : 'native',
-    args: serialize(value['args'], VALUE_LIMITS),
+    args: maskedArgs(plugin, value['args'], VALUE_LIMITS),
     status: status as CapacitorCall['status'],
     startedAt,
   };
@@ -153,7 +153,9 @@ function toCall(value: unknown): CapacitorCall | null {
   if (duration !== undefined) call.durationMs = duration;
   const callbacks = finite(value['callbacks']);
   if (callbacks !== undefined) call.callbacks = callbacks;
-  if ('result' in value) call.result = serialize(value['result'], VALUE_LIMITS);
+  if ('result' in value) {
+    call.result = maskedResult(plugin, hasSecretKey(value['args']), value['result'], VALUE_LIMITS);
+  }
   const error = value['error'];
   if (isObject(error)) {
     const errorCode = text(error['code'], 50);
@@ -199,8 +201,8 @@ export function toCapacitorReport(value: unknown): CapacitorReport | null {
     : undefined;
   return {
     pageId,
-    url: text(value['url'], 500) ?? '',
-    title: text(value['title'], 200) ?? '',
+    url: redactUrl(text(value['url'], 500) ?? ''),
+    title: redactMessage(text(value['title'], 200) ?? ''),
     full: value['full'] === true,
     ...(info ? { info } : {}),
     calls: value['calls']

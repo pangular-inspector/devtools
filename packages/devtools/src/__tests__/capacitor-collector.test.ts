@@ -236,6 +236,40 @@ describe('createCapacitorHook', () => {
     });
   });
 
+  it('masks secrets inside string bodies: JSON, form fields and JSON stored as a value', async () => {
+    const { win, cap } = fakeCapacitor({
+      'CapacitorHttp.request': async () => ({
+        status: 200,
+        data: '{"accessToken":"opaque-access-1","name":"Ann"}',
+      }),
+    });
+    const hook = collect(win);
+
+    await cap.nativePromise('CapacitorHttp', 'request', {
+      url: 'https://api.example.com/login',
+      method: 'POST',
+      dataType: 'json',
+      data: '{"username":"ann","password":"hunter2"}',
+    });
+    await cap.nativePromise('CapacitorHttp', 'request', {
+      url: 'https://api.example.com/login',
+      method: 'POST',
+      data: 'username=ann&password=hunter3',
+    });
+    await cap.nativePromise('Preferences', 'set', {
+      key: 'profile',
+      value: '{"refreshToken":"opaque-refresh-1","name":"Ann"}',
+    });
+    await settle();
+
+    const text = JSON.stringify(hook.calls());
+    for (const secret of ['hunter2', 'hunter3', 'opaque-access-1', 'opaque-refresh-1']) {
+      expect(text).not.toContain(secret);
+    }
+    expect(text).toContain('ann');
+    expect(text).toContain('Ann');
+  });
+
   it('hands the app the original promise, arguments and rejection', async () => {
     const failure = new Error('denied');
     const { win, cap, nativePromise } = fakeCapacitor({
