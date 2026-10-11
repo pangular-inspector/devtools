@@ -68,4 +68,14 @@ describe('impure-pipe-in-for block matching', () => {
     const compare = `<li [x]="a<b" *ngFor="let x of xs">{{ x }}</li><p>{{ title | slow }}</p>`;
     expect(lintFor(compare)).toEqual([]);
   });
+
+  it('does not end an *ngFor element at an end tag inside an attribute value', () => {
+    const template = `<li *ngFor="let x of xs"><span title="</li>">{{ x | slow }}</span></li>`;
+    expect(lintFor(template)).toHaveLength(1);
+  });
+
+  it('does not take *ngFor inside an attribute value for the directive', () => {
+    const template = `<p title="use *ngFor = here">{{ title | slow }}</p>`;
+    expect(lintFor(template)).toEqual([]);
+  });
 });

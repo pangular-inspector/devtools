@@ -158,10 +158,34 @@ function startTagEnd(text: string, open: number): number {
   return text.length;
 }
 
+/** `text` with every quoted attribute value inside a start tag blanked to
+ * spaces, so offsets stay the same but a `*ngFor` or `</li>` inside a value
+ * such as `title="..."` is never read as markup. */
+function maskAttributeValues(text: string): string {
+  const chars = text.split('');
+  const starts = /<[A-Za-z][\w:-]*/g;
+  let tag: RegExpExecArray | null;
+  while ((tag = starts.exec(text)) !== null) {
+    let i = tag.index + 1;
+    for (; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '"' || ch === "'") {
+        const close = text.indexOf(ch, i + 1);
+        const stop = close === -1 ? text.length : close;
+        for (let j = i + 1; j < stop; j++) chars[j] = ' ';
+        i = stop;
+      } else if (ch === '>') break;
+    }
+    starts.lastIndex = i + 1;
+  }
+  return chars.join('');
+}
+
 /** Spans of every element that carries `*ngFor`, from its start tag (whose
  * bindings also run per row) to its matching end tag. */
-function ngForBlocks(text: string): { start: number; end: number }[] {
+function ngForBlocks(source: string): { start: number; end: number }[] {
   const blocks: { start: number; end: number }[] = [];
+  const text = maskAttributeValues(source);
   // Walk start tags from the front, skipping quoted values, so a `<` inside
   // an attribute such as `[hidden]="n < 2"` is never taken for a tag.
   const starts = /<([A-Za-z][\w:-]*)/g;
