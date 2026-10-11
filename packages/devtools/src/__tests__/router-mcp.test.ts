@@ -399,6 +399,24 @@ describe('router MCP tools', () => {
     expect(broadcast).toHaveBeenCalledOnce();
   });
 
+  it('navigate ends a result it cuts with a note', async () => {
+    const { ctx, push, call } = await boot();
+    await push('push-router', report());
+    vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: never) => {
+      const { requestId } = (options as { args: [{ requestId: string }] }).args[0];
+      await push('router-action-result', {
+        requestId,
+        result: { outcome: 'succeeded', rows: 'x'.repeat(20_000) },
+      });
+      return undefined as never;
+    }) as never);
+    const text = await call('navigate', { action: 'probe', url: '/' });
+    expect(text).toMatch(
+      /```\n\n_Cut at 15,000 of 20,\d{3} characters, so the JSON above is incomplete and does not parse\._$/,
+    );
+    expect(text.length).toBeLessThan(15_300);
+  });
+
   it('sends a panel router action to one page when no page is named', async () => {
     const { ctx, push, call } = await boot();
     await push('push-router', report());

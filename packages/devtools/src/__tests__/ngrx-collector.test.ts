@@ -1175,6 +1175,40 @@ describe('ngrx collector with Store DevTools', () => {
     }
   });
 
+  it('resends the held log when the server forgot the page', async () => {
+    const { store, ng } = setupDevtools();
+    const pages: NgrxPages = new Map();
+    const my = {
+      rpc: {
+        call: async (name: string, report: unknown) => {
+          if (name === 'forget-ngrx-page') return void pages.delete(report as string);
+          if (name !== 'push-ngrx-state') return undefined;
+          return { seq: mergeNgrxReport(pages, report as NgrxPageReport, []) };
+        },
+        register: () => {},
+      },
+    };
+    const overlay = attachNgrx(my, 'p1', () => ng as any);
+    const seqs = () => ngrxStateOf(pages).pages[0]?.log.map((e) => e.seq);
+    try {
+      await overlay.push();
+      store.dispatch({ type: 'inc' });
+      store.dispatch({ type: 'inc' });
+      await overlay.push();
+      expect(seqs()).toEqual([1, 2]);
+      overlay.leave();
+      await Promise.resolve();
+      expect(pages.size).toBe(0);
+      store.dispatch({ type: 'inc' });
+      await overlay.push();
+      await overlay.push();
+      expect(seqs()).toEqual([1, 2, 3]);
+      expect(ngrxStateOf(pages).pages[0].dropped).toBe(0);
+    } finally {
+      overlay.stop();
+    }
+  });
+
   it('does not call a restore to the newest action paused', () => {
     const { store, collector } = setupDevtools();
     store.dispatch({ type: 'inc' });

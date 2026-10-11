@@ -1,6 +1,7 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { DevframeRpcClient } from 'devframe/client';
 import { afterEach, describe, expect, it } from 'vitest';
+import { scopeToPage } from '../page-id';
 import { FormsFieldDetail } from '../pages/forms-field-detail';
 import { FormsInspector } from '../pages/forms-inspector';
 import { FormsLint, FormsSubmit } from '../pages/forms-report';
@@ -284,6 +285,130 @@ describe('FormsInspector fields', () => {
   });
 });
 
+describe('FormsInspector status pills', () => {
+  // Backgrounds of the stylesheet rules that apply to an element, in source order.
+  function backgrounds(element: Element): string[] {
+    const found: string[] = [];
+    for (const sheet of Array.from(document.styleSheets)) {
+      for (const rule of Array.from(sheet.cssRules)) {
+        if (!(rule instanceof CSSStyleRule) || !element.matches(rule.selectorText)) continue;
+        const match = /background:\s*([^;]+);/.exec(rule.cssText);
+        if (match) found.push(match[1].trim());
+      }
+    }
+    return found;
+  }
+
+  it('gives the status badge on a selected row an opaque background', async () => {
+    const invalid: CollectedForm = {
+      ...form,
+      root: {
+        ...form.root,
+        status: 'INVALID',
+        children: [
+          field('email', {
+            status: 'INVALID',
+            errors: [{ kind: 'required', message: 'Required' }],
+          }),
+          field('name', { status: 'PENDING' }),
+          field('phone'),
+        ],
+      },
+    };
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve(''), [invalid]),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    button(fixture, 'Show details for email').click();
+    await settle(fixture);
+
+    const row = host.querySelector('.fields tbody tr:has(.field[aria-pressed="true"])');
+    const pills = [
+      row?.querySelector('.badge[data-status="INVALID"]'),
+      host.querySelector('.badge[data-status="PENDING"]'),
+      host.querySelector('.badge[data-status="VALID"]'),
+      host.querySelector('.form-item.active .count'),
+    ];
+    for (const pill of pills) {
+      expect(pill).not.toBeNull();
+      const applied = backgrounds(pill!);
+      expect(applied.length).toBeGreaterThan(0);
+      // A tint mixed with transparent lets the selected-row tint show through it.
+      expect(applied.at(-1)).not.toContain('transparent');
+    }
+  });
+});
+
+describe('FormsInspector error summary', () => {
+  it('opens the field of an entry on the Fields tab, clearing a filter that hides it', async () => {
+    const invalid: CollectedForm = {
+      ...form,
+      root: {
+        ...form.root,
+        children: [
+          field('email'),
+          field('name', { status: 'INVALID', errors: [{ kind: 'required', message: 'required' }] }),
+        ],
+      },
+      errorSummary: [{ path: 'name', kind: 'required', message: 'is required' }],
+    };
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve('about name'), [invalid]),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const inspector = fixture.componentInstance;
+    inspector.filter.set('email');
+    inspector.active.set(new Set(['dirty']));
+    inspector.tab_.set('timeline');
+    await settle(fixture);
+
+    const entry = Array.from(host.querySelectorAll<HTMLButtonElement>('.summary-link')).find(
+      (b) => b.textContent?.replace(/\s+/g, ' ').trim() === 'Show field name: is required required',
+    );
+    expect(entry).toBeDefined();
+    entry!.click();
+    await settle(fixture);
+
+    expect(inspector.tab_()).toBe('fields');
+    expect(inspector.filter()).toBe('');
+    expect(inspector.active().size).toBe(0);
+    expect(inspector.fieldPath()).toBe('name');
+    expect(button(fixture, 'Show details for name').getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('app-forms-field-detail')).not.toBeNull();
+    expect(document.activeElement?.id).toBe('forms-field-heading');
+  });
+
+  it('keeps a filter that already shows the field', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(
+        () => Promise.resolve(''),
+        [{ ...form, errorSummary: [{ path: 'name', kind: 'required', message: 'is required' }] }],
+      ),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const inspector = fixture.componentInstance;
+    inspector.filter.set('nam');
+    await settle(fixture);
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('.summary-link')!
+      .click();
+    await settle(fixture);
+    expect(inspector.filter()).toBe('nam');
+    expect(inspector.fieldPath()).toBe('name');
+  });
+});
+
 describe('FormsInspector pick', () => {
   it('turns into Cancel picking and cancels from the button and Escape', async () => {
     const calls: Record<string, unknown>[] = [];
@@ -483,6 +608,76 @@ describe('FormsInspector selection', () => {
         (b) => b.textContent?.trim() === 'Submit',
       ),
     ).toBe(false);
+  });
+
+  it('drops the armed confirmation, snapshot and field when the selection falls back to another form', async () => {
+    const calls: Record<string, unknown>[] = [];
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((name, arg) => {
+        if (name !== 'request-form-action') return Promise.resolve('');
+        calls.push(arg);
+        return Promise.resolve({ ok: true });
+      }),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const inspector = fixture.componentInstance;
+    const a: CollectedForm = { ...form, id: 'a@p1', label: 'A' };
+    const b: CollectedForm = { ...form, id: 'b@p1', label: 'B' };
+    inspector.forms.set([a, b]);
+    await settle(fixture);
+    expect(inspector.selected()?.id).toBe('a@p1');
+    inspector.toggleField('email');
+    inspector.snapshot.set('#1');
+    inspector.confirmAct('reset');
+    await settle(fixture);
+    expect(button(fixture, 'Confirm reset')).toBeTruthy();
+
+    inspector.forms.set([b]);
+    await settle(fixture);
+    expect(inspector.selected()?.id).toBe('b@p1');
+    expect(inspector.armed()).toBeNull();
+    expect(inspector.snapshot()).toBeNull();
+    expect(inspector.fieldPath()).toBeNull();
+    button(fixture, 'Reset').click();
+    await settle(fixture);
+    expect(calls).toEqual([]);
+    expect(button(fixture, 'Confirm reset')).toBeTruthy();
+  });
+
+  it('says a form hidden by "All pages" is on another page, not gone', async () => {
+    scopeToPage('p1');
+    try {
+      const fixture = TestBed.createComponent(FormsInspector);
+      fixture.componentRef.setInput(
+        'rpc',
+        fakeClient(() => Promise.resolve('ok')),
+      );
+      document.body.append(fixture.nativeElement);
+      await settle(fixture);
+      const inspector = fixture.componentInstance;
+      inspector.forms.set([
+        { ...form, id: 'here@p1', label: 'Here' },
+        { ...form, id: 'there@p2', label: 'There' },
+      ]);
+      inspector.selectForm('there@p2');
+      await settle(fixture);
+      expect(inspector.allPages()).toBe(true);
+      expect(inspector.selected()?.id).toBe('there@p2');
+
+      inspector.allPages.set(false);
+      await settle(fixture);
+      expect(inspector.missing()).toBeNull();
+      expect(text(fixture)).not.toContain('This form is no longer on the page');
+      expect(text(fixture)).toContain('This form is on another page');
+      button(fixture, 'Show forms from all pages').click();
+      await settle(fixture);
+      expect(inspector.selected()?.id).toBe('there@p2');
+    } finally {
+      scopeToPage(null);
+    }
   });
 });
 

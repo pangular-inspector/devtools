@@ -15,7 +15,7 @@ import {
   type Routes,
 } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { watchRouter, type NavigationRecord } from '../router.ts';
 import { ConfigTracker, activeIds, walkConfig } from '../router-config.ts';
 import { outletsOf } from '../router-links.ts';
@@ -283,6 +283,29 @@ describe('router features on a real Router', () => {
 
       await runAction(router as never, navigations, { action: 'instrument', on: true }, set);
       expect(instrumented).toBe(true);
+    },
+  );
+
+  it.skipIf(!angularAtLeast('20.2.0'))(
+    'reports the skip when probing the URL the router is already on',
+    async () => {
+      await router.navigateByUrl('/users/8');
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const pending = runAction(
+          router as never,
+          navigations,
+          { action: 'probe', url: '/users/8' },
+          () => {},
+        );
+        await vi.advanceTimersByTimeAsync(10_000);
+        const result = (await pending) as Record<string, unknown>;
+        expect(result['error']).toBeUndefined();
+        expect(result).toMatchObject({ matched: false, reason: expect.stringMatching(/ignored/) });
+        expect(router.url).toBe('/users/8');
+      } finally {
+        vi.useRealTimers();
+      }
     },
   );
 

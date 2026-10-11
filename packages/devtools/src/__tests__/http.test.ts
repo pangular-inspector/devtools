@@ -147,6 +147,12 @@ describe('sanitizeRules', () => {
     expect(
       sanitizeRules([{ pattern: '/a', method: 'G T', status: 500 }])[0].method,
     ).toBeUndefined();
+    expect(
+      sanitizeRules([{ pattern: '/a', method: '-GET', status: 500 }])[0].method,
+    ).toBeUndefined();
+    expect(sanitizeRules([{ pattern: '/a', method: 'm-search', status: 500 }])[0].method).toBe(
+      'M-SEARCH',
+    );
     const many = Array.from({ length: MAX_RULES + 10 }, (_, i) => ({
       pattern: `/p${i}`,
       status: 500,

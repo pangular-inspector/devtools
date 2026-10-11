@@ -220,6 +220,10 @@ export function createCdRecorder(options: {
     get recording() {
       return recording;
     },
+    /** True while the recorder holds cycles, recording or stopped. */
+    get hasCycles() {
+      return cycles.length > 0;
+    },
     /** Starts a fresh recording. */
     start() {
       reset();

@@ -534,7 +534,13 @@ export function attachPipes<H extends object = Element>(
     name: 'instrument-pipes',
     type: 'event',
     jsonSerializable: true,
-    handler: (on: boolean) => setInstrumented(on !== false),
+    handler: (request: boolean | { pageId?: unknown; on?: unknown } | null) => {
+      if (request && typeof request === 'object') {
+        if (typeof request.pageId === 'string' && request.pageId !== pageId) return;
+        return setInstrumented(request.on !== false);
+      }
+      return setInstrumented(request !== false);
+    },
   });
 
   return {

@@ -216,7 +216,7 @@ export function sanitizeRules(input: unknown): HttpRule[] {
     const rule: HttpRule = {
       id: str(r.id, 40) || `r${rules.length + 1}`,
       pattern,
-      method: method && /^[A-Z]+$/.test(method) ? method : undefined,
+      method: method && /^[A-Z][A-Z-]*$/.test(method) ? method : undefined,
       enabled: r.enabled !== false,
       target,
       status: status ?? (body !== undefined ? 200 : undefined),

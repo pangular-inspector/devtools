@@ -66,7 +66,8 @@ export function attachChangeDetection(
   };
 
   const push = async (force = false) => {
-    if (!force && !recorder.recording && !lastJson) return;
+    // After leave() a stopped recording with cycles is still worth sending again.
+    if (!force && !recorder.recording && !recorder.hasCycles && !lastJson) return;
     const report: CdReport = { pageId, supported, ...recorder.snapshot(hostId) };
     const json = JSON.stringify(report);
     if (!force && json === lastJson) {

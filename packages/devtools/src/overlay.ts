@@ -58,6 +58,7 @@ import {
   type RefreshScheduler,
 } from './change-detection.ts';
 import { attachChangeDetection } from './cd-overlay.ts';
+import { createScanBackoff } from './router-attach.ts';
 import { SETUP_URL, insideDevtoolsPanel } from './panel-frame.ts';
 import { clearHighlight, showHighlight } from './page-highlight.ts';
 
@@ -358,6 +359,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   let setup: RouterSetup | undefined;
   let sentGeneration = -1;
   let routerMisses = 0;
+  const routerScan = createScanBackoff();
   let lastRouterPayload = '';
   let lastRouterPushAt = 0;
   let routerPushTimer: ReturnType<typeof setTimeout> | undefined;
@@ -403,10 +405,12 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
 
   function attachRouter(ng: RouterDebugApi) {
     const roots = Array.from(document.querySelectorAll('[ng-version]'));
+    if (!roots.length && !routerScan.due()) return;
     const candidates = roots.length ? roots : findAngularElements().slice(0, 1);
     const routers = findRouters(ng, candidates);
     if (!routers.length) {
-      if (roots.some((root) => read(() => !!ng?.getComponent?.(root), false))) routerMisses++;
+      if (candidates.some((root) => read(() => !!ng?.getComponent?.(root), false))) routerMisses++;
+      else if (!roots.length) routerScan.miss();
       return;
     }
     router = routers[0];
