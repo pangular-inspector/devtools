@@ -6,6 +6,7 @@ import { attachAnalog } from './analog-runtime.ts';
 import { attachForms } from './forms-collector.ts';
 import { attachPipes } from './pipes-collector.ts';
 import { attachHttp } from './http-overlay.ts';
+import { attachCapacitor } from './capacitor-overlay.ts';
 import { allowClientRules, httpRegistry } from './http-rules.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
 import { collectInjectorTree } from './injector-tree.ts';
@@ -366,6 +367,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     : null;
   const pipes = on.pipes ? attachPipes(my, pageId, getNg) : null;
   const http = on.http ? attachHttp(my, pageId, tickMs) : null;
+  const capacitor = on.capacitor
+    ? attachCapacitor(my, pageId, { maxCalls: limits.capacitorCalls, devtoolsUrl: metaUrl })
+    : null;
   const cd = on.components
     ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs)
     : null;
@@ -711,6 +715,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     lastInjectorJson = '';
     forget('injectors', 'forget-injector-page');
     http?.leave();
+    capacitor?.leave();
     forget('analog', 'forget-analog-page');
     ngrx?.leave();
   };
@@ -718,6 +723,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   const resendConfig = () => {
     sentGeneration = -1;
     pipes?.resume();
+    capacitor?.resume();
     left = false;
     onVisibility();
   };
@@ -733,6 +739,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     leave();
     forms?.stop();
     pipes?.stop();
+    capacitor?.stop();
     ngrx?.stop();
     cd?.stop();
     stopAnalog();

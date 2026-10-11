@@ -22,6 +22,7 @@
     "./config": "./src/config.ts",
     "./overlay": "./src/overlay-auto.ts",
     "./overlay-manual": "./src/overlay.ts",
+    "./capacitor-hook": "./src/capacitor-hook.ts",
     "./overlay-angular-native": "./src/overlay-angular-native.ts",
     "./popup": "./src/popup.ts",
     "./overlay-nativescript": "./src/overlay-nativescript.ts",
@@ -38,6 +39,7 @@
       "./config": "./dist/config.mjs",
       "./overlay": "./dist/overlay.mjs",
       "./overlay-manual": "./dist/overlay-manual.mjs",
+      "./capacitor-hook": "./dist/capacitor-hook.mjs",
       "./overlay-angular-native": "./dist/overlay-angular-native.mjs",
       "./popup": "./dist/popup.mjs",
       "./overlay-nativescript": "./dist/overlay-nativescript.mjs",
@@ -113,6 +115,7 @@
   "devDependencies": {
     "@angular/common": "^22.1.0",
     "@angular/core": "^22.1.0",
+    "@capacitor/core": "^8.5.3",
     "hono": "4.13.8",
     "@nativescript/core": "^9.1.0",
     "rxjs": "~7.8.0",

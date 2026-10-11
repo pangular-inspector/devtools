@@ -8,6 +8,7 @@ export const PANGULAR_INSPECTORS = [
   'pipes',
   'http',
   'analog',
+  'capacitor',
 ] as const;
 
 export type PangularInspector = (typeof PANGULAR_INSPECTORS)[number];
@@ -24,6 +25,7 @@ export const PANGULAR_LIMITS = {
   httpCalls: { default: 200, min: 10, max: 2000 },
   changeLog: { default: 200, min: 10, max: 2000 },
   cdCycles: { default: 200, min: 10, max: 2000 },
+  capacitorCalls: { default: 200, min: 10, max: 2000 },
 } as const;
 
 export type PangularLimit = keyof typeof PANGULAR_LIMITS;
@@ -157,6 +159,8 @@ export interface PangularConfig {
     changeLog?: number;
     /** Change detection cycles kept per page while recording. Default 200. */
     cdCycles?: number;
+    /** Capacitor plugin calls kept per page and on the server. Default 200. */
+    capacitorCalls?: number;
   };
 }
 
@@ -486,6 +490,8 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'set-http-rules': 'http',
   'set-ssr-overrides': 'http',
   'clear-http-calls': 'http',
+  'push-capacitor': 'capacitor',
+  'forget-capacitor-page': 'capacitor',
 };
 
 /**
@@ -539,6 +545,8 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'list-http-rules': 'http',
   'set-http-rule': 'http',
   'remove-http-rule': 'http',
+  'list-capacitor-calls': 'capacitor',
+  'list-capacitor-plugins': 'capacitor',
 };
 
 /**
@@ -593,6 +601,8 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'list-http-rules',
   'set-http-rule',
   'remove-http-rule',
+  'list-capacitor-calls',
+  'list-capacitor-plugins',
 ];
 
 export function isPageAgentEntry(id: string): boolean {
@@ -640,6 +650,7 @@ const INSPECTOR_LABEL: Record<PangularInspector, string> = {
   pipes: 'Pipes',
   http: 'HTTP',
   analog: 'Analog',
+  capacitor: 'Capacitor',
 };
 
 const ACTION_LABEL: Record<PangularAction, string> = {
@@ -657,6 +668,7 @@ const LIMIT_LABEL: Record<PangularLimit, (value: number) => string> = {
   httpCalls: (value) => `${value} HTTP calls`,
   changeLog: (value) => `${value} NgRx changes`,
   cdCycles: (value) => `${value} change detection cycles`,
+  capacitorCalls: (value) => `${value} Capacitor plugin calls`,
 };
 
 /** The options that differ from the defaults, as label and value pairs. Empty when nothing is changed. */

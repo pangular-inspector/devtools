@@ -4,6 +4,16 @@ import { PANGULAR_LOGO_DATA_URI } from './brand.ts';
 import { getRoutes } from './rpc/get-routes.ts';
 import { getComponents } from './rpc/get-components.ts';
 import { getPipes } from './rpc/get-pipes.ts';
+import {
+  capacitorCallsText,
+  capacitorPluginsText,
+  capacitorState,
+  expireCapacitorPages,
+  mergeCapacitorReport,
+  toCapacitorReport,
+  type CapacitorPage,
+  type CapacitorState,
+} from './rpc/capacitor-tools.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
@@ -193,6 +203,14 @@ import {
 export * from './config.ts';
 
 import pkg from '../package.json' with { type: 'json' };
+
+type CapacitorToolArgs = {
+  page?: string;
+  plugin?: string;
+  failed?: boolean;
+  slowMs?: number;
+  limit?: number;
+};
 
 type PageGraph = SignalGraph & { pageId?: string };
 
@@ -481,6 +499,45 @@ const pangular = defineDevframe({
       // A source scan like get-pipes, so a static report bakes it in too.
       snapshot: true,
       handler: () => lintPipes(ctx.cwd),
+    });
+
+    const capacitorPages = new Map<string, CapacitorPage>();
+    const capacitorShared = await my.rpc.sharedState('capacitor', {
+      initialValue: { pages: {} } as CapacitorState,
+    });
+    const applyCapacitor = () =>
+      capacitorShared.mutate((draft) => {
+        draft.pages = capacitorState(capacitorPages).pages;
+      });
+    const capacitorSessions = trackPageSessions(ctx.rpc, (pageIds) => {
+      let removed = false;
+      for (const pageId of pageIds) removed = capacitorPages.delete(pageId) || removed;
+      if (removed) applyCapacitor();
+    });
+
+    register({
+      name: 'push-capacitor',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: unknown) => {
+        const report = toCapacitorReport(message);
+        if (!report) return { known: true };
+        capacitorSessions.bind(report.pageId);
+        const answer = mergeCapacitorReport(capacitorPages, report, limits.capacitorCalls);
+        if (answer.known) applyCapacitor();
+        return answer;
+      },
+    });
+
+    register({
+      name: 'forget-capacitor-page',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (pageId: string) => {
+        if (typeof pageId !== 'string') return;
+        capacitorSessions.unbind(pageId);
+        if (capacitorPages.delete(pageId)) applyCapacitor();
+      },
     });
 
     const routerPages = new Map<string, RouterPage>();
@@ -894,6 +951,7 @@ const pangular = defineDevframe({
       const nextPipes = expirePipePages(pipePages, Date.now(), liveTtl);
       if (nextPipes) applyPipes(nextPipes);
       if (expireNgrxPages(ngrxPages, Date.now(), liveTtl)) applyNgrx();
+      if (expireCapacitorPages(capacitorPages, Date.now(), liveTtl)) applyCapacitor();
     }, 5000);
     expiry.unref?.();
     registry.owner = ctx;
@@ -976,6 +1034,40 @@ const pangular = defineDevframe({
         preview?: boolean;
       }) => ({
         markdown: listHttpCallsText(httpSnapshot(), { ...args, page: pageArgument(args) }),
+      }),
+    });
+
+    agent.registerTool({
+      id: 'pangular:list-capacitor-calls',
+      description:
+        'Capacitor plugin calls the app made, newest first: plugin and method, whether it went to the native bridge or a web implementation answered it, the arguments, the result or the error, and the duration. Callback methods such as watchPosition show as streams with their callback count. Failed calls show the error code, and calls the platform does not implement are marked **not implemented**. Ends with the active plugin listeners and how many events each received (counts, not payloads). Native calls are logged on iOS and Android; calls a web implementation answers are logged only when the app loads `@pangular-inspector/devtools/capacitor-hook` before @capacitor/core. Arguments, results and errors are masked like other live values. Empty when no Capacitor app reports.',
+      safety: 'read',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: PAGE_ARGUMENT,
+          plugin: { type: 'string', description: 'Only calls to this plugin, such as Camera.' },
+          failed: { type: 'boolean', description: 'Only calls that failed.' },
+          slowMs: {
+            type: 'integer',
+            description: 'Only calls that took at least this many milliseconds.',
+          },
+          limit: { type: 'integer', description: 'How many calls to list (1-200, default 30).' },
+        },
+      },
+      handler: async (args: CapacitorToolArgs) => ({
+        markdown: capacitorCallsText(capacitorPages, { ...args, page: pageArgument(args) }),
+      }),
+    });
+
+    agent.registerTool({
+      id: 'pangular:list-capacitor-plugins',
+      description:
+        'The Capacitor environment of the app and its plugins: platform, server URL, whether CapacitorHttp and native logging are on, the WebView user agent, and each plugin with whether it is available on this platform, imported by the app, installed natively, and its native methods. Flags plugins the app imports that are not available (run `npx cap sync`) and native plugins the app does not import. Empty when no Capacitor app reports.',
+      safety: 'read',
+      inputSchema: { type: 'object', properties: { page: PAGE_ARGUMENT } },
+      handler: async (args: { page?: string }) => ({
+        markdown: capacitorPluginsText(capacitorPages, { page: pageArgument(args) }),
       }),
     });
 
@@ -2919,6 +3011,7 @@ const pangular = defineDevframe({
             router: withUrl(routerPages.values()),
             pipes: withUrl(pipePages.values()),
             http: withUrl(httpPages.values()),
+            capacitor: withUrl(capacitorPages.values()),
           },
           visibility.list(),
         );
