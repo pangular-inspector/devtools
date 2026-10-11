@@ -85,6 +85,17 @@ describe('signalGraphText', () => {
     expect(JSON.parse(signalGraphText(graph))).toEqual(graph);
   });
 
+  it('counts signals without a debugName so agents can suggest naming them', () => {
+    const graph = smallGraph();
+    graph.nodes.push(
+      { id: 'u1', kind: 'signal', epoch: 0, value: 1 },
+      { id: 'u2', kind: 'effect', epoch: 0 },
+    );
+    const view = JSON.parse(signalGraphText(graph)) as { unnamedSignals?: number };
+    expect(view.unnamedSignals).toBe(1);
+    expect(JSON.parse(signalGraphText(smallGraph()))).not.toHaveProperty('unnamedSignals');
+  });
+
   it('cuts a 400 node graph with long histories under the cap and says what it left out', () => {
     const graph = bigGraph();
     const full = JSON.stringify(graph, null, 2);

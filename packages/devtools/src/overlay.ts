@@ -50,6 +50,7 @@ import {
   collectSignalGraph,
   graphKey,
   graphValue,
+  signalOwner,
   toSignalTarget,
   type SignalTarget,
 } from './signal-graph.ts';
@@ -316,7 +317,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     }
     lastSignalKey = key;
     signalSentAt = Date.now();
-    const owner = graph.component?.id ?? '';
+    const owner = signalOwner(graph);
     const full = force || !historyDelta || owner !== historyFor;
     historyFor = owner;
     const statuses = (graph.resources ?? [])

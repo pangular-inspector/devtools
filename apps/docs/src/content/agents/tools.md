@@ -149,12 +149,13 @@ The signal graph the page reported: nodes (`signal`, `computed`, `linkedSignal`,
 
 The answer also holds:
 
-| Field          | Value                                                                                                                         |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `resources`    | One entry per `resource()`, `httpResource()` or `rxResource()`: `status`, `isLoading`, `params`, `value`, `error`, `nodeIds`. |
-| `environments` | The root and route injectors the page can report, with `id` and `name`.                                                       |
-| `changes`      | On a node or resource, every change since the page first saw it. The history keeps the last 50.                               |
-| `nodeCount`    | Set when Angular reported more than the 400 nodes the page keeps.                                                             |
+| Field            | Value                                                                                                                         |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `resources`      | One entry per `resource()`, `httpResource()` or `rxResource()`: `status`, `isLoading`, `params`, `value`, `error`, `nodeIds`. |
+| `environments`   | The root and route injectors the page can report, with `id` and `name`.                                                       |
+| `changes`        | On a node or resource, every change since the page first saw it. The history keeps the last 50.                               |
+| `nodeCount`      | Set when Angular reported more than the 400 nodes the page keeps.                                                             |
+| `unnamedSignals` | Set when signals, computeds or linkedSignals in the graph have no `debugName`. Their history holds sampled values only.       |
 
 The answer is cut at 20,000 characters. A graph that is too long first keeps fewer history entries per node, then keeps the first nodes that fit. A note under the JSON says how many history entries and nodes it left out. Pass `node` or `history: false` to see the rest.
 

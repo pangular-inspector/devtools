@@ -33,7 +33,7 @@ A line under the picker names the component, its host path, and why it was chose
 
 ### Node cards
 
-Filter by name, or by kind with the chips. If you pick another component or injector and its graph has no node of the chosen kind, the filter goes back to **All**. If the chosen kind runs out of nodes in the same graph, its chip stays pressed with a count of 0. Each card shows:
+Filter by name, or by kind with the chips. Typing `res` or more of the word `resource` lists every resource. If you pick another component or injector and its graph has no node of the chosen kind, the filter goes back to **All**. If the chosen kind runs out of nodes in the same graph, its chip stays pressed with a count of 0. Each card shows:
 
 - Its kind and label. Kinds come from Angular, such as `signal`, `computed`, `linkedSignal`, `effect` and `template`. Nodes without a name show **(unnamed)**.
 - The current value.
@@ -47,6 +47,8 @@ Expand a card to see:
 - **Dependencies (producers)**: the nodes it reads.
 - **Consumers**: the nodes and effects that read it.
 - **Value history**: recent values, newest first, each with a time and a source tag.
+
+When a signal or linkedSignal has no exact **set** entries, the card says why: the signal has no name, or every change was sampled because another live signal shares its name and value.
 
 Click an entry under **Dependencies (producers)** or **Consumers** to open that node's card and move focus to it. If the name or kind filter hides the node, the tab clears both filters and says so. An internal signal of a resource opens the resource card. Unnamed nodes show their id, so this is the way to reach them.
 
