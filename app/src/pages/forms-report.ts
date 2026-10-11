@@ -1,4 +1,4 @@
-import { Component, effect, input, linkedSignal, signal, untracked } from '@angular/core';
+import { Component, effect, input, linkedSignal, output, signal, untracked } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { FORMS_STYLES, formsCall, plain, type FormLintFinding } from './forms-types';
 
@@ -170,9 +170,12 @@ export class FormsSubmit {
                 >{{ f.severity }}</span
               >
               <code class="rule">{{ f.rule }}</code>
-              @if (f.path) {
+              @if (f.path; as path) {
                 <span class="muted path"
-                  >at <code>{{ f.path }}</code></span
+                  >at
+                  <button type="button" class="summary-link" (click)="showField.emit(path)">
+                    <span class="sr-only">Show field </span><code>{{ path }}</code>
+                  </button></span
                 >
               }
             </div>
@@ -260,13 +263,6 @@ export class FormsSubmit {
       font-size: 12.5px;
       overflow-wrap: anywhere;
     }
-    .path code {
-      color: #fde68a;
-
-      @include m.light {
-        color: var(--accent);
-      }
-    }
     .message,
     .fix {
       margin: 0;
@@ -291,6 +287,8 @@ export class FormsLint {
   formId = input.required<string>();
   version = input(0);
   rpc = input<DevframeRpcClient | null>(null);
+  /** Emits a finding's field path so the page can open that field. */
+  showField = output<string>();
 
   readonly findings = linkedSignal<string, FormLintFinding[] | null>({
     source: this.formId,

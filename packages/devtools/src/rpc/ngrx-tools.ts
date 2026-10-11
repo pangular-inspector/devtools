@@ -10,6 +10,7 @@ import type {
 import type { SignalStoreMembers } from './get-ngrx-store.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
+import { untrusted } from './forms-tools.ts';
 
 export const NGRX_PAGE_EXPIRES_MS = PAGE_TTL_MS;
 const MAX_LOG = 200;
@@ -145,9 +146,12 @@ export function ngrxStateOf(pages: NgrxPages): NgrxState {
   };
 }
 
-/** The answer of the dispatch-ngrx-action tool, as markdown. */
+/**
+ * The answer of the dispatch-ngrx-action tool, as markdown. The page writes the
+ * error, the message and the entry, so all of it sits behind the notice.
+ */
 export function dispatchResultText(result: NgrxRequestResult): string {
-  if (result.error) return `Not dispatched: ${result.error}`;
+  if (result.error) return untrusted(`Not dispatched: ${result.error}`);
   const lines = [result.message ?? 'Dispatched.'];
   if (result.entry) {
     lines.push(
@@ -161,5 +165,5 @@ export function dispatchResultText(result: NgrxRequestResult): string {
   } else {
     lines.push('', 'Read the pangular:ngrx-store resource for the log entry and the new state.');
   }
-  return lines.join('\n');
+  return untrusted(lines.join('\n'));
 }

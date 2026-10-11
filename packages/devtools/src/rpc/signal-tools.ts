@@ -111,8 +111,9 @@ export function signalGraphText(
   const full = JSON.stringify(view, null, 2);
   if (full.length <= budget) return full;
 
-  // Leave room for the note that explains the cut.
-  const room = budget - 600;
+  // Leave room for the note that explains the cut. A budget smaller than the
+  // note keeps no JSON at all rather than a negative slice from the end.
+  const room = Math.max(0, budget - 600);
   const totalEntries = entries(view.history);
   let historyKept: number | null = null;
   let fitted: Graph = view;
@@ -169,6 +170,10 @@ export function signalGraphText(
     sliced = true;
   }
   const what = cuts.length ? `: ${cuts.join('; ')}` : '';
-  const broken = sliced ? ' The JSON above is cut short and does not parse.' : '';
-  return `${text}\n\n_Cut to fit ${budget.toLocaleString('en-US')} characters (the full graph is ${full.length.toLocaleString('en-US')})${what}.${broken} ${NARROW}_`;
+  const broken = !text
+    ? ' No part of the graph fits.'
+    : sliced
+      ? ' The JSON above is cut short and does not parse.'
+      : '';
+  return `${text ? `${text}\n\n` : ''}_Cut to fit ${budget.toLocaleString('en-US')} characters (the full graph is ${full.length.toLocaleString('en-US')})${what}.${broken} ${NARROW}_`;
 }

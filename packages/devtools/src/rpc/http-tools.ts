@@ -110,7 +110,12 @@ export function listHttpCallsText(
     .filter((row) => !want || row.call.url.toLowerCase().includes(want))
     .filter((row) => !args.failed || isFailedCall(row.call))
     .sort((a, b) => b.call.at - a.call.at);
-  const limit = Math.min(Math.max(Math.floor(args.limit ?? DEFAULT_LIMIT), 1), MAX_LIMIT);
+  // Agents send strings, NaN and null too: anything that is not a finite number is the default.
+  const asked = Number(args.limit ?? DEFAULT_LIMIT);
+  const limit = Math.min(
+    Math.max(Math.floor(Number.isFinite(asked) ? asked : DEFAULT_LIMIT), 1),
+    MAX_LIMIT,
+  );
   const shown = matching.slice(0, limit);
   const filters = [
     want ? `URL contains ${code(args.url!)}` : '',
@@ -118,7 +123,7 @@ export function listHttpCallsText(
   ].filter(Boolean);
 
   if (!shown.length) {
-    return `${rows.length} call${rows.length === 1 ? '' : 's'} recorded for ${scope}, none match ${filters.join(' and ')}.`;
+    return `${UNTRUSTED_HTTP}\n\n${rows.length} call${rows.length === 1 ? '' : 's'} recorded for ${scope}, none match ${filters.join(' and ')}.`;
   }
 
   const showPage = !args.page && pages.length > 1;

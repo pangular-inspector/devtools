@@ -352,6 +352,7 @@ function countFields(node: FormFieldNode): number {
                 @case ('fields') {
                   <div class="filters">
                     <input
+                      #fieldFilter
                       class="filter"
                       type="search"
                       placeholder="Filter fields by path"
@@ -360,6 +361,7 @@ function countFields(node: FormFieldNode): number {
                       spellcheck="false"
                       [value]="filter()"
                       (input)="onFilter($event)"
+                      (keydown.escape)="filter.set('')"
                     />
                     <fieldset class="chips">
                       <legend class="sr-only">Show only fields that are</legend>
@@ -375,6 +377,7 @@ function countFields(node: FormFieldNode): number {
                       }
                     </fieldset>
                   </div>
+                  <p class="sr-only" role="status">{{ filterStatus() }}</p>
 
                   <div class="table-scroll" role="region" aria-label="Fields" tabindex="0">
                     <table class="fields">
@@ -531,10 +534,21 @@ function countFields(node: FormFieldNode): number {
                         } @empty {
                           <tr>
                             <td colspan="5" class="no-match">
-                              @if (filter()) {
-                                No field path matches "{{ filter() }}".
-                              } @else {
-                                No field matches the selected filters.
+                              <p>
+                                @if (filter()) {
+                                  No field path matches "{{ filter() }}".
+                                } @else {
+                                  No field matches the selected filters.
+                                }
+                              </p>
+                              @if (filtering()) {
+                                <button
+                                  type="button"
+                                  class="small"
+                                  (click)="clearFilters(fieldFilter)"
+                                >
+                                  Clear filters
+                                </button>
                               }
                             </td>
                           </tr>
@@ -570,7 +584,12 @@ function countFields(node: FormFieldNode): number {
                   <app-forms-submit [formId]="form.id" [version]="version()" [rpc]="rpc()" />
                 }
                 @case ('lint') {
-                  <app-forms-lint [formId]="form.id" [version]="version()" [rpc]="rpc()" />
+                  <app-forms-lint
+                    [formId]="form.id"
+                    [version]="version()"
+                    [rpc]="rpc()"
+                    (showField)="showField($event)"
+                  />
                 }
               }
             </div>
@@ -814,29 +833,6 @@ function countFields(node: FormFieldNode): number {
       padding: 0 0 0 16px;
       color: var(--text);
       overflow-wrap: anywhere;
-    }
-    .summary-link {
-      display: inline;
-      padding: 0;
-      border: none;
-      border-radius: 4px;
-      background: none;
-      color: inherit;
-      font: inherit;
-      text-align: left;
-      cursor: pointer;
-    }
-    .summary-link code:first-of-type {
-      color: var(--accent);
-      text-decoration: underline;
-      text-underline-offset: 3px;
-    }
-    .summary-link:hover code:first-of-type {
-      color: var(--accent-hover);
-    }
-    .summary-link:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
     }
     .error-summary .kind-tag {
       margin-left: 6px;
@@ -1245,6 +1241,12 @@ function countFields(node: FormFieldNode): number {
       color: var(--text-2);
       text-align: center;
     }
+    .fields .no-match p {
+      margin: 0 0 10px;
+    }
+    .fields .no-match p:last-child {
+      margin-bottom: 0;
+    }
     .empty {
       display: grid;
       justify-items: center;
@@ -1329,6 +1331,10 @@ export class FormsInspector {
   readonly chips = CHIPS;
   readonly tab_ = signal<Tab>('fields');
   readonly active = signal(new Set<Chip>());
+  /** True while the path search or a chip hides fields, the same test `rows` applies. */
+  readonly filtering = computed(() => !!this.filter() || this.active().size > 0);
+  /** Spoken only after Clear filters, never on a poll. */
+  readonly filterStatus = signal('');
   readonly version = signal(0);
   readonly message = signal('');
 
@@ -1556,7 +1562,7 @@ export class FormsInspector {
     row?.focus();
   }
 
-  /** Opens a field from the error summary: Fields tab, filters that hide it cleared, detail focused. */
+  /** Opens a field from the error summary or a lint finding: Fields tab, filters that hide it cleared, detail focused. */
   showField(path: string) {
     this.tab_.set('fields');
     const listed = () => this.rows().some((row) => row.node.path === path);
@@ -1622,6 +1628,16 @@ export class FormsInspector {
   sourceText(error: FormFieldError) {
     const label = SOURCE_LABELS[error.source ?? ''] ?? error.source ?? '';
     return error.from !== undefined ? `${label} on ${error.from || 'the form'}` : label;
+  }
+
+  /** Resets the path search and the chips, then hands focus back to the search field. */
+  clearFilters(search: HTMLInputElement) {
+    this.filter.set('');
+    this.active.set(new Set());
+    const count = this.rows().length;
+    const message = `Filters cleared. Showing ${count} ${count === 1 ? 'field' : 'fields'}.`;
+    this.filterStatus.update((current) => (current === message ? `${message}\u00a0` : message));
+    search.focus();
   }
 
   onFilter(event: Event) {
