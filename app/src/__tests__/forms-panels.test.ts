@@ -7,7 +7,7 @@ import { FormsInspector } from '../pages/forms-inspector';
 import { FormsLint, FormsSubmit } from '../pages/forms-report';
 import { FormsTimeline } from '../pages/forms-timeline';
 import { FormsWebMcp } from '../pages/forms-webmcp';
-import type { CollectedForm, FormFieldNode } from '../pages/forms-types';
+import type { CollectedForm, FormEvent, FormFieldNode } from '../pages/forms-types';
 
 type Call = (name: string, arg: Record<string, unknown>) => Promise<unknown>;
 
@@ -678,6 +678,45 @@ describe('FormsInspector selection', () => {
     } finally {
       scopeToPage(null);
     }
+  });
+});
+
+describe('FormsInspector timeline', () => {
+  it('passes every kept event of the form to the timeline when limits.formTimeline is raised', async () => {
+    const events: FormEvent[] = Array.from({ length: 300 }, (_, i) => ({
+      formId: form.id,
+      path: i < 50 ? 'name' : 'email',
+      type: 'value',
+      seq: i + 1,
+      timestamp: 1000 + i,
+    }));
+    const rpc = {
+      call: () => Promise.resolve('ok'),
+      callEvent: () => Promise.resolve(),
+      sharedState: () =>
+        Promise.resolve({ value: () => ({ forms: [form], events }), on: () => () => {} }),
+    };
+    const client = {
+      connectionMeta: { configs: { pangular: { limits: { formTimeline: 500 } } } },
+      scope: () => ({ rpc }),
+    } as unknown as DevframeRpcClient;
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput('rpc', client);
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    fixture.componentInstance.tab_.set('timeline');
+    await settle(fixture);
+    expect(text(fixture)).toContain('Showing the latest 100 of 300 events');
+
+    const host = fixture.nativeElement as HTMLElement;
+    const search = host.querySelector<HTMLInputElement>(
+      'input[aria-label="Filter by field path"]',
+    )!;
+    search.value = 'name';
+    search.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    expect(text(fixture)).toContain('50 of 300 events');
+    expect(host.querySelectorAll('.events li')).toHaveLength(50);
   });
 });
 
