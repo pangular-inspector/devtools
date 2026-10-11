@@ -131,4 +131,14 @@ describe('NetworkInspector response preview', () => {
     expect(inspector.methodOptions().map((o) => o.value)).toContain('HEAD');
     expect(status()).toContain('not complete JSON');
   });
+
+  it('keeps a relative URL without a leading slash, so the rule matches the request', async () => {
+    const { button, inspector } = await open({ url: 'api/heroes?page=2' });
+    button('Mock this request')!.click();
+    await fixture.whenStable();
+    // Rules match a pattern without `*` as a substring of the request URL.
+    const pattern = inspector.draft().pattern;
+    expect(pattern).toBe('api/heroes?page=2');
+    expect('api/heroes?page=2'.includes(pattern)).toBe(true);
+  });
 });

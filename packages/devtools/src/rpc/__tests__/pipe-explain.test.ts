@@ -67,7 +67,7 @@ describe('explainPipeText', () => {
     expect(text).not.toContain('Record calls');
   });
 
-  it('names the Record calls button when the pipe is in use and recording is off', () => {
+  it('names record-pipes and the Record calls button when the pipe is in use and recording is off', () => {
     const text = explainPipeText(
       'appPrice',
       fixture(),
@@ -77,7 +77,9 @@ describe('explainPipeText', () => {
     const live = liveLine(text);
     expect(live).toContain('1 instance(s), used by CartComponent (1).');
     expect(live).toContain('No calls recorded, recording is off.');
-    expect(live).toContain('Click **Record calls** in the Pipes panel');
+    expect(live).toContain(
+      'Start it with pangular:record-pipes (or **Record calls** in the Pipes panel)',
+    );
     expect(live).not.toContain('Instrument');
     expect(live).not.toContain('—');
   });

@@ -2,6 +2,7 @@ import { createHostContext } from 'devframe/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pangular from '../devframe.ts';
 import { isPipePageReport, mergePipePageReport, type PipePageReport } from '../rpc/pipes-tools.ts';
+import { fixtureDir } from '../rpc/__tests__/fixture-dir.ts';
 
 async function boot() {
   const host = {
@@ -9,17 +10,17 @@ async function boot() {
     resolveOrigin: () => 'http://localhost',
     getStorageDir: () => '',
   };
-  const ctx = await createHostContext({ cwd: process.cwd(), mode: 'dev', host: host as never });
+  // An empty project: explain-pipe scans the source on every call, and these
+  // tests are about live data only.
+  const cwd = fixtureDir('pangular-pipes-pages-');
+  const ctx = await createHostContext({ cwd, mode: 'dev', host: host as never });
   await pangular.setup(ctx as never);
   const invoke = (name: string, ...args: unknown[]) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...(args as never));
-  const explain = async () =>
-    (
-      (await ctx.agent.invoke('pangular:explain-pipe', { name: 'async' })) as {
-        markdown: string;
-      }
-    ).markdown;
-  return { ctx, invoke, explain };
+  const tool = async (id: string, args: Record<string, unknown>) =>
+    ((await ctx.agent.invoke(`pangular:${id}`, args)) as { markdown: string }).markdown;
+  const explain = (page?: string) => tool('explain-pipe', { name: 'async', page });
+  return { ctx, invoke, explain, tool };
 }
 
 function page(pageId: string): PipePageReport {
@@ -68,17 +69,18 @@ describe('pipe pages and their connections', () => {
     await invoke('push-pipes', page('tab-1'));
     host.getCurrentRpcSession = () => ({ meta: { id: 2 } });
     await invoke('push-pipes', page('tab-2'));
-    expect(await explain()).toContain('6 instance(s)');
+    expect(await explain('tab-1')).toContain('3 instance(s)');
 
     host._emitSessionDisconnected({ id: 1 });
-    expect(await explain()).toContain('3 instance(s)');
+    expect(await explain('tab-1')).toMatch(/^No page `tab-1` is reporting pipe usage/);
+    expect(await explain('tab-2')).toContain('3 instance(s)');
 
     // A reconnect re-binds the page to its new connection, so the old
     // connection closing afterwards must not drop it.
     host.getCurrentRpcSession = () => ({ meta: { id: 3 } });
     await invoke('push-pipes', page('tab-2'));
     host._emitSessionDisconnected({ id: 2 });
-    expect(await explain()).toContain('3 instance(s)');
+    expect(await explain('tab-2')).toContain('3 instance(s)');
   });
 });
 
@@ -179,5 +181,128 @@ describe('pipe recording requests', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+function pageWith(pageId: string, instanceCount: number, callCount?: number): PipePageReport {
+  const base = page(pageId);
+  return {
+    ...base,
+    pipes: [
+      {
+        ...base.pipes[0],
+        instanceCount,
+        components: [{ name: 'ExamplePage', count: instanceCount }],
+        ...(callCount === undefined
+          ? {}
+          : { call: { callCount, lastArgs: [pageId], lastResult: pageId } }),
+      },
+    ],
+    instrumented: callCount !== undefined,
+  };
+}
+
+describe('explain-pipe page scoping', () => {
+  it('answers from the most recent page, or the one `page` names, without mixing tabs', async () => {
+    vi.useFakeTimers();
+    try {
+      const { invoke, explain } = await boot();
+      await invoke('push-pipes', pageWith('tab-1', 2, 5));
+      await vi.advanceTimersByTimeAsync(1000);
+      await invoke('push-pipes', pageWith('tab-2', 4));
+
+      const latest = await explain();
+      expect(latest).toMatch(/^Live data from page `tab-2`; 2 pages report pipe usage/);
+      expect(latest).toContain('4 instance(s)');
+      expect(latest).toContain('recording is off');
+      expect(latest).not.toContain('6 instance(s)');
+
+      const first = await explain('tab-1');
+      expect(first).toContain('Live data from page `tab-1`');
+      expect(first).toContain('2 instance(s)');
+      expect(first).toContain('Called 5 time(s)');
+      expect(first).toContain('Last input: `[tab-1]`');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('names the reporting pages when `page` is unknown', async () => {
+    const { invoke, explain } = await boot();
+    expect(await explain('gone')).toBe(
+      'No page `gone` is reporting pipe usage. No page reports pipe usage right now.',
+    );
+    await invoke('push-pipes', page('tab-1'));
+    expect(await explain('gone')).toBe(
+      'No page `gone` is reporting pipe usage. Pages that report pipe usage: `tab-1`. Pass one of these ids as `page`, or leave `page` out for the most recent.',
+    );
+  });
+
+  it('adds no page line when only one page reports', async () => {
+    const { invoke, explain } = await boot();
+    await invoke('push-pipes', page('tab-1'));
+    const text = await explain();
+    expect(text).not.toContain('Live data from page');
+    expect(text).toContain('3 instance(s)');
+  });
+});
+
+describe('record-pipes agent tool', () => {
+  const recordings = (broadcast: { mock: { calls: unknown[][] } }) =>
+    broadcast.mock.calls
+      .map(([options]) => options as { method: string; args: unknown[] })
+      .filter((options) => options.method === 'pangular:instrument-pipes')
+      .map((options) => options.args[0]);
+
+  it('starts and stops recording through the same request the panel sends', async () => {
+    vi.useFakeTimers();
+    try {
+      const { ctx, invoke, tool } = await boot();
+      const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
+      await invoke('push-pipes', page('tab-1'));
+      await vi.advanceTimersByTimeAsync(1000);
+      await invoke('push-pipes', page('tab-2'));
+
+      expect(await tool('record-pipes', { action: 'start' })).toMatch(
+        /^Recording pipe calls on page `tab-2`\./,
+      );
+      expect(await tool('record-pipes', { action: 'start', page: 'tab-1' })).toMatch(
+        /^Recording pipe calls on page `tab-1`\./,
+      );
+      expect(await tool('record-pipes', { action: 'stop', page: 'tab-1' })).toMatch(
+        /^Recording stopped on page `tab-1`\./,
+      );
+      expect(await tool('record-pipes', { action: 'stop' })).toMatch(
+        /^Recording stopped on 2 page\(s\)\./,
+      );
+      expect(recordings(broadcast)).toEqual([
+        { pageId: 'tab-2', on: true },
+        { pageId: 'tab-1', on: true },
+        { pageId: 'tab-1', on: false },
+        { on: false },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends nothing for an unknown page, a missing action or before any page reports', async () => {
+    const { ctx, invoke, tool } = await boot();
+    const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
+    expect(await tool('record-pipes', { action: 'start' })).toMatch(
+      /^No page reports pipe usage, so there is nothing to record/,
+    );
+    await invoke('push-pipes', page('tab-1'));
+    expect(await tool('record-pipes', { action: 'start', page: 'gone' })).toMatch(
+      /^No page `gone` is reporting pipe usage\. Pages that report pipe usage: `tab-1`/,
+    );
+    expect(await tool('record-pipes', {})).toBe('Pass `action`: "start" or "stop".');
+    expect(recordings(broadcast)).toEqual([]);
+  });
+
+  it('points explain-pipe at the agent tool while recording is off', async () => {
+    const { invoke, explain } = await boot();
+    await invoke('push-pipes', page('tab-1'));
+    expect(await explain()).toContain('Start it with pangular:record-pipes');
   });
 });

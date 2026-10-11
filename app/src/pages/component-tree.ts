@@ -13,6 +13,7 @@ import {
   output,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { ExtensionBridge, type SourceLocation } from '../extension-bridge';
@@ -159,6 +160,7 @@ function bare(name: string): string {
             <path d="m20 20-3.5-3.5" />
           </svg>
           <input
+            #filterInput
             type="search"
             placeholder="Filter by class, tag or directive…"
             aria-label="Filter components by class, tag or directive"
@@ -235,7 +237,7 @@ function bare(name: string): string {
               @if (page()!.truncated) {
                 <p class="state-hint">The filter only searches the components the tree lists.</p>
               }
-              <button type="button" (click)="setFilter('')">Clear filter</button>
+              <button type="button" (click)="clearFilter()">Clear filter</button>
             </div>
           }
           <div
@@ -567,6 +569,7 @@ function bare(name: string): string {
             <path d="m20 20-3.5-3.5" />
           </svg>
           <input
+            #filterInput
             type="search"
             placeholder="Filter by selector, class or file…"
             aria-label="Filter components by selector, class or file"
@@ -629,7 +632,7 @@ function bare(name: string): string {
       } @else if (!filteredSource().length) {
         <div class="state">
           <p class="state-title">No components match “{{ filter().trim() }}”</p>
-          <button type="button" (click)="filter.set('')">Clear filter</button>
+          <button type="button" (click)="clearFilter()">Clear filter</button>
         </div>
       } @else {
         <ul class="source-list" role="list">
@@ -873,14 +876,14 @@ function bare(name: string): string {
       line-height: 18px;
     }
     .defer-state-complete {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .defer-state-error {
-      @include m.soft(var(--danger));
+      @include m.tint(danger);
     }
     .defer-state-loading,
     .defer-state-placeholder {
-      @include m.soft(var(--warn));
+      @include m.tint(warn);
     }
     .triggers {
       min-width: 0;
@@ -1067,7 +1070,7 @@ function bare(name: string): string {
     .badge {
       padding: 2px 8px;
       border-radius: 99px;
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.06em;
@@ -1185,7 +1188,7 @@ function bare(name: string): string {
       font-size: 12px;
     }
     .chip.on {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .chip-note {
       color: var(--text-2);
@@ -1318,14 +1321,14 @@ function bare(name: string): string {
       flex: none;
       padding: 1px 8px;
       border-radius: 99px;
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
     .kind-flag.directive {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .row-main {
       display: flex;
@@ -1403,6 +1406,7 @@ export class ComponentTree {
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
   private readonly cleanups: (() => void)[] = [];
   private selection = { pageId: null as string | null, detailId: null as string | null };
 
@@ -1760,6 +1764,13 @@ export class ComponentTree {
     this.announcement.set(
       filterAnnouncement(this.page()?.count ?? 0, matches, value, !!this.page()?.truncated),
     );
+  }
+
+  /** Clears the filter from the no-match state and keeps focus on the search box. */
+  clearFilter() {
+    if (this.live()) this.setFilter('');
+    else this.filter.set('');
+    this.filterInput()?.nativeElement.focus();
   }
 
   async pick() {

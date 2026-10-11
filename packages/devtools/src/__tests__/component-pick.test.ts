@@ -82,6 +82,34 @@ describe('startComponentPick', () => {
     });
   });
 
+  it('picks a component inside the shadow root of a ShadowDom component', async () => {
+    document.body.innerHTML = `<app-root ng-version="22.0.0"><app-shell></app-shell></app-root>`;
+    const root = document.querySelector('app-root')!;
+    const shell = document.querySelector('app-shell')!;
+    shell.attachShadow({ mode: 'open' }).innerHTML =
+      '<app-trip-card><button>Book</button></app-trip-card>';
+    const card = shell.shadowRoot!.querySelector('app-trip-card')!;
+    class _Shell {}
+    const instances = new Map<Element, object>([
+      [root, {}],
+      [shell, new _Shell()],
+      [card, new _TripCard()],
+    ]);
+    const ng: ComponentDebugNg = { getComponent: (el) => instances.get(el) ?? null };
+    const highlight = { show: vi.fn(), clear: vi.fn() };
+    const pick = startComponentPick({ getNg: () => ng, highlight, timeoutMs: 1000 });
+    const button = card.querySelector('button')!;
+
+    button.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, composed: true }));
+    expect(highlight.show).toHaveBeenLastCalledWith(card);
+    button.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }),
+    );
+    const result = await pick.result;
+    expect(result).toMatchObject({ ok: true, name: 'TripCard', tag: 'app-trip-card' });
+    expect(result.ok && elementById(result.id)).toBe(card);
+  });
+
   it('ends on Escape, on cancel and after the timeout', async () => {
     const first = setup();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));

@@ -39,6 +39,7 @@ let nextId = 0;
       [attr.aria-expanded]="open()"
       [attr.aria-label]="ariaLabel() || null"
       [attr.aria-labelledby]="labelledBy() || null"
+      [attr.aria-describedby]="describedBy() || null"
       [attr.aria-activedescendant]="open() && active() >= 0 ? uid + '-opt-' + active() : null"
       [disabled]="disabled()"
       (click)="toggle()"
@@ -277,6 +278,8 @@ export class Select<T extends string = string> {
   readonly placeholder = input('Select…');
   readonly ariaLabel = input('');
   readonly labelledBy = input('');
+  /** Ids of help text for the trigger, such as a note about the picked value. */
+  readonly describedBy = input('');
   readonly disabled = input(false);
   readonly emptyText = input('Nothing to choose');
 

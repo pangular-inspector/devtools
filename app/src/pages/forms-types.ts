@@ -260,6 +260,28 @@ export const FORMS_STYLES = `
       color: #fff;
     }
   }
+  .summary-link {
+    display: inline;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .summary-link code:first-of-type {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .summary-link:hover code:first-of-type {
+    color: var(--accent-hover);
+  }
+  .summary-link:focus-visible {
+    @include m.focus-ring;
+  }
   .field-input {
     min-width: 0;
     height: 34px;
@@ -329,17 +351,17 @@ export const FORMS_STYLES = `
   .tag[data-tone='ok'] {
     border-color: color-mix(in srgb, var(--ok) 30%, transparent);
     background: color-mix(in srgb, var(--ok) 12%, var(--surface));
-    color: var(--ok);
+    color: var(--ok-text);
   }
   .tag[data-tone='warn'] {
     border-color: color-mix(in srgb, var(--warn) 30%, transparent);
     background: color-mix(in srgb, var(--warn) 12%, var(--surface));
-    color: var(--warn);
+    color: var(--warn-text);
   }
   .tag[data-tone='bad'] {
     border-color: color-mix(in srgb, var(--danger) 30%, transparent);
     background: color-mix(in srgb, var(--danger) 12%, var(--surface));
-    color: var(--danger);
+    color: var(--danger-text);
   }
   .status {
     margin: 0;

@@ -35,6 +35,15 @@
   color: #{$color};
 }
 
+// Tinted pill, badge or chip in a theme tone (ok, warn, danger or accent).
+// The text uses the stronger `--<tone>-text` token so it keeps 4.5:1 when the
+// pill sits on a hovered or selected row.
+@mixin tint($tone) {
+  border-color: color-mix(in srgb, var(--#{$tone}) 30%, transparent);
+  background: color-mix(in srgb, var(--#{$tone}) 12%, transparent);
+  color: var(--#{$tone}-text);
+}
+
 @mixin truncate {
   overflow: hidden;
   min-width: 0;

@@ -287,7 +287,7 @@ describe('router features on a real Router', () => {
   );
 
   it.skipIf(!angularAtLeast('20.2.0'))(
-    'reports the skip when probing the URL the router is already on',
+    'matches the URL the router is already on instead of reporting a skip',
     async () => {
       await router.navigateByUrl('/users/8');
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -301,7 +301,7 @@ describe('router features on a real Router', () => {
         await vi.advanceTimersByTimeAsync(10_000);
         const result = (await pending) as Record<string, unknown>;
         expect(result['error']).toBeUndefined();
-        expect(result).toMatchObject({ matched: false, reason: expect.stringMatching(/ignored/) });
+        expect(result).toMatchObject({ matched: true });
         expect(router.url).toBe('/users/8');
       } finally {
         vi.useRealTimers();

@@ -38,6 +38,7 @@ import { angularNativePage, type PlatformPage } from './native-page';
 import { initialTab, storeTab, storedTab } from './tab-memory';
 import { detectBaseURL } from './base-url';
 import { clearHighlightsOnHide } from './rpc';
+import { viewAccent } from './view-accents';
 
 const HUB_VIEWS = [
   'angular',
@@ -57,22 +58,6 @@ const VIEW_TITLE: Record<View, string> = {
   'angular-native': 'Angular Native',
   nativescript: 'NativeScript',
   capacitor: 'Capacitor',
-};
-
-const VIEW_ACCENT: Partial<Record<View, string>> = {
-  ngrx: '#d770e8',
-  analog: '#ff5470',
-  'angular-native': '#ff4d6d',
-  nativescript: '#8196ff',
-  capacitor: '#53b9ff',
-};
-
-const VIEW_ACCENT_LIGHT: Partial<Record<View, string>> = {
-  ngrx: '#a21caf',
-  analog: '#be123c',
-  'angular-native': '#be123c',
-  nativescript: '#3448c5',
-  capacitor: '#0369a1',
 };
 
 const VIEW_TAB: Partial<Record<View, Tab>> = { ngrx: 'store', analog: 'analog' };
@@ -162,7 +147,8 @@ function readView(): View | null {
 @Component({
   selector: 'app-root',
   host: {
-    '[style.--accent]': 'viewAccent()',
+    '[style.--accent]': 'viewAccent()?.accent ?? null',
+    '[style.--accent-text]': 'viewAccent()?.text ?? null',
     '(window:message)': 'inspectFromPanel($event)',
   },
   imports: [
@@ -782,11 +768,7 @@ export class App implements OnInit, OnDestroy {
     { id: 'network', label: 'SSR & HTTP' },
   ];
   readonly view = signal<View | null>(readView());
-  readonly viewAccent = computed(() => {
-    const view = this.view();
-    const accents = this.themeService.current() === 'light' ? VIEW_ACCENT_LIGHT : VIEW_ACCENT;
-    return (view && accents[view]) ?? null;
-  });
+  readonly viewAccent = computed(() => viewAccent(this.view(), this.themeService.current()));
   readonly title = computed(() => {
     const view = this.view();
     return view ? VIEW_TITLE[view] : 'Pangular Inspector';

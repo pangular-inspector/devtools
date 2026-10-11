@@ -2,7 +2,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDeferTracker, type DeferDebugNg } from '../defer-blocks.ts';
 import { elementById } from '../element-id.ts';
-import { deferBlocksText, toComponentPage } from '../rpc/component-tools.ts';
+import { DEFER_ROWS, deferBlocksText, toComponentPage } from '../rpc/component-tools.ts';
+import { MAX_TOOL_CHARS } from '../rpc/router-tools.ts';
 import type { ComponentPage, DeferBlockInfo } from '../types.ts';
 
 class _TripReviews {}
@@ -165,6 +166,34 @@ describe('deferBlocksText', () => {
     expect(text).not.toContain('`d3` in');
     expect(text).toMatch(/\| `d4` .*\| still dehydrated \|/);
     expect(text).toMatch(/\| `d5` .*hydrate never: the server HTML stays static/);
+  });
+
+  it('lists at most DEFER_ROWS blocks per page and says how many more are not shown', () => {
+    const blocks = Array.from({ length: DEFER_ROWS + 7 }, (_, n) =>
+      info({ id: `d${n}`, state: 'error' }),
+    );
+    const text = deferBlocksText([report(blocks)], 30_000);
+    expect(text).toContain(`${DEFER_ROWS + 7} defer blocks`);
+    expect(text).toContain(`| \`d${DEFER_ROWS - 1}\` |`);
+    expect(text).not.toContain(`| \`d${DEFER_ROWS}\` |`);
+    expect(text).toContain(
+      '7 more blocks not shown. The Defer blocks list on the Components page of the panel has every block.',
+    );
+    expect(text).toContain('7 more that need attention not shown.');
+    expect(text).not.toContain(`- \`d${DEFER_ROWS}\` in`);
+
+    const two = deferBlocksText([report(blocks), { ...report(blocks), pageId: 'p2' }], 30_000);
+    expect(two).toContain('7 more blocks not shown. Pass `page` to read one tab. The Defer blocks');
+  });
+
+  it('cuts the whole answer at the shared tool size and says how to narrow it', () => {
+    const pages = Array.from({ length: 8 }, (_, n) => ({
+      ...report(Array.from({ length: DEFER_ROWS }, (_, i) => info({ id: `d${i}` }))),
+      pageId: `p${n}`,
+    }));
+    const text = deferBlocksText(pages);
+    expect(text.length).toBeLessThanOrEqual(MAX_TOOL_CHARS);
+    expect(text).toMatch(/… \(truncated; pass `page` to read one tab\)$/);
   });
 
   it('says when a page has no util, no blocks, or no page reported', () => {

@@ -36,6 +36,7 @@ import {
   renderRows,
   resolveAnalogReport,
   type AnalogState,
+  UNTRUSTED,
 } from './analog-tools.ts';
 import { fixedTtl, PAGE_TTL_MS, type PageTtl } from './page-ttl.ts';
 
@@ -361,8 +362,9 @@ export async function registerAnalog(
     handler: async (args: ApiRequest) => {
       const result = await sendApi(args ?? { path: '' });
       if (result['error']) return text(`Refused: ${result['error']}`);
+      // The response body comes from the dev server's routes, so it sits behind the notice.
       return text(
-        `${args.method ?? 'GET'} ${args.path}: ${result['status']} in ${result['ms']}ms (${result['type'] || 'no content type'})\n\n${result['body']}`,
+        `${UNTRUSTED}\n\n${args.method ?? 'GET'} ${args.path}: ${result['status']} in ${result['ms']}ms (${result['type'] || 'no content type'})\n\n${result['body']}`,
       );
     },
   });

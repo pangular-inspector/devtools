@@ -171,6 +171,21 @@ describe('ngrx collector', () => {
     expect(entry.durationMs).toBeUndefined();
   });
 
+  it('keeps a method change out of a patchState entry from earlier in the same tick', async () => {
+    const { store, collector } = setup();
+    collector.collect();
+    patchState(store, { saved: ['x'] });
+    store.setQuery('rome');
+    await Promise.resolve();
+    expect(collector.logSince(0).map((e) => [e.type, e.diff])).toEqual([
+      ['patchState', [{ path: 'saved[0]', op: 'add', after: 'x' }]],
+      ['setQuery', [{ path: 'query', op: 'change', before: '', after: 'rome' }]],
+    ]);
+    expect(collector.run({ type: 'restore', seq: 1 }).ok).toBe(true);
+    expect((store as any)[STATE_SOURCE].query()).toBe('');
+    expect((store as any)[STATE_SOURCE].saved()).toEqual(['x']);
+  });
+
   it('measures a method call duration and updates rolling stats per method', () => {
     const { store, collector } = setup();
     collector.collect();

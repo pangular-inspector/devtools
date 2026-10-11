@@ -1,4 +1,12 @@
-import { Component, computed, input, linkedSignal, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  computed,
+  input,
+  linkedSignal,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { actionAllowed, actionBlockedMessage } from '../devtools-config';
@@ -14,6 +22,11 @@ import {
   type SourceRoute,
 } from './router-types';
 
+/** "3 of 12 routes": the filtered count, worded like the other panel pages. */
+export function routeCountText(matches: number, total: number): string {
+  return `${matches} of ${total} ${total === 1 ? 'route' : 'routes'}`;
+}
+
 interface NodeRow {
   node: RouteNode;
   depth: number;
@@ -28,6 +41,12 @@ interface MatchResult {
   nearest: string[];
 }
 
+/** A Predict answer and the URL it was asked for. */
+interface TestedUrl {
+  url: string;
+  result: MatchResult;
+}
+
 @Component({
   selector: 'app-route-tree',
   imports: [JsonPipe],
@@ -35,12 +54,13 @@ interface MatchResult {
     <form class="test" (submit)="$event.preventDefault(); predict()">
       <label for="test-url">Test a URL</label>
       <input
+        #urlInput
         id="test-url"
         class="field"
         type="text"
         placeholder="/users/42"
         [value]="testUrl()"
-        (input)="testUrl.set($any($event.target).value)"
+        (input)="editUrl($any($event.target).value)"
       />
       <button type="submit" class="small primary">Predict</button>
       <button
@@ -53,8 +73,13 @@ interface MatchResult {
         Probe in app
       </button>
     </form>
-    @if (match(); as result) {
+    @if (match(); as tested) {
+      @let result = tested.result;
       <div class="result" role="status" [attr.data-matched]="result.matched">
+        <span class="for"
+          >Result for <code>{{ tested.url }}</code
+          >:</span
+        >
         @if (result.matched) {
           <span class="badge" data-tone="good">match</span>
           Matches <code class="chain">{{ chainText(result) }}</code>
@@ -85,16 +110,23 @@ interface MatchResult {
       <input
         #filterInput
         class="field filter"
-        type="text"
+        type="search"
         aria-label="Filter routes"
         placeholder="Filter by path, component or file"
         [value]="filter()"
-        (input)="filter.set($any($event.target).value)"
+        (input)="setFilter($any($event.target).value)"
+        (keydown.escape)="setFilter('')"
       />
       @if (page().config) {
         <p class="muted summary">
-          Generation {{ page().generation }} · {{ rows().length }} route(s). Lazy routes show their
-          children once loaded.
+          Generation {{ page().generation }} ·
+          @if (filter()) {
+            <span class="count">{{ countText() }}</span
+            >.
+          } @else {
+            {{ rows().length }} route(s).
+          }
+          Lazy routes show their children once loaded.
           @if (page().configTruncated; as left) {
             {{ left }} route(s) left out: the page lists at most 200 routes per level and 1000 in
             total.
@@ -102,6 +134,7 @@ interface MatchResult {
         </p>
       }
     </div>
+    <p class="visually-hidden" role="status">{{ filterAnnouncement() }}</p>
     @if (!page().config) {
       <div class="empty">
         <p class="empty-title">
@@ -123,7 +156,7 @@ interface MatchResult {
       <div class="empty">
         <p class="empty-title">No routes match the filter.</p>
         <p class="muted">Try a shorter path or a component name.</p>
-        <button type="button" class="small" (click)="filter.set(''); filterInput.focus()">
+        <button type="button" class="small" (click)="setFilter(''); filterInput.focus()">
           Clear filter
         </button>
       </div>
@@ -307,6 +340,13 @@ interface MatchResult {
       flex-basis: 100%;
       font-size: 12px;
     }
+    .result .for {
+      color: var(--text-2);
+    }
+    .result .for code {
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
     .chain {
       color: var(--accent);
     }
@@ -335,6 +375,10 @@ interface MatchResult {
       margin: 0;
       font-size: 12px;
       font-variant-numeric: tabular-nums;
+    }
+    .summary .count {
+      color: var(--text);
+      font-weight: 600;
     }
     td {
       vertical-align: middle;
@@ -409,7 +453,7 @@ export class RouteTree {
   private readonly pageId = computed(() => this.page().pageId);
   // Results, messages and typed params belong to one page. The component stays mounted when
   // the page picker switches pages, so they start over whenever the pageId changes.
-  readonly match = linkedSignal<string, MatchResult | null>({
+  readonly match = linkedSignal<string, TestedUrl | null>({
     source: this.pageId,
     computation: () => null,
   });
@@ -426,7 +470,15 @@ export class RouteTree {
     source: this.pageId,
     computation: () => null,
   });
+  /** Spoken only from the filter input, so a poll that changes the routes stays quiet. */
+  readonly filterAnnouncement = linkedSignal<string, string>({
+    source: this.pageId,
+    computation: () => '',
+  });
   private predictSeq = 0;
+  private announceFlip = false;
+  private probeSeq = 0;
+  private readonly urlInput = viewChild<ElementRef<HTMLInputElement>>('urlInput');
 
   readonly active = computed(() => new Set(this.page().activeIds ?? []));
 
@@ -452,6 +504,27 @@ export class RouteTree {
     visit(this.page().config ?? [], 0);
     return rows;
   });
+
+  readonly total = computed(() => {
+    const count = (nodes: RouteNode[]): number =>
+      nodes.reduce((sum, node) => sum + 1 + count(node.children ?? []), 0);
+    return count(this.page().config ?? []);
+  });
+
+  readonly countText = computed(() => routeCountText(this.rows().length, this.total()));
+
+  setFilter(value: string) {
+    this.filter.set(value);
+    const matches = this.rows().length;
+    const text = !value
+      ? ''
+      : matches
+        ? `${routeCountText(matches, this.total())} match.`
+        : 'No routes match.';
+    // A new query with the same count still changes the text, so screen readers say it again.
+    this.announceFlip = !this.announceFlip;
+    this.filterAnnouncement.set(text && (this.announceFlip ? `${text}\u00a0` : text));
+  }
 
   hasKeys(value: Record<string, unknown>) {
     return Object.keys(value).length > 0;
@@ -498,14 +571,32 @@ export class RouteTree {
     return result.chain.map((node) => node.fullPath).join(' → ');
   }
 
+  /** A new URL makes the shown result and any answer still on its way stale. */
+  editUrl(value: string) {
+    this.testUrl.set(value);
+    this.predictSeq++;
+    this.probeSeq++;
+    this.match.set(null);
+    this.message.set('');
+  }
+
+  private askForUrl(verb: string) {
+    this.match.set(null);
+    this.message.set(`Type a URL to ${verb}, for example /users/42.`);
+    this.urlInput()?.nativeElement.focus();
+  }
+
   async predict() {
     const url = this.testUrl().trim();
-    if (!url) return;
     const seq = ++this.predictSeq;
+    if (!url) {
+      this.askForUrl('predict');
+      return;
+    }
     const pageId = this.pageId();
     const result = await routerCall<MatchResult>(this.rpc(), 'router-match', { pageId, url });
     if (seq !== this.predictSeq || pageId !== this.pageId()) return;
-    this.match.set(result);
+    this.match.set(result && { url, result });
     if (result) {
       if (this.message() === PAGE_UNREACHABLE) this.message.set('');
     } else {
@@ -515,11 +606,15 @@ export class RouteTree {
 
   async probe() {
     const url = this.testUrl().trim();
-    if (!url) return;
+    const seq = ++this.probeSeq;
+    if (!url) {
+      this.askForUrl('probe');
+      return;
+    }
     this.message.set('Running the real matcher in the app…');
     const pageId = this.pageId();
     const result = await routerAction(this.rpc(), pageId, { action: 'probe', url });
-    if (pageId !== this.pageId()) return;
+    if (seq !== this.probeSeq || pageId !== this.pageId()) return;
     if (result['error']) {
       this.message.set(String(result['error']));
       return;

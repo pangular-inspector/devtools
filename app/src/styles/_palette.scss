@@ -31,30 +31,36 @@ $accents: (
     base: #f5a524,
     hover: #fbbf4d,
     ink: #1c1300,
+    text: #fbbf4d,
     light: (
       base: #92400e,
       hover: #a04510,
       ink: #ffffff,
+      text: #78350f,
     ),
   ),
   ember: (
     base: #fb7a3c,
     hover: #fd9a67,
     ink: #1f0a00,
+    text: #fd9a67,
     light: (
       base: #9a3412,
       hover: #b04016,
       ink: #ffffff,
+      text: #7c2d12,
     ),
   ),
   gold: (
     base: #eab308,
     hover: #facc15,
     ink: #1a1400,
+    text: #facc15,
     light: (
       base: #713f12,
       hover: #854d0e,
       ink: #ffffff,
+      text: #5c330e,
     ),
   ),
 );
@@ -69,6 +75,20 @@ $status-light: (
   ok: #166534,
   warn: #92400e,
   danger: #b91c1c,
+);
+
+// Text on a 12 to 16% tint of the matching status color (pills, badges, chips).
+// Stronger than the base so it keeps 4.5:1 on hovered and selected rows.
+$status-text: (
+  ok-text: #4ade80,
+  warn-text: #fbbf24,
+  danger-text: #fca5a5,
+);
+
+$status-text-light: (
+  ok-text: #14532d,
+  warn-text: #78350f,
+  danger-text: #991b1b,
 );
 
 @function accent($name, $key, $subkey: null) {

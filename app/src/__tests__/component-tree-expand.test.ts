@@ -178,3 +178,69 @@ describe('ComponentTree expand and collapse all', () => {
     expect(visible(fixture)).toEqual(['app', 'header', 'nav', 'main', 'list', 'item', 'footer']);
   });
 });
+
+describe('ComponentTree Clear filter focus', () => {
+  beforeEach(() => {
+    vi.stubGlobal('CSS', { escape: (value: string) => value });
+    Element.prototype.scrollIntoView ??= () => {};
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.unstubAllGlobals();
+  });
+
+  const search = (fixture: ComponentFixture<ComponentTree>) =>
+    host(fixture).querySelector<HTMLInputElement>('input[type="search"]');
+
+  it('keeps focus on the search box after Clear filter in the live tree', async () => {
+    const fixture = await setup();
+    fixture.componentInstance.setFilter('zzz');
+    await settle(fixture);
+    const clear = button(fixture, 'Clear filter');
+    clear.focus();
+    clear.click();
+    await settle(fixture);
+    expect(visible(fixture)).toContain('app');
+    expect(document.activeElement).toBe(search(fixture));
+  });
+
+  it('keeps focus on the search box after Clear filter in the source scan', async () => {
+    const rpc = {
+      call: (name: string) =>
+        Promise.resolve(
+          name === 'get-components'
+            ? [
+                {
+                  selector: 'app-cart',
+                  className: 'Cart',
+                  kind: 'component',
+                  file: 'src/cart.ts',
+                  line: 1,
+                  inputs: [],
+                  outputs: [],
+                  isStandalone: true,
+                },
+              ]
+            : [],
+        ),
+      callEvent: () => Promise.resolve(),
+      sharedState: () => Promise.resolve({ value: () => null, on: () => () => {} }),
+    };
+    const fixture = TestBed.createComponent(ComponentTree);
+    fixture.componentRef.setInput('rpc', {
+      connectionMeta: {},
+      scope: () => ({ rpc }),
+    } as unknown as DevframeRpcClient);
+    document.body.appendChild(fixture.nativeElement);
+    await settle(fixture);
+    fixture.componentInstance.filter.set('zzz');
+    await settle(fixture);
+    const clear = button(fixture, 'Clear filter');
+    clear.focus();
+    clear.click();
+    await settle(fixture);
+    expect(host(fixture).textContent).toContain('app-cart');
+    expect(document.activeElement).toBe(search(fixture));
+  });
+});
