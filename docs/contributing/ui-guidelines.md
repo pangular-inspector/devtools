@@ -28,12 +28,12 @@ Always use the variables, never hex values:
 | `--accent-soft`, `--accent-line`                  | Selected backgrounds, focus glow, accent borders                        |
 | `--ok`, `--warn`, `--danger`                      | Status                                                                  |
 | `--ok-text`, `--warn-text`, `--danger-text`       | Text on a tint of the matching status color (pills, badges, chips)      |
-| `--accent-text`                                   | Text on an accent tint; follows the view accent on brand views          |
+| `--accent-text`                                   | Text on an accent tint; brand views set their own value                 |
 | `--radius`, `--radius-sm`                         | Cards, controls                                                         |
 | `--control-h`                                     | 34px, the height of every input, select and button                      |
 | `--ease`, `--font-mono`                           | Motion curve, code and tokens                                           |
 
-Brand colors belong only to the brand they represent: NgRx keeps its purple on the NgRx view, the Angular view uses the Angular gradient for its logo and title, and Analog, NativeScript and Capacitor use their own colors on their pages. Each one has a darker light-theme value (`VIEW_ACCENT_LIGHT` in `app/src/app.ts`). Everything else is amber.
+Brand colors belong only to the brand they represent: NgRx keeps its purple on the NgRx view, the Angular view uses the Angular gradient for its logo and title, and Analog, NativeScript and Capacitor use their own colors on their pages. Each one has a dark and a light value in `app/src/view-accents.ts`: `accent` replaces `--accent` on that view, and `text` replaces `--accent-text` and must keep 4.5:1 on its own tint over every surface and selected row (`app/src/__tests__/tint-contrast.test.ts` checks it). Everything else is amber.
 
 ## Shared building blocks
 

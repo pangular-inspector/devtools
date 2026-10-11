@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { compileString } from 'sass';
+import { VIEW_ACCENTS } from '../view-accents';
 
 // Tinted pills (`m.tint`, data-tone badges, DI kind letters) put `--<tone>-text`
 // on a 12 to 16% tint of the tone. The pill can sit on a plain, hovered or
@@ -76,6 +77,21 @@ describe('text on tinted pills', () => {
         it(`${accent} ${mode}: --${tone}-text keeps 4.5:1 on its tint`, () => {
           const tokens = themes[mode];
           expect(tokens[`${tone}-text`], `--${tone}-text`).toBeDefined();
+          const min = worst(tokens, tone);
+          expect(min.ratio, min.on).toBeGreaterThanOrEqual(4.5);
+        });
+      }
+    }
+  }
+
+  // Brand views replace --accent and --accent-text on the panel root, which also
+  // changes the selected-row tint under every other pill.
+  const base = theme('amber');
+  for (const mode of ['dark', 'light'] as const) {
+    for (const [view, brand] of Object.entries(VIEW_ACCENTS[mode])) {
+      for (const tone of TONES) {
+        it(`${view} view ${mode}: --${tone}-text keeps 4.5:1 on its tint`, () => {
+          const tokens = { ...base[mode], accent: brand.accent, 'accent-text': brand.text };
           const min = worst(tokens, tone);
           expect(min.ratio, min.on).toBeGreaterThanOrEqual(4.5);
         });
