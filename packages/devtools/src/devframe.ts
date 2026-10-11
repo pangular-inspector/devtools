@@ -128,6 +128,7 @@ import { extractRoutes } from './rpc/get-routes.ts';
 import { scanServerRoutes } from './rpc/server-routes.ts';
 import {
   httpRegistry,
+  MAX_DELAY_MS,
   sanitizeCalls,
   sanitizeRules,
   type HttpCall,
@@ -140,6 +141,14 @@ import { isSsrRequestId, ssrRegistry } from './ssr-registry.ts';
 import { sanitizeSsrOverrides } from './ssr-overrides.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import { listHttpCallsText } from './rpc/http-tools.ts';
+import {
+  httpRulesText,
+  removeHttpRule,
+  ruleChangeText,
+  upsertHttpRule,
+  type RuleChange,
+  type SetHttpRuleArgs,
+} from './rpc/http-rule-tools.ts';
 import {
   changeDetectionText,
   expireCdPages,
@@ -956,6 +965,73 @@ const pangular = defineDevframe({
       }) => ({
         markdown: listHttpCallsText(httpSnapshot(), { ...args, page: pageArgument(args) }),
       }),
+    });
+
+    const ruleInput = {
+      id: { type: 'string', description: 'Rule id from list-http-rules. Leave out to add a rule.' },
+      pattern: {
+        type: 'string',
+        description: 'Part of the request URL, where `*` matches anything, such as /api/orders*.',
+      },
+      method: { type: 'string', description: 'Only this method, such as GET. Any when left out.' },
+      target: {
+        type: 'string',
+        enum: ['client', 'server', 'both'],
+        description: 'Browser calls, SSR calls, or both (default).',
+      },
+      status: {
+        type: 'integer',
+        description:
+          'Status to answer with: 400 or more fails the request, below 400 returns `body`.',
+      },
+      delayMs: { type: 'integer', description: `Hold the request back (0-${MAX_DELAY_MS} ms).` },
+      body: { description: 'Mock response body: JSON text or a JSON value. Alone it answers 200.' },
+      enabled: { type: 'boolean', description: 'Default true.' },
+    };
+    const newRuleId = () => `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const httpRuleChange = (change: RuleChange, verb: 'Added' | 'Updated' | 'Removed') => {
+      if (!config.actions.http) return { markdown: actionBlockedMessage('http') };
+      if ('error' in change) return { markdown: change.error };
+      setHttpRules(change.rules);
+      return { markdown: ruleChangeText(verb, change.rule, change.rules) };
+    };
+
+    agent.registerTool({
+      id: 'pangular:list-http-rules',
+      description:
+        'The HTTP fault and mock rules the panel or an agent set, in match order: id, on or off, method, URL pattern, whether it applies to browser calls, SSR calls or both, and its effect (fail with a status, answer with a status and mock body, delay). Rules apply to every connected tab and to the server. Patterns and bodies are masked like recorded calls. Empty when no rule is set.',
+      safety: 'read',
+      inputSchema: { type: 'object', properties: {} },
+      handler: async () => ({
+        markdown: httpRulesText(registry.rules ?? [], config.actions.http),
+      }),
+    });
+
+    agent.registerTool({
+      id: 'pangular:set-http-rule',
+      description:
+        "Adds an HTTP fault or mock rule, or replaces the rule with `id`, the same way the panel's Fault injection form does (development only). `pattern` plus at least one of `status`, `delayMs` or `body`. The rule applies to every connected tab right away and to SSR on the next page load. Returns the saved rule list. Needs the HTTP write action (actions.http).",
+      safety: 'action',
+      inputSchema: { type: 'object', properties: ruleInput, required: ['pattern'] },
+      handler: async (args: SetHttpRuleArgs) => {
+        const rules = registry.rules ?? [];
+        const verb = typeof args.id === 'string' && args.id ? 'Updated' : 'Added';
+        return httpRuleChange(upsertHttpRule(rules, args, newRuleId), verb);
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:remove-http-rule',
+      description:
+        'Removes the HTTP fault or mock rule with `id` (from list-http-rules) and returns the rules left. Needs the HTTP write action (actions.http).',
+      safety: 'action',
+      inputSchema: {
+        type: 'object',
+        properties: { id: { type: 'string', description: 'Rule id from list-http-rules.' } },
+        required: ['id'],
+      },
+      handler: async (args: { id?: unknown }) =>
+        httpRuleChange(removeHttpRule(registry.rules ?? [], args.id), 'Removed'),
     });
 
     register({
@@ -2305,7 +2381,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-forms',
       description:
-        'Inspect the forms on the running page (Signal Forms, reactive and template-driven). Without arguments it lists each form with its status and error count. Pass `form` for its field tree (value, status, touched, dirty, errors per field). Signal Forms that set `experimentalWebMcpTool` also carry `webMcp`: the tool name, description, inputs, registration status (registered, or failed with the fields that blocked schema inference), required fields that changed since registration, duplicate names and recent agent calls. Password and other secret-looking values are redacted. For "why is this form invalid", call explain-form-invalid first.',
+        'Inspect the forms on the running page (Signal Forms, reactive and template-driven). Without arguments it lists each form with its status and error count. Pass `form` for its field tree (value, status, touched, dirty, errors per field). A tree shows as many fields as fit in 20,000 characters (at most 200 per form) and cuts values over 300 characters; a group that lost fields carries `notShown`, and a note names a `path` to read them. Signal Forms that set `experimentalWebMcpTool` also carry `webMcp`: the tool name, description, inputs, registration status (registered, or failed with the fields that blocked schema inference), required fields that changed since registration, duplicate names and recent agent calls. Password and other secret-looking values are redacted. For "why is this form invalid", call explain-form-invalid first.',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -2343,7 +2419,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:explain-form-invalid',
       description:
-        'Explain why forms on the running page are invalid: each failing field with its current value, the validator that failed, its message and whether it was touched, plus fields waiting on async validators and disabled reasons. Without `form` it covers every form that is invalid or waiting on async validation.',
+        'Explain why forms on the running page are invalid: each failing field with its current value, the validator that failed, its message and whether it was touched, plus fields waiting on async validators and disabled reasons. Without `form` it covers every form that is invalid or waiting on async validation. Lists at most 100 problems per form; pass `path` to explain one group.',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -2353,9 +2429,14 @@ const pangular = defineDevframe({
             type: 'string',
             description: 'Page id (the part after @ in a form id) when several tabs are connected.',
           },
+          path: {
+            type: 'string',
+            description:
+              'Dotted field path to explain only that group or field, e.g. address or items.3. Applies to every matched form.',
+          },
         },
       },
-      handler: async (args: { form?: string; page?: string }) => {
+      handler: async (args: { form?: string; page?: string; path?: string }) => {
         const state = formsState.value() as FormsState;
         if (!state.forms.length) return { markdown: noForms };
         const elsewhere = unknownFormPage(args);
@@ -2436,9 +2517,12 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:form-payload',
       description:
-        'Show what a form would send: form.value vs getRawValue() with the disabled fields form.value drops (reactive), or the hidden/disabled/readonly fields Signal Forms keeps in the value without validating them, plus which fields the user changed.',
+        'Show what a form would send: form.value vs getRawValue() with the disabled fields form.value drops (reactive), or the hidden/disabled/readonly fields Signal Forms keeps in the value without validating them, plus which fields the user changed. Each value is cut at 8,000 characters; pass `path` for one group.',
       safety: 'read',
-      inputSchema: { type: 'object', properties: { form: formProperty, page: formPageProperty } },
+      inputSchema: {
+        type: 'object',
+        properties: { form: formProperty, path: pathProperty, page: formPageProperty },
+      },
       handler: withForms(formPayloadText),
     });
 
@@ -2559,7 +2643,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:export-form',
       description:
-        'Export a form as a JSON snapshot (tree, status, raw value) or as a test fixture (setValue / signal model plus the expected status) with a repro header. Secret values stay [redacted].',
+        'Export a form as a JSON snapshot (tree, status, raw value) or as a test fixture (setValue / signal model plus the expected status) with a repro header. Secret values stay [redacted]. A snapshot keeps as many fields as fit in 20,000 characters (at most 200) and notes what was cut.',
       safety: 'read',
       inputSchema: {
         type: 'object',
