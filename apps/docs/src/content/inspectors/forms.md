@@ -19,6 +19,8 @@ The sidebar lists each form with its label, its kind (**Signal Forms**, **Reacti
 
 Select a form to see its status, whether it is dirty or touched, whether it was submitted or is submitting, and an **Error summary**.
 
+Click an entry in the **Error summary** to open that field. The tab switches to the **Fields** view, opens the field's [details](#field-details) and moves focus to them. If the path filter or the chips hide the field, the tab clears them, the filter first and the chips only if the field is still hidden.
+
 ### WebMCP tool
 
 A Signal Form that sets `experimentalWebMcpTool` (with `provideExperimentalWebMcpForms()`) shows a **WebMCP tool** block in its details. See [WebMCP](https://angular.dev/ai/webmcp) for the API itself.
