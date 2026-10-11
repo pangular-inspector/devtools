@@ -169,16 +169,32 @@ A refused write names the reason and the unmask that lifts it. The panel, `form-
 
 <ngmd-accordion>
   <ngmd-accordion-item title="The full list of secret words">
-    password, passwd, passphrase, passcode, pass, pwd, secret, token, otp, totp, pin, cvv, cvc, csc, ssn, iban, card, cc, credential, credentials, cookie, authorization and jwt. Names are split on camelCase and punctuation, so <code>userPassword</code> and <code>card_number</code> both match. The pairs apiKey, privateKey, secretKey, accessKey, ccNum, ccNumber, securityCode, sessionId and sessionKey match as well. Every inspector uses this list.
+    password, passwd, passphrase, passcode, pass, pwd, secret, token, otp, totp, pin, cvv, cvc, csc, ssn, iban, card, cc, credential, credentials, cookie, authorization and jwt. Names are split on camelCase and punctuation, so <code>userPassword</code> and <code>card_number</code> both match. The pairs apiKey, privateKey, secretKey, accessKey, ccNum, ccNumber, securityCode, sessionId, sessionKey, authHeader, authKey, authCode and basicAuth match as well, and so does a name that is only bearer. <code>auth</code> on its own is not secret, so an <code>auth</code> state slice stays readable, but credentials inside it are still masked by value (see <a href="#credentials-inside-values">Credentials inside values</a>). Every inspector uses this list.
   </ngmd-accordion-item>
 </ngmd-accordion>
+
+### Credentials inside values
+
+Some credentials are hidden wherever they appear in a string, whatever the key is called. Every inspector, the panel and the agent tools get the same masking:
+
+| Value                                                                                                                                   | Shown as                        |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| A URL with a password, such as `https://alice:pw@host`                                                                                  | `https://alice:[redacted]@host` |
+| `Basic` followed by base64 of `user:password`                                                                                           | `Basic [redacted]`              |
+| `Digest` followed by its `name="value"` parameters                                                                                      | `Digest [redacted]`             |
+| `Token` followed by an opaque token with letters and digits                                                                             | `Token [redacted]`              |
+| `Bearer` followed by a token                                                                                                            | `Bearer [redacted]`             |
+| Any of `Basic`, `Bearer`, `Digest`, `Token`, `Negotiate`, `NTLM`, `ApiKey` and similar after `Authorization:` or `Proxy-Authorization:` | the scheme, then `[redacted]`   |
+| A JWT                                                                                                                                   | `[redacted]`                    |
+
+The URL user stays visible, so you can tell which account a call uses. Ordinary words are left alone: `Basic plan`, `Token expired` and `Digest of the week` don't match.
 
 ### Router
 
 These are replaced with `[redacted]` in URLs, params, data and messages:
 
 - query, matrix and fragment keys that look secret (token, password, api key, code, sig, session, jwt and similar), including inside encoded return URLs,
-- JWTs, bearer tokens and long opaque tokens,
+- URL passwords, `Authorization` credentials, JWTs, bearer tokens and long opaque tokens,
 - route params with secret-looking names.
 
 A secret route param is known from the route config before a navigation is recognized, so link targets and a navigation that was already running when the overlay attached are masked too. A navigation that fails before that (for example inside a lazy route that failed to load) can still show it in its URL. JWTs are masked before long values are cut, so a long token never leaves a readable start behind.

@@ -446,6 +446,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'ping-signal-graph': 'signals',
   'forget-signal-page': 'signals',
   'select-signal-target': 'signals',
+  'signal-graph-peek-result': 'signals',
   'get-providers': 'injectors',
   'push-injector-tree': 'injectors',
   'ping-injector-tree': 'injectors',

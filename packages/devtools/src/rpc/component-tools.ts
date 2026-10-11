@@ -1,6 +1,7 @@
 import type { ComponentPage, DeferBlockInfo, LiveComponentNode } from '../types.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
+import { capped } from './router-tools.ts';
 
 export const COMPONENT_PAGE_TTL = PAGE_TTL_MS;
 
@@ -133,12 +134,22 @@ function deferNotes(block: DeferBlockInfo, now: number): string[] {
   return notes;
 }
 
-/** Markdown answer for the defer-blocks agent tool, one section per page. */
+/** Table rows, and entries under "Needs attention", the defer-blocks tool lists per page. */
+export const DEFER_ROWS = 50;
+
+const PANEL = 'The Defer blocks list on the Components page of the panel has every block';
+
+/**
+ * Markdown answer for the defer-blocks agent tool, one section per page. Each
+ * page lists at most {@link DEFER_ROWS} blocks, and the whole answer is cut
+ * by {@link capped}.
+ */
 export function deferBlocksText(pages: ComponentPage[], now = Date.now()): string {
   if (!pages.length) {
     return 'No component tree has been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.';
   }
   const cell = (text: string) => text.replace(/\|/g, '\\|');
+  const narrow = `${pages.length > 1 ? ' Pass `page` to read one tab.' : ''} ${PANEL}.`;
   const sections = pages.map((page) => {
     const title = `Page \`${page.pageId}\`${page.url ? ` (${page.url})` : ''}`;
     if (!page.deferBlocks) {
@@ -156,14 +167,31 @@ export function deferBlocksText(pages: ComponentPage[], now = Date.now()): strin
       }
       return `| \`${block.id}\` | ${cell(owner)} | ${block.state} | ${block.hydration} | ${cell(block.triggers.join(', ') || 'none')} | ${cell(notes.join(', '))} |`;
     });
+    const more = (hidden: number, what: string) =>
+      hidden > 0 ? ['', `${hidden} more ${what} not shown.${narrow}`] : [];
+    const hiddenRows = rows.length - DEFER_ROWS;
     return [
       `${title}: ${page.deferBlocks.length} defer ${page.deferBlocks.length === 1 ? 'block' : 'blocks'}.`,
       '',
       '| Block | Owner | State | Hydration | Triggers | Notes |',
       '| --- | --- | --- | --- | --- | --- |',
-      ...rows,
-      ...(attention.length ? ['', 'Needs attention:', '', ...attention] : []),
+      ...rows.slice(0, DEFER_ROWS),
+      ...more(hiddenRows, hiddenRows === 1 ? 'block' : 'blocks'),
+      ...(attention.length
+        ? [
+            '',
+            'Needs attention:',
+            '',
+            ...attention.slice(0, DEFER_ROWS),
+            ...more(attention.length - DEFER_ROWS, 'that need attention'),
+          ]
+        : []),
     ].join('\n');
   });
-  return sections.join('\n\n');
+  return capped(
+    sections.join('\n\n'),
+    pages.length > 1
+      ? 'pass `page` to read one tab'
+      : 'see the Defer blocks list on the Components page of the panel',
+  );
 }
