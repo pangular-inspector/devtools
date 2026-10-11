@@ -154,7 +154,7 @@ The answer also holds:
 
 The answer is cut at 20,000 characters. A graph that is too long first keeps fewer history entries per node, then keeps the first nodes that fit. A note under the JSON says how many history entries and nodes it left out. Pass `node` or `history: false` to see the rest.
 
-With `root` or a route path, the tool switches the page's graph to the effects of that injector and waits up to 1.5 seconds for it. If no injector matches, the answer lists the ones the page knows. On Angular 20.0, the answer says the live graph needs Angular 20.1 or later.
+With `root` or a route path, the tool asks the page for the effects of that injector and waits up to 1.5 seconds for the answer. It reads that graph once and leaves the Signals page on the target it shows. If no injector matches, the answer lists the ones the page knows. On Angular 20.0, the answer says the live graph needs Angular 20.1 or later.
 
 <ngmd-callout type="tip" title="One graph per page">
   The page reports one graph: the component picked on the Signals page or with <code>highlight</code>, otherwise the deepest component in the primary router outlet. Call <code>highlight</code> first to switch the graph to another component. Only signals a template or an effect has read appear.
