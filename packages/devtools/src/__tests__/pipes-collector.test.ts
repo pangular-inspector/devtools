@@ -166,6 +166,25 @@ describe('pipes collector', () => {
     expect(currency.call?.lastResult).toBe('$5.00');
   });
 
+  it('only instruments when the request names this page or no page', async () => {
+    await mount(Receipt);
+    const h = harness('pg');
+    h.handlers.get('instrument-pipes')!({ pageId: 'other', on: true });
+    h.collector.push();
+    await Promise.resolve();
+    expect(h.reports().at(-1)?.instrumented).toBe(false);
+    h.handlers.get('instrument-pipes')!({ pageId: 'pg', on: true });
+    await Promise.resolve();
+    expect(h.reports().at(-1)?.instrumented).toBe(true);
+    h.handlers.get('instrument-pipes')!({ pageId: 'other', on: false });
+    h.collector.push();
+    await Promise.resolve();
+    expect(h.reports().at(-1)?.instrumented).toBe(true);
+    h.handlers.get('instrument-pipes')!({ on: false });
+    await Promise.resolve();
+    expect(h.reports().at(-1)?.instrumented).toBe(false);
+  });
+
   it('stops instrumenting and the next report reflects it', async () => {
     await mount(Receipt);
     const h = harness();

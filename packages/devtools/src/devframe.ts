@@ -93,6 +93,7 @@ import {
   expirePipePages,
   isPipePageReport,
   mergePipePageReport,
+  pipeInstrumentRequest,
   type PipePageReport,
   type PipesState,
 } from './rpc/pipes-tools.ts';
@@ -139,6 +140,7 @@ import { listHttpCallsText } from './rpc/http-tools.ts';
 import {
   changeDetectionText,
   expireCdPages,
+  pickCdPage,
   toCdPage,
   type CdPage,
   type CdState,
@@ -441,13 +443,13 @@ const pangular = defineDevframe({
       name: 'request-instrument-pipes',
       type: 'action',
       jsonSerializable: true,
-      handler: (on: unknown) => {
-        void my.rpc.broadcast({
-          method: 'instrument-pipes',
-          args: [on !== false],
-          optional: true,
-        });
-        return { pages: pipePages.size };
+      handler: (message: unknown) => {
+        const request = pipeInstrumentRequest(message, pipePages);
+        // No page has reported yet: starting now would patch every connected tab.
+        if (request.on && !request.pageId) return { pages: 0 };
+        void my.rpc.broadcast({ method: 'instrument-pipes', args: [request], optional: true });
+        if (!request.pageId) return { pages: pipePages.size };
+        return { pages: pipePages.has(request.pageId) ? 1 : 0 };
       },
     });
 
@@ -480,6 +482,7 @@ const pangular = defineDevframe({
           );
         } catch {
           routerPages.delete(report.pageId);
+          applyRouter(currentRouter(routerPages));
         }
         return { hasConfig: !!routerPages.get(report.pageId)?.config };
       },
@@ -1804,8 +1807,11 @@ const pangular = defineDevframe({
                 : 'Recording cleared.';
           return { markdown: next };
         }
-        const text = changeDetectionText(cdState.value() as CdState, args ?? {});
-        const injectors = args?.page ? injectorPages.get(args.page) : latestInjectorPage();
+        const cd = cdState.value() as CdState;
+        const text = changeDetectionText(cd, args ?? {});
+        // The zone mode comes from the same page as the recording, not the latest tab.
+        const zonePage = args?.page ?? pickCdPage(cd)?.pageId;
+        const injectors = zonePage ? injectorPages.get(zonePage) : latestInjectorPage();
         const mode = injectors ? zoneModeText(injectors.zone, injectors.pageId) : '';
         return { markdown: mode ? `${mode}\n\n${text}` : text };
       },

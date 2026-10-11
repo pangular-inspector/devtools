@@ -63,6 +63,38 @@ describe('agent tools', () => {
     expect(await push('ping-change-detection', 'p1')).toEqual({ known: false });
   });
 
+  it('report the zone mode of the page that recorded, not the latest tab', async () => {
+    vi.useFakeTimers();
+    const { push, call } = await boot();
+    await push('push-injector-tree', {
+      pageId: 'rec',
+      roots: [injectorRoot('app-root')],
+      environment: [],
+      zone: 'zone',
+    });
+    await push('push-change-detection', {
+      pageId: 'rec',
+      supported: true,
+      recording: true,
+      startedAt: 1,
+      dropped: 0,
+      cycles: [{ id: 1, at: 1, ms: 2, passes: 1, checks: 1, components: [] }],
+      components: [{ name: 'Cart', checks: 1, ms: 2, maxMs: 2, cycles: 1 }],
+      hosts: {},
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    await push('push-injector-tree', {
+      pageId: 'other',
+      roots: [injectorRoot('app-root')],
+      environment: [],
+      zone: 'zoneless',
+    });
+    const text = await call('change-detection', '');
+    expect(text).toMatch(/^Page `rec` /);
+    expect(text).not.toContain('`other`');
+    expect(await call('change-detection', '', { page: 'other' })).toMatch(/^Page `other` /);
+  });
+
   it('report the change detection mode and what services inject', async () => {
     const { push, call, injectorState } = await boot();
     const rootEnv = {
