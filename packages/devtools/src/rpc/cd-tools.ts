@@ -111,7 +111,8 @@ export function expireCdPages(
   return changed;
 }
 
-function pickCdPage(state: CdState, pageId?: string): CdPage | undefined {
+/** The page the change-detection tool reports: the one asked for, else recording, else latest. */
+export function pickCdPage(state: CdState, pageId?: string): CdPage | undefined {
   const pages = Object.values(state.pages);
   if (pageId) return state.pages[pageId];
   return pages.find((p) => p.recording) ?? pages.sort((a, b) => b.reportedAt - a.reportedAt)[0];

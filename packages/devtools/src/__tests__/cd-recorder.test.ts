@@ -186,6 +186,31 @@ describe('change detection in the overlay', () => {
     expect(profilers).toHaveLength(0);
   });
 
+  it('sends a stopped recording again after leave, as on a bfcache restore', async () => {
+    const { cd, sent, handlers, emit } = setup('22.1.0');
+    handlers.get('change-detection-record')!({ pageId: 'p1', on: true });
+    emit(E.ChangeDetectionStart);
+    emit(E.ComponentStart);
+    emit(E.ComponentEnd, new Shell());
+    emit(E.ChangeDetectionEnd);
+    handlers.get('change-detection-record')!({ pageId: 'p1', on: false });
+    await Promise.resolve();
+    await cd.push();
+    cd.leave();
+    sent.length = 0;
+    await cd.push();
+    const pushes = sent.filter((s) => s.name === 'push-change-detection');
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0].args[0]).toMatchObject({ recording: false, cycles: [{ id: 1 }] });
+    sent.length = 0;
+    handlers.get('change-detection-record')!({ pageId: 'p1', clear: true });
+    await Promise.resolve();
+    cd.leave();
+    sent.length = 0;
+    await cd.push();
+    expect(sent).toEqual([]);
+  });
+
   it('reports that it cannot record before Angular 20', async () => {
     const { ng, sent, handlers } = setup('19.2.0');
     handlers.get('change-detection-record')!({ on: true });
