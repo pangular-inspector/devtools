@@ -175,7 +175,7 @@ import {
 } from './rpc/cd-tools.ts';
 import type { HttpPage, HttpPayloadState, HttpReport, HttpState } from './types.ts';
 
-import { nameServerFns, registerAnalog } from './rpc/analog-register.ts';
+import { analogPages, nameServerFns, registerAnalog } from './rpc/analog-register.ts';
 import { createPageVisibility } from './rpc/page-ttl.ts';
 import {
   PAGE_ARGUMENT,
@@ -192,6 +192,7 @@ import { clip } from './text.ts';
 import { setRedaction } from './forms-privacy.ts';
 import {
   FORM_WRITE_ACTIONS,
+  FORMLESS_FORM_ACTIONS,
   PANGULAR_CONFIG_KEY,
   ROUTER_WRITE_ACTIONS,
   actionBlockedMessage,
@@ -1218,13 +1219,23 @@ const pangular = defineDevframe({
     const pendingFormActions = new Map<string, (result: unknown) => void>();
     let formActionSeq = 0;
 
-    const requestFormAction = (request: Record<string, unknown>, timeoutMs = 15_000) =>
-      !config.actions.forms && FORM_WRITE_ACTIONS.includes(request['action'] as string)
-        ? Promise.resolve<Record<string, unknown>>({
-            ok: false,
-            error: actionBlockedMessage('forms'),
-          })
-        : sendFormAction(request, timeoutMs);
+    const requestFormAction = (request: Record<string, unknown>, timeoutMs = 15_000) => {
+      const action = request['action'] as string;
+      if (!config.actions.forms && FORM_WRITE_ACTIONS.includes(action)) {
+        return Promise.resolve<Record<string, unknown>>({
+          ok: false,
+          error: actionBlockedMessage('forms'),
+        });
+      }
+      const formId = request['formId'];
+      if (!FORMLESS_FORM_ACTIONS.includes(action) && (typeof formId !== 'string' || !formId)) {
+        return Promise.resolve<Record<string, unknown>>({
+          ok: false,
+          error: `${String(action)} needs a formId.`,
+        });
+      }
+      return sendFormAction(request, timeoutMs);
+    };
 
     const sendFormAction = (request: Record<string, unknown>, timeoutMs: number) =>
       new Promise<Record<string, unknown>>((resolve) => {
@@ -2288,8 +2299,8 @@ const pangular = defineDevframe({
           limit: {
             type: 'integer',
             minimum: 1,
-            maximum: 50,
-            description: 'How many navigations to return (default 5, at most 50).',
+            maximum: limits.navigations,
+            description: `How many navigations to return (default 5, at most ${limits.navigations}).`,
           },
           perf: {
             type: 'boolean',
@@ -2306,7 +2317,7 @@ const pangular = defineDevframe({
       }) => {
         const state = routerState.value() as RouterState;
         if (!state.pages.length) return { markdown: noRouter };
-        return { markdown: explainNavigationText(state, args) };
+        return { markdown: explainNavigationText(state, args, Date.now(), limits.navigations) };
       },
     });
 
@@ -2934,7 +2945,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:form-action',
       description:
-        'Act on a live form (dev mode). Actions: set-value (mode code or user; user goes through the input like typing), mark-touched, mark-untouched, mark-dirty, mark-pristine, touch-all, revalidate (Signal Forms: reloads async/HTTP validation), reset, enable, disable (reactive only), submit, focus, focus-first-invalid, store-as-global ($form in the page console), snapshot, restore, instrument (value true or false: record the calling code of form changes, validator changes and template updates per keystroke, shown by form-history). reset, submit and restore need confirm: true. Secret, hidden and readonly fields are never written; disabled reactive fields need force.',
+        'Act on a live form (dev mode). Actions: set-value (mode code or user; user goes through the input like typing), mark-touched, mark-untouched, mark-dirty, mark-pristine, touch-all, revalidate (Signal Forms: reloads async/HTTP validation), reset, enable, disable (reactive only), submit, focus, focus-first-invalid, store-as-global ($form in the page console; needs force to replace a $form or $control the page set itself), snapshot, restore, instrument (value true or false: record the calling code of form changes, validator changes and template updates per keystroke, shown by form-history). reset, submit and restore need confirm: true. Secret, hidden and readonly fields are never written; disabled reactive fields need force.',
       safety: 'action',
       inputSchema: {
         type: 'object',
@@ -3058,6 +3069,7 @@ const pangular = defineDevframe({
             pipes: withUrl(pipePages.values()),
             http: withUrl(httpPages.values()),
             capacitor: withUrl(capacitorPages.values()),
+            analog: withUrl(on.analog ? analogPages() : []),
           },
           visibility.list(),
         );

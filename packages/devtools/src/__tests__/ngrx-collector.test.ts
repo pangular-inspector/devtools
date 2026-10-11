@@ -4,7 +4,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { domTree } from '../host-tree.ts';
 import { createNgrxCollector } from '../ngrx-collector.ts';
 import { attachNgrx } from '../ngrx-overlay.ts';
-import { diff, serialize, type NgrxPageReport } from '../ngrx-shared.ts';
+import {
+  diff,
+  NGRX_DIFF_MORE_CAP,
+  referenceDiff,
+  serialize,
+  type NgrxPageReport,
+} from '../ngrx-shared.ts';
 import { mergeNgrxReport, nameStore, ngrxStateOf, type NgrxPages } from '../rpc/ngrx-tools.ts';
 
 const SIGNAL = Symbol('SIGNAL');
@@ -998,6 +1004,33 @@ describe('ngrx collector with a classic store', () => {
     ]);
   });
 
+  it('marks a diff cut at 50 rows with the number of changes left out', () => {
+    const initial = Object.fromEntries(Array.from({ length: 60 }, (_, i) => [`k${i}`, 0]));
+    const { store, collector } = fakeClassic(initial, (state, action) =>
+      action.type === 'bump'
+        ? Object.fromEntries(Object.keys(state).map((key) => [key, 1]))
+        : { ...state, k0: 2 },
+    );
+    store.dispatch({ type: 'bump' });
+    store.dispatch({ type: 'one' });
+    const [bump, one] = collector.logSince(0);
+    expect(bump.diff).toHaveLength(50);
+    expect(bump.diffTruncated).toBe(10);
+    expect(one.diff).toHaveLength(1);
+    expect(one).not.toHaveProperty('diffTruncated');
+  });
+
+  it('reuses the serialized classic state while the store holds the same object', () => {
+    const { store, collector } = fakeClassic({ n: 0 }, (s, action) =>
+      action.type === 'inc' ? { n: s.n + 1 } : s,
+    );
+    store.dispatch({ type: 'noop' });
+    const first = collector.collect().classic!.state;
+    expect(collector.collect().classic!.state).toBe(first);
+    store.dispatch({ type: 'inc' });
+    expect(collector.collect().classic!.state).toEqual({ n: 1 });
+  });
+
   it('keeps a redacted top-level key out of the logged diff', () => {
     const { store, collector } = fakeClassic({ apiKey: 'hunter2' }, (state, action) =>
       action.type === 'rotate' ? { apiKey: 'swordfish' } : state,
@@ -1282,6 +1315,33 @@ describe('serialize', () => {
       { path: 'a.b', op: 'change', before: 1, after: 2 },
       { path: 'list[1]', op: 'add', after: 2 },
       { path: 'c', op: 'add', after: true },
+    ]);
+  });
+
+  it('counts the changes past the limit without keeping them', () => {
+    const before = Object.fromEntries(Array.from({ length: 60 }, (_, i) => [`k${i}`, 0]));
+    const after = Object.fromEntries(Array.from({ length: 60 }, (_, i) => [`k${i}`, 1]));
+    const overflow = { more: 0 };
+    expect(diff(before, after, 50, 6, overflow)).toHaveLength(50);
+    expect(overflow.more).toBe(10);
+    const raw = { more: 0 };
+    expect(referenceDiff(before, after, '', {}, 50, 12, raw)).toHaveLength(50);
+    expect(raw.more).toBe(10);
+  });
+
+  it('stops counting at the cap', () => {
+    const size = NGRX_DIFF_MORE_CAP + 200;
+    const before = Array.from({ length: size }, () => 0);
+    const after = Array.from({ length: size }, () => 1);
+    const overflow = { more: 0 };
+    expect(diff(before, after, 50, 6, overflow)).toHaveLength(50);
+    expect(overflow.more).toBe(NGRX_DIFF_MORE_CAP);
+  });
+
+  it('treats equal objects as unchanged whatever their key order', () => {
+    expect(diff({ a: [{ x: 1, y: 2 }] }, { a: [{ y: 2, x: 1 }] }, 50, 1)).toEqual([]);
+    expect(diff({ a: { x: 1 } }, { a: { x: 1, y: 2 } }, 50, 1)).toEqual([
+      { path: 'a', op: 'change', before: { x: 1 }, after: { x: 1, y: 2 } },
     ]);
   });
 });

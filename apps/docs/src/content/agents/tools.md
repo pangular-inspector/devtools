@@ -194,7 +194,7 @@ With `storeId`, the full state of one store: state, computed values, `withEntiti
 
 ### signal-store-history
 
-The change log for a page's stores, oldest first: `@ngrx/signals` state diffs (method calls and `patchState` writes, each with a per-key diff), classic `@ngrx/store` actions, and `@ngrx/signals/events` dispatched events. A method-call entry carries a duration in milliseconds. With `watchState` registered, it is the time from the start of the method to that patch; without it, the time the whole call took. A signal-store entry carries the event that caused it when the change happened while that event was being dispatched.
+The change log for a page's stores, oldest first: `@ngrx/signals` state diffs (method calls and `patchState` writes, each with a per-key diff), classic `@ngrx/store` actions, and `@ngrx/signals/events` dispatched events. A method-call entry carries a duration in milliseconds. With `watchState` registered, it is the time from the start of the method to that patch; without it, the time the whole call took. A signal-store entry carries the event that caused it when the change happened while that event was being dispatched. Each entry lists up to 50 changes; when there were more, it ends with how many were left out, such as `12 more changes not shown`.
 
 | Argument  | Required | Value                                                                                                                                                            |
 | --------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -208,11 +208,11 @@ All router tools read the page, except `explain-render-mode`, which also reads y
 
 ### Read the current route
 
-| Tool                 | What it answers                                                                                                                                                                                                                                                                                      | Arguments                                             |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `inspect-route`      | The current route: URL, query params, fragment, title, the navigation in flight, the active route tree (component, params, data, guards, resolvers) and the outlet tree with each outlet's `routerOutletData`. With `selector`, the route a component was rendered for, or whether a link is active. | `selector`: component class, element tag or link text |
-| `explain-navigation` | Recent navigations, newest first: who started each one, redirects and loops with the cause of each hop, per-phase timing, guard and resolver verdicts, lazy loads, and the cancel or error reason in plain language.                                                                                 | `url`, `id`, `limit` (1 to 50, default 5), `perf`     |
-| `export-navigation`  | A markdown repro of one navigation, with router options, any loop it is part of and the relevant slice of the route config. Defaults to the latest one that did not succeed.                                                                                                                         | `id`                                                  |
+| Tool                 | What it answers                                                                                                                                                                                                                                                                                      | Arguments                                                           |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `inspect-route`      | The current route: URL, query params, fragment, title, the navigation in flight, the active route tree (component, params, data, guards, resolvers) and the outlet tree with each outlet's `routerOutletData`. With `selector`, the route a component was rendered for, or whether a link is active. | `selector`: component class, element tag or link text               |
+| `explain-navigation` | Recent navigations, newest first: who started each one, redirects and loops with the cause of each hop, per-phase timing, guard and resolver verdicts, lazy loads, and the cancel or error reason in plain language.                                                                                 | `url`, `id`, `limit` (1 to `limits.navigations`, default 5), `perf` |
+| `export-navigation`  | A markdown repro of one navigation, with router options, any loop it is part of and the relevant slice of the route config. Defaults to the latest one that did not succeed.                                                                                                                         | `id`                                                                |
 
 Use `explain-navigation` for "why was I redirected". Pass `perf: true` for "why is navigation slow": it lists the slowest navigations and preloads.
 
@@ -334,6 +334,8 @@ Both tools are action tools and need a development build. They don't write secre
 When a write goes through a native `<select>` (`mode: user`, the default for `fill-form`, or any write to a template-driven form), the value must equal the value of one of its options (`[ngValue]` or `value`). A multiple select takes an array. If no option matches, the field is not written and the result says `has no option with the value ...`. A `mode: code` write to a reactive form or Signal Form sets the model directly and does not check the options.
 
 `form-action` accepts these actions: `set-value`, `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`, `touch-all`, `revalidate`, `reset`, `enable`, `disable`, `submit`, `focus`, `focus-first-invalid`, `store-as-global`, `snapshot`, `restore` and `instrument`.
+
+`form-action` and `fill-form` always act on the form `form` names. `store-as-global` does not overwrite a `$form` or `$control` that the page defined itself, unless you pass `force`.
 
 `snapshot` keeps a copy of the form value, so it refuses a form whose value cannot be cloned, such as a control that holds a function. `inspect-forms` with `includeValues: false` also leaves out uncommitted input, model drift and metadata.
 
@@ -460,7 +462,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 ### Lint
 
-`analog-lint` finds Analog mistakes: two files for one URL, a missing default export, a layout without `router-outlet`, bad API method suffixes, prerender entries that match nothing, and frontmatter errors. It also reports live problems, like a `load()` fetched twice, a server function read that runs again after hydration, or a restart needed. No arguments.
+`analog-lint` finds Analog mistakes: two files for one URL, a missing default export, a layout without `router-outlet`, bad API method suffixes, prerender entries that match nothing, and frontmatter errors. It also reports live problems, like a `load()` fetched twice, a server function read that runs again after hydration, or a restart needed. Hydration errors and restart hints come from one page: pass `page` to pick it, or leave it out for the most recent. If no page with that id sends Analog data, the answer says so and lists the pages that do.
 
 <ngmd-alert severity="helpful">
   <code>analog-server-calls</code> and <code>analog-call-api</code> need the <a href="../getting-started/vite.md">Vite plugin</a>. The plugin records the calls and knows the dev server address.

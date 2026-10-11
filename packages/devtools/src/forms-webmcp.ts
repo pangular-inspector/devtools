@@ -93,9 +93,12 @@ export function inferShape(value: unknown, path = '', depth = 0): Shape {
   const at = path || '(form)';
   if (value === null) return { blocking: [{ path: at, reason: 'null' }] };
   if (value === undefined) return { blocking: [{ path: at, reason: 'undefined' }] };
-  if (depth >= MAX_DEPTH) return { blocking: [] };
+  if (depth >= MAX_DEPTH) {
+    return { blocking: [{ path: at, reason: `nested deeper than ${MAX_DEPTH} levels` }] };
+  }
   if (Array.isArray(value)) {
     if (!value.length) return { blocking: [{ path: at, reason: 'empty array' }] };
+    // Angular infers an array from its first item only, so the others are not checked.
     const item = inferShape(value[0], `${path}[]`, depth + 1);
     return {
       schema: item.schema && { type: 'array', items: item.schema },
@@ -236,7 +239,7 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
   let activity = false;
   let provided: boolean | undefined;
   let providerCheckedAt = 0;
-  const context = modelContextOf();
+  let context: AnyRecord | null = null;
   let restore: (() => void) | null = null;
 
   const add = (record: ToolRecord) => {
@@ -295,7 +298,8 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
     };
   }
 
-  if (context) {
+  // Patches `registerTool` and lists the tools already there, once a `modelContext` exists.
+  function attach(context: AnyRecord) {
     const original = context['registerTool'] as (...args: unknown[]) => unknown;
     const own = Object.prototype.hasOwnProperty.call(context, 'registerTool');
     const patched = function (this: unknown, tool: AnyRecord, options?: AnyRecord) {
@@ -366,6 +370,15 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
     }
   }
 
+  // A polyfill or extension can add `modelContext` after the overlay loads, so `describe`
+  // looks again until one shows up.
+  const lookUp = () => {
+    if (context) return;
+    context = modelContextOf();
+    if (context) attach(context);
+  };
+  lookUp();
+
   const onRejection = (event: PromiseRejectionEvent) => {
     const match = read(
       () => String(event.reason?.message ?? event.reason).match(SCHEMA_ERROR),
@@ -435,7 +448,9 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
   }
 
   return {
-    active: () => running > 0,
+    // Only the synchronous part of `execute`: user typing or app code that runs while a
+    // long async submit is pending is not the agent's.
+    active: () => current !== null,
     takeActivity() {
       const was = activity;
       activity = running > 0;
@@ -446,6 +461,7 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
     },
     describe(forms, ng) {
       const out = new Map<object, WebMcpTool>();
+      lookUp();
       if (!context) checkProvided(forms, ng);
       if (!records.length) {
         return {

@@ -374,6 +374,8 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
     primary.forEach((node, index) => {
       const own = parts(node.path);
       if (own.length !== 1 || !own[0].startsWith(':') || node.guards?.canMatch) return;
+      // Children don't stop it: when the URL ends at this route, Angular matches it with no
+      // child activated (recognize's NoLeftoversInUrl) and never backtracks to the literal.
       for (const later of primary.slice(index + 1)) {
         const laterParts = parts(later.path);
         if (laterParts.length === 1 && !laterParts[0].startsWith(':') && laterParts[0] !== '**') {
@@ -394,9 +396,10 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
           rule: 'empty-redirect-prefix',
           severity: 'error',
           route: node.fullPath,
-          message: "An empty-path redirect without pathMatch 'full' matches every URL.",
-          fix: "Add pathMatch: 'full'.",
-          angular: 'throws',
+          message:
+            "An empty-path redirect with pathMatch 'prefix' matches every URL, so every navigation is redirected.",
+          fix: "Use pathMatch: 'full'.",
+          angular: 'silent',
         });
       }
     }

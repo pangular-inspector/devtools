@@ -290,6 +290,34 @@ describe('signal-store-history', () => {
     const text = signalStoreHistoryText(pages, undefined, undefined, 0);
     expect(text).toMatch(/pass `page`/i);
   });
+
+  it('says how many changes a long diff left out', () => {
+    const pages = pagesWith(
+      [store()],
+      [logEntry({ seq: 1, diffTruncated: 12 }), logEntry({ seq: 2, diffTruncated: 1000 })],
+    );
+    const text = signalStoreHistoryText(pages);
+    expect(text).toContain('count change 0 → 1; 12 more changes not shown');
+    expect(text).toContain('1000+ more changes not shown');
+  });
+
+  it('drops malformed log entries and stores from a report instead of failing', () => {
+    const pages: NgrxPages = new Map();
+    const report = {
+      pageId: 'p1',
+      session: 's1',
+      url: '/app',
+      title: 'My App',
+      stores: [store(), null, { id: 'ngrx-2' }],
+      classic: { state: 'not a classic store' },
+      log: [null, 'entry', { seq: 2 }, logEntry({ seq: 3 })],
+    } as unknown as NgrxPageReport;
+    expect(mergeNgrxReport(pages, report, [])).toBe(3);
+    const page = pages.get('p1')!;
+    expect(page.stores.map((s) => s.id)).toEqual(['ngrx-1']);
+    expect(page.log.map((e) => e.seq)).toEqual([3]);
+    expect(page.classic).toBeNull();
+  });
 });
 
 describe('withUntrustedPreamble', () => {

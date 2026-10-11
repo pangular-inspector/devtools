@@ -103,6 +103,29 @@ export interface NgrxLogEntry {
   /** `source: 'signal-store'` only: the event that this state change was correlated with. */
   causedByEvent?: { type: string; payload?: unknown };
   unrestorable?: 'dropped' | 'not-recorded';
+  /**
+   * How many more changes the state went through than `diff` holds (it keeps at most 50).
+   * The page counts up to {@link DIFF_MORE_CAP}, so at the cap it is a lower bound.
+   */
+  diffTruncated?: number;
+}
+
+/** The most changes the page counts past a full diff (`NGRX_DIFF_MORE_CAP` in the package). */
+export const DIFF_MORE_CAP = 1000;
+
+/** "12 more changes not shown", or "1000+ more changes not shown" at the cap. */
+export function moreChangesText(count: number): string {
+  const n = count >= DIFF_MORE_CAP ? `${DIFF_MORE_CAP}+` : String(count);
+  return `${n} more ${count === 1 ? 'change' : 'changes'} not shown`;
+}
+
+/** The change count of a log entry, counting the rows left out of a long diff. */
+export function changeCountText(entry: Pick<NgrxLogEntry, 'diff' | 'diffTruncated'>): string {
+  const more = entry.diffTruncated ?? 0;
+  const total = entry.diff.length + more;
+  if (total === 0) return 'no change';
+  const n = more >= DIFF_MORE_CAP ? `${total}+` : String(total);
+  return `${n} ${total === 1 ? 'change' : 'changes'}`;
 }
 
 export interface NgrxPage {

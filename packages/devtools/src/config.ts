@@ -387,6 +387,14 @@ export function pickPangularConfig<T extends PangularConfig>(
   return { config: { inspectors, agent, actions, redaction, limits }, rest };
 }
 
+/** Form actions that work without a `formId`: they act on the page, not on one form. */
+export const FORMLESS_FORM_ACTIONS: readonly string[] = [
+  'locate',
+  'pick',
+  'cancel-pick',
+  'instrument',
+];
+
 /** Form actions that change the form or its validity, as opposed to reading or focusing it. */
 export const FORM_WRITE_ACTIONS: readonly string[] = [
   'set-value',
@@ -492,6 +500,15 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'clear-http-calls': 'http',
   'push-capacitor': 'capacitor',
   'forget-capacitor-page': 'capacitor',
+  'push-analog': 'analog',
+  'forget-analog-page': 'analog',
+  'analog-clear-calls': 'analog',
+  'analog-project': 'analog',
+  'analog-explain-url': 'analog',
+  'analog-lint': 'analog',
+  'analog-render': 'analog',
+  'analog-text': 'analog',
+  'analog-call-api': 'analog',
 };
 
 /**

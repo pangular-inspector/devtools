@@ -97,6 +97,9 @@ export interface RouterDebugApi {
 export type AnyRecord = Record<string, any>;
 
 export const MAX_DEPTH = 12;
+
+/** Key on a wrapped guard or resolver that holds the app's own function. */
+export const WRAPPED = '__pangularOriginal';
 const MAX_REASON = 300;
 const MAX_URL = 2000;
 const URL_SECRET_KEY =
@@ -108,7 +111,8 @@ const GUARD_KINDS = [
   'canMatch',
   'canLoad',
 ] as const;
-const CANCEL_CODES = [
+/** Angular's `NavigationCancellationCode` names, by code. */
+export const CANCEL_CODES = [
   'Redirect',
   'SupersededByNewNavigation',
   'NoDataFromResolver',
@@ -677,6 +681,21 @@ function extrasOf(extras: AnyRecord | null | undefined, restored: unknown): stri
   return out.length ? out : undefined;
 }
 
+/**
+ * A skipped navigation has no NavigationStart to carry its trigger. Read it
+ * from the router's current navigation when that is the same one, else say
+ * it is unknown rather than guess it was started by code.
+ */
+function skippedTriggerOf(router: AnyRecord | undefined, id: number): string {
+  return read(() => {
+    const transitions = router?.['navigationTransitions'];
+    const current = transitions?.['currentNavigation'];
+    const navigation = (typeof current === 'function' ? current() : current) as AnyRecord | null;
+    if (navigation?.['id'] !== id || typeof navigation['trigger'] !== 'string') return 'unknown';
+    return navigation['trigger'] as string;
+  }, 'unknown');
+}
+
 function findPending(navigations: NavigationRecord[]): NavigationRecord | undefined {
   for (let i = navigations.length - 1; i >= 0; i--) {
     if (navigations[i].outcome === 'pending') return navigations[i];
@@ -841,6 +860,16 @@ export function clearNavigations(navigations: NavigationRecord[]) {
   droppedNavigationCounts.delete(navigations);
 }
 
+/**
+ * Empties the list, pending navigations included, and forgets the dropped count.
+ * Used when the overlay lets go of a router: a new router counts its navigation
+ * ids from 1 again, so old records would take its events.
+ */
+export function resetNavigations(navigations: NavigationRecord[]) {
+  navigations.length = 0;
+  droppedNavigationCounts.delete(navigations);
+}
+
 /** How many navigations `trimNavigations` removed from this list. */
 export function droppedNavigations(navigations: NavigationRecord[]): number {
   return droppedNavigationCounts.get(navigations) ?? 0;
@@ -848,13 +877,15 @@ export function droppedNavigations(navigations: NavigationRecord[]): number {
 
 /**
  * Folds one router event into the navigation it belongs to. Returns true when
- * something changed.
+ * something changed. `onLateChange` runs when a field is filled in after the
+ * event, such as the page title the app sets once the navigation ended.
  */
 export function applyRouterEvent(
   navigations: NavigationRecord[],
   event: AnyRecord,
   at: number,
   router?: AnyRecord,
+  onLateChange?: () => void,
 ): boolean {
   const type = read(() => event['type'] as number | undefined, undefined);
   const id = read(() => event['id'] as number, -1);
@@ -966,12 +997,13 @@ export function applyRouterEvent(
     const nav: NavigationRecord = {
       id,
       url: redactUrl(String(event['url'])),
-      trigger: 'imperative',
+      trigger: skippedTriggerOf(router, id),
       startedAt: at,
       outcome: 'pending',
       generation: configGeneration,
     };
-    if (pendingCaller && at - pendingCaller.at < 2000) nav.caller = pendingCaller.text;
+    if (pendingCaller && at - pendingCaller.at < 2000 && nav.trigger === 'imperative')
+      nav.caller = pendingCaller.text;
     pendingCaller = null;
     navigations.push(nav);
   }
@@ -1040,8 +1072,11 @@ export function applyRouterEvent(
         const reused = reusedOf(router);
         if (reused.length) nav.reused = reused;
         Promise.resolve().then(() => {
-          if (typeof document !== 'undefined')
-            nav.title = redactMessage(document.title, state.secrets);
+          if (typeof document === 'undefined') return;
+          const title = redactMessage(document.title, state.secrets);
+          if (title === nav.title) return;
+          nav.title = title;
+          onLateChange?.();
         });
       }
       finish(nav, at, router);
@@ -1188,7 +1223,7 @@ export function watchRouter(
   const subscription = read(
     () =>
       events['subscribe']((event: AnyRecord) => {
-        if (!applyRouterEvent(navigations, event, Date.now(), router)) return;
+        if (!applyRouterEvent(navigations, event, Date.now(), router, onChange)) return;
         trimNavigations(navigations, max);
         onChange();
       }) as { unsubscribe(): void },

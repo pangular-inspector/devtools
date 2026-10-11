@@ -1,5 +1,6 @@
 import { isRouterLink } from './router-links.ts';
 import {
+  CANCEL_CODES,
   EventType,
   MAX_DEPTH,
   clip,
@@ -21,6 +22,7 @@ import {
   type AnyRecord,
   type NavigationRecord,
   type RouterDebugApi,
+  WRAPPED,
 } from './router.ts';
 
 export interface PreloadRecord {
@@ -88,6 +90,7 @@ export function routerLinkOf(target: Element | null, ng?: RouterDebugApi): Eleme
 
 const INSTRUMENT_KEY = 'pangular-router-instrument';
 
+/** Whether instrumentation is on for this tab: on unless it was turned off. */
 export function storedInstrumented(): boolean {
   try {
     return sessionStorage.getItem(INSTRUMENT_KEY) !== '0';
@@ -371,8 +374,6 @@ function track(result: unknown, record: Recorder): unknown {
   return result;
 }
 
-const WRAPPED = '__pangularOriginal';
-
 interface Wrapping {
   restore: (() => void)[];
 }
@@ -539,7 +540,8 @@ function instrumentRoutes(
 }
 
 /**
- * Opt-in: wraps every guard and resolver in the live config so each run is
+ * On by default (see `storedInstrumented`); turned off per tab with the
+ * "instrument" action. Wraps every guard and resolver in the live config so each run is
  * recorded with its verdict and time. Call again after the config changes to
  * cover newly loaded routes. The returned function unwraps everything.
  */
@@ -663,6 +665,15 @@ function findConfig(router: AnyRecord, id: string): AnyRecord | null {
   return found;
 }
 
+const REDIRECT_CANCEL_CODE = CANCEL_CODES.indexOf('Redirect');
+/** The events that end a probed navigation. */
+const PROBE_END_EVENTS: number[] = [
+  EventType.NavigationEnd,
+  EventType.NavigationCancel,
+  EventType.NavigationError,
+  EventType.NavigationSkipped,
+];
+
 function probe(router: AnyRecord, navigations: NavigationRecord[], url: string): Promise<unknown> {
   const transitions = read(() => router['navigationTransitions'] as AnyRecord, null);
   const events = read(() => transitions?.['events'] as AnyRecord, null);
@@ -700,15 +711,20 @@ function probe(router: AnyRecord, navigations: NavigationRecord[], url: string):
         abortCurrent();
       }
       if (id !== targetId) return;
-      if (event['type'] === 4 && redirectedTo === undefined) {
+      if (event['type'] === EventType.RoutesRecognized && redirectedTo === undefined) {
         matched = read(() => serializeRoute(event['state']['root']), null);
         abortCurrent();
       }
-      if (event['type'] === 2 && event['code'] === 0 && redirectedTo === undefined && !matched) {
+      if (
+        event['type'] === EventType.NavigationCancel &&
+        event['code'] === REDIRECT_CANCEL_CODE &&
+        redirectedTo === undefined &&
+        !matched
+      ) {
         redirecting = true;
         return;
       }
-      if ([1, 2, 3, 16].includes(event['type'])) {
+      if (PROBE_END_EVENTS.includes(event['type'])) {
         const record = markProbe(targetId);
         finish(
           redirectedTo !== undefined
@@ -743,14 +759,21 @@ function probe(router: AnyRecord, navigations: NavigationRecord[], url: string):
     targetId = current < 0 ? current : current + 1;
     setCaller('probe from DevTools', true);
     // 'reload' so probing the current URL is matched instead of skipped as the same URL.
-    const promise = read(
-      () =>
-        router['navigateByUrl'](url, {
-          skipLocationChange: true,
-          onSameUrlNavigation: 'reload',
-        }) as Promise<unknown>,
-      null,
-    );
+    let promise: Promise<unknown> | null = null;
+    try {
+      promise = router['navigateByUrl'](url, {
+        skipLocationChange: true,
+        onSameUrlNavigation: 'reload',
+      }) as Promise<unknown>;
+    } catch (error) {
+      markProbe(targetId);
+      finish({
+        error: `navigateByUrl threw before the probe started: ${redactMessage(
+          read(() => String((error as Error)?.message ?? error), 'unknown error'),
+        )}`,
+      });
+      return;
+    }
     promise?.catch?.(() => {});
   });
 }

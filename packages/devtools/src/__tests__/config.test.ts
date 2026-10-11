@@ -212,7 +212,7 @@ describe('agent tool and RPC registration', () => {
   it('assigns every tool, resource and RPC function to an inspector or keeps it shared', async () => {
     const { rpc, tools, resources } = await boot();
     const unassigned = rpc.filter((name) => !RPC_INSPECTOR[name] && !SHARED_RPC.includes(name));
-    expect(unassigned.filter((name) => !name.includes('analog'))).toEqual([]);
+    expect(unassigned).toEqual([]);
     for (const id of [...tools, ...resources].filter((id) => !SHARED_RPC.includes(id))) {
       expect(agentAllowed({ id }, resolvePangularConfig({ agent: { tools: offAll() } }))).toBe(
         false,
@@ -352,6 +352,21 @@ describe('panel actions', () => {
       error: expect.stringContaining('actions.analog'),
     });
     expect(await invoke('get-http-rules', undefined)).toEqual([]);
+  });
+
+  it('refuses a form action without formId unless it acts on the page', async () => {
+    const { ctx, invoke } = await boot();
+    const broadcast = vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: never) => {
+      const { requestId } = (options as { args: [{ requestId: string }] }).args[0];
+      await invoke('form-action-result', { requestId, result: { ok: true } });
+    }) as never);
+    expect(await invoke('request-form-action', { action: 'focus' })).toEqual({
+      ok: false,
+      error: 'focus needs a formId.',
+    });
+    expect(broadcast).not.toHaveBeenCalled();
+    expect(await invoke('request-form-action', { action: 'cancel-pick' })).toEqual({ ok: true });
+    expect(broadcast).toHaveBeenCalledTimes(1);
   });
 
   it('refuses a panel probe with router actions off and lets record and resolve lazy through', async () => {

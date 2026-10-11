@@ -1,4 +1,6 @@
+import * as v from 'valibot';
 import type {
+  NgrxClassicStoreInfo,
   NgrxLogEntry,
   NgrxPage,
   NgrxPageReport,
@@ -38,6 +40,43 @@ export function isNgrxReport(value: unknown): value is NgrxPageReport {
     Array.isArray(r.stores) &&
     Array.isArray(r.log)
   );
+}
+
+const StoreSchema = v.looseObject({
+  id: v.string(),
+  kind: v.picklist(['signal-store', 'signal-state']),
+  className: v.string(),
+  scope: v.string(),
+  stateKeys: v.array(v.string()),
+  state: v.record(v.string(), v.unknown()),
+  computed: v.record(v.string(), v.unknown()),
+  methods: v.array(v.looseObject({ name: v.string(), calls: v.number() })),
+  references: v.array(v.string()),
+  writable: v.boolean(),
+});
+
+const LogEntrySchema = v.looseObject({
+  seq: v.number(),
+  source: v.picklist(['signal-store', 'store', 'event']),
+  storeId: v.string(),
+  type: v.string(),
+  timestamp: v.number(),
+  diff: v.array(v.looseObject({ path: v.string(), op: v.picklist(['add', 'remove', 'change']) })),
+  restorable: v.boolean(),
+});
+
+const ClassicSchema = v.looseObject({
+  state: v.unknown(),
+  devtools: v.boolean(),
+  scope: v.string(),
+});
+
+/**
+ * The page writes the report, so its items are checked one by one: a malformed store
+ * or log entry is dropped instead of failing the merge or reaching the panel.
+ */
+function validItems<T>(items: unknown[], schema: v.GenericSchema): T[] {
+  return items.filter((item): item is T => v.is(schema, item));
 }
 
 /**
@@ -98,7 +137,9 @@ export function mergeNgrxReport(
   // (forget-ngrx-page, expiry, restart), drop the partial log and answer 0 so
   // the page resends everything it still holds.
   const resync = !known && typeof report.since === 'number' && report.since > 0;
-  const fresh = resync ? [] : report.log.filter((entry: NgrxLogEntry) => entry.seq > lastSeq);
+  const fresh = resync
+    ? []
+    : validItems<NgrxLogEntry>(report.log, LogEntrySchema).filter((entry) => entry.seq > lastSeq);
   const lost = new Map<number, NgrxUnrestorable>();
   for (const update of Array.isArray(report.unrestorable) ? report.unrestorable : []) {
     if (typeof update?.seq === 'number' && UNRESTORABLE.has(update.reason)) {
@@ -114,8 +155,11 @@ export function mergeNgrxReport(
     session: report.session,
     url: redactUrl(String(report.url ?? '').slice(0, 2000)),
     title: redactMessage(String(report.title ?? '').slice(0, 2000)).slice(0, 200),
-    stores: report.stores.map((store) => ({ ...store, ...nameStore(store, declarations) })),
-    classic: report.classic ?? null,
+    stores: validItems<NgrxSignalStoreInfo>(report.stores, StoreSchema).map((store) => ({
+      ...store,
+      ...nameStore(store, declarations),
+    })),
+    classic: v.is(ClassicSchema, report.classic) ? (report.classic as NgrxClassicStoreInfo) : null,
     log,
     dropped: Math.max(0, (log[0]?.seq ?? 1) - 1),
     reportedAt: now,

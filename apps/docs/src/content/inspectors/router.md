@@ -89,8 +89,8 @@ How the router is set up (`provideRouter`, `forRoot or other` or `unknown`), the
 Route config mistakes, each with a fix:
 
 - Unreachable routes after `**`, and duplicate paths.
-- A `:param` that shadows a literal path.
-- Empty-path redirects without `pathMatch: 'full'`, and redirect cycles.
+- A `:param` that shadows a later literal path. This includes a `:param` route with children or `loadChildren`, because when the URL ends at it the router matches it with no child and never reaches the literal route.
+- Empty-path redirects with `pathMatch: 'prefix'`, which redirect every URL, and redirect cycles.
 - Redirect loops seen at runtime (rule `redirect-loop`), with the hops and the guards involved.
 - Deprecated class guards and `canLoad`.
 - Lazy chunks downloaded before a rejecting `canActivate`.
@@ -184,18 +184,18 @@ Without that recording, the guards listed for a navigation are candidates: the `
 
 ## Agent tools
 
-| Tool or resource               | What it does                                                                                                                                                                       |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:explain-navigation`  | Why a navigation failed or redirected, with any loop and the cause of each hop. Pass `url` or `id` to narrow it, `limit` for more than the last 5, or `perf` for the slowest ones. |
-| `pangular:inspect-route`       | The route the page is on. Pass `selector` (a component class, tag or link text) for the route a component was rendered for, or a link state.                                       |
-| `pangular:list-routes`         | The live config with source files and example URLs. `match` predicts a URL, `audit` lists the guards of each page.                                                                 |
-| `pangular:lint-routes`         | The lint findings, including redirect loops seen at runtime.                                                                                                                       |
-| `pangular:router-config`       | The setup, including whether guard recording is on.                                                                                                                                |
-| `pangular:export-navigation`   | A markdown repro, with any loop the navigation is part of. Defaults to the latest navigation that did not succeed.                                                                 |
-| `pangular:explain-render-mode` | Which render mode a URL gets, from `*.routes.server.ts`.                                                                                                                           |
-| `pangular:get-routes`          | Routes from your source files.                                                                                                                                                     |
-| `pangular:navigate`            | Acts on the router: `navigate`, `abort`, `replay`, `probe`, `instrument` and `resolve-lazy`.                                                                                       |
-| `pangular:router` (resource)   | The active route tree and recent navigations of each page.                                                                                                                         |
+| Tool or resource               | What it does                                                                                                                                                                                                    |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:explain-navigation`  | Why a navigation failed or redirected, with any loop and the cause of each hop. Pass `url` or `id` to narrow it, `limit` for more than the last 5 (up to `limits.navigations`), or `perf` for the slowest ones. |
+| `pangular:inspect-route`       | The route the page is on. Pass `selector` (a component class, tag or link text) for the route a component was rendered for, or a link state.                                                                    |
+| `pangular:list-routes`         | The live config with source files and example URLs. `match` predicts a URL, `audit` lists the guards of each page.                                                                                              |
+| `pangular:lint-routes`         | The lint findings, including redirect loops seen at runtime.                                                                                                                                                    |
+| `pangular:router-config`       | The setup, including whether guard recording is on.                                                                                                                                                             |
+| `pangular:export-navigation`   | A markdown repro, with any loop the navigation is part of. Defaults to the latest navigation that did not succeed.                                                                                              |
+| `pangular:explain-render-mode` | Which render mode a URL gets, from `*.routes.server.ts`.                                                                                                                                                        |
+| `pangular:get-routes`          | Routes from your source files.                                                                                                                                                                                  |
+| `pangular:navigate`            | Acts on the router: `navigate`, `abort`, `replay`, `probe`, `instrument` and `resolve-lazy`.                                                                                                                    |
+| `pangular:router` (resource)   | The active route tree and recent navigations of each page.                                                                                                                                                      |
 
 `navigate` only accepts same-origin relative URLs that start with `/`. `resolve-lazy` needs a `routeId`. With [`actions.router`](../getting-started/configuration.md#actions) set to `false`, the tool refuses `navigate`, `abort`, `replay` and `probe`, and keeps `instrument` and `resolve-lazy`. See [Tools](../agents/tools.md).
 
