@@ -15,7 +15,7 @@ The Forms tab reads the forms of the running page, in development builds only. I
 
 ### Forms list
 
-The sidebar lists each form with its label, its kind (**Signal Forms**, **Reactive** or **Template-driven**) and its error count. When the panel runs inside a page and other tabs report forms, check **All pages** to include them.
+The sidebar lists each form with its label, its kind (**Signal Forms**, **Reactive** or **Template-driven**) and its error count. When the panel runs inside a page and other tabs report forms, check **All pages** to include them. If you uncheck **All pages** while a form from another tab is selected, the details say the form is on another page and offer **Show forms from all pages**.
 
 Select a form to see its status, whether it is dirty or touched, whether it was submitted or is submitting, and an **Error summary**.
 
@@ -66,7 +66,17 @@ Click a field to open its details below the table. Click the field again, or **C
 
 ### Timeline view
 
-Recent changes, newest first, each tagged with its origin: user, code, agent (a WebMCP tool call) or devtools. Filter the list by origin. The timeline tracks array items by identity, so moves show as moves. Async validation times show as **pending** tags. The page keeps the last 200 events, set with [`limits.formTimeline`](../getting-started/configuration.md#limits). Once older events are dropped, the timeline and `form-history` say how many.
+Recent changes, newest first, each tagged with its origin: user, code, agent (a WebMCP tool call) or devtools. The timeline tracks array items by identity, so moves show as moves. Async validation times show as **pending** tags. The page keeps the last 200 events, set with [`limits.formTimeline`](../getting-started/configuration.md#limits). Once older events are dropped, the timeline and `form-history` say how many.
+
+Narrow the list with three filters. An event shows only when it passes all of them.
+
+| Filter                               | What it matches                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------- |
+| **Filter by field path**             | Events whose field path contains the text, ignoring case. Press `Escape` to clear it. |
+| **Event type**                       | One event type, such as `value`, `status` or `submit`. Lists only the types present.  |
+| Origin (**All**, **User** and so on) | Events from one origin.                                                               |
+
+The list shows the latest 100 matching events. When more match, the count next to the filters says so, for example "Showing the latest 100 of 240 events". If the filters hide every event, click **Clear filters** to reset all three.
 
 Check **Record details** to add the calling code of each change, validator changes, and component renders per keystroke. It is off by default and applies to the whole page.
 
@@ -200,7 +210,7 @@ Agents can loop: inspect, act, `wait-for-form`, then `form-diff` from the marker
 
 ### Reset, submit and restore ask first
 
-In the tab, the button turns into **Confirm reset**, **Confirm submit** or **Confirm restore**. Click again to run it. Agents pass `confirm: true` for the same actions, and for `fill-form` with `submit`.
+In the tab, the button turns into **Confirm reset**, **Confirm submit** or **Confirm restore**. Click again to run it. If the selected form changes first, for example because the page destroyed it, the confirmation, the snapshot and the open field are cleared. Agents pass `confirm: true` for the same actions, and for `fill-form` with `submit`.
 
 ### Fields that are not written
 

@@ -109,13 +109,15 @@ The source-mode notice says to connect the overlay on Angular 20 or later for th
 
 Arrow keys, Home and End move the selection through the tree. The right arrow expands a row or moves to its first child. The left arrow collapses a row or moves to its parent. The first row is selected when nothing else is.
 
+If the selected injector leaves the page because its component or directive was destroyed, the details say so and a screen reader announces it. The tab doesn't pick another injector for you. Click **Show** with the first injector's name, or select a row.
+
 ## Agent tools
 
-| Tool or resource             | Kind     | What it does                                                                                                                                                                                 |
-| ---------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:get-providers`     | tool     | DI providers from source: `@Injectable` services, `inject()` calls, constructor parameters and `providers` arrays.                                                                           |
-| `pangular:inspect-providers` | tool     | The injector tree a page reported, with what components and created services inject. `selector` narrows it to matching element injectors, `token` to where a token is provided and injected. |
-| `pangular:injector-tree`     | resource | The live tree last reported by a page.                                                                                                                                                       |
+| Tool or resource             | Kind     | What it does                                                                                                                                                                                                                                     |
+| ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pangular:get-providers`     | tool     | DI providers from source: `@Injectable` services, `inject()` calls, constructor parameters and `providers` arrays.                                                                                                                               |
+| `pangular:inspect-providers` | tool     | The injector tree a page reported, with what components and created services inject. `selector` narrows it to matching element or environment injectors (`Root`, `Platform`, `Route: admin`), `token` to where a token is provided and injected. |
+| `pangular:injector-tree`     | resource | The live tree last reported by a page.                                                                                                                                                                                                           |
 
 See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 

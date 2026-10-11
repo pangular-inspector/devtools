@@ -139,4 +139,45 @@ describe('pipe recording requests', () => {
     await invoke('push-pipes', page('tab-1'));
     expect(await invoke('request-instrument-pipes', true)).toEqual({ pages: 1 });
   });
+
+  it('does not start recording on every tab before any page has reported', async () => {
+    const { ctx, invoke } = await boot();
+    const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
+    expect(await invoke('request-instrument-pipes', true)).toEqual({ pages: 0 });
+    const starts = broadcast.mock.calls.filter(
+      ([options]) => (options as { method: string }).method === 'pangular:instrument-pipes',
+    );
+    expect(starts).toHaveLength(0);
+  });
+
+  it('sends the page id with the request so other tabs stay unpatched', async () => {
+    vi.useFakeTimers();
+    try {
+      const { ctx, invoke } = await boot();
+      const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
+      const sent = () =>
+        broadcast.mock.calls
+          .map(([options]) => options as { method: string; args: unknown[] })
+          .filter((options) => options.method === 'pangular:instrument-pipes')
+          .at(-1)?.args;
+      await invoke('push-pipes', page('tab-1'));
+      await vi.advanceTimersByTimeAsync(1000);
+      await invoke('push-pipes', page('tab-2'));
+
+      expect(await invoke('request-instrument-pipes', { pageId: 'tab-1', on: true })).toEqual({
+        pages: 1,
+      });
+      expect(sent()).toEqual([{ pageId: 'tab-1', on: true }]);
+      expect(await invoke('request-instrument-pipes', { pageId: 'gone', on: true })).toEqual({
+        pages: 0,
+      });
+      // Without a page id, start picks the latest page and stop reaches every page.
+      await invoke('request-instrument-pipes', true);
+      expect(sent()).toEqual([{ pageId: 'tab-2', on: true }]);
+      expect(await invoke('request-instrument-pipes', { on: false })).toEqual({ pages: 2 });
+      expect(sent()).toEqual([{ on: false }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

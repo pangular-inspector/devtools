@@ -8,10 +8,12 @@ import {
   effect,
   inject,
   input,
+  linkedSignal,
   signal,
 } from '@angular/core';
 import { DatePipe, JsonPipe, NgTemplateOutlet } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
+import { pickPage, type ReportedPage } from '../live-pages';
 import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
 
@@ -147,6 +149,17 @@ const KIND_COLORS: Record<string, string> = {
         [value]="filter()"
         (input)="filter.set($any($event.target).value)"
       />
+      @if (pageOptions().length > 1) {
+        <div class="picker page-picker">
+          <span class="label-key" id="signals-page-label">Page</span>
+          <app-select
+            labelledBy="signals-page-label"
+            [options]="pageOptions()"
+            [value]="shownPageId()"
+            (valueChange)="selectPage($event)"
+          />
+        </div>
+      }
       @if (componentOptions().length) {
         <div class="picker">
           <span class="label-key" id="signals-component-label">Graph of</span>
@@ -159,6 +172,7 @@ const KIND_COLORS: Record<string, string> = {
         </div>
       }
     </div>
+    <p class="sr-only" role="status">{{ announcement() }}</p>
 
     @if (graph()?.component; as comp) {
       <p class="showing">
@@ -882,6 +896,9 @@ const KIND_COLORS: Record<string, string> = {
       flex: 1 1 auto;
       min-width: 0;
     }
+    .page-picker {
+      flex: 0 1 240px;
+    }
     .label-key {
       flex: none;
       color: var(--text-2);
@@ -1208,13 +1225,73 @@ export class SignalInspector {
   private readonly injector = inject(Injector);
   private readonly pageId = hostPageId();
   private readonly cleanups: (() => void)[] = [];
-  private readonly treePages = signal<Record<string, { roots?: LiveNode[]; reportedAt?: number }>>(
-    {},
-  );
-  readonly picked = signal<string | null>(null);
+  private readonly treePages = signal<
+    Record<string, { roots?: LiveNode[]; reportedAt?: number; title?: string; url?: string }>
+  >({});
+  private readonly graphState = signal<{
+    graph: SignalGraph | null;
+    pages: Record<string, SignalGraph>;
+  }>({ graph: null, pages: {} });
+  readonly chosenPageId = signal<string | null>(null);
+  readonly announcement = signal('');
 
-  graph = signal<SignalGraph | null>(null);
-  readonly unsupported = signal(false);
+  // Older servers send only the newest graph, without the per-page map.
+  private readonly graphPages = computed<Record<string, SignalGraph>>(() => {
+    const { graph, pages } = this.graphState();
+    if (Object.keys(pages).length) return pages;
+    return graph ? { [graph.pageId ?? '']: graph } : {};
+  });
+
+  // The newest graph comes as `graph`; a page that reports later never takes over.
+  readonly shownPageId = linkedSignal<
+    { pages: Record<string, SignalGraph>; newest: string | null; chosen: string | null },
+    string | null
+  >({
+    source: () => ({
+      pages: this.graphPages(),
+      newest: this.graphState().graph?.pageId ?? null,
+      chosen: this.chosenPageId(),
+    }),
+    computation: ({ pages, newest, chosen }, previous) => {
+      const reported: Record<string, ReportedPage> = {};
+      for (const pageId of Object.keys(pages)) {
+        reported[pageId] = { pageId, reportedAt: pageId === newest ? 1 : 0 };
+      }
+      return pickPage(reported, { chosen, host: this.pageId, previous: previous?.value ?? null });
+    },
+  });
+
+  private readonly reported = computed<SignalGraph | null>(() => {
+    const pageId = this.shownPageId();
+    return pageId === null ? null : (this.graphPages()[pageId] ?? null);
+  });
+  readonly unsupported = computed(() => !!this.reported()?.unsupported);
+  readonly graph = computed<SignalGraph | null>(() => {
+    const reported = this.reported();
+    return reported?.unsupported ? null : reported;
+  });
+  private readonly graphOwner = computed(() => {
+    const g = this.graph();
+    return g ? `${g.pageId ?? ''}|${g.component?.id ?? g.injector?.id ?? ''}` : null;
+  });
+
+  // Component and injector ids belong to one page, so each page keeps its own pick.
+  private readonly pickedByPage = signal<Record<string, string>>({});
+  readonly picked = computed(() => this.pickedByPage()[this.targetPageId() ?? ''] ?? null);
+
+  readonly pageOptions = computed<SelectOption[]>(() => {
+    if (this.pageId) return [];
+    const tree = this.treePages();
+    return Object.keys(this.graphPages()).map((pageId) => {
+      const page = tree[pageId];
+      return {
+        value: pageId,
+        label: page?.title || page?.url || `Page ${pageId}`,
+        hint: page?.url,
+      };
+    });
+  });
+
   readonly showInternals = signal(false);
   sourceSignals = signal<SourceSignal[]>([]);
   sourceLoaded = signal(false);
@@ -1238,7 +1315,10 @@ export class SignalInspector {
     return [...counts].map(([kind, count]) => ({ kind, count }));
   });
   kindTotal = computed(() => this.kindCounts().reduce((sum, g) => sum + g.count, 0));
-  selectedId = signal<string | null>(null);
+  selectedId = linkedSignal<string | null, string | null>({
+    source: this.graphOwner,
+    computation: () => null,
+  });
   selectedNode = computed(
     () => this.graph()?.nodes.find((n) => n.id === this.selectedId()) ?? null,
   );
@@ -1290,7 +1370,12 @@ export class SignalInspector {
   });
 
   private readonly targetPageId = computed(
-    () => this.pageId ?? this.graph()?.pageId ?? this.latestTreePage()?.pageId ?? null,
+    () =>
+      this.pageId ??
+      (this.shownPageId() || null) ??
+      this.graph()?.pageId ??
+      this.latestTreePage()?.pageId ??
+      null,
   );
 
   private readonly latestTreePage = computed(() => {
@@ -1362,18 +1447,18 @@ export class SignalInspector {
       const state = await my.rpc.sharedState('signal-graph');
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
-        const next = value as { graph?: SignalGraph | null; pages?: Record<string, SignalGraph> };
-        const reported = this.reportedGraph(next);
-        this.unsupported.set(!!reported?.unsupported);
-        const graph = reported?.unsupported ? null : reported;
-        const owner = (g: SignalGraph | null) => g?.component?.id ?? g?.injector?.id;
-        if (owner(graph) !== owner(this.graph())) this.selectedId.set(null);
-        this.graph.set(graph);
+        const next = value as {
+          graph?: SignalGraph | null;
+          pages?: Record<string, SignalGraph>;
+        } | null;
+        const pages = next?.pages && typeof next.pages === 'object' ? next.pages : {};
+        this.notePageGone(pages);
+        this.graphState.set({ graph: next?.graph ?? null, pages });
       };
       apply(state.value());
       this.cleanups.push(state.on('updated', apply));
     } catch {
-      this.graph.set(null);
+      this.graphState.set({ graph: null, pages: {} });
     }
     try {
       const tree = await my.rpc.sharedState('component-tree');
@@ -1389,26 +1474,32 @@ export class SignalInspector {
     }
   }
 
-  private lockedPage: string | null = null;
+  private notePageGone(pages: Record<string, SignalGraph>) {
+    const chosen = this.chosenPageId();
+    if (!chosen || pages[chosen]) return;
+    const label = this.pageOptions().find((o) => o.value === chosen)?.label ?? 'The chosen page';
+    this.chosenPageId.set(null);
+    this.announcement.set(`${label} closed, so this shows another page.`);
+  }
 
-  private reportedGraph(next: {
-    graph?: SignalGraph | null;
-    pages?: Record<string, SignalGraph>;
-  }): SignalGraph | null {
-    if (this.pageId) return next?.pages?.[this.pageId] ?? null;
-    const locked = this.lockedPage ? next?.pages?.[this.lockedPage] : undefined;
-    if (locked) return locked;
-    const latest = next?.graph ?? null;
-    this.lockedPage = latest?.pageId ?? null;
-    return latest;
+  selectPage(pageId: string | null) {
+    if (!pageId || pageId === this.shownPageId()) return;
+    this.chosenPageId.set(pageId);
+    const label = this.pageOptions().find((o) => o.value === pageId)?.label ?? pageId;
+    this.announcement.set(`Showing the signal graph of ${label}.`);
   }
 
   pickComponent(value: string | null) {
     const picked = value && value !== FOLLOW ? value : null;
-    this.picked.set(picked);
+    const pageId = this.targetPageId() ?? undefined;
+    this.pickedByPage.update((all) => {
+      const next = { ...all };
+      if (picked) next[pageId ?? ''] = picked;
+      else delete next[pageId ?? ''];
+      return next;
+    });
     const client = this.rpc();
     if (!client) return;
-    const pageId = this.targetPageId() ?? undefined;
     const target = picked?.startsWith(ENV)
       ? { pageId, env: picked.slice(ENV.length) }
       : { pageId, id: picked };
