@@ -145,11 +145,13 @@ With `root` or a route path, the tool switches the page's graph to the effects o
 
 The injectors a page reported. Element injectors list what each component injected and which injector supplied it. Environment injectors run from the platform down to the root and route injectors, and list what the services they already created inject. Reads: page.
 
-| Argument   | Required | Value                                                                                                                                                |
-| ---------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `selector` | no       | A tag name, a component or directive class name, or an injector id. Returns only the matching element injectors, each with its lookup path resolved. |
-| `token`    | no       | A token name, like `HttpClient`. Returns the injectors that provide it and the components or services that inject it.                                |
-| `pageId`   | no       | Same as `page`.                                                                                                                                      |
+| Argument   | Required | Value                                                                                                                                                                            |
+| ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `selector` | no       | A tag name, a component or directive class name, an environment injector name like `Root`, `Platform` or `Route: admin`, or an injector id. Returns only the matching injectors. |
+| `token`    | no       | A token name, like `HttpClient`. Returns the injectors that provide it and the components or services that inject it.                                                            |
+| `pageId`   | no       | Same as `page`.                                                                                                                                                                  |
+
+A `selector` that names an element injector returns it with its lookup path resolved to names and provided tokens. One that names an environment injector, in any case, returns that injector's providers, what the services it already created inject, and its parent injectors. When nothing matches, the answer lists the tags and environment injector names on the page to retry with.
 
 Without `selector` or `token`, the answer is the whole tree, cut off at 20,000 characters, and says which change detection mode the page runs. When the page has more than 2000 element injectors, the answer says that it holds only the first 2000.
 
