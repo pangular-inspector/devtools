@@ -33,7 +33,7 @@ A line under the picker names the component, its host path, and why it was chose
 
 ### Node cards
 
-Filter by name, or by kind with the chips. Each card shows:
+Filter by name, or by kind with the chips. If you pick another component or injector and its graph has no node of the chosen kind, the filter goes back to **All**. If the chosen kind runs out of nodes in the same graph, its chip stays pressed with a count of 0. Each card shows:
 
 - Its kind and label. Kinds come from Angular, such as `signal`, `computed`, `linkedSignal`, `effect` and `template`. Nodes without a name show **(unnamed)**.
 - The current value.

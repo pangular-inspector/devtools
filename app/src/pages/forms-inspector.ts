@@ -571,7 +571,12 @@ function countFields(node: FormFieldNode): number {
                   <app-forms-submit [formId]="form.id" [version]="version()" [rpc]="rpc()" />
                 }
                 @case ('lint') {
-                  <app-forms-lint [formId]="form.id" [version]="version()" [rpc]="rpc()" />
+                  <app-forms-lint
+                    [formId]="form.id"
+                    [version]="version()"
+                    [rpc]="rpc()"
+                    (showField)="showField($event)"
+                  />
                 }
               }
             </div>
@@ -815,29 +820,6 @@ function countFields(node: FormFieldNode): number {
       padding: 0 0 0 16px;
       color: var(--text);
       overflow-wrap: anywhere;
-    }
-    .summary-link {
-      display: inline;
-      padding: 0;
-      border: none;
-      border-radius: 4px;
-      background: none;
-      color: inherit;
-      font: inherit;
-      text-align: left;
-      cursor: pointer;
-    }
-    .summary-link code:first-of-type {
-      color: var(--accent);
-      text-decoration: underline;
-      text-underline-offset: 3px;
-    }
-    .summary-link:hover code:first-of-type {
-      color: var(--accent-hover);
-    }
-    .summary-link:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
     }
     .error-summary .kind-tag {
       margin-left: 6px;
@@ -1557,7 +1539,7 @@ export class FormsInspector {
     row?.focus();
   }
 
-  /** Opens a field from the error summary: Fields tab, filters that hide it cleared, detail focused. */
+  /** Opens a field from the error summary or a lint finding: Fields tab, filters that hide it cleared, detail focused. */
   showField(path: string) {
     this.tab_.set('fields');
     const listed = () => this.rows().some((row) => row.node.path === path);
