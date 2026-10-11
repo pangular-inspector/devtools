@@ -113,14 +113,14 @@ It then calls `chrome.permissions.contains()` for `<scheme>://<hostname>/*` of t
 
 ### Finding the server
 
-With access granted, it looks for the devtools server under these paths, in order:
+With access granted, it looks for the devtools server under these paths, in this order of preference:
 
 1. `/__pangular/`
 2. `/__devframes/pangular/`
 3. `/__devframe/`
 4. `/`
 
-Under each path it fetches `__devframe/__connection.json`, then `__connection.json`, with no credentials, no cache, no redirects and a 1.5 second timeout. The first response that is OK and parses as JSON wins.
+Under each path it fetches `__devframe/__connection.json` and `__connection.json`, with no credentials, no cache, no redirects and a 1.5 second timeout. It sends every request at once, so a missing server costs one timeout rather than one per URL. The first URL in the order above whose response is OK and parses as JSON wins.
 
 It records the status of each request, or "no answer" when the request fails or times out. If none answers, the status view lists every URL it tried with its status and links to the setup section of the README. If any request got `401` or `403`, the status view says the server refused the request, shows up to 200 characters of the response text and links to the 403 notes on the Vite page instead. Both views have a **Try again** button that starts the search over.
 
@@ -140,7 +140,7 @@ The panel loads `ui/index.html` with three query parameters:
 
 Outside the extension, the UI accepts a `baseURL` only on its own origin. Inside the extension, it accepts any `http` or `https` URL. The panel only passes hosts the extension can reach.
 
-On each navigation of the inspected page, the panel shows its status view again and repeats the whole search.
+The search starts as soon as the panel opens. On each navigation of the inspected page, the panel shows its status view again and repeats the whole search right away.
 
 ### Theme
 

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PANGULAR_EXTENSION_ORIGINS } from '../extension-origin.ts';
 
 const root = join(import.meta.dirname, '../../../../extension');
 const source = [
@@ -226,7 +227,8 @@ describe('extension panel bridge', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(new URL(panel.frame.src).searchParams.get('pageId')).toBe('next-page');
     await vi.advanceTimersByTimeAsync(5000);
-    expect(panel.fetch).toHaveBeenCalledTimes(2);
+    const first = 'http://localhost:4200/__pangular/__devframe/__connection.json';
+    expect(panel.fetch.mock.calls.filter(([url]) => url === first)).toHaveLength(2);
   });
 
   it('falls back to the stored page id of an overlay that sets no global', async () => {
@@ -322,32 +324,77 @@ describe('extension panel bridge', () => {
   });
 
   it('drops a detection that finishes after a navigation and detects again', async () => {
-    let answer: (response: Response) => void = () => {};
+    const answers: ((response: Response) => void)[] = [];
     let slow = true;
     const panel = open({
       pageId: () => 'page-1',
       fetch: (url) =>
-        slow
-          ? new Promise((resolve) => (answer = resolve))
-          : found('/__pangular/__devframe/__connection.json')(url),
+        slow ? new Promise((resolve) => answers.push(resolve)) : new Promise(() => {}),
     });
-    await vi.advanceTimersByTimeAsync(500);
-    expect(panel.fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(answers.length).toBeGreaterThan(0);
 
     panel.navigate();
     expect(panel.message()).toBe('Detecting Angular app…');
     slow = false;
-    answer(new Response('{}', { status: 200 }));
+    answers.forEach((answer) => answer(new Response('{}', { status: 200 })));
     await vi.advanceTimersByTimeAsync(0);
     expect(panel.frame.style.display).toBe('none');
     expect(panel.message()).toBe('Detecting Angular app…');
+  });
 
-    await vi.advanceTimersByTimeAsync(1000);
+  it('detects again on navigation without a fixed delay', async () => {
+    let up = false;
+    const panel = open({
+      pageId: () => 'page-1',
+      fetch: (url) => (up ? found('/__pangular/__devframe/__connection.json')(url) : offline()),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(panel.message()).toMatch(/^No devtools server answered/);
+
+    up = true;
+    panel.navigate();
+    await vi.advanceTimersByTimeAsync(0);
     expect(panel.frame.style.display).toBe('block');
     expect(new URL(panel.frame.src).searchParams.get('baseURL')).toBe(
       'http://localhost:4200/__pangular/',
     );
   });
+
+  it('sends every probe at once and prefers the earliest path that answers', async () => {
+    const answers = new Map<string, (response: Response) => void>();
+    const panel = open({
+      pageId: () => 'page-1',
+      fetch: (url) => new Promise((resolve) => answers.set(url, resolve)),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const urls = panel.fetch.mock.calls.map(([url]) => url);
+    expect(urls.length).toBeGreaterThan(1);
+    expect([...answers.keys()]).toEqual(urls);
+
+    answers.get('http://localhost:4200/__connection.json')!(new Response('{}', { status: 200 }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(panel.frame.style.display).toBe('none');
+
+    answers.get('http://localhost:4200/__devframes/pangular/__connection.json')!(
+      new Response('{}', { status: 200 }),
+    );
+    for (const [url, answer] of answers) {
+      if (!url.endsWith('/__devframes/pangular/__connection.json')) {
+        answer(new Response('', { status: 404 }));
+      }
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    expect(new URL(panel.frame.src).searchParams.get('baseURL')).toBe(
+      'http://localhost:4200/__devframes/pangular/',
+    );
+  });
+
+  it('pins the same extension origins the server trusts', () => {
+    const pinned = source.match(/const PINNED_ORIGINS = (\[[^\]]*\]);/)?.[1];
+    expect(JSON.parse(pinned!.replaceAll("'", '"'))).toEqual(PANGULAR_EXTENSION_ORIGINS);
+  });
+
   it('reveals a component the UI frame asks for and answers with the request id', async () => {
     const inspect = vi.fn((expression: string) =>
       expression.includes('__pangularHostOf') ? true : null,

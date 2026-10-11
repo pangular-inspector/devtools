@@ -23,7 +23,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'is-angular-page') {
     const info = angularTabs.get(message.tabId);
     sendResponse({ isAngular: !!info, version: info?.version });
-    return true;
   }
 });
 

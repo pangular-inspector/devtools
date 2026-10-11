@@ -1,6 +1,7 @@
 /**
  * IDs of Pangular Inspector extension builds, trusted without any
  * `allowedOrigins` entry. The `key` in `extension/manifest.json` fixes the ID.
+ * `PINNED_ORIGINS` in `extension/panel-bridge.js` must list the same IDs.
  */
 export const PANGULAR_EXTENSION_IDS: readonly string[] = ['dcogniffeelebaolkkfbopmjcblhblfk'];
 
