@@ -221,6 +221,96 @@ describe('SignalInspector', () => {
       expect(trigger(fixture, 'signals-page-label')).toBeNull();
       expect(notices(fixture)).toContain('Tab A closed, so this shows another page.');
     });
+
+    it('forgets the pick of a page that closed', async () => {
+      const { fixture, push } = await renderPages({ graph: b, pages: { A: a, B: b } });
+      await choose(fixture, 'signals-page-label', 'Tab A');
+      await choose(fixture, 'signals-component-label', 'AppA');
+      expect(fixture.componentInstance.pickerValue()).toBe('cA');
+
+      await push({ graph: b, pages: { B: b } });
+      await push({ graph: b, pages: { A: a, B: b } });
+      await choose(fixture, 'signals-page-label', 'Tab A');
+      expect(fixture.componentInstance.pickerValue()).toBe('follow');
+    });
+  });
+
+  describe('kind chips', () => {
+    const listeners = new Set<(value: unknown) => void>();
+    const owned = (id: string, kinds: string[]) => ({
+      ...graph,
+      nodes: kinds.map((kind, i) => ({ id: String(i + 1), kind, label: `${kind}${i}`, epoch: 1 })),
+      component: { ...graph.component, id },
+    });
+
+    async function renderLive(first: unknown) {
+      listeners.clear();
+      const rpc = {
+        call: () => Promise.resolve([]),
+        callEvent: () => Promise.resolve(),
+        sharedState: (name: string) =>
+          Promise.resolve({
+            value: () => (name === 'signal-graph' ? { graph: first } : { pages: {} }),
+            on: (_event: string, listener: (value: unknown) => void) => {
+              if (name === 'signal-graph') listeners.add(listener);
+              return () => listeners.delete(listener);
+            },
+          }),
+      };
+      const fixture = TestBed.createComponent(SignalInspector);
+      fixture.componentRef.setInput('rpc', {
+        connectionMeta: {},
+        scope: () => ({ rpc }),
+      } as unknown as DevframeRpcClient);
+      for (let i = 0; i < 3; i++) {
+        await new Promise((resolve) => setTimeout(resolve));
+        await fixture.whenStable();
+      }
+      const push = async (next: unknown) => {
+        for (const listener of listeners) listener({ graph: next });
+        await fixture.whenStable();
+      };
+      return { fixture, push };
+    }
+
+    function pressed(fixture: ComponentFixture<unknown>) {
+      return Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('.kind-chip[aria-pressed="true"]'),
+        (el) => el.textContent?.replace(/\s+/g, ''),
+      );
+    }
+
+    it('resets a kind the newly picked component does not have', async () => {
+      const { fixture, push } = await renderLive(owned('c1', ['signal', 'linkedSignal']));
+      fixture.componentInstance.kind.set('linkedSignal');
+      await fixture.whenStable();
+
+      await push(owned('c2', ['signal', 'computed']));
+      expect(fixture.componentInstance.kind()).toBeNull();
+      expect(pressed(fixture)).toEqual(['All2']);
+      expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('No signals match.');
+    });
+
+    it('keeps a kind the newly picked component also has', async () => {
+      const { fixture, push } = await renderLive(owned('c1', ['signal', 'computed']));
+      fixture.componentInstance.kind.set('computed');
+      await fixture.whenStable();
+
+      await push(owned('c2', ['computed', 'effect']));
+      expect(fixture.componentInstance.kind()).toBe('computed');
+      expect(pressed(fixture)).toEqual(['computed1']);
+    });
+
+    it('shows an active kind with no matches as a pressed chip with count 0', async () => {
+      const { fixture, push } = await renderLive(owned('c1', ['signal', 'computed']));
+      fixture.componentInstance.kind.set('computed');
+      await fixture.whenStable();
+
+      await push(owned('c1', ['signal']));
+      expect(fixture.componentInstance.kind()).toBe('computed');
+      expect(pressed(fixture)).toEqual(['computed0']);
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain('No signals match.');
+    });
   });
 
   it('offers Clear filters when a filter hides the only resource of a resource-only graph', async () => {
