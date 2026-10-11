@@ -33,6 +33,17 @@ const entry = (seq: number, type: string, origin: 'dispatch' | 'effect' | 'react
   restorable: false,
 });
 
+describe('live-state resource descriptions', () => {
+  it('describe the untrusted notice and the large-state fallback', async () => {
+    const { ctx } = await boot();
+    for (const id of ['component-tree', 'signal-graph', 'injector-tree', 'ngrx-store']) {
+      const description = ctx.agent.getResource(`pangular:${id}`)?.description ?? '';
+      expect(description, id).toContain('`_untrusted`');
+      expect(description, id).toContain('Past 100,000 characters');
+    }
+  });
+});
+
 describe('ngrx-store resource', () => {
   it('lists where each classic store action came from', async () => {
     const { push, read, ctx } = await boot();

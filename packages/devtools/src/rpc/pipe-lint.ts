@@ -162,14 +162,16 @@ function startTagEnd(text: string, open: number): number {
  * bindings also run per row) to its matching end tag. */
 function ngForBlocks(text: string): { start: number; end: number }[] {
   const blocks: { start: number; end: number }[] = [];
-  const re = /\*ngFor\s*=/g;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(text)) !== null) {
-    const open = text.lastIndexOf('<', match.index);
-    const tag = open === -1 ? null : /^<([A-Za-z][\w:-]*)/.exec(text.slice(open));
-    if (!tag) continue;
-    const name = tag[1].toLowerCase();
+  // Walk start tags from the front, skipping quoted values, so a `<` inside
+  // an attribute such as `[hidden]="n < 2"` is never taken for a tag.
+  const starts = /<([A-Za-z][\w:-]*)/g;
+  let tag: RegExpExecArray | null;
+  while ((tag = starts.exec(text)) !== null) {
+    const open = tag.index;
     const headEnd = startTagEnd(text, open);
+    starts.lastIndex = headEnd;
+    if (!/\s\*ngFor\s*=/.test(text.slice(open, headEnd))) continue;
+    const name = tag[1].toLowerCase();
     if (text[headEnd - 2] === '/' || VOID_ELEMENTS.has(name)) {
       blocks.push({ start: open, end: headEnd });
       continue;

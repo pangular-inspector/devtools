@@ -61,4 +61,11 @@ describe('impure-pipe-in-for block matching', () => {
     const template = `<app-row *ngFor="let r of rows" [label]="r | slow" /><p>{{ title | slow }}</p>`;
     expect(lintFor(template)).toHaveLength(1);
   });
+
+  it('finds an *ngFor element whose earlier attributes contain a bare <', () => {
+    const hidden = `<ul><li [hidden]="n < 2" *ngFor="let x of xs">{{ x | slow }}</li></ul>`;
+    expect(lintFor(hidden)).toHaveLength(1);
+    const compare = `<li [x]="a<b" *ngFor="let x of xs">{{ x }}</li><p>{{ title | slow }}</p>`;
+    expect(lintFor(compare)).toEqual([]);
+  });
 });

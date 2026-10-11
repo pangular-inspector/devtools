@@ -34,6 +34,13 @@ function read<T>(fn: () => T, fallback: T): T {
   }
 }
 
+/** The container comment after a block's root nodes, or failing that its first root node. */
+function anchorOf(roots: unknown[]): Node | null {
+  const nodes = roots.filter((node): node is Node => node instanceof Node);
+  const after = nodes.at(-1)?.nextSibling;
+  return after instanceof Comment ? after : (nodes[0] ?? null);
+}
+
 function timeOf(value: unknown): number | null {
   return typeof value === 'number' ? value : null;
 }
@@ -42,8 +49,10 @@ function timeOf(value: unknown): number | null {
  * Reads `@defer` blocks through `ng.ɵgetControlFlowBlocks` (Angular 22+) or
  * `ng.ɵgetDeferBlocks` (earlier). Ids stay stable between collections, and
  * the tracker remembers when each block changed state or hydrated. When
- * Angular gives no `hostNode` (Angular 20), a block is known by its position
- * under its Angular root instead.
+ * Angular gives no `hostNode` (Angular 20), a block is known by the comment
+ * Angular places right after its root nodes, which stays put while the block
+ * moves from placeholder to content. Only a block with no root nodes falls
+ * back to its position among such blocks under its Angular root.
  */
 export function createDeferTracker(now: () => number = Date.now) {
   const ids = new WeakMap<object, string>();
@@ -92,7 +101,8 @@ export function createDeferTracker(now: () => number = Date.now) {
           if (out.length >= MAX_BLOCKS) return out;
           if (!raw || typeof raw !== 'object' || typeof raw.state !== 'string') continue;
           if (typeof raw.type === 'number' && raw.type !== DEFER_TYPE) continue;
-          const hostNode = raw.hostNode instanceof Node ? raw.hostNode : null;
+          const roots: unknown[] = Array.isArray(raw.rootNodes) ? raw.rootNodes : [];
+          const hostNode = raw.hostNode instanceof Node ? raw.hostNode : anchorOf(roots);
           const host = hostNode ?? positionKey(root, position++);
           if (hosts.has(host)) continue;
           hosts.add(host);
@@ -114,7 +124,6 @@ export function createDeferTracker(now: () => number = Date.now) {
           }
           seen.set(host, record);
 
-          const roots: unknown[] = Array.isArray(raw.rootNodes) ? raw.rootNodes : [];
           const block: DeferBlockInfo = {
             id: idOf(host),
             state: raw.state,
@@ -127,8 +136,10 @@ export function createDeferTracker(now: () => number = Date.now) {
               .slice(0, MAX_ROOT_IDS)
               .map((el) => elementId(el)),
           };
-          const firstRoot = roots.find((node): node is Node => node instanceof Node) ?? null;
-          const owner = ownerOf(ng, hostNode ?? firstRoot?.parentNode ?? null);
+          const owner = ownerOf(
+            ng,
+            raw.hostNode instanceof Node ? raw.hostNode : (hostNode?.parentNode ?? null),
+          );
           if (owner) block.owner = owner;
           if (triggers.includes('hydrate never')) block.hydrateNever = true;
           if (raw.loadingBlock?.exists) {
