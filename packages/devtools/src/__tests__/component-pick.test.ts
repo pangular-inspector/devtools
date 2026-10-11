@@ -110,6 +110,37 @@ describe('startComponentPick', () => {
     expect(result.ok && elementById(result.id)).toBe(card);
   });
 
+  it('follows the pointer between components inside one shadow root', async () => {
+    document.body.innerHTML = `<app-root ng-version="22.0.0"><app-shell></app-shell></app-root>`;
+    const root = document.querySelector('app-root')!;
+    const shell = document.querySelector('app-shell')!;
+    shell.attachShadow({ mode: 'open' }).innerHTML =
+      '<app-trip-card><button>Book</button></app-trip-card><app-map><b>Map</b></app-map>';
+    const card = shell.shadowRoot!.querySelector('app-trip-card')!;
+    const map = shell.shadowRoot!.querySelector('app-map')!;
+    const instances = new Map<Element, object>([
+      [root, {}],
+      [shell, {}],
+      [card, new _TripCard()],
+      [map, {}],
+    ]);
+    const ng: ComponentDebugNg = { getComponent: (el) => instances.get(el) ?? null };
+    const highlight = { show: vi.fn(), clear: vi.fn() };
+    const pick = startComponentPick({ getNg: () => ng, highlight, timeoutMs: 1000 });
+    const move = (el: Element) =>
+      el.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, composed: true }));
+
+    move(card.querySelector('button')!);
+    expect(highlight.show).toHaveBeenLastCalledWith(card);
+    move(map.querySelector('b')!);
+    expect(highlight.show).toHaveBeenLastCalledWith(map);
+    // Moving within the same component does not redraw the box.
+    move(map.querySelector('b')!);
+    expect(highlight.show).toHaveBeenCalledTimes(2);
+    pick.cancel();
+    await pick.result;
+  });
+
   it('ends on Escape, on cancel and after the timeout', async () => {
     const first = setup();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));

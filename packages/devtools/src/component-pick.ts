@@ -38,13 +38,22 @@ export function startComponentPick(options: PickOptions): {
 
   let finish: (result: ComponentPickResult) => void = () => {};
   const result = new Promise<ComponentPickResult>((resolve) => {
+    // Moving between elements inside one shadow root fires no mouseover at the
+    // document, since both ends retarget to the host, so pointermove also updates
+    // the box. It is only redrawn when the component under the pointer changes.
+    let shown: Element | null | undefined;
     const onHover = (event: Event) => {
       const host = hostOf(event);
-      if (host instanceof HTMLElement) options.highlight.show(host);
+      const next = host instanceof HTMLElement ? host : null;
+      if (next === shown) return;
+      shown = next;
+      if (next) options.highlight.show(next);
       else options.highlight.clear();
     };
     const onLeave = (event: MouseEvent) => {
-      if (!event.relatedTarget) options.highlight.clear();
+      if (event.relatedTarget) return;
+      shown = undefined;
+      options.highlight.clear();
     };
     const onClick = (event: Event) => {
       if (ownElement(event.target)) return;
@@ -77,6 +86,7 @@ export function startComponentPick(options: PickOptions): {
       finish = () => {};
       doc.removeEventListener('click', onClick, true);
       doc.removeEventListener('mouseover', onHover, true);
+      doc.removeEventListener('pointermove', onHover, true);
       doc.removeEventListener('mouseout', onLeave, true);
       doc.removeEventListener('keydown', onKey, true);
       clearTimeout(timer);
@@ -87,6 +97,7 @@ export function startComponentPick(options: PickOptions): {
     popup?.setAttribute('data-picking', '');
     doc.addEventListener('click', onClick, true);
     doc.addEventListener('mouseover', onHover, true);
+    doc.addEventListener('pointermove', onHover, true);
     doc.addEventListener('mouseout', onLeave, true);
     doc.addEventListener('keydown', onKey, true);
   });
