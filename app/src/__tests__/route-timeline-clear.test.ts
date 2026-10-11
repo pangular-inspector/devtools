@@ -97,6 +97,21 @@ describe('RouteTimeline Clear', () => {
     expect(el(fixture).querySelectorAll('ol.navs > li')).toHaveLength(2);
   });
 
+  it('keeps the answer off a page the user switched to while clearing', async () => {
+    let answer!: (value: unknown) => void;
+    const fixture = mount(
+      page({ pageId: 'a', navigations }),
+      () => new Promise((resolve) => (answer = resolve)),
+    );
+    await settle(fixture);
+    clearButton(fixture).click();
+    fixture.componentRef.setInput('page', page({ pageId: 'b', navigations }));
+    await settle(fixture);
+    answer({ ok: true });
+    await settle(fixture);
+    expect(status(fixture)).not.toContain('Navigations cleared.');
+  });
+
   it('is off, with the note, when router actions are turned off', async () => {
     const calls: string[] = [];
     const fixture = mount(

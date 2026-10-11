@@ -773,13 +773,17 @@ export class RouteTimeline {
   /** Drops this page's navigations and loop warnings; focus stays on the Clear button. */
   async clearNavigations() {
     const client = this.rpc();
+    const pageId = this.pageId();
+    let text: string;
     try {
       if (!client) throw new Error('No connection');
-      await rpcCall(client, 'clear-router-navigations', this.page().pageId);
-      this.message.set('Navigations cleared.');
+      await rpcCall(client, 'clear-router-navigations', pageId);
+      text = 'Navigations cleared.';
     } catch {
-      this.message.set('Could not clear the navigations.');
+      text = 'Could not clear the navigations.';
     }
+    // The answer is about the page the user may have left; keep it off the page now shown.
+    if (pageId === this.pageId()) this.message.set(text);
   }
 
   exportJson() {
