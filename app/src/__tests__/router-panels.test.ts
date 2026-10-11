@@ -303,6 +303,20 @@ describe('RouteTree filter count', () => {
     expect(filterStatus(fixture)).toBe('No routes match.');
   });
 
+  it('speaks again when a new query has the same count', async () => {
+    const fixture = mount(RouteTree, page({ config: routes }), offline);
+    await settle(fixture);
+    const raw = () =>
+      el(fixture).querySelectorAll('p.visually-hidden[role="status"]')[1]?.textContent ?? '';
+    type(fixture, 'about');
+    await settle(fixture);
+    const first = raw();
+    type(fixture, 'abou');
+    await settle(fixture);
+    expect(filterStatus(fixture)).toBe('1 of 3 routes match.');
+    expect(raw()).not.toBe(first);
+  });
+
   it('updates the count on a poll without speaking', async () => {
     const fixture = mount(RouteTree, page({ config: routes }), offline);
     await settle(fixture);

@@ -476,6 +476,7 @@ export class RouteTree {
     computation: () => '',
   });
   private predictSeq = 0;
+  private announceFlip = false;
   private probeSeq = 0;
   private readonly urlInput = viewChild<ElementRef<HTMLInputElement>>('urlInput');
 
@@ -515,13 +516,14 @@ export class RouteTree {
   setFilter(value: string) {
     this.filter.set(value);
     const matches = this.rows().length;
-    this.filterAnnouncement.set(
-      !value
-        ? ''
-        : matches
-          ? `${routeCountText(matches, this.total())} match.`
-          : 'No routes match.',
-    );
+    const text = !value
+      ? ''
+      : matches
+        ? `${routeCountText(matches, this.total())} match.`
+        : 'No routes match.';
+    // A new query with the same count still changes the text, so screen readers say it again.
+    this.announceFlip = !this.announceFlip;
+    this.filterAnnouncement.set(text && (this.announceFlip ? `${text}\u00a0` : text));
   }
 
   hasKeys(value: Record<string, unknown>) {
