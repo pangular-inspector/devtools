@@ -194,7 +194,7 @@ describe('Capacitor view', () => {
     await settle(fixture);
     const el = host(fixture);
 
-    const failed = el.querySelector<HTMLInputElement>('.check input')!;
+    const failed = el.querySelector<HTMLButtonElement>('.strip [data-filter="failed"]')!;
     failed.click();
     await settle(fixture);
     expect(el.querySelectorAll('.calls .call')).toHaveLength(2);
@@ -204,6 +204,8 @@ describe('Capacitor view', () => {
     await settle(fixture);
     const detail = el.querySelector('.detail')!;
     expect(detail.textContent).toContain('Preferences.set()');
+    detail.querySelector<HTMLButtonElement>('#cap-tab-outcome')!.click();
+    await settle(fixture);
     expect(detail.textContent).toContain('Disk full');
 
     const search = el.querySelector<HTMLInputElement>('input[type="search"]')!;
@@ -211,12 +213,15 @@ describe('Capacitor view', () => {
     search.dispatchEvent(new Event('input'));
     await settle(fixture);
     expect(text(fixture)).toContain('No call matches the filters.');
+    expect(el.querySelector('.empty')?.textContent).toContain(
+      'hidden by the search “nothing” and the Failed filter',
+    );
     el.querySelector<HTMLButtonElement>('.empty button')!.click();
     await settle(fixture);
     expect(el.querySelectorAll('.calls .call')).toHaveLength(3);
 
     const plugins = el.querySelector('section[aria-labelledby="cap-plugins-title"]')!.textContent;
-    expect(plugins).toContain('Run npx cap sync');
+    expect(plugins).toContain('Not available on android. Run npx cap sync android, then run');
     // Haptics gets the note; WebView, which Capacitor registers itself, does not.
     expect(plugins?.split('Installed, not imported by the app.')).toHaveLength(2);
     const listeners = el.querySelector('section[aria-labelledby="cap-listeners-title"]')!;
@@ -296,7 +301,8 @@ describe('Capacitor view across pages and updates', () => {
     connection.resolve(client);
     await settle(fixture);
     const status = () =>
-      host(fixture).querySelector('app-capacitor-inspector .sr-only[role="status"]')!.textContent;
+      host(fixture).querySelector('app-capacitor-inspector .strip[role="status"] .sr-only')!
+        .textContent;
     const before = status();
 
     report({ cap1: page({ calls: [...page().calls, call(4)] }) });
@@ -304,7 +310,7 @@ describe('Capacitor view across pages and updates', () => {
     expect(host(fixture).querySelectorAll('.calls .call')).toHaveLength(4);
     expect(status()).toBe(before);
 
-    host(fixture).querySelector<HTMLInputElement>('.check input')!.click();
+    host(fixture).querySelector<HTMLButtonElement>('.strip [data-filter="failed"]')!.click();
     await settle(fixture);
     expect(status()?.trim()).toBe('2 of 4 calls shown');
   });
@@ -392,6 +398,288 @@ describe('Capacitor view across pages and updates', () => {
     const fixture = TestBed.createComponent(App);
     await settle(fixture);
     expect(host(fixture).querySelector('#soon-title')).toBeNull();
+  });
+});
+
+describe('Capacitor summary, details and plugin state', () => {
+  beforeEach(() => history.replaceState(null, '', '/?view=capacitor'));
+  afterEach(() => {
+    delete (navigator as { clipboard?: unknown }).clipboard;
+  });
+
+  const clipboard = () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    return writeText;
+  };
+  const open = async (pages: Record<string, CapacitorPage>) => {
+    const fixture = TestBed.createComponent(App);
+    await settle(fixture);
+    const fake = fakeClient(pages);
+    connection.resolve(fake.client);
+    await settle(fixture);
+    return { fixture, el: host(fixture), report: fake.report };
+  };
+  const stat = (el: HTMLElement, filter: string) =>
+    el.querySelector<HTMLButtonElement>(`.strip [data-filter="${filter}"]`)!;
+  const status = (el: HTMLElement) =>
+    el.querySelector('.strip[role="status"] .sr-only')?.textContent?.trim();
+  const busy = () =>
+    page({
+      calls: [
+        ...page().calls,
+        call(4, { plugin: 'Filesystem', method: 'readFile', durationMs: 900 }),
+        call(5, {
+          plugin: 'Geolocation',
+          method: 'getCurrentPosition',
+          status: 'pending',
+          result: undefined,
+          durationMs: undefined,
+          startedAt: Date.now(),
+        }),
+      ],
+    });
+
+  it('sums up the page in a status strip whose counts filter the calls', async () => {
+    const { fixture, el } = await open({ cap1: busy() });
+    const strip = el.querySelector('.strip')!;
+    expect(strip.getAttribute('role')).toBe('status');
+    const stats = [...strip.querySelectorAll('.stat')].map((s) =>
+      s.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(stats).toEqual([
+      'Platform android native',
+      'Calls 5',
+      'Failed 2',
+      'Slow, 500 ms+ 1',
+      'Pending 1',
+      'CapacitorHttp On',
+      'Plugin hints 2',
+    ]);
+    // The call list is not a live region.
+    expect(el.querySelector('.calls')!.closest('[role="status"], [aria-live]')).toBeNull();
+    expect(stat(el, 'all').getAttribute('aria-pressed')).toBe('true');
+
+    stat(el, 'slow').click();
+    await settle(fixture);
+    expect(stat(el, 'slow').getAttribute('aria-pressed')).toBe('true');
+    expect(stat(el, 'all').getAttribute('aria-pressed')).toBe('false');
+    let rows = [...el.querySelectorAll('.calls .call')].map((b) => b.textContent);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain('Filesystem.readFile()');
+    expect(status(el)).toBe('1 of 5 calls shown');
+
+    stat(el, 'pending').click();
+    await settle(fixture);
+    rows = [...el.querySelectorAll('.calls .call')].map((b) => b.textContent);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatch(/Pending\s+waiting \d+ ms/);
+
+    // Pressing the filter that is on shows every call again.
+    stat(el, 'pending').click();
+    await settle(fixture);
+    expect(el.querySelectorAll('.calls .call')).toHaveLength(5);
+    expect(stat(el, 'all').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('keeps one tab stop in the call list and the selection on its call when calls arrive', async () => {
+    const { fixture, el, report } = await open({ cap1: page() });
+    const rows = () => [...el.querySelectorAll<HTMLButtonElement>('.calls .call')];
+    expect(rows().filter((row) => row.tabIndex === 0)).toHaveLength(1);
+    rows()[2].click();
+    await settle(fixture);
+    expect(rows()[2].tabIndex).toBe(0);
+    const picked = rows()[2];
+    expect(picked.textContent).toContain('Camera.getPhoto()');
+
+    report({
+      cap1: page({ calls: [...page().calls, call(4, { method: 'checkPermissions' }), call(5)] }),
+    });
+    await settle(fixture);
+    expect(rows()).toHaveLength(5);
+    const pressed = rows().filter((row) => row.getAttribute('aria-pressed') === 'true');
+    expect(pressed).toEqual([picked]);
+    expect(rows().filter((row) => row.tabIndex === 0)).toEqual([picked]);
+    expect(el.querySelector('#cap-detail-title')?.textContent).toContain('Camera.getPhoto()');
+  });
+
+  it('shows a call in tabs that follow the tabs pattern', async () => {
+    const { fixture, el } = await open({ cap1: page() });
+    el.querySelector<HTMLButtonElement>('.calls .call')!.click();
+    await settle(fixture);
+    const tabs = () => [...el.querySelectorAll<HTMLButtonElement>('#cap-detail [role="tab"]')];
+    expect(tabs().map((t) => t.textContent?.trim())).toEqual(['Arguments', 'Error', 'Timing']);
+    expect(tabs().map((t) => t.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
+    expect(tabs().map((t) => t.tabIndex)).toEqual([0, -1, -1]);
+    const panel = () => el.querySelector('#cap-detail [role="tabpanel"]')!;
+    expect(panel().getAttribute('aria-labelledby')).toBe('cap-tab-args');
+    expect(panel().textContent).toContain('"quality": 90');
+
+    tabs()[0].focus();
+    tabs()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await settle(fixture);
+    expect(document.activeElement).toBe(tabs()[1]);
+    expect(tabs()[1].getAttribute('aria-selected')).toBe('true');
+    expect(panel().textContent).toContain('Disk full');
+
+    tabs()[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    await settle(fixture);
+    expect(document.activeElement).toBe(tabs()[2]);
+    expect(panel().id).toBe('cap-panel-timing');
+    expect(panel().textContent).toContain('Duration');
+    expect(panel().textContent).toContain('120 ms');
+    expect(panel().getAttribute('tabindex')).toBe('0');
+  });
+
+  it('copies a call as JSON and as code with the masked values it shows, and says so', async () => {
+    const writeText = clipboard();
+    const masked = call(1, {
+      plugin: 'Preferences',
+      method: 'set',
+      args: { key: 'authToken', value: '[redacted]', 'x-mode': 1 },
+      result: undefined,
+    });
+    const { fixture, el } = await open({ cap1: page({ calls: [masked] }) });
+    el.querySelector<HTMLButtonElement>('.calls .call')!.click();
+    await settle(fixture);
+    const button = (name: string) =>
+      [...el.querySelectorAll<HTMLButtonElement>('#cap-detail button')].find(
+        (b) => b.textContent?.trim() === name,
+      )!;
+
+    button('Copy as code').click();
+    await settle(fixture);
+    expect(writeText).toHaveBeenLastCalledWith(
+      'await Preferences.set({\n  key: "authToken",\n  value: "[redacted]",\n  "x-mode": 1,\n});',
+    );
+    expect(status(el)).toBe('Copied Preferences.set() as code.');
+
+    button('Copy as JSON').click();
+    await settle(fixture);
+    const copied = JSON.parse((writeText.mock.calls.at(-1) as unknown as [string])[0]);
+    expect(copied).toEqual(JSON.parse(JSON.stringify(masked)));
+    expect(status(el)).toBe('Copied Preferences.set() as JSON.');
+  });
+
+  it("gives the sync command for the page's platform, with a copy button", async () => {
+    const writeText = clipboard();
+    const info = page().info;
+    const { fixture, el } = await open({ cap1: page({ info: { ...info, platform: 'ios' } }) });
+    const plugins = el.querySelector('section[aria-labelledby="cap-plugins-title"]')!;
+    expect(plugins.textContent).toContain('Not available on ios. Run npx cap sync ios, then run');
+    const copy = plugins.querySelector<HTMLButtonElement>('button.copy')!;
+    expect(copy.getAttribute('aria-label')).toBe('Copy npx cap sync ios');
+    copy.click();
+    await settle(fixture);
+    expect(writeText).toHaveBeenCalledWith('npx cap sync ios');
+    expect(status(el)).toBe('Copied npx cap sync ios.');
+    // Only the one plugin gets a command.
+    expect(plugins.querySelectorAll('button.copy')).toHaveLength(1);
+  });
+
+  it('shows the last event of each listener and flags a possible leak', async () => {
+    const now = Date.now();
+    const { el } = await open({
+      cap1: page({
+        listeners: [
+          {
+            id: '1',
+            plugin: 'Network',
+            event: 'networkStatusChange',
+            addedAt: 1,
+            events: 2,
+            lastEventAt: now - 1000,
+            last: { connected: true, connectionType: 'wifi' },
+          },
+          { id: '2', plugin: 'Network', event: 'networkStatusChange', addedAt: 2, events: 0 },
+          { id: '3', plugin: 'App', event: 'pause', addedAt: 2, events: 1, lastEventAt: now },
+          { id: '4', plugin: 'App', event: 'pause', addedAt: 2, events: 0, removed: true },
+        ],
+      }),
+    });
+    const rows = [
+      ...el.querySelectorAll('section[aria-labelledby="cap-listeners-title"] tbody tr'),
+    ].map((row) => row.textContent?.replace(/\s+/g, ' ').trim());
+    expect(rows[0]).toContain('{"connected":true,"connectionType":"wifi"}');
+    expect(rows[0]).toContain('2 active listeners: possible leak');
+    expect(rows[1]).toContain('None yet');
+    expect(rows[1]).toContain('2 active listeners: possible leak');
+    expect(rows[2]).toContain('No data');
+    expect(rows[2]).not.toContain('possible leak');
+    expect(rows[3]).toContain('Removed');
+  });
+
+  it('shows the Foldable state from call results and listener events, newest first', async () => {
+    const now = Date.now();
+    const foldable = {
+      name: 'Foldable',
+      available: true,
+      registered: true,
+      native: true,
+      methods: [],
+    };
+    const info = page().info;
+    const { el } = await open({
+      cap1: page({
+        info: { ...info, plugins: [...info.plugins, foldable] },
+        calls: [
+          call(1, {
+            plugin: 'Foldable',
+            method: 'getFoldState',
+            args: undefined,
+            startedAt: now - 10_000,
+            durationMs: 5,
+            result: {
+              state: 'flat',
+              isSeparating: false,
+              posture: 'flat',
+              hingeOrientation: 'vertical',
+              activeDisplay: 'inner',
+            },
+          }),
+          call(2, {
+            plugin: 'Foldable',
+            method: 'getHingeAngle',
+            args: undefined,
+            status: 'error',
+            result: undefined,
+            error: { message: 'No hinge sensor' },
+          }),
+        ],
+        listeners: [
+          {
+            id: '9',
+            plugin: 'Foldable',
+            event: 'foldStateChange',
+            addedAt: 1,
+            events: 1,
+            lastEventAt: now - 3000,
+            last: { state: 'half-opened', isSeparating: true, posture: 'tabletop' },
+          },
+        ],
+      }),
+    });
+    const card = el.querySelector('app-capacitor-state article')!;
+    expect(card.querySelector('h3')?.textContent?.trim()).toBe('Foldable');
+    const fields = Object.fromEntries(
+      [...card.querySelectorAll('dl > div')].map((item) => [
+        item.querySelector('dt')?.textContent?.trim(),
+        item.querySelector('dd')?.textContent?.replace(/\s+/g, ' ').trim(),
+      ]),
+    );
+    expect(fields).toEqual({
+      'Fold state': 'half-opened from foldStateChange, 3 s ago',
+      Posture: 'tabletop from foldStateChange, 3 s ago',
+      'Hinge orientation': 'vertical from getFoldState(), 10 s ago',
+      'Hinge angle': 'Not reported yet',
+      'Active display': 'inner from getFoldState(), 10 s ago',
+      'Size class': 'Not reported yet',
+    });
+  });
+
+  it('shows no plugin state without a plugin that has a card', async () => {
+    const { el } = await open({ cap1: page() });
+    expect(el.querySelector('#cap-state-title')).toBeNull();
   });
 });
 

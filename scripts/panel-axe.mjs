@@ -78,6 +78,13 @@ const capacitorInfo = (platform, bridge) => ({
     { name: 'Camera', available: true, registered: true, native: true, methods: ['getPhoto'] },
     { name: 'Haptics', available: true, registered: null, native: true, methods: ['vibrate'] },
     { name: 'WebView', available: false, registered: true, native: false, methods: [] },
+    {
+      name: 'Foldable',
+      available: true,
+      registered: true,
+      native: true,
+      methods: ['getFoldState', 'getHingeAngle'],
+    },
   ],
 });
 // The server keys each page's calls by id.
@@ -111,6 +118,19 @@ const CAPACITOR_SEED = {
           result: undefined,
           durationMs: undefined,
         }),
+        capacitorCall(5, {
+          plugin: 'Foldable',
+          method: 'getFoldState',
+          args: undefined,
+          durationMs: 840,
+          result: {
+            state: 'flat',
+            isSeparating: false,
+            posture: 'flat',
+            hingeOrientation: 'vertical',
+            activeDisplay: 'inner',
+          },
+        }),
       ]),
       listeners: [
         {
@@ -120,6 +140,24 @@ const CAPACITOR_SEED = {
           addedAt: now - 50_000,
           events: 3,
           lastEventAt: now - 5000,
+        },
+        {
+          id: '3',
+          plugin: 'Network',
+          event: 'networkStatusChange',
+          addedAt: now - 40_000,
+          events: 3,
+          lastEventAt: now - 5000,
+          last: { connected: true, connectionType: 'wifi' },
+        },
+        {
+          id: '4',
+          plugin: 'Foldable',
+          event: 'foldStateChange',
+          addedAt: now - 40_000,
+          events: 2,
+          lastEventAt: now - 3000,
+          last: { state: 'half-opened', isSeparating: true, posture: 'tabletop' },
         },
         {
           id: '2',
@@ -255,7 +293,14 @@ try {
       await capacitor.locator('.calls .call').first().waitFor({ timeout: 15_000 });
       await capacitor.locator('.calls .call').nth(1).click();
       await capacitor.locator('#cap-detail').waitFor();
+      await capacitor.locator('app-capacitor-state article').waitFor();
+      await capacitor.getByText('possible leak').first().waitFor();
       await check(capacitor, `${colorScheme} view=capacitor with an app reporting`);
+      await capacitor.locator('#cap-tab-outcome').click();
+      await check(capacitor, `${colorScheme} view=capacitor on the Error tab`);
+      await capacitor.locator('#cap-tab-timing').click();
+      await capacitor.locator('.strip [data-filter="slow"]').click();
+      await check(capacitor, `${colorScheme} view=capacitor with the Slow filter`);
       await capacitor.locator('.page-picker [role="combobox"]').click();
       await capacitor.locator('.page-picker [role="option"]', { hasText: 'Desktop' }).click();
       await capacitor.getByText("Plugin calls aren't shown on this page.").waitFor();

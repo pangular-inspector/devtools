@@ -49,6 +49,8 @@ export interface CapacitorListener {
   events: number;
   lastEventAt?: number;
   removed?: boolean;
+  /** The payload of the last event, masked like a call result. */
+  last?: unknown;
 }
 
 /** A page as the panel reads it. On the wire, `calls` is keyed by call id. */
@@ -146,4 +148,180 @@ export function capacitorPages(value: unknown): CapacitorPage[] {
 export function isUnimplemented(call: CapacitorCall): boolean {
   const error = call.error;
   return !!error && (error.code === 'UNIMPLEMENTED' || /not implemented/i.test(error.message));
+}
+
+/** A call that took at least this long, or has waited this long, counts as slow. */
+export const SLOW_MS = 500;
+
+/** Which calls the list shows, besides the search. */
+export type CallFilter = 'all' | 'failed' | 'slow' | 'pending';
+
+/** How long a call took, or for a pending call how long it has waited so far. */
+export function took(call: CapacitorCall, now: number): number {
+  if (call.durationMs !== undefined) return call.durationMs;
+  return call.status === 'pending' ? Math.max(0, now - call.startedAt) : 0;
+}
+
+export function matchesFilter(call: CapacitorCall, filter: CallFilter, now: number): boolean {
+  if (filter === 'failed') return call.status === 'error';
+  if (filter === 'pending') return call.status === 'pending';
+  if (filter === 'slow') return took(call, now) >= SLOW_MS;
+  return true;
+}
+
+/** "450 ms", "3 s", "2 min" or "1 h". */
+export function span(ms: number): string {
+  if (ms < 1000) return `${Math.max(0, Math.round(ms))} ms`;
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds} s`;
+  const minutes = Math.round(seconds / 60);
+  return minutes < 60 ? `${minutes} min` : `${Math.round(minutes / 60)} h`;
+}
+
+/** "3 s ago", or "just now" within the first second. */
+export function ago(at: number, now: number): string {
+  const ms = now - at;
+  return ms < 1000 ? 'just now' : `${span(ms)} ago`;
+}
+
+/** A hint on a plugin row: text around an optional command to run. */
+export interface PluginHint {
+  before: string;
+  command?: string;
+  after?: string;
+}
+
+/**
+ * What to do about a plugin, or null when nothing is off. Plugins Capacitor
+ * registers itself get no hint.
+ */
+export function pluginHint(plugin: CapacitorPluginInfo, platform: string): PluginHint | null {
+  if (CORE_PLUGINS.has(plugin.name)) return null;
+  if (plugin.registered === true && !plugin.available) {
+    if (platform === 'android' || platform === 'ios') {
+      return {
+        before: `Not available on ${platform}. Run `,
+        command: `npx cap sync ${platform}`,
+        after: ', then run the app again.',
+      };
+    }
+    return {
+      before: 'Not available here. Run ',
+      command: 'npx cap sync',
+      after: ' if it should be native.',
+    };
+  }
+  if (plugin.native && plugin.registered === false) {
+    return { before: 'Installed, not imported by the app.' };
+  }
+  return null;
+}
+
+/** The counts at the top of the tab. */
+export interface CapacitorSummary {
+  pageId: string;
+  platform: string;
+  native: boolean;
+  /** Whether this page logs calls at all; without it the call counts mean nothing. */
+  logsCalls: boolean;
+  calls: number;
+  failed: number;
+  slow: number;
+  pending: number;
+  capacitorHttp: 'On' | 'Off' | 'Unknown';
+  hints: number;
+}
+
+export function summarize(page: CapacitorPage, now: number): CapacitorSummary {
+  const info = page.info;
+  const count = (filter: CallFilter) =>
+    page.calls.filter((call) => matchesFilter(call, filter, now)).length;
+  const http = info.env.capacitorHttp;
+  return {
+    pageId: page.pageId,
+    platform: info.platform,
+    native: info.native,
+    logsCalls: info.bridge || info.webCalls,
+    calls: page.calls.length,
+    failed: count('failed'),
+    slow: count('slow'),
+    pending: count('pending'),
+    capacitorHttp: http === null ? 'Unknown' : http ? 'On' : 'Off',
+    hints: info.plugins.filter((plugin) => pluginHint(plugin, info.platform)).length,
+  };
+}
+
+/**
+ * Active listeners per plugin and event, keyed `plugin event`. More than one
+ * for the same event often means a component added one and never removed it.
+ */
+export function activeListenerCounts(listeners: CapacitorListener[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const listener of listeners) {
+    if (listener.removed) continue;
+    const key = `${listener.plugin} ${listener.event}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+
+/** A value as a JavaScript literal, indented by 2 spaces. Strings stay as JSON strings. */
+export function jsLiteral(value: unknown, indent = ''): string {
+  if (value === undefined) return 'undefined';
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? String(value);
+  const inner = `${indent}  `;
+  if (Array.isArray(value)) {
+    if (!value.length) return '[]';
+    return `[\n${value.map((item) => inner + jsLiteral(item, inner)).join(',\n')},\n${indent}]`;
+  }
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (!entries.length) return '{}';
+  const lines = entries.map(
+    ([key, item]) =>
+      `${inner}${IDENTIFIER.test(key) ? key : JSON.stringify(key)}: ${jsLiteral(item, inner)}`,
+  );
+  return `{\n${lines.join(',\n')},\n${indent}}`;
+}
+
+/**
+ * The call as code to paste into the app, such as
+ * `await Camera.getPhoto({quality: 90});`. It uses the masked arguments the
+ * panel holds, so a masked value stays masked.
+ */
+export function callAsCode(call: CapacitorCall): string {
+  const plugin = IDENTIFIER.test(call.plugin)
+    ? call.plugin
+    : `Capacitor.Plugins[${JSON.stringify(call.plugin)}]`;
+  const method = IDENTIFIER.test(call.method)
+    ? `.${call.method}`
+    : `[${JSON.stringify(call.method)}]`;
+  const args = call.args === undefined ? [] : [jsLiteral(call.args)];
+  if (call.kind === 'callback') {
+    if (!args.length) args.push('{}');
+    args.push('(result, error) => {}');
+  }
+  return `await ${plugin}${method}(${args.join(', ')});`;
+}
+
+/** Pretty JSON, or `undefined` for a missing value. */
+export function json(value: unknown): string {
+  if (value === undefined) return 'undefined';
+  try {
+    return JSON.stringify(value, null, 2) ?? 'undefined';
+  } catch {
+    return String(value);
+  }
+}
+
+/** One-line JSON, cut to `max` characters. */
+export function preview(value: unknown, max = 120): string {
+  let text: string;
+  try {
+    text = JSON.stringify(value) ?? 'undefined';
+  } catch {
+    text = String(value);
+  }
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }

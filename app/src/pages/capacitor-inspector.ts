@@ -18,33 +18,43 @@ import { hostPageId } from '../page-id';
 import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 import { panelConfig } from '../devtools-config';
+import { CapacitorCallDetail } from './capacitor-call-detail';
+import { CapacitorState, pluginStateCards } from './capacitor-state';
 import {
-  CORE_PLUGINS,
+  SLOW_MS,
+  activeListenerCounts,
   capacitorPages,
   defaultCapacitorPage,
   inFirstSeenOrder,
   isUnimplemented,
+  matchesFilter,
+  pluginHint,
+  preview,
+  span,
+  summarize,
+  took,
   yesNo,
+  type CallFilter,
   type CapacitorCall,
   type CapacitorPage,
+  type CapacitorSummary,
 } from './capacitor-types';
 
 const GUIDE_URL = 'https://pangular-inspector.dev/inspectors/capacitor/#web-calls';
+/** The summary strip is a live region; it changes at most this often. */
+const SUMMARY_THROTTLE_MS = 2000;
 
-function json(value: unknown): string {
-  if (value === undefined) return 'undefined';
-  try {
-    return JSON.stringify(value, null, 2) ?? 'undefined';
-  } catch {
-    return String(value);
-  }
-}
+const FILTER_LABELS: Record<CallFilter, string> = {
+  all: 'All calls',
+  failed: 'Failed',
+  slow: `Slow (${SLOW_MS} ms or more)`,
+  pending: 'Pending',
+};
 
 @Component({
   selector: 'app-capacitor-inspector',
-  imports: [LimitNote, Select],
+  imports: [LimitNote, Select, CapacitorCallDetail, CapacitorState],
   template: `
-    <p class="sr-only" role="status">{{ announcement() }}</p>
     @if (!loaded()) {
       <p class="state" role="status">Loading Capacitor data…</p>
     } @else if (failed()) {
@@ -57,6 +67,41 @@ function json(value: unknown): string {
         Plugin calls, plugins and listeners of a Capacitor app, as its WebView reports them. Values
         are masked like other live data.
       </p>
+
+      <div class="strip" role="status" aria-label="Capacitor summary" aria-atomic="false">
+        @if (summary(); as s) {
+          <span class="stat" aria-atomic="true">
+            <span class="stat-label">Platform</span>
+            &ngsp;<span class="stat-value"
+              ><code>{{ s.platform }}</code> {{ s.native ? 'native' : 'web' }}</span
+            >
+          </span>
+          @if (s.logsCalls) {
+            @for (stat of callStats(s); track stat.filter) {
+              <button
+                type="button"
+                class="stat"
+                aria-atomic="true"
+                [attr.data-filter]="stat.filter"
+                [attr.aria-pressed]="callFilter() === stat.filter"
+                (click)="pickFilter(stat.filter)"
+              >
+                <span class="stat-label">{{ stat.label }}</span>
+                &ngsp;<span class="stat-value">{{ stat.count }}</span>
+              </button>
+            }
+          }
+          <span class="stat" aria-atomic="true">
+            <span class="stat-label">CapacitorHttp</span>
+            &ngsp;<span class="stat-value">{{ s.capacitorHttp }}</span>
+          </span>
+          <span class="stat" aria-atomic="true">
+            <span class="stat-label">Plugin hints</span>
+            &ngsp;<span class="stat-value">{{ s.hints }}</span>
+          </span>
+        }
+        <span class="sr-only">{{ message() }}</span>
+      </div>
 
       <section class="env" aria-labelledby="cap-env-title">
         <div class="env-head">
@@ -111,6 +156,13 @@ function json(value: unknown): string {
         </dl>
       </section>
 
+      @if (stateCards().length) {
+        <section aria-labelledby="cap-state-title">
+          <h2 id="cap-state-title">Plugin state</h2>
+          <app-capacitor-state [cards]="stateCards()" [now]="now()" />
+        </section>
+      }
+
       <section aria-labelledby="cap-calls-title">
         <h2 id="cap-calls-title">Plugin calls</h2>
         @if (!page.info.bridge && !page.info.webCalls) {
@@ -139,22 +191,22 @@ function json(value: unknown): string {
                 <path d="m20 20-3.5-3.5" />
               </svg>
               <input
+                #search
                 type="search"
                 aria-label="Filter calls by plugin or method"
                 placeholder="Filter by plugin or method"
                 [value]="filter()"
-                (input)="filter.set($any($event.target).value)"
-                (keydown.escape)="filter.set('')"
+                (input)="setSearch($any($event.target).value)"
+                (keydown.escape)="setSearch('')"
               />
             </div>
-            <label class="check">
-              <input
-                type="checkbox"
-                [checked]="onlyFailed()"
-                (change)="onlyFailed.set($any($event.target).checked)"
-              />
-              Only failed
-            </label>
+            <app-select
+              class="show"
+              ariaLabel="Show calls"
+              [options]="filterOptions"
+              [value]="callFilter()"
+              (valueChange)="setFilter($any($event))"
+            />
             <span class="count">{{ shownCalls().length }} of {{ page.calls.length }} calls</span>
           </div>
           <app-limit-note
@@ -168,7 +220,13 @@ function json(value: unknown): string {
           } @else if (!shownCalls().length) {
             <div class="empty">
               <p>No call matches the filters.</p>
-              <button type="button" class="small" (click)="clearFilters()">Clear filters</button>
+              <p class="muted">
+                {{ page.calls.length }}
+                {{ page.calls.length === 1 ? 'call is' : 'calls are' }} hidden by {{ hiddenBy() }}.
+              </p>
+              <button type="button" class="small" (click)="clearFilters(); search.focus()">
+                Clear filters
+              </button>
             </div>
           } @else {
             <div class="split">
@@ -185,49 +243,54 @@ function json(value: unknown): string {
                       data-cap-call
                       [class.selected]="selected()?.id === call.id"
                       [attr.aria-pressed]="selected()?.id === call.id"
+                      [attr.tabindex]="tabStop() === call.id ? 0 : -1"
+                      (focus)="focusedCallId.set(call.id)"
                       (click)="select(call.id)"
                     >
-                      <time class="when">{{ time(call.startedAt) }}</time>
                       <code class="name">{{ call.plugin }}.{{ call.method }}()</code>
-                      <span class="chip" [attr.data-tone]="tone(call)">{{
-                        statusLabel(call)
-                      }}</span>
-                      <span class="chip via">{{ call.via }}</span>
+                      <span class="chip status" [attr.data-tone]="tone(call)">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          @switch (tone(call)) {
+                            @case ('ok') {
+                              <path d="M20 6 9 17l-5-5" />
+                            }
+                            @case ('danger') {
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="m15 9-6 6M9 9l6 6" />
+                            }
+                            @case ('warn') {
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M5.6 5.6l12.8 12.8" />
+                            }
+                            @default {
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M12 7v5l3 2" />
+                            }
+                          }
+                        </svg>
+                        {{ statusLabel(call) }}
+                      </span>
                       @if (call.kind === 'callback') {
                         <span class="chip via">stream</span>
                       }
-                      <span class="duration">{{ duration(call) }}</span>
+                      <span class="duration">
+                        <span class="bar" aria-hidden="true"
+                          ><span [style.width.%]="barWidth(call)"></span
+                        ></span>
+                        {{ durationText(call) }}
+                      </span>
+                      <span class="chip via">{{ call.via }}</span>
+                      <time class="when">{{ time(call.startedAt) }}</time>
                     </button>
                   </li>
                 }
               </ol>
               @if (selected(); as call) {
-                <section class="detail" id="cap-detail" aria-labelledby="cap-detail-title">
-                  <h3 id="cap-detail-title">
-                    <code>{{ call.plugin }}.{{ call.method }}()</code>
-                  </h3>
-                  <p class="meta">
-                    {{ statusLabel(call) }}, {{ call.via }},
-                    {{ call.kind === 'callback' ? 'stream' : 'promise' }}, started
-                    {{ time(call.startedAt)
-                    }}{{ call.durationMs !== undefined ? ', took ' + duration(call) : ''
-                    }}{{ call.callbacks ? ', ' + call.callbacks + ' callbacks' : '' }}
-                  </p>
-                  <h4>Arguments</h4>
-                  <pre tabindex="0" aria-label="Arguments">{{ json(call.args) }}</pre>
-                  @if (call.error; as error) {
-                    <h4>Error</h4>
-                    <p class="error-text">
-                      @if (error.code) {
-                        <code>{{ error.code }}</code>
-                      }
-                      {{ error.message }}
-                    </p>
-                  } @else if (call.status === 'ok') {
-                    <h4>Result</h4>
-                    <pre tabindex="0" aria-label="Result">{{ json(call.result) }}</pre>
-                  }
-                </section>
+                <app-capacitor-call-detail
+                  [call]="call"
+                  [now]="now()"
+                  (announce)="announce($event)"
+                />
               }
             </div>
           }
@@ -259,19 +322,20 @@ function json(value: unknown): string {
                     <td>{{ plugin.available ? 'Yes' : 'No' }}</td>
                     <td>{{ yesNo(plugin.registered) }}</td>
                     <td>{{ plugin.native ? 'Yes' : 'No' }}</td>
-                    <td>
-                      @if (
-                        plugin.registered === true &&
-                        !plugin.available &&
-                        !corePlugins.has(plugin.name)
-                      ) {
-                        Not available here. Run <code>npx cap sync</code> if it should be native.
-                      } @else if (
-                        plugin.native &&
-                        plugin.registered === false &&
-                        !corePlugins.has(plugin.name)
-                      ) {
-                        Installed, not imported by the app.
+                    <td class="note">
+                      @if (pluginHint(plugin, page.info.platform); as hint) {
+                        <!-- prettier-ignore -->
+                        <span class="hint">{{ hint.before }}@if (hint.command) {<code>{{ hint.command }}</code>}{{ hint.after }}</span>
+                        @if (hint.command) {
+                          <button
+                            type="button"
+                            class="copy"
+                            [attr.aria-label]="'Copy ' + hint.command"
+                            (click)="copyCommand(hint.command)"
+                          >
+                            Copy
+                          </button>
+                        }
                       }
                     </td>
                   </tr>
@@ -308,8 +372,30 @@ function json(value: unknown): string {
                       <code>{{ listener.event }}</code>
                     </td>
                     <td>{{ listener.events }}</td>
-                    <td>{{ listener.lastEventAt ? time(listener.lastEventAt) : 'None yet' }}</td>
-                    <td>{{ listener.removed ? 'Removed' : 'Active' }}</td>
+                    <td class="last">
+                      @if (listener.lastEventAt) {
+                        @if (listener.last !== undefined) {
+                          <code class="payload">{{ preview(listener.last) }}</code>
+                        } @else {
+                          <span class="payload">No data</span>
+                        }
+                        <span class="muted">at {{ time(listener.lastEventAt) }}</span>
+                      } @else {
+                        None yet
+                      }
+                    </td>
+                    <td>
+                      {{ listener.removed ? 'Removed' : 'Active' }}
+                      @if (!listener.removed && leakCount(listener) > 1) {
+                        <span class="chip leak" data-tone="warn">
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 3 2 21h20z" />
+                            <path d="M12 10v4M12 17.5v.01" />
+                          </svg>
+                          {{ leakCount(listener) }} active listeners: possible leak
+                        </span>
+                      }
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -331,7 +417,7 @@ function json(value: unknown): string {
       font-size: 13px;
     }
     .intro {
-      margin: 0 0 16px;
+      margin: 0 0 12px;
       color: var(--text-2);
       line-height: 1.5;
     }
@@ -343,19 +429,60 @@ function json(value: unknown): string {
       color: var(--text-strong);
       font-size: 15px;
     }
-    h3 {
-      margin: 0 0 4px;
-      font-size: 14px;
-      overflow-wrap: anywhere;
-    }
-    h4 {
-      @include m.label;
-      margin: 16px 0 6px;
-    }
     code {
       font-family: var(--font-mono);
       font-size: 12px;
       overflow-wrap: anywhere;
+    }
+    .muted {
+      color: var(--text-2);
+    }
+    .strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 20px;
+    }
+    .stat {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 88px;
+      min-height: var(--control-h);
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      text-align: left;
+    }
+    button.stat {
+      cursor: pointer;
+      transition: background-color 150ms var(--ease);
+    }
+    button.stat:hover {
+      background: var(--surface-2);
+    }
+    button.stat[aria-pressed='true'] {
+      border-color: var(--accent-line);
+      background: var(--accent-soft);
+      box-shadow: inset 0 -2px 0 var(--accent);
+    }
+    button.stat:focus-visible {
+      @include m.focus-ring;
+    }
+    .stat-label {
+      @include m.label;
+    }
+    button.stat[aria-pressed='true'] .stat-label {
+      color: var(--text-2);
+    }
+    .stat-value {
+      color: var(--text-strong);
+      font-size: 15px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
     }
     .env-head {
       display: flex;
@@ -463,15 +590,9 @@ function json(value: unknown): string {
     input[type='search']:focus {
       @include m.field-focus;
     }
-    .check {
-      display: inline-flex;
-      gap: 6px;
-      align-items: center;
-      min-height: var(--control-h);
-      color: var(--text);
-    }
-    .check input:focus-visible {
-      @include m.focus-ring;
+    .show {
+      flex: 0 1 220px;
+      min-width: 0;
     }
     .count {
       margin-left: auto;
@@ -532,22 +653,59 @@ function json(value: unknown): string {
     .call:focus-visible {
       @include m.focus-ring(-2px);
     }
+    .name {
+      flex: 1 1 180px;
+      min-width: 0;
+      color: var(--text-strong);
+    }
     .when,
     .duration {
       color: var(--text-2);
       font-size: 12px;
       font-variant-numeric: tabular-nums;
     }
-    .name {
-      flex: 1 1 160px;
-      min-width: 0;
+    .when {
+      margin-left: auto;
+    }
+    .duration {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .bar {
+      display: inline-block;
+      width: 48px;
+      height: 6px;
+      overflow: hidden;
+      border-radius: 3px;
+      background: var(--surface-3);
+    }
+    .bar > span {
+      display: block;
+      height: 100%;
+      min-width: 2px;
+      border-radius: 3px;
+      background: var(--accent);
     }
     .chip {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
       padding: 1px 8px;
+      border: 1px solid transparent;
       border-radius: 99px;
       font-size: 11px;
       font-weight: 600;
       @include m.tint(accent);
+    }
+    .chip svg {
+      width: 12px;
+      height: 12px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
     .chip[data-tone='ok'] {
       @include m.tint(ok);
@@ -559,41 +717,13 @@ function json(value: unknown): string {
       @include m.tint(danger);
     }
     .chip.via {
+      border-color: var(--border);
       background: var(--surface-3);
       color: var(--text);
     }
-    .detail {
-      @include m.panel;
-      position: sticky;
-      top: 64px;
-      min-width: 0;
-      margin: 0;
-      padding: 12px;
-    }
-    .meta {
-      margin: 0;
-      color: var(--text-2);
-    }
-    pre {
-      max-height: 280px;
-      margin: 0;
-      padding: 8px;
-      overflow: auto;
-      border-radius: var(--radius-sm);
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font-mono);
-      font-size: 12px;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-    pre:focus-visible {
-      @include m.focus-ring(-2px);
-    }
-    .error-text {
-      margin: 0;
-      color: var(--text);
-      overflow-wrap: anywhere;
+    .chip.leak {
+      margin-top: 4px;
+      white-space: normal;
     }
     .table-wrap {
       overflow-x: auto;
@@ -605,8 +735,12 @@ function json(value: unknown): string {
     }
     table {
       width: 100%;
+      min-width: 640px;
       border-collapse: collapse;
       font-size: 13px;
+    }
+    th code {
+      overflow-wrap: normal;
     }
     th,
     td {
@@ -622,6 +756,33 @@ function json(value: unknown): string {
     }
     tbody tr:last-child > * {
       border-bottom: 0;
+    }
+    .hint {
+      margin-right: 6px;
+    }
+    .copy {
+      height: 26px;
+      padding: 0 10px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .copy:hover {
+      background: var(--surface-3);
+    }
+    .copy:focus-visible {
+      @include m.focus-ring;
+    }
+    td.note,
+    td.last {
+      min-width: 220px;
+    }
+    .payload {
+      display: block;
+      margin: 0 0 2px;
     }
     .empty,
     .state {
@@ -644,10 +805,13 @@ export class CapacitorInspector {
   private unsubscribe?: () => void;
 
   protected readonly time = time;
-  protected readonly json = json;
+  protected readonly preview = preview;
+  protected readonly pluginHint = pluginHint;
   protected readonly guideUrl = GUIDE_URL;
   protected readonly yesNo = yesNo;
-  protected readonly corePlugins = CORE_PLUGINS;
+  protected readonly filterOptions: SelectOption[] = (
+    Object.keys(FILTER_LABELS) as CallFilter[]
+  ).map((value) => ({ value, label: FILTER_LABELS[value] }));
   readonly pages = signal<CapacitorPage[]>([]);
   readonly loaded = signal(false);
   readonly failed = signal(false);
@@ -660,8 +824,14 @@ export class CapacitorInspector {
         : defaultCapacitorPage(pages, this.hostPageId),
   });
   readonly selectedCallId = signal<number | null>(null);
+  /** The row that last had focus, so the list keeps one tab stop on it. */
+  readonly focusedCallId = signal<number | null>(null);
   readonly filter = signal('');
-  readonly onlyFailed = signal(false);
+  readonly callFilter = signal<CallFilter>('all');
+  /** Ticks every second, for pending ages and "3 s ago". */
+  readonly now = signal(Date.now());
+  /** What the status region says: a filter count or a copy. */
+  readonly message = signal('');
 
   readonly page = computed(() => {
     const wanted = this.selectedPageId();
@@ -686,8 +856,11 @@ export class CapacitorInspector {
     const page = this.page();
     if (!page) return [];
     const text = this.filter().trim().toLowerCase();
+    const filter = this.callFilter();
+    // Only the slow filter changes with time.
+    const now = filter === 'slow' ? this.now() : 0;
     return [...page.calls]
-      .filter((call) => !this.onlyFailed() || call.status === 'error')
+      .filter((call) => matchesFilter(call, filter, now))
       .filter((call) => !text || `${call.plugin}.${call.method}`.toLowerCase().includes(text))
       .sort((a, b) => b.startedAt - a.startedAt);
   });
@@ -695,36 +868,73 @@ export class CapacitorInspector {
     const calls = this.shownCalls();
     return calls.find((call) => call.id === this.selectedCallId()) ?? null;
   });
-  /**
-   * The count, announced only when a filter changes. The visible count also
-   * changes with every call the app makes, which would make a screen reader
-   * talk while the user uses the app.
-   */
-  readonly announcement = computed(() => {
-    this.filter();
-    this.onlyFailed();
-    // The same counts after a filter change are still announced: a trailing
-    // no-break space flips so the live region sees a change.
-    this.announceFlip = !this.announceFlip;
-    const text = untracked(() => {
-      const page = this.page();
-      return page ? `${this.shownCalls().length} of ${page.calls.length} calls shown` : '';
-    });
-    return text && this.announceFlip ? `${text}\u00a0` : text;
+  /** The one row Tab reaches: the focused one, else the selected one, else the newest. */
+  readonly tabStop = computed(() => {
+    const calls = this.shownCalls();
+    for (const id of [this.focusedCallId(), this.selectedCallId()]) {
+      if (id !== null && calls.some((call) => call.id === id)) return id;
+    }
+    return calls[0]?.id ?? null;
   });
-  private announceFlip = true;
+  /** The slowest visible call, which the duration bars are scaled to. */
+  readonly slowest = computed(() => {
+    const now = this.now();
+    return Math.max(1, ...this.shownCalls().map((call) => took(call, now)));
+  });
+  readonly hiddenBy = computed(() => {
+    const parts: string[] = [];
+    const text = this.filter().trim();
+    if (text) parts.push(`the search “${text}”`);
+    if (this.callFilter() !== 'all') parts.push(`the ${FILTER_LABELS[this.callFilter()]} filter`);
+    return parts.join(' and ');
+  });
+  readonly stateCards = computed(() => {
+    const page = this.page();
+    return page ? pluginStateCards(page) : [];
+  });
+  readonly leaks = computed(() => activeListenerCounts(this.page()?.listeners ?? []));
+
+  private readonly liveSummary = computed(() => {
+    const page = this.page();
+    return page ? summarize(page, this.now()) : null;
+  });
+  /** The strip's counts, changed at most every SUMMARY_THROTTLE_MS. */
+  readonly summary = signal<CapacitorSummary | null>(null);
+  private summaryShownAt = 0;
+  private summaryTimer: ReturnType<typeof setTimeout> | undefined;
+  private messageFlip = false;
 
   constructor() {
     effect(() => {
       const client = this.rpc();
       if (client) void this.load(client);
     });
-    this.destroyRef.onDestroy(() => this.unsubscribe?.());
+    // A live region that changed with every call would talk while the user
+    // uses the app, so the strip catches up at most every two seconds.
+    effect(() => {
+      const next = this.liveSummary();
+      untracked(() => this.queueSummary(next));
+    });
+    const clock = setInterval(() => this.now.set(Date.now()), 1000);
+    this.destroyRef.onDestroy(() => {
+      clearInterval(clock);
+      clearTimeout(this.summaryTimer);
+      this.unsubscribe?.();
+    });
   }
 
   retry() {
     const client = this.rpc();
     if (client) void this.load(client);
+  }
+
+  callStats(s: CapacitorSummary): { filter: CallFilter; label: string; count: number }[] {
+    return [
+      { filter: 'all', label: 'Calls', count: s.calls },
+      { filter: 'failed', label: 'Failed', count: s.failed },
+      { filter: 'slow', label: `Slow, ${SLOW_MS} ms+`, count: s.slow },
+      { filter: 'pending', label: 'Pending', count: s.pending },
+    ];
   }
 
   select(id: number) {
@@ -759,9 +969,47 @@ export class CapacitorInspector {
     rows[next]?.focus();
   }
 
+  setSearch(text: string) {
+    if (text === this.filter()) return;
+    this.filter.set(text);
+    this.announceCount();
+  }
+
+  setFilter(filter: CallFilter) {
+    if (filter === this.callFilter()) return;
+    this.callFilter.set(filter);
+    this.announceCount();
+  }
+
+  /** A strip button: picks its filter, or shows all calls again when it is on. */
+  pickFilter(filter: CallFilter) {
+    this.setFilter(this.callFilter() === filter ? 'all' : filter);
+  }
+
   clearFilters() {
     this.filter.set('');
-    this.onlyFailed.set(false);
+    this.callFilter.set('all');
+    this.announceCount();
+  }
+
+  /** Says something in the status region, even when it is the same sentence again. */
+  announce(text: string) {
+    // A trailing no-break space flips, so the live region sees a change.
+    this.messageFlip = !this.messageFlip;
+    this.message.set(this.messageFlip ? `${text} ` : text);
+  }
+
+  async copyCommand(command: string) {
+    try {
+      await navigator.clipboard.writeText(command);
+      this.announce(`Copied ${command}.`);
+    } catch {
+      this.announce('The clipboard is not available here.');
+    }
+  }
+
+  leakCount(listener: { plugin: string; event: string }): number {
+    return this.leaks().get(`${listener.plugin} ${listener.event}`) ?? 0;
   }
 
   tone(call: CapacitorCall): string {
@@ -776,8 +1024,36 @@ export class CapacitorInspector {
     return isUnimplemented(call) ? 'Not implemented' : 'Error';
   }
 
-  duration(call: CapacitorCall): string {
+  durationText(call: CapacitorCall): string {
+    if (call.status === 'pending') return `waiting ${span(took(call, this.now()))}`;
     return call.durationMs === undefined ? '' : `${Math.round(call.durationMs)} ms`;
+  }
+
+  barWidth(call: CapacitorCall): number {
+    return Math.min(100, (took(call, this.now()) / this.slowest()) * 100);
+  }
+
+  private announceCount() {
+    const page = this.page();
+    if (page) this.announce(`${this.shownCalls().length} of ${page.calls.length} calls shown`);
+  }
+
+  private queueSummary(next: CapacitorSummary | null) {
+    const shown = this.summary();
+    if (JSON.stringify(next) === JSON.stringify(shown)) return;
+    clearTimeout(this.summaryTimer);
+    this.summaryTimer = undefined;
+    const wait = this.summaryShownAt + SUMMARY_THROTTLE_MS - Date.now();
+    if (!shown || !next || next.pageId !== shown.pageId || wait <= 0) {
+      this.summary.set(next);
+      this.summaryShownAt = Date.now();
+      return;
+    }
+    this.summaryTimer = setTimeout(() => {
+      this.summaryTimer = undefined;
+      this.summary.set(this.liveSummary());
+      this.summaryShownAt = Date.now();
+    }, wait);
   }
 
   private async load(client: DevframeRpcClient) {
