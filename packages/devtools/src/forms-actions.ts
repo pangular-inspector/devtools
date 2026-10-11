@@ -397,12 +397,19 @@ export function guardedFields(
   return overflow ? null : out;
 }
 
+// A real click on a checkbox, radio or select fires input, then change. Signal Forms
+// listens for input and the reactive and template-driven accessors listen for change.
+function dispatchPick(element: Element): void {
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  element.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 function nativeWrite(element: Element, value: unknown): boolean {
   if (element instanceof HTMLInputElement) {
     if (element.type === 'file') return false;
     if (element.type === 'checkbox') {
       element.checked = !!value;
-      element.dispatchEvent(new Event('change', { bubbles: true }));
+      dispatchPick(element);
       return true;
     }
     if (element.type === 'radio') {
@@ -414,7 +421,7 @@ function nativeWrite(element: Element, value: unknown): boolean {
       ) as HTMLInputElement | undefined;
       if (!target) return false;
       target.checked = true;
-      target.dispatchEvent(new Event('change', { bubbles: true }));
+      dispatchPick(target);
       return true;
     }
     element.value = value == null ? '' : String(value);
@@ -467,7 +474,7 @@ function selectWrite(
     select.selectedIndex = index;
     expected = options[index].value;
   }
-  select.dispatchEvent(new Event('change', { bubbles: true }));
+  dispatchPick(select);
   return { expected };
 }
 
@@ -540,7 +547,14 @@ function writeValue(
   }
   if (viaDom && nativeWrite(element, value)) {
     if (mode === 'user') element.dispatchEvent(new Event('blur'));
-    return null;
+    const picked =
+      element instanceof HTMLInputElement &&
+      (element.type === 'checkbox' || element.type === 'radio');
+    if (!picked) return null;
+    const expected = element.type === 'checkbox' ? !!value : value;
+    const deferred = found.kind !== 'signal' && read(() => node['updateOn'], 'change') !== 'change';
+    const stored = deferred ? node['_pendingValue'] : rawValue(found, node);
+    return sameOption(stored, expected) ? null : `holds ${label(stored)} after the write`;
   }
   if (found.kind === 'template' && leaf) {
     const dir = directivesOf(node);

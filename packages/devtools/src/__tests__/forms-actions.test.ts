@@ -160,6 +160,24 @@ Component({
   </form>`,
 })(Shirt);
 
+class Trip {
+  model = signal({ terms: false, pace: 'slow', seat: 'aisle' });
+  form = form(this.model);
+}
+Component({
+  selector: 'trip-form',
+  imports: [FormField, FormRoot],
+  template: `<form [formRoot]="form">
+    <input id="terms" type="checkbox" [formField]="form.terms" />
+    <input id="slow" type="radio" value="slow" [formField]="form.pace" />
+    <input id="fast" type="radio" value="fast" [formField]="form.pace" />
+    <select id="seat" [formField]="form.seat">
+      <option value="aisle">Aisle</option>
+      <option value="window">Window</option>
+    </select>
+  </form>`,
+})(Trip);
+
 async function render<T>(type: new () => T) {
   const fixture = TestBed.createComponent(type);
   fixture.detectChanges();
@@ -409,6 +427,23 @@ describe('form actions on template-driven and Signal Forms', () => {
     expect(
       (await runFormAction(ctx, { action: 'disable', formId: 'form-1', path: 'title' })).error,
     ).toContain('ngModel');
+  });
+
+  it('writes Signal Forms checkboxes, radios and selects through the page in user mode', async () => {
+    const fixture = await render(Trip);
+    const ctx = contextFor(fixture.nativeElement);
+    const model = fixture.componentInstance.model;
+    const write = (path: string, value: unknown) =>
+      runFormAction(ctx, { action: 'set-value', formId: 'form-1', path, value, mode: 'user' });
+
+    expect((await write('terms', true)).ok).toBe(true);
+    expect(model().terms).toBe(true);
+    expect((await write('terms', false)).ok).toBe(true);
+    expect(model().terms).toBe(false);
+    expect((await write('pace', 'fast')).ok).toBe(true);
+    expect(model().pace).toBe('fast');
+    expect((await write('seat', 'window')).ok).toBe(true);
+    expect(model().seat).toBe('window');
   });
 
   it('writes Signal Forms fields, refuses hidden ones and submits through the form root', async () => {
