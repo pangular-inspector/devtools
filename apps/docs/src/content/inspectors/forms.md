@@ -15,7 +15,7 @@ The Forms tab reads the forms of the running page, in development builds only. I
 
 ### Forms list
 
-The sidebar lists each form with its label, its kind (**Signal Forms**, **Reactive** or **Template-driven**) and its error count. When the panel runs inside a page and other tabs report forms, check **All pages** to include them.
+The sidebar lists each form with its label, its kind (**Signal Forms**, **Reactive** or **Template-driven**) and its error count. When the panel runs inside a page and other tabs report forms, check **All pages** to include them. If you uncheck **All pages** while a form from another tab is selected, the details say the form is on another page and offer **Show forms from all pages**.
 
 Select a form to see its status, whether it is dirty or touched, whether it was submitted or is submitting, and an **Error summary**.
 
@@ -200,7 +200,7 @@ Agents can loop: inspect, act, `wait-for-form`, then `form-diff` from the marker
 
 ### Reset, submit and restore ask first
 
-In the tab, the button turns into **Confirm reset**, **Confirm submit** or **Confirm restore**. Click again to run it. Agents pass `confirm: true` for the same actions, and for `fill-form` with `submit`.
+In the tab, the button turns into **Confirm reset**, **Confirm submit** or **Confirm restore**. Click again to run it. If the selected form changes first, for example because the page destroyed it, the confirmation, the snapshot and the open field are cleared. Agents pass `confirm: true` for the same actions, and for `fill-form` with `submit`.
 
 ### Fields that are not written
 

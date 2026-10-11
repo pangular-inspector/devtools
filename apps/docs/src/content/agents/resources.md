@@ -93,7 +93,7 @@ The list also includes the keys behind the six resources above (`pangular:compon
 
 ### Read a key with a tool
 
-Some clients only use tools. The `devframe_state_read` tool reads the same keys:
+Some clients only use tools. For the component tree, the [`list-components`](./tools.md#list-components) tool returns an outline of one page. The `devframe_state_read` tool reads every key, as full JSON:
 
 <ngmd-workflow>
   <ngmd-step title="List the keys">

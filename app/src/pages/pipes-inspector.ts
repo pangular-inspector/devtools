@@ -9,6 +9,7 @@ import {
   signal,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
 
 interface UsageSite {
@@ -1179,7 +1180,9 @@ export class PipesInspector {
     this.pendingRecord.set(on);
     let result: { pages?: number } | undefined;
     try {
-      result = (await client.scope('pangular').rpc.call('request-instrument-pipes', on)) as
+      // Start on this panel's page (or the latest page); stop every page that records.
+      const request = on ? { pageId: hostPageId() ?? undefined, on } : { on };
+      result = (await client.scope('pangular').rpc.call('request-instrument-pipes', request)) as
         { pages?: number } | undefined;
     } catch {
       this.settleRecord("Couldn't reach the devtools server. Try again.");
