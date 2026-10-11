@@ -125,7 +125,7 @@ The page sends the token as the `authToken` option of [`initOverlay`](./getting-
 - Use a long random value, such as the output of `openssl rand -hex 16`. Tokens shorter than 16 characters are ignored with a warning.
 - The servers never print a token. The CLI prints a short hash of each, to tell them apart.
 - Tokens stay on the server. They are not part of the config that pages receive in `__connection.json`.
-- The page sends the token in the query string of its WebSocket or server-sent events URL (`devframe_auth_token`), so it can show up in proxy or server logs, and in the browser console when the connection is refused, such as a mixed content warning.
+- The page sends the token in the query string of its WebSocket or server-sent events URL (`devframe_auth_token`), so it can show up in proxy or server logs, and in the browser console or the device log whenever the connection fails, such as a mixed content or cleartext error. The browser prints that URL itself, so Pangular Inspector can't mask it there.
 - The page keeps the token in its `localStorage`, in a WebView too, so it can reconnect. Clear the app's storage to forget it.
 - With `--no-auth`, the CLI ignores the tokens, since every client is trusted already.
 - To rotate a token, change it, restart the server and rebuild the app with the new value. The servers read the tokens when they start, and a token trusts only the connection that sent it: nothing is saved on the server, so the restart ends every session it trusted. A page that still sends the old token is refused and asks for the one-time code. The `authToken` passed to `initOverlay` wins over the copy in `localStorage`, so an app built with the old token asks for the code on every launch until you rebuild it.

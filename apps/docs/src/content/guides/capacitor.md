@@ -141,7 +141,7 @@ The standalone CLI and the Express hub accept `capacitor://localhost` and `https
 
 ### Let the app reach your machine
 
-The page is `https://localhost` on Android and the server is plain HTTP, so the Android WebView blocks the connection as mixed content. Android also blocks cleartext traffic. Allow both in a development build:
+The page is `https://localhost` on Android and the server is plain HTTP, so the Android WebView can block the connection as mixed content. Android also blocks cleartext traffic, even to `localhost` through `adb reverse`, so without `server.cleartext` the connection fails with `net::ERR_CLEARTEXT_NOT_PERMITTED`. Allow both in a development build:
 
 ```ts {4,8-9}
 // capacitor.config.ts
@@ -160,7 +160,7 @@ export default config;
 
 If your config already has a `server` or `android` block, add the keys to it instead.
 
-With `adb reverse`, the server is at `http://localhost`, which Chromium may not count as mixed content. Keep both settings anyway: they cost nothing in a development build. Capacitor applies both on `npx cap sync`, which `npx cap run` also runs, so set the flag there: `CAPACITOR_DEVTOOLS=1 npx cap run android`. `server.cleartext` sets `android:usesCleartextTraffic` in the manifest of the `capacitor-cordova-android-plugins` module, which Android merges into the app. Setting `server.androidScheme` to `'http'` also avoids mixed content, but it changes the app's origin, so the WebView no longer sees the data the app stored under `https://localhost`.
+With `adb reverse`, the server is at `http://localhost`, which Chromium may not count as mixed content, but cleartext is still blocked, so `server.cleartext` is required. Keep `allowMixedContent` too, for a server on a network address. Capacitor applies both on `npx cap sync`, which `npx cap run` also runs, so set the flag there: `CAPACITOR_DEVTOOLS=1 npx cap run android`. `server.cleartext` sets `android:usesCleartextTraffic` in the manifest of the `capacitor-cordova-android-plugins` module, which Android merges into the app. Setting `server.androidScheme` to `'http'` also avoids mixed content, but it changes the app's origin, so the WebView no longer sees the data the app stored under `https://localhost`.
 
 On iOS, App Transport Security can block plain HTTP to a network address. If it does, allow local networking in a development build's `ios/App/App/Info.plist`:
 

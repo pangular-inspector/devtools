@@ -209,7 +209,7 @@ await initOverlay({
 
 Build with `ng build --configuration development,device`. Without the `device` configuration, as in a clone that has no local file, the stub leaves `authToken` out and the page asks for the code.
 
-The token is a development secret. Keep the local file out of git. The page keeps the token in its `localStorage`, and sends it in the query string of its connection URL. See [Pairing tokens](../security.md#pairing-tokens).
+The token is a development secret. Keep the local file out of git. The page keeps the token in its `localStorage`, and sends it in the query string of its connection URL. When the connection fails, the browser console prints that whole URL, token included, so don't share console output or device logs from a failed connection. Rotate the token if you did. See [Pairing tokens](../security.md#pairing-tokens).
 
 When the server refuses the token, the overlay logs a warning in the console and asks for the code instead. With `connectionMeta`, it also logs a warning once when it can't reach the server.
 
