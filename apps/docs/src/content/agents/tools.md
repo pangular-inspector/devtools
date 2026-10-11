@@ -93,6 +93,8 @@ The live detail of one component instance: inputs, outputs and whether a parent 
 
 A class name or tag that matches several instances answers for the first and lists the ids of all of them. When nothing matches and the page's tree stopped at a [limit](../inspectors/components.md#selection), `inspect-component` and `highlight` say which one, since the instance can be past it. Secret-looking values are redacted.
 
+The answer stops at 20,000 characters. Past that, each value longer than 1,000 characters shows only the start of its JSON, then each list (inputs, outputs, properties, listeners, directives, injected services) keeps fewer entries. A note names the cut values and says how many entries are not shown. The `detail` of the `component-tree` resource has every value in full.
+
 ### list-components
 
 The live component tree of one page as an indented outline, one line per instance: class name, host tag and instance id, as in `ProductCard <app-card> c12`. Reads: page.
@@ -121,6 +123,8 @@ The `@defer` blocks of each page: the component that holds each one, its state, 
 | `pageId` | no       | Same as `page`. |
 
 Without a development build, the page has no util to read defer blocks, and the answer says so.
+
+Each page lists at most 50 blocks in the table and 50 under **Needs attention**, with a note on how many more are not shown. The whole answer stops at 20,000 characters. If several tabs report, pass `page` to read one. The **Defer blocks** list on the [Components](../inspectors/components.md#defer-blocks) page has every block.
 
 ### change-detection
 

@@ -52,7 +52,8 @@ const MAX_NAVIGATIONS = 50;
 const MAX_PAGES = 20;
 const MAX_RESOURCE_CHARS = 100_000;
 const MAX_TEXT = 4_000;
-const MAX_TOOL_CHARS = 20_000;
+/** Longest markdown a tool answer shows before {@link capped} cuts it. */
+export const MAX_TOOL_CHARS = 20_000;
 const MAX_ROUTES = 1_000;
 const MAX_CHILDREN = 200;
 const MAX_ROUTE_DEPTH = 13;
@@ -425,9 +426,10 @@ export function json(value: unknown): string {
   return code(text.length > 500 ? `${text.slice(0, 500)}…` : text);
 }
 
-export function capped(text: string): string {
+/** Cuts an answer at {@link MAX_TOOL_CHARS} and says how to narrow it (`narrow` defaults to the router arguments). */
+export function capped(text: string, narrow = 'pass `page`, `url` or a smaller `limit`'): string {
   return text.length > MAX_TOOL_CHARS
-    ? `${text.slice(0, MAX_TOOL_CHARS)}… (truncated; pass \`page\`, \`url\` or a smaller \`limit\`)`
+    ? `${text.slice(0, MAX_TOOL_CHARS)}… (truncated; ${narrow})`
     : text;
 }
 
