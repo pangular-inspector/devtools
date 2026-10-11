@@ -458,6 +458,8 @@ const pangular = defineDevframe({
       name: 'pipe-lint',
       type: 'query',
       jsonSerializable: true,
+      // A source scan like get-pipes, so a static report bakes it in too.
+      snapshot: true,
       handler: () => lintPipes(ctx.cwd),
     });
 
