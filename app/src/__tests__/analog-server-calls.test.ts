@@ -162,18 +162,19 @@ describe('Analog server calls list', () => {
         apiCall(2, '/api/missing', 404),
         apiCall(3, '/api/boom', 500),
         failedAction,
+        apiCall(5, '/api/no-response', 0),
       ]).rpc,
     );
     const root: HTMLElement = fixture.nativeElement;
     const failed = root.querySelector<HTMLInputElement>('.call-filters input[type="checkbox"]')!;
     failed.click();
     await settle(fixture);
-    expect(rows(root)).toBe(3);
-    expect(root.querySelector('.total')?.textContent?.trim()).toBe('3 of 4');
+    expect(rows(root)).toBe(4);
+    expect(root.querySelector('.total')?.textContent?.trim()).toBe('4 of 5');
 
     root.querySelector<HTMLInputElement>('input[data-kind="api"]')!.click();
     await settle(fixture);
-    expect(rows(root)).toBe(2);
+    expect(rows(root)).toBe(3);
   });
 
   it('shows a no-match state whose Clear filters resets them and focuses the search', async () => {
