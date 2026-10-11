@@ -23,10 +23,17 @@ function capArgs(args: unknown): string {
   return Array.isArray(args) ? `[${args.map(capJson).join(', ')}]` : capJson(args);
 }
 
-/** Formats everything known about one pipe — static declaration/usage, live
- * call counts and last input/output (if instrumented), and any lint findings
- * — as markdown for an agent asking "why is this pipe slow or stale?" */
-export function explainPipeText(name: string, cwd: string, live: PipesState): string {
+/** Formats everything known about one pipe (static declaration/usage, live
+ * call counts and last input/output if instrumented, and any lint findings)
+ * as markdown for an agent asking "why is this pipe slow or stale?"
+ * `connectedPages` is how many pages currently report pipes; with none (the
+ * stdio server, or no app tab open) there is no live data at all. */
+export function explainPipeText(
+  name: string,
+  cwd: string,
+  live: PipesState,
+  connectedPages: number,
+): string {
   const declared = scanPipes(cwd).filter((p) => p.name === name);
   const runtime = live.pipes.find((p) => p.name === name);
   const findings = lintPipes(cwd).filter((f) => f.pipe === name);
@@ -43,8 +50,16 @@ export function explainPipeText(name: string, cwd: string, live: PipesState): st
   }
   if (!declared.length) lines.push(`Not found by source scan (only seen live).`);
 
-  lines.push('', runtimeText(runtime, live.instrumented.length > 0));
+  lines.push('', runtimeText(runtime, connectedPages > 0, live.instrumented.length > 0));
   if (name === 'async') {
+    const duplicates = live.async.filter((a) => a.duplicate);
+    if (duplicates.length) {
+      const owners = [...new Set(duplicates.map((a) => a.component))].join(', ');
+      lines.push(
+        '',
+        `**Duplicate subscriptions:** ${duplicates.length} \`| async\` usage(s) subscribe to a source that another \`| async\` usage on the same page also subscribes to (${owners}). For a cold, unshared source each subscription repeats the work, for example a second HTTP request. Subscribe once with \`@let\`, share the source with \`shareReplay\`, or read it through \`toSignal()\`.`,
+      );
+    }
     const resubscribing = live.async.filter((a) => a.resubscribing);
     if (resubscribing.length) {
       const owners = [...new Set(resubscribing.map((a) => a.component))].join(', ');
@@ -63,12 +78,21 @@ export function explainPipeText(name: string, cwd: string, live: PipesState): st
   return lines.join('\n');
 }
 
-function runtimeText(runtime: PipeUsageInfo | undefined, instrumented: boolean): string {
-  if (!runtime) {
-    return instrumented
-      ? '**Live:** not seen on the currently connected page.'
-      : '**Live:** unknown, recording is off. Click **Record calls** in the Pipes panel for call counts, last input/output and stale-argument detection.';
-  }
+const NO_PAGE =
+  '**Live:** no page is connected, so there is no live data. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.';
+
+const NOT_IN_USE =
+  '**Live:** not in use on the connected page(s). No rendered component uses this pipe right now. Pipe discovery is always on, so this does not depend on recording.';
+
+const RECORD_HINT =
+  'No calls recorded, recording is off. Click **Record calls** in the Pipes panel for call counts, last input/output and stale-argument detection.';
+
+function runtimeText(
+  runtime: PipeUsageInfo | undefined,
+  connected: boolean,
+  instrumented: boolean,
+): string {
+  if (!runtime) return connected ? NOT_IN_USE : NO_PAGE;
   const components = runtime.components.map((c) => `${c.name} (${c.count})`).join(', ');
   const parts = [
     `**Live:** ${runtime.instanceCount} instance(s), used by ${components || 'unknown'}.`,
@@ -90,8 +114,8 @@ function runtimeText(runtime: PipeUsageInfo | undefined, instrumented: boolean):
           .join('; ')}.`,
       );
     }
-  } else if (instrumented) {
-    parts.push('No calls recorded yet.');
+  } else {
+    parts.push(instrumented ? 'No calls recorded yet.' : RECORD_HINT);
   }
   if (runtime.stale) {
     parts.push(

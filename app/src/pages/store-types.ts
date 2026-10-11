@@ -129,6 +129,28 @@ export interface LiveStore {
   classic?: NgrxClassicStoreInfo;
 }
 
+/** The page a change log belongs to, as the panel last saw it. */
+export interface NgrxLogKey {
+  pageId: string | null;
+  log: readonly NgrxLogEntry[];
+}
+
+/**
+ * Whether `next` still shows the change log `prev` showed. It is false for another page, and
+ * for the same page after the app reloaded: the reload keeps the `pageId` but starts a new
+ * log at seq 1, so the log goes back in seq, comes back empty, or reuses a seq for an entry
+ * with another timestamp.
+ */
+export function sameNgrxLog(prev: NgrxLogKey, next: NgrxLogKey): boolean {
+  if (prev.pageId !== next.pageId) return false;
+  const last = prev.log.at(-1);
+  if (!last) return true;
+  const newest = next.log.at(-1);
+  if (!newest || newest.seq < last.seq) return false;
+  const same = next.log.find((entry) => entry.seq === last.seq);
+  return !same || same.timestamp === last.timestamp;
+}
+
 const TYPE = '@type';
 
 const TAGS = new Set([

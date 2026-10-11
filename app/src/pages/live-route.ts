@@ -254,7 +254,7 @@ type TabId = (typeof TABS)[number]['id'];
       padding: 0 6px;
       border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
       border-radius: 99px;
-      background: color-mix(in srgb, var(--danger) 12%, transparent);
+      background: color-mix(in srgb, var(--danger) 12%, var(--surface));
       color: var(--danger);
       font-size: 11px;
       font-weight: 600;

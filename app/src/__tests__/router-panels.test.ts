@@ -6,7 +6,7 @@ import { RouteCurrent } from '../pages/route-current';
 import { RouteLint } from '../pages/route-lint';
 import { RouteTimeline } from '../pages/route-timeline';
 import { RouteTree } from '../pages/route-tree';
-import type { NavigationRecord, RouterPage } from '../pages/router-types';
+import type { NavigationRecord, RouteNode, RouterPage } from '../pages/router-types';
 
 type Call = (name: string, arg: Record<string, unknown>) => Promise<unknown>;
 
@@ -69,6 +69,12 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+function liveRegion(fixture: ComponentFixture<unknown>): HTMLElement {
+  const found = el(fixture).querySelector<HTMLElement>('p.visually-hidden[role="status"]');
+  if (!found) throw new Error('No row status region');
+  return found;
+}
+
 describe('RouteTree row actions', () => {
   const config = page({
     config: [
@@ -115,11 +121,12 @@ describe('RouteTree row actions', () => {
     await settle(fixture);
     expect(calls).toEqual([]);
     const field = el(fixture).querySelector<HTMLInputElement>('input.param')!;
-    const status = el(fixture).querySelector('tr.row-result [role="status"]');
-    expect(status?.textContent?.trim()).toBe('Fill in :id to navigate.');
-    expect(status?.closest('tr')?.previousElementSibling?.textContent).toContain('users/:id');
+    const note = el(fixture).querySelector('tr.row-result p');
+    expect(note?.textContent?.trim()).toBe('Fill in :id to navigate.');
+    expect(note?.closest('tr')?.previousElementSibling?.textContent).toContain('users/:id');
     expect(field.getAttribute('aria-invalid')).toBe('true');
-    expect(field.getAttribute('aria-describedby')).toBe(status?.id);
+    expect(field.getAttribute('aria-describedby')).toBe(note?.id);
+    expect(liveRegion(fixture).textContent?.trim()).toBe('Fill in :id to navigate.');
     expect(document.activeElement).toBe(field);
     expect(el(fixture).textContent).not.toContain('Give a url');
 
@@ -162,6 +169,82 @@ describe('RouteTree row actions', () => {
     expect(result?.previousElementSibling?.textContent).toContain('lazy');
     expect(result?.textContent?.trim()).toBe('Could not reach the page.');
     expect(el(fixture).querySelector('p.message')).toBeNull();
+  });
+});
+
+describe('RouteTree page switch', () => {
+  const routes: RouteNode[] = [
+    { id: 'r1', path: 'users/:id', fullPath: 'users/:id', kind: 'component', component: 'User' },
+  ];
+  const pageA = page({ pageId: 'a', config: routes });
+  const pageB = page({ pageId: 'b', config: routes });
+  const matched = { matched: true, chain: routes, params: { id: '1' }, notes: [], nearest: [] };
+
+  function predict(fixture: ComponentFixture<unknown>, url: string) {
+    const input = el(fixture).querySelector<HTMLInputElement>('#test-url')!;
+    input.value = url;
+    input.dispatchEvent(new Event('input'));
+    el(fixture)
+      .querySelector('form.test')!
+      .dispatchEvent(new Event('submit', { cancelable: true }));
+  }
+
+  function typeParam(fixture: ComponentFixture<unknown>, value: string) {
+    const field = el(fixture).querySelector<HTMLInputElement>('input.param')!;
+    field.value = value;
+    field.dispatchEvent(new Event('input'));
+  }
+
+  it('keeps one empty row status region in the page before any row reports', async () => {
+    const fixture = mount(RouteTree, pageA, offline);
+    await settle(fixture);
+    expect(liveRegion(fixture).textContent?.trim()).toBe('');
+    expect(el(fixture).querySelectorAll('[role="status"]')).toHaveLength(1);
+  });
+
+  it("drops page A's results and typed params after switching to page B", async () => {
+    const fixture = mount(RouteTree, pageA, (name) =>
+      Promise.resolve(name === 'router-match' ? matched : { error: 'Guard said no' }),
+    );
+    await settle(fixture);
+    button(fixture, 'Navigate to users/:id').click();
+    await settle(fixture);
+    expect(el(fixture).querySelector('input.param')?.getAttribute('aria-invalid')).toBe('true');
+    typeParam(fixture, '9');
+    button(fixture, 'Navigate to users/:id').click();
+    predict(fixture, '/users/1');
+    await settle(fixture);
+    expect(el(fixture).querySelector('.result')).not.toBeNull();
+    expect(el(fixture).querySelector('tr.row-result')?.textContent).toContain('Guard said no');
+
+    fixture.componentRef.setInput('page', pageB);
+    await settle(fixture);
+    expect(el(fixture).querySelector('.result')).toBeNull();
+    expect(el(fixture).querySelector('tr.row-result')).toBeNull();
+    expect(liveRegion(fixture).textContent?.trim()).toBe('');
+    const fresh = el(fixture).querySelector<HTMLInputElement>('input.param')!;
+    expect(fresh.value).toBe('');
+    expect(fresh.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('ignores answers for page A that arrive after the switch to page B', async () => {
+    const answers: ((value: unknown) => void)[] = [];
+    const fixture = mount(RouteTree, pageA, () => new Promise((resolve) => answers.push(resolve)));
+    await settle(fixture);
+    predict(fixture, '/users/1');
+    typeParam(fixture, '1');
+    button(fixture, 'Navigate to users/:id').click();
+    await settle(fixture);
+    expect(answers).toHaveLength(2);
+
+    fixture.componentRef.setInput('page', pageB);
+    await settle(fixture);
+    answers[0](matched);
+    answers[1]({ id: 5, outcome: 'succeeded', finalUrl: '/users/1' });
+    await settle(fixture);
+    expect(el(fixture).querySelector('.result')).toBeNull();
+    expect(el(fixture).querySelector('tr.row-result')).toBeNull();
+    expect(el(fixture).textContent).not.toContain('Navigation #5');
   });
 });
 

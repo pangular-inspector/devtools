@@ -198,7 +198,7 @@ export function explainFieldText(
     .map(eventLine);
   if (source) lines.push(source);
   if (recent.length) lines.push('Recent changes:', ...recent);
-  return `${UNTRUSTED}\n\n${lines.join('\n')}${freshness(state, now)}`;
+  return `${UNTRUSTED}\n\n${lines.join('\n')}${freshness(state, now, [form])}`;
 }
 
 function bindingText(node: FormFieldNode): string {
@@ -309,7 +309,7 @@ export function explainSubmitText(state: FormsState, args: FieldArgs, now = Date
   }
   const submits = state.events.filter((e) => e.formId === form.id && e.type === 'submit').slice(-5);
   if (submits.length) lines.push('Recent submits:', ...submits.map(eventLine));
-  return `${UNTRUSTED}\n\n**${form.label.replace(/[`*]/g, "'")}** (${form.id})\n${lines.join('\n')}${freshness(state, now)}`;
+  return `${UNTRUSTED}\n\n**${form.label.replace(/[`*]/g, "'")}** (${form.id})\n${lines.join('\n')}${freshness(state, now, [form])}`;
 }
 
 interface Payload {
@@ -377,7 +377,7 @@ export function formPayloadText(state: FormsState, args: FieldArgs, now = Date.n
       : 'No field changed since it was created or last reset.',
   );
   if (JSON.stringify(p.raw).includes(REDACTED)) lines.push('Secret values show as [redacted].');
-  return `${UNTRUSTED}\n\n${lines.join('\n')}${freshness(state, now)}`;
+  return `${UNTRUSTED}\n\n${lines.join('\n')}${freshness(state, now, [form])}`;
 }
 
 export interface HistoryArgs extends FieldArgs {

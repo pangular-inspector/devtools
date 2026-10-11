@@ -79,7 +79,7 @@ The overlay sends no platform marker, so `list-pages` lists a NativeScript app w
 
 `10.0.2.2` is how the Android emulator reaches its host. A physical device needs your machine's LAN address as `baseURL`.
 
-`initNativeScriptOverlay()` returns a function that stops the overlay and tells the server to forget the app's component, injector and NgRx reports.
+`initNativeScriptOverlay()` returns a function that stops the overlay and tells the server to forget the app's component, signal, injector and NgRx reports.
 
 ## How it works
 
