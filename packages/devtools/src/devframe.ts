@@ -57,6 +57,7 @@ import {
   toComponentPage,
   truncationText,
 } from './rpc/component-tools.ts';
+import { LIST_COMPONENTS_DESCRIPTION, listComponentsText } from './rpc/component-outline.ts';
 import {
   explainFormsText,
   formsResourceText,
@@ -1713,6 +1714,38 @@ const pangular = defineDevframe({
           markdown: `Live detail of \`${detail.name}\` (\`<${detail.tag}>\`, instance \`${detail.id}\` on page \`${hit.pageId}\`), read from the running page.${others ? `\n\n${others}` : ''}\n\n${JSON.stringify(detail, null, 2)}`,
         };
       },
+    });
+
+    agent.registerTool({
+      id: 'pangular:list-components',
+      description: LIST_COMPONENTS_DESCRIPTION,
+      safety: 'read',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: PAGE_ARGUMENT,
+          filter: {
+            type: 'string',
+            description:
+              'Case-insensitive text to find in a class name, host tag or host directive. Matches keep their ancestors.',
+          },
+          depth: {
+            type: 'number',
+            description: 'Most levels to list, 1 for the roots only. Unlimited without it.',
+          },
+        },
+      },
+      handler: async (args: { page?: string; filter?: string; depth?: number }) => ({
+        markdown: listComponentsText(
+          componentPages.values(),
+          (pageId) => routerPages.get(pageId)?.outlets,
+          {
+            page: pageArgument(args),
+            filter: typeof args?.filter === 'string' ? args.filter : undefined,
+            depth: typeof args?.depth === 'number' ? args.depth : undefined,
+          },
+        ),
+      }),
     });
 
     agent.registerTool({

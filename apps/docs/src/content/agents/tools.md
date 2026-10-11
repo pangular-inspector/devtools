@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Fifty-four tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Fifty-five tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -92,6 +92,25 @@ The live detail of one component instance: inputs, outputs and whether a parent 
 | `pageId`   | no       | Same as `page`.                                                              |
 
 A class name or tag that matches several instances answers for the first and lists the ids of all of them. When nothing matches and the page's tree stopped at a [limit](../inspectors/components.md#selection), `inspect-component` and `highlight` say which one, since the instance can be past it. Secret-looking values are redacted.
+
+### list-components
+
+The live component tree of one page as an indented outline, one line per instance: class name, host tag and instance id, as in `ProductCard <app-card> c12`. Reads: page.
+
+| Argument | Required | Value                                                                                                                       |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `filter` | no       | Text to find in a class name, host tag or host directive, ignoring case. The outline keeps the matches and their ancestors. |
+| `depth`  | no       | The most levels to list, `1` for the roots only. Unlimited by default.                                                      |
+
+Markers follow the id:
+
+| Marker                                | Meaning                                                                                                     |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `[routed route /products]`            | A router outlet shows this instance. A named outlet adds `outlet <name>`. It needs the Router inspector on. |
+| `[directives: RouterLinkActive, ...]` | The other directives on the host.                                                                           |
+| `(+3 below)`                          | `depth` hides 3 instances under this one.                                                                   |
+
+The outline carries no input or property values. Pass an id to `inspect-component` for those, or to `highlight` to show the instance. The answer stops at 20,000 characters and says how to narrow it, and it says when the page's tree stopped at a [limit](../inspectors/components.md#selection).
 
 ### defer-blocks
 
