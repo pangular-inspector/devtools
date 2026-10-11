@@ -900,7 +900,7 @@ export class App implements OnInit, OnDestroy {
     const view = this.view();
     // The extension has no hub and no views to leave.
     if (!view || location.protocol === 'chrome-extension:') return null;
-    const tab = VIEW_TAB[view] ?? (this.comingSoon() ? 'dashboard' : this.tab());
+    const tab = this.comingSoon() ? 'dashboard' : (VIEW_TAB[view] ?? this.tab());
     return { tab, href: fullPanelHref(location.href, tab) };
   });
 

@@ -101,7 +101,7 @@ afterEach(() => {
 
 describe('Open full panel link', () => {
   it('links a hub view to the full panel on the tab with the same content', async () => {
-    const { el } = await open(`${BASE}?view=capacitor`);
+    const { el } = await open(`${BASE}?view=capacitor`, { cap1: capacitorPage });
     const anchor = link(el);
     expect(anchor?.textContent?.trim()).toBe('Open full panel');
     expect(anchor?.getAttribute('href')).toBe(`${BASE}#tab=capacitor`);
@@ -115,6 +115,12 @@ describe('Open full panel link', () => {
   it('links a view with nothing to show to the Dashboard, not to a remembered tab', async () => {
     const { el } = await open(`${BASE}?view=angular-native`);
     expect(el.textContent).toContain('No Angular Native app is connected');
+    expect(link(el)?.getAttribute('href')).toBe(`${BASE}#tab=dashboard`);
+  });
+
+  it('links the Capacitor view to the Dashboard while no app reports', async () => {
+    const { el } = await open(`${BASE}?view=capacitor`);
+    expect(el.textContent).toContain('Inspect Capacitor apps');
     expect(link(el)?.getAttribute('href')).toBe(`${BASE}#tab=dashboard`);
   });
 
