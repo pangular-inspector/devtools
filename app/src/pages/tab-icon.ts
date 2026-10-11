@@ -67,10 +67,13 @@ import { Component, input } from '@angular/core';
           <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
         }
         @case ('capacitor') {
-          <rect x="7" y="2" width="10" height="20" rx="2" />
-          <path d="M11 18h2" />
-          <path d="m10 7 4 4" />
-          <path d="m14 7-4 4" />
+          <!-- The Capacitor logo (Simple Icons, CC0), filled like the brand mark. -->
+          <path
+            fill="currentColor"
+            stroke="none"
+            transform="translate(1.8 1.8) scale(0.85)"
+            d="M24 3.7l-5.766 5.766 5.725 5.736-3.713 3.712L5.073 3.742 8.786.03l5.736 5.726L20.284 0 24 3.7zM.029 8.785l3.713-3.713 15.173 15.173-3.713 3.714-5.732-5.726L3.7 24 0 20.285l5.754-5.764L.029 8.785z"
+          />
         }
       }
     </svg>
