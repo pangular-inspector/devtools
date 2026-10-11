@@ -363,18 +363,20 @@ function readView(): View | null {
         (keydown)="onNavKey($event)"
       >
         @if (availableTabs().length > 1) {
-          @for (t of tabs(); track t.id) {
-            <button
-              type="button"
-              [class.active]="tab() === t.id"
-              [attr.aria-current]="tab() === t.id ? 'page' : null"
-              [attr.tabindex]="rovingTab() === t.id ? 0 : -1"
-              (click)="switchTab(t.id)"
-            >
-              <app-tab-icon [name]="t.id" />
-              <span>{{ t.label }}</span>
-            </button>
-          }
+          <div class="tab-bar" role="toolbar" aria-label="Inspectors" aria-orientation="horizontal">
+            @for (t of tabs(); track t.id) {
+              <button
+                type="button"
+                [class.active]="tab() === t.id"
+                [attr.aria-current]="tab() === t.id ? 'page' : null"
+                [attr.tabindex]="rovingTab() === t.id ? 0 : -1"
+                (click)="switchTab(t.id)"
+              >
+                <app-tab-icon [name]="t.id" />
+                <span>{{ t.label }}</span>
+              </button>
+            }
+          </div>
         }
       </nav>
       @if (fullPanelLink(); as link) {
@@ -419,7 +421,7 @@ function readView(): View | null {
             To turn it on, set <code>{{ snippet }}</code> in the devtools options.
           }
           <a [href]="inspectorsDocsUrl" target="_blank" rel="noopener noreferrer"
-            >About inspectors</a
+            >About inspectors<span class="sr-only"> (opens in a new tab)</span></a
           >
         </p>
       } @else {
@@ -594,6 +596,9 @@ function readView(): View | null {
     }
     nav:empty {
       display: none;
+    }
+    .tab-bar {
+      display: contents;
     }
     nav button {
       position: relative;
