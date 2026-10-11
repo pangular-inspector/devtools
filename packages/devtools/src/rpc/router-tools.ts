@@ -426,11 +426,14 @@ export function json(value: unknown): string {
   return code(text.length > 500 ? `${text.slice(0, 500)}…` : text);
 }
 
-/** Cuts an answer at {@link MAX_TOOL_CHARS} and says how to narrow it (`narrow` defaults to the router arguments). */
+/**
+ * Cuts an answer so that, with the note on how to narrow it (`narrow`
+ * defaults to the router arguments), it is at most {@link MAX_TOOL_CHARS}.
+ */
 export function capped(text: string, narrow = 'pass `page`, `url` or a smaller `limit`'): string {
-  return text.length > MAX_TOOL_CHARS
-    ? `${text.slice(0, MAX_TOOL_CHARS)}… (truncated; ${narrow})`
-    : text;
+  if (text.length <= MAX_TOOL_CHARS) return text;
+  const suffix = `… (truncated; ${narrow})`;
+  return `${text.slice(0, Math.max(0, MAX_TOOL_CHARS - suffix.length))}${suffix}`;
 }
 
 /** Longest JSON a router action answer shows before it is cut. */

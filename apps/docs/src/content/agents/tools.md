@@ -93,7 +93,7 @@ The live detail of one component instance: inputs, outputs and whether a parent 
 
 A class name or tag that matches several instances answers for the first and lists the ids of all of them. When nothing matches and the page's tree stopped at a [limit](../inspectors/components.md#selection), `inspect-component` and `highlight` say which one, since the instance can be past it. Secret-looking values are redacted.
 
-The answer stops at 20,000 characters. Past that, each value longer than 1,000 characters shows only the start of its JSON, then each list (inputs, outputs, properties, listeners, directives, injected services) keeps fewer entries. A note names the cut values and says how many entries are not shown. The `detail` of the `component-tree` resource has every value in full.
+The answer stops at 20,000 characters. Past that, each value longer than 1,000 characters shows only the start of its JSON, then each list (inputs, outputs, properties, listeners, directives, injected services, and the inputs and outputs of each directive) keeps fewer entries. A note names the cut values and says how many entries are not shown. The `detail` of the `component-tree` resource has every value in full.
 
 ### list-components
 

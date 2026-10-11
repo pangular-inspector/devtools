@@ -47,7 +47,10 @@ function withClippedValues(detail: ComponentDetail) {
   return { clipped, cut };
 }
 
-/** The detail with each list cut to its first `keep` entries, and how many each list lost. */
+/**
+ * The detail with each list, and the inputs and outputs of each directive it
+ * keeps, cut to their first `keep` entries, and how many each list lost.
+ */
 function withShortLists(detail: ComponentDetail, keep: number) {
   const hidden: string[] = [];
   const short = { ...detail };
@@ -57,6 +60,15 @@ function withShortLists(detail: ComponentDetail, keep: number) {
     hidden.push(`${list.length - keep} more ${key}`);
     (short as Record<ListKey, unknown[]>)[key] = list.slice(0, keep);
   }
+  short.directives = short.directives.map((directive) => {
+    const cut = { ...directive };
+    for (const key of ['inputs', 'outputs'] as const) {
+      if (directive[key].length <= keep) continue;
+      hidden.push(`${directive[key].length - keep} more ${directive.name} ${key}`);
+      cut[key] = directive[key].slice(0, keep);
+    }
+    return cut;
+  });
   return { short, hidden };
 }
 

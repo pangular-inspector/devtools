@@ -71,8 +71,30 @@ describe('inspectComponentText', () => {
     expect(json.inputs).toHaveLength(1);
   });
 
+  it('shortens the inputs and outputs of a directive and counts what it left out', () => {
+    const inputs = Array.from({ length: 400 }, (_, n) => prop(`i${n}`, 'v'.repeat(200)));
+    const outputs = Array.from({ length: 300 }, (_, n) => ({
+      name: `o${n}`,
+      prop: `o${n}`,
+      listened: false,
+    }));
+    const text = inspectComponentText(
+      detail({ directives: [{ name: 'Tooltip', inputs, outputs }] }),
+      HEADING,
+    );
+    expect(text.length).toBeLessThanOrEqual(MAX_TOOL_CHARS);
+    expect(text).not.toContain('(truncated;');
+    expect(text).toContain(
+      'Each list shows its first 40 entries: 360 more Tooltip inputs, 260 more Tooltip outputs not shown.',
+    );
+    const [directive] = body(text).directives;
+    expect(directive.inputs).toHaveLength(40);
+    expect(directive.outputs).toHaveLength(40);
+  });
+
   it('falls back to the shared cut with a pointer to the full detail', () => {
     const text = inspectComponentText(detail({ path: 'a > '.repeat(10_000) }), HEADING);
+    expect(text.length).toBeLessThanOrEqual(MAX_TOOL_CHARS);
     expect(text).toMatch(
       /… \(truncated; read the `detail` of the pangular:component-tree resource for every value in full\)$/,
     );

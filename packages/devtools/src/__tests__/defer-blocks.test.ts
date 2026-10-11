@@ -192,7 +192,7 @@ describe('deferBlocksText', () => {
       pageId: `p${n}`,
     }));
     const text = deferBlocksText(pages);
-    expect(text.length).toBeLessThan(MAX_TOOL_CHARS + 100);
+    expect(text.length).toBeLessThanOrEqual(MAX_TOOL_CHARS);
     expect(text).toMatch(/… \(truncated; pass `page` to read one tab\)$/);
   });
 
