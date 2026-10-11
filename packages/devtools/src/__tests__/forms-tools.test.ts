@@ -266,6 +266,7 @@ describe('mergePageReport', () => {
       forms: [],
       events: [],
       reportedAt: 0,
+      pagesReportedAt: {},
       setupErrors: [],
       instrumented: [],
       dropped: {},

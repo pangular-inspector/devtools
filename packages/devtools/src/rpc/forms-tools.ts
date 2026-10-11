@@ -13,6 +13,8 @@ export interface FormsState {
   forms: CollectedForm[];
   events: FormEvent[];
   reportedAt: number;
+  /** When each page last reported, by page id. */
+  pagesReportedAt?: Record<string, number>;
   setupErrors?: { pageId: string; message: string }[];
   instrumented?: string[];
   /** Older events removed at `limits.formTimeline`, by page id. */
@@ -57,8 +59,13 @@ export function countNodes(node: FormFieldNode, test: (n: FormFieldNode) => numb
   );
 }
 
-export function freshness(state: FormsState, now: number): string {
-  const age = now - state.reportedAt;
+/** The staleness note for an answer about `forms`, judged by the pages they came from. */
+export function freshness(state: FormsState, now: number, forms: CollectedForm[]): string {
+  const times = forms.map((f) => state.pagesReportedAt?.[f.id.slice(f.id.indexOf('@') + 1)]);
+  const reportedAt = times.every((t): t is number => t !== undefined)
+    ? Math.min(...times)
+    : state.reportedAt;
+  const age = now - reportedAt;
   return age > STALE_AFTER_MS
     ? `\n\n_Last reported ${Math.round(age / 1000)}s ago. The page may have closed or navigated away._`
     : '';
@@ -214,7 +221,7 @@ export function inspectFormsText(
 ): string {
   const forms = matchForms(state.forms, args.form, args.page);
   if (!forms.length) return noMatch(state.forms, args.form ?? '');
-  const stale = freshness(state, now);
+  const stale = freshness(state, now, forms);
   if (!args.form && !args.path && !args.onlyInvalid) {
     const lines = forms.map((f) => {
       const fields = countNodes(f.root, () => 1);
@@ -254,7 +261,7 @@ export function explainFormsText(
 ): string {
   const forms = matchForms(state.forms, args.form, args.page);
   if (!forms.length) return noMatch(state.forms, args.form ?? '');
-  const stale = freshness(state, now);
+  const stale = freshness(state, now, forms);
   const failing = args.form
     ? forms
     : forms.filter((f) => f.root.status === 'INVALID' || f.root.status === 'PENDING');
@@ -464,6 +471,7 @@ function stateOf(pages: Pages, maxEvents: number): FormsState {
     events: events.slice(-maxEvents),
     dropped,
     reportedAt: all.length ? Math.min(...all.map((page) => page.reportedAt)) : 0,
+    pagesReportedAt: Object.fromEntries(all.map((page) => [page.pageId, page.reportedAt])),
     instrumented: all.filter((page) => page.instrumented).map((page) => page.pageId),
     setupErrors: all.flatMap((page) =>
       (page.setupErrors ?? []).map((message) => ({ pageId: page.pageId, message })),

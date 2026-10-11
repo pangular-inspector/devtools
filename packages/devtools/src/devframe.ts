@@ -371,6 +371,7 @@ const pangular = defineDevframe({
         draft.forms = next.forms;
         draft.events = next.events;
         draft.reportedAt = next.reportedAt;
+        draft.pagesReportedAt = next.pagesReportedAt ?? {};
         draft.setupErrors = next.setupErrors ?? [];
         draft.instrumented = next.instrumented ?? [];
         draft.dropped = next.dropped ?? {};
