@@ -1,3 +1,4 @@
+import { isAuthTokens, type PangularAuthTokens } from './auth-tokens.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 import type { Plugin } from 'vite';
@@ -9,6 +10,7 @@ import { analogMiddleware, setDevOrigin } from './analog-server-log.ts';
 import { analogConfig, setAnalogRoot } from './rpc/analog-scan.ts';
 import { releaseServerState } from './server-state.ts';
 import { extensionOrigin, isAllowedExtensionOrigin } from './extension-origin.ts';
+import { normalizeAllowedOrigins } from './allowed-origins.ts';
 import { pickPangularConfig, resolvePangularConfig, type PangularConfig } from './config.ts';
 
 export type { PangularConfig } from './config.ts';
@@ -17,12 +19,25 @@ export interface PangularViteOptions extends PangularConfig {
   base?: string;
   apiPrefix?: string;
   allowedOrigins?: string[];
-  auth?: boolean;
+  /**
+   * The one-time code: on, off, or on with pairing tokens (`{tokens}`) that a
+   * client may send instead. Left out, it is on when a non-loopback host or
+   * origin is allowed.
+   */
+  auth?: boolean | PangularAuthTokens;
+  /**
+   * Also answer requests from other machines, such as a phone on Wi-Fi, when
+   * their origin is in `allowedOrigins`. Needs the one-time code on: with
+   * `auth: false` it is ignored. Off by default: only this machine.
+   */
+  allowLan?: boolean;
 }
 
 export interface HubOriginPolicy {
   allowedHosts?: readonly string[] | true;
   allowedOrigins?: readonly string[];
+  /** Answer requests from other machines whose origin is in `allowedOrigins`. */
+  lan?: boolean;
 }
 
 function isLoopback(address: string | undefined): boolean {
@@ -69,40 +84,7 @@ function isLoopbackOrigin(origin: string): boolean {
   }
 }
 
-function webOrigin(entry: string): string {
-  try {
-    return new URL(entry).origin;
-  } catch {
-    return 'null';
-  }
-}
-
-/**
- * Reduces each `allowedOrigins` entry to the origin a browser sends: no path or
- * trailing slash, and a lowercase host. Entries that are not URLs are dropped.
- */
-export function normalizeAllowedOrigins(
-  entries: readonly string[] | undefined,
-  warn: (message: string) => void = () => undefined,
-): string[] {
-  const origins: string[] = [];
-  for (const entry of entries ?? []) {
-    const origin = extensionOrigin(entry) ?? webOrigin(entry);
-    if (origin === 'null') {
-      warn(
-        `[pangular] Ignoring allowedOrigins entry "${entry}": it is not an origin such as https://tunnel.example.`,
-      );
-      continue;
-    }
-    if (origin !== entry) {
-      warn(
-        `[pangular] allowedOrigins entry "${entry}" is read as "${origin}". Browsers send the origin only, without a path.`,
-      );
-    }
-    if (!origins.includes(origin)) origins.push(origin);
-  }
-  return origins;
-}
+export { normalizeAllowedOrigins };
 
 export function allowsRemoteOrigins(policy: HubOriginPolicy = {}): boolean {
   if (policy.allowedHosts === true) return true;
@@ -113,6 +95,29 @@ export function allowsRemoteOrigins(policy: HubOriginPolicy = {}): boolean {
   return (policy.allowedOrigins ?? []).some(
     (origin) => !isLoopbackOrigin(origin) && !extensionOrigin(origin),
   );
+}
+
+/** Whether `allowLan` takes effect: only with the one-time code on and a remote origin listed. */
+export function lanAllowed(
+  allowLan: boolean | undefined,
+  authOn: boolean,
+  policy: HubOriginPolicy,
+  warn: (message: string) => void = () => undefined,
+): boolean {
+  if (!allowLan) return false;
+  if (!authOn) {
+    warn(
+      '[pangular] Ignoring allowLan: it needs the one-time code, and auth is false. Only this machine can reach the devtools.',
+    );
+    return false;
+  }
+  if (!allowsRemoteOrigins({ allowedOrigins: policy.allowedOrigins })) {
+    warn(
+      '[pangular] allowLan has no effect without a network origin in allowedOrigins, such as http://192.168.1.20:5173.',
+    );
+    return false;
+  }
+  return true;
 }
 
 export function hubAuthFor(policy: HubOriginPolicy, auth?: boolean): boolean {
@@ -148,11 +153,29 @@ export function isAllowedHubRequest(
   policy: HubOriginPolicy = {},
   onBlockedOrigin?: (origin: string) => void,
 ): boolean {
-  if (!isLoopback(req.socket?.remoteAddress)) return false;
+  if (!isLoopback(req.socket?.remoteAddress)) return isAllowedLanRequest(req, policy);
   const origin = req.headers?.origin;
   if (isAllowedHubOrigin(origin, policy)) return true;
   if (origin !== undefined) onBlockedOrigin?.(origin);
   return false;
+}
+
+/**
+ * A request from another machine passes only with `lan` on and an origin
+ * listed in `allowedOrigins`. A same-origin GET carries no `Origin`, so its
+ * origin comes from the `Host` it was sent to. The one-time code still guards
+ * the data: `lan` is only on while the code is.
+ */
+function isAllowedLanRequest(req: IncomingMessage, policy: HubOriginPolicy): boolean {
+  if (!policy.lan || !policy.allowedOrigins?.length) return false;
+  let origin = req.headers?.origin;
+  if (origin === undefined) {
+    const host = req.headers?.host;
+    if (!host) return false;
+    const secure = (req.socket as { encrypted?: boolean } | undefined)?.encrypted === true;
+    origin = `${secure ? 'https' : 'http'}://${host.toLowerCase()}`;
+  }
+  return policy.allowedOrigins.includes(origin);
 }
 
 /** Warns once per origin that the origin check turned away. */
@@ -221,6 +244,8 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
           logger?.warn(message),
         ),
       };
+      const authOn = isAuthTokens(options.auth) || hubAuthFor(policy, options.auth);
+      policy.lan = lanAllowed(options.allowLan, authOn, policy, (message) => logger?.warn(message));
       const blocked = blockedOriginReporter((message) => logger?.warn(message));
       server.middlewares.use(hubRequestGate(base, policy, blocked));
       if (analog) {
@@ -233,7 +258,7 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
         ...config,
         base,
         ...(httpServer ? {} : { ws: { sidecar: true } }),
-        auth: hubAuthFor(policy, options.auth),
+        auth: isAuthTokens(options.auth) ? options.auth : hubAuthFor(policy, options.auth),
         allowedOrigins: hubOriginRegistryFor(policy),
       });
       httpServer?.on('upgrade', hubUpgradeListener(base, policy, devtools.handleUpgrade, blocked));
