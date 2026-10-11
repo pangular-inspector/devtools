@@ -24,7 +24,7 @@ Plans follow feedback. To ask for something, or to move an item up, comment on i
 
 ## Phase 1: wired into your workflow
 
-Tracked in [#310](https://github.com/pangular-inspector/devtools/issues/310).
+Tracked in [#340](https://github.com/pangular-inspector/devtools/issues/340).
 
 | Item                    | What it does                                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------------------------ |
@@ -35,7 +35,7 @@ Tracked in [#310](https://github.com/pangular-inspector/devtools/issues/310).
 
 ## Phase 2: deeper inspection
 
-Tracked in [#311](https://github.com/pangular-inspector/devtools/issues/311).
+Tracked in [#341](https://github.com/pangular-inspector/devtools/issues/341).
 
 | Item                    | What it does                                                                                          |
 | ----------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -46,7 +46,7 @@ Tracked in [#311](https://github.com/pangular-inspector/devtools/issues/311).
 
 ## Phase 3: a shell you live in
 
-Tracked in [#312](https://github.com/pangular-inspector/devtools/issues/312). Ionic support is tracked in [#307](https://github.com/pangular-inspector/devtools/issues/307).
+Tracked in [#342](https://github.com/pangular-inspector/devtools/issues/342). Ionic support is tracked in [#307](https://github.com/pangular-inspector/devtools/issues/307).
 
 | Item                    | What it does                                                                   |
 | ----------------------- | ------------------------------------------------------------------------------ |
@@ -57,7 +57,7 @@ Tracked in [#312](https://github.com/pangular-inspector/devtools/issues/312). Io
 
 ## Phase 4: deeper diagnosis
 
-Tracked in [#313](https://github.com/pangular-inspector/devtools/issues/313).
+Tracked in [#343](https://github.com/pangular-inspector/devtools/issues/343).
 
 | Item                      | What it does                                                                                           |
 | ------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -67,7 +67,7 @@ Tracked in [#313](https://github.com/pangular-inspector/devtools/issues/313).
 
 ## Fixes and improvements per inspector
 
-Besides the phases, each inspector and each part of the package has an issue with confirmed fixes and smaller improvements, from [#315](https://github.com/pangular-inspector/devtools/issues/315) to [#335](https://github.com/pangular-inspector/devtools/issues/335). Pull requests for any of them are welcome. Start with [Development setup](./contributing/development.md).
+Besides the phases, issues [#344](https://github.com/pangular-inspector/devtools/issues/344) through [#359](https://github.com/pangular-inspector/devtools/issues/359) track inspector and package audit findings and proposed improvements. Pull requests for any of them are welcome. Start with [Development setup](./contributing/development.md).
 
 ## Where to next
 
