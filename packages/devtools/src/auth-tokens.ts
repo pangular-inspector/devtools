@@ -8,6 +8,7 @@
 // yet, so the devframe's setup registers devframe's own handshake,
 // `anonymous:devframe:auth`, with the tokens first. The code exchange, the
 // banner and revoke stay the default ones, on the same token storage.
+import { createHash } from 'node:crypto';
 import { createInteractiveAuth } from 'devframe/recipes/interactive-auth';
 
 export const PANGULAR_AUTH_TOKEN_ENV = 'PANGULAR_AUTH_TOKEN';
@@ -30,9 +31,15 @@ export function authTokensFrom(
   values: unknown,
   warn: (message: string) => void = (message) => console.warn(message),
 ): string[] {
-  const list = (Array.isArray(values) ? values : [values]).filter(
+  const all = Array.isArray(values) ? values : [values];
+  const list = all.filter(
     (value): value is string => typeof value === 'string' && value.trim() !== '',
   );
+  if (list.length < all.length) {
+    warn(
+      `[pangular] Ignoring ${all.length - list.length} pairing token(s) that are empty or not strings. If a token comes from an environment variable such as ${PANGULAR_AUTH_TOKEN_ENV}, check that it is set.`,
+    );
+  }
   const tokens = list
     .map((token) => token.trim())
     .filter((token) => token.length >= MIN_AUTH_TOKEN_LENGTH);
@@ -53,9 +60,12 @@ export function authTokensFromEnv(
   return value ? authTokensFrom(value.split(','), warn) : [];
 }
 
-/** Enough of a token to tell two apart in a log, never the whole token. */
+/**
+ * A short hash of a token, to tell two apart in a log. It reveals none of the
+ * token's characters.
+ */
 export function maskToken(token: string): string {
-  return `${token.slice(0, 4)}…`;
+  return `#${createHash('sha256').update(token).digest('hex').slice(0, 6)}`;
 }
 
 interface RpcHost {

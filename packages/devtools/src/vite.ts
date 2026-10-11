@@ -99,12 +99,17 @@ export function allowsRemoteOrigins(policy: HubOriginPolicy = {}): boolean {
 
 /** Whether `allowLan` takes effect: only with the one-time code on and a remote origin listed. */
 export function lanAllowed(
-  allowLan: boolean | undefined,
+  allowLan: unknown,
   authOn: boolean,
   policy: HubOriginPolicy,
   warn: (message: string) => void = () => undefined,
 ): boolean {
-  if (!allowLan) return false;
+  if (allowLan !== true) {
+    if (allowLan !== undefined && allowLan !== false) {
+      warn(`[pangular] Ignoring allowLan: ${JSON.stringify(allowLan)}. Pass true to turn it on.`);
+    }
+    return false;
+  }
   if (!authOn) {
     warn(
       '[pangular] Ignoring allowLan: it needs the one-time code, and auth is false. Only this machine can reach the devtools.',

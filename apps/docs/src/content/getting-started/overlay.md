@@ -187,7 +187,7 @@ await initOverlay({
 });
 ```
 
-The token is a development secret. Keep the file out of git.
+The token is a development secret. Keep the file out of git. The page keeps the token in its `localStorage`, and sends it in the query string of its connection URL. See [Pairing tokens](../security.md#pairing-tokens).
 
 ## Stop the overlay
 

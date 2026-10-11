@@ -14,8 +14,9 @@ describe('pairing token helpers', () => {
   it('keeps tokens of 16 characters or more and warns about the others without printing them', () => {
     const warn = vi.fn();
     expect(authTokensFrom([TOKEN, 'tiny-secret', ` ${TOKEN} `, 7], warn)).toEqual([TOKEN]);
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0][0])).not.toContain('tiny-secret');
+    // One warning for the number, one for the short token; neither prints it.
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls.join(' ')).not.toContain('tiny-secret');
   });
 
   it('reads comma-separated tokens from PANGULAR_AUTH_TOKEN', () => {
@@ -26,8 +27,17 @@ describe('pairing token helpers', () => {
     expect(authTokensFromEnv({})).toEqual([]);
   });
 
-  it('shows only the start of a token', () => {
-    expect(maskToken(TOKEN)).toBe('pair…');
+  it('shows a short hash of a token, none of its characters', () => {
+    const masked = maskToken(TOKEN);
+    expect(masked).toMatch(/^#[0-9a-f]{6}$/);
+    expect(TOKEN).not.toContain(masked.slice(1, 4));
+    expect(maskToken(`${TOKEN}-2`)).not.toBe(masked);
+  });
+
+  it('warns about empty or missing tokens, such as an unset environment variable', () => {
+    const warn = vi.fn();
+    expect(authTokensFrom([undefined, '', TOKEN], warn)).toEqual([TOKEN]);
+    expect(String(warn.mock.calls[0][0])).toContain('empty or not strings');
   });
 
   it('tells a token option from an auth handler', () => {

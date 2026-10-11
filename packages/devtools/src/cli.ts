@@ -165,6 +165,14 @@ function copyCommand(cli: CAC, from: Command, name: string, description: string)
   return command;
 }
 
+/** What `createPangular()` gets for a command: pairing tokens only for the dev server. */
+export function cliHostOptions(command: string, access: CliAccess) {
+  return {
+    pageTools: command !== 'mcp',
+    authTokens: command === 'dev' ? access.authTokens : [],
+  };
+}
+
 /** The lines the dev server prints once it listens. */
 export function startupLines(
   origin: string,
@@ -219,16 +227,21 @@ export function createPangularCli(options: PangularCliOptions = {}) {
       allowedOrigins?: unknown;
     };
     access = cliAccess(flags, fileOrigins, env);
+    // With --no-auth, devframe trusts every client through its own handshake;
+    // ours would replace it and trust only token holders.
+    if ((flags as { auth?: boolean }).auth === false && access.authTokens.length) {
+      console.warn(
+        '[pangular] Ignoring the pairing tokens: --no-auth already trusts every client.',
+      );
+      access = { ...access, authTokens: [] };
+    }
     if (root !== process.cwd()) process.chdir(root);
     if (!looksLikeAngularProject(root)) {
       console.error(
         `[pangular] ${root} has no angular.json and no package.json that depends on @angular/core, so the source scans find nothing. Pass --root <dir> or set PANGULAR_ROOT to your project folder.`,
       );
     }
-    current = createPangular(config, {
-      pageTools: command !== 'mcp',
-      authTokens: command === 'mcp' ? [] : access.authTokens,
-    });
+    current = createPangular(config, cliHostOptions(command, access));
   };
 
   const configureCli = (cli: CAC) => {

@@ -102,7 +102,7 @@ When the server is ready, it prints the version, the panel URL, the panel URL fo
   MCP:   http://localhost:9999/__mcp
 ```
 
-If you pass no `--port` and port 9999 is taken, it also prints the port it uses instead. It also lists the extra allowed origins and the first characters of each pairing token, never a whole token.
+If you pass no `--port` and port 9999 is taken, it also prints the port it uses instead. It also lists the extra allowed origins and a short hash of each pairing token, never the token.
 
 When the server listens on your network (`--host 0.0.0.0` or a network address), it also prints the network URLs and an `initOverlay()` call to paste into an app on a device, with the server's whole connection info, its config included. See [Set up Capacitor](../guides/capacitor.md).
 

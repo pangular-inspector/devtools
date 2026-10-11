@@ -83,6 +83,7 @@ describe('hub request gate on the network', () => {
     expect(check(PHONE, { origin: 'http://192.168.1.99:5173' })).toBe(403);
     expect(check(PHONE, { origin: 'http://evil.example' })).toBe(403);
     expect(check(PHONE)).toBe(403);
+    expect(check(PHONE, { origin: 'null' })).toBe(403);
   });
 
   it('with lan on, takes the origin of a same-origin request from its Host', () => {
@@ -120,6 +121,15 @@ describe('hub request gate on the network', () => {
 describe('lanAllowed', () => {
   it('is off unless asked for', () => {
     expect(lanAllowed(undefined, true, { allowedOrigins: [LAN_ORIGIN] })).toBe(false);
+  });
+
+  it('turns on only for true, and warns about any other value', () => {
+    const warn = vi.fn();
+    expect(lanAllowed('yes', true, { allowedOrigins: [LAN_ORIGIN] }, warn)).toBe(false);
+    expect(lanAllowed(1, true, { allowedOrigins: [LAN_ORIGIN] }, warn)).toBe(false);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(lanAllowed(false, true, { allowedOrigins: [LAN_ORIGIN] }, warn)).toBe(false);
+    expect(warn).toHaveBeenCalledTimes(2);
   });
 
   it('refuses to turn on without the one-time code, and says so', () => {

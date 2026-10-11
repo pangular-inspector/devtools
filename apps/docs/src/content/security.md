@@ -123,8 +123,11 @@ The page sends the token as the `authToken` option of [`initOverlay`](./getting-
 
 - A token is a development secret. Read it from an environment variable, and keep it out of committed config and source.
 - Use a long random value. Tokens shorter than 16 characters are ignored with a warning, for example the output of `openssl rand -hex 16` works.
-- The servers never print a whole token. The CLI prints its first characters.
+- The servers never print a token. The CLI prints a short hash of each, to tell them apart.
 - Tokens stay on the server. They are not part of the config that pages receive in `__connection.json`.
+- The page sends the token in the query string of its WebSocket or server-sent events URL (`devframe_auth_token`), so it can show up in proxy or server logs, and in the browser console when the connection is refused, such as a mixed content warning.
+- The page keeps the token in its `localStorage`, in a WebView too, so it can reconnect. Clear the app's storage to forget it.
+- With `--no-auth`, the CLI ignores the tokens, since every client is trusted already.
 
 ### MCP endpoint
 
