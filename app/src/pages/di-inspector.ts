@@ -1,6 +1,22 @@
-import { Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  input,
+  linkedSignal,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
+import { pickPage, type ReportedPage } from '../live-pages';
 import { hostPageId } from '../page-id';
+import { Select, type SelectOption } from '../ui/select';
 
 interface ProviderInfo {
   token: string;
@@ -51,12 +67,25 @@ interface Row {
 
 type TreeView = 'element' | 'environment';
 
+interface InjectorPage {
+  roots?: unknown;
+  environment?: unknown;
+  truncated?: unknown;
+  reportedAt?: unknown;
+}
+
+interface InjectorTreeState extends InjectorPage {
+  pages?: Record<string, InjectorPage>;
+}
+
 const NULL_ID = 'inj-null';
 
+// Text tones: these color the kind letter and badge on a 14 to 16% tint of
+// themselves, so they use the stronger `-text` tokens.
 const KIND_TONE: Record<string, string> = {
-  component: 'var(--accent)',
-  directive: '#7cb4ff',
-  environment: 'var(--ok)',
+  component: 'var(--accent-text)',
+  directive: 'var(--directive)',
+  environment: 'var(--ok-text)',
   null: 'var(--text-3)',
 };
 
@@ -75,7 +104,22 @@ function isTree(value: unknown): value is InjectorNode[] {
 
 @Component({
   selector: 'app-di-inspector',
+  imports: [NgTemplateOutlet, Select],
   template: `
+    <p class="sr-only" role="status">{{ announcement() }}</p>
+    <ng-template #pagePicker>
+      @if (pageOptions().length > 1) {
+        <div class="page-picker">
+          <span class="label-key" id="di-page-label">Page</span>
+          <app-select
+            labelledBy="di-page-label"
+            [options]="pageOptions()"
+            [value]="shownPageId()"
+            (valueChange)="selectPage($event)"
+          />
+        </div>
+      }
+    </ng-template>
     @if (roots().length > 0) {
       <p class="intro">
         Every component and directive gets an injector. When it asks for a token, Angular walks up
@@ -107,6 +151,7 @@ function isTree(value: unknown): value is InjectorNode[] {
             <path d="m20 20-3.5-3.5" />
           </svg>
           <input
+            #queryInput
             type="search"
             placeholder="Find a token, component or injector…"
             aria-label="Find a token, component or injector"
@@ -117,6 +162,7 @@ function isTree(value: unknown): value is InjectorNode[] {
             (keydown.escape)="query.set('')"
           />
         </div>
+        <ng-container [ngTemplateOutlet]="pagePicker" />
         @if (view() === 'element') {
           <label class="checkbox">
             <input
@@ -137,6 +183,20 @@ function isTree(value: unknown): value is InjectorNode[] {
         </label>
       </div>
 
+      @if (truncated()) {
+        <p class="notice">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 11v5M12 8h.01" />
+          </svg>
+          <span>
+            <strong>This page has more than 2000 element injectors.</strong>
+            Only the first 2000 are shown, so a lookup path or a provider can point to one that is
+            not listed.
+          </span>
+        </p>
+      }
+
       @if (providedBy().length) {
         <div class="where" role="status">
           <span class="where-label">Provided by</span>
@@ -151,7 +211,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       } @else if (query().trim() && !rows().length) {
         <div class="where muted" role="status">
           Nothing here matches “{{ query().trim() }}”.
-          <button type="button" class="link" (click)="query.set('')">Clear search</button>
+          <button type="button" class="link" (click)="clearQuery()">Clear search</button>
         </div>
       }
 
@@ -213,6 +273,7 @@ function isTree(value: unknown): value is InjectorNode[] {
                 aria-hidden="true"
                 >{{ kind(row.node)[0].toUpperCase() }}</span
               >
+              <span class="sr-only">{{ kind(row.node) }}</span>
               <span class="name mono">{{ label(row.node) }}</span>
               @if (row.node.injector.component) {
                 <span class="sub">{{ row.node.injector.component }}</span>
@@ -225,6 +286,7 @@ function isTree(value: unknown): value is InjectorNode[] {
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M12 5v14M5 12l7 7 7-7" />
                     </svg>
+                    <span class="sr-only">injects</span>
                     {{ row.node.dependencies!.length }}
                   </span>
                 }
@@ -236,6 +298,7 @@ function isTree(value: unknown): value is InjectorNode[] {
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M21 8 12 3 3 8v8l9 5 9-5z" />
                     </svg>
+                    <span class="sr-only">provides</span>
                     {{ row.node.injector.providerCount }}
                   </span>
                 }
@@ -244,7 +307,23 @@ function isTree(value: unknown): value is InjectorNode[] {
           }
         </div>
 
-        @if (selected(); as sel) {
+        @if (gone(); as name) {
+          <section class="detail gone" aria-labelledby="di-detail-title">
+            <header class="detail-head">
+              <h2 id="di-detail-title" class="mono">{{ name }}</h2>
+            </header>
+            <div class="state compact">
+              <p class="state-hint">
+                This injector is no longer on the page. Its component or directive was destroyed.
+              </p>
+              @if (rows()[0]; as first) {
+                <button type="button" (click)="reveal(first.node.injector.id)">
+                  Show {{ label(first.node) }}
+                </button>
+              }
+            </div>
+          </section>
+        } @else if (selected(); as sel) {
           <section class="detail" aria-labelledby="di-detail-title">
             <header class="detail-head">
               <span class="badge" [style.--tone]="tone(kind(sel))">{{ kind(sel) }}</span>
@@ -283,7 +362,12 @@ function isTree(value: unknown): value is InjectorNode[] {
                         ></span>
                         <span class="mono">{{ step.label }}</span>
                         @if (step.providers) {
-                          <span class="step-count">{{ step.providers }}</span>
+                          <span class="step-count">
+                            {{ step.providers }}
+                            <span class="sr-only">{{
+                              step.providers === 1 ? 'provider' : 'providers'
+                            }}</span>
+                          </span>
                         }
                       </button>
                     }
@@ -292,11 +376,17 @@ function isTree(value: unknown): value is InjectorNode[] {
               </ol>
             </div>
 
-            @if (sel.injector.type === 'element') {
+            @if (sel.injector.type === 'element' || sel.dependencies) {
               <div class="block">
                 <h3>
-                  Injected here <span class="pill">{{ sel.dependencies?.length ?? 0 }}</span>
+                  {{
+                    sel.injector.type === 'element' ? 'Injected here' : 'Injected by its services'
+                  }}
+                  <span class="pill">{{ sel.dependencies?.length ?? 0 }}</span>
                 </h3>
+                @if (sel.injector.type !== 'element') {
+                  <p class="hint">Only services this injector has already created are listed.</p>
+                }
                 @if (sel.dependencies?.length) {
                   <ul class="deps">
                     @for (dep of sel.dependencies; track dep.from + dep.token + $index) {
@@ -308,7 +398,10 @@ function isTree(value: unknown): value is InjectorNode[] {
                           }
                         </div>
                         <div class="dep-meta">
-                          @if (sel.injector.directives && sel.injector.directives.length > 1) {
+                          @if (
+                            sel.injector.type !== 'element' ||
+                            (sel.injector.directives && sel.injector.directives.length > 1)
+                          ) {
                             <span>for {{ dep.from }}</span>
                           }
                           @if (dep.providedBy; as by) {
@@ -320,6 +413,8 @@ function isTree(value: unknown): value is InjectorNode[] {
                               ></span>
                               from <span class="mono">{{ labelById(by) }}</span>
                             </button>
+                          } @else if (dep.flags.includes('optional')) {
+                            <span class="from absent">optional, not provided</span>
                           } @else {
                             <span class="from missing">not provided anywhere</span>
                           }
@@ -327,8 +422,10 @@ function isTree(value: unknown): value is InjectorNode[] {
                       </li>
                     }
                   </ul>
-                } @else {
+                } @else if (sel.injector.type === 'element') {
                   <p class="empty-line">Nothing is injected through the constructor or inject().</p>
+                } @else {
+                  <p class="empty-line">No service created here has injected anything yet.</p>
                 }
               </div>
             }
@@ -378,6 +475,11 @@ function isTree(value: unknown): value is InjectorNode[] {
         <p class="state-title">Loading dependency injection data…</p>
       </div>
     } @else if (sourceProviders().length === 0) {
+      @if (pageOptions().length > 1) {
+        <div class="toolbar">
+          <ng-container [ngTemplateOutlet]="pagePicker" />
+        </div>
+      }
       <div class="state">
         <p class="state-title">No DI data found</p>
         <p class="state-hint">
@@ -393,6 +495,7 @@ function isTree(value: unknown): value is InjectorNode[] {
             <path d="m20 20-3.5-3.5" />
           </svg>
           <input
+            #queryInput
             type="search"
             placeholder="Filter by token or file…"
             aria-label="Filter by token or file"
@@ -403,6 +506,7 @@ function isTree(value: unknown): value is InjectorNode[] {
             (keydown.escape)="query.set('')"
           />
         </div>
+        <ng-container [ngTemplateOutlet]="pagePicker" />
         <span class="total" aria-live="polite">
           {{ sourceMatchCount() }} of {{ sourceProviders().length }}
         </span>
@@ -415,14 +519,14 @@ function isTree(value: unknown): value is InjectorNode[] {
         </svg>
         <span>
           <strong>DI from source scan (static analysis).</strong>
-          Connect the overlay on Angular 17+ to see the live injector tree.
+          Connect the overlay on Angular 20 or later to see the live injector tree.
         </span>
       </p>
       @if (groupedProviders().length === 0) {
         <div class="state">
           <p class="state-title">No providers match “{{ query() }}”</p>
           <p class="state-hint">Try part of a token name or a file path.</p>
-          <button type="button" (click)="query.set('')">Clear filter</button>
+          <button type="button" (click)="clearQuery()">Clear filter</button>
         </div>
       } @else {
         <div class="source-providers">
@@ -459,9 +563,14 @@ function isTree(value: unknown): value is InjectorNode[] {
     @use 'mixins' as m;
 
     :host {
+      --directive: #7cb4ff;
       display: block;
       color: var(--text);
       font-size: 13px;
+
+      @include m.light {
+        --directive: #1e40af;
+      }
     }
     .mono {
       font-family: var(--font-mono);
@@ -487,6 +596,22 @@ function isTree(value: unknown): value is InjectorNode[] {
       -webkit-backdrop-filter: blur(10px);
       border: 1px solid var(--border);
       border-radius: var(--radius);
+    }
+    .page-picker {
+      display: flex;
+      flex: 0 1 240px;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .page-picker app-select {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .label-key {
+      flex: none;
+      color: var(--text-2);
+      font-size: 12px;
     }
     .segmented {
       display: inline-flex;
@@ -822,7 +947,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       font-size: 11px;
     }
     .count.provides {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .count svg {
       width: 11px;
@@ -1000,7 +1125,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       line-height: 16px;
     }
     .kind-flag {
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
     }
     .dep-meta {
       display: flex;
@@ -1019,6 +1144,10 @@ function isTree(value: unknown): value is InjectorNode[] {
     }
     .from .mono {
       color: var(--text);
+    }
+    .from.absent {
+      cursor: default;
+      background: none;
     }
     .from.missing {
       cursor: default;
@@ -1066,11 +1195,6 @@ function isTree(value: unknown): value is InjectorNode[] {
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
     @media (prefers-reduced-motion: reduce) {
       .spinner {
         animation: none;
@@ -1091,6 +1215,13 @@ function isTree(value: unknown): value is InjectorNode[] {
     }
     .state-title + .state-hint + button {
       margin-top: 8px;
+    }
+    .state button:focus-visible {
+      @include m.focus-ring;
+    }
+    .gone .state {
+      align-items: flex-start;
+      text-align: left;
     }
     .notice {
       display: flex;
@@ -1178,7 +1309,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       font-size: 11px;
       padding: 1px 8px;
       border-radius: 99px;
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
       border-width: 1px;
       border-style: solid;
     }
@@ -1202,19 +1333,99 @@ function isTree(value: unknown): value is InjectorNode[] {
 })
 export class DiInspector {
   rpc = input<DevframeRpcClient | null>(null);
+  private readonly injector = inject(Injector);
 
   readonly nullId = NULL_ID;
-  readonly roots = signal<InjectorNode[]>([]);
-  readonly environment = signal<InjectorNode[]>([]);
+  private readonly hostPage = hostPageId();
+  private readonly treeState = signal<InjectorTreeState | null>(null);
+  private readonly pageTitles = signal<Record<string, { title?: string; url?: string }>>({});
+  readonly chosenPageId = signal<string | null>(null);
+
+  // Older servers send only the newest tree, without the per-page map.
+  private readonly treePages = computed<Record<string, InjectorPage>>(() => {
+    const state = this.treeState();
+    if (!state) return {};
+    const pages = state.pages && typeof state.pages === 'object' ? state.pages : {};
+    if (Object.keys(pages).length || this.hostPage) return pages;
+    return { '': state };
+  });
+
+  // A page that reports later never takes over from the one shown.
+  readonly shownPageId = linkedSignal<
+    { pages: Record<string, InjectorPage>; chosen: string | null },
+    string | null
+  >({
+    source: () => ({ pages: this.treePages(), chosen: this.chosenPageId() }),
+    computation: ({ pages, chosen }, previous) => {
+      const reported: Record<string, ReportedPage> = {};
+      for (const [pageId, page] of Object.entries(pages)) {
+        const at = typeof page?.reportedAt === 'number' ? page.reportedAt : 0;
+        reported[pageId] = { pageId, reportedAt: at };
+      }
+      return pickPage(reported, {
+        chosen,
+        host: this.hostPage,
+        previous: previous?.value ?? null,
+      });
+    },
+  });
+
+  private readonly shownPage = computed(() => {
+    const pageId = this.shownPageId();
+    return pageId === null ? null : (this.treePages()[pageId] ?? null);
+  });
+  readonly roots = computed<InjectorNode[]>(() => {
+    const roots = this.shownPage()?.roots;
+    return isTree(roots) ? roots : [];
+  });
+  readonly environment = computed<InjectorNode[]>(() => {
+    const environment = this.shownPage()?.environment;
+    return isTree(environment) ? environment : [];
+  });
+  readonly truncated = computed(() => this.shownPage()?.truncated === true);
+
+  private readonly multiPage = computed(
+    () => !this.hostPage && Object.keys(this.treePages()).length > 1,
+  );
+  readonly pageOptions = computed<SelectOption[]>(() => {
+    if (!this.multiPage()) return [];
+    const titles = this.pageTitles();
+    return Object.keys(this.treePages()).map((pageId) => {
+      const page = titles[pageId];
+      return {
+        value: pageId,
+        label: page?.title || page?.url || `Page ${pageId}`,
+        hint: page?.url,
+      };
+    });
+  });
+
+  /** Injector ids belong to one page, so each page keeps its own selection and expansion. */
+  private readonly pageKey = computed(() => this.shownPageId() ?? '');
+  private perPage<T>(initial: () => T) {
+    const saved = new Map<string, T>();
+    return linkedSignal<string, T>({
+      source: this.pageKey,
+      computation: (key, previous) => {
+        if (previous) saved.set(previous.source, previous.value);
+        return saved.has(key) ? (saved.get(key) as T) : initial();
+      },
+    });
+  }
+
   readonly sourceProviders = signal<SourceProvider[]>([]);
   readonly loaded = signal(false);
   readonly view = signal<TreeView>('element');
   readonly query = signal('');
+  private readonly queryInput = viewChild<ElementRef<HTMLInputElement>>('queryInput');
   readonly onlyProviding = signal(false);
   readonly componentsOnly = signal(true);
-  readonly collapsed = signal<ReadonlySet<string>>(new Set());
-  readonly selectedId = signal<string | null>(null);
-  readonly focusId = signal<string | null>(null);
+  readonly collapsed = this.perPage<ReadonlySet<string>>(() => new Set());
+  readonly selectedId = this.perPage<string | null>(() => null);
+  readonly focusId = this.perPage<string | null>(() => null);
+  readonly announcement = signal('');
+  private readonly selectedLabel = this.perPage<string | null>(() => null);
+  private wasGone = false;
 
   private readonly index = computed(() => {
     const map = new Map<string, InjectorNode>();
@@ -1260,10 +1471,17 @@ export class DiInspector {
     return rows;
   });
 
+  /** Falls back to the first row only while nothing is chosen, never when the choice is gone. */
   readonly selected = computed(() => {
     const id = this.selectedId();
-    const found = id ? this.index().map.get(id) : undefined;
-    return found ?? this.rows()[0]?.node ?? null;
+    if (!id) return this.rows()[0]?.node ?? null;
+    return this.index().map.get(id) ?? null;
+  });
+
+  /** The label of the chosen injector once it has left the page. */
+  readonly gone = computed(() => {
+    const id = this.selectedId();
+    return id && !this.index().map.has(id) ? (this.selectedLabel() ?? 'The injector') : null;
   });
 
   readonly rovingId = computed(() => {
@@ -1291,7 +1509,7 @@ export class DiInspector {
       const node = map.get(id);
       return {
         id,
-        label: node ? labelOf(node) : 'Null injector',
+        label: node ? labelOf(node) : id === NULL_ID ? 'Null injector' : 'Not listed',
         kind: node ? kindOf(node) : 'null',
         providers: node?.providers.length ?? 0,
       };
@@ -1340,6 +1558,7 @@ export class DiInspector {
 
   private readonly destroyRef = inject(DestroyRef);
   private stopTree: (() => void) | null = null;
+  private treeLoad = 0;
 
   constructor() {
     effect(() => {
@@ -1348,10 +1567,44 @@ export class DiInspector {
       void this.loadInjectorTree(client);
       void this.loadSourceProviders(client);
     });
+    // Page titles come from the component tree, and are only needed for the Page picker.
+    effect((onCleanup) => {
+      const client = this.rpc();
+      if (!client || !this.multiPage()) return;
+      let live = true;
+      let stop: (() => void) | null = null;
+      onCleanup(() => {
+        live = false;
+        stop?.();
+      });
+      client
+        .scope('pangular')
+        .rpc.sharedState('component-tree')
+        .then((state) => {
+          if (!live) return;
+          const apply = (value: unknown) => {
+            const pages = (value as { pages?: unknown } | null)?.pages;
+            this.pageTitles.set(
+              pages && typeof pages === 'object'
+                ? (pages as Record<string, { title?: string; url?: string }>)
+                : {},
+            );
+          };
+          apply(state.value());
+          stop = state.on('updated', apply);
+        })
+        .catch(() => {});
+    });
     this.destroyRef.onDestroy(() => {
       this.stopTree?.();
       this.highlight(null);
     });
+  }
+
+  /** Clears the search from a no-match message and keeps focus on the search box. */
+  clearQuery() {
+    this.query.set('');
+    this.queryInput()?.nativeElement.focus();
   }
 
   label(node: InjectorNode) {
@@ -1373,7 +1626,7 @@ export class DiInspector {
 
   labelById(id: string) {
     const node = this.index().map.get(id);
-    return node ? labelOf(node) : 'Null injector';
+    return node ? labelOf(node) : id === NULL_ID ? 'Null injector' : 'not listed';
   }
 
   capital(text: string) {
@@ -1388,13 +1641,49 @@ export class DiInspector {
   setView(view: TreeView) {
     if (this.view() === view) return;
     this.view.set(view);
-    this.selectedId.set(null);
+    this.choose(null);
     this.focusId.set(null);
   }
 
   select(id: string) {
-    this.selectedId.set(id);
+    this.choose(id);
     this.focusId.set(id);
+  }
+
+  private choose(id: string | null) {
+    const node = id ? this.index().map.get(id) : undefined;
+    this.selectedId.set(id);
+    this.selectedLabel.set(node ? labelOf(node) : null);
+    this.wasGone = false;
+  }
+
+  /** Announces once when the chosen injector leaves the page, like the component tree does. */
+  private syncGone() {
+    const gone = this.gone() !== null;
+    if (gone && !this.wasGone) {
+      // A trailing no-break space makes a repeat differ, so screen readers say it again.
+      const message = 'The selected injector is no longer on the page.';
+      this.announcement.update((current) => (current === message ? `${message}\u00a0` : message));
+    }
+    this.wasGone = gone;
+  }
+
+  selectPage(pageId: string | null) {
+    if (!pageId || pageId === this.shownPageId()) return;
+    this.chosenPageId.set(pageId);
+    this.wasGone = this.gone() !== null;
+    const label = this.pageOptions().find((o) => o.value === pageId)?.label ?? pageId;
+    this.announcement.set(`Showing the injectors of ${label}.`);
+  }
+
+  private notePageGone(pages: Record<string, InjectorPage> | undefined) {
+    const chosen = this.chosenPageId();
+    if (!chosen || pages?.[chosen]) return;
+    const label = this.pageOptions().find((o) => o.value === chosen)?.label ?? 'The chosen page';
+    this.chosenPageId.set(null);
+    this.announcement.set(`${label} closed, so this shows another page.`);
+    // The page that takes over brings its own selection; only a gone injector there is news.
+    this.wasGone = true;
   }
 
   toggle(id: string, event?: Event) {
@@ -1426,16 +1715,17 @@ export class DiInspector {
     if (node.injector.type === 'element' && !node.injector.component)
       this.componentsOnly.set(false);
     this.select(id);
-    queueMicrotask(() => this.focusRow(id, false));
+    afterNextRender(() => this.focusRow(id, false), { injector: this.injector });
   }
 
   highlight(node: InjectorNode | null) {
     const client = this.rpc();
     if (!client) return;
     const selector = node?.injector.type === 'element' ? (node.injector.selector ?? null) : null;
+    const target = selector ? { pageId: this.shownPageId() || null, selector } : null;
     void client
-      .scope('ng-devtools')
-      .rpc.call('request-page-highlight', selector)
+      .scope('pangular')
+      .rpc.call('request-page-highlight', target)
       .catch(() => {});
   }
 
@@ -1483,7 +1773,7 @@ export class DiInspector {
     if (next >= 0) {
       const id = rows[next].node.injector.id;
       this.focusId.set(id);
-      this.selectedId.set(id);
+      this.choose(id);
       queueMicrotask(() => this.focusRow(id, true));
     }
   }
@@ -1495,34 +1785,35 @@ export class DiInspector {
     el.scrollIntoView({ block: 'nearest' });
   }
 
-  private async loadInjectorTree(client: DevframeRpcClient) {
+  private clearTree() {
     this.stopTree?.();
     this.stopTree = null;
-    const my = client.scope('ng-devtools');
+  }
+
+  private async loadInjectorTree(client: DevframeRpcClient) {
+    const load = ++this.treeLoad;
+    this.clearTree();
+    const my = client.scope('pangular');
     let state: Awaited<ReturnType<typeof my.rpc.sharedState>>;
     try {
       state = await my.rpc.sharedState('injector-tree');
     } catch {
       return;
     }
-    if (this.destroyRef.destroyed) return;
-    const pageId = hostPageId();
+    if (this.destroyRef.destroyed || this.rpc() !== client || load !== this.treeLoad) return;
     const apply = (value: unknown) => {
-      const shared = value as {
-        roots?: unknown;
-        environment?: unknown;
-        pages?: Record<string, { roots?: unknown; environment?: unknown }>;
-      } | null;
-      const next = (pageId ? shared?.pages?.[pageId] : undefined) ?? shared;
-      if (isTree(next?.roots)) this.roots.set(next.roots);
-      if (isTree(next?.environment)) this.environment.set(next.environment);
+      const next = value && typeof value === 'object' ? (value as InjectorTreeState) : null;
+      this.notePageGone(next?.pages);
+      this.treeState.set(next);
+      this.syncGone();
     };
     apply(state.value());
+    this.clearTree();
     this.stopTree = state.on('updated', apply);
   }
 
   private async loadSourceProviders(client: DevframeRpcClient) {
-    const my = client.scope('ng-devtools');
+    const my = client.scope('pangular');
     try {
       this.sourceProviders.set((await my.rpc.call('get-providers')) as SourceProvider[]);
     } catch {

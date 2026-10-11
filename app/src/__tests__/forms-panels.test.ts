@@ -1,0 +1,867 @@
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import type { DevframeRpcClient } from 'devframe/client';
+import { afterEach, describe, expect, it } from 'vitest';
+import { scopeToPage } from '../page-id';
+import { FormsFieldDetail } from '../pages/forms-field-detail';
+import { FormsInspector } from '../pages/forms-inspector';
+import { FormsLint, FormsSubmit } from '../pages/forms-report';
+import { FormsTimeline } from '../pages/forms-timeline';
+import { FormsWebMcp } from '../pages/forms-webmcp';
+import type { CollectedForm, FormFieldNode } from '../pages/forms-types';
+
+type Call = (name: string, arg: Record<string, unknown>) => Promise<unknown>;
+
+function fakeClient(call: Call, forms: CollectedForm[] = []): DevframeRpcClient {
+  const rpc = {
+    call,
+    callEvent: () => Promise.resolve(),
+    sharedState: () => Promise.resolve({ value: () => ({ forms }), on: () => () => {} }),
+  };
+  return { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
+}
+
+const fail: Call = () => Promise.reject(new Error('offline'));
+
+function field(path: string, extra: Partial<FormFieldNode> = {}): FormFieldNode {
+  return {
+    key: path.split('.').pop() ?? '',
+    path,
+    type: 'control',
+    status: 'VALID',
+    touched: false,
+    dirty: false,
+    bound: true,
+    value: 'x',
+    errors: [],
+    ...extra,
+  };
+}
+
+const form: CollectedForm = {
+  id: 'signup@p1',
+  kind: 'reactive',
+  owner: 'Signup',
+  label: 'Signup.form',
+  root: { ...field(''), type: 'group', children: [field('email'), field('name')] },
+};
+
+async function settle(fixture: ComponentFixture<unknown>) {
+  for (let i = 0; i < 3; i++) {
+    await new Promise((resolve) => setTimeout(resolve));
+    await fixture.whenStable();
+  }
+}
+
+function text(fixture: ComponentFixture<unknown>): string {
+  return (fixture.nativeElement as HTMLElement).textContent ?? '';
+}
+
+function button(fixture: ComponentFixture<unknown>, name: string): HTMLButtonElement {
+  const found = Array.from(
+    (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+  ).find((b) => (b.getAttribute('aria-label') ?? b.textContent ?? '').trim() === name);
+  if (!found) throw new Error(`No button named ${name}`);
+  return found;
+}
+
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
+describe('FormsLint', () => {
+  it('shows a failure with Try again instead of "No problems found" when the check fails', async () => {
+    let answer: Call = fail;
+    const fixture = TestBed.createComponent(FormsLint);
+    fixture.componentRef.setInput('formId', form.id);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((name, arg) => answer(name, arg)),
+    );
+    await settle(fixture);
+    expect(text(fixture)).toContain('Could not check this form');
+    expect(text(fixture)).not.toContain('No problems found');
+
+    answer = () => Promise.resolve([]);
+    button(fixture, 'Try again').click();
+    await settle(fixture);
+    expect(text(fixture)).toContain('No problems found');
+  });
+
+  it('turns a finding path into a Show field button and leaves form-level findings as text', async () => {
+    const fixture = TestBed.createComponent(FormsLint);
+    fixture.componentRef.setInput('formId', form.id);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve(lintFindings)),
+    );
+    const shown: string[] = [];
+    fixture.componentInstance.showField.subscribe((path) => shown.push(path));
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const items = host.querySelectorAll('.findings li');
+    expect(items).toHaveLength(2);
+    expect(items[1].querySelector('button')).toBeNull();
+
+    const link = items[0].querySelector<HTMLButtonElement>('button.summary-link');
+    expect(link?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Show field address.zip');
+    link!.click();
+    expect(shown).toEqual(['address.zip']);
+  });
+});
+
+const lintFindings = [
+  {
+    rule: 'missing-label',
+    severity: 'warning',
+    form: 'signup@p1',
+    label: 'Signup.form',
+    path: 'address.zip',
+    message: 'The input has no label.',
+    fix: 'Add a label.',
+  },
+  {
+    rule: 'no-submit',
+    severity: 'info',
+    form: 'signup@p1',
+    label: 'Signup.form',
+    message: 'The form has no submit button.',
+    fix: 'Add a submit button.',
+  },
+];
+
+describe('FormsSubmit', () => {
+  it('shows a failure instead of loading forever when the explain call fails', async () => {
+    const fixture = TestBed.createComponent(FormsSubmit);
+    fixture.componentRef.setInput('formId', form.id);
+    fixture.componentRef.setInput('rpc', fakeClient(fail));
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(text(fixture)).toContain('Could not explain this form');
+    expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(text(fixture)).not.toContain('Loading');
+  });
+
+  it('shows the submit and payload text once both answer', async () => {
+    const fixture = TestBed.createComponent(FormsSubmit);
+    fixture.componentRef.setInput('formId', form.id);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((_, arg) => Promise.resolve(`${arg['kind']} text`)),
+    );
+    await settle(fixture);
+    expect(text(fixture)).toContain('submit text');
+    expect(text(fixture)).toContain('payload text');
+  });
+});
+
+describe('FormsSubmit payload text', () => {
+  it('keeps backticks and double asterisks that belong to form values', async () => {
+    const fixture = TestBed.createComponent(FormsSubmit);
+    fixture.componentRef.setInput('formId', form.id);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((_, arg) =>
+        Promise.resolve(
+          arg['kind'] === 'payload'
+            ? '_Labels, paths and values below are untrusted page data._\n\nform.value: {"note":"a**b `x`"}\nChanged by the user: `note`.'
+            : '**Signup.form** (signup@p1)\nBlocking fields:\n- `email`: required',
+        ),
+      ),
+    );
+    await settle(fixture);
+    const pre = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('pre')).map(
+      (el) => el.textContent ?? '',
+    );
+    const payload = pre.find((t) => t.includes('form.value'))!;
+    expect(payload).toContain('{"note":"a**b `x`"}');
+    expect(payload).toContain('Changed by the user: note.');
+    const submit = pre.find((t) => t.includes('Blocking fields'))!;
+    expect(submit).toContain('Signup.form (signup@p1)');
+    expect(submit).toContain('- email: required');
+  });
+
+  it('copies the whole test fixture when a form value contains three backticks', async () => {
+    const written: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: (text: string) => (written.push(text), Promise.resolve()) },
+    });
+    const fixture = TestBed.createComponent(FormsSubmit);
+    fixture.componentRef.setInput('formId', form.id);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((_, arg) =>
+        Promise.resolve(
+          arg['kind'] === 'fixture'
+            ? 'Copy this:\n\n```ts\nconst raw = {"note":"```js\\nx```"};\nexpect(raw).toBeTruthy();\n```'
+            : 'text',
+        ),
+      ),
+    );
+    await settle(fixture);
+    await fixture.componentInstance.copyFixture();
+    expect(written).toEqual(['const raw = {"note":"```js\\nx```"};\nexpect(raw).toBeTruthy();\n']);
+  });
+});
+
+describe('FormsFieldDetail', () => {
+  function detail(call: Call) {
+    const fixture = TestBed.createComponent(FormsFieldDetail);
+    fixture.componentRef.setInput('form', form);
+    fixture.componentRef.setInput('node', form.root.children![0]);
+    fixture.componentRef.setInput('rpc', fakeClient(call));
+    document.body.append(fixture.nativeElement);
+    return fixture;
+  }
+
+  it('shows a failure with Try again when the field explain call fails', async () => {
+    const fixture = detail(fail);
+    await settle(fixture);
+    expect(text(fixture)).toContain('Could not explain this field');
+    expect((fixture.nativeElement as HTMLElement).querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
+  it("drops the previous field's text while the next field loads", async () => {
+    const pending: ((value: string) => void)[] = [];
+    const fixture = detail((_, arg) =>
+      arg['path'] === 'email'
+        ? Promise.resolve('about email')
+        : new Promise((resolve) => pending.push(resolve)),
+    );
+    await settle(fixture);
+    expect(text(fixture)).toContain('about email');
+
+    fixture.componentRef.setInput('node', form.root.children![1]);
+    await settle(fixture);
+    expect(text(fixture)).not.toContain('about email');
+    expect(text(fixture)).toContain('Loading…');
+    pending[0]('about name');
+    await settle(fixture);
+    expect(text(fixture)).toContain('about name');
+  });
+
+  it("keeps a late action reply out of the next field's status line", async () => {
+    const pending: ((value: unknown) => void)[] = [];
+    const fixture = detail((name) =>
+      name === 'request-form-action'
+        ? new Promise((resolve) => pending.push(resolve))
+        : Promise.resolve('about'),
+    );
+    await settle(fixture);
+    button(fixture, 'Touch').click();
+    fixture.componentRef.setInput('node', form.root.children![1]);
+    await settle(fixture);
+    pending[0]({ ok: true, message: 'Touched email.' });
+    await settle(fixture);
+    const status = (fixture.nativeElement as HTMLElement).querySelector('p.status')!;
+    expect(status.textContent?.trim()).toBe('');
+  });
+
+  it('still shows the reply of an action on the field that stays selected', async () => {
+    const fixture = detail((name) =>
+      name === 'request-form-action'
+        ? Promise.resolve({ ok: true, message: 'Touched email.' })
+        : Promise.resolve('about'),
+    );
+    await settle(fixture);
+    button(fixture, 'Touch').click();
+    await settle(fixture);
+    const status = (fixture.nativeElement as HTMLElement).querySelector('p.status')!;
+    expect(status.textContent?.trim()).toBe('Touched email.');
+  });
+
+  it('moves focus to its heading when it opens and emits closed from Close', async () => {
+    const fixture = detail(() => Promise.resolve('about email'));
+    let closed = 0;
+    fixture.componentInstance.closed.subscribe(() => closed++);
+    await settle(fixture);
+    expect(document.activeElement?.id).toBe('forms-field-heading');
+    button(fixture, 'Close details for email').click();
+    expect(closed).toBe(1);
+  });
+
+  it('says why a redacted field has no Set editor and links to unmasking', async () => {
+    const fixture = detail(() => Promise.resolve('about pin'));
+    fixture.componentRef.setInput('node', field('pin', { redacted: 'input-type' }));
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#field-value')).toBeNull();
+    expect(text(fixture)).toContain('this field is redacted (password input)');
+    const link = host.querySelector<HTMLAnchorElement>('a')!;
+    expect(link.textContent).toContain('How to unmask it');
+    expect(link.href).toContain('security/#opt-fields-in-or-out');
+  });
+});
+
+describe('FormsInspector fields', () => {
+  it('names the row button for what it does, toggles it, and closes the detail', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve('about email'), [form]),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const row = button(fixture, 'Show details for email');
+    expect(row.getAttribute('aria-pressed')).toBe('false');
+
+    row.click();
+    await settle(fixture);
+    expect(row.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('app-forms-field-detail')).not.toBeNull();
+    expect(document.activeElement?.id).toBe('forms-field-heading');
+
+    row.click();
+    await settle(fixture);
+    expect(row.getAttribute('aria-pressed')).toBe('false');
+    expect(host.querySelector('app-forms-field-detail')).toBeNull();
+
+    row.click();
+    await settle(fixture);
+    button(fixture, 'Close details for email').click();
+    await settle(fixture);
+    expect(host.querySelector('app-forms-field-detail')).toBeNull();
+    expect(document.activeElement).toBe(row);
+  });
+
+  it('clears the field path filter on Escape', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput('rpc', fakeClient(fail, [form]));
+    await settle(fixture);
+    const box = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      'input[aria-label="Filter fields by path"]',
+    )!;
+    box.value = 'email';
+    box.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    expect(fixture.componentInstance.filter()).toBe('email');
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await settle(fixture);
+    expect(fixture.componentInstance.filter()).toBe('');
+    expect(box.value).toBe('');
+  });
+});
+
+describe('FormsInspector field filters', () => {
+  async function mounted() {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve(''), [form]),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    return fixture;
+  }
+
+  function search(fixture: ComponentFixture<FormsInspector>): HTMLInputElement {
+    return (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      'input.filter[type="search"]',
+    )!;
+  }
+
+  function status(fixture: ComponentFixture<FormsInspector>): string {
+    const region = (fixture.nativeElement as HTMLElement).querySelector('.panel p[role="status"]');
+    return region?.textContent?.trim() ?? '';
+  }
+
+  it('offers Clear filters when the search and chips hide every field, and resets both', async () => {
+    const fixture = await mounted();
+    const input = search(fixture);
+    input.value = 'nothing';
+    input.dispatchEvent(new Event('input'));
+    fixture.componentInstance.active.set(new Set(['dirty']));
+    await settle(fixture);
+    expect(text(fixture)).toContain('No field path matches "nothing".');
+    expect(status(fixture)).toBe('');
+
+    button(fixture, 'Clear filters').click();
+    await settle(fixture);
+    expect(fixture.componentInstance.filter()).toBe('');
+    expect(fixture.componentInstance.active().size).toBe(0);
+    expect(search(fixture).value).toBe('');
+    expect(document.activeElement).toBe(search(fixture));
+    expect(button(fixture, 'Show details for email')).toBeDefined();
+    expect(status(fixture)).toBe('Filters cleared. Showing 3 fields.');
+  });
+
+  it('offers Clear filters when only a chip hides every field', async () => {
+    const fixture = await mounted();
+    const dirty = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLLabelElement>('.chips label'),
+    ).find((label) => label.textContent?.trim() === 'Dirty')!;
+    dirty.querySelector('input')!.click();
+    await settle(fixture);
+    expect(text(fixture)).toContain('No field matches the selected filters.');
+
+    button(fixture, 'Clear filters').click();
+    await settle(fixture);
+    expect(fixture.componentInstance.active().size).toBe(0);
+    expect(dirty.querySelector('input')!.checked).toBe(false);
+  });
+
+  it('shows no Clear filters while no filter is set', async () => {
+    const fixture = await mounted();
+    expect(() => button(fixture, 'Clear filters')).toThrow();
+  });
+});
+
+describe('FormsInspector status pills', () => {
+  // Backgrounds of the stylesheet rules that apply to an element, in source order.
+  function backgrounds(element: Element): string[] {
+    const found: string[] = [];
+    for (const sheet of Array.from(document.styleSheets)) {
+      for (const rule of Array.from(sheet.cssRules)) {
+        if (!(rule instanceof CSSStyleRule) || !element.matches(rule.selectorText)) continue;
+        const match = /background:\s*([^;]+);/.exec(rule.cssText);
+        if (match) found.push(match[1].trim());
+      }
+    }
+    return found;
+  }
+
+  it('gives the status badge on a selected row an opaque background', async () => {
+    const invalid: CollectedForm = {
+      ...form,
+      root: {
+        ...form.root,
+        status: 'INVALID',
+        children: [
+          field('email', {
+            status: 'INVALID',
+            errors: [{ kind: 'required', message: 'Required' }],
+          }),
+          field('name', { status: 'PENDING' }),
+          field('phone'),
+        ],
+      },
+    };
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve(''), [invalid]),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    button(fixture, 'Show details for email').click();
+    await settle(fixture);
+
+    const row = host.querySelector('.fields tbody tr:has(.field[aria-pressed="true"])');
+    const pills = [
+      row?.querySelector('.badge[data-status="INVALID"]'),
+      host.querySelector('.badge[data-status="PENDING"]'),
+      host.querySelector('.badge[data-status="VALID"]'),
+      host.querySelector('.form-item.active .count'),
+    ];
+    for (const pill of pills) {
+      expect(pill).not.toBeNull();
+      const applied = backgrounds(pill!);
+      expect(applied.length).toBeGreaterThan(0);
+      // A tint mixed with transparent lets the selected-row tint show through it.
+      expect(applied.at(-1)).not.toContain('transparent');
+    }
+  });
+});
+
+describe('FormsInspector error summary', () => {
+  it('opens the field of an entry on the Fields tab, clearing a filter that hides it', async () => {
+    const invalid: CollectedForm = {
+      ...form,
+      root: {
+        ...form.root,
+        children: [
+          field('email'),
+          field('name', { status: 'INVALID', errors: [{ kind: 'required', message: 'required' }] }),
+        ],
+      },
+      errorSummary: [{ path: 'name', kind: 'required', message: 'is required' }],
+    };
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve('about name'), [invalid]),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const inspector = fixture.componentInstance;
+    inspector.filter.set('email');
+    inspector.active.set(new Set(['dirty']));
+    inspector.tab_.set('timeline');
+    await settle(fixture);
+
+    const entry = Array.from(host.querySelectorAll<HTMLButtonElement>('.summary-link')).find(
+      (b) => b.textContent?.replace(/\s+/g, ' ').trim() === 'Show field name: is required required',
+    );
+    expect(entry).toBeDefined();
+    entry!.click();
+    await settle(fixture);
+
+    expect(inspector.tab_()).toBe('fields');
+    expect(inspector.filter()).toBe('');
+    expect(inspector.active().size).toBe(0);
+    expect(inspector.fieldPath()).toBe('name');
+    expect(button(fixture, 'Show details for name').getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('app-forms-field-detail')).not.toBeNull();
+    expect(document.activeElement?.id).toBe('forms-field-heading');
+  });
+
+  it('keeps a filter that already shows the field', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(
+        () => Promise.resolve(''),
+        [{ ...form, errorSummary: [{ path: 'name', kind: 'required', message: 'is required' }] }],
+      ),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const inspector = fixture.componentInstance;
+    inspector.filter.set('nam');
+    await settle(fixture);
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('.summary-link')!
+      .click();
+    await settle(fixture);
+    expect(inspector.filter()).toBe('nam');
+    expect(inspector.fieldPath()).toBe('name');
+  });
+});
+
+describe('FormsInspector lint', () => {
+  it('opens the field of a finding on the Fields tab with focus on the detail heading', async () => {
+    const nested: CollectedForm = {
+      ...form,
+      root: {
+        ...form.root,
+        children: [
+          field('email'),
+          { ...field('address'), type: 'group', children: [field('address.zip')] },
+        ],
+      },
+    };
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(
+        (name) => Promise.resolve(name.includes('lint') ? lintFindings : 'about zip'),
+        [nested],
+      ),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const inspector = fixture.componentInstance;
+    inspector.filter.set('email');
+    inspector.tab_.set('lint');
+    await settle(fixture);
+
+    expect(host.querySelectorAll('app-forms-lint button.summary-link')).toHaveLength(1);
+    button(fixture, 'Show field address.zip').click();
+    await settle(fixture);
+
+    expect(inspector.tab_()).toBe('fields');
+    expect(inspector.filter()).toBe('');
+    expect(inspector.fieldPath()).toBe('address.zip');
+    expect(host.querySelector('app-forms-field-detail')).not.toBeNull();
+    expect(document.activeElement?.id).toBe('forms-field-heading');
+  });
+});
+
+describe('FormsInspector pick', () => {
+  it('turns into Cancel picking and cancels from the button and Escape', async () => {
+    const calls: Record<string, unknown>[] = [];
+    const pending: ((value: unknown) => void)[] = [];
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(
+        (_name, arg) => {
+          calls.push(arg);
+          if (arg['action'] === 'pick') return new Promise((resolve) => pending.push(resolve));
+          return Promise.resolve({ ok: true, message: 'Picking cancelled.' });
+        },
+        [form],
+      ),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+
+    button(fixture, 'Pick field on page').click();
+    await settle(fixture);
+    const cancel = button(fixture, 'Cancel picking');
+    expect(cancel.getAttribute('aria-pressed')).toBe('true');
+    cancel.click();
+    await settle(fixture);
+    expect(calls.at(-1)).toEqual({ action: 'cancel-pick', formId: form.id });
+    pending.shift()!({ ok: false, error: 'Picking cancelled.' });
+    await settle(fixture);
+    expect(button(fixture, 'Pick field on page').getAttribute('aria-pressed')).toBe('false');
+    expect(text(fixture)).toContain('Picking cancelled.');
+
+    button(fixture, 'Pick field on page').click();
+    await settle(fixture);
+    calls.length = 0;
+    host.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await settle(fixture);
+    expect(calls).toEqual([{ action: 'cancel-pick', formId: form.id }]);
+  });
+
+  it('ignores the answer of a superseded pick', async () => {
+    const pending: ((value: unknown) => void)[] = [];
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => new Promise((resolve) => pending.push(resolve)), [form]),
+    );
+    await settle(fixture);
+    const inspector = fixture.componentInstance;
+    void inspector.pick();
+    void inspector.pick();
+    await settle(fixture);
+    pending[1]({ ok: true, formId: form.id, path: 'email' });
+    await settle(fixture);
+    pending[0]({ ok: false, error: 'Picking cancelled.' });
+    await settle(fixture);
+    expect(inspector.message()).toBe('Picked email.');
+    expect(inspector.picking()).toBeNull();
+  });
+});
+
+describe('FormsInspector redaction', () => {
+  it('labels redacted fields in plain words', async () => {
+    const secret: CollectedForm = {
+      ...form,
+      root: {
+        ...form.root,
+        children: [field('pinCode', { redacted: 'key', value: '[redacted]' })],
+      },
+    };
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve(''), [secret]),
+    );
+    await settle(fixture);
+    expect(text(fixture)).toContain('redacted: name looks secret');
+    expect(text(fixture)).not.toContain('redacted (key)');
+  });
+});
+
+describe('FormsWebMcp', () => {
+  it('shows the tool, its inputs, changed required fields and recent calls', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', {
+      name: 'sign_up',
+      description: 'Create an account',
+      status: 'registered',
+      seen: 'register',
+      inputs: ['name: string', 'age: number'],
+      required: ['name'],
+      requiredChanged: [{ path: 'age', now: true }],
+      calls: [{ at: 0, ms: 12, outcome: 'failed', fields: ['name'], detail: 'name: is required' }],
+    });
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('h3')?.textContent).toContain('WebMCP tool');
+    expect(text(fixture)).toContain('sign_up');
+    expect(text(fixture)).toContain('Create an account');
+    expect(host.querySelectorAll('.inputs li')[0].textContent).toContain('required');
+    expect(host.querySelectorAll('.inputs li')[1].textContent).not.toContain('required');
+    expect(text(fixture)).toContain('is now required');
+    expect(text(fixture)).toContain('submit failed');
+    expect(text(fixture)).toContain('name: is required');
+  });
+
+  it('lists the fields that block schema inference', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', {
+      name: 'book',
+      description: '',
+      status: 'failed',
+      seen: 'error',
+      error: 'schema',
+      blocking: [{ path: 'when', reason: 'null' }],
+    });
+    await settle(fixture);
+    expect(text(fixture)).toContain('not registered');
+    expect(text(fixture)).toContain('when is null');
+    expect(text(fixture)).toContain('No agent has called this tool');
+  });
+
+  it('says calls are not recorded for a tool registered before the inspector attached', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', {
+      name: 'sign_up',
+      description: '',
+      status: 'registered',
+      seen: 'list',
+    });
+    await settle(fixture);
+    expect(text(fixture)).toContain('registered before the inspector attached');
+    expect(text(fixture)).toContain('Calls are not recorded');
+    expect(text(fixture)).not.toContain('No agent has called this tool');
+  });
+
+  it('says when the provider is set but the browser has no modelContext', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('page', { modelContext: false, provided: true, tools: [] });
+    fixture.componentRef.setInput('signalForm', true);
+    await settle(fixture);
+    expect(text(fixture)).toContain('the browser has no');
+    fixture.componentRef.setInput('signalForm', false);
+    await settle(fixture);
+    expect(text(fixture).trim()).toBe('');
+  });
+
+  it('appears in the form detail of the inspector', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    const withTool: CollectedForm = {
+      ...form,
+      kind: 'signal',
+      webMcp: {
+        name: 'sign_up',
+        description: 'Create an account',
+        status: 'registered',
+        seen: 'register',
+      },
+    };
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve(''), [withTool]),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    expect(text(fixture)).toContain('WebMCP tool');
+    expect(text(fixture)).toContain('sign_up');
+  });
+});
+
+describe('FormsInspector selection', () => {
+  it("does not hand a closed tab's selected form over to another tab's form with the same label", async () => {
+    const login = (page: string): CollectedForm => ({
+      ...form,
+      id: `login@${page}`,
+      label: 'Login',
+    });
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve('ok')),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const inspector = fixture.componentInstance;
+    inspector.forms.set([login('a'), login('b')]);
+    inspector.selectForm('login@a');
+    await settle(fixture);
+    expect(inspector.selected()?.id).toBe('login@a');
+
+    inspector.forms.set([login('b')]);
+    await settle(fixture);
+    expect(inspector.selected()).toBeNull();
+    expect(text(fixture)).toContain('This form is no longer on the page');
+    expect(
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).some(
+        (b) => b.textContent?.trim() === 'Submit',
+      ),
+    ).toBe(false);
+  });
+
+  it('drops the armed confirmation, snapshot and field when the selection falls back to another form', async () => {
+    const calls: Record<string, unknown>[] = [];
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((name, arg) => {
+        if (name !== 'request-form-action') return Promise.resolve('');
+        calls.push(arg);
+        return Promise.resolve({ ok: true });
+      }),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const inspector = fixture.componentInstance;
+    const a: CollectedForm = { ...form, id: 'a@p1', label: 'A' };
+    const b: CollectedForm = { ...form, id: 'b@p1', label: 'B' };
+    inspector.forms.set([a, b]);
+    await settle(fixture);
+    expect(inspector.selected()?.id).toBe('a@p1');
+    inspector.toggleField('email');
+    inspector.snapshot.set('#1');
+    inspector.confirmAct('reset');
+    await settle(fixture);
+    expect(button(fixture, 'Confirm reset')).toBeTruthy();
+
+    inspector.forms.set([b]);
+    await settle(fixture);
+    expect(inspector.selected()?.id).toBe('b@p1');
+    expect(inspector.armed()).toBeNull();
+    expect(inspector.snapshot()).toBeNull();
+    expect(inspector.fieldPath()).toBeNull();
+    button(fixture, 'Reset').click();
+    await settle(fixture);
+    expect(calls).toEqual([]);
+    expect(button(fixture, 'Confirm reset')).toBeTruthy();
+  });
+
+  it('says a form hidden by "All pages" is on another page, not gone', async () => {
+    scopeToPage('p1');
+    try {
+      const fixture = TestBed.createComponent(FormsInspector);
+      fixture.componentRef.setInput(
+        'rpc',
+        fakeClient(() => Promise.resolve('ok')),
+      );
+      document.body.append(fixture.nativeElement);
+      await settle(fixture);
+      const inspector = fixture.componentInstance;
+      inspector.forms.set([
+        { ...form, id: 'here@p1', label: 'Here' },
+        { ...form, id: 'there@p2', label: 'There' },
+      ]);
+      inspector.selectForm('there@p2');
+      await settle(fixture);
+      expect(inspector.allPages()).toBe(true);
+      expect(inspector.selected()?.id).toBe('there@p2');
+
+      inspector.allPages.set(false);
+      await settle(fixture);
+      expect(inspector.missing()).toBeNull();
+      expect(text(fixture)).not.toContain('This form is no longer on the page');
+      expect(text(fixture)).toContain('This form is on another page');
+      button(fixture, 'Show forms from all pages').click();
+      await settle(fixture);
+      expect(inspector.selected()?.id).toBe('there@p2');
+    } finally {
+      scopeToPage(null);
+    }
+  });
+});
+
+describe('FormsTimeline', () => {
+  it('leaves the Record details checkbox on the reported state until the page confirms', async () => {
+    const fixture = TestBed.createComponent(FormsTimeline);
+    fixture.componentRef.setInput('events', []);
+    fixture.componentRef.setInput('recording', false);
+    document.body.append(fixture.nativeElement);
+    const emitted: boolean[] = [];
+    fixture.componentInstance.record.subscribe((on) => emitted.push(on));
+    await settle(fixture);
+    const box = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '.record input[type="checkbox"]',
+    )!;
+    box.click();
+    await settle(fixture);
+    expect(emitted).toEqual([true]);
+    expect(box.checked).toBe(false);
+
+    fixture.componentRef.setInput('recording', true);
+    await settle(fixture);
+    expect(box.checked).toBe(true);
+  });
+});

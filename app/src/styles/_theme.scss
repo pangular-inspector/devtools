@@ -17,10 +17,15 @@ $ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --accent: #{p.accent($accent, base)};
   --accent-hover: #{p.accent($accent, hover)};
   --accent-ink: #{p.accent($accent, ink)};
+  --accent-text: #{p.accent($accent, text)};
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
   --accent-line: color-mix(in srgb, var(--accent) 45%, transparent);
 
   @each $name, $value in p.$status {
+    --#{$name}: #{$value};
+  }
+
+  @each $name, $value in p.$status-text {
     --#{$name}: #{$value};
   }
 
@@ -32,4 +37,37 @@ $ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease: #{$ease};
   --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@mixin light-tokens {
+  color-scheme: light;
+
+  @each $name, $value in p.$neutrals-light {
+    --#{$name}: #{$value};
+  }
+
+  --accent: #{p.accent($accent, light, base)};
+  --accent-hover: #{p.accent($accent, light, hover)};
+  --accent-ink: #{p.accent($accent, light, ink)};
+  --accent-text: #{p.accent($accent, light, text)};
+
+  @each $name, $value in p.$status-light {
+    --#{$name}: #{$value};
+  }
+
+  @each $name, $value in p.$status-text-light {
+    --#{$name}: #{$value};
+  }
+
+  --shadow: 0 2px 12px -4px rgba(0, 0, 0, 0.12);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    @include light-tokens;
+  }
+}
+
+:root[data-theme='light'] {
+  @include light-tokens;
 }

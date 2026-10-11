@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ThemeToggle } from './theme-toggle';
 
-const KEY = 'ng-devtools-demo-theme';
+const KEY = 'pangular-demo-theme';
 
 function create() {
   const fixture = TestBed.createComponent(ThemeToggle);

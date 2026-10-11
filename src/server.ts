@@ -6,20 +6,23 @@ import {
 } from '@angular/ssr/node';
 import express from 'express';
 import { join } from 'node:path';
-import { initNgDevtoolsHub } from '@santoshyadavdev/ng-devtools/hub';
+import { initPangularHub } from '@pangular-inspector/devtools/hub';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
 const app = express();
 const angularApp = new AngularNodeAppEngine();
 
-const auth = process.env['NG_DEVTOOLS_AUTH'] === 'true';
-const devtools = initNgDevtoolsHub({
+const auth = process.env['PANGULAR_AUTH'] === 'true';
+const devtools = initPangularHub({
   ws: { sidecar: true },
   auth,
-  allowedOrigins: false,
+  // Lets an SSR override serve index.csr.html to force a Client render.
+  browserDistFolder,
 });
 app.use(devtools.nodeMiddleware);
+// Traces each SSR request for the SSR & HTTP tab and adds a Server-Timing header.
+app.use(devtools.ssrMiddleware);
 
 const products = [
   { id: 1, name: 'Signal lamp', price: 24, stock: 12 },
@@ -48,6 +51,23 @@ app.get('/api/products{/:id}', (req, res) => {
     if (product) res.json(product);
     else res.status(404).json({ error: 'No such product' });
   }, delay);
+});
+
+/** Access check for the SSR guards example: product 2 is sold out, unknown ids answer 404. */
+app.get('/api/access/:id', (req, res) => {
+  const delay = Math.min(Math.max(Number(req.query['delay']) || 0, 0), 5000);
+  setTimeout(() => {
+    const product = products.find((p) => p.id === Number(req.params['id']));
+    if (!product) res.status(404).json({ allowed: false });
+    else res.json({ allowed: product.stock > 0, soldOut: product.stock === 0 });
+  }, delay);
+});
+
+/** A POST for the SSR requests example; the transfer cache leaves POSTs out by default. */
+app.post('/api/quote', express.json({ limit: '1kb' }), (req, res) => {
+  const ids: unknown[] = Array.isArray(req.body?.ids) ? req.body.ids.slice(0, 20) : [];
+  const picked = products.filter((p) => ids.includes(p.id));
+  res.json({ items: picked.length, total: picked.reduce((sum, p) => sum + p.price, 0) });
 });
 
 /**

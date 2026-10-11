@@ -3,5 +3,5 @@ import { App } from './app/app';
 import { appConfig } from './app/app.config';
 
 bootstrapApplication(App, appConfig).then(() => {
-  if (import.meta.env.DEV) void import('@santoshyadavdev/ng-devtools/overlay');
+  if (import.meta.env.DEV) void import('@pangular-inspector/devtools/overlay');
 });

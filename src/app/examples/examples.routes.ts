@@ -1,5 +1,13 @@
 import { Routes } from '@angular/router';
-import { adminGuard, brokenResolver, lockedGuard, userResolver } from './route-guards';
+import {
+  adminGuard,
+  brokenResolver,
+  lockedGuard,
+  loopAGuard,
+  loopBGuard,
+  userResolver,
+} from './route-guards';
+import { productAccessGuard, productResolver } from './ssr-guards';
 
 /**
  * Deliberately varied: children, grandchildren, a redirect, route data and a
@@ -72,6 +80,18 @@ export const examplesRoutes: Routes = [
         resolve: { report: brokenResolver },
         data: { title: 'Broken' },
       },
+      {
+        path: 'loop-a',
+        loadComponent: () => import('./route-panel').then((m) => m.RoutePanel),
+        canActivate: [loopAGuard],
+        data: { title: 'Guard loop A' },
+      },
+      {
+        path: 'loop-b',
+        loadComponent: () => import('./route-panel').then((m) => m.RoutePanel),
+        canActivate: [loopBGuard],
+        data: { title: 'Guard loop B' },
+      },
     ],
   },
   {
@@ -83,6 +103,29 @@ export const examplesRoutes: Routes = [
     path: 'http',
     loadComponent: () => import('./http-example').then((m) => m.HttpExample),
     data: { title: 'SSR & HTTP', inspector: 'network' },
+  },
+  {
+    path: 'ssr',
+    loadComponent: () => import('./ssr-requests-example').then((m) => m.SsrRequestsExample),
+    data: { title: 'SSR requests', inspector: 'network' },
+  },
+  { path: 'ssr-guards', redirectTo: 'ssr/product/3', pathMatch: 'full' },
+  {
+    path: 'ssr/product/:id',
+    loadComponent: () => import('./ssr-guards-example').then((m) => m.SsrGuardsExample),
+    canActivate: [productAccessGuard],
+    resolve: { product: productResolver },
+    data: { title: 'SSR guards', inspector: 'network' },
+  },
+  {
+    path: 'store',
+    loadComponent: () => import('./store-example').then((m) => m.StoreExample),
+    data: { title: 'NgRx', inspector: 'store' },
+  },
+  {
+    path: 'defer',
+    loadComponent: () => import('./defer-example').then((m) => m.DeferExample),
+    data: { title: 'Defer blocks', inspector: 'components' },
   },
   { path: 'injectors', redirectTo: 'di', pathMatch: 'full' },
 ];

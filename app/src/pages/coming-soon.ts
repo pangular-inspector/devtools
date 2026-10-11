@@ -1,13 +1,14 @@
-import { Component, input } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
 
 export interface ComingSoonInfo {
-  id: 'nativescript' | 'capacitor' | 'analog';
+  id: 'nativescript' | 'capacitor' | 'analog' | 'angular-native';
   name: string;
   badge: string;
   heading: string;
   summary: string;
   color: string;
   plans: string[];
+  plansTitle?: string;
   pr?: number;
   author?: { name: string; login: string };
   link?: { label: string; href: string };
@@ -32,6 +33,28 @@ export interface ComingSoonInfo {
                   fill="#3c5afd"
                   d="M237.248 18.752q18.061 18.06 18.748 45.247V192c-.457 18.12-6.707 33.207-18.748 45.247c-12.04 12.04-27.127 18.291-45.251 18.752H63.999q-27.187-.69-45.247-18.752C6.712 225.208.46 210.121 0 192.001V64q.69-27.187 18.752-45.247Q36.812.692 63.999 0h127.998c18.124.46 33.211 6.711 45.251 18.752m-17.655 103q-6.033-6.003-6.28-15.066V64q-.192-9.063-6.221-15.091c-4.02-4.023-9.054-6.093-15.095-6.22h-21.312v106.626L85.315 42.687H63.999c-6.042.128-11.072 2.198-15.091 6.221c-4.023 4.02-6.093 9.05-6.22 15.09v42.688q-.249 9.063-6.281 15.066q-6.03 5.996-15.091 6.246q9.062.255 15.09 6.25c4.024 4.002 6.115 9.024 6.281 15.066V192c.128 6.037 2.198 11.072 6.221 15.091q6.03 6.03 15.09 6.22h21.317V106.687l85.37 106.627h21.312c6.041-.128 11.076-2.202 15.095-6.221s6.093-9.054 6.22-15.09v-42.688q.249-9.063 6.281-15.066q6.03-5.995 15.091-6.25q-9.062-.25-15.09-6.246"
                 />
+              </svg>
+            }
+            @case ('angular-native') {
+              <svg viewBox="0 0 32 32" width="88" height="88">
+                <defs>
+                  <linearGradient id="an-hero-grad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#f0224f" />
+                    <stop offset="1" stop-color="#c4002d" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M16 0C27.2 0 32 4.8 32 16S27.2 32 16 32 0 27.2 0 16 4.8 0 16 0Z"
+                  fill="url(#an-hero-grad)"
+                />
+                <g transform="translate(6.4 6.4) scale(0.8)" fill="#fff">
+                  <path d="M14.8486 0L23.138 16.8551L23.9996 3.99892L14.8486 0Z" />
+                  <path
+                    d="M16.9875 17.7114H7.01272L5.73926 20.627L12.0001 24L18.261 20.627L16.9875 17.7114Z"
+                  />
+                  <path d="M8.72168 13.9298H15.2812L11.9997 6.39575L8.72168 13.9298Z" />
+                  <path d="M9.15103 0L0 3.99892L0.861556 16.8551L9.15103 0Z" />
+                </g>
               </svg>
             }
             @case ('analog') {
@@ -75,7 +98,7 @@ export interface ComingSoonInfo {
       @if (info().author; as author) {
         <a
           class="author"
-          [href]="'https://github.com/santoshyadavdev/angular-devtools/pull/' + info().pr"
+          [href]="'https://github.com/pangular-inspector/devtools/pull/' + info().pr"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -105,7 +128,7 @@ export interface ComingSoonInfo {
       }
 
       <h3 class="plans-title">
-        {{ info().link ? 'In an ' + info().name + ' app' : 'On the roadmap' }}
+        {{ plansTitle() }}
       </h3>
       <ul class="plans">
         @for (plan of info().plans; track plan; let i = $index) {
@@ -367,17 +390,6 @@ export interface ComingSoonInfo {
       background: var(--brand);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 20%, transparent);
     }
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      margin: -1px;
-      padding: 0;
-      overflow: hidden;
-      clip: rect(0 0 0 0);
-      white-space: nowrap;
-      border: 0;
-    }
     @media (max-height: 640px) {
       .soon {
         padding-top: 12px;
@@ -429,11 +441,6 @@ export interface ComingSoonInfo {
         opacity: 0;
       }
     }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
     @keyframes shimmer {
       60%,
       100% {
@@ -480,4 +487,8 @@ export interface ComingSoonInfo {
 })
 export class ComingSoon {
   readonly info = input.required<ComingSoonInfo>();
+  readonly plansTitle = computed(() => {
+    const info = this.info();
+    return info.plansTitle ?? (info.link ? `In an ${info.name} app` : 'On the roadmap');
+  });
 }

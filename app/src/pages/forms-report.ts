@@ -1,22 +1,30 @@
-import { Component, effect, input, signal, untracked } from '@angular/core';
+import { Component, effect, input, linkedSignal, output, signal, untracked } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { FORMS_STYLES, formsCall, plain, type FormLintFinding } from './forms-types';
 
 @Component({
   selector: 'app-forms-submit',
   template: `
-    <section class="block" aria-labelledby="forms-submit-title">
-      <h3 id="forms-submit-title" class="section-label">Submit</h3>
-      <pre class="explain" [attr.aria-busy]="submit() ? null : 'true'">{{
-        submit() || 'Loading…'
-      }}</pre>
-    </section>
-    <section class="block" aria-labelledby="forms-payload-title">
-      <h3 id="forms-payload-title" class="section-label">Payload</h3>
-      <pre class="explain" [attr.aria-busy]="payload() ? null : 'true'">{{
-        payload() || 'Loading…'
-      }}</pre>
-    </section>
+    @if (failed()) {
+      <div class="empty-state" role="alert">
+        <p class="empty-title">Could not explain this form</p>
+        <p>The devtools server did not answer. Check that the app is running, then try again.</p>
+        <button type="button" class="small" (click)="retry()">Try again</button>
+      </div>
+    } @else {
+      <section class="block" aria-labelledby="forms-submit-title">
+        <h3 id="forms-submit-title" class="section-label">Submit</h3>
+        <pre class="explain" [attr.aria-busy]="submit() === null ? 'true' : null">{{
+          submit() ?? 'Loading…'
+        }}</pre>
+      </section>
+      <section class="block" aria-labelledby="forms-payload-title">
+        <h3 id="forms-payload-title" class="section-label">Payload</h3>
+        <pre class="explain" [attr.aria-busy]="payload() === null ? 'true' : null">{{
+          payload() ?? 'Loading…'
+        }}</pre>
+      </section>
+    }
     <div class="fixture">
       <button type="button" class="small" (click)="copyFixture()">Copy test fixture</button>
       <span class="status" role="status">{{ message() }}</span>
@@ -52,25 +60,45 @@ export class FormsSubmit {
   version = input(0);
   rpc = input<DevframeRpcClient | null>(null);
 
-  readonly submit = signal('');
-  readonly payload = signal('');
+  readonly submit = linkedSignal<string, string | null>({
+    source: this.formId,
+    computation: () => null,
+  });
+  readonly payload = linkedSignal<string, string | null>({
+    source: this.formId,
+    computation: () => null,
+  });
+  readonly failed = linkedSignal({ source: this.formId, computation: () => false });
   readonly message = signal('');
+  private readonly attempt = signal(0);
 
   constructor() {
     effect(() => {
       const form = this.formId();
       this.version();
+      this.attempt();
       const client = this.rpc();
+      if (!client) return;
       untracked(async () => {
         const [submit, payload] = await Promise.all([
           formsCall<string>(client, 'forms-explain', { kind: 'submit', form }),
           formsCall<string>(client, 'forms-explain', { kind: 'payload', form }),
         ]);
         if (this.formId() !== form) return;
+        if (submit === null || payload === null) {
+          this.failed.set(true);
+          return;
+        }
+        this.failed.set(false);
         this.submit.set(plain(submit));
         this.payload.set(plain(payload));
       });
     });
+  }
+
+  retry() {
+    this.failed.set(false);
+    this.attempt.update((n) => n + 1);
   }
 
   async copyFixture() {
@@ -78,7 +106,7 @@ export class FormsSubmit {
       kind: 'fixture',
       form: this.formId(),
     });
-    const code = (text ?? '').match(/```ts\n([\s\S]*?)```/)?.[1];
+    const code = (text ?? '').match(/```ts\n([\s\S]*)```\s*$/)?.[1];
     if (!code) {
       this.message.set('No test fixture is available for this form.');
       return;
@@ -95,7 +123,13 @@ export class FormsSubmit {
 @Component({
   selector: 'app-forms-lint',
   template: `
-    @if (findings() === null) {
+    @if (failed()) {
+      <div class="empty-state" role="alert">
+        <p class="empty-title">Could not check this form</p>
+        <p>The devtools server did not answer. Check that the app is running, then try again.</p>
+        <button type="button" class="small" (click)="retry()">Try again</button>
+      </div>
+    } @else if (findings() === null) {
       <div class="empty-state" role="status">
         <span class="spinner" aria-hidden="true"></span>
         <p>Checking the form for problems…</p>
@@ -136,9 +170,12 @@ export class FormsSubmit {
                 >{{ f.severity }}</span
               >
               <code class="rule">{{ f.rule }}</code>
-              @if (f.path) {
+              @if (f.path; as path) {
                 <span class="muted path"
-                  >at <code>{{ f.path }}</code></span
+                  >at
+                  <button type="button" class="summary-link" (click)="showField.emit(path)">
+                    <span class="sr-only">Show field </span><code>{{ path }}</code>
+                  </button></span
                 >
               }
             </div>
@@ -164,7 +201,7 @@ export class FormsSubmit {
       margin-bottom: 4px;
       border-radius: 50%;
       background: color-mix(in srgb, var(--ok) 12%, transparent);
-      color: var(--ok);
+      color: var(--ok-text);
     }
     .summary {
       margin: 0;
@@ -226,9 +263,6 @@ export class FormsSubmit {
       font-size: 12.5px;
       overflow-wrap: anywhere;
     }
-    .path code {
-      color: #fde68a;
-    }
     .message,
     .fix {
       margin: 0;
@@ -253,18 +287,34 @@ export class FormsLint {
   formId = input.required<string>();
   version = input(0);
   rpc = input<DevframeRpcClient | null>(null);
+  /** Emits a finding's field path so the page can open that field. */
+  showField = output<string>();
 
-  readonly findings = signal<FormLintFinding[] | null>(null);
+  readonly findings = linkedSignal<string, FormLintFinding[] | null>({
+    source: this.formId,
+    computation: () => null,
+  });
+  readonly failed = linkedSignal({ source: this.formId, computation: () => false });
+  private readonly attempt = signal(0);
 
   constructor() {
     effect(() => {
       const form = this.formId();
       this.version();
+      this.attempt();
       const client = this.rpc();
+      if (!client) return;
       untracked(async () => {
         const found = await formsCall<FormLintFinding[]>(client, 'forms-lint', { form });
-        if (this.formId() === form) this.findings.set(found ?? []);
+        if (this.formId() !== form) return;
+        this.failed.set(found === null);
+        if (found) this.findings.set(found);
       });
     });
+  }
+
+  retry() {
+    this.failed.set(false);
+    this.attempt.update((n) => n + 1);
   }
 }

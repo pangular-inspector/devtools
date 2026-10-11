@@ -39,6 +39,7 @@ let nextId = 0;
       [attr.aria-expanded]="open()"
       [attr.aria-label]="ariaLabel() || null"
       [attr.aria-labelledby]="labelledBy() || null"
+      [attr.aria-describedby]="describedBy() || null"
       [attr.aria-activedescendant]="open() && active() >= 0 ? uid + '-opt-' + active() : null"
       [disabled]="disabled()"
       (click)="toggle()"
@@ -63,6 +64,7 @@ let nextId = 0;
         [attr.aria-labelledby]="labelledBy() || uid + '-trigger'"
         [class.up]="dropUp()"
         animate.enter="list-in"
+        (pointerdown)="$event.preventDefault()"
       >
         @for (opt of options(); track opt.value; let i = $index) {
           <li
@@ -91,6 +93,8 @@ let nextId = 0;
     }
   `,
   styles: `
+    @use 'mixins' as m;
+
     :host {
       position: relative;
       display: inline-flex;
@@ -185,6 +189,10 @@ let nextId = 0;
         0 16px 40px -12px rgb(0 0 0 / 0.7),
         0 0 0 1px rgb(0 0 0 / 0.2);
       overscroll-behavior: contain;
+
+      @include m.light {
+        box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.25);
+      }
     }
     .list.up {
       top: auto;
@@ -270,6 +278,8 @@ export class Select<T extends string = string> {
   readonly placeholder = input('Select…');
   readonly ariaLabel = input('');
   readonly labelledBy = input('');
+  /** Ids of help text for the trigger, such as a note about the picked value. */
+  readonly describedBy = input('');
   readonly disabled = input(false);
   readonly emptyText = input('Nothing to choose');
 
@@ -371,13 +381,8 @@ export class Select<T extends string = string> {
   }
 
   private move(step: 1 | -1) {
-    const opts = this.options();
-    let i = this.active();
-    for (let n = 0; n < opts.length; n++) {
-      i = Math.min(Math.max(i + step, 0), opts.length - 1);
-      if (!opts[i].disabled) break;
-    }
-    this.setActive(i);
+    const next = this.firstEnabled(this.active() + step, step);
+    if (next >= 0) this.setActive(next);
   }
 
   private firstEnabled(from: number, step: 1 | -1) {

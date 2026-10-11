@@ -1,6 +1,9 @@
 import { bootstrapApplication } from '@angular/platform-browser';
 import { appConfig } from './app/app.config';
 import { App } from './app/app';
+import { installDemoModelContext } from './app/examples/webmcp-demo';
+
+if (typeof ngDevMode === 'undefined' || ngDevMode) installDemoModelContext();
 
 // Load the devtools overlay (which also opens the popup) in development only
 bootstrapApplication(App, appConfig)
@@ -9,9 +12,11 @@ bootstrapApplication(App, appConfig)
       return ref
         .whenStable()
         .then(() =>
-          Promise.all([import('@santoshyadavdev/ng-devtools/overlay'), import('@ngrx/signals')]),
+          Promise.all([import('@pangular-inspector/devtools/overlay'), import('@ngrx/signals')]),
         )
-        .then(([devtools, { patchState }]) => devtools.registerNgrxSignals({ patchState }));
+        .then(([devtools, { patchState, watchState }]) =>
+          devtools.registerNgrxSignals({ patchState, watchState }),
+        );
     }
     return undefined;
   })

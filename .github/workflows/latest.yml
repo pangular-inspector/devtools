@@ -1,0 +1,63 @@
+name: Latest versions
+
+# The package declares `@angular/core >=20` and `vite >=5`, and this repository pins the versions
+# it tests on, so a new Angular, Analog or Vite release can break users between our releases
+# without CI noticing (#100). Each week this makes fresh apps the way users do, on whatever those
+# ranges resolve to that day, installs the package from a local registry, wires the documented
+# setup, builds it and checks the hub answers. See apps/docs/src/content/contributing/publishing.md.
+on:
+  schedule:
+    # Mondays at 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # A failing scheduled run opens, or comments on, one issue per scenario.
+  issues: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  scenario:
+    name: ${{ matrix.scenario }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      # Every scenario reports, so one week's failures are all visible at once.
+      fail-fast: false
+      matrix:
+        scenario:
+          - angular-cli
+          - analog
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      # Starts its own Verdaccio, publishes the package there, and writes the Angular, Analog,
+      # Vite and devframe versions it resolved to the job summary, pass or fail.
+      - run: pnpm verify:publish --scenario=${{ matrix.scenario }}
+
+      # One open issue per scenario, found by its title: a new one the first week it fails, and a
+      # comment on that one every week after until someone closes it.
+      - name: Report the failure
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCENARIO: ${{ matrix.scenario }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="ci: the $SCENARIO setup fails on the latest versions"
+          body="The $SCENARIO scenario of \`pnpm verify:publish\` failed on the newest versions the peer ranges allow: $RUN. The run's summary lists the versions it resolved. See #100."
+          number=$(gh issue list --state open --search "\"$title\" in:title" --json number,title \
+            | jq -r --arg title "$title" 'map(select(.title == $title)) | .[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "Still failing: $RUN"
+          else
+            gh issue create --title "$title" --body "$body" --label bug --label 'area: ci'
+          fi

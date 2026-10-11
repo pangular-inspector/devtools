@@ -177,7 +177,7 @@ export class SignalsExample {
       }
     }
     try {
-      sessionStorage.setItem('ng-devtools-examples-count', String(count));
+      sessionStorage.setItem('pangular-examples-count', String(count));
     } catch {
       // storage can be unavailable; the example does not depend on it
     }
@@ -187,7 +187,7 @@ export class SignalsExample {
 
   private readStoredCount(): number | undefined {
     try {
-      const raw = sessionStorage.getItem('ng-devtools-examples-count');
+      const raw = sessionStorage.getItem('pangular-examples-count');
       const value = Number(raw);
       return raw !== null && Number.isFinite(value) ? value : undefined;
     } catch {

@@ -6,6 +6,7 @@ import {
   inject,
   input,
   linkedSignal,
+  output,
   signal,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
@@ -17,6 +18,7 @@ import { RouteTimeline } from './route-timeline';
 import { RouteTree } from './route-tree';
 import type { RouterPage, SourceRoute } from './router-types';
 import { Select } from '../ui/select';
+import type { ComponentFocus } from '../types/component-focus.types';
 
 const TABS = [
   { id: 'current', label: 'Current' },
@@ -52,7 +54,7 @@ type TabId = (typeof TABS)[number]['id'];
       <div class="empty" role="alert">
         <p class="empty-title">Could not load the live router state.</p>
         <p class="muted">
-          Check that the dev server with ng-devtools is still running, then retry.
+          Check that the dev server with Pangular Inspector is still running, then retry.
         </p>
         <button type="button" class="retry" (click)="retry()">Retry</button>
       </div>
@@ -86,7 +88,11 @@ type TabId = (typeof TABS)[number]['id'];
       >
         @switch (selected()) {
           @case ('current') {
-            <app-route-current [page]="current" [rpc]="rpc()" />
+            <app-route-current
+              [page]="current"
+              [rpc]="rpc()"
+              (showComponent)="showComponent.emit($event)"
+            />
           }
           @case ('navigations') {
             <app-route-timeline [page]="current" [rpc]="rpc()" />
@@ -254,27 +260,20 @@ type TabId = (typeof TABS)[number]['id'];
       padding: 0 6px;
       border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
       border-radius: 99px;
-      background: color-mix(in srgb, var(--danger) 12%, transparent);
-      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+      color: var(--danger-text);
       font-size: 11px;
       font-weight: 600;
       line-height: 16px;
       text-align: center;
       font-variant-numeric: tabular-nums;
     }
-    .visually-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip-path: inset(50%);
-      white-space: nowrap;
-    }
   `,
 })
 export class LiveRoute {
   rpc = input<DevframeRpcClient | null>(null);
   sources = input<SourceRoute[]>([]);
+  readonly showComponent = output<ComponentFocus>();
 
   readonly tabs = TABS;
   readonly selected = signal<TabId>('current');
@@ -287,10 +286,9 @@ export class LiveRoute {
     computation: (pages, previous) =>
       previous?.value && pages.some((p) => p.pageId === previous.value)
         ? previous.value
-        : (pages.find((p) => p.pageId === this.hostPageId && p.snapshot)?.pageId ??
-          pages.find((p) => p.snapshot)?.pageId ??
-          pages[0]?.pageId ??
-          null),
+        : this.hostPageId
+          ? (pages.find((p) => p.pageId === this.hostPageId)?.pageId ?? null)
+          : (pages.find((p) => p.snapshot)?.pageId ?? pages[0]?.pageId ?? null),
   });
 
   private unsubscribe: (() => void) | null = null;
@@ -298,7 +296,9 @@ export class LiveRoute {
 
   readonly page = computed(() => {
     const pages = this.pages();
-    return pages.find((p) => p.pageId === this.pageId()) ?? pages[0] ?? null;
+    return (
+      pages.find((p) => p.pageId === this.pageId()) ?? (this.hostPageId ? null : pages[0]) ?? null
+    );
   });
 
   readonly problems = computed(
@@ -320,7 +320,7 @@ export class LiveRoute {
     this.loading.set(true);
     this.failed.set(false);
     try {
-      const state = await client.scope('ng-devtools').rpc.sharedState('router');
+      const state = await client.scope('pangular').rpc.sharedState('router');
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         this.pages.set((value as { pages?: RouterPage[] } | undefined)?.pages ?? []);

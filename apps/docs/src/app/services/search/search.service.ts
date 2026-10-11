@@ -1,0 +1,266 @@
+import {
+  Injectable,
+  computed,
+  effect,
+  linkedSignal,
+  resource,
+  signal,
+  type Signal,
+} from '@angular/core';
+import config from '../../../ngmd.config';
+import type {SearchHit, SearchProvider} from '../../../types/search';
+import {OramaSearchProvider} from './orama-provider';
+import {AlgoliaSearchProvider} from './algolia-provider';
+
+const SEARCH_DEBOUNCE = 200;
+const HISTORY_KEY = 'ngmd-search-history-v1';
+const HISTORY_MAX = 10;
+
+export interface HistoryItem {
+  id: string;
+  url: string;
+  labelHtml: string;
+  subLabelHtml: string;
+  createdAt: number;
+  /** Pinned by the user via the star toggle in the palette. Favorites
+   * render above recents and are not capped by `HISTORY_MAX`. */
+  isFavorite?: boolean;
+}
+
+/**
+ * Single entry point for the command palette. Picks the right backend
+ * (Orama by default, Algolia if configured), debounces the query, keeps the
+ * previous result batch visible while a new one is in flight, and persists
+ * recent navigations to `localStorage`.
+ *
+ * The "no-blink between keystrokes" UX comes from the `resource()` +
+ * `linkedSignal()` pair: the resource re-fetches whenever the debounced
+ * query changes, the linkedSignal latches onto the source but falls back
+ * to the previous value when the source is undefined and the user is
+ * still typing. Mirrors adev's `searchResults` shape.
+ *
+ * Swap to Algolia by populating `site.algolia` in `ngmd.config.ts`. Nothing
+ * in this file changes when you do; the provider just picks itself up.
+ */
+@Injectable({providedIn: 'root'})
+export class SearchService {
+  private readonly isBrowser = typeof window !== 'undefined';
+
+  readonly query = signal('');
+
+  /** Source for the resource. Updates 200ms after the user stops typing.
+   * Clearing the input bypasses the debounce so the empty state restores
+   * immediately. */
+  private readonly debouncedQuery = signal('');
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private readonly provider: SearchProvider = this.pickProvider();
+  private readonly historyState = signal<HistoryItem[]>([]);
+
+  /** True when the hosted Algolia DocSearch backend is configured. Drives
+   * the required "Search by Algolia" attribution in the palette footer. */
+  readonly isAlgolia = !!(
+    config.site.algolia?.appId &&
+    config.site.algolia?.apiKey &&
+    config.site.algolia?.indexName
+  );
+
+  /** Re-fetches every time the debounced query changes. Empty string is
+   * treated as "no params" so the loader doesn't run on an empty input. */
+  private readonly resultsResource = resource({
+    params: () => this.debouncedQuery() || undefined,
+    loader: async ({params}) => {
+      if (!params) return [] as SearchHit[];
+      try {
+        return await this.provider.search(params);
+      } catch (err) {
+        console.warn('[ngmd] search provider failed:', err);
+        return [] as SearchHit[];
+      }
+    },
+  });
+
+  /** Result list. Keeps the previous batch visible while the next is in
+   * flight so the dialog doesn't blink between keystrokes. */
+  readonly results = linkedSignal<SearchHit[] | undefined, SearchHit[]>({
+    source: this.resultsResource.value,
+    computation: (next, prev) =>
+      (next === undefined && this.query().trim() ? prev?.value : next) ?? [],
+  });
+
+  /** True while the query is debouncing or the resource has a request in flight. */
+  readonly loading = computed(
+    () => this.resultsResource.isLoading() || this.debouncedQuery() !== this.query().trim(),
+  );
+
+  /** Most-recently navigated hits, newest first. */
+  readonly history: Signal<HistoryItem[]> = this.historyState.asReadonly();
+
+  /** Pinned items, newest favorite first. Render before `recents`. */
+  readonly favorites = computed(() => this.historyState().filter((h) => h.isFavorite));
+
+  /** Recently-visited items that aren't favorites. Capped at HISTORY_MAX. */
+  readonly recents = computed(() => this.historyState().filter((h) => !h.isFavorite));
+
+  /** True when we have an active query but no hits came back. */
+  readonly hasNoResults = computed(
+    () => !!this.query().trim() && !this.loading() && this.results().length === 0,
+  );
+
+  constructor() {
+    this.loadHistory();
+    // Debounce the query feeding the resource. Clear is immediate.
+    effect(() => {
+      const q = this.query().trim();
+      if (this.debounceTimer) clearTimeout(this.debounceTimer);
+      if (!q) {
+        this.debouncedQuery.set('');
+        return;
+      }
+      this.debounceTimer = setTimeout(() => this.debouncedQuery.set(q), SEARCH_DEBOUNCE);
+    });
+  }
+
+  /** Record that the user navigated to a hit. Preserves an existing
+   * `isFavorite` flag if the URL was already pinned. Recents cap at
+   * `HISTORY_MAX`; favorites are never trimmed. */
+  recordVisit(hit: SearchHit): void {
+    if (!this.isBrowser) return;
+    this.historyState.update((items) => {
+      const existing = items.find((h) => h.url === hit.url);
+      const item: HistoryItem = {
+        id: hit.id,
+        url: hit.url,
+        labelHtml: stripMark(hit.labelHtml),
+        subLabelHtml: stripMark(hit.subLabelHtml),
+        createdAt: Date.now(),
+        isFavorite: existing?.isFavorite ?? false,
+      };
+      const others = items.filter((h) => h.url !== item.url);
+      const favorites = others.filter((h) => h.isFavorite);
+      const recents = others.filter((h) => !h.isFavorite);
+      if (item.isFavorite) {
+        // Favourites are uncapped, but recents must still respect
+        // HISTORY_MAX so a corrupt / hand-edited localStorage entry
+        // doesn't perpetuate an oversized recents list.
+        return [item, ...favorites, ...recents.slice(0, HISTORY_MAX)];
+      }
+      return [...favorites, item, ...recents.slice(0, HISTORY_MAX - 1)];
+    });
+    this.persistHistory();
+  }
+
+  /** Toggle the pinned-favorite flag for an item already in history. No-op
+   * if the URL isn't there yet. Re-applies the recents cap so unpinning a
+   * batch of favourites can't leave the list oversized. */
+  toggleFavorite(url: string): void {
+    if (!this.isBrowser) return;
+    this.historyState.update((items) => {
+      const target = items.find((h) => h.url === url);
+      if (!target) return items;
+      const flipped = {...target, isFavorite: !target.isFavorite};
+      const others = items.filter((h) => h !== target);
+      const favorites = others.filter((h) => h.isFavorite);
+      const recents = others.filter((h) => !h.isFavorite);
+      return flipped.isFavorite
+        ? [flipped, ...favorites, ...recents.slice(0, HISTORY_MAX)]
+        : [...favorites, flipped, ...recents].slice(0, favorites.length + HISTORY_MAX);
+    });
+    this.persistHistory();
+  }
+
+  /** Drop a single entry from history regardless of pin state. Used by
+   * the per-row X button on history items. */
+  removeFromHistory(url: string): void {
+    if (!this.isBrowser) return;
+    this.historyState.update((items) => items.filter((h) => h.url !== url));
+    this.persistHistory();
+  }
+
+  /** Clears recents only. Favorites are kept; users pin them explicitly. */
+  clearRecents(): void {
+    this.historyState.update((items) => items.filter((h) => h.isFavorite));
+    this.persistHistory();
+  }
+
+  /** Increments every time `requestOpen` is called. `CommandPalette`
+   * watches this signal and opens itself whenever the value changes, so
+   * components like the 404 catch-all can pop the palette pre-filled
+   * with a starting query. */
+  private readonly openTickSignal = signal(0);
+  readonly openTick = this.openTickSignal.asReadonly();
+
+  /** Set the query and ping the palette to open. The catch-all uses this
+   * to drive its "Search the docs" button on the 404 view. */
+  requestOpen(query: string): void {
+    this.query.set(query);
+    this.openTickSignal.update((n) => n + 1);
+  }
+
+  /** One-shot search bypassing the reactive resource. The 404 view uses
+   * this to fetch a single best-guess suggestion for the failed URL
+   * without disturbing the palette's live query state. */
+  async searchOnce(query: string): Promise<SearchHit[]> {
+    if (!query.trim()) return [];
+    try {
+      return await this.provider.search(query);
+    } catch (err) {
+      console.warn('[ngmd] search provider failed:', err);
+      return [];
+    }
+  }
+
+  private pickProvider(): SearchProvider {
+    const algolia = config.site.algolia;
+    if (algolia?.appId && algolia?.apiKey && algolia?.indexName) {
+      return new AlgoliaSearchProvider(algolia);
+    }
+    return new OramaSearchProvider();
+  }
+
+  private loadHistory(): void {
+    if (!this.isBrowser) return;
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      if (!raw) return;
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      const urls = new Set<string>();
+      const valid = parsed.filter((h): h is HistoryItem => {
+        const ok =
+          typeof h?.url === 'string' &&
+          typeof h.id === 'string' &&
+          typeof h.labelHtml === 'string' &&
+          typeof h.subLabelHtml === 'string' &&
+          !urls.has(h.url);
+        if (ok) urls.add(h.url);
+        return ok;
+      });
+      // Preserve every favourite (never capped — users pinned them on
+      // purpose), only trim non-favourites to HISTORY_MAX. Otherwise a
+      // user with >10 pinned items would silently lose anything past
+      // the first 10 on the next page load.
+      const favourites = valid.filter((h) => h.isFavorite);
+      const recents = valid.filter((h) => !h.isFavorite).slice(0, HISTORY_MAX);
+      this.historyState.set([...favourites, ...recents]);
+    } catch {
+      // Corrupt entry — wipe and move on.
+      try {
+        localStorage.removeItem(HISTORY_KEY);
+      } catch {}
+    }
+  }
+
+  private persistHistory(): void {
+    if (!this.isBrowser) return;
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(this.historyState()));
+    } catch {
+      // Quota or disabled storage; non-fatal.
+    }
+  }
+}
+
+function stripMark(html: string): string {
+  return html.replace(/<\/?mark>/g, '');
+}

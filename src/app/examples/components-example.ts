@@ -1,17 +1,19 @@
 import { Component, signal } from '@angular/core';
+import { EagerClock } from './eager-clock';
 import { ExamplePage } from './example-page';
 import { Highlight } from './highlight.directive';
 import { StatCard } from './stat-card';
 
 @Component({
   selector: 'app-components-example',
-  imports: [ExamplePage, Highlight, StatCard],
+  imports: [ExamplePage, Highlight, StatCard, EagerClock],
   template: `
     <app-example-page heading="Components and directives" tab="Components">
       <ng-container lead>
         <code>app-stat-card</code> has a required input, optional inputs, a two way bound model and
         an output. <code>[appHighlight]</code> is an attribute directive with its own input, output
-        and host bindings.
+        and host bindings. <code>app-eager-clock</code> opts out of the default strategy with
+        <code>changeDetection: Eager</code>.
       </ng-container>
       <ng-container hint>
         Select <code>app-stat-card</code> to see its inputs and outputs listed from source.
@@ -26,6 +28,8 @@ import { StatCard } from './stat-card';
         />
         <app-stat-card label="Second instance" [value]="42" hint="Each instance is listed." />
       </div>
+
+      <app-eager-clock />
 
       <p class="state" aria-live="polite">
         The model is <strong>{{ detailed() ? 'open' : 'closed' }}</strong

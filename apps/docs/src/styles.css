@@ -1,0 +1,833 @@
+@import 'tailwindcss';
+
+/* Tailwind v4 doesn't scan `.md` by default. Tell it to, so authoring
+ * components can take Tailwind classes (`<ngmd-accordion class="my-8">`,
+ * etc.) and have those utilities actually appear in the generated CSS. */
+@source "./content/**/*.md";
+@source not inline("bg-[image:var(...)]");
+
+/* View Transitions API tuning. Angular's withViewTransitions() crossfades
+ * route changes via these pseudo-elements. Shorten the default ~250ms to
+ * 150ms so it stays snappy. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 150ms;
+  animation-timing-function: ease;
+}
+
+/* Hero title animation. The gradient span slowly shifts horizontally so the
+ * amber core appears to pulse through the text. Whole h1 fades up on
+ * first paint. Honours prefers-reduced-motion. */
+@keyframes ngmd-hero-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ngmd-hero-gradient-flow {
+  from {
+    background-position: 200% 50%;
+  }
+
+  to {
+    background-position: -100% 50%;
+  }
+}
+
+.ngmd-hero-fade {
+  animation: ngmd-hero-fade-in 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Hide hero words and the gradient line at first paint so SSR HTML doesn't
+ * flash before motion takes over. Motion sets opacity:1 + translateY(0)
+ * via inline styles, which override these defaults. */
+.ngmd-hero-anim {
+  opacity: 0;
+  transform: translateY(0.5em);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ngmd-hero-anim {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ngmd-hero-gradient {
+  background-size: 300% auto;
+  animation: ngmd-hero-gradient-flow 5s linear infinite;
+}
+
+/* Toast slide-in. Each toast in `<app-toaster>` starts off-screen right and
+ * eases in. Reduced-motion users get a plain fade so nothing flies across
+ * the viewport. */
+@keyframes ngmd-toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(110%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes ngmd-toast-slide-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(110%);
+  }
+}
+
+@keyframes ngmd-toast-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ngmd-toast-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+.ngmd-toast-slide {
+  animation: ngmd-toast-slide-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ngmd-toast-slide-out {
+  animation: ngmd-toast-slide-out 220ms cubic-bezier(0.55, 0, 0.78, 0.2) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ngmd-toast-slide {
+    animation: ngmd-toast-fade-in 200ms ease-out both;
+  }
+
+  .ngmd-toast-slide-out {
+    animation: ngmd-toast-fade-out 180ms ease-in both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ngmd-hero-fade,
+  .ngmd-hero-gradient {
+    animation: none;
+  }
+}
+
+@plugin '@tailwindcss/typography';
+
+@variant dark (&:where(.dark, .dark *));
+
+/* Hide NgmdUi Custom Elements inside markdown until @angular/elements has
+ * registered them (Angular-rendered hosts in .page.ts are already complete).
+ * Without this, raw children (often plain <code> spans projected via
+ * ng-content) render with default inline-code styling for a few ms during
+ * the bundle load + provideAppInitializer step — looks like the title sits
+ * inside a code pill until the element upgrades. `:not(:defined)` ceases
+ * matching the moment customElements.define() runs. */
+:is(analog-markdown, analog-markdown-route) ngmd-accordion:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-accordion-item:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-alert:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-badge:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-callout:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-card:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-card-grid:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-hero:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-image:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-pill:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-pill-row:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-step:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-tab:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-tabs:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-video:not(:defined),
+:is(analog-markdown, analog-markdown-route) ngmd-workflow:not(:defined) {
+  visibility: hidden;
+}
+
+@layer base {
+  /* Host margin lives here (not on the inner template div) so a class
+   * on the markdown tag overrides it. Inner-div margins are trapped by
+   * the flex/grid formatting context they sit in, so `class="my-8"`
+   * written in .md cannot reach them. With margin on the host +
+   * `display: block`, `<ngmd-callout class="my-8">` works as expected.
+   * Lives inside `@layer base` so Tailwind utilities (which sit in the
+   * later `@layer utilities`) win on cascade and the `class=` override
+   * actually applies. Unlayered rules would otherwise always beat
+   * layered ones regardless of selector specificity. */
+  ngmd-accordion,
+  ngmd-callout,
+  ngmd-card-grid,
+  ngmd-code-block,
+  ngmd-image,
+  ngmd-tabs,
+  ngmd-video,
+  ngmd-hero,
+  ngmd-workflow,
+  ngmd-alert,
+  ngmd-pill-row {
+    display: block;
+    margin: 1.5rem 0;
+  }
+}
+
+@layer base {
+  :root {
+    /* Surface */
+    --bg: #ffffff;
+    --bg-muted: #f4f4f5;
+    --fg: #0a0a0a;
+    --muted: #71717a;
+    --border: #e4e4e7;
+    --border-strong: #d4d4d8;
+
+    /* Brand (used by accent-aware components) */
+    --primary: #18181b;
+    --primary-fg: #fafafa;
+    --accent: #b45309;
+    --accent-strong: #92400e;
+    --accent-fg: #ffffff;
+    --accent-soft: rgba(245, 165, 36, 0.16);
+    --accent-gradient: linear-gradient(to right, #b45309 0%, #d97706 50%, #92400e 100%);
+    --accent-gradient-soft: linear-gradient(
+      to bottom right,
+      rgba(251, 191, 36, 0.12) 0%,
+      rgba(245, 165, 36, 0.1) 50%,
+      rgba(217, 119, 6, 0.08) 100%
+    );
+    --code-border-gradient: linear-gradient(135deg, #fcd34d, #f5a524, #b45309);
+    --line-highlight: rgba(245, 165, 36, 0.16);
+
+    /* Geometry */
+    --radius-sm: 0.25rem;
+    --radius: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+
+    /* Typography */
+    --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-display: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    font-family: var(--font-sans);
+    color-scheme: light;
+  }
+
+  .dark {
+    --bg: #0a0a0a;
+    --bg-muted: #18181b;
+    --fg: #fafafa;
+    --muted: #a1a1aa;
+    --border: #27272a;
+    --border-strong: #3f3f46;
+
+    --primary: #fafafa;
+    --primary-fg: #18181b;
+    --accent: #f5a524;
+    --accent-strong: #fcd34d;
+    --accent-fg: #18181b;
+    --accent-soft: rgba(245, 165, 36, 0.15);
+    --accent-gradient: linear-gradient(to right, #fbbf24 0%, #f5a524 50%, #fcd34d 100%);
+    --accent-gradient-soft: linear-gradient(
+      to bottom right,
+      rgba(251, 191, 36, 0.1) 0%,
+      rgba(245, 165, 36, 0.1) 50%,
+      rgba(217, 119, 6, 0.1) 100%
+    );
+    --code-border-gradient: linear-gradient(135deg, #fde68a, #f5a524, #d97706);
+    --line-highlight: rgba(245, 165, 36, 0.14);
+
+    color-scheme: dark;
+  }
+
+  html,
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+  }
+
+  a {
+    text-decoration: inherit;
+  }
+
+  /* `<mark>` is emitted by both search providers around the matched
+   * substring. Match-on-accent so users see why each row hit without the
+   * default browser yellow flash. */
+  mark {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    border-radius: 0.2rem;
+    padding: 0 0.1em;
+  }
+
+  /* Scrollbar styling, ported from angular.dev (shared-docs
+   * `_scroll-track.scss`). Opt in by adding the class to a scrollable
+   * element. Global / native scrollbars stay browser-default.
+   *
+   * - `.ngmd-scroll-track` — 8px, large surfaces (main page)
+   * - `.ngmd-scroll-track-mini` — 6px, side surfaces (sidebar, TOC, code)
+   *
+   * Both: transparent track, rounded thumb, colour shift on hover. */
+  .ngmd-scroll-track::-webkit-scrollbar-track,
+  .ngmd-scroll-track-mini::-webkit-scrollbar-track,
+  .ngmd-scroll-track::-webkit-scrollbar-corner,
+  .ngmd-scroll-track-mini::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .ngmd-scroll-track::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .ngmd-scroll-track-mini::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  /* Main page (body) — adev pattern: base is brighter (medium gray) and
+   * hover goes a notch darker. Different palette step from the side
+   * scroll so they don't read identical. */
+  .ngmd-scroll-track::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--muted) 45%, transparent);
+    border-radius: 10px;
+    transition: background-color 0.3s ease;
+  }
+
+  .ngmd-scroll-track::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted);
+  }
+
+  /* Side surfaces — pick up colour on hover so the user knows they can
+   * grab the small thumb. */
+  .ngmd-scroll-track-mini::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border-radius: 10px;
+    transition: background-color 0.3s ease;
+  }
+
+  .ngmd-scroll-track-mini::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted);
+  }
+}
+
+@layer components {
+  /* Suppress pointer-driven focus rings on <details>/<summary> (the cyan
+   * flash on click is the browser default outline). Keyboard focus is left
+   * untouched — `:focus-visible` only fires for keyboard / tab navigation
+   * and gets a proper accent outline below. */
+  details:focus:not(:focus-visible),
+  summary:focus:not(:focus-visible) {
+    outline: none;
+    box-shadow: none;
+  }
+
+  /* Same treatment for the accordion-item button. */
+  .ngmd-accordion-item > button:focus:not(:focus-visible) {
+    outline: none;
+    box-shadow: none;
+  }
+
+  /* Visible keyboard focus for accordion buttons. Accent ring so the focused
+   * row reads at a glance during keyboard navigation. */
+  .ngmd-accordion-item > button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  analog-markdown,
+  analog-markdown-route,
+  .ngmd-prose {
+    display: block;
+    color: var(--fg);
+    line-height: 1.7;
+    overflow-wrap: break-word;
+    /* Widen inter-word gaps slightly so inline-code chips don't kiss the
+     * neighbouring word. Applies to all prose so the rhythm stays even. */
+    word-spacing: 0.05em;
+  }
+
+  analog-markdown-route {
+    max-width: 48rem;
+    margin-inline: auto;
+    padding: 0 2rem 0 2rem;
+  }
+
+  analog-markdown h1,
+  analog-markdown-route h1 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-block: 0 1rem;
+    letter-spacing: -0.02em;
+    scroll-margin-top: 6rem;
+  }
+
+  analog-markdown h2,
+  analog-markdown-route h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin-block: 2.5rem 1rem;
+    padding-block-end: 0.5rem;
+    border-block-end: 1px solid var(--border);
+    letter-spacing: -0.01em;
+    scroll-margin-top: 6rem;
+  }
+
+  analog-markdown h3,
+  analog-markdown-route h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-block: 2rem 0.75rem;
+    scroll-margin-top: 6rem;
+  }
+
+  /* When a badge chip sits inline next to a heading (`## 0.1.2 <ngmd-badge ...>`)
+   * the chip's default `vertical-align: middle` aligns to the x-height
+   * baseline, which sits low against uppercase / numeric heading glyphs that
+   * have no x-height. Nudge the chip up so it reads as visually centred. */
+  analog-markdown :where(h1, h2, h3, h4) ngmd-badge,
+  analog-markdown-route :where(h1, h2, h3, h4) ngmd-badge,
+  .ngmd-prose :where(h1, h2, h3, h4) ngmd-badge {
+    position: relative;
+    top: -0.05em;
+  }
+
+  /* Inline code inside headings: strip the heavy code-span box and lean on
+   * the brand accent instead. Lets identifiers like skill names, hook names,
+   * or symbol references read as accent-coloured monospace titles rather
+   * than the dense gray pill the inline-code rule applies in body prose. */
+  analog-markdown h1 code,
+  analog-markdown-route h1 code,
+  analog-markdown h2 code,
+  analog-markdown-route h2 code,
+  analog-markdown h3 code,
+  analog-markdown-route h3 code {
+    color: var(--accent);
+    background: transparent;
+    padding: 0;
+    font-size: 0.95em;
+  }
+
+  analog-markdown p,
+  analog-markdown-route p {
+    margin-block: 1rem;
+  }
+
+  analog-markdown ul,
+  analog-markdown-route ul,
+  analog-markdown ol,
+  analog-markdown-route ol {
+    margin-block: 1rem;
+    padding-inline-start: 1.5rem;
+  }
+
+  analog-markdown ul,
+  analog-markdown-route ul {
+    list-style: disc;
+  }
+
+  analog-markdown ol,
+  analog-markdown-route ol {
+    list-style: decimal;
+  }
+
+  analog-markdown li,
+  analog-markdown-route li {
+    margin-block: 0.25rem;
+  }
+
+  analog-markdown a,
+  analog-markdown-route a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    transition: color 0.15s ease;
+  }
+
+  analog-markdown a:hover,
+  analog-markdown-route a:hover {
+    color: var(--accent-strong);
+  }
+
+  analog-markdown a:focus-visible,
+  analog-markdown-route a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  analog-markdown code:not(pre code),
+  analog-markdown-route code:not(pre code),
+  .ngmd-prose code:not(pre code) {
+    background:
+      linear-gradient(var(--bg), var(--bg)) padding-box,
+      var(--code-border-gradient) border-box;
+    color: var(--fg);
+    padding: 0.15em 0.45em;
+    border-radius: 0.3rem;
+    font-size: 0.875em;
+    font-weight: 500;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    border: 1.5px solid transparent;
+    /* When a long chip wraps across two lines, each fragment gets a
+     * full border + padding instead of the default split where the
+     * right side is open on line 1 and the left side is open on line 2. */
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  .dark analog-markdown code:not(pre code),
+  .dark analog-markdown-route code:not(pre code),
+  .dark .ngmd-prose code:not(pre code) {
+    border-width: 1px;
+  }
+
+  :is(analog-markdown, analog-markdown-route, .ngmd-prose)
+    :is(ngmd-card, ngmd-callout)
+    code:not(pre code) {
+    background: color-mix(in srgb, var(--fg) 7%, transparent);
+    border-color: transparent;
+  }
+
+  analog-markdown pre,
+  analog-markdown-route pre {
+    margin: 1.5rem 0;
+    padding: 1rem 1.25rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    border: 1px solid var(--border);
+  }
+
+  analog-markdown pre code,
+  analog-markdown-route pre code {
+    background: transparent;
+    padding: 0;
+  }
+
+  /* Markdown tables. Mirrors adev's `_table.scss` shape: full-width, thin
+   * row dividers, header underline, vertical-align top so multi-line cells
+   * and inline-code chips don't push their row off-balance. Wrapped in an
+   * `overflow-x: auto` shell so wide tables scroll horizontally on mobile
+   * instead of breaking the layout. */
+  analog-markdown table,
+  analog-markdown-route table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    display: block;
+    overflow-x: auto;
+  }
+
+  analog-markdown table:focus-visible,
+  analog-markdown-route table:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  analog-markdown thead,
+  analog-markdown-route thead {
+    border-block-end: 1px solid var(--border);
+  }
+
+  analog-markdown th,
+  analog-markdown-route th {
+    text-align: left;
+    padding: 0.5rem 1rem 0.5rem 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    vertical-align: bottom;
+  }
+
+  analog-markdown tbody tr,
+  analog-markdown-route tbody tr {
+    border-block-end: 1px solid var(--border);
+  }
+
+  analog-markdown tbody tr:last-child,
+  analog-markdown-route tbody tr:last-child {
+    border-block-end: none;
+  }
+
+  analog-markdown td,
+  analog-markdown-route td {
+    padding: 0.85rem 1rem 0.85rem 0;
+    vertical-align: top;
+  }
+
+  analog-markdown td:first-child,
+  analog-markdown-route td:first-child {
+    min-width: 22ch;
+    padding-inline-end: 1.5rem;
+  }
+
+  analog-markdown td:last-child,
+  analog-markdown-route td:last-child {
+    padding-inline-end: 0;
+  }
+
+  /* Small brand icon for package-name table cells. Inline-block with the
+   * baseline so it doesn't bump the row height; sized to 1em so it scales
+   * with the surrounding font automatically. */
+  analog-markdown img.pkg-icon,
+  analog-markdown-route img.pkg-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-inline-end: 0.5em;
+    vertical-align: -0.15em;
+    object-fit: contain;
+  }
+
+  analog-markdown blockquote,
+  analog-markdown-route blockquote {
+    border-inline-start: 3px solid var(--border);
+    padding-inline-start: 1rem;
+    margin-inline: 0;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .ngmd-video {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    margin: 1.5rem 0;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg-muted);
+  }
+
+  .ngmd-video iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  .ngmd-image {
+    margin: 1.5rem 0;
+    margin-inline: 0;
+  }
+
+  .ngmd-image img {
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+
+  .ngmd-image figcaption {
+    margin-top: 0.5rem;
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--muted);
+  }
+
+  .ngmd-code-group {
+    margin: 1.5rem 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .ngmd-code-group__tabs {
+    display: flex;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-muted);
+  }
+
+  .ngmd-code-group__tab {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    color: color-mix(in srgb, var(--muted) 80%, var(--fg));
+    font-family: var(--font-mono);
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .ngmd-code-group__icon {
+    width: 1rem;
+    height: 1rem;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  .ngmd-code-group__tab:hover {
+    color: var(--fg);
+  }
+
+  .ngmd-code-group__tab[data-active='true'] {
+    color: var(--accent-strong);
+    border-bottom-color: var(--accent);
+  }
+
+  .ngmd-code-group__panel {
+    display: none;
+  }
+
+  .ngmd-code-group__panel[data-active='true'] {
+    display: block;
+  }
+
+  .ngmd-code-group__panel pre {
+    margin: 0;
+    border-radius: 0;
+    border: 0;
+  }
+
+  /* Shiki dual-theme: github-light-default by default, github-dark-default under `.dark`.
+   * Shiki emits both --shiki-light and --shiki-dark CSS vars on every span
+   * but never picks a default color, so we have to wire both branches. */
+  /* Scoped to `.shiki-themes` (only present on dual-theme output, never on
+   * single-theme build-time output) so we don't override the inline colours
+   * shiki emits for the build-time `.md` code blocks. */
+  .shiki-themes,
+  .shiki-themes span {
+    color: var(--shiki-light);
+    background-color: var(--shiki-light-bg);
+  }
+
+  .dark .shiki-themes,
+  .dark .shiki-themes span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+
+  /* Highlighted lines (from `{1,3-5}` meta on a fenced block).
+   * Shiki wraps each line in `<span class="line">`; the ngmd-code-highlight
+   * marked extension adds `highlighted` to lines in the spec. We render a
+   * full-bleed tinted background plus a left-edge accent stripe. */
+  .shiki .line.highlighted {
+    display: inline-block;
+    width: 100%;
+    background-color: var(--line-highlight);
+    box-shadow: inset 2px 0 var(--accent);
+  }
+
+  /* Accordion item (NgmdAccordionItem) animations.
+   *
+   * Two pieces:
+   * 1. Chevron rotates from -180deg (closed, points up) to 0deg (open, points
+   *    down). Single endpoint pair so the browser cannot take the long way
+   *    around — what tripped the earlier `rotate-180` attempt.
+   * 2. Body collapses via CSS grid-rows: the outer `.ngmd-accordion-body`
+   *    animates `grid-template-rows` between 0fr and 1fr; the inner wrapper
+   *    has `overflow: hidden` and `min-height: 0` so the row fr basis is the
+   *    real animation driver. This trick has the widest evergreen support
+   *    right now — Chrome 117+, Edge 117+, Safari 17.4+, Firefox 121+ — and
+   *    avoids `interpolate-size: allow-keywords` which is still landing
+   *    (Firefox shipped only in 145, late 2025). See:
+   *    https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template-rows
+   */
+  /* Open-state button background. Token-driven so it follows the surface
+   * palette in both modes (zinc-100 in light, zinc-900 in dark). */
+  .ngmd-accordion-item.is-open > button {
+    background: var(--bg-muted);
+  }
+
+  /* Body reveal: grid-template-rows from minmax(0,0fr) to minmax(0,1fr).
+   * Symmetric in both directions and crucially clamps the row to 0 when
+   * closed regardless of the inner wrapper's intrinsic size. */
+  .ngmd-accordion-body {
+    display: grid;
+    grid-template-rows: minmax(0, 0fr);
+    min-height: 0;
+    opacity: 0;
+    transition:
+      grid-template-rows 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 200ms ease-out;
+  }
+
+  .ngmd-accordion-item.is-open .ngmd-accordion-body {
+    grid-template-rows: minmax(0, 1fr);
+    opacity: 1;
+  }
+
+  .ngmd-accordion-body-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ngmd-accordion-body {
+      transition: none;
+    }
+  }
+
+  /* `<div class="ngmd-code-import">` wraps a file= imported code block with
+   * a header bar that links the file path to its GitHub source. */
+  .ngmd-code-import {
+    margin: 1.5rem 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .ngmd-code-import__header {
+    display: block;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-muted);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    color: color-mix(in srgb, var(--muted) 80%, var(--fg));
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+
+  .ngmd-code-import__header:hover {
+    color: var(--accent-strong);
+  }
+
+  .ngmd-code-import pre {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+}

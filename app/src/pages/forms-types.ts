@@ -1,4 +1,5 @@
 import type { DevframeRpcClient } from 'devframe/client';
+import { rpcTry } from '../rpc';
 
 export type FieldStatus = 'VALID' | 'INVALID' | 'PENDING' | 'DISABLED';
 
@@ -55,7 +56,29 @@ export interface CollectedForm {
   submit?: { hasAction: boolean; willRun: boolean; submitting: boolean };
   submitDom?: { reasons: string[] };
   errorSummary?: { path: string; kind: string; message: string }[];
+  webMcp?: WebMcpTool;
   root: FormFieldNode;
+}
+
+export interface WebMcpTool {
+  name: string;
+  description: string;
+  status: 'registering' | 'registered' | 'failed';
+  seen: 'register' | 'list' | 'error';
+  error?: string;
+  inputs?: string[];
+  required?: string[];
+  requiredChanged?: { path: string; now: boolean }[];
+  blocking?: { path: string; reason: string }[];
+  duplicate?: boolean;
+  calls?: { at: number; ms?: number; outcome: string; fields?: string[]; detail?: string }[];
+}
+
+export interface WebMcpPage {
+  pageId?: string;
+  modelContext: boolean;
+  provided?: boolean;
+  tools: WebMcpTool[];
 }
 
 export function pageOf(formId: string): string {
@@ -116,20 +139,22 @@ export const SOURCE_LABELS: Record<string, string> = {
   manual: 'setErrors',
 };
 
-export function formsCall<T>(
-  client: DevframeRpcClient | null,
-  name: string,
-  arg?: unknown,
-): Promise<T | null> {
-  if (!client) return Promise.resolve(null);
-  const rpc = client.scope('ng-devtools').rpc as unknown as {
-    call: (name: string, ...args: unknown[]) => Promise<unknown>;
-  };
-  return rpc.call(name, ...(arg === undefined ? [] : [arg])).then(
-    (value) => value as T,
-    () => null,
-  );
+export const formsCall = rpcTry;
+
+const REDACT_LABELS: Record<string, string> = {
+  key: 'name looks secret',
+  'input-type': 'password input',
+  autocomplete: 'autocomplete is a secret kind',
+  marker: 'marked as mask',
+  parent: 'inside a secret group',
+  config: 'listed in mask',
+};
+
+export function redactLabel(reason: string): string {
+  return REDACT_LABELS[reason] ?? reason;
 }
+
+export const UNMASK_DOCS_URL = 'https://pangular-inspector.dev/security/#opt-fields-in-or-out';
 
 export async function formAction(
   client: DevframeRpcClient | null,
@@ -147,24 +172,19 @@ export function actionMessage(result: FormActionResult): string {
   return `${text}${skipped}${result.status ? ` Status: ${result.status}.` : ''}`;
 }
 
+const MARKUP = /"(?:[^"\\\n]|\\.)*"|`([^`\n]*)`|\*\*/g;
+
 export function plain(text: string | null): string {
   return (text ?? '')
     .replace(/^_Labels, paths.*_\n\n/, '')
-    .replace(/`/g, '')
-    .replace(/\*\*/g, '');
+    .replace(MARKUP, (match, code?: string) => code ?? (match === '**' ? '' : match));
 }
 
 export const FORMS_STYLES = `
+  @use 'mixins' as m;
+
   .muted {
     color: var(--text-2);
-  }
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
   code {
     font-family: var(--font-mono);
@@ -235,6 +255,32 @@ export const FORMS_STYLES = `
     color: #1f0707;
     font-weight: 600;
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent);
+
+    @include m.light {
+      color: #fff;
+    }
+  }
+  .summary-link {
+    display: inline;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .summary-link code:first-of-type {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .summary-link:hover code:first-of-type {
+    color: var(--accent-hover);
+  }
+  .summary-link:focus-visible {
+    @include m.focus-ring;
   }
   .field-input {
     min-width: 0;
@@ -304,18 +350,18 @@ export const FORMS_STYLES = `
   }
   .tag[data-tone='ok'] {
     border-color: color-mix(in srgb, var(--ok) 30%, transparent);
-    background: color-mix(in srgb, var(--ok) 12%, transparent);
-    color: var(--ok);
+    background: color-mix(in srgb, var(--ok) 12%, var(--surface));
+    color: var(--ok-text);
   }
   .tag[data-tone='warn'] {
     border-color: color-mix(in srgb, var(--warn) 30%, transparent);
-    background: color-mix(in srgb, var(--warn) 12%, transparent);
-    color: var(--warn);
+    background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+    color: var(--warn-text);
   }
   .tag[data-tone='bad'] {
     border-color: color-mix(in srgb, var(--danger) 30%, transparent);
-    background: color-mix(in srgb, var(--danger) 12%, transparent);
-    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+    color: var(--danger-text);
   }
   .status {
     margin: 0;
@@ -352,11 +398,6 @@ export const FORMS_STYLES = `
     border: 2px solid var(--border-strong);
     border-top-color: var(--accent);
     border-radius: 50%;
-    animation: forms-spin 0.8s linear infinite;
-  }
-  @keyframes forms-spin {
-    to {
-      transform: rotate(360deg);
-    }
+    animation: spin 0.8s linear infinite;
   }
 `;

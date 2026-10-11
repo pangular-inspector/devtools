@@ -33,7 +33,7 @@ import { CartStore } from './shared/cart.store';
     <footer>
       <span class="muted">Built with</span>
       <a href="https://analogjs.org">Analog</a>
-      <span class="muted">· a demo for Angular DevTools</span>
+      <span class="muted">· a demo for Pangular Inspector</span>
     </footer>
   `,
 })

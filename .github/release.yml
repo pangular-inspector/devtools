@@ -1,0 +1,14 @@
+changelog:
+  exclude:
+    labels: ['release: skip']
+  categories:
+    - title: Breaking changes
+      labels: ['breaking changes']
+    - title: Features
+      labels: [feature]
+    - title: Bug fixes
+      labels: [bug]
+    - title: Documentation
+      labels: ['area: docs']
+    - title: Other changes
+      labels: ['*']

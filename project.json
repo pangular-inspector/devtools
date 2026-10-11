@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/nx/schemas/project-schema.json",
-  "name": "angular-devtools",
+  "name": "pangular-inspector",
   "projectType": "application",
   "generators": {},
   "sourceRoot": "src",
@@ -26,7 +26,7 @@
         "ssr": {
           "entry": "src/server.ts"
         },
-        "outputPath": "dist/angular-devtools"
+        "outputPath": "dist/pangular-inspector"
       },
       "configurations": {
         "production": {
@@ -57,16 +57,19 @@
       "executor": "@angular/build:dev-server",
       "configurations": {
         "production": {
-          "buildTarget": "angular-devtools:build:production"
+          "buildTarget": "pangular-inspector:build:production"
         },
         "development": {
-          "buildTarget": "angular-devtools:build:development"
+          "buildTarget": "pangular-inspector:build:development"
         }
       },
       "defaultConfiguration": "development"
     },
     "test": {
-      "executor": "@angular/build:unit-test"
+      "executor": "@angular/build:unit-test",
+      "options": {
+        "runnerConfig": true
+      }
     }
   }
 }

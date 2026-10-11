@@ -1,16 +1,30 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
   input,
   linkedSignal,
   signal,
+  untracked,
 } from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
+import { rpcCall as call } from '../rpc';
+import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
+import {
+  CACHE_SKIP_TEXT,
+  HTTP_RULE_STATUSES,
+  isHttpRuleStatus,
+  type CacheSkip,
+} from '@pangular-inspector/devtools/config';
+import { prettyJson } from '../format';
+import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 
 type HttpSide = 'client' | 'server';
@@ -35,17 +49,96 @@ interface HttpCall {
   side: HttpSide;
   cacheHit: boolean;
   faulted: boolean;
+  mocked?: boolean;
+  delayMs?: number;
+  cancelled?: boolean;
   ruleId?: string;
+  rulePattern?: string;
   pageUrl?: string;
+  requestId?: string;
+  cacheStored?: boolean;
+  cacheSkip?: CacheSkip;
   at: number;
   error?: string;
   preview?: string;
 }
 
+interface SsrNavigation {
+  url: string;
+  finalUrl?: string;
+  outcome: string;
+  reason?: string;
+  durationMs?: number;
+  guards?: { names: string[]; passed?: boolean; ms?: number };
+  resolvers?: { names: string[]; ms?: number };
+}
+
+interface SsrRequest {
+  id: string;
+  method: string;
+  url: string;
+  status: number;
+  at: number;
+  durationMs: number;
+  renderMs: number;
+  bytes: number;
+  renderMode: 'server' | 'prerender' | 'client' | 'redirect' | 'not-rendered' | 'unknown';
+  fetches: number;
+  fetchMs: number;
+  headers: Record<string, string>;
+  navigations?: SsrNavigation[];
+  overrides?: { id: string; kind: SsrOverrideKind; applied: boolean; note?: string }[];
+  aborted?: boolean;
+}
+
+type SsrOverrideKind = 'render-error' | 'client-render' | 'state-edit';
+
+interface SsrOverride {
+  id: string;
+  kind: SsrOverrideKind;
+  pattern: string;
+  enabled: boolean;
+  message?: string;
+  key?: string;
+  value?: string;
+}
+
+interface OverrideDraft {
+  kind: SsrOverrideKind;
+  pattern: string;
+  message: string;
+  key: string;
+  value: string;
+}
+
+const EMPTY_OVERRIDE: OverrideDraft = {
+  kind: 'render-error',
+  pattern: '',
+  message: '',
+  key: '',
+  value: '',
+};
+
+const OVERRIDE_LABEL: Record<SsrOverrideKind, string> = {
+  'render-error': 'Render error',
+  'client-render': 'Client render',
+  'state-edit': 'TransferState edit',
+};
+
+const RENDER_MODE_LABEL: Record<SsrRequest['renderMode'], string> = {
+  server: 'Server',
+  prerender: 'Prerender',
+  client: 'Client',
+  redirect: 'Redirect',
+  'not-rendered': 'Not rendered',
+  unknown: 'Unknown',
+};
+
 interface PayloadEntry {
   key: string;
   http?: { url?: string; status?: number; statusText?: string; responseType?: string };
   source?: 'http' | 'analog' | 'hydration';
+  fn?: { id: string; name?: string; file?: string };
   size: number;
   value: unknown;
 }
@@ -67,6 +160,14 @@ interface HydrationStats {
   skipHydrationHosts: string[];
   warnings: string[];
   warningsCaptured?: boolean;
+  stableMs?: number;
+}
+
+interface HttpPayload {
+  found: boolean;
+  size: number;
+  entries: PayloadEntry[];
+  error?: string;
 }
 
 interface HttpPage {
@@ -74,17 +175,21 @@ interface HttpPage {
   url: string;
   initialUrl?: string;
   title: string;
-  payload: { found: boolean; size: number; entries: PayloadEntry[]; error?: string };
   hydration: HydrationStats | null;
   calls: HttpCall[];
+  dropped?: number;
+  ssrRequestId?: string;
   firstSeenAt?: number;
   reportedAt: number;
 }
 
 interface HttpState {
   serverCalls: HttpCall[];
+  serverDropped?: number;
+  requests?: SsrRequest[];
   pages: HttpPage[];
   rules: HttpRule[];
+  ssrOverrides?: SsrOverride[];
 }
 
 interface RuleDraft {
@@ -97,25 +202,89 @@ interface RuleDraft {
 }
 
 const EMPTY_DRAFT: RuleDraft = {
-  pattern: '/api/products',
+  pattern: '',
   method: '',
   target: 'both',
-  status: '500',
+  status: '',
   delayMs: '',
   body: '',
 };
 
-function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Promise<unknown> {
-  if (!client) return Promise.resolve(null);
-  const rpc = client.scope('ng-devtools').rpc as unknown as {
-    call: (name: string, ...args: unknown[]) => Promise<unknown>;
-  };
-  return rpc.call(name, ...(arg === undefined ? [] : [arg]));
+function pathOf(url: string): string {
+  try {
+    const parsed = new URL(url, 'http://x');
+    return parsed.pathname + parsed.search;
+  } catch {
+    return url;
+  }
 }
+
+const REDACTED_IN_URL = /\[redacted\]|%5Bredacted%5D/gi;
+
+/**
+ * A rule pattern for a recorded call: its path and query, without the origin, so it
+ * matches the relative client URL and the absolute SSR URL. A redacted value becomes
+ * `*`, because the real request carries the secret.
+ */
+function mockPattern(url: string): string {
+  return pathOf(url).replace(REDACTED_IN_URL, '*');
+}
+
+/** The preview as a mock body, when it is complete JSON (the rule form takes JSON only). */
+function jsonBody(preview: string): string | null {
+  const pretty = prettyJson(preview);
+  if (pretty !== null) return pretty;
+  try {
+    JSON.parse(preview);
+    return preview.trim();
+  } catch {
+    return null;
+  }
+}
+
+const STANDARD_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+
+/**
+ * The path of a page, as an SSR override pattern. The query is left out because the panel only
+ * has a redacted copy of it, which would not match the real request.
+ */
+function pagePath(url: string): string {
+  try {
+    return new URL(url, 'http://x').pathname;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * The page path as a prefilled override pattern. Patterns match anywhere in the URL, so the site
+ * root (`/`) would match every page; it is left empty for the user to fill in.
+ */
+function pagePattern(url: string): string {
+  const path = pagePath(url);
+  return path === '/' ? '' : path;
+}
+
+/** A part the server masked in a payload key, plain or URL-encoded. */
+const REDACTED_PART = /\[redacted\]|%5Bredacted%5D/i;
+
+/** The longest TransferState key `set-ssr-overrides` keeps (see `sanitizeSsrOverrides`). */
+const MAX_OVERRIDE_KEY = 200;
+const MAX_RULES = 50;
+const MAX_PATTERN = 500;
+const MAX_BODY = 100_000;
+
+const HTTP_STATUS_OPTIONS: SelectOption[] = [
+  { value: '', label: 'None' },
+  ...HTTP_RULE_STATUSES.map(([status, reason]) => ({
+    value: String(status),
+    label: `${status} ${reason}`,
+  })),
+];
 
 @Component({
   selector: 'app-network-inspector',
-  imports: [JsonPipe, Select],
+  imports: [JsonPipe, LimitNote, Select],
   template: `
     @if (loading()) {
       <div class="state" role="status">
@@ -144,14 +313,269 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
           (valueChange)="selectPage($event)"
         />
       </div>
-      <button type="button" (click)="clearCalls()">Clear timeline</button>
+      <button
+        type="button"
+        [disabled]="!canWrite()"
+        [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
+        (click)="clearCalls()"
+      >
+        Clear timeline
+      </button>
       <p class="message" role="status">{{ message() }}</p>
     </div>
 
     <div class="grid">
+      <section class="panel wide" aria-labelledby="ssr-heading">
+        <h2 id="ssr-heading">SSR requests ({{ requests().length }})</h2>
+        @if (requests().length) {
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Request</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Render mode</th>
+                  <th scope="col" class="num">Render</th>
+                  <th scope="col" class="num">Server calls</th>
+                  <th scope="col">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (req of requests(); track req.id) {
+                  <tr
+                    [class.selected]="selectedRequest()?.id === req.id"
+                    (click)="selectedRequestId.set(req.id)"
+                  >
+                    <td class="url">
+                      <button
+                        type="button"
+                        class="link"
+                        [title]="req.url"
+                        [attr.aria-pressed]="selectedRequest()?.id === req.id"
+                        aria-controls="ssr-detail"
+                      >
+                        <span class="method">{{ req.method }}</span> {{ req.url }}
+                      </button>
+                    </td>
+                    <td
+                      class="status"
+                      [class.ok]="statusTone(req.status) === 'ok'"
+                      [class.redirect]="statusTone(req.status) === 'redirect'"
+                      [class.bad]="statusTone(req.status) === 'bad'"
+                    >
+                      <span class="dot" aria-hidden="true"></span>{{ req.status }}
+                    </td>
+                    <td>{{ renderModeLabel(req.renderMode) }}</td>
+                    <td class="num">{{ req.renderMs }} ms</td>
+                    <td class="num">{{ req.fetches }} ({{ req.fetchMs }} ms)</td>
+                    <td>
+                      <div class="notes">
+                        @if (req.id === selected()?.ssrRequestId) {
+                          <span class="tag server">this page</span>
+                        }
+                        @if (req.overrides?.length) {
+                          <span class="tag mock">overridden</span>
+                        }
+                        @if (req.aborted) {
+                          <span class="tag fault">aborted</span>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (selectedRequest(); as req) {
+            <div id="ssr-detail" class="preview" role="region" aria-labelledby="ssr-detail-heading">
+              <h3 id="ssr-detail-heading">
+                {{ req.method }} <code>{{ req.url }}</code>
+              </h3>
+              <dl class="stats">
+                <div>
+                  <dt>Request id</dt>
+                  <dd>
+                    <code>{{ req.id }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Render</dt>
+                  <dd>{{ req.renderMs }} ms</dd>
+                </div>
+                <div>
+                  <dt>Total</dt>
+                  <dd>{{ req.durationMs }} ms</dd>
+                </div>
+                <div>
+                  <dt>Sent</dt>
+                  <dd>{{ req.bytes }} B</dd>
+                </div>
+                <div>
+                  <dt>Browser page</dt>
+                  <dd>{{ requestPage()?.title || requestPage()?.url || 'not connected' }}</dd>
+                </div>
+              </dl>
+              @if (req.overrides?.length) {
+                <h3>Overrides from the panel</h3>
+                <p class="muted small">
+                  This response was changed on purpose, so it is not what the app sends on its own.
+                </p>
+                @for (o of req.overrides; track o.id + o.kind) {
+                  <p class="request-call">
+                    <span class="tag mock">{{ overrideLabel(o.kind) }}</span>
+                    <span>{{ o.applied ? 'applied' : 'not applied' }}</span>
+                    @if (o.note) {
+                      <span class="muted">{{ o.note }}</span>
+                    }
+                  </p>
+                }
+              }
+              @if (req.navigations?.length) {
+                <h3>Router during the render</h3>
+                @for (n of req.navigations; track $index) {
+                  <dl class="stats nav-stats">
+                    <div>
+                      <dt>Navigation</dt>
+                      <dd>
+                        <code>{{ n.url }}</code>
+                        @if (n.finalUrl) {
+                          to <code>{{ n.finalUrl }}</code>
+                        }
+                        ({{ n.outcome }})
+                      </dd>
+                    </div>
+                    @if (n.guards) {
+                      <div>
+                        <dt>Guards</dt>
+                        <dd [class.bad]="guardVerdict(n) === 'rejected'">
+                          {{ msLabel(n.guards.ms)
+                          }}{{ guardVerdict(n) ? ', ' + guardVerdict(n) : '' }}
+                        </dd>
+                      </div>
+                    }
+                    @if (n.resolvers) {
+                      <div>
+                        <dt>Resolvers</dt>
+                        <dd>{{ msLabel(n.resolvers.ms) }}</dd>
+                      </div>
+                    }
+                    @if (n.durationMs !== undefined) {
+                      <div>
+                        <dt>Navigation total</dt>
+                        <dd>{{ n.durationMs }} ms</dd>
+                      </div>
+                    }
+                  </dl>
+                  @if (n.reason) {
+                    <p class="muted small">{{ n.reason }}</p>
+                  }
+                }
+              }
+              <h3>Server calls ({{ requestCalls().length }})</h3>
+              @for (c of requestCalls(); track c.id) {
+                <p class="request-call">
+                  <span class="method">{{ c.method }}</span>
+                  <span class="preview-url" [title]="c.url">{{ c.url }}</span>
+                  <span
+                    class="status"
+                    [class.ok]="callTone(c) === 'ok'"
+                    [class.bad]="callTone(c) === 'bad'"
+                    >{{ statusLabel(c) }}</span
+                  >
+                  <span class="muted">{{ c.durationMs }} ms</span>
+                  @if (c.cacheStored) {
+                    <span class="tag server">cached</span>
+                  } @else if (c.cacheSkip) {
+                    <span class="tag" [title]="skipText(c.cacheSkip)">not cached</span>
+                  }
+                </p>
+                @if (!c.cacheStored && c.cacheSkip) {
+                  <p class="muted small skip-reason">Not cached: {{ skipText(c.cacheSkip) }}.</p>
+                }
+              } @empty {
+                <p class="muted small">The render made no HttpClient calls.</p>
+              }
+              @if (refetched().length) {
+                <h3>Fetched again in the browser ({{ refetched().length }})</h3>
+                <p class="muted small">
+                  These calls ran on the server and again after hydration instead of reading the
+                  transfer cache.
+                </p>
+                @for (c of refetched(); track c.id) {
+                  <p class="request-call">
+                    <span class="method">{{ c.method }}</span>
+                    <span class="preview-url" [title]="c.url">{{ c.url }}</span>
+                    <span class="tag fault">cache miss</span>
+                  </p>
+                  @if (refetchReason(c); as why) {
+                    <p class="muted small skip-reason">Why: {{ why }}.</p>
+                  }
+                }
+              } @else if (requestPage() && requestCalls().length) {
+                <p class="muted small ok-note">No server call ran again in the browser.</p>
+              }
+            </div>
+          }
+        } @else {
+          <div class="empty">
+            <p>No SSR requests traced.</p>
+            <p class="muted small">
+              Add <code>app.use(devtools.ssrMiddleware)</code> before the Angular handler in
+              <code>server.ts</code>, then load a server rendered page.
+            </p>
+          </div>
+        }
+      </section>
+
       <section class="panel wide" aria-labelledby="timeline-heading">
         <h2 id="timeline-heading">HTTP timeline ({{ timeline().length }})</h2>
-        @if (timeline().length) {
+        <app-limit-note
+          [dropped]="droppedCalls()"
+          [max]="maxCalls()"
+          what="HTTP calls"
+          limit="httpCalls"
+        />
+        <div
+          class="filters"
+          role="group"
+          aria-label="Filter the HTTP timeline"
+          [class.no-calls]="!timeline().length"
+        >
+          <div class="search">
+            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              id="timeline-search"
+              type="search"
+              placeholder="Find a URL or method…"
+              aria-label="Find a URL or method"
+              autocomplete="off"
+              spellcheck="false"
+              [value]="callQuery()"
+              (input)="callQuery.set($any($event.target).value)"
+              (keydown.escape)="callQuery.set('')"
+            />
+          </div>
+          <app-select
+            class="side-filter"
+            ariaLabel="Side"
+            [options]="sideOptions"
+            [(value)]="sideFilter"
+          />
+          <label class="inline failed-toggle">
+            <input
+              type="checkbox"
+              [checked]="failedOnly()"
+              (change)="failedOnly.set($any($event.target).checked)"
+            />
+            Failed only
+          </label>
+          <span class="total">{{ visibleCalls().length }} of {{ timeline().length }}</span>
+          <span class="sr-only" role="status">{{ filterStatus() }}</span>
+        </div>
+        @if (visibleCalls().length) {
           <div class="table-wrap">
             <table>
               <thead>
@@ -166,10 +590,10 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                 </tr>
               </thead>
               <tbody>
-                @for (entry of timeline(); track entry.side + entry.id) {
+                @for (entry of visibleCalls(); track entry.side + entry.id) {
                   <tr
                     [class.selected]="selectedCall()?.id === entry.id"
-                    (click)="selectedCallId.set(entry.id)"
+                    (click)="openCall(entry.id)"
                   >
                     <td>
                       <span class="tag" [class.server]="entry.side === 'server'">{{
@@ -182,8 +606,9 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                         type="button"
                         class="link"
                         [title]="entry.url"
+                        [attr.data-call-id]="entry.id"
                         [attr.aria-pressed]="selectedCall()?.id === entry.id"
-                        (click)="selectedCallId.set(entry.id)"
+                        [attr.aria-controls]="selectedCall() ? 'call-preview' : null"
                       >
                         {{ entry.url }}
                       </button>
@@ -193,11 +618,11 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                     </td>
                     <td
                       class="status"
-                      [class.ok]="statusTone(entry.status) === 'ok'"
-                      [class.redirect]="statusTone(entry.status) === 'redirect'"
-                      [class.bad]="statusTone(entry.status) === 'bad'"
+                      [class.ok]="callTone(entry) === 'ok'"
+                      [class.redirect]="callTone(entry) === 'redirect'"
+                      [class.bad]="callTone(entry) === 'bad'"
                     >
-                      <span class="dot" aria-hidden="true"></span>{{ entry.status || 'ERR' }}
+                      <span class="dot" aria-hidden="true"></span>{{ statusLabel(entry) }}
                     </td>
                     <td class="num">{{ entry.durationMs }} ms</td>
                     <td>
@@ -205,8 +630,19 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                         @if (entry.cacheHit) {
                           <span class="tag">transfer cache</span>
                         }
+                        @if (entry.delayMs) {
+                          <span class="tag">delayed {{ entry.delayMs }} ms</span>
+                        }
+                        @if (entry.mocked) {
+                          <span class="tag mock">mocked</span>
+                        }
                         @if (entry.faulted) {
                           <span class="tag fault">faulted</span>
+                        }
+                        @if (rulePatternOf(entry); as pattern) {
+                          <span class="tag rule-ref" [title]="'Matched rule: ' + pattern"
+                            >rule <code>{{ pattern }}</code></span
+                          >
                         }
                       </div>
                     </td>
@@ -215,51 +651,107 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
               </tbody>
             </table>
           </div>
+        } @else if (timeline().length) {
+          <div class="empty no-match" role="status">
+            <p>No requests match.</p>
+            <p class="muted small">
+              @if (callQuery().trim()) {
+                Nothing matches “{{ callQuery().trim() }}” with these filters.
+              } @else {
+                None of the {{ timeline().length }} requests fit these filters.
+              }
+            </p>
+            <div class="empty-actions">
+              <button type="button" (click)="clearCallFilters()">Clear filters</button>
+            </div>
+          </div>
         } @else {
           <div class="empty">
             <p>No requests yet.</p>
             <p class="muted small">
-              Add <code>withNgDevtools()</code> to <code>provideHttpClient</code>, then load a page
-              of the app.
+              Add <code>withPangular()</code> to <code>provideHttpClient</code>, then load a page of
+              the app.
             </p>
           </div>
         }
         @if (selectedCall(); as detail) {
-          <div class="preview">
+          <div
+            id="call-preview"
+            class="preview"
+            role="region"
+            aria-labelledby="preview-heading"
+            (keydown.escape)="closePreview()"
+          >
             <div class="preview-head">
-              <h3>Response preview</h3>
-              <button type="button" class="ghost" (click)="selectedCallId.set(null)">Close</button>
+              <h3 id="preview-heading" tabindex="-1">Response preview</h3>
+              <div class="preview-actions">
+                @if (!detail.error && detail.preview) {
+                  <button
+                    type="button"
+                    class="ghost"
+                    [attr.aria-label]="'Copy the response of ' + detail.method + ' ' + detail.url"
+                    (click)="copyPreview(detail)"
+                  >
+                    Copy
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="ghost"
+                  aria-controls="rule-form"
+                  [disabled]="!canWrite()"
+                  [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
+                  (click)="mockCall(detail)"
+                >
+                  Mock this request
+                </button>
+                <button type="button" class="ghost" (click)="closePreview()">Close</button>
+              </div>
             </div>
             <p class="preview-meta">
               <span class="method">{{ detail.method }}</span>
               <span
                 class="status"
-                [class.ok]="statusTone(detail.status) === 'ok'"
-                [class.redirect]="statusTone(detail.status) === 'redirect'"
-                [class.bad]="statusTone(detail.status) === 'bad'"
-                >{{ detail.status || 'ERR' }}</span
+                [class.ok]="callTone(detail) === 'ok'"
+                [class.redirect]="callTone(detail) === 'redirect'"
+                [class.bad]="callTone(detail) === 'bad'"
+                >{{ statusLabel(detail) }}</span
               >
               <span class="preview-url" [title]="detail.url">{{ detail.url }}</span>
             </p>
-            <pre [class.error]="!!detail.error">{{
-              detail.error ?? detail.preview ?? '(no body)'
-            }}</pre>
+            @if (rulePatternOf(detail); as pattern) {
+              <p class="preview-rule">
+                Matched rule <code>{{ pattern }}</code>
+              </p>
+            }
+            <!-- A named region, so the focusable scroll box says what it holds. -->
+            <pre
+              class="preview-body"
+              tabindex="0"
+              role="region"
+              [attr.aria-label]="detail.error ? 'Response error' : 'Response body'"
+              [class.error]="!!detail.error && !detail.cancelled"
+              >{{ detail.error ?? previewText(detail) ?? '(no body)' }}</pre>
           </div>
         }
       </section>
 
       <section class="panel" aria-labelledby="rules-heading">
         <h2 id="rules-heading">Fault injection</h2>
-        <form class="rule-form" (submit)="addRule($event)">
+        @if (!canWrite()) {
+          <p id="http-writes-off" class="muted small">{{ writesOff }}</p>
+        }
+        <form id="rule-form" class="rule-form" (submit)="addRule($event)">
           <label>
             <span>URL pattern <span class="hint">(substring or * glob)</span></span>
             <input
+              id="rule-pattern"
               required
               spellcheck="false"
               autocomplete="off"
               [value]="draft().pattern"
               (input)="patch('pattern', $event)"
-              placeholder="/api/products"
+              placeholder="e.g. /api/products"
             />
           </label>
           <div class="row">
@@ -267,7 +759,7 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
               <span id="rule-method-label">Method</span>
               <app-select
                 labelledBy="rule-method-label"
-                [options]="methodOptions"
+                [options]="methodOptions()"
                 [value]="draft().method"
                 (valueChange)="setDraft('method', $event ?? '')"
               />
@@ -276,6 +768,7 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
               <span id="rule-target-label">Apply on</span>
               <app-select
                 labelledBy="rule-target-label"
+                [describedBy]="draftMocksOnServer() ? 'rule-ssr-note' : ''"
                 [options]="targetOptions"
                 [value]="draft().target"
                 (valueChange)="setDraft('target', $event ?? 'both')"
@@ -283,17 +776,16 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
             </div>
           </div>
           <div class="row">
-            <label>
-              Status
-              <input
-                type="number"
-                inputmode="numeric"
-                min="100"
-                max="599"
+            <div class="field-group">
+              <span id="rule-status-label">Status</span>
+              <app-select
+                labelledBy="rule-status-label"
+                [describedBy]="draftMocksOnServer() ? 'rule-ssr-note' : ''"
+                [options]="statusOptions"
                 [value]="draft().status"
-                (input)="patch('status', $event)"
+                (valueChange)="setDraft('status', $event ?? '')"
               />
-            </label>
+            </div>
             <label>
               Delay (ms)
               <input
@@ -321,19 +813,26 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
           </label>
           <p id="body-error" class="field-error">{{ bodyError() }}</p>
           @if (draftMocksOnServer()) {
-            <p class="muted small">
+            <p id="rule-ssr-note" class="muted small">
               SSR mocks are not transferred to the client: the browser requests the URL again and
               gets the real response unless the rule also applies on the client.
             </p>
           }
+          <p id="rule-hint" class="muted small">{{ draftHint() }}</p>
           <div class="form-actions">
-            <button type="submit" [disabled]="!draft().pattern.trim() || !!bodyError()">
+            <button
+              type="submit"
+              [disabled]="!canWrite() || !draftRule()"
+              [attr.aria-describedby]="canWrite() ? 'rule-hint' : 'http-writes-off'"
+            >
               Add rule
             </button>
           </div>
         </form>
 
-        <h3 class="rules-heading">Rules ({{ rules().length }})</h3>
+        <h3 id="rule-list-heading" class="rules-heading" tabindex="-1">
+          Rules ({{ rules().length }})
+        </h3>
         <ul class="rules">
           @for (rule of rules(); track rule.id) {
             <li [class.off]="!rule.enabled">
@@ -341,6 +840,8 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                 <input
                   type="checkbox"
                   [checked]="rule.enabled"
+                  [disabled]="!canWrite()"
+                  [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
                   (change)="toggleRule(rule.id)"
                   [attr.aria-label]="'Enable rule for ' + rule.pattern"
                 />
@@ -352,6 +853,9 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
               <button
                 type="button"
                 class="link remove"
+                data-remove-rule
+                [disabled]="!canWrite()"
+                [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
                 (click)="removeRule(rule.id)"
                 [attr.aria-label]="'Remove rule for ' + rule.pattern"
               >
@@ -390,6 +894,153 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
         </ul>
       </section>
 
+      <section class="panel" aria-labelledby="overrides-heading">
+        <h2 id="overrides-heading">SSR overrides</h2>
+        <p class="muted small">
+          Development only. These change what the server sends for matching pages, from the next
+          full page load, and the request is marked <strong>overridden</strong>.
+        </p>
+        <form class="rule-form" (submit)="addOverride($event)">
+          <div class="field-group">
+            <span id="override-kind-label">Override</span>
+            <app-select
+              labelledBy="override-kind-label"
+              [describedBy]="overrideDraft().kind === 'state-edit' ? '' : 'override-kind-help'"
+              [options]="overrideKindOptions"
+              [value]="overrideDraft().kind"
+              (valueChange)="setOverrideDraft('kind', $event ?? 'render-error')"
+            />
+          </div>
+          <label>
+            <span>Page pattern <span class="hint">(substring or * glob)</span></span>
+            <input
+              id="override-pattern"
+              required
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="e.g. /examples/ssr"
+              [value]="overrideDraft().pattern"
+              (input)="patchOverride('pattern', $event)"
+            />
+          </label>
+          @switch (overrideDraft().kind) {
+            @case ('render-error') {
+              <p id="override-kind-help" class="muted small">
+                Throws while the server renders, so it needs <code>providePangularHttp()</code> and
+                a page the engine renders. Prerendered files served as static files skip it.
+              </p>
+              <label>
+                Error message
+                <input
+                  spellcheck="false"
+                  placeholder="Simulated render error"
+                  aria-describedby="override-kind-help"
+                  [value]="overrideDraft().message"
+                  (input)="patchOverride('message', $event)"
+                />
+              </label>
+            }
+            @case ('state-edit') {
+              <label>
+                TransferState key
+                <input
+                  id="override-key"
+                  spellcheck="false"
+                  autocomplete="off"
+                  [value]="overrideDraft().key"
+                  (input)="patchOverride('key', $event)"
+                />
+              </label>
+              <label>
+                <span>New JSON value <span class="hint">(empty removes the entry)</span></span>
+                <textarea
+                  id="override-value"
+                  rows="3"
+                  spellcheck="false"
+                  [value]="overrideDraft().value"
+                  (input)="patchOverride('value', $event)"
+                  [attr.aria-invalid]="overrideValueError() ? 'true' : null"
+                  [attr.aria-describedby]="
+                    overrideFromPayload()
+                      ? 'override-value-error override-value-note'
+                      : 'override-value-error'
+                  "
+                ></textarea>
+              </label>
+              <p id="override-value-error" class="field-error">{{ overrideValueError() }}</p>
+              @if (overrideFromPayload(); as from) {
+                <p id="override-value-note" class="muted small">
+                  Filled in from the TransferState payload. The value starts empty because the panel
+                  only shows a redacted copy, so type the JSON the server should send.
+                  @if (from === 'http') {
+                    For a cached HTTP response this is the whole cache record, not only the response
+                    body.
+                  }
+                </p>
+              }
+            }
+            @case ('client-render') {
+              <p id="override-kind-help" class="muted small">
+                Serves <code>index.csr.html</code> instead of rendering. Needs
+                <code>browserDistFolder</code> in <code>initPangularHub()</code>.
+              </p>
+            }
+          }
+          <div class="form-actions">
+            <button
+              type="submit"
+              [disabled]="!canWrite() || !overrideReady()"
+              [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
+            >
+              Add override
+            </button>
+          </div>
+        </form>
+
+        <h3 id="override-list-heading" class="rules-heading" tabindex="-1">
+          Overrides ({{ overrides().length }})
+        </h3>
+        <ul class="rules">
+          @for (o of overrides(); track o.id) {
+            <li [class.off]="!o.enabled">
+              <label class="inline">
+                <input
+                  type="checkbox"
+                  [checked]="o.enabled"
+                  [disabled]="!canWrite()"
+                  (change)="toggleOverride(o.id)"
+                  [attr.aria-label]="'Enable ' + overrideLabel(o.kind) + ' for ' + o.pattern"
+                />
+                <code class="rule-pattern" [title]="o.pattern"
+                  ><span class="rule-method">{{ overrideLabel(o.kind) }}</span>
+                  {{ o.pattern }}</code
+                >
+              </label>
+              <button
+                type="button"
+                class="link remove"
+                data-remove-override
+                [disabled]="!canWrite()"
+                (click)="removeOverride(o.id)"
+                [attr.aria-label]="'Remove ' + overrideLabel(o.kind) + ' for ' + o.pattern"
+              >
+                Remove
+              </button>
+              <span class="rule-meta">
+                @if (o.message) {
+                  <span>{{ o.message }}</span>
+                }
+                @if (o.key) {
+                  <span>{{ o.value === undefined ? 'remove' : 'set' }} {{ o.key }}</span>
+                }
+              </span>
+            </li>
+          } @empty {
+            <li class="empty-rule">No overrides.</li>
+          }
+        </ul>
+      </section>
+
       <section class="panel" aria-labelledby="hydration-heading">
         <h2 id="hydration-heading">Hydration</h2>
         @if (selected()?.hydration; as h) {
@@ -413,6 +1064,10 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
             <div>
               <dt>Skipped components</dt>
               <dd>{{ h.componentsSkippedHydration ?? 'n/a' }}</dd>
+            </div>
+            <div>
+              <dt>App stable after</dt>
+              <dd>{{ h.stableMs === undefined ? 'n/a' : h.stableMs + ' ms' }}</dd>
             </div>
             <div>
               <dt>Incremental defer blocks</dt>
@@ -467,7 +1122,7 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
           @if (h.warningsCaptured === false) {
             <h3>Warnings</h3>
             <p class="muted small">
-              Not captured: add <code>provideNgDevtoolsHttp()</code> to the app providers.
+              Not captured: add <code>providePangularHttp()</code> to the app providers.
             </p>
           } @else {
             <h3>Warnings ({{ h.warnings.length }})</h3>
@@ -487,7 +1142,7 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
 
       <section class="panel wide" aria-labelledby="payload-heading">
         <h2 id="payload-heading">TransferState payload</h2>
-        @if (selected()?.payload; as payload) {
+        @if (selectedPayload(); as payload) {
           @if (!payload.found) {
             <div class="empty">
               <p>No TransferState script: this page was not server rendered.</p>
@@ -521,7 +1176,34 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                     }
                     <span class="entry-size">{{ entry.size }} B</span>
                   </summary>
-                  <pre>{{ entry.value | json }}</pre>
+                  <div class="entry-key-row">
+                    <span class="entry-key-label">Key</span>
+                    <code class="entry-key-text">{{ entry.key }}</code>
+                    <div class="entry-actions">
+                      <button
+                        type="button"
+                        class="ghost"
+                        [attr.aria-label]="'Copy key ' + entry.key"
+                        (click)="copyKey(entry.key)"
+                      >
+                        Copy
+                      </button>
+                      @if (canEditEntry(entry)) {
+                        <button
+                          type="button"
+                          class="ghost"
+                          [attr.aria-label]="'Edit in SSR overrides, key ' + entry.key"
+                          (click)="editEntry(entry)"
+                        >
+                          Edit in SSR overrides
+                        </button>
+                      }
+                    </div>
+                  </div>
+                  <!-- Focusable so a long value can be scrolled with the keyboard. -->
+                  <pre tabindex="0" role="region" [attr.aria-label]="'Value of ' + entry.key">{{
+                    entry.value | json
+                  }}</pre>
                 </details>
               }
             </div>
@@ -557,7 +1239,7 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       flex-direction: column;
       align-items: flex-start;
       gap: 4px;
-      @include m.soft(var(--danger));
+      @include m.tint(danger);
     }
     .state.error strong {
       font-weight: 600;
@@ -572,11 +1254,6 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
     }
     .toolbar {
       position: sticky;
@@ -825,10 +1502,77 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       text-align: center;
       line-height: 1.5;
     }
+    .empty-actions {
+      display: flex;
+      justify-content: center;
+      margin-top: 8px;
+    }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin: 0 0 12px;
+    }
+    .search {
+      position: relative;
+      flex: 1 1 220px;
+      min-width: 0;
+    }
+    .search-icon {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      width: 14px;
+      height: 14px;
+      transform: translateY(-50%);
+      fill: none;
+      stroke: var(--text-3);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      pointer-events: none;
+    }
+    .search:focus-within .search-icon {
+      stroke: var(--accent);
+    }
+    .filters input[type='search'] {
+      height: var(--control-h);
+      padding-left: 34px;
+    }
+    .filters .side-filter {
+      flex: 0 0 140px;
+    }
+    .failed-toggle {
+      flex: none;
+      height: var(--control-h);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .total {
+      flex: none;
+      color: var(--text-2);
+      font-size: 12px;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    /* "0 of 0" says nothing before the first call; the empty state below explains it. */
+    .filters.no-calls .total {
+      display: none;
+    }
     .table-wrap {
-      overflow-x: auto;
+      max-height: min(420px, 60vh);
+      overflow: auto;
       margin: 0 -16px;
       padding: 0 16px;
+    }
+    .table-wrap :focus-visible {
+      @include m.focus-ring(-2px);
+    }
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--surface);
     }
     table {
       width: 100%;
@@ -976,16 +1720,27 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       white-space: nowrap;
     }
     .tag.server {
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
     }
     .tag.fault {
-      @include m.soft(var(--danger));
+      @include m.tint(danger);
+    }
+    .tag.mock {
+      @include m.tint(accent);
+    }
+    .tag.rule-ref {
+      gap: 4px;
+      max-width: 220px;
+    }
+    .tag.rule-ref code {
+      @include m.truncate;
+      font-family: var(--font-mono);
     }
     .tag.on {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .tag.off-tag {
-      @include m.soft(var(--warn));
+      @include m.tint(warn);
     }
     pre {
       margin: 0;
@@ -1017,10 +1772,19 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
     }
     .preview-head {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 4px 8px;
       margin-bottom: 4px;
+    }
+    .preview-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    pre.preview-body {
+      max-height: 320px;
     }
     .preview-head h3 {
       margin: 0;
@@ -1031,6 +1795,27 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       gap: 8px;
       min-width: 0;
       margin-bottom: 8px;
+    }
+    .request-call {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      min-width: 0;
+      margin: 0 0 4px;
+    }
+    .request-call .preview-url {
+      flex: 1 1 auto;
+    }
+    .skip-reason {
+      margin: 0 0 8px;
+    }
+    .nav-stats {
+      margin-bottom: 8px;
+    }
+    .preview-rule {
+      margin-bottom: 8px;
+      color: var(--text-2);
+      font-size: 12px;
     }
     .preview-url {
       min-width: 0;
@@ -1239,6 +2024,31 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
     summary:hover .entry-key {
       color: var(--accent);
     }
+    .entry-key-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 8px;
+      min-width: 0;
+      margin: 0 0 8px;
+      padding: 0 4px;
+    }
+    .entry-key-label {
+      @include m.label;
+      flex: none;
+    }
+    .entry-key-text {
+      flex: 1 1 200px;
+      min-width: 0;
+      color: var(--text-strong);
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+    .entry-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
     .entry-size {
       flex: none;
       color: var(--text-2);
@@ -1265,12 +2075,44 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
 })
 export class NetworkInspector {
   readonly rpc = input<DevframeRpcClient | null>(null);
+  readonly canWrite = computed(() => actionAllowed(this.rpc(), 'http'));
+  protected readonly writesOff = actionBlockedMessage('http');
 
   readonly loading = signal(false);
   readonly failed = signal(false);
   readonly serverCalls = signal<HttpCall[]>([]);
   readonly pages = signal<HttpPage[]>([]);
+  readonly payloads = signal<Record<string, HttpPayload>>({});
+  readonly serverDropped = signal(0);
+  readonly requests = signal<SsrRequest[]>([]);
   readonly rules = signal<HttpRule[]>([]);
+  readonly overrides = signal<SsrOverride[]>([]);
+  readonly overrideDraft = signal<OverrideDraft>({ ...EMPTY_OVERRIDE });
+  /** Set when the draft came from a TransferState entry, so the form can explain the empty value. */
+  readonly overrideFromPayload = signal<'http' | 'other' | null>(null);
+  readonly overrideKindOptions: SelectOption<SsrOverrideKind>[] = [
+    { value: 'render-error', label: 'Render error' },
+    { value: 'client-render', label: 'Force Client render' },
+    { value: 'state-edit', label: 'Edit TransferState entry' },
+  ];
+
+  readonly overrideValueError = computed(() => {
+    const value = this.overrideDraft().value.trim();
+    if (!value) return '';
+    try {
+      JSON.parse(value);
+      return '';
+    } catch {
+      return 'The value must be valid JSON.';
+    }
+  });
+
+  readonly overrideReady = computed(() => {
+    const d = this.overrideDraft();
+    if (!d.pattern.trim() || this.overrides().length >= 20) return false;
+    if (d.kind === 'state-edit') return !!d.key.trim() && !this.overrideValueError();
+    return true;
+  });
   private readonly hostPageId = hostPageId();
   readonly selectedPageId = linkedSignal<HttpPage[], string | null>({
     source: () => this.pages(),
@@ -1283,13 +2125,28 @@ export class NetworkInspector {
   readonly draft = signal<RuleDraft>({ ...EMPTY_DRAFT });
   readonly message = signal('');
   readonly bodyPlaceholder = '{ "error": "Service unavailable" }';
+  readonly statusOptions = HTTP_STATUS_OPTIONS;
 
-  private unsubscribe: (() => void) | null = null;
+  private unsubscribe: (() => void)[] = [];
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly selected = computed(
     () => this.pages().find((p) => p.pageId === this.selectedPageId()) ?? null,
   );
+
+  private readonly pageRequestId = computed(() => this.selected()?.ssrRequestId ?? null);
+  readonly selectedRequestId = linkedSignal<string | null>(() => this.pageRequestId());
+
+  readonly selectedPayload = computed(() => {
+    const pageId = this.selectedPageId();
+    return pageId ? (this.payloads()[pageId] ?? null) : null;
+  });
+
+  readonly maxCalls = computed(() => panelConfig(this.rpc()).limits.httpCalls);
+
+  readonly droppedCalls = computed(() => (this.selected()?.dropped ?? 0) + this.serverDropped());
 
   readonly pageServerCalls = computed(() => {
     const initialUrl = this.selected()?.initialUrl;
@@ -1301,23 +2158,130 @@ export class NetworkInspector {
     [...this.pageServerCalls(), ...(this.selected()?.calls ?? [])].sort((a, b) => b.at - a.at),
   );
 
+  readonly callQuery = signal('');
+  readonly sideFilter = signal<HttpSide | 'all' | null>('all');
+  readonly failedOnly = signal(false);
+  readonly sideOptions: SelectOption<HttpSide | 'all'>[] = [
+    { value: 'all', label: 'All sides' },
+    { value: 'server', label: 'SSR' },
+    { value: 'client', label: 'Client' },
+  ];
+
+  readonly visibleCalls = computed(() => {
+    const query = this.callQuery().trim().toLowerCase();
+    const side = this.sideFilter() ?? 'all';
+    const failedOnly = this.failedOnly();
+    return this.timeline().filter(
+      (c) =>
+        (side === 'all' || c.side === side) &&
+        (!failedOnly || this.isFailed(c)) &&
+        (!query ||
+          `${c.method} ${c.url}`.toLowerCase().includes(query) ||
+          `${c.method} ${pathOf(c.url)}`.toLowerCase().includes(query)),
+    );
+  });
+
+  /**
+   * The count, announced only when a filter changes. The visible count also changes with every
+   * call the app makes, which would make a screen reader talk while the user uses the app.
+   */
+  readonly filterStatus = computed(() => {
+    this.callQuery();
+    this.sideFilter();
+    this.failedOnly();
+    // A filter change that keeps the same counts still gets announced: the text flips a
+    // trailing no-break space so the live region sees a change.
+    this.filterFlip = !this.filterFlip;
+    const text = untracked(() => `${this.visibleCalls().length} of ${this.timeline().length}`);
+    return this.filterFlip ? `${text}\u00a0` : text;
+  });
+  private filterFlip = true;
+
+  /** Follows the visible rows, so the preview hides while filters hide its call. */
   readonly selectedCall = computed(
-    () => this.timeline().find((c) => c.id === this.selectedCallId()) ?? null,
+    () => this.visibleCalls().find((c) => c.id === this.selectedCallId()) ?? null,
   );
 
-  readonly draftMocksOnServer = computed(() => {
-    const draft = this.draft();
-    const status = Number(draft.status);
-    return (
-      !!draft.status &&
-      Number.isFinite(status) &&
-      this.mocksOnServer({ target: draft.target, status })
+  readonly selectedRequest = computed(
+    () => this.requests().find((r) => r.id === this.selectedRequestId()) ?? null,
+  );
+
+  readonly requestCalls = computed(() => {
+    const id = this.selectedRequest()?.id;
+    return id ? this.serverCalls().filter((c) => c.requestId === id) : [];
+  });
+
+  readonly requestPage = computed(() => {
+    const id = this.selectedRequest()?.id;
+    return id ? (this.pages().find((p) => p.ssrRequestId === id) ?? null) : null;
+  });
+
+  readonly refetched = computed(() => {
+    const request = this.selectedRequest();
+    const page = this.requestPage();
+    if (!request || !page) return [];
+    const fetched = new Set(
+      this.requestCalls()
+        .filter((c) => c.status)
+        .map((c) => `${c.method} ${pathOf(c.url)}`),
     );
+    return page.calls.filter(
+      (c) =>
+        c.side === 'client' &&
+        !c.cacheHit &&
+        !c.mocked &&
+        c.at >= request.at &&
+        fetched.has(`${c.method} ${pathOf(c.url)}`),
+    );
+  });
+
+  readonly draftMocksOnServer = computed(() => {
+    const rule = this.draftRule();
+    return !!rule && this.mocksOnServer(rule);
+  });
+
+  readonly draftRule = computed<Omit<HttpRule, 'id'> | null>(() => {
+    const draft = this.draft();
+    const pattern = draft.pattern.trim();
+    if (!pattern || pattern.length > MAX_PATTERN || this.bodyError()) return null;
+    if (this.rules().length >= MAX_RULES) return null;
+    const body = draft.body.trim();
+    const delayMs = Math.min(Math.max(Math.round(Number(draft.delayMs)) || 0, 0), 10_000);
+    const status = draft.status.trim() ? Number(draft.status) : body ? 200 : undefined;
+    if (status !== undefined && !isHttpRuleStatus(status)) return null;
+    if (status === undefined && !delayMs) return null;
+    return {
+      pattern,
+      enabled: true,
+      target: draft.target,
+      ...(draft.method ? { method: draft.method } : {}),
+      ...(status !== undefined ? { status } : {}),
+      ...(delayMs ? { delayMs } : {}),
+      ...(body ? { body } : {}),
+    };
+  });
+
+  readonly draftHint = computed(() => {
+    const draft = this.draft();
+    if (this.rules().length >= MAX_RULES) {
+      return `You can add up to ${MAX_RULES} rules. Remove one to add another.`;
+    }
+    if (!draft.pattern.trim()) return 'Enter a URL pattern to add a rule.';
+    if (draft.pattern.trim().length > MAX_PATTERN)
+      return `The URL pattern is limited to ${MAX_PATTERN} characters.`;
+    if (this.bodyError()) return '';
+    if (draft.status.trim() && !isHttpRuleStatus(Number(draft.status)))
+      return 'Pick a status from the list.';
+    if (!this.draftRule()) return 'Set a status, a delay or a mock body.';
+    if (!draft.status.trim() && draft.body.trim())
+      return 'With no status, the mock body returns 200.';
+    return '';
   });
 
   readonly bodyError = computed(() => {
     const body = this.draft().body.trim();
     if (!body) return '';
+    if (body.length > MAX_BODY) return `The mock body is limited to ${MAX_BODY} characters.`;
     try {
       JSON.parse(body);
       return '';
@@ -1331,29 +2295,153 @@ export class NetworkInspector {
       const client = this.rpc();
       if (client) this.load(client);
     });
-    this.destroyRef.onDestroy(() => this.unsubscribe?.());
+    this.destroyRef.onDestroy(() => this.stopListening());
   }
 
   async load(client: DevframeRpcClient) {
     this.loading.set(true);
     this.failed.set(false);
     try {
-      const state = await client.scope('ng-devtools').rpc.sharedState('http');
+      const rpc = client.scope('pangular').rpc;
+      const [state, payloads] = await Promise.all([
+        rpc.sharedState('http'),
+        rpc.sharedState('http-payloads'),
+      ]);
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         const snapshot = value as HttpState | undefined;
         this.serverCalls.set(snapshot?.serverCalls ?? []);
+        this.serverDropped.set(snapshot?.serverDropped ?? 0);
+        this.requests.set([...(snapshot?.requests ?? [])].reverse());
         this.pages.set(snapshot?.pages ?? []);
         this.rules.set(snapshot?.rules ?? []);
+        this.overrides.set(snapshot?.ssrOverrides ?? []);
       };
+      const applyPayloads = (value: unknown) =>
+        this.payloads.set(
+          (value as { pages?: Record<string, HttpPayload> } | undefined)?.pages ?? {},
+        );
       apply(state.value());
-      this.unsubscribe?.();
-      this.unsubscribe = state.on('updated', apply);
+      applyPayloads(payloads.value());
+      this.stopListening();
+      this.unsubscribe = [state.on('updated', apply), payloads.on('updated', applyPayloads)];
     } catch {
       this.failed.set(true);
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** A guard that returns a UrlTree reports shouldActivate false, so a redirect is not a rejection. */
+  guardVerdict(nav: SsrNavigation): 'redirected' | 'rejected' | '' {
+    if (nav.guards?.passed !== false) return '';
+    return nav.outcome === 'redirected' ? 'redirected' : 'rejected';
+  }
+
+  msLabel(ms: number | undefined): string {
+    return ms === undefined ? 'n/a' : `${ms} ms`;
+  }
+
+  skipText(skip: CacheSkip): string {
+    return CACHE_SKIP_TEXT[skip] ?? '';
+  }
+
+  refetchReason(call: HttpCall): string {
+    const key = `${call.method} ${pathOf(call.url)}`;
+    const matches = this.requestCalls().filter((c) => `${c.method} ${pathOf(c.url)}` === key);
+    const first = matches[0];
+    // Several matching server calls with different outcomes can't be paired, so name no reason.
+    return first?.cacheSkip && matches.every((c) => c.cacheSkip === first.cacheSkip)
+      ? this.skipText(first.cacheSkip)
+      : '';
+  }
+
+  renderModeLabel(mode: SsrRequest['renderMode']): string {
+    return RENDER_MODE_LABEL[mode] ?? 'Unknown';
+  }
+
+  statusLabel(call: HttpCall): string {
+    if (call.cancelled) return 'cancelled';
+    return call.status ? String(call.status) : 'ERR';
+  }
+
+  callTone(call: HttpCall): 'ok' | 'redirect' | 'bad' | 'neutral' {
+    return call.cancelled ? 'neutral' : this.statusTone(call.status);
+  }
+
+  /** A failed call has a status of 400 or more, no status (ERR) or was cancelled. */
+  isFailed(call: HttpCall): boolean {
+    return !!call.cancelled || !call.status || call.status >= 400;
+  }
+
+  clearCallFilters() {
+    this.callQuery.set('');
+    this.sideFilter.set('all');
+    this.failedOnly.set(false);
+    this.host.nativeElement.querySelector<HTMLInputElement>('#timeline-search')?.focus();
+  }
+
+  rulePatternOf(call: HttpCall): string | null {
+    if (call.rulePattern) return call.rulePattern;
+    if (!call.ruleId) return null;
+    return this.rules().find((rule) => rule.id === call.ruleId)?.pattern ?? null;
+  }
+
+  openCall(id: string) {
+    this.selectedCallId.set(id);
+    afterNextRender(
+      () => this.host.nativeElement.querySelector<HTMLElement>('#preview-heading')?.focus(),
+      { injector: this.injector },
+    );
+  }
+
+  /** The preview as shown: JSON indented by 2 spaces, other text as recorded (both already redacted). */
+  previewText(call: HttpCall): string | undefined {
+    if (call.preview === undefined) return undefined;
+    return prettyJson(call.preview) ?? call.preview;
+  }
+
+  async copyPreview(call: HttpCall) {
+    const text = this.previewText(call);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      this.message.set('Copied.');
+    } catch {
+      this.message.set('The clipboard is not available here.');
+    }
+  }
+
+  /** Fills the fault rule form from a recorded call and moves focus to it. Nothing is saved. */
+  mockCall(call: HttpCall) {
+    const method = call.method.toUpperCase();
+    const pattern = mockPattern(call.url);
+    const body = call.error || !call.preview ? null : jsonBody(call.preview);
+    this.draft.set({ ...EMPTY_DRAFT, pattern, method, body: body ?? '' });
+    const what = `${method} ${pattern}`;
+    this.message.set(
+      body
+        ? `Filled in a rule for ${what} with the preview as its body. Check it, then add the rule.`
+        : call.preview && !call.error
+          ? `Filled in a rule for ${what}. The preview is not complete JSON, so it is not used as the body.`
+          : `Filled in a rule for ${what}. Set a status, a delay or a body, then add the rule.`,
+    );
+    afterNextRender(
+      () => this.host.nativeElement.querySelector<HTMLInputElement>('#rule-pattern')?.focus(),
+      { injector: this.injector },
+    );
+  }
+
+  closePreview() {
+    const id = this.selectedCallId();
+    this.selectedCallId.set(null);
+    if (!id) return;
+    const buttons = this.host.nativeElement.querySelectorAll<HTMLElement>('button[data-call-id]');
+    [...buttons].find((button) => button.dataset['callId'] === id)?.focus();
+  }
+
+  private stopListening() {
+    for (const stop of this.unsubscribe.splice(0)) stop();
   }
 
   statusTone(status: number | undefined): 'ok' | 'redirect' | 'bad' | 'neutral' {
@@ -1370,6 +2458,7 @@ export class NetworkInspector {
 
   payloadLabel(entry: PayloadEntry): string | null {
     if (entry.source === 'hydration') return 'hydration annotations';
+    if (entry.fn) return `Analog server function ${entry.fn.name ?? entry.fn.id}`;
     if (entry.source === 'analog') return 'Analog';
     return null;
   }
@@ -1382,10 +2471,13 @@ export class NetworkInspector {
     this.pages().map((page) => ({ value: page.pageId, label: page.title || page.url })),
   );
 
-  readonly methodOptions: SelectOption[] = [
-    { value: '', label: 'Any' },
-    ...['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => ({ value: m, label: m })),
-  ];
+  /** The usual methods, plus the draft's own when "Mock this request" filled in another one. */
+  readonly methodOptions = computed<SelectOption[]>(() => {
+    const draft = this.draft().method;
+    const methods =
+      draft && !STANDARD_METHODS.includes(draft) ? [...STANDARD_METHODS, draft] : STANDARD_METHODS;
+    return [{ value: '', label: 'Any' }, ...methods.map((m) => ({ value: m, label: m }))];
+  });
 
   readonly targetOptions: SelectOption<HttpRule['target']>[] = [
     { value: 'both', label: 'SSR + client' },
@@ -1396,6 +2488,7 @@ export class NetworkInspector {
   selectPage(pageId: string | null) {
     if (pageId) this.selectedPageId.set(pageId);
     this.selectedCallId.set(null);
+    this.overrideFromPayload.set(null);
   }
 
   setDraft<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
@@ -1407,37 +2500,37 @@ export class NetworkInspector {
     this.draft.update((draft) => ({ ...draft, [key]: value }));
   }
 
-  addRule(event: Event) {
+  async addRule(event: Event) {
     event.preventDefault();
-    const draft = this.draft();
-    if (!draft.pattern.trim() || this.bodyError()) return;
-    const status = Number(draft.status);
-    const delayMs = Number(draft.delayMs);
+    const draft = this.draftRule();
+    if (!draft) return;
     const rule: HttpRule = {
       id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-      pattern: draft.pattern.trim(),
-      enabled: true,
-      target: draft.target,
-      ...(draft.method ? { method: draft.method } : {}),
-      ...(draft.status && Number.isFinite(status) ? { status } : {}),
-      ...(draft.delayMs && Number.isFinite(delayMs) ? { delayMs } : {}),
-      ...(draft.body.trim() ? { body: draft.body.trim() } : {}),
+      ...draft,
     };
-    void this.saveRules([...this.rules(), rule], 'Rule added.');
+    if (await this.saveRules([...this.rules(), rule], 'Rule added.', rule)) {
+      this.draft.set({ ...EMPTY_DRAFT });
+      this.host.nativeElement.querySelector<HTMLInputElement>('#rule-pattern')?.focus();
+    }
   }
 
   toggleRule(id: string) {
+    const rule = this.rules().find((r) => r.id === id);
+    if (!rule) return;
     void this.saveRules(
-      this.rules().map((rule) => (rule.id === id ? { ...rule, enabled: !rule.enabled } : rule)),
+      this.rules().map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)),
       'Rule updated.',
+      rule,
     );
   }
 
-  removeRule(id: string) {
-    void this.saveRules(
-      this.rules().filter((rule) => rule.id !== id),
-      'Rule removed.',
-    );
+  async removeRule(id: string) {
+    const index = this.rules().findIndex((r) => r.id === id);
+    if (index < 0) return;
+    const rest = this.rules().filter((r) => r.id !== id);
+    if (await this.saveRules(rest, 'Rule removed.', this.rules()[index])) {
+      this.focusAfterRemove('[data-remove-rule]', index, '#rule-list-heading');
+    }
   }
 
   async clearCalls() {
@@ -1450,13 +2543,165 @@ export class NetworkInspector {
     }
   }
 
-  private async saveRules(rules: HttpRule[], done: string) {
+  overrideLabel(kind: SsrOverrideKind): string {
+    return OVERRIDE_LABEL[kind] ?? kind;
+  }
+
+  setOverrideDraft<K extends keyof OverrideDraft>(key: K, value: OverrideDraft[K]) {
+    this.overrideDraft.update((d) => ({ ...d, [key]: value }));
+    // The "filled in from the payload" note only describes the entry the form was filled from.
+    if (key === 'kind' && value !== 'state-edit') this.overrideFromPayload.set(null);
+  }
+
+  patchOverride(key: keyof OverrideDraft, event: Event) {
+    const value = (event.target as HTMLInputElement).value;
+    this.overrideDraft.update((d) => ({ ...d, [key]: value }));
+    if (key === 'key') this.overrideFromPayload.set(null);
+  }
+
+  async copyKey(key: string) {
     try {
-      await call(this.rpc(), 'set-http-rules', rules);
-      this.rules.set(rules);
-      this.message.set(`${done} Reload the page to apply SSR rules.`);
+      await navigator.clipboard.writeText(key);
+      this.message.set('Copied.');
+    } catch {
+      this.message.set('The clipboard is not available here.');
+    }
+  }
+
+  /**
+   * The edit needs HTTP writes and a key the server keeps exactly: it trims keys and drops longer
+   * ones than it accepts. A key with a redacted part can never match the real one.
+   */
+  canEditEntry(entry: PayloadEntry): boolean {
+    const { key } = entry;
+    return (
+      this.canWrite() &&
+      !!key &&
+      key === key.trim() &&
+      key.length <= MAX_OVERRIDE_KEY &&
+      !REDACTED_PART.test(key)
+    );
+  }
+
+  /**
+   * Opens the SSR overrides form as a TransferState edit for this entry. The value stays empty:
+   * the payload the panel holds is redacted and clipped, so copying it would write masks back.
+   */
+  editEntry(entry: PayloadEntry) {
+    if (!this.canEditEntry(entry)) return;
+    const page = this.selected();
+    this.overrideDraft.set({
+      ...EMPTY_OVERRIDE,
+      kind: 'state-edit',
+      pattern: page ? pagePattern(page.initialUrl ?? page.url) : '',
+      key: entry.key,
+    });
+    this.overrideFromPayload.set(entry.http ? 'http' : 'other');
+    this.message.set('Editing the TransferState entry in SSR overrides.');
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement;
+        const target = host.querySelector<HTMLElement>(
+          this.overrideDraft().pattern ? '#override-value' : '#override-pattern',
+        );
+        target?.scrollIntoView?.({ block: 'center' });
+        target?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  async addOverride(event: Event) {
+    event.preventDefault();
+    if (!this.overrideReady()) return;
+    const d = this.overrideDraft();
+    const next: SsrOverride = {
+      id: `o${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      kind: d.kind,
+      pattern: d.pattern.trim(),
+      enabled: true,
+      ...(d.kind === 'render-error' && d.message.trim() ? { message: d.message.trim() } : {}),
+      ...(d.kind === 'state-edit' ? { key: d.key.trim() } : {}),
+      ...(d.kind === 'state-edit' && d.value.trim() ? { value: d.value.trim() } : {}),
+    };
+    if (await this.saveOverrides([...this.overrides(), next], 'Override added. Reload the page.')) {
+      this.overrideDraft.set({ ...EMPTY_OVERRIDE, kind: d.kind });
+      this.overrideFromPayload.set(null);
+      this.host.nativeElement.querySelector<HTMLInputElement>('#override-pattern')?.focus();
+    }
+  }
+
+  toggleOverride(id: string) {
+    void this.saveOverrides(
+      this.overrides().map((o) => (o.id === id ? { ...o, enabled: !o.enabled } : o)),
+      'Override updated. Reload the page.',
+    );
+  }
+
+  async removeOverride(id: string) {
+    const index = this.overrides().findIndex((o) => o.id === id);
+    if (index < 0) return;
+    const rest = this.overrides().filter((o) => o.id !== id);
+    if (await this.saveOverrides(rest, 'Override removed.')) {
+      this.focusAfterRemove('[data-remove-override]', index, '#override-list-heading');
+    }
+  }
+
+  /**
+   * The removed row's button is gone, so focus moves to the Remove button that took its place,
+   * the one before it when the last row went, or the list heading when the list is empty.
+   */
+  private focusAfterRemove(buttons: string, index: number, heading: string) {
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement;
+        const remaining = host.querySelectorAll<HTMLElement>(buttons);
+        const next = remaining[Math.min(index, remaining.length - 1)];
+        (next ?? host.querySelector<HTMLElement>(heading))?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  /** Clears a repeated message first, so the live region speaks again for the same text. */
+  private announce(text: string) {
+    if (this.message() !== text) {
+      this.message.set(text);
+      return;
+    }
+    this.message.set('');
+    // A newer message set before the render wins over this restore.
+    afterNextRender(
+      () => {
+        if (this.message() === '') this.message.set(text);
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private async saveOverrides(next: SsrOverride[], done: string): Promise<boolean> {
+    try {
+      const saved = await call(this.rpc(), 'set-ssr-overrides', next);
+      this.overrides.set(Array.isArray(saved) ? (saved as SsrOverride[]) : next);
+      this.announce(done);
+      return true;
+    } catch {
+      this.message.set('Could not save the overrides.');
+      return false;
+    }
+  }
+
+  private async saveRules(rules: HttpRule[], done: string, changed: HttpRule): Promise<boolean> {
+    try {
+      const saved = await call(this.rpc(), 'set-http-rules', rules);
+      this.rules.set(Array.isArray(saved) ? (saved as HttpRule[]) : rules);
+      this.announce(
+        changed.target === 'client' ? done : `${done} Reload the page to apply it to SSR.`,
+      );
+      return true;
     } catch {
       this.message.set('Could not save the rules.');
+      return false;
     }
   }
 }

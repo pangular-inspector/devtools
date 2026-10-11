@@ -10,7 +10,7 @@
       // Applied before first paint: pages are prerendered, so waiting for the
       // bundle would show the wrong theme and then swap it.
       try {
-        var stored = localStorage.getItem('ng-devtools-demo-theme');
+        var stored = localStorage.getItem('pangular-demo-theme');
         if (stored === 'light' || stored === 'dark') {
           document.documentElement.dataset.theme = stored;
         }

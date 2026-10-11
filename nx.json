@@ -10,5 +10,26 @@
     "production": ["default"]
   },
   "nxCloudId": "6acb321e8ad7d9bfe6d9d23e",
+  "plugins": [
+    {
+      "plugin": "@nx/vite/plugin",
+      "include": ["apps/docs/**/*"],
+      "options": {
+        "buildTargetName": "build",
+        "devTargetName": "serve",
+        "previewTargetName": "preview",
+        "serveStaticTargetName": "serve-static",
+        "typecheckTargetName": "typecheck"
+      }
+    },
+    {
+      "plugin": "@nx/vitest",
+      "include": ["apps/docs/**/*"],
+      "options": {
+        "testTargetName": "test",
+        "testMode": "run"
+      }
+    }
+  ],
   "analytics": true
 }

@@ -5,6 +5,7 @@ import {
   afterNextRender,
   afterRenderEffect,
   computed,
+  effect,
   inject,
   linkedSignal,
   signal,
@@ -23,14 +24,30 @@ import { StoreInspector } from './pages/store-inspector';
 import { FormsInspector } from './pages/forms-inspector';
 import { PipesInspector } from './pages/pipes-inspector';
 import type { Tab, Tabs } from './types/tab.types';
+import type { ComponentFocus } from './types/component-focus.types';
 import { AnalogInspector } from './pages/analog-inspector';
 import { NetworkInspector } from './pages/network-inspector';
 import { ComingSoon, type ComingSoonInfo } from './pages/coming-soon';
 import { TabIcon } from './pages/tab-icon';
 import { styleHubRail } from './hub-rail-style';
+import { ThemeService } from './theme.service';
 import { followHubDocks, selectHubDock } from './hub-dock-sync';
+import { panelConfig, tabEnabled } from './devtools-config';
+import { hostPageId, scopeToPage } from './page-id';
+import { angularNativePage, type PlatformPage } from './native-page';
+import { initialTab, storeTab, storedTab } from './tab-memory';
+import { detectBaseURL } from './base-url';
+import { clearHighlightsOnHide } from './rpc';
+import { viewAccent } from './view-accents';
 
-const HUB_VIEWS = ['angular', 'ngrx', 'analog', 'nativescript', 'capacitor'] as const;
+const HUB_VIEWS = [
+  'angular',
+  'ngrx',
+  'analog',
+  'angular-native',
+  'nativescript',
+  'capacitor',
+] as const;
 
 type View = (typeof HUB_VIEWS)[number];
 
@@ -38,37 +55,18 @@ const VIEW_TITLE: Record<View, string> = {
   angular: 'Angular',
   ngrx: 'NgRx Store',
   analog: 'Analog',
+  'angular-native': 'Angular Native',
   nativescript: 'NativeScript',
   capacitor: 'Capacitor',
 };
 
-const VIEW_ACCENT: Partial<Record<View, string>> = {
-  ngrx: '#d770e8',
-  analog: '#ff5470',
-  nativescript: '#8196ff',
-  capacitor: '#53b9ff',
-};
-
 const VIEW_TAB: Partial<Record<View, Tab>> = { ngrx: 'store', analog: 'analog' };
 const TAB_VIEW: Partial<Record<Tab, View>> = { store: 'ngrx', analog: 'analog' };
+const VIEW_TABS: Partial<Record<View, Tab[]>> = {
+  'angular-native': ['components', 'signals', 'injectors', 'store', 'pipes'],
+};
 
 const COMING_SOON: Partial<Record<View, ComingSoonInfo>> = {
-  nativescript: {
-    id: 'nativescript',
-    name: 'NativeScript',
-    badge: 'Coming Soon',
-    heading: 'NativeScript Support',
-    summary:
-      'Inspect NativeScript Angular apps running natively on iOS and Android, with the same tools.',
-    color: '#3c5afd',
-    plans: [
-      'Native overlay that reports the component tree from the device',
-      'Standalone devtools server your phone or simulator connects to',
-      'Example NativeScript app to try it end to end',
-    ],
-    pr: 16,
-    author: { name: 'Nathan Walker', login: 'NathanWalker' },
-  },
   capacitor: {
     id: 'capacitor',
     name: 'Capacitor',
@@ -83,6 +81,26 @@ const COMING_SOON: Partial<Record<View, ComingSoonInfo>> = {
     ],
     pr: 21,
     author: { name: 'Erkam Yaman', login: 'erkamyaman' },
+  },
+};
+
+const NATIVESCRIPT_SETUP: ComingSoonInfo = {
+  id: 'nativescript',
+  name: 'NativeScript',
+  badge: 'Available',
+  heading: 'Inspect NativeScript apps',
+  summary:
+    'A NativeScript Angular app reports from the simulator or device to this server, and its components, signals, injectors and NgRx stores show up in the Angular dock.',
+  color: '#3c5afd',
+  plansTitle: 'Set up an app',
+  plans: [
+    'Install @pangular-inspector/devtools and @valor/nativescript-websockets',
+    'Call initNativeScriptOverlay() in main.ts, before the app bootstraps',
+    'Run npx pangular dev --no-auth in the app, then open the Angular dock',
+  ],
+  link: {
+    label: 'NativeScript setup guide',
+    href: 'https://pangular-inspector.dev/guides/nativescript/',
   },
 };
 
@@ -102,6 +120,25 @@ const NOT_ANALOG: ComingSoonInfo = {
   link: { label: 'Get started with Analog', href: 'https://analogjs.org/docs/getting-started' },
 };
 
+const NO_ANGULAR_NATIVE: ComingSoonInfo = {
+  id: 'angular-native',
+  name: 'Angular Native',
+  badge: 'Not connected',
+  heading: 'No Angular Native app is connected',
+  summary:
+    'Start the overlay in your Angular Native app and run this server with --no-auth. The tabs fill as soon as the app reports.',
+  color: '#e11d48',
+  plans: [
+    'The component tree, with the view outlined on the device',
+    'Signals and injectors of the running app',
+    'Live @ngrx/signals and @ngrx/store state',
+  ],
+  link: {
+    label: 'Set up Angular Native',
+    href: 'https://pangular-inspector.dev/guides/angular-native/',
+  },
+};
+
 function readView(): View | null {
   const view = new URLSearchParams(location.search).get('view');
   return HUB_VIEWS.find((known) => known === view) ?? null;
@@ -109,7 +146,11 @@ function readView(): View | null {
 
 @Component({
   selector: 'app-root',
-  host: { '[style.--accent]': 'viewAccent()' },
+  host: {
+    '[style.--accent]': 'viewAccent()?.accent ?? null',
+    '[style.--accent-text]': 'viewAccent()?.text ?? null',
+    '(window:message)': 'inspectFromPanel($event)',
+  },
   imports: [
     Dashboard,
     ComponentTree,
@@ -127,7 +168,7 @@ function readView(): View | null {
   template: `
     <header>
       <h1 class="brand">
-        <span class="mark" [class.ng-mark]="view() === 'angular'">
+        <span class="mark" [class.ng-mark]="view() === 'angular'" [class.pi-mark]="!view()">
           @if (view() === 'nativescript') {
             <svg width="22" height="22" viewBox="0 0 256 256" aria-hidden="true">
               <path
@@ -152,6 +193,27 @@ function readView(): View | null {
               />
               <path fill="#119eff" d="m115.36 100.987l39.659-39.602L93.917.313L54.365 39.914z" />
               <path fill-opacity=".2" d="m115.359 100.985l39.659-39.601l-15.271-15.186z" />
+            </svg>
+          } @else if (view() === 'angular-native') {
+            <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true">
+              <defs>
+                <linearGradient id="an-mark-grad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#f0224f" />
+                  <stop offset="1" stop-color="#c4002d" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M16 0C27.2 0 32 4.8 32 16S27.2 32 16 32 0 27.2 0 16 4.8 0 16 0Z"
+                fill="url(#an-mark-grad)"
+              />
+              <g transform="translate(6.4 6.4) scale(0.8)" fill="#fff">
+                <path d="M14.8486 0L23.138 16.8551L23.9996 3.99892L14.8486 0Z" />
+                <path
+                  d="M16.9875 17.7114H7.01272L5.73926 20.627L12.0001 24L18.261 20.627L16.9875 17.7114Z"
+                />
+                <path d="M8.72168 13.9298H15.2812L11.9997 6.39575L8.72168 13.9298Z" />
+                <path d="M9.15103 0L0 3.99892L0.861556 16.8551L9.15103 0Z" />
+              </g>
             </svg>
           } @else if (view() === 'analog') {
             <svg width="24" height="17" viewBox="0 0 256 182" aria-hidden="true">
@@ -194,16 +256,81 @@ function readView(): View | null {
               />
             </svg>
           } @else {
-            <svg
-              width="20"
-              height="22"
-              viewBox="0 0 223 236"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                d="m222.077 39.192-8.019 125.923L137.387 0l84.69 39.192Zm-53.105 162.825-57.933 33.056-57.934-33.056 11.783-28.556h92.301l11.783 28.556ZM111.039 62.675l30.357 73.803H80.681l30.358-73.803ZM7.937 165.115 0 39.192 84.69 0 7.937 165.115Z"
-              />
+            <svg width="30" height="30" viewBox="0 0 500 500" aria-hidden="true">
+              <rect width="500" height="500" rx="112" fill="#1c1a17" />
+              <g transform="translate(250 252) scale(1.38) translate(-120 -129)">
+                <defs>
+                  <mask id="pi-mark-mask">
+                    <rect x="-60" y="-60" width="360" height="380" fill="#fff" />
+                    <g fill="none" stroke="#000" stroke-width="30" stroke-linejoin="miter">
+                      <path d="M88 66 V196" />
+                      <path d="M88 66 H143 L170 98 L143 130 H88 Z" />
+                    </g>
+                  </mask>
+                  <clipPath id="pi-mark-clip">
+                    <rect x="-40" y="129" width="320" height="200" />
+                  </clipPath>
+                </defs>
+                <g transform="rotate(-10 120 129)">
+                  <ellipse
+                    cx="120"
+                    cy="129"
+                    rx="128"
+                    ry="34"
+                    fill="none"
+                    stroke="#78350f"
+                    stroke-width="10"
+                  />
+                </g>
+                <g mask="url(#pi-mark-mask)">
+                  <path fill="#fbbf24" d="M120 5 L2 46 L22 198 L120 253 Z" />
+                  <path fill="#f59e0b" d="M120 5 L238 46 L218 198 L120 253 Z" />
+                </g>
+                <g transform="rotate(-10 120 129)">
+                  <ellipse
+                    clip-path="url(#pi-mark-clip)"
+                    cx="120"
+                    cy="129"
+                    rx="128"
+                    ry="34"
+                    fill="none"
+                    stroke="#1c1a17"
+                    stroke-width="22"
+                  />
+                  <ellipse
+                    clip-path="url(#pi-mark-clip)"
+                    cx="120"
+                    cy="129"
+                    rx="128"
+                    ry="34"
+                    fill="none"
+                    stroke="#fde68a"
+                    stroke-width="10"
+                  />
+                  <g transform="translate(230.9 146.0) rotate(10) scale(1.5) translate(-4 -4)">
+                    <line
+                      x1="9"
+                      y1="9"
+                      x2="21"
+                      y2="21"
+                      stroke="#1c1a17"
+                      stroke-width="14"
+                      stroke-linecap="round"
+                    />
+                    <circle r="16" fill="#1c1a17" />
+                    <line
+                      x1="9"
+                      y1="9"
+                      x2="21"
+                      y2="21"
+                      stroke="#fde68a"
+                      stroke-width="7"
+                      stroke-linecap="round"
+                    />
+                    <circle r="12" fill="#1c1a17" stroke="#fde68a" stroke-width="5" />
+                  </g>
+                </g>
+              </g>
             </svg>
           }
         </span>
@@ -216,7 +343,7 @@ function readView(): View | null {
         [class.fade-end]="navFade().end"
         (scroll)="measureNav()"
       >
-        @if (tabs().length > 1) {
+        @if (availableTabs().length > 1) {
           @for (t of tabs(); track t.id) {
             <button
               type="button"
@@ -240,48 +367,62 @@ function readView(): View | null {
         {{ connected() ? 'Live' : connectionFailed() ? 'Disconnected' : 'Connecting…' }}
       </span>
     </header>
-    <main #main tabindex="-1">
+    <main #main tabindex="-1" [attr.aria-label]="mainLabel()">
+      <p class="background-note" role="status">{{ backgroundNote() }}</p>
       @if (connectionFailed()) {
         <p class="connection-error" role="alert">
           Can't reach the devtools server. Check that the dev server is running, then reload.
         </p>
       } @else if (comingSoon(); as info) {
         <app-coming-soon [info]="info" />
+      } @else if (view() === 'angular-native' && !nativePageId()) {
+        <p class="turned-off" role="status">Looking for an Angular Native app…</p>
+      } @else if (!tabEnabled(tab(), config())) {
+        <p class="turned-off">
+          This inspector is turned off in the devtools config (<code>inspectors</code>).
+        </p>
       } @else {
-        @switch (tab()) {
-          @case ('dashboard') {
-            <app-dashboard [rpc]="rpc()" (navigate)="switchTab($event)" />
-          }
-          @case ('components') {
-            <app-component-tree [rpc]="rpc()" (showForm)="showForm($event)" />
-          }
-          @case ('routes') {
-            <app-route-inspector [rpc]="rpc()" />
-          }
-          @case ('signals') {
-            <app-signal-inspector [rpc]="rpc()" />
-          }
-          @case ('injectors') {
-            <app-di-inspector [rpc]="rpc()" />
-          }
-          @case ('store') {
-            <app-store-inspector [rpc]="rpc()" />
-          }
-          @case ('network') {
-            <app-network-inspector [rpc]="rpc()" />
-          }
-          @case ('forms') {
-            <app-forms-inspector
-              [rpc]="rpc()"
-              [focus]="formFocus()"
-              (focusHandled)="formFocus.set(null)"
-            />
-          }
-          @case ('pipes') {
-            <app-pipes-inspector [rpc]="rpc()" />
-          }
-          @case ('analog') {
-            <app-analog-inspector [rpc]="rpc()" />
+        @for (scope of [scopeKey()]; track scope) {
+          @switch (tab()) {
+            @case ('dashboard') {
+              <app-dashboard [rpc]="rpc()" (navigate)="switchTab($event)" />
+            }
+            @case ('components') {
+              <app-component-tree
+                [rpc]="rpc()"
+                [focus]="componentFocus()"
+                (focusHandled)="componentFocus.set(null)"
+                (showForm)="showForm($event)"
+              />
+            }
+            @case ('routes') {
+              <app-route-inspector [rpc]="rpc()" (showComponent)="showComponent($event)" />
+            }
+            @case ('signals') {
+              <app-signal-inspector [rpc]="rpc()" />
+            }
+            @case ('injectors') {
+              <app-di-inspector [rpc]="rpc()" />
+            }
+            @case ('store') {
+              <app-store-inspector [rpc]="rpc()" />
+            }
+            @case ('network') {
+              <app-network-inspector [rpc]="rpc()" />
+            }
+            @case ('forms') {
+              <app-forms-inspector
+                [rpc]="rpc()"
+                [focus]="formFocus()"
+                (focusHandled)="formFocus.set(null)"
+              />
+            }
+            @case ('pipes') {
+              <app-pipes-inspector [rpc]="rpc()" />
+            }
+            @case ('analog') {
+              <app-analog-inspector [rpc]="rpc()" />
+            }
           }
         }
       }
@@ -349,6 +490,10 @@ function readView(): View | null {
       background: color-mix(in srgb, var(--accent) 8%, transparent);
       box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
     }
+    .mark.pi-mark {
+      background: none;
+      box-shadow: none;
+    }
     .mark.ng-mark {
       background: linear-gradient(
         135deg,
@@ -362,6 +507,10 @@ function readView(): View | null {
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
+
+      @include m.light {
+        background-image: linear-gradient(90deg, #be123c 0%, #a21caf 50%, #6d28d9 100%);
+      }
     }
     nav {
       position: relative;
@@ -551,6 +700,23 @@ function readView(): View | null {
     main > * {
       animation: enter 0.28s var(--ease) both;
     }
+    .background-note {
+      margin: 0 0 12px;
+      color: var(--text-2);
+      font-size: 12px;
+      &:empty {
+        display: none;
+      }
+    }
+    .turned-off {
+      max-width: 60ch;
+      margin: 0;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+    }
     .connection-error {
       max-width: 60ch;
       margin: 0;
@@ -602,42 +768,78 @@ export class App implements OnInit, OnDestroy {
     { id: 'network', label: 'SSR & HTTP' },
   ];
   readonly view = signal<View | null>(readView());
-  readonly viewAccent = computed(() => {
-    const view = this.view();
-    return (view && VIEW_ACCENT[view]) ?? null;
-  });
+  readonly viewAccent = computed(() => viewAccent(this.view(), this.themeService.current()));
   readonly title = computed(() => {
     const view = this.view();
-    return view ? VIEW_TITLE[view] : 'Angular DevTools';
+    return view ? VIEW_TITLE[view] : 'Pangular Inspector';
   });
+  protected readonly mainLabel = computed(
+    () => this.availableTabs().find((t) => t.id === this.tab())?.label ?? this.title(),
+  );
   readonly analogKnown = signal(false);
+  readonly nativePageId = signal<string | null>(null);
+  readonly nativeKnown = signal(false);
+  protected readonly scopeKey = computed(() =>
+    this.view() === 'angular-native' ? (this.nativePageId() ?? '') : '',
+  );
   readonly comingSoon = computed(() => {
     const view = this.view();
     if (view === 'analog') return this.analogKnown() && !this.analog() ? NOT_ANALOG : undefined;
+    if (view === 'nativescript') return NATIVESCRIPT_SETUP;
+    if (view === 'angular-native') {
+      return this.nativeKnown() && !this.nativePageId() ? NO_ANGULAR_NATIVE : undefined;
+    }
     return view ? COMING_SOON[view] : undefined;
   });
-  readonly tabs = computed(() => {
+  readonly config = computed(() => panelConfig(this.rpc()));
+  protected readonly tabEnabled = tabEnabled;
+  protected readonly availableTabs = computed(() => {
     if (this.comingSoon()) return [];
     const view = this.view();
     const only = view ? VIEW_TAB[view] : undefined;
-    if (only) return this.allTabs.filter((t) => t.id === only);
-    return this.allTabs.filter(
+    const enabled = this.allTabs.filter((t) => tabEnabled(t.id, this.config()));
+    if (only) return enabled.filter((t) => t.id === only);
+    const some = view ? VIEW_TABS[view] : undefined;
+    if (some) return enabled.filter((t) => some.includes(t.id));
+    return enabled.filter(
       (t) => (t.id !== 'analog' || this.analog()) && !(view === 'angular' && TAB_VIEW[t.id]),
     );
+  });
+  readonly tabs = computed(() => {
+    const tabs = this.availableTabs();
+    if (this.rpc()) return tabs;
+    const tab = this.tab();
+    return tabs.filter((t) => t.id === 'dashboard' || t.id === tab);
   });
 
   tab = linkedSignal<Tab>(() => {
     const view = this.view();
-    return (view && VIEW_TAB[view]) || 'dashboard';
+    return (view && (VIEW_TAB[view] ?? VIEW_TABS[view]?.[0])) || 'dashboard';
   });
   rpc = signal<DevframeRpcClient | null>(null);
   connected = signal(false);
   readonly connectionFailed = signal(false);
+  private readonly hiddenPages = signal<string[]>([]);
+  private readonly pageId = hostPageId();
+  readonly backgroundNote = computed(() => {
+    const hidden = this.hiddenPages();
+    if (this.pageId) {
+      return hidden.includes(this.pageId) ? 'Tab in background, showing the last data.' : '';
+    }
+    if (!hidden.length) return '';
+    return hidden.length === 1
+      ? 'A tab is in the background, showing its last data.'
+      : `${hidden.length} tabs are in the background, showing their last data.`;
+  });
+  private stopVisibility = () => {};
+  private stopNative = () => {};
 
   private stopFollowing = () => {};
+  private stopHighlights = () => {};
   private readonly nav = viewChild<ElementRef<HTMLElement>>('nav');
   private readonly main = viewChild<ElementRef<HTMLElement>>('main');
   private readonly injector = inject(Injector);
+  private readonly themeService = inject(ThemeService);
   private navObserver?: ResizeObserver;
   readonly navFade = signal({ start: false, end: false });
 
@@ -654,6 +856,16 @@ export class App implements OnInit, OnDestroy {
       untracked(() => {
         this.revealActiveTab();
         this.measureNav();
+      });
+    });
+    effect(() => {
+      const theme = this.themeService.current();
+      untracked(() => {
+        try {
+          if (window.parent !== window) styleHubRail(window.parent.document, theme);
+        } catch {
+          // cross-origin parent
+        }
       });
     });
   }
@@ -683,24 +895,28 @@ export class App implements OnInit, OnDestroy {
     if (this.view()) {
       this.stopFollowing = followHubDocks(HUB_VIEWS, (view) => this.showView(view));
     }
-    try {
-      if (window.parent !== window) styleHubRail(window.parent.document);
-    } catch {
-      // a cross origin parent cannot be styled
-    }
-    // Deep link: read tab from hash
-    const params = new URLSearchParams(location.hash.replace(/^#/, ''));
-    const hashTab = params.get('tab');
-    if (hashTab && this.tabs().some((t) => t.id === hashTab)) {
-      this.tab.set(hashTab as Tab);
+    const restored = initialTab(
+      location.hash,
+      storedTab(this.tabScope()),
+      this.availableTabs().map((t) => t.id),
+    );
+    if (restored) this.tab.set(restored);
+    else if (
+      !this.view() &&
+      initialTab(location.hash, storedTab(this.tabScope()), ['analog']) === 'analog'
+    ) {
+      this.restoreAnalog = true;
     }
 
+    this.stopHighlights = clearHighlightsOnHide(() => this.rpc());
     const baseURL = detectBaseURL();
     connectDevframe(baseURL ? { baseURL } : {}).then(
       (client) => {
         this.rpc.set(client);
         this.connected.set(true);
-        const scoped = client.scope('ng-devtools').rpc as unknown as {
+        void this.watchVisibility(client);
+        void this.watchAngularNative(client);
+        const scoped = client.scope('pangular').rpc as unknown as {
           call: (name: string) => Promise<unknown>;
         };
         scoped.call('analog-project').then(
@@ -708,10 +924,15 @@ export class App implements OnInit, OnDestroy {
             const isAnalog = !!(project as { analog?: boolean } | null)?.analog;
             this.analog.set(isAnalog);
             this.analogKnown.set(true);
+            if (isAnalog && this.restoreAnalog && tabEnabled('analog', this.config())) {
+              this.tab.set('analog');
+            }
+            this.restoreAnalog = false;
             if (!isAnalog && this.tab() === 'analog' && !this.view()) this.tab.set('dashboard');
           },
           () => {
             this.analogKnown.set(true);
+            this.restoreAnalog = false;
             if (this.tab() === 'analog' && !this.view()) this.tab.set('dashboard');
           },
         );
@@ -722,17 +943,22 @@ export class App implements OnInit, OnDestroy {
       () => {
         this.connectionFailed.set(true);
         this.analogKnown.set(true);
+        this.nativeKnown.set(true);
       },
     );
   }
 
   ngOnDestroy() {
+    this.stopNative();
     this.stopFollowing();
+    this.stopVisibility();
+    this.stopHighlights();
     this.navObserver?.disconnect();
   }
 
   private showView(view: View) {
     if (view === this.view()) return;
+    scopeToPage(view === 'angular-native' ? this.nativePageId() : null);
     this.view.set(view);
     const url = new URL(location.href);
     url.searchParams.set('view', view);
@@ -741,10 +967,32 @@ export class App implements OnInit, OnDestroy {
   }
 
   formFocus = signal<{ id: string } | null>(null);
+  // Belongs to the Components tab that received it, so leaving the tab drops it.
+  readonly componentFocus = linkedSignal<Tab, ComponentFocus | null>({
+    source: this.tab,
+    computation: () => null,
+  });
 
   showForm(formId: string) {
     this.formFocus.set({ id: formId });
     this.switchTab('forms');
+  }
+
+  showComponent(focus: ComponentFocus) {
+    if (!this.config().inspectors.components) return;
+    // Switch first: the focus belongs to the tab, so the switch would clear it.
+    this.switchTab('components');
+    this.componentFocus.set(focus);
+  }
+
+  inspectFromPanel({ source, origin, data }: MessageEvent<unknown>) {
+    if (source !== window.parent || origin !== location.origin) return;
+    const message = data as { type?: unknown; id?: unknown } | null;
+    if (message?.type !== 'pangular:inspect-component' || typeof message.id !== 'string') return;
+    // Any element inside the app resolves to a component, so following every
+    // Elements selection would pull the user off whichever tab they are on.
+    if (this.tab() !== 'components' || !this.config().inspectors.components) return;
+    this.componentFocus.set({ id: message.id });
   }
 
   switchTab(id: Tab) {
@@ -757,9 +1005,52 @@ export class App implements OnInit, OnDestroy {
     history.replaceState(history.state, '', `#tab=${id}`);
   }
 
+  private restoreAnalog = false;
+
   private setTab(id: Tab) {
+    this.restoreAnalog = false;
     this.keepFocus();
     this.tab.set(id);
+    storeTab(this.tabScope(), id);
+  }
+
+  private tabScope() {
+    return this.view() ?? 'panel';
+  }
+
+  private async watchAngularNative(client: DevframeRpcClient) {
+    try {
+      const state = await client.scope('pangular').rpc.sharedState('component-tree');
+      const apply = (value: unknown) => {
+        const pages = (value as { pages?: Record<string, PlatformPage> } | undefined)?.pages;
+        const pageId = angularNativePage(pages, this.nativePageId());
+        if (this.view() === 'angular-native') scopeToPage(pageId);
+        this.nativePageId.set(pageId);
+        this.nativeKnown.set(true);
+      };
+      apply(state.value());
+      this.stopNative();
+      this.stopNative = state.on('updated', apply);
+    } catch {
+      this.nativeKnown.set(true);
+    }
+  }
+
+  private async watchVisibility(client: DevframeRpcClient) {
+    try {
+      const state = await client.scope('pangular').rpc.sharedState('page-visibility');
+      const apply = (value: unknown) => {
+        const hidden = (value as { hidden?: unknown } | undefined)?.hidden;
+        this.hiddenPages.set(
+          Array.isArray(hidden) ? hidden.filter((id) => typeof id === 'string') : [],
+        );
+      };
+      apply(state.value());
+      this.stopVisibility();
+      this.stopVisibility = state.on('updated', apply);
+    } catch {
+      // an older server has no visibility state, and no note is shown
+    }
   }
 
   private keepFocus() {
@@ -794,52 +1085,11 @@ export class App implements OnInit, OnDestroy {
       return;
     }
     try {
-      await client.call('hub:docks:activate', { dockId: `ng-devtools:${view}` });
+      await client.call('hub:docks:activate', { dockId: `pangular:${view}` });
       this.keepFocus();
       this.showView(view);
     } catch {
       this.setTab(fallback);
     }
   }
-}
-
-// Chrome extension passes ?baseURL=...; embedded uses /__ng-devtools/; standalone uses default
-function sameOrigin(value: string): boolean {
-  try {
-    return new URL(value, location.href).origin === location.origin;
-  } catch {
-    return false;
-  }
-}
-
-const LOOPBACK_HOSTS = ['localhost', '127.0.0.1'];
-
-function loopbackFromExtension(value: string): boolean {
-  if (location.protocol !== 'chrome-extension:') return false;
-  try {
-    const url = new URL(value);
-    return (
-      (url.protocol === 'http:' || url.protocol === 'https:') &&
-      LOOPBACK_HOSTS.includes(url.hostname)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function detectBaseURL(): string | undefined {
-  const params = new URLSearchParams(location.search);
-  const fromQuery = params.get('baseURL');
-  // Same origin only: any page can open this URL, and this value decides where
-  // the panel opens its RPC channel.
-  // `new URL` throws on a malformed value, and this runs before the connection
-  // is made, so an unhandled throw would leave the panel blank.
-  if (fromQuery && (sameOrigin(fromQuery) || loopbackFromExtension(fromQuery))) {
-    return fromQuery;
-  }
-
-  if (location.pathname.includes('__ng-devtools') || location.pathname.includes('__devframes/')) {
-    return undefined;
-  }
-  return '/__ng-devtools/';
 }

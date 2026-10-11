@@ -1,8 +1,9 @@
 import { CurrencyPipe, NgOptimizedImage } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { Dispatcher } from '@ngrx/signals/events';
 import { Account } from '../travel/auth';
-import { TravelStore } from '../travel/travel.store';
+import { bookingEvents, TravelStore } from '../travel/travel.store';
 
 @Component({
   selector: 'app-trips',
@@ -266,6 +267,7 @@ import { TravelStore } from '../travel/travel.store';
 export class Trips {
   protected readonly account = inject(Account);
   private readonly store = inject(TravelStore);
+  private readonly dispatcher = inject(Dispatcher);
   protected readonly message = signal('');
   protected readonly trips = computed(() => {
     const email = this.account.email();
@@ -281,6 +283,8 @@ export class Trips {
   protected cancel(id: string) {
     if (!this.trips().some((trip) => trip.booking.id === id)) return;
     this.store.cancel(id);
+    this.store.trackSelection(this.store.bookingSelectedId());
+    this.dispatcher.dispatch(bookingEvents.cancelled(id));
     this.message.set(`Trip ${id} was cancelled and the seats were released.`);
   }
 }

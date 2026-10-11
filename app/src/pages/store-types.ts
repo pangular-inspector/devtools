@@ -15,6 +15,24 @@ export interface NgrxStoreEntry {
   file: string;
   line: number;
   detail?: string;
+  types?: string[];
+}
+
+/**
+ * `selectedId` is set once the app's `selectedId` state field holds a non-null value.
+ * `selected` is only set when that id resolves to an entity in the collection, so a
+ * stale/dangling id shows `selectedId` without `selected`.
+ */
+export interface NgrxEntitiesInfo {
+  collection?: string;
+  idsKey: string;
+  entityMapKey: string;
+  entitiesKey?: string;
+  ids: (string | number)[];
+  count: number;
+  selectedIdKey?: string;
+  selectedId?: unknown;
+  selected?: unknown;
 }
 
 export interface NgrxSignalStoreInfo {
@@ -27,7 +45,21 @@ export interface NgrxSignalStoreInfo {
   stateKeys: string[];
   state: Record<string, unknown>;
   computed: Record<string, unknown>;
-  methods: { name: string; calls: number; rx?: boolean }[];
+  /** `withEntities()` collections found in `state`/`computed`. See the collector for details. */
+  entities?: NgrxEntitiesInfo[];
+  /**
+   * `lastDurationMs`/`avgDurationMs` are the wall-clock time of the synchronous method call
+   * only (see {@link NgrxLogEntry.durationMs}), present only once the method has been called
+   * at least once with measurable timing.
+   */
+  methods: {
+    name: string;
+    calls: number;
+    rx?: boolean;
+    signalMethod?: boolean;
+    lastDurationMs?: number;
+    avgDurationMs?: number;
+  }[];
   references: string[];
   writable: boolean;
 }
@@ -36,6 +68,7 @@ export interface NgrxClassicStoreInfo {
   state: unknown;
   devtools: boolean;
   scope: string;
+  paused?: boolean;
 }
 
 export interface NgrxDiffEntry {
@@ -45,16 +78,31 @@ export interface NgrxDiffEntry {
   after?: unknown;
 }
 
+export type NgrxActionOrigin = 'dispatch' | 'effect' | 'reactive';
+
 export interface NgrxLogEntry {
   seq: number;
-  source: 'signal-store' | 'store';
+  source: 'signal-store' | 'store' | 'event';
   storeId: string;
   type: string;
   args?: unknown[];
   action?: unknown;
+  origin?: NgrxActionOrigin;
   timestamp: number;
   diff: NgrxDiffEntry[];
   restorable: boolean;
+  /**
+   * Set only for an entry produced by a wrapped `signalStore`/`signalState` method call
+   * (never a plain `patchState`/signal-write entry, a classic-store action entry or an
+   * event entry). How long the synchronous call took to return.
+   */
+  durationMs?: number;
+  /** `source: 'event'` only: the dispatched `@ngrx/signals/events` event's type and payload. */
+  eventType?: string;
+  payload?: unknown;
+  /** `source: 'signal-store'` only: the event that this state change was correlated with. */
+  causedByEvent?: { type: string; payload?: unknown };
+  unrestorable?: 'dropped' | 'not-recorded';
 }
 
 export interface NgrxPage {
@@ -64,6 +112,7 @@ export interface NgrxPage {
   stores: NgrxSignalStoreInfo[];
   classic: NgrxClassicStoreInfo | null;
   log: NgrxLogEntry[];
+  dropped?: number;
   reportedAt: number;
 }
 
@@ -80,10 +129,52 @@ export interface LiveStore {
   classic?: NgrxClassicStoreInfo;
 }
 
+/** The page a change log belongs to, as the panel last saw it. */
+export interface NgrxLogKey {
+  pageId: string | null;
+  log: readonly NgrxLogEntry[];
+}
+
+/**
+ * Whether `next` still shows the change log `prev` showed. It is false for another page, and
+ * for the same page after the app reloaded: the reload keeps the `pageId` but starts a new
+ * log at seq 1, so the log goes back in seq, comes back empty, or reuses a seq for an entry
+ * with another timestamp.
+ */
+export function sameNgrxLog(prev: NgrxLogKey, next: NgrxLogKey): boolean {
+  if (prev.pageId !== next.pageId) return false;
+  const last = prev.log.at(-1);
+  if (!last) return true;
+  const newest = next.log.at(-1);
+  if (!newest || newest.seq < last.seq) return false;
+  const same = next.log.find((entry) => entry.seq === last.seq);
+  return !same || same.timestamp === last.timestamp;
+}
+
 const TYPE = '@type';
 
+const TAGS = new Set([
+  'undefined',
+  'number',
+  'bigint',
+  'symbol',
+  'function',
+  'Date',
+  'RegExp',
+  'Error',
+  'Element',
+  'Map',
+  'Set',
+]);
+
 function tagged(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value) && TYPE in value;
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    TYPE in value &&
+    TAGS.has((value as Record<string, unknown>)[TYPE] as string)
+  );
 }
 
 function key(name: string): string {

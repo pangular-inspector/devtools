@@ -1,0 +1,23 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "pangular-inspector-docs",
+  "projectType": "application",
+  "sourceRoot": "apps/docs/src",
+  "tags": ["type:app", "scope:docs"],
+  "targets": {
+    "build": {
+      "outputs": ["{workspaceRoot}/dist/apps/docs"]
+    },
+    "preview": {
+      "dependsOn": ["build"],
+      "command": "node ../../dist/apps/docs/analog/server/index.mjs",
+      "options": {"cwd": "{projectRoot}"},
+      "continuous": true
+    },
+    "deploy": {
+      "dependsOn": ["build"],
+      "command": "wrangler deploy",
+      "options": {"cwd": "{projectRoot}"}
+    }
+  }
+}

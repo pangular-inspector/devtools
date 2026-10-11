@@ -1,0 +1,208 @@
+import {execFileSync} from 'node:child_process';
+import {readFileSync, readdirSync, realpathSync, statSync} from 'node:fs';
+import {isAbsolute, join, relative, resolve} from 'node:path';
+import frontMatter from 'front-matter';
+import {apiRoutes} from './api-gen.plugin.ts';
+
+export {createSlugger, headingText, slugify} from './src/app/utils/heading-slug.ts';
+
+/**
+ * Shared helpers for the build-time Vite plugins (`page-meta`, `sitemap`,
+ * `link-guard`, `search-index`). Every plugin walks `src/content/**\/*.md`
+ * and `src/app/pages/**\/*.page.ts` the same way; centralising those walks
+ * here keeps the discovery rules in sync.
+ *
+ * Routes are derived from filesystem paths:
+ *   - `.md` under `src/content/`: `src/content/concepts/theming.md` → `/concepts/theming`
+ *   - `.page.ts` under `src/app/pages/`: `home/index.page.ts` → `/home`,
+ *     `index.page.ts` → `/`, dynamic / catch-all (`[...slug].page.ts`) → '' (skipped)
+ *
+ * `slugify` and `createSlugger` are re-exported from the runtime TOC's
+ * heading-id module so build-time link validation and runtime fragments
+ * stay aligned.
+ */
+
+/** Walk `src/app/pages/**\/*.page.ts` and return paths relative to `root`. */
+export function walkPageFiles(dir: string, root: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir, {withFileTypes: true})) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkPageFiles(full, root, out);
+    } else if (entry.isFile() && entry.name.endsWith('.page.ts')) {
+      out.push(relative(root, full));
+    }
+  }
+  return out;
+}
+
+/**
+ * Walk `src/content/**\/*.md` and return `[relativePath, route]` pairs.
+ * `relativePath` is from `root`; `route` mirrors the path under `baseDir`
+ * (defaults to `dir`) with the `.md` stripped.
+ */
+export function walkContentFiles(
+  dir: string,
+  root: string,
+  baseDir: string = dir,
+  out: Array<[string, string]> = [],
+): Array<[string, string]> {
+  for (const entry of readdirSync(dir, {withFileTypes: true})) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkContentFiles(full, root, baseDir, out);
+    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+      const rel = relative(root, full);
+      const fromContent = relative(baseDir, full)
+        .replace(/\\/g, '/')
+        .replace(/\.md$/, '')
+        .replace(/(^|\/)index$/, '');
+      out.push([rel, '/' + fromContent]);
+    }
+  }
+  return out;
+}
+
+/** `src/app/pages/foo/bar.page.ts` → `/foo/bar`. `index.page.ts` → `/`.
+ * Dynamic / catch-all (`[...slug].page.ts`) returns `''`, signalling "skip". */
+export function routeFromPagePath(rel: string): string {
+  const segments = pageRouteSegments(rel);
+  if (!segments || segments.some((s) => s.startsWith('['))) return '';
+  return '/' + segments.join('/');
+}
+
+export function pageRouteMatcher(rel: string): RegExp | null {
+  const segments = pageRouteSegments(rel);
+  if (!segments || !segments.some((s) => s.startsWith('['))) return null;
+  const pattern = segments
+    .map((s) => (s.startsWith('[') ? '[^/]+' : s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    .join('/');
+  return new RegExp(`^/${pattern}$`);
+}
+
+function pageRouteSegments(rel: string): string[] | null {
+  const trimmed = rel
+    .replace(/\\/g, '/')
+    .replace(/^src\/app\/pages\//, '')
+    .replace(/\.page\.ts$/, '');
+  if (trimmed.includes('[...')) return null;
+  return trimmed.split(/[/.]/).filter((s) => s !== 'index' && !/^\(.*\)$/.test(s));
+}
+
+export interface SiteRoute {
+  route: string;
+  file: string;
+  noIndex: boolean;
+}
+
+export function siteRoutes(root: string): SiteRoute[] {
+  const routes = new Map<string, SiteRoute>();
+  try {
+    for (const file of walkPageFiles(join(root, 'src/app/pages'), root)) {
+      const route = routeFromPagePath(file);
+      if (route) routes.set(route, {route, file, noIndex: false});
+    }
+  } catch {
+    // src/app/pages missing
+  }
+  try {
+    for (const [file, route] of walkContentFiles(join(root, 'src/content'), root)) {
+      const noIndex = isNoIndex(
+        parseFrontmatter(readFileSync(join(root, file), 'utf8')).attributes,
+      );
+      if (!noIndex || !routes.has(route)) routes.set(route, {route, file, noIndex});
+    }
+  } catch {
+    // src/content missing
+  }
+  for (const {route, file} of apiRoutes(root)) {
+    if (!routes.has(route)) routes.set(route, {route, file, noIndex: false});
+  }
+  return [...routes.values()].sort((a, b) => a.route.localeCompare(b.route));
+}
+
+export function prerenderRoutes(root: string): string[] {
+  return [...siteRoutes(root).map((r) => r.route), '/404.html'];
+}
+
+/**
+ * Last-commit date for `file` (YYYY-MM-DD), via `git log -1 --format=%cs`.
+ * Falls back to file mtime when the file is uncommitted, and to `''`
+ * (or whatever `mtimeFallback` returns) when both are unavailable.
+ */
+export function gitDate(file: string, cwd: string, mtimeFallback: () => string = () => ''): string {
+  try {
+    const stamp = execFileSync('git', ['log', '-1', '--format=%cs', '--', file], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+    if (stamp) return stamp;
+  } catch {
+    // fall through to mtime
+  }
+  try {
+    return statSync(join(cwd, file)).mtime.toISOString().slice(0, 10);
+  } catch {
+    return mtimeFallback();
+  }
+}
+
+export function parseFrontmatter(text: string): {
+  attributes: Record<string, unknown>;
+  body: string;
+} {
+  try {
+    const {attributes, body} = frontMatter<unknown>(text);
+    return {
+      attributes:
+        attributes && typeof attributes === 'object' ? (attributes as Record<string, unknown>) : {},
+      body,
+    };
+  } catch {
+    return {attributes: {}, body: text};
+  }
+}
+
+export function isNoIndex(attributes: Record<string, unknown>): boolean {
+  return /^(true|yes|1)$/i.test(String(attributes['noIndex'] ?? ''));
+}
+
+export function fenceTracker(): (line: string) => boolean {
+  let open = '';
+  return (line) => {
+    const m = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (!open) {
+      if (!m || (m[1][0] === '`' && m[2].includes('`'))) return false;
+      open = m[1];
+      return true;
+    }
+    if (m && m[1][0] === open[0] && m[1].length >= open.length && !m[2].trim()) open = '';
+    return true;
+  };
+}
+
+export function withoutCode(markdown: string): string {
+  const inFence = fenceTracker();
+  return markdown
+    .split(/\r?\n/)
+    .map((line) => (inFence(line) ? '' : line))
+    .join('\n')
+    .replace(/(`+)[^\n]*?\1/g, ' ');
+}
+
+export const siteRoot = import.meta.dirname;
+
+/**
+ * Resolve `path` against `root`, following symlinks, and throw when the
+ * real target lies outside the real root.
+ */
+export function resolveInside(root: string, path: string): string {
+  const realRoot = realpathSync(root);
+  const full = realpathSync(resolve(realRoot, path));
+  const rel = relative(realRoot, full);
+  if (rel.startsWith('..') || isAbsolute(rel)) {
+    throw new Error('path resolves outside the project root');
+  }
+  return full;
+}

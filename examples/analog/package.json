@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @santoshyadavdev/ng-devtools build && vite",
-    "build": "pnpm --filter @santoshyadavdev/ng-devtools build && vite build",
+    "dev": "pnpm --filter @pangular-inspector/devtools build && vite",
+    "build": "pnpm --filter @pangular-inspector/devtools build && vite build",
     "preview": "node dist/analog/server/index.mjs"
   },
   "dependencies": {
@@ -33,7 +33,7 @@
     "@analogjs/vite-plugin-angular": "2.7.5",
     "@angular/build": "^22.1.8",
     "@angular/compiler-cli": "^22.1.0",
-    "@santoshyadavdev/ng-devtools": "workspace:*",
+    "@pangular-inspector/devtools": "workspace:*",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
   }

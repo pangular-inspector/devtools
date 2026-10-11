@@ -338,7 +338,9 @@ export class Destinations {
 
   constructor() {
     effect(() => {
-      this.store.setQuery(this.q() ?? '');
+      const query = this.q() ?? '';
+      this.store.setQuery(query);
+      this.store.trackSearch(query);
       const region = this.region();
       this.store.setRegion(
         region && this.store.regions().includes(region as Region) ? (region as Region) : 'All',

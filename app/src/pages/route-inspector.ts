@@ -1,13 +1,28 @@
-import { Component, computed, effect, input, linkedSignal, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  computed,
+  effect,
+  input,
+  linkedSignal,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { isStaticReport } from '../rpc';
 import { LiveRoute } from './live-route';
 import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types';
+import type { ComponentFocus } from '../types/component-focus.types';
 
 @Component({
   selector: 'app-route-inspector',
   imports: [LiveRoute],
   template: `
-    <app-live-route [rpc]="rpc()" [sources]="routes()" />
+    <app-live-route
+      [rpc]="rpc()"
+      [sources]="routes()"
+      (showComponent)="showComponent.emit($event)"
+    />
 
     <section class="config" aria-labelledby="config-heading">
       <div class="section-head">
@@ -35,11 +50,12 @@ import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types'
           <input
             #filterInput
             class="field"
-            type="text"
+            type="search"
             aria-label="Filter source routes"
             placeholder="Filter routes…"
             [value]="filter()"
             (input)="onFilterInput($event)"
+            (keydown.escape)="filter.set('')"
           />
           <button type="button" class="small" [attr.aria-busy]="loading()" (click)="refresh()">
             {{ loading() ? 'Scanning…' : 'Refresh' }}
@@ -49,7 +65,13 @@ import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types'
         @if (error()) {
           <div class="empty" role="alert">
             <p class="empty-title">Could not scan the route files.</p>
-            <p class="muted">Check that the dev server is running, then refresh.</p>
+            <p class="muted">
+              @if (staticReport()) {
+                Run <code>pangular build</code> again to rebuild the report.
+              } @else {
+                Check that the dev server is running, then refresh.
+              }
+            </p>
           </div>
         } @else if (loading() && routes().length === 0) {
           <p class="muted empty" role="status">Scanning routes…</p>
@@ -76,7 +98,12 @@ import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types'
             {{ filtered().length }} of {{ routes().length }} route entries,
             {{ navigable() }} navigable
           </p>
-          <div class="table-scroll" role="region" aria-label="Source route config" tabindex="0">
+          <div
+            class="table-scroll"
+            role="region"
+            aria-label="Source route config table"
+            tabindex="0"
+          >
             <table>
               <thead>
                 <tr>
@@ -211,6 +238,8 @@ import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types'
 })
 export class RouteInspector {
   rpc = input<DevframeRpcClient | null>(null);
+  readonly showComponent = output<ComponentFocus>();
+  staticReport = computed(() => isStaticReport(this.rpc()));
 
   routes = signal<SourceRoute[]>([]);
   filter = signal('');
@@ -269,7 +298,7 @@ export class RouteInspector {
     this.loading.set(true);
     this.error.set(false);
     try {
-      const my = client.scope('ng-devtools');
+      const my = client.scope('pangular');
       const result = (await my.rpc.call('get-routes')) as SourceRoute[];
       this.routes.set(result);
     } catch {

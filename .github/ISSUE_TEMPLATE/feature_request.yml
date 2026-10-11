@@ -1,0 +1,46 @@
+name: Feature request
+description: Suggest an inspector, a view or an agent tool
+title: '<area>: '
+labels: [feature, needs triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Title the issue `area: what is missing`, in lowercase, for example `signals: the detail panel can't jump to a dependency or consumer`. The area is one of the [commit scopes](https://github.com/pangular-inspector/devtools/blob/main/docs/contributing/commit-message-guidelines.md#scope), such as `components`, `router`, `forms`, `http`, `mcp`, `extension` or `docs`.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to understand or debug in your Angular app?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you'd like to see
+      description: The view, data or agent tool that would help. Mockups are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: angular
+    attributes:
+      label: Angular APIs involved
+      description: Debug APIs or framework internals that could provide the data, if you know them.
+  - type: dropdown
+    id: docs
+    attributes:
+      label: Docs impact
+      description: Pages in the docs site that the change would need to update.
+      options:
+        - A new or changed inspector page
+        - Agent tools or resources
+        - Setup or options
+        - Security
+        - None
+        - Not sure
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to work on this

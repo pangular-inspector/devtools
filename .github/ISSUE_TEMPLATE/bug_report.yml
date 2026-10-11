@@ -1,0 +1,69 @@
+name: Bug report
+description: Something in the devtools shows wrong data, breaks, or looks wrong
+title: '<area>: '
+labels: [bug, needs triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Title the issue `area: what is wrong`, in lowercase, for example `router: a failed lazy navigation is only logged`. The area is one of the [commit scopes](https://github.com/pangular-inspector/devtools/blob/main/docs/contributing/commit-message-guidelines.md#scope), such as `components`, `router`, `forms`, `http`, `mcp`, `extension` or `docs`.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Components
+        - Signals
+        - Injectors
+        - Router
+        - Forms
+        - NgRx store
+        - Pipes
+        - SSR & HTTP
+        - Analog
+        - Dashboard or panel shell
+        - Chrome extension
+        - Agent tools (MCP)
+        - Vite plugin or setup
+        - Demo app
+        - Documentation site
+    validations:
+      required: true
+  - type: dropdown
+    id: setup
+    attributes:
+      label: Setup
+      description: How the devtools are mounted in your app.
+      options:
+        - Angular CLI with Express (initPangularHub)
+        - Vite plugin
+        - Analog
+        - Standalone CLI (pangular dev)
+        - Chrome extension
+        - MCP server (stdio or HTTP)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Steps, a minimal repository, or the page of the demo app where it happens.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Angular, @pangular-inspector/devtools, browser, and Analog if used.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or logs

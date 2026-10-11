@@ -174,7 +174,7 @@ export class PipesExample {
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
 
   protected readonly message = signal(
-    'Angular DevTools now inspects pipes, not just components and signals.',
+    'Pangular Inspector now inspects pipes, not just components and signals.',
   );
   protected readonly postedAt = signal(Date.now());
 

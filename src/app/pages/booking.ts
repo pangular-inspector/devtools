@@ -12,10 +12,11 @@ import {
   validate,
 } from '@angular/forms/signals';
 import { RouterLink } from '@angular/router';
+import { Dispatcher } from '@ngrx/signals/events';
 import { Account } from '../travel/auth';
 import type { LeavesSafely } from '../travel/trip-routes';
 import type { Destination } from '../travel/destination';
-import { TravelStore, type Booking as TripBooking } from '../travel/travel.store';
+import { bookingEvents, TravelStore, type Booking as TripBooking } from '../travel/travel.store';
 
 interface BookingModel {
   startDate: string;
@@ -622,6 +623,7 @@ export class Booking implements LeavesSafely {
   private readonly store = inject(TravelStore);
   private readonly account = inject(Account);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly dispatcher = inject(Dispatcher);
 
   protected readonly earliest = isoDay(7);
   protected readonly status = signal('');
@@ -689,9 +691,11 @@ export class Booking implements LeavesSafely {
             );
             return;
           }
+          this.store.trackSelection(created.id);
           this.account.signIn(value.name, value.email);
           this.confirmed.set(created);
           this.status.set('');
+          this.dispatcher.dispatch(bookingEvents.created(created));
         },
         onInvalid: () => this.status.set('Check the highlighted fields.'),
       },

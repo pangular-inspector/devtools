@@ -1,0 +1,79 @@
+{
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "commitType": "docs",
+  "commitConvention": "angular",
+  "contributors": [
+    {
+      "login": "santoshyadavdev",
+      "name": "Santosh Yadav",
+      "avatar_url": "https://avatars.githubusercontent.com/u/11923975?v=4",
+      "profile": "https://santoshyadav.dev",
+      "contributions": [
+        "code",
+        "maintenance",
+        "review",
+        "doc",
+        "infra"
+      ]
+    },
+    {
+      "login": "erkamyaman",
+      "name": "erKam",
+      "avatar_url": "https://avatars.githubusercontent.com/u/88717125?v=4",
+      "profile": "https://erkamyaman.dev",
+      "contributions": [
+        "code",
+        "maintenance",
+        "review",
+        "doc",
+        "infra"
+      ]
+    },
+    {
+      "login": "abiramcodes",
+      "name": "Abiram",
+      "avatar_url": "https://avatars.githubusercontent.com/u/131433061?v=4",
+      "profile": "https://www.abikb.xyz/",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "Kaap10",
+      "name": "Vardhman Gupta",
+      "avatar_url": "https://avatars.githubusercontent.com/u/112063624?v=4",
+      "profile": "https://kaap10.github.io/portfolio",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "Nicoss54",
+      "name": "Nicolas Frizzarin",
+      "avatar_url": "https://avatars.githubusercontent.com/u/24563545?v=4",
+      "profile": "https://github.com/Nicoss54",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "NathanWalker",
+      "name": "Nathan Walker",
+      "avatar_url": "https://avatars.githubusercontent.com/u/457187?v=4",
+      "profile": "https://nstudio.io",
+      "contributions": [
+        "code"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "skipCi": true,
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "projectName": "devtools",
+  "projectOwner": "pangular-inspector"
+}

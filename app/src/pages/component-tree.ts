@@ -2,15 +2,36 @@ import { JsonPipe } from '@angular/common';
 import {
   Component,
   DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
   input,
+  linkedSignal,
   output,
   signal,
+  untracked,
+  viewChild,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { ExtensionBridge, type SourceLocation } from '../extension-bridge';
 import { hostPageId } from '../page-id';
+import { pickPage } from '../live-pages';
+import { isAngularNativePage } from '../native-page';
+import { isStaticReport } from '../rpc';
+import { Select, type SelectOption } from '../ui/select';
+import {
+  countText,
+  filterAnnouncement,
+  truncationNotice,
+  filterTree,
+  nearestRow,
+  reconcileSelection,
+} from './component-tree-state';
+import { CdRecording, type CdPage } from './cd-recording';
+import type { ComponentFocus } from '../types/component-focus.types';
 
 interface SourceComponent {
   selector: string;
@@ -21,8 +42,8 @@ interface SourceComponent {
   inputs: string[];
   outputs: string[];
   isStandalone: boolean;
+  changeDetection?: 'OnPush' | 'Eager' | 'unknown';
 }
-
 interface LiveNode {
   id: string;
   name: string;
@@ -36,6 +57,7 @@ interface Prop {
   prop: string;
   value?: unknown;
   listened?: boolean;
+  kind?: 'signal' | 'resource';
 }
 
 interface Dependency {
@@ -51,20 +73,37 @@ interface Detail {
   name: string;
   tag: string;
   path: string;
+  source?: SourceLocation;
   changeDetection?: string;
   encapsulation?: string;
   inputs: Prop[];
   outputs: Prop[];
+  properties?: Prop[];
   listeners: string[];
   directives: { name: string; inputs: Prop[]; outputs: Prop[] }[];
   dependencies: Dependency[];
 }
 
+interface DeferBlock {
+  id: string;
+  owner?: { id: string; name: string; tag: string };
+  state: string;
+  hydration: string;
+  hydrateNever?: boolean;
+  triggers: string[];
+  rootIds: string[];
+}
+
 interface Page {
   pageId: string;
+  url?: string;
+  title?: string;
+  platform?: string;
+  deferBlocks?: DeferBlock[];
   roots: LiveNode[];
   count: number;
   truncated?: boolean;
+  truncatedBy?: { components?: number; depth?: number };
   detail: Detail | null;
   reportedAt: number;
 }
@@ -83,6 +122,14 @@ interface RoutedHit {
   outlet: string;
 }
 
+interface PickResult {
+  ok?: boolean;
+  id?: string;
+  name?: string;
+  pageId?: string;
+  error?: string;
+}
+
 interface Row {
   node: LiveNode;
   depth: number;
@@ -96,13 +143,14 @@ function bare(name: string): string {
 
 @Component({
   selector: 'app-component-tree',
-  imports: [JsonPipe],
+  imports: [JsonPipe, Select, CdRecording],
+  host: { '(keydown.escape)': 'cancelPick()' },
   template: `
     @if (live()) {
       <p class="intro">
         Every component instance on the page, in the order Angular rendered them. Hover a row to
-        highlight its host in the page, and select it to read its live inputs, outputs and injected
-        services.
+        highlight its host in the page, and select it to read its live inputs, properties, outputs
+        and injected services.
       </p>
 
       <div class="toolbar">
@@ -112,22 +160,72 @@ function bare(name: string): string {
             <path d="m20 20-3.5-3.5" />
           </svg>
           <input
+            #filterInput
             type="search"
             placeholder="Filter by class, tag or directive…"
             aria-label="Filter components by class, tag or directive"
             autocomplete="off"
             spellcheck="false"
             [value]="filter()"
-            (input)="filter.set($any($event.target).value)"
-            (keydown.escape)="filter.set('')"
+            (input)="setFilter($any($event.target).value)"
+            (keydown.escape)="setFilter('')"
           />
         </div>
-        <span class="count" aria-live="polite">
-          {{ page()!.count }} {{ page()!.count === 1 ? 'instance' : 'instances' }}
-        </span>
+        @if (pageOptions().length > 1) {
+          <span class="sr-only" id="ct-page-label">Page</span>
+          <app-select
+            class="page-select"
+            labelledBy="ct-page-label"
+            [options]="pageOptions()"
+            [value]="page()?.pageId ?? null"
+            (valueChange)="selectPage($event)"
+          />
+        }
+        <span class="count">{{ countLabel() }}</span>
+        <button
+          type="button"
+          class="tree-action"
+          [disabled]="!!filter().trim()"
+          (click)="expandAll()"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m7 15 5 5 5-5" />
+            <path d="m7 9 5-5 5 5" />
+          </svg>
+          Expand all
+        </button>
+        <button
+          type="button"
+          class="tree-action"
+          [disabled]="!!filter().trim()"
+          (click)="collapseAll()"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m7 20 5-5 5 5" />
+            <path d="m7 4 5 5 5-5" />
+          </svg>
+          Collapse all
+        </button>
+        @if (!native()) {
+          <button
+            type="button"
+            class="pick"
+            [class.on]="picking()"
+            (click)="picking() ? cancelPick() : pick()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 4l6.5 16 2.3-6.7L19.5 11z" />
+            </svg>
+            {{ picking() ? 'Cancel pick' : 'Pick component on page' }}
+          </button>
+        }
       </div>
+      <p class="sr-only" role="status">{{ announcement() }}</p>
+      @if (pickMessage()) {
+        <p class="pick-message">{{ pickMessage() }}</p>
+      }
       @if (page()!.truncated) {
-        <p class="notice">The page has more components than the tree shows.</p>
+        <p class="notice" role="status">{{ truncationText() }}</p>
       }
 
       <div class="layout">
@@ -136,7 +234,10 @@ function bare(name: string): string {
           @if (!rows().length) {
             <div class="state compact tree">
               <p class="state-title">No components match “{{ filter().trim() }}”</p>
-              <button type="button" (click)="filter.set('')">Clear filter</button>
+              @if (page()!.truncated) {
+                <p class="state-hint">The filter only searches the components the tree lists.</p>
+              }
+              <button type="button" (click)="clearFilter()">Clear filter</button>
             </div>
           }
           <div
@@ -180,6 +281,14 @@ function bare(name: string): string {
                 @for (hit of routedById().get(row.node.id) ?? []; track hit.outlet + hit.route) {
                   <span class="routed">{{ hit.route || '/' }}</span>
                 }
+                @if (cdHosts()[row.node.id]; as checks) {
+                  <span class="checks">
+                    {{ checks
+                    }}<span class="sr-only">
+                      {{ checks === 1 ? 'check' : 'checks' }} while recording</span
+                    >
+                  </span>
+                }
                 @if (row.node.directives?.length) {
                   <span class="dirs" [attr.title]="row.node.directives!.join(', ')">
                     +{{ row.node.directives!.length }}
@@ -199,8 +308,17 @@ function bare(name: string): string {
               <span class="badge">component</span>
               <h2 id="ct-detail-title" class="mono">{{ sel.name }}</h2>
               <span class="mono muted">&lt;{{ sel.tag }}&gt;</span>
+              @if (whereOf(sel); as where) {
+                <p class="where mono">{{ where.file }}:{{ where.line }}</p>
+              }
+              @if (devtoolsActions()) {
+                <div class="actions" role="group" aria-label="Chrome DevTools">
+                  <button type="button" (click)="revealInElements(sel)">Reveal in Elements</button>
+                  <button type="button" (click)="openSource(sel)">Open source</button>
+                </div>
+                <p class="where action-message" role="status">{{ actionMessage() }}</p>
+              }
               @if (sourceFor(sel); as src) {
-                <p class="where mono">{{ src.file }}:{{ src.line }}</p>
                 @if (formsIn(src.file).length) {
                   <div class="actions">
                     @for (form of formsIn(src.file); track form.formId) {
@@ -265,6 +383,29 @@ function bare(name: string): string {
                   </ul>
                 } @else {
                   <p class="empty-line">No outputs.</p>
+                }
+              </div>
+
+              <div class="block">
+                <h3>
+                  Properties <span class="pill">{{ d.properties?.length ?? 0 }}</span>
+                </h3>
+                @if (d.properties?.length) {
+                  <ul class="props">
+                    @for (p of d.properties; track p.name) {
+                      <li class="prop">
+                        <span class="prop-name mono">
+                          {{ p.name }}
+                          @if (p.kind) {
+                            <span class="flag">{{ p.kind }}</span>
+                          }
+                        </span>
+                        <pre>{{ p.value | json }}</pre>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="empty-line">No other properties.</p>
                 }
               </div>
 
@@ -353,13 +494,61 @@ function bare(name: string): string {
           </section>
         } @else {
           <div class="detail placeholder">
-            <p class="state-hint">
-              Select a component to see its live inputs, outputs, change detection and injected
-              services.
-            </p>
+            @if (destroyed(); as name) {
+              <p class="state-title">The selected component was destroyed</p>
+              <p class="state-hint">
+                <span class="mono">{{ name }}</span> is no longer on the page. Select another
+                component to see its live values.
+              </p>
+            } @else {
+              <p class="state-hint">
+                Select a component to see its live inputs, properties, outputs, change detection and
+                injected services.
+              </p>
+            }
           </div>
         }
       </div>
+
+      @if (deferBlocks().length) {
+        <section class="defer" aria-labelledby="ct-defer-title">
+          <h2 id="ct-defer-title" class="defer-title">
+            Defer blocks <span class="pill">{{ deferBlocks().length }}</span>
+          </h2>
+          <ul class="defer-list">
+            @for (block of deferBlocks(); track block.id) {
+              <li>
+                <button
+                  type="button"
+                  class="defer-row"
+                  [disabled]="!block.owner"
+                  (click)="showOwner(block)"
+                  (focus)="highlightBlock(block)"
+                  (blur)="highlight(null)"
+                  (mouseenter)="highlightBlock(block)"
+                  (mouseleave)="highlight(null)"
+                >
+                  <span class="name mono">{{ block.owner?.name ?? 'Unknown component' }}</span>
+                  <span class="defer-state" [class]="'defer-state-' + block.state">{{
+                    block.state
+                  }}</span>
+                  @if (block.hydrateNever) {
+                    <span class="flag">hydrate never</span>
+                  } @else if (block.hydration !== 'not-configured') {
+                    <span class="flag">{{ block.hydration }}</span>
+                  }
+                  <span class="triggers mono">{{
+                    block.triggers.join(', ') || 'no triggers'
+                  }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+      @if (!staticReport() && !native()) {
+        <app-cd-recording [page]="cdPage()" [pageId]="page()!.pageId" [rpc]="rpc()" />
+      }
     } @else {
       @if (page()) {
         <p class="notice" role="status">
@@ -380,6 +569,7 @@ function bare(name: string): string {
             <path d="m20 20-3.5-3.5" />
           </svg>
           <input
+            #filterInput
             type="search"
             placeholder="Filter by selector, class or file…"
             aria-label="Filter components by selector, class or file"
@@ -425,7 +615,13 @@ function bare(name: string): string {
       } @else if (error() && !source().length) {
         <div class="state" role="alert">
           <p class="state-title">Could not load components</p>
-          <p class="state-hint">Check that the dev server is running, then try again.</p>
+          <p class="state-hint">
+            @if (staticReport()) {
+              Run <code>pangular build</code> again to rebuild the report.
+            } @else {
+              Check that the dev server is running, then try again.
+            }
+          </p>
           <button type="button" (click)="refresh()">Retry</button>
         </div>
       } @else if (!source().length) {
@@ -436,7 +632,7 @@ function bare(name: string): string {
       } @else if (!filteredSource().length) {
         <div class="state">
           <p class="state-title">No components match “{{ filter().trim() }}”</p>
-          <button type="button" (click)="filter.set('')">Clear filter</button>
+          <button type="button" (click)="clearFilter()">Clear filter</button>
         </div>
       } @else {
         <ul class="source-list" role="list">
@@ -474,6 +670,10 @@ function bare(name: string): string {
                     <dd class="mono">{{ comp.file }}:{{ comp.line }}</dd>
                     <dt>Standalone</dt>
                     <dd>{{ comp.isStandalone ? 'Yes' : 'No' }}</dd>
+                    @if (comp.kind === 'component') {
+                      <dt>Change detection</dt>
+                      <dd>{{ comp.changeDetection ?? 'Unknown' }}</dd>
+                    }
                     <dt>Inputs</dt>
                     <dd class="mono">{{ comp.inputs.join(', ') || 'None' }}</dd>
                     <dt>Outputs</dt>
@@ -505,17 +705,6 @@ function bare(name: string): string {
     }
     .muted {
       color: var(--text-2);
-    }
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0 0 0 0);
-      white-space: nowrap;
-      border: 0;
     }
     .intro {
       max-width: 720px;
@@ -632,10 +821,80 @@ function bare(name: string): string {
     .refresh.spinning svg {
       animation: spin 0.8s linear infinite;
     }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
+    .page-select {
+      flex: 0 1 220px;
+      min-width: 0;
+    }
+    .tree-action:disabled,
+    .tree-action:disabled:hover {
+      background: var(--surface-2);
+      border-color: var(--border-strong);
+      opacity: 0.5;
+    }
+    .pick.on {
+      background: var(--accent-soft);
+      border-color: var(--accent-line);
+      color: var(--text-strong);
+    }
+    .defer {
+      margin-top: 16px;
+    }
+    .defer-title {
+      @include m.label;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0 0 8px;
+    }
+    .defer-list {
+      display: grid;
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .defer-row {
+      justify-content: flex-start;
+      flex-wrap: wrap;
+      width: 100%;
+      height: auto;
+      min-height: var(--control-h);
+      padding: 6px 12px;
+      background: var(--surface);
+      border-color: var(--border);
+      text-align: left;
+    }
+    .defer-row:disabled {
+      cursor: default;
+    }
+    .defer-state {
+      padding: 0 8px;
+      border-radius: 99px;
+      background: var(--surface-3);
+      color: var(--text-2);
+      font-size: 11px;
+      line-height: 18px;
+    }
+    .defer-state-complete {
+      @include m.tint(ok);
+    }
+    .defer-state-error {
+      @include m.tint(danger);
+    }
+    .defer-state-loading,
+    .defer-state-placeholder {
+      @include m.tint(warn);
+    }
+    .triggers {
+      min-width: 0;
+      color: var(--text-2);
+      font-size: 12px;
+      @include m.truncate;
+    }
+    .pick-message {
+      margin: 0 0 12px;
+      color: var(--text-2);
+      line-height: 1.5;
     }
     .layout {
       display: grid;
@@ -749,6 +1008,20 @@ function bare(name: string): string {
       line-height: 18px;
       @include m.truncate;
     }
+    .checks {
+      flex: none;
+      margin-left: auto;
+      padding: 0 7px;
+      border-radius: 99px;
+      background: var(--accent-soft);
+      color: var(--text);
+      font-size: 11px;
+      line-height: 18px;
+      font-variant-numeric: tabular-nums;
+    }
+    .checks + .dirs {
+      margin-left: 0;
+    }
     .dirs {
       flex: none;
       margin-left: auto;
@@ -797,7 +1070,7 @@ function bare(name: string): string {
     .badge {
       padding: 2px 8px;
       border-radius: 99px;
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.06em;
@@ -915,7 +1188,7 @@ function bare(name: string): string {
       font-size: 12px;
     }
     .chip.on {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .chip-note {
       color: var(--text-2);
@@ -1048,14 +1321,14 @@ function bare(name: string): string {
       flex: none;
       padding: 1px 8px;
       border-radius: 99px;
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
     .kind-flag.directive {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .row-main {
       display: flex;
@@ -1101,7 +1374,10 @@ function bare(name: string): string {
 })
 export class ComponentTree {
   readonly rpc = input<DevframeRpcClient | null>(null);
+  readonly staticReport = computed(() => isStaticReport(this.rpc()));
+  readonly focus = input<ComponentFocus | null>(null);
   readonly showForm = output<string>();
+  readonly focusHandled = output<void>();
 
   readonly filter = signal('');
   readonly loading = signal(false);
@@ -1109,26 +1385,65 @@ export class ComponentTree {
   readonly source = signal<SourceComponent[]>([]);
   readonly formOwners = signal<{ formId: string; label: string; file: string | null }[]>([]);
   readonly pages = signal<Record<string, Page>>({});
+  readonly chosenPageId = signal<string | null>(null);
   readonly selectedId = signal<string | null>(null);
+  readonly destroyed = signal<string | null>(null);
+  readonly announcement = signal('');
+  readonly picking = signal(false);
+  readonly pickMessage = signal('');
+  private pickPageId: string | null = null;
+  private pickSeq = 0;
   readonly focusId = signal<string | null>(null);
+  private readonly bridge = inject(ExtensionBridge);
+  readonly actionMessage = linkedSignal<string | null, string>({
+    source: this.selectedId,
+    computation: () => '',
+  });
   readonly collapsed = signal<ReadonlySet<string>>(new Set());
   readonly openKey = signal<string | null>(null);
-  private readonly outlets = signal<OutletInfo[]>([]);
+  private readonly routerPages = signal<{ pageId?: string; outlets?: OutletInfo[] }[]>([]);
   private readonly pageId = hostPageId();
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
   private readonly cleanups: (() => void)[] = [];
+  private selection = { pageId: null as string | null, detailId: null as string | null };
 
-  readonly page = computed<Page | null>(() => {
-    const pages = this.pages();
-    if (this.pageId) return pages[this.pageId] ?? null;
-    let latest: Page | null = null;
-    for (const page of Object.values(pages)) {
-      if (!latest || page.reportedAt > latest.reportedAt) latest = page;
-    }
-    return latest;
+  private readonly shownPageId = linkedSignal<
+    { pages: Record<string, Page>; chosen: string | null },
+    string | null
+  >({
+    source: () => ({ pages: this.pages(), chosen: this.chosenPageId() }),
+    computation: ({ pages, chosen }, previous) =>
+      pickPage(pages, { chosen, host: this.pageId, previous: previous?.value ?? null }),
   });
 
+  readonly page = computed<Page | null>(() => {
+    const id = this.shownPageId();
+    return id ? (this.pages()[id] ?? null) : null;
+  });
+
+  readonly pageOptions = computed<SelectOption[]>(() =>
+    Object.values(this.pages()).map((page) => ({
+      value: page.pageId,
+      label: page.title || page.url || `Page ${page.pageId}`,
+      hint: page.url,
+    })),
+  );
+
   readonly live = computed(() => (this.page()?.roots.length ?? 0) > 0);
+  readonly native = computed(() => isAngularNativePage(this.page()));
+  readonly devtoolsActions = computed(
+    () => this.bridge.available && !!this.page() && !this.native() && !this.staticReport(),
+  );
+
+  private readonly cdPages = signal<Record<string, CdPage>>({});
+  readonly cdPage = computed(() => {
+    const pageId = this.page()?.pageId;
+    return pageId ? (this.cdPages()[pageId] ?? null) : null;
+  });
+  readonly cdHosts = computed(() => this.cdPage()?.hosts ?? {});
 
   private readonly index = computed(() => {
     const map = new Map<string, LiveNode>();
@@ -1146,21 +1461,20 @@ export class ComponentTree {
 
   private readonly query = computed(() => this.filter().trim().toLowerCase());
 
-  private readonly visible = computed(() => {
-    const roots = this.page()?.roots ?? [];
-    const q = this.query();
-    if (!q) return roots;
-    const keep = (node: LiveNode) =>
-      node.name.toLowerCase().includes(q) ||
-      node.tag.toLowerCase().includes(q) ||
-      !!node.directives?.some((d) => d.toLowerCase().includes(q));
-    const prune = (nodes: LiveNode[]): LiveNode[] =>
-      nodes.flatMap((node) => {
-        const children = prune(node.children);
-        return keep(node) || children.length ? [{ ...node, children }] : [];
-      });
-    return prune(roots);
-  });
+  private readonly filtered = computed(() => filterTree(this.page()?.roots ?? [], this.query()));
+
+  readonly deferBlocks = computed(() => this.page()?.deferBlocks ?? []);
+
+  readonly countLabel = computed(() =>
+    countText(
+      this.page()?.count ?? 0,
+      this.filtered().matches,
+      !!this.query(),
+      !!this.page()?.truncated,
+    ),
+  );
+
+  readonly truncationText = computed(() => truncationNotice(this.page()?.truncatedBy));
 
   readonly rows = computed<Row[]>(() => {
     const rows: Row[] = [];
@@ -1173,7 +1487,7 @@ export class ComponentTree {
         if (expanded) walk(node.children, depth + 1);
       }
     };
-    walk(this.visible(), 0);
+    walk(this.filtered().nodes, 0);
     return rows;
   });
 
@@ -1195,6 +1509,11 @@ export class ComponentTree {
     const selected = this.selectedId();
     if (selected && ids.has(selected)) return selected;
     return rows[0]?.node.id ?? null;
+  });
+
+  private readonly outlets = computed<OutletInfo[]>(() => {
+    const shown = this.page()?.pageId;
+    return this.routerPages().find((p) => p.pageId === shown)?.outlets ?? [];
   });
 
   readonly routedById = computed(() => {
@@ -1241,10 +1560,33 @@ export class ComponentTree {
 
   constructor() {
     effect(() => {
+      const shown = this.page()?.pageId ?? null;
+      untracked(() => {
+        if (this.picking() && shown !== this.pickPageId) this.dropPick();
+      });
+    });
+    effect(() => {
       const client = this.rpc();
       if (!client) return;
       void this.refresh();
       void this.watch(client);
+    });
+    effect(() => {
+      const focus = this.focus();
+      if (!focus) return;
+      const shown = this.page()?.pageId ?? null;
+      // The focus names the page it came from, which may not be the one shown.
+      if (focus.pageId && shown !== focus.pageId && this.pages()[focus.pageId]) {
+        untracked(() => this.selectPage(focus.pageId!));
+        return;
+      }
+      if (!this.live()) return;
+      untracked(() => {
+        const onPage = !focus.pageId || shown === focus.pageId;
+        if (onPage && this.index().map.has(focus.id)) this.reveal(focus.id);
+        else this.announcement.set('That component is no longer on the page.');
+        this.focusHandled.emit();
+      });
     });
     this.destroyRef.onDestroy(() => {
       this.highlight(null);
@@ -1254,35 +1596,42 @@ export class ComponentTree {
 
   private async watch(client: DevframeRpcClient) {
     for (const cleanup of this.cleanups.splice(0)) cleanup();
-    const my = client.scope('ng-devtools');
+    const my = client.scope('pangular');
     try {
       const tree = await my.rpc.sharedState('component-tree');
       if (this.destroyRef.destroyed) return;
       const applyTree = (value: unknown) => {
         const pages = (value as { pages?: Record<string, Page> } | null)?.pages;
-        this.pages.set(pages && typeof pages === 'object' ? pages : {});
+        this.applyPages(pages && typeof pages === 'object' ? pages : {});
       };
       applyTree(tree.value());
       this.cleanups.push(tree.on('updated', applyTree));
     } catch {
-      this.pages.set({});
+      this.applyPages({});
+    }
+    try {
+      const cd = await my.rpc.sharedState('change-detection');
+      if (this.destroyRef.destroyed) return;
+      const applyCd = (value: unknown) => {
+        const pages = (value as { pages?: Record<string, CdPage> } | null)?.pages;
+        this.cdPages.set(pages && typeof pages === 'object' ? pages : {});
+      };
+      applyCd(cd.value());
+      this.cleanups.push(cd.on('updated', applyCd));
+    } catch {
+      this.cdPages.set({});
     }
     try {
       const router = await my.rpc.sharedState('router');
       if (this.destroyRef.destroyed) return;
       const applyRouter = (value: unknown) => {
-        const pages =
-          (value as { pages?: { pageId?: string; outlets?: OutletInfo[]; snapshot?: unknown }[] })
-            ?.pages ?? [];
-        const page = this.pageId
-          ? pages.find((p) => p.pageId === this.pageId)
-          : (pages.find((p) => p.snapshot) ?? pages[0]);
-        this.outlets.set(page?.outlets ?? []);
+        const pages = (value as { pages?: { pageId?: string; outlets?: OutletInfo[] }[] })?.pages;
+        this.routerPages.set(Array.isArray(pages) ? pages : []);
       };
       applyRouter(router.value());
       this.cleanups.push(router.on('updated', applyRouter));
     } catch {
-      this.outlets.set([]);
+      this.routerPages.set([]);
     }
   }
 
@@ -1290,7 +1639,7 @@ export class ComponentTree {
     const client = this.rpc();
     if (!client) return;
     this.loading.set(true);
-    const my = client.scope('ng-devtools');
+    const my = client.scope('pangular');
     try {
       this.source.set((await my.rpc.call('get-components')) as SourceComponent[]);
       this.error.set(false);
@@ -1309,6 +1658,38 @@ export class ComponentTree {
 
   formsIn(file: string) {
     return this.formOwners().filter((form) => form.file === file);
+  }
+
+  whereOf(node: LiveNode): SourceLocation | null {
+    return this.detail()?.source ?? this.sourceFor(node);
+  }
+
+  async revealInElements(node: LiveNode) {
+    const pageId = this.page()?.pageId;
+    if (!pageId) return;
+    this.actionMessage.set('');
+    const result = await this.bridge.reveal(pageId, node.id);
+    if (this.selectedId() !== node.id) return;
+    this.actionMessage.set(
+      result.ok
+        ? ''
+        : 'Could not reveal it. The component must be rendered in the tab these DevTools inspect.',
+    );
+  }
+
+  async openSource(node: LiveNode) {
+    const pageId = this.page()?.pageId;
+    if (!pageId) return;
+    const where = this.whereOf(node);
+    this.actionMessage.set('');
+    const result = await this.bridge.openSource(pageId, node.id, where);
+    if (this.selectedId() !== node.id) return;
+    if (result.ok) return;
+    this.actionMessage.set(
+      where
+        ? `Not found in Sources. Open ${where.file}:${where.line} in your editor.`
+        : 'Could not open the source. The component must be rendered in the tab these DevTools inspect.',
+    );
   }
 
   sourceFor(node: LiveNode): SourceComponent | null {
@@ -1333,16 +1714,147 @@ export class ComponentTree {
     return bare(name);
   }
 
-  select(id: string) {
-    const next = this.selectedId() === id ? null : id;
-    this.selectedId.set(next);
-    this.focusId.set(id);
+  private applyPages(pages: Record<string, Page>) {
+    const active = document.activeElement;
+    const focused =
+      active instanceof HTMLElement && this.host.nativeElement.contains(active)
+        ? (active.closest<HTMLElement>('.row')?.dataset['id'] ?? null)
+        : null;
+    const before = focused ? this.rows().map((row) => row.node.id) : [];
+    const known = this.index().map;
+    this.pages.set(pages);
+    this.syncSelection(known);
+    if (!focused) return;
+    const after = new Set(this.rows().map((row) => row.node.id));
+    if (after.has(focused)) return;
+    const next = nearestRow(before, after, focused);
+    if (!next) return;
+    this.focusId.set(next);
+    afterNextRender(() => this.rowElement(next)?.focus(), { injector: this.injector });
+  }
+
+  private syncSelection(known = this.index().map) {
+    const page = this.page();
+    const next = reconcileSelection(
+      { ...this.selection, selectedId: this.selectedId() },
+      page
+        ? { pageId: page.pageId, roots: page.roots, detail: page.detail, truncated: page.truncated }
+        : null,
+    );
+    const name = next.destroyed ? known.get(next.destroyed)?.name : undefined;
+    this.selection = { pageId: next.pageId, detailId: next.detailId };
+    if (next.selectedId !== this.selectedId()) this.selectedId.set(next.selectedId);
+    if (next.selectedId) this.destroyed.set(null);
+    if (!next.destroyed) return;
+    this.destroyed.set(name ?? 'The component');
+    this.announcement.set('The selected component was destroyed.');
+    this.sendSelection(null);
+  }
+
+  selectPage(pageId: string | null) {
+    if (!pageId) return;
+    this.chosenPageId.set(pageId);
+    this.destroyed.set(null);
+    this.syncSelection();
+  }
+
+  setFilter(value: string) {
+    this.filter.set(value);
+    const { matches } = this.filtered();
+    this.announcement.set(
+      filterAnnouncement(this.page()?.count ?? 0, matches, value, !!this.page()?.truncated),
+    );
+  }
+
+  /** Clears the filter from the no-match state and keeps focus on the search box. */
+  clearFilter() {
+    if (this.live()) this.setFilter('');
+    else this.filter.set('');
+    this.filterInput()?.nativeElement.focus();
+  }
+
+  async pick() {
+    const client = this.rpc();
+    if (!client || this.picking()) return;
+    const seq = ++this.pickSeq;
+    this.pickPageId = this.page()?.pageId ?? null;
+    this.picking.set(true);
+    this.say('Click a component in the app. Press Escape to cancel.');
+    const result = (await client
+      .scope('pangular')
+      .rpc.call('request-component-pick', { pageId: this.pickPageId ?? undefined })
+      .catch(() => ({ ok: false, error: 'Could not reach the devtools server.' }))) as PickResult;
+    if (seq !== this.pickSeq) return;
+    this.picking.set(false);
+    if (!result?.ok || !result.id) {
+      this.say(result?.error ?? 'No component was picked.');
+      return;
+    }
+    if (result.pageId && result.pageId !== this.page()?.pageId) this.selectPage(result.pageId);
+    this.say(`Picked ${result.name ?? 'a component'}.`);
+    this.destroyed.set(null);
+    if (this.index().map.has(result.id)) this.reveal(result.id);
+    else this.selectedId.set(result.id);
+  }
+
+  cancelPick() {
+    const client = this.rpc();
+    if (!client || !this.picking()) return;
+    void client
+      .scope('pangular')
+      .rpc.call('cancel-component-pick', { pageId: this.pickPageId ?? undefined })
+      .catch(() => {});
+  }
+
+  private dropPick() {
+    this.cancelPick();
+    this.pickSeq++;
+    this.picking.set(false);
+    this.say('Picking stopped because the page changed.');
+  }
+
+  private say(message: string) {
+    this.pickMessage.set(message);
+    this.announcement.set(message);
+  }
+
+  private sendSelection(id: string | null) {
     const client = this.rpc();
     if (!client) return;
     void client
-      .scope('ng-devtools')
-      .rpc.call('select-component', { pageId: this.page()?.pageId, id: next })
+      .scope('pangular')
+      .rpc.call('select-component', { pageId: this.page()?.pageId, id })
       .catch(() => {});
+  }
+
+  private rowElement(id: string) {
+    return this.host.nativeElement.querySelector<HTMLElement>(`.row[data-id="${CSS.escape(id)}"]`);
+  }
+
+  select(id: string) {
+    const next = this.selectedId() === id ? null : id;
+    this.selectedId.set(next);
+    this.destroyed.set(null);
+    this.focusId.set(id);
+    this.sendSelection(next);
+  }
+
+  private reveal(id: string) {
+    const { parents } = this.index();
+    this.collapsed.update((set) => {
+      const next = new Set(set);
+      for (let parent = parents.get(id); parent; parent = parents.get(parent)) next.delete(parent);
+      return next;
+    });
+    if (!this.rows().some((row) => row.node.id === id)) this.setFilter('');
+    if (this.selectedId() !== id) this.select(id);
+    afterNextRender(
+      () =>
+        document
+          .querySelector(`.row[data-id="${CSS.escape(id)}"]`)
+          ?.scrollIntoView({ block: 'nearest' }),
+      { injector: this.injector },
+    );
   }
 
   toggle(id: string, event?: Event) {
@@ -1356,14 +1868,62 @@ export class ComponentTree {
     });
   }
 
+  expandAll() {
+    if (this.query()) return;
+    this.collapsed.set(new Set());
+    this.announce('Expanded every component.');
+  }
+
+  collapseAll() {
+    if (this.query()) return;
+    const { map, parents } = this.index();
+    const previous = this.rovingId();
+    const next = new Set<string>();
+    for (const node of map.values()) if (node.children.length) next.add(node.id);
+    this.collapsed.set(next);
+    if (previous) {
+      const visible = new Set(this.rows().map((row) => row.node.id));
+      let id: string | undefined = previous;
+      while (id && !visible.has(id)) id = parents.get(id);
+      if (id) this.focusId.set(id);
+    }
+    this.announce('Collapsed every component. Only the top level is shown.');
+  }
+
+  /** Sets the live message, changing it slightly when it repeats so screen readers say it again. */
+  private announce(message: string) {
+    this.announcement.update((current) => (current === message ? `${message}\u00a0` : message));
+  }
+
+  private expandSiblings(id: string) {
+    if (this.query()) return;
+    const parent = this.index().parents.get(id);
+    const siblings = parent
+      ? (this.index().map.get(parent)?.children ?? [])
+      : (this.page()?.roots ?? []);
+    this.collapsed.update((set) => {
+      const next = new Set(set);
+      for (const sibling of siblings) next.delete(sibling.id);
+      return next;
+    });
+  }
+
   highlight(id: string | null) {
     const client = this.rpc();
     if (!client) return;
     const target = id ? { pageId: this.page()?.pageId, id } : null;
     void client
-      .scope('ng-devtools')
+      .scope('pangular')
       .rpc.call('request-page-highlight', target)
       .catch(() => {});
+  }
+
+  highlightBlock(block: DeferBlock) {
+    this.highlight(block.rootIds[0] ?? block.owner?.id ?? null);
+  }
+
+  showOwner(block: DeferBlock) {
+    if (block.owner && this.index().map.has(block.owner.id)) this.reveal(block.owner.id);
   }
 
   onTreeKey(event: KeyboardEvent) {
@@ -1400,6 +1960,9 @@ export class ComponentTree {
       case 'Enter':
       case ' ':
         this.select(row.node.id);
+        break;
+      case '*':
+        this.expandSiblings(row.node.id);
         break;
       default:
         return;

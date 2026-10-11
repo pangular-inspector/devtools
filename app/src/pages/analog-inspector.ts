@@ -1,6 +1,7 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -9,6 +10,10 @@ import {
   untracked,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { time } from '../format';
+import { hostPageId } from '../page-id';
+import { rpcCall, rpcTry as call } from '../rpc';
+import { actionAllowed, actionBlockedMessage } from '../devtools-config';
 import { Select } from '../ui/select';
 
 interface AnalogRoute {
@@ -38,6 +43,13 @@ interface ContentFile {
   error?: string;
 }
 
+interface ServerFn {
+  name: string;
+  file: string;
+  id: string;
+  method: string;
+}
+
 interface AnalogProject {
   analog: boolean;
   version?: string;
@@ -45,19 +57,26 @@ interface AnalogProject {
   api: ApiRoute[];
   middleware: string[];
   content: ContentFile[];
+  serverFns?: ServerFn[];
 }
+
+type ActionOutcome = 'success' | 'redirect' | 'invalid' | 'error';
 
 interface AnalogCall {
   id: number;
   at: number;
-  kind: 'page' | 'load' | 'fn' | 'api';
+  kind: 'page' | 'load' | 'action' | 'fn' | 'api';
   method: string;
   url: string;
+  route?: string;
   status: number;
   ms: number;
   bytes?: number;
   from: string;
   render?: 'ssr' | 'client';
+  outcome?: ActionOutcome;
+  location?: string;
+  seeded?: boolean;
   preview?: string;
 }
 
@@ -77,10 +96,17 @@ interface DuplicateLoad {
   browserAt: number;
 }
 
+interface ServerFnRefetch {
+  id: string;
+  ssrAt: number;
+  browserAt: number;
+}
+
 interface AnalogState {
   pages?: AnalogPage[];
   calls?: AnalogCall[];
   duplicates?: DuplicateLoad[];
+  refetches?: ServerFnRefetch[];
 }
 
 interface Finding {
@@ -102,7 +128,7 @@ interface UrlMatch {
 interface RenderRow {
   path: string;
   file?: string;
-  mode: 'ssr' | 'ssg' | 'client';
+  mode: 'ssr' | 'ssg' | 'client' | 'cached' | 'redirect';
   reason: string;
   last?: { render?: 'ssr' | 'client'; status: number; ms: number; at: number };
 }
@@ -110,6 +136,7 @@ interface RenderRow {
 interface PrerenderPlan {
   dynamicConfig: boolean;
   listed: string[] | null;
+  fromRules?: string[];
   staticMissing: string[];
   dynamic: string[];
   built: string[];
@@ -133,7 +160,7 @@ interface LintCard {
   title: string;
   summary: string;
   fix: string;
-  items: { file?: string; path?: string }[];
+  items: { file?: string; path?: string; message?: string }[];
 }
 
 const LINT_TEXT: Record<string, { title: string; summary: string }> = {
@@ -167,7 +194,7 @@ const LINT_TEXT: Record<string, { title: string; summary: string }> = {
   },
   'server-without-load': {
     title: '.server.ts without load or action',
-    summary: 'The server file exports nothing Analog calls.',
+    summary: 'The server file exports no load, action or server function, so Analog calls nothing.',
   },
   'orphan-server-file': {
     title: '.server.ts without a page',
@@ -211,6 +238,11 @@ const LINT_TEXT: Record<string, { title: string; summary: string }> = {
     summary:
       'These pages fetched their data while rendering on the server and again in the browser.',
   },
+  'fn-fetched-twice': {
+    title: 'Server function read runs twice',
+    summary:
+      'These reads ran while rendering on the server and again in the browser right after hydration.',
+  },
   'restart-needed': {
     title: 'New pages need a restart',
     summary: 'These page files exist, but the running router does not know them yet.',
@@ -226,25 +258,50 @@ const LINT_TEXT: Record<string, { title: string; summary: string }> = {
 };
 type Kind = 'all' | AnalogCall['kind'];
 
-const MODE_LABEL = { ssr: 'SSR', ssg: 'Prerendered', client: 'Client only' } as const;
+/** Rows the call list renders at most, newest first. */
+const MAX_SHOWN_CALLS = 150;
+/** Calls the dev server keeps (`MAX_CALLS` in packages/devtools/src/analog-server-log.ts). */
+const MAX_SERVER_CALLS = 200;
+
+const STATIC_MESSAGES = new Set([
+  'missing-default-export',
+  'redirect-with-component',
+  'redirect-path-match',
+  'layout-without-outlet',
+  'server-without-load',
+  'orphan-server-file',
+  'load-fetched-twice',
+  'restart-needed',
+  'prerender-missing-root',
+]);
+
+const MODE_LABEL = {
+  ssr: 'SSR',
+  ssg: 'Prerendered',
+  client: 'Client only',
+  cached: 'Cached',
+  redirect: 'Redirect',
+} as const;
 const KIND_LABEL: Record<Kind, string> = {
   all: 'All',
   page: 'Pages',
   load: 'load()',
+  action: 'Actions',
   fn: 'Server fn',
   api: 'API',
 };
-
-function call<T>(client: DevframeRpcClient | null, name: string, arg?: unknown): Promise<T | null> {
-  if (!client) return Promise.resolve(null);
-  const rpc = client.scope('ng-devtools').rpc as unknown as {
-    call: (name: string, ...args: unknown[]) => Promise<unknown>;
-  };
-  return rpc.call(name, ...(arg === undefined ? [] : [arg])).then(
-    (value) => value as T,
-    () => null,
-  );
-}
+const OUTCOME_LABEL: Record<ActionOutcome, string> = {
+  success: 'succeeded',
+  redirect: 'redirected',
+  invalid: 'validation errors',
+  error: 'failed',
+};
+const OUTCOME_TONE: Record<ActionOutcome, string> = {
+  success: 'good',
+  redirect: 'info',
+  invalid: 'warn',
+  error: 'bad',
+};
 
 function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth: number }[] = []) {
   for (const route of routes) {
@@ -258,7 +315,15 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
   selector: 'app-analog-inspector',
   imports: [Select],
   template: `
-    @if (project() === null) {
+    @if (project() === null && loadFailed()) {
+      <div class="empty" role="alert">
+        <h2 class="empty-title">Could not read the project.</h2>
+        <p class="muted">
+          Check that the dev server with Pangular Inspector is still running, then retry.
+        </p>
+        <button type="button" class="btn" (click)="retry()">Retry</button>
+      </div>
+    } @else if (project() === null) {
       <div class="loading" role="status">
         <span class="spinner" aria-hidden="true"></span>
         <span>Reading the project…</span>
@@ -267,7 +332,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       <div class="empty">
         <h2 class="empty-title">This app is not an Analog app.</h2>
         <p class="muted">
-          Add <code>ngDevtools()</code> from <code>@santoshyadavdev/ng-devtools/vite</code> next to
+          Add <code>pangular()</code> from <code>@pangular-inspector/devtools/vite</code> next to
           <code>analog()</code> in vite.config.ts and run the Analog dev server.
         </p>
       </div>
@@ -337,7 +402,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   [value]="testUrl()"
                   (input)="testUrl.set($any($event.target).value)"
                 />
-                <button type="submit" class="btn primary">Explain</button>
+                <button type="submit" class="btn primary" [disabled]="explaining()">
+                  {{ explaining() ? 'Explaining…' : 'Explain' }}
+                </button>
               </form>
               <label class="sr-only" for="route-filter">Filter routes</label>
               <input
@@ -347,43 +414,48 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                 placeholder="Filter by path or file"
                 [value]="filter()"
                 (input)="filter.set($any($event.target).value)"
+                (keydown.escape)="filter.set('')"
               />
             </div>
-            @if (match(); as m) {
-              <div class="callout" [attr.data-tone]="m.matched ? 'good' : 'bad'" role="status">
-                @if (m.matched) {
-                  <strong class="mono">{{ testUrl() }}</strong> renders
-                  <ol class="chain">
-                    @for (r of m.chain; track r.id) {
-                      <li>
-                        <span class="mono">{{ short(r.file) ?? r.fullPath }}</span>
-                        <span class="pill" [attr.data-kind]="r.kind">{{ r.kind }}</span>
-                      </li>
-                    }
-                  </ol>
-                  @if (paramList(m.params).length) {
-                    <div class="chips">
-                      @for (p of paramList(m.params); track p[0]) {
-                        <span class="chip mono">{{ p[0] }} = {{ p[1] }}</span>
-                      }
-                    </div>
-                  }
-                } @else {
-                  <strong class="mono">{{ testUrl() }}</strong> matches no file route. Angular
-                  throws NG04002 "Cannot match any routes".
-                  @if (m.rejected.length) {
-                    <ul class="plain">
-                      @for (r of m.rejected.slice(0, 5); track $index) {
+            <div class="explain-result" role="status">
+              @if (explainError(); as error) {
+                <div class="callout" data-tone="bad">{{ error }}</div>
+              } @else if (explained(); as e) {
+                <div class="callout" [attr.data-tone]="e.match.matched ? 'good' : 'bad'">
+                  @if (e.match.matched) {
+                    <strong class="mono">{{ e.url }}</strong> renders
+                    <ol class="chain">
+                      @for (r of e.match.chain; track r.id) {
                         <li>
-                          <span class="mono">{{ short(r.file) ?? r.path }}</span>
-                          <span class="muted">{{ r.reason }}</span>
+                          <span class="mono">{{ short(r.file) ?? r.fullPath }}</span>
+                          <span class="pill" [attr.data-kind]="r.kind">{{ r.kind }}</span>
                         </li>
                       }
-                    </ul>
+                    </ol>
+                    @if (paramList(e.match.params).length) {
+                      <div class="chips">
+                        @for (p of paramList(e.match.params); track p[0]) {
+                          <span class="chip mono">{{ p[0] }} = {{ p[1] }}</span>
+                        }
+                      </div>
+                    }
+                  } @else {
+                    <strong class="mono">{{ e.url }}</strong> matches no file route. Angular throws
+                    NG04002 "Cannot match any routes".
+                    @if (e.match.rejected.length) {
+                      <ul class="plain">
+                        @for (r of e.match.rejected.slice(0, 5); track $index) {
+                          <li>
+                            <span class="mono">{{ short(r.file) ?? r.path }}</span>
+                            <span class="muted">{{ r.reason }}</span>
+                          </li>
+                        }
+                      </ul>
+                    }
                   }
-                }
-              </div>
-            }
+                </div>
+              }
+            </div>
             <div class="table-wrap" role="region" aria-label="File routes" tabindex="0">
               <table>
                 <thead>
@@ -470,6 +542,18 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                 server result.
               </div>
             }
+            @if (refetchedFns().length) {
+              <div class="callout" data-tone="warn" role="note">
+                <strong>Server function read ran twice</strong>:
+                @for (name of refetchedFns(); track name; let last = $last) {
+                  <span class="mono">{{ name }}</span
+                  >{{ last ? '' : ', ' }}
+                }
+                ran while server rendering, then again in the browser. The browser did not use the
+                TransferState seed.
+              </div>
+            }
+            <h2 id="analog-calls-heading">Server calls</h2>
             <div class="calls-bar">
               <fieldset class="segmented">
                 <legend class="sr-only">Show calls of kind</legend>
@@ -479,6 +563,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                       type="radio"
                       name="analog-kind"
                       class="sr-only"
+                      [attr.data-kind]="k"
                       [checked]="kind() === k"
                       (change)="kind.set(k)"
                     />
@@ -486,15 +571,60 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   </label>
                 }
               </fieldset>
-              <button
-                type="button"
-                class="btn ghost"
-                [disabled]="!allCalls().length"
-                (click)="clearCalls()"
-              >
-                Clear calls
-              </button>
+              <div class="calls-actions">
+                <button
+                  type="button"
+                  class="btn ghost"
+                  [disabled]="!allCalls().length"
+                  (click)="clearCalls()"
+                >
+                  Clear calls
+                </button>
+                <span class="calls-message" role="status">{{ callsMessage() }}</span>
+              </div>
             </div>
+            <div class="call-filters" role="group" aria-label="Filter the server calls">
+              <div class="search">
+                <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+                <input
+                  id="analog-call-search"
+                  class="field"
+                  type="search"
+                  placeholder="Find a URL, path or function…"
+                  aria-label="Find a URL, path or function"
+                  autocomplete="off"
+                  spellcheck="false"
+                  [value]="callQuery()"
+                  (input)="callQuery.set($any($event.target).value)"
+                  (keydown.escape)="callQuery.set('')"
+                />
+              </div>
+              <label class="check">
+                <input
+                  type="checkbox"
+                  [checked]="failedOnly()"
+                  (change)="failedOnly.set($any($event.target).checked)"
+                />
+                Failed only
+              </label>
+              <span class="total" aria-live="polite"
+                >{{ matchingCalls().length }} of {{ allCalls().length }}</span
+              >
+            </div>
+            @if (shownCount() < matchingCalls().length || serverFull()) {
+              <p class="note">
+                @if (shownCount() < matchingCalls().length) {
+                  Showing the newest {{ shownCount() }} of {{ matchingCalls().length }}.
+                }
+                @if (serverFull()) {
+                  The dev server keeps only the newest {{ maxServerCalls }} calls and drops older
+                  ones.
+                }
+              </p>
+            }
             @if (calls().length) {
               <div class="table-wrap" role="region" aria-label="Server calls" tabindex="0">
                 <table>
@@ -520,7 +650,23 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                         <td class="request">
                           <div class="meta">
                             <span class="method" [attr.data-method]="c.method">{{ c.method }}</span>
-                            <span class="mono url">{{ c.url }}</span>
+                            @if (fnOf(c); as fn) {
+                              <strong class="mono url">{{ fn.name }}</strong>
+                              <span class="mono muted">{{ short(fn.file) }}</span>
+                            } @else {
+                              <span class="mono url">{{ c.url }}</span>
+                            }
+                            @if (c.seeded) {
+                              <span class="pill">ran during server rendering</span>
+                            }
+                            @if (c.outcome) {
+                              <span class="pill" [attr.data-tone]="outcomeTone(c.outcome)"
+                                >{{ outcomeLabel(c.outcome) }}
+                                @if (c.location) {
+                                  to {{ c.location }}
+                                }
+                              </span>
+                            }
                             @if (c.render) {
                               <span
                                 class="pill"
@@ -541,12 +687,34 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                             c.status
                           }}</span>
                         </td>
-                        <td class="num nowrap">{{ c.ms }} ms</td>
+                        <td class="num nowrap">
+                          @if (c.seeded) {
+                            <span class="muted">in process</span>
+                          } @else {
+                            {{ c.ms }} ms
+                          }
+                        </td>
                         <td class="muted">{{ c.from }}</td>
                       </tr>
                     }
                   </tbody>
                 </table>
+              </div>
+            } @else if (allCalls().length && callFiltered()) {
+              <div class="empty-box no-match" role="status">
+                <p class="empty-lead">No calls match.</p>
+                <p class="muted">
+                  @if (callQuery().trim()) {
+                    Nothing matches “{{ callQuery().trim() }}” with these filters.
+                  } @else {
+                    None of the {{ allCalls().length }} calls fit these filters.
+                  }
+                </p>
+                <div class="empty-actions">
+                  <button type="button" class="btn ghost" (click)="clearCallFilters()">
+                    Clear filters
+                  </button>
+                </div>
               </div>
             } @else {
               <div class="empty-box">
@@ -558,7 +726,8 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   }
                 </p>
                 <p class="muted">
-                  Navigate in the app to see page renders, load() fetches and API calls.
+                  Navigate in the app to see page renders, load() fetches, form actions, server
+                  functions and API calls.
                 </p>
               </div>
             }
@@ -609,6 +778,39 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
               </table>
             </div>
 
+            @if (serverFns().length) {
+              <h2>Server functions</h2>
+              <div class="table-wrap" role="region" aria-label="Server functions" tabindex="0">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Method</th>
+                      <th scope="col">Name</th>
+                      <th scope="col">File</th>
+                      <th scope="col" class="num">Calls</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (fn of serverFns(); track fn.id) {
+                      <tr>
+                        <td>
+                          <span class="method" [attr.data-method]="fn.method">{{ fn.method }}</span>
+                        </td>
+                        <td class="mono">{{ fn.name }}</td>
+                        <td>
+                          <span class="file"
+                            ><span class="dir">{{ dir(fn.file) }}</span
+                            >{{ base(fn.file) }}</span
+                          >
+                        </td>
+                        <td class="num tnum">{{ fnCalls(fn.id) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+
             <form class="card playground" (submit)="$event.preventDefault(); send()">
               <h2>Request playground</h2>
               <div class="row">
@@ -628,8 +830,23 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   [value]="apiPath()"
                   (input)="apiPath.set($any($event.target).value)"
                 />
-                <button type="submit" class="btn primary">Send</button>
+                <button
+                  type="submit"
+                  class="btn primary"
+                  [disabled]="!canSend()"
+                  [attr.aria-describedby]="sendHintId()"
+                >
+                  {{ sending() ? 'Sending…' : 'Send' }}
+                </button>
               </div>
+              @if (!canCall()) {
+                <p id="analog-calls-off" class="muted">{{ callsOff }}</p>
+              } @else if (needsConfirm()) {
+                <p id="analog-confirm-hint" class="muted">
+                  Tick "This request can change data on the dev server" below to send a
+                  {{ method() }} request.
+                </p>
+              }
               @if (method() !== 'GET') {
                 <label for="api-body">JSON body</label>
                 <textarea
@@ -640,7 +857,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   [value]="apiBody()"
                   (input)="apiBody.set($any($event.target).value)"
                 ></textarea>
-                <label class="check"
+                <label class="check confirm-send"
                   ><input
                     type="checkbox"
                     [checked]="confirmSend()"
@@ -649,7 +866,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   This request can change data on the dev server</label
                 >
               }
-              @if (response(); as r) {
+              @if (sending()) {
+                <p class="muted" role="status">Sending {{ method() }} {{ apiPath().trim() }}…</p>
+              } @else if (response(); as r) {
                 <div class="response" role="status">
                   @if (r.error) {
                     <div class="row">
@@ -755,6 +974,14 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                         <span class="muted small">default, nothing configured</span>
                       }
                     </dd>
+                    @if (p.fromRules?.length) {
+                      <dt>From routeRules</dt>
+                      <dd>
+                        @for (r of p.fromRules; track r) {
+                          <span class="chip mono">{{ r }}</span>
+                        }
+                      </dd>
+                    }
                     @if (p.staticMissing.length) {
                       <dt>Static, not listed</dt>
                       <dd>
@@ -875,6 +1102,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                           @if (item.path && item.path !== item.file) {
                             <span class="mono path">{{ item.path }}</span>
                           }
+                          @if (item.message) {
+                            <p class="detail">{{ item.message }}</p>
+                          }
                         </li>
                       }
                     </ul>
@@ -895,10 +1125,20 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
     }
   `,
   styles: `
+    @use 'mixins' as m;
+
     :host {
       --good: var(--ok);
       --bad: var(--danger);
       --info: #60a5fa;
+      --info-text: #bfdbfe;
+
+      @include m.light {
+        --info: #1d4ed8;
+        --info-text: #1e40af;
+      }
+    }
+    :host {
       --mono: var(--font-mono);
       display: grid;
       gap: 16px;
@@ -924,11 +1164,6 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
     }
     @media (prefers-reduced-motion: reduce) {
       .spinner {
@@ -1111,7 +1346,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
     .count[data-tone='warn'],
     [role='tab'][aria-selected='true'] .count[data-tone='warn'] {
       background: color-mix(in srgb, var(--warn) 12%, transparent);
-      color: var(--warn);
+      color: var(--warn-text);
     }
 
     .panel {
@@ -1451,65 +1686,141 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
     }
     .pill.live {
       border-color: var(--accent-line);
-      background: var(--accent-soft);
-      color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+      color: var(--accent-text);
     }
     .pill[data-kind='layout'] {
       border-color: #94a3b8;
       color: #e2e8f0;
+
+      @include m.light {
+        border-color: #64748b;
+        color: #475569;
+      }
     }
     .pill[data-kind='markdown'] {
       border-color: #0ea5e9;
       color: #bae6fd;
+
+      @include m.light {
+        border-color: #0284c7;
+        color: #0369a1;
+      }
     }
     .pill[data-kind='load'] {
       border-color: #2dd4bf;
       color: #99f6e4;
+
+      @include m.light {
+        border-color: #0d9488;
+        color: #0f766e;
+      }
     }
     .pill[data-mode='ssr'] {
       border-color: #3b82f6;
       color: #bfdbfe;
+
+      @include m.light {
+        border-color: #2563eb;
+        color: #1d4ed8;
+      }
     }
     .pill[data-mode='ssg'] {
       border-color: #22c55e;
       color: #bbf7d0;
+
+      @include m.light {
+        border-color: #16a34a;
+        color: #166534;
+      }
     }
     .pill[data-mode='client'] {
       border-color: #eab308;
       color: #fef08a;
+
+      @include m.light {
+        border-color: #92400e;
+        color: #713f12;
+      }
+    }
+    .pill[data-mode='cached'] {
+      border-color: #a855f7;
+      color: #e9d5ff;
+
+      @include m.light {
+        border-color: #9333ea;
+        color: #7e22ce;
+      }
+    }
+    .pill[data-mode='redirect'] {
+      border-color: #94a3b8;
+      color: #e2e8f0;
+
+      @include m.light {
+        border-color: #64748b;
+        color: #475569;
+      }
     }
     .pill[data-call='page'] {
       border-color: #3b82f6;
       color: #bfdbfe;
+
+      @include m.light {
+        border-color: #2563eb;
+        color: #1d4ed8;
+      }
     }
     .pill[data-call='load'] {
       border-color: #2dd4bf;
       color: #99f6e4;
+
+      @include m.light {
+        border-color: #0d9488;
+        color: #0f766e;
+      }
     }
     .pill[data-call='fn'] {
       border-color: #14b8a6;
       color: #99f6e4;
+
+      @include m.light {
+        border-color: #0d9488;
+        color: #0f766e;
+      }
     }
     .pill[data-call='api'] {
       border-color: #f97316;
       color: #fed7aa;
+
+      @include m.light {
+        border-color: #c2410c;
+        color: #9a3412;
+      }
+    }
+    .pill[data-call='action'] {
+      border-color: #ec4899;
+      color: #fbcfe8;
+
+      @include m.light {
+        border-color: #db2777;
+        color: #9d174d;
+      }
+    }
+    [data-tone='good'].pill {
+      @include m.tint(ok);
     }
     [data-tone='warn'].pill,
     [data-tone='warn'].chip {
-      border-color: color-mix(in srgb, var(--warn) 30%, transparent);
-      background: color-mix(in srgb, var(--warn) 12%, transparent);
-      color: var(--warn);
+      @include m.tint(warn);
     }
     [data-tone='bad'].pill,
     [data-tone='bad'].chip {
-      border-color: color-mix(in srgb, var(--danger) 30%, transparent);
-      background: color-mix(in srgb, var(--danger) 12%, transparent);
-      color: var(--danger);
+      @include m.tint(danger);
     }
     [data-tone='info'].pill {
       border-color: color-mix(in srgb, var(--info) 30%, transparent);
       background: color-mix(in srgb, var(--info) 12%, transparent);
-      color: #bfdbfe;
+      color: var(--info-text);
     }
 
     .status {
@@ -1519,19 +1830,13 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       font-variant-numeric: tabular-nums;
     }
     .status[data-status='good'] {
-      border-color: color-mix(in srgb, var(--ok) 30%, transparent);
-      background: color-mix(in srgb, var(--ok) 12%, transparent);
-      color: var(--ok);
+      @include m.tint(ok);
     }
     .status[data-status='warn'] {
-      border-color: color-mix(in srgb, var(--warn) 30%, transparent);
-      background: color-mix(in srgb, var(--warn) 12%, transparent);
-      color: var(--warn);
+      @include m.tint(warn);
     }
     .status[data-status='bad'] {
-      border-color: color-mix(in srgb, var(--danger) 30%, transparent);
-      background: color-mix(in srgb, var(--danger) 12%, transparent);
-      color: var(--danger);
+      @include m.tint(danger);
     }
     .method {
       min-width: 52px;
@@ -1547,22 +1852,40 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       border-color: color-mix(in srgb, #7dd3fc 30%, transparent);
       background: color-mix(in srgb, #7dd3fc 12%, transparent);
       color: #7dd3fc;
+
+      @include m.light {
+        border-color: color-mix(in srgb, #0369a1 30%, transparent);
+        background: color-mix(in srgb, #0369a1 8%, transparent);
+        color: #075985;
+      }
     }
     .method[data-method='POST'] {
       border-color: color-mix(in srgb, var(--ok) 30%, transparent);
       background: color-mix(in srgb, var(--ok) 12%, transparent);
       color: #86efac;
+
+      @include m.light {
+        color: var(--ok-text);
+      }
     }
     .method[data-method='PUT'],
     .method[data-method='PATCH'] {
       border-color: color-mix(in srgb, var(--warn) 30%, transparent);
       background: color-mix(in srgb, var(--warn) 12%, transparent);
       color: #fde68a;
+
+      @include m.light {
+        color: var(--warn-text);
+      }
     }
     .method[data-method='DELETE'] {
       border-color: color-mix(in srgb, var(--danger) 30%, transparent);
       background: color-mix(in srgb, var(--danger) 12%, transparent);
       color: #fecaca;
+
+      @include m.light {
+        color: var(--danger-text);
+      }
     }
     .request {
       min-width: 260px;
@@ -1607,6 +1930,73 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       align-items: center;
       justify-content: space-between;
       gap: 8px;
+    }
+    .calls-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: center;
+    }
+    .calls-message {
+      color: var(--text-2);
+      font-size: 12.5px;
+    }
+    .call-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: center;
+    }
+    .search {
+      position: relative;
+      flex: 1 1 220px;
+      min-width: 0;
+    }
+    .search .field {
+      width: 100%;
+      padding-left: 34px;
+    }
+    .search-icon {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      width: 14px;
+      height: 14px;
+      transform: translateY(-50%);
+      fill: none;
+      stroke: var(--text-3);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      pointer-events: none;
+    }
+    .search:focus-within .search-icon {
+      stroke: var(--accent);
+    }
+    .call-filters .check {
+      flex: none;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .total {
+      flex: none;
+      color: var(--text-2);
+      font-size: 12px;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .note {
+      margin: 0;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+    .empty-actions {
+      display: flex;
+      justify-content: center;
+      margin-top: 8px;
     }
     .segmented {
       display: inline-flex;
@@ -1784,7 +2174,13 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
     .where li {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 4px 12px;
+    }
+    .where .detail {
+      flex-basis: 100%;
+      margin: 0;
+      color: var(--text-2);
+      overflow-wrap: anywhere;
     }
     .fix {
       margin-top: 12px;
@@ -1829,53 +2225,76 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       font-size: 15px;
       font-weight: 600;
     }
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip-path: inset(50%);
-      white-space: nowrap;
-    }
   `,
 })
 export class AnalogInspector {
   rpc = input<DevframeRpcClient | null>(null);
+  readonly canCall = computed(() => actionAllowed(this.rpc(), 'analog'));
+  protected readonly callsOff = actionBlockedMessage('analog');
 
-  readonly kinds: Kind[] = ['all', 'page', 'load', 'fn', 'api'];
+  readonly kinds: Kind[] = ['all', 'page', 'load', 'action', 'fn', 'api'];
   readonly methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
   readonly methodOptions = this.methods.map((m) => ({ value: m, label: m }));
   readonly view = signal<View>('routes');
   readonly project = signal<AnalogProject | null>(null);
+  readonly loadFailed = signal(false);
   readonly state = signal<AnalogState>({});
   readonly findings = signal<Finding[]>([]);
   readonly renderRows = signal<RenderRow[]>([]);
   readonly plan = signal<PrerenderPlan | null>(null);
   readonly filter = signal('');
   readonly testUrl = signal('');
-  readonly match = signal<UrlMatch | null>(null);
+  readonly explained = signal<{ url: string; match: UrlMatch } | null>(null);
+  readonly explainError = signal('');
+  readonly explaining = signal(false);
   readonly kind = signal<Kind>('all');
   readonly method = signal('GET');
   readonly apiPath = signal('');
   readonly apiBody = signal('');
   readonly confirmSend = signal(false);
   readonly response = signal<ApiResult | null>(null);
+  readonly sending = signal(false);
+  readonly needsConfirm = computed(() => this.method() !== 'GET' && !this.confirmSend());
+  readonly canSend = computed(() => this.canCall() && !this.sending() && !this.needsConfirm());
+  readonly sendHintId = computed(() =>
+    !this.canCall() ? 'analog-calls-off' : this.needsConfirm() ? 'analog-confirm-hint' : null,
+  );
 
   private unsubscribe: (() => void) | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private refreshRun = 0;
   private readonly destroyRef = inject(DestroyRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  readonly page = computed(() => this.state().pages?.[0] ?? null);
+  private readonly hostPageId = hostPageId();
+
+  readonly page = computed(() => {
+    const pages = this.state().pages ?? [];
+    return (this.hostPageId ? pages.find((p) => p.pageId === this.hostPageId) : pages[0]) ?? null;
+  });
   readonly openFiles = computed(() => new Set((this.page()?.chain ?? []).map((c) => c.file)));
   readonly allCalls = computed(() => this.state().calls ?? []);
-  readonly calls = computed(() => {
+  readonly maxServerCalls = MAX_SERVER_CALLS;
+  readonly callQuery = signal('');
+  readonly failedOnly = signal(false);
+  readonly callsMessage = signal('');
+  /** True when the search or the failed filter is on, so an empty list is a no-match. */
+  readonly callFiltered = computed(() => !!this.callQuery().trim() || this.failedOnly());
+  /** Every call that passes the kind, search and failed filters, oldest first. */
+  readonly matchingCalls = computed(() => {
     const kind = this.kind();
-    return this.allCalls()
-      .filter((c) => kind === 'all' || c.kind === kind)
-      .slice(-150)
-      .reverse();
+    const query = this.callQuery().trim().toLowerCase();
+    const failedOnly = this.failedOnly();
+    return this.allCalls().filter(
+      (c) =>
+        (kind === 'all' || c.kind === kind) &&
+        (!failedOnly || this.isFailed(c)) &&
+        (!query || this.callText(c).includes(query)),
+    );
   });
+  readonly calls = computed(() => this.matchingCalls().slice(-MAX_SHOWN_CALLS).reverse());
+  readonly shownCount = computed(() => this.calls().length);
+  readonly serverFull = computed(() => this.allCalls().length >= MAX_SERVER_CALLS);
   readonly allRoutes = computed(() => walk(this.project()?.routes ?? []));
   readonly pageCount = computed(
     () => this.allRoutes().filter((r) => r.route.file && r.route.kind !== 'layout').length,
@@ -1889,11 +2308,18 @@ export class AnalogInspector {
         !!r.route.file?.toLowerCase().includes(needle),
     );
   });
+  readonly serverFns = computed(() => this.project()?.serverFns ?? []);
+  private readonly fnById = computed(() => new Map(this.serverFns().map((fn) => [fn.id, fn])));
+  readonly refetchedFns = computed(() =>
+    Array.from(
+      new Set((this.state().refetches ?? []).map((r) => this.fnById().get(r.id)?.name ?? r.id)),
+    ),
+  );
   readonly duplicates = computed(() =>
     Array.from(new Set((this.state().duplicates ?? []).map((d) => d.route))),
   );
   readonly modeCounts = computed(() =>
-    (['ssr', 'ssg', 'client'] as const)
+    (['ssr', 'ssg', 'cached', 'client', 'redirect'] as const)
       .map((mode) => ({
         mode,
         label: MODE_LABEL[mode],
@@ -1918,7 +2344,14 @@ export class AnalogInspector {
         };
         cards.set(finding.rule, card);
       }
-      card.items.push({ file: finding.file, path: finding.path });
+      const message =
+        STATIC_MESSAGES.has(finding.rule) || finding.message === card.summary
+          ? undefined
+          : finding.message;
+      const same = (item: LintCard['items'][number]) =>
+        item.file === finding.file && item.path === finding.path && item.message === message;
+      if (!card.items.some(same))
+        card.items.push({ file: finding.file, path: finding.path, message });
     }
     return Array.from(cards.values()).sort((a, b) => order[a.severity] - order[b.severity]);
   });
@@ -1958,8 +2391,9 @@ export class AnalogInspector {
     const project = await call<AnalogProject>(client, 'analog-project');
     if (this.destroyRef.destroyed) return;
     this.project.set(project);
+    this.loadFailed.set(project === null);
     try {
-      const shared = await client.scope('ng-devtools').rpc.sharedState('analog');
+      const shared = await client.scope('pangular').rpc.sharedState('analog');
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => this.state.set((value as AnalogState) ?? {});
       apply(shared.value());
@@ -1970,6 +2404,13 @@ export class AnalogInspector {
     }
     if (this.destroyRef.destroyed) return;
     await this.refresh(this.view());
+  }
+
+  retry() {
+    const client = this.rpc();
+    if (!client) return;
+    this.loadFailed.set(false);
+    void this.load(client);
   }
 
   private scheduleRefresh(view: View) {
@@ -1989,9 +2430,12 @@ export class AnalogInspector {
     this.findings.set(findings ?? []);
     this.renderRows.set(render?.rows ?? []);
     this.plan.set(render?.plan ?? null);
-    if (view === 'routes' || view === 'content') {
+    if (view === 'routes' || view === 'content' || this.project() === null) {
       const project = await call<AnalogProject>(client, 'analog-project');
-      if (project && run === this.refreshRun) this.project.set(project);
+      if (project && run === this.refreshRun) {
+        this.project.set(project);
+        this.loadFailed.set(false);
+      }
     }
   }
 
@@ -2041,8 +2485,24 @@ export class AnalogInspector {
   }
 
   mismatch(row: RenderRow): boolean {
-    if (!row.last?.render) return false;
+    if (!row.last?.render || row.mode === 'redirect') return false;
     return row.mode === 'client' ? row.last.render !== 'client' : row.last.render === 'client';
+  }
+
+  fnOf(call: AnalogCall): ServerFn | undefined {
+    return call.kind === 'fn' && call.route ? this.fnById().get(call.route) : undefined;
+  }
+
+  fnCalls(id: string): number {
+    return this.allCalls().filter((c) => c.kind === 'fn' && c.route === id).length;
+  }
+
+  outcomeLabel(outcome: ActionOutcome): string {
+    return OUTCOME_LABEL[outcome];
+  }
+
+  outcomeTone(outcome: ActionOutcome): string {
+    return OUTCOME_TONE[outcome];
   }
 
   statusClass(status: number): 'good' | 'warn' | 'bad' {
@@ -2074,9 +2534,7 @@ export class AnalogInspector {
     }
   }
 
-  time(at: number): string {
-    return new Date(at).toLocaleTimeString();
-  }
+  readonly time = time;
 
   tryApi(api: ApiRoute) {
     this.method.set(api.method === 'ANY' ? 'GET' : api.method);
@@ -2085,19 +2543,67 @@ export class AnalogInspector {
     queueMicrotask(() => document.getElementById('api-path')?.focus());
   }
 
+  /** A failed call answered with 400 or more, never answered, or ended in an error outcome. */
+  isFailed(c: AnalogCall): boolean {
+    return !c.status || c.status >= 400 || c.outcome === 'error';
+  }
+
+  private callText(c: AnalogCall): string {
+    const fn = this.fnOf(c);
+    return [c.url, c.route, fn?.name, fn?.file].filter(Boolean).join(' ').toLowerCase();
+  }
+
+  clearCallFilters() {
+    this.callQuery.set('');
+    this.failedOnly.set(false);
+    this.kind.set('all');
+    queueMicrotask(() =>
+      this.host.nativeElement.querySelector<HTMLInputElement>('#analog-call-search')?.focus(),
+    );
+  }
+
   async clearCalls() {
-    await call(this.rpc(), 'analog-clear-calls');
+    const client = this.rpc();
+    try {
+      if (!client) throw new Error('No devtools server');
+      await rpcCall(client, 'analog-clear-calls');
+      this.callsMessage.set('Calls cleared.');
+      // The button is disabled once the list is empty, so hand focus to the kind filter.
+      queueMicrotask(() =>
+        this.host.nativeElement
+          .querySelector<HTMLInputElement>('input[name="analog-kind"]:checked')
+          ?.focus(),
+      );
+    } catch {
+      this.callsMessage.set('Could not clear the calls.');
+    }
   }
 
   async explain() {
     const url = this.testUrl().trim();
-    if (!url) return;
-    this.match.set(await call<UrlMatch>(this.rpc(), 'analog-explain-url', url));
+    if (!url) {
+      this.explained.set(null);
+      this.explainError.set('Type a URL to explain, for example /products/42.');
+      return;
+    }
+    this.explaining.set(true);
+    this.explainError.set('');
+    try {
+      const match = (await rpcCall(this.rpc(), 'analog-explain-url', url)) as UrlMatch | null;
+      if (!match) throw new Error('The devtools server did not answer');
+      this.explained.set({ url, match });
+    } catch (error) {
+      const reason = String((error as Error)?.message || 'The devtools server did not answer');
+      this.explained.set(null);
+      this.explainError.set(`Could not explain ${url}. ${reason.replace(/\.?$/, '.')}`);
+    } finally {
+      this.explaining.set(false);
+    }
   }
 
   async send() {
     const path = this.apiPath().trim();
-    if (!path) return;
+    if (!path || this.sending() || this.needsConfirm()) return;
     let body: unknown;
     if (this.method() !== 'GET' && this.apiBody().trim()) {
       try {
@@ -2107,13 +2613,19 @@ export class AnalogInspector {
         return;
       }
     }
-    const result = await call<ApiResult>(this.rpc(), 'analog-call-api', {
-      method: this.method(),
-      path,
-      body,
-      confirm: this.confirmSend(),
-    });
-    this.response.set(result ?? { error: 'No answer from the devtools server.' });
+    this.response.set(null);
+    this.sending.set(true);
+    try {
+      const result = await call<ApiResult>(this.rpc(), 'analog-call-api', {
+        method: this.method(),
+        path,
+        body,
+        confirm: this.confirmSend(),
+      });
+      this.response.set(result ?? { error: 'No answer from the devtools server.' });
+    } finally {
+      this.sending.set(false);
+    }
   }
 
   onKey(event: KeyboardEvent) {

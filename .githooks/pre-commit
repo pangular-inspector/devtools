@@ -1,0 +1,26 @@
+#!/bin/sh
+root="$(git rev-parse --show-toplevel)" || exit 0
+cd "$root" || exit 0
+
+list="$(mktemp)" || exit 0
+trap 'rm -f "$list"' EXIT
+
+unstaged="$(git -c core.quotePath=false diff --name-only)"
+
+git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR |
+  grep -E '\.(ts|mjs|js|json|scss|css|html|md|yml|yaml)$' |
+  grep -v '^extension/ui/' |
+  while IFS= read -r file; do
+    if printf '%s\n' "$unstaged" | grep -qxF -- "$file"; then
+      echo "pre-commit: not formatting $file because it has unstaged changes. Run pnpm format:check before you push." >&2
+    else
+      printf '%s\n' "$file"
+    fi
+  done >"$list"
+
+[ -s "$list" ] || exit 0
+
+tr '\n' '\0' <"$list" | xargs -0 pnpm --silent exec prettier --write --ignore-unknown >/dev/null 2>&1 ||
+  echo "WARNING: failed to format staged files." >&2
+tr '\n' '\0' <"$list" | xargs -0 git --literal-pathspecs add --
+exit 0

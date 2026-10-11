@@ -1,6 +1,7 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { Component, computed, input, linkedSignal, output } from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
+import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
 import {
   SHARED_STYLES,
   routerAction,
@@ -8,6 +9,7 @@ import {
   type OutletInfo,
   type RouterPage,
 } from './router-types';
+import type { ComponentFocus } from '../types/component-focus.types';
 
 interface RouteRow {
   route: ActiveRoute;
@@ -41,8 +43,19 @@ interface OutletRow {
           <span class="pending-text"
             >Navigating to <code>{{ pending.url }}</code> (#{{ pending.id }})</span
           >
-          <button type="button" class="small" (click)="abort()">Abort</button>
+          <button
+            type="button"
+            class="small"
+            [disabled]="!navigationAllowed()"
+            [attr.aria-describedby]="navigationAllowed() ? null : 'route-current-writes-off'"
+            (click)="abort()"
+          >
+            Abort
+          </button>
         </div>
+        @if (!navigationAllowed()) {
+          <p id="route-current-writes-off" class="muted">{{ navigationOff }}</p>
+        }
       }
       @if (message()) {
         <p class="muted" role="status">{{ message() }}</p>
@@ -157,6 +170,20 @@ interface OutletRow {
               @if (row.outlet.activated) {
                 <code>{{ row.outlet.component ?? '?' }}</code> for
                 <code>{{ row.outlet.route ?? '?' }}</code>
+                @if (row.outlet.devtoolsId && componentsOn()) {
+                  <button
+                    type="button"
+                    class="small show-component"
+                    (click)="
+                      showComponent.emit({ pageId: page().pageId, id: row.outlet.devtoolsId })
+                    "
+                  >
+                    Show in Components<span class="visually-hidden"
+                      >:
+                      {{ row.outlet.component ?? row.outlet.element ?? 'routed component' }}</span
+                    >
+                  </button>
+                }
               } @else {
                 <span class="muted">not activated</span>
               }
@@ -165,6 +192,11 @@ interface OutletRow {
               }
               @for (bound of boundInputs(row.outlet); track bound.input) {
                 <span class="tag">input {{ bound.input }} ← {{ bound.source }}</span>
+              }
+              @if (row.outlet.data !== undefined) {
+                <span class="outlet-data"
+                  >routerOutletData <code>{{ row.outlet.data }}</code></span
+                >
               }
             </li>
           }
@@ -222,7 +254,7 @@ interface OutletRow {
       border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
       border-radius: var(--radius-sm);
       background: color-mix(in srgb, var(--warn) 10%, transparent);
-      color: var(--warn);
+      color: var(--warn-text);
       font-size: 13px;
     }
     .pending-text {
@@ -291,13 +323,30 @@ interface OutletRow {
     .outlets li:hover {
       background: var(--surface-2);
     }
+    .show-component {
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .outlet-data {
+      display: block;
+      color: var(--text-2);
+      font-size: 12px;
+    }
   `,
 })
 export class RouteCurrent {
   page = input.required<RouterPage>();
   rpc = input<DevframeRpcClient | null>(null);
+  readonly navigationAllowed = computed(() => actionAllowed(this.rpc(), 'router'));
+  protected readonly navigationOff = actionBlockedMessage('router');
+  readonly componentsOn = computed(() => panelConfig(this.rpc()).inspectors.components);
+  /** A routed component, and the page it is on, to select in the Components tab. */
+  readonly showComponent = output<ComponentFocus>();
 
-  readonly message = signal('');
+  private readonly pageId = computed(() => this.page().pageId);
+  // The component stays mounted when the page picker switches pages, so the message of one page
+  // starts over on the next.
+  readonly message = linkedSignal<string, string>({ source: this.pageId, computation: () => '' });
 
   readonly rows = computed(() => {
     const rows: RouteRow[] = [];
@@ -341,9 +390,11 @@ export class RouteCurrent {
   }
 
   async abort() {
-    const result = await routerAction(this.rpc(), this.page().pageId, { action: 'abort' });
+    const pageId = this.pageId();
+    const result = await routerAction(this.rpc(), pageId, { action: 'abort' });
+    if (pageId !== this.pageId()) return;
     this.message.set(
-      result?.['error'] ? String(result['error']) : `Aborted navigation #${result?.['aborted']}`,
+      result['error'] ? String(result['error']) : `Aborted navigation #${result['aborted']}.`,
     );
   }
 }

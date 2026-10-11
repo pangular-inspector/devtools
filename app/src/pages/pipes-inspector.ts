@@ -2,13 +2,17 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
   input,
   signal,
+  viewChild,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
 
 interface UsageSite {
@@ -73,6 +77,7 @@ interface AsyncUsageInfo {
   hasSource: boolean;
   latestValue?: string;
   duplicate: boolean;
+  resubscribing?: boolean;
   target?: PipeTarget;
 }
 
@@ -91,6 +96,8 @@ interface PipesSnapshot {
   async: AsyncUsageInfo[];
   instrumented: string[];
 }
+
+const RECORD_CONFIRM_MS = 5000;
 
 type PipeKind = 'all' | 'custom' | 'builtin' | 'impure' | 'live';
 
@@ -119,6 +126,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
           <path d="m20 20-3.5-3.5" />
         </svg>
         <input
+          #filterInput
           type="search"
           placeholder="Find a pipe, class or file…"
           aria-label="Find a pipe, class or file"
@@ -138,13 +146,25 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
           class="record"
           [class.on]="instrumenting()"
           [attr.aria-pressed]="instrumenting()"
+          [attr.aria-busy]="pendingRecord() !== null"
+          [attr.aria-disabled]="pendingRecord() !== null"
           (click)="toggleInstrument()"
         >
           <span class="rec-dot" aria-hidden="true"></span>
-          {{ instrumenting() ? 'Stop recording' : 'Record calls' }}
+          {{ recordLabel() }}
         </button>
       </div>
     </div>
+
+    @if (recordMessage(); as message) {
+      <p class="notice" role="status">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 11v5M12 8h.01" />
+        </svg>
+        <span>{{ message }}</span>
+      </p>
+    }
 
     @if (instrumenting()) {
       <p class="notice" role="status">
@@ -248,7 +268,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
         <section id="pipe-detail" class="detail" aria-labelledby="pipe-detail-title">
           @if (selected(); as p) {
             <header class="detail-head">
-              <h2 id="pipe-detail-title" class="mono">{{ p.name }}</h2>
+              <h2 id="pipe-detail-title" class="mono" tabindex="-1">{{ p.name }}</h2>
               <span class="chip" [class.impure]="!p.isPure">{{
                 p.isPure ? 'pure' : 'impure'
               }}</span>
@@ -317,7 +337,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                               type="button"
                               class="component"
                               [attr.aria-label]="'Highlight ' + c.name + ' on the page'"
-                              (click)="highlight(target)"
+                              (click)="highlight(target, true)"
                               (mouseenter)="highlight(target)"
                               (mouseleave)="highlight(null)"
                               (focus)="highlight(target)"
@@ -394,7 +414,8 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
         </h2>
         <p class="hint">
           Each <span class="mono">| async</span> subscribes on its own. Two on the same source mean
-          the work runs twice.
+          the work runs twice. A source that changes on every check, like
+          <span class="mono">getData() | async</span>, resubscribes each time.
         </p>
         <ul class="async-list">
           @for (a of async(); track $index) {
@@ -418,6 +439,9 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
               }
               @if (a.duplicate) {
                 <span class="chip warn">duplicate subscription</span>
+              }
+              @if (a.resubscribing) {
+                <span class="chip warn">resubscribing</span>
               }
               <span class="mono value latest">{{ a.latestValue ?? 'no value yet' }}</span>
             </li>
@@ -446,7 +470,17 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
               <div class="finding-head">
                 <span class="severity" [attr.data-tone]="f.severity">{{ f.severity }}</span>
                 <code class="mono rule">{{ f.rule }}</code>
-                <span class="where mono">{{ f.pipe }} · {{ f.file }}:{{ f.line }}</span>
+                @let target = pipeFor(f);
+                <span class="where mono">
+                  @if (target) {
+                    <button type="button" class="pipe-link" (click)="showPipe(target)">
+                      <span class="sr-only">Show pipe </span>{{ f.pipe }}
+                    </button>
+                  } @else {
+                    {{ f.pipe }}
+                  }
+                  · {{ f.file }}:{{ f.line }}
+                </span>
               </div>
               <p class="finding-message">{{ f.message }}</p>
               <p class="finding-fix"><span class="fix-label">Fix</span> {{ f.fix }}</p>
@@ -466,14 +500,6 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
     }
     .mono {
       font-family: var(--font-mono);
-    }
-    .visually-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip: rect(0 0 0 0);
-      white-space: nowrap;
     }
     .intro {
       max-width: 720px;
@@ -582,6 +608,9 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       cursor: default;
       opacity: 0.6;
     }
+    .record[aria-busy='true'] {
+      cursor: progress;
+    }
     .rec-dot {
       width: 8px;
       height: 8px;
@@ -589,7 +618,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       background: var(--text-3);
     }
     .record.on {
-      @include m.soft(var(--accent));
+      @include m.tint(accent);
     }
     .record.on .rec-dot {
       background: var(--accent);
@@ -725,10 +754,10 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
     }
     .chip.impure,
     .chip.warn {
-      @include m.soft(var(--warn));
+      @include m.tint(warn);
     }
     .chip.live {
-      @include m.soft(var(--ok));
+      @include m.tint(ok);
     }
     .pill {
       display: inline-flex;
@@ -766,6 +795,13 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       font-size: 15px;
       font-weight: 600;
       overflow-wrap: anywhere;
+      border-radius: 4px;
+    }
+    .detail-head h2:focus {
+      outline: none;
+    }
+    .detail-head h2:focus-visible {
+      @include m.focus-ring;
     }
     .block {
       padding: 14px 16px;
@@ -959,10 +995,10 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       text-transform: uppercase;
     }
     .severity[data-tone='warning'] {
-      @include m.soft(var(--warn));
+      @include m.tint(warn);
     }
     .severity[data-tone='error'] {
-      @include m.soft(var(--danger));
+      @include m.tint(danger);
     }
     .rule {
       color: var(--accent);
@@ -972,6 +1008,27 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       color: var(--text-3);
       font-size: 11px;
       overflow-wrap: anywhere;
+    }
+    button.pipe-link {
+      display: inline;
+      height: auto;
+      padding: 0;
+      border: 0;
+      border-radius: 4px;
+      background: none;
+      color: var(--accent);
+      font: inherit;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      white-space: normal;
+    }
+    button.pipe-link:hover:not(:disabled) {
+      border-color: transparent;
+      background: none;
+      color: var(--accent-hover);
+    }
+    button.pipe-link:focus-visible {
+      @include m.focus-ring;
     }
     .finding-message {
       margin: 6px 0 0;
@@ -1030,11 +1087,6 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
     @media (prefers-reduced-motion: reduce) {
       .spinner {
         animation: none;
@@ -1045,6 +1097,8 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
 export class PipesInspector {
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
 
   rpc = input<DevframeRpcClient | null>(null);
 
@@ -1062,26 +1116,28 @@ export class PipesInspector {
   lint = signal<PipeLintFinding[] | null>(null);
   lintFailed = signal(false);
   instrumentedPages = signal<string[]>([]);
-  instrumenting = signal(false);
+  instrumenting = computed(() => this.instrumentedPages().length > 0);
+  pendingRecord = signal<boolean | null>(null);
+  recordMessage = signal<string | null>(null);
+  recordLabel = computed(() => {
+    const pending = this.pendingRecord();
+    if (pending !== null) return pending ? 'Starting…' : 'Stopping…';
+    return this.instrumenting() ? 'Stop recording' : 'Record calls';
+  });
+  private pendingTimer?: ReturnType<typeof setTimeout>;
 
   private readonly liveByName = computed(() => new Map(this.live().map((p) => [p.name, p])));
 
   filtered = computed(() => {
-    const q = this.filter().trim().toLowerCase();
+    const q = this.filter();
     const kind = this.kind() ?? 'all';
-    const live = this.liveByName();
-    return this.pipes().filter((p) => {
-      if (kind === 'custom' && p.builtin) return false;
-      if (kind === 'builtin' && !p.builtin) return false;
-      if (kind === 'impure' && p.isPure) return false;
-      if (kind === 'live' && !live.has(p.name)) return false;
-      return (
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        p.className.toLowerCase().includes(q) ||
-        p.file.toLowerCase().includes(q)
-      );
-    });
+    return this.pipes().filter((p) => this.fitsKind(p, kind) && this.fitsQuery(p, q));
+  });
+
+  private readonly pipesByName = computed(() => {
+    const byName = new Map<string, PipeInfo[]>();
+    for (const p of this.pipes()) byName.set(p.name, [...(byName.get(p.name) ?? []), p]);
+    return byName;
   });
 
   private unsubscribe?: () => void;
@@ -1097,6 +1153,7 @@ export class PipesInspector {
 
     this.destroyRef.onDestroy(() => {
       this.unsubscribe?.();
+      clearTimeout(this.pendingTimer);
       this.highlight(null);
     });
   }
@@ -1107,7 +1164,7 @@ export class PipesInspector {
     this.loading.set(true);
     this.loadFailed.set(false);
     try {
-      const my = client.scope('ng-devtools');
+      const my = client.scope('pangular');
       const pipes = (await my.rpc.call('get-pipes')) as PipeInfo[];
       this.pipes.set(pipes);
       const sel = this.selected();
@@ -1126,9 +1183,7 @@ export class PipesInspector {
   async loadLint(client: DevframeRpcClient) {
     this.lintFailed.set(false);
     try {
-      const findings = (await client
-        .scope('ng-devtools')
-        .rpc.call('pipe-lint')) as PipeLintFinding[];
+      const findings = (await client.scope('pangular').rpc.call('pipe-lint')) as PipeLintFinding[];
       this.lint.set(findings);
     } catch {
       this.lintFailed.set(true);
@@ -1137,7 +1192,7 @@ export class PipesInspector {
 
   async loadLive(client: DevframeRpcClient) {
     try {
-      const state = await client.scope('ng-devtools').rpc.sharedState('pipe-usage');
+      const state = await client.scope('pangular').rpc.sharedState('pipe-usage');
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         const snapshot = value as PipesSnapshot | undefined;
@@ -1145,7 +1200,7 @@ export class PipesInspector {
         this.async.set(snapshot?.async ?? []);
         const pages = snapshot?.instrumented ?? [];
         this.instrumentedPages.set(pages);
-        this.instrumenting.set(pages.length > 0);
+        if (this.pendingRecord() === pages.length > 0) this.settleRecord(null);
       };
       apply(state.value());
       this.unsubscribe?.();
@@ -1157,14 +1212,42 @@ export class PipesInspector {
 
   async toggleInstrument() {
     const client = this.rpc();
-    if (!client) return;
+    if (!client || this.pendingRecord() !== null) return;
     const on = !this.instrumenting();
-    this.instrumenting.set(on);
+    this.recordMessage.set(null);
+    this.pendingRecord.set(on);
+    let result: { pages?: number } | undefined;
     try {
-      await client.scope('ng-devtools').rpc.call('request-instrument-pipes', on);
+      // Start on this panel's page (or the latest page); stop every page that records.
+      const request = on ? { pageId: hostPageId() ?? undefined, on } : { on };
+      result = (await client.scope('pangular').rpc.call('request-instrument-pipes', request)) as
+        { pages?: number } | undefined;
     } catch {
-      this.instrumenting.set(!on);
+      this.settleRecord("Couldn't reach the devtools server. Try again.");
+      return;
     }
+    if (this.pendingRecord() !== on) return;
+    if (result?.pages === 0) {
+      this.settleRecord(
+        'No page is connected. Open your app in the browser with the devtools running, then record again.',
+      );
+      return;
+    }
+    clearTimeout(this.pendingTimer);
+    this.pendingTimer = setTimeout(() => {
+      if (this.pendingRecord() !== on) return;
+      this.settleRecord(
+        on
+          ? 'No page confirmed recording. Reload the app and try again.'
+          : 'No page confirmed it stopped recording. Reload the app to stop it.',
+      );
+    }, RECORD_CONFIRM_MS);
+  }
+
+  private settleRecord(message: string | null) {
+    clearTimeout(this.pendingTimer);
+    this.pendingRecord.set(null);
+    if (message !== null) this.recordMessage.set(message);
   }
 
   liveFor(name: string): LivePipeInfo | undefined {
@@ -1191,21 +1274,67 @@ export class PipesInspector {
     this.selected.set(this.isSelected(pipe) ? null : pipe);
   }
 
+  /** The listed pipe a lint finding is about: the one declared in the finding's file, or else
+   * the first pipe with that name. Null when the pipe is not in the list. */
+  pipeFor(finding: PipeLintFinding): PipeInfo | null {
+    const matches = this.pipesByName().get(finding.pipe);
+    if (!matches?.length) return null;
+    return matches.find((p) => p.file === finding.file) ?? matches[0];
+  }
+
+  /** Selects a pipe from a lint finding, clearing only the filters that hide it, then scrolls
+   * its row into view and moves focus to the detail heading. */
+  showPipe(pipe: PipeInfo) {
+    if (!this.fitsQuery(pipe, this.filter())) this.filter.set('');
+    if (!this.fitsKind(pipe, this.kind() ?? 'all')) this.kind.set('all');
+    this.selected.set(pipe);
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement;
+        host.querySelector<HTMLElement>('.row.selected')?.scrollIntoView?.({ block: 'nearest' });
+        host.querySelector<HTMLElement>('#pipe-detail-title')?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private fitsKind(p: PipeInfo, kind: PipeKind): boolean {
+    if (kind === 'custom') return !p.builtin;
+    if (kind === 'builtin') return !!p.builtin;
+    if (kind === 'impure') return !p.isPure;
+    if (kind === 'live') return this.liveByName().has(p.name);
+    return true;
+  }
+
+  private fitsQuery(p: PipeInfo, filter: string): boolean {
+    const q = filter.trim().toLowerCase();
+    return (
+      !q ||
+      p.name.toLowerCase().includes(q) ||
+      p.className.toLowerCase().includes(q) ||
+      p.file.toLowerCase().includes(q)
+    );
+  }
+
   clearFilters() {
     this.filter.set('');
     this.kind.set('all');
+    this.filterInput()?.nativeElement.focus();
   }
 
   highlightPipe(live: LivePipeInfo | undefined) {
     this.highlight(live?.components.find((c) => c.targets?.length)?.targets?.[0]);
   }
 
-  highlight(target: PipeTarget | null | undefined) {
+  highlight(target: PipeTarget | null | undefined, reveal = false) {
     const client = this.rpc();
     if (!client) return;
     void client
-      .scope('ng-devtools')
-      .rpc.call('request-page-highlight', target ?? null)
+      .scope('pangular')
+      .rpc.call(
+        'request-page-highlight',
+        target ? { ...target, ...(reveal ? { reveal } : {}) } : null,
+      )
       .catch(() => {});
   }
 

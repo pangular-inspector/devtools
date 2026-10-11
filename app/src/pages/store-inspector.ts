@@ -1,12 +1,32 @@
-import { Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import {
+  afterRenderEffect,
+  Component,
+  DestroyRef,
+  ElementRef,
+  computed,
+  effect,
+  inject,
+  input,
+  linkedSignal,
+  signal,
+  viewChild,
+} from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { time } from '../format';
 import { hostPageId } from '../page-id';
+import { rpcCall as call } from '../rpc';
+import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
+import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 import {
   pretty,
+  sameNgrxLog,
   short,
   type LiveStore,
+  type NgrxActionOrigin,
   type NgrxLogEntry,
+  type NgrxLogKey,
   type NgrxPage,
   type NgrxState,
   type NgrxStoreEntry,
@@ -23,6 +43,7 @@ const KIND_COLORS: Record<string, string> = {
   'signal-state': '#22d3ee',
   'signal-method': '#fb7185',
   store: '#a78bfa',
+  event: 'var(--warn)',
 };
 
 const KIND_LABELS: Record<string, string> = {
@@ -31,7 +52,33 @@ const KIND_LABELS: Record<string, string> = {
   'signal-method': 'signalMethod',
   'store-setup': 'store setup',
   store: '@ngrx/store',
+  event: 'event',
 };
+
+const ORIGIN_TEXT: Record<NgrxActionOrigin, string> = {
+  dispatch: 'store.dispatch(action)',
+  effect: 'NgRx effect (Store.next)',
+  reactive: 'store.dispatch(() => action)',
+};
+
+function parsePayload(text: string): { payload?: Record<string, unknown>; error?: string } {
+  if (!text.trim()) return {};
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { error: 'The payload is not valid JSON.' };
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { error: 'The payload must be a JSON object, like {"id": 7}.' };
+  }
+  if (Object.prototype.hasOwnProperty.call(value, 'type')) {
+    return {
+      error: 'The payload cannot have a "type" key. Put the action type in the Type field.',
+    };
+  }
+  return { payload: value as Record<string, unknown> };
+}
 
 const CLASSIC_KINDS = new Set([
   'action',
@@ -42,25 +89,19 @@ const CLASSIC_KINDS = new Set([
   'store-setup',
 ]);
 
-function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Promise<unknown> {
-  if (!client) return Promise.resolve(null);
-  const rpc = client.scope('ng-devtools').rpc as unknown as {
-    call: (name: string, ...args: unknown[]) => Promise<unknown>;
-  };
-  return rpc.call(name, ...(arg === undefined ? [] : [arg]));
-}
-
 @Component({
   selector: 'app-store-inspector',
-  imports: [Select],
+  imports: [LimitNote, Select, NgTemplateOutlet],
   template: `
     <div class="toolbar">
       <input
+        #filterInput
         type="search"
         placeholder="Filter stores, changes and declarations…"
         aria-label="Filter stores, changes and source declarations"
         [value]="filter()"
         (input)="filter.set($any($event.target).value)"
+        (keydown.escape)="filter.set('')"
       />
       @if (pages().length > 1) {
         <span class="visually-hidden" id="ngrx-page-label">Page</span>
@@ -89,7 +130,7 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       @if (failed()) {
         <div class="empty" role="alert">
           <p class="empty-title">Could not load the live store state.</p>
-          <p class="hint">Check that the dev server with ng-devtools is still running.</p>
+          <p class="hint">Check that the dev server with Pangular Inspector is still running.</p>
           <button type="button" class="btn" (click)="retry()">Retry</button>
         </div>
       } @else if (!page()) {
@@ -165,7 +206,7 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                   }
                   @if (current.classic) {
                     <span class="chip">{{
-                      current.classic.devtools ? 'Store DevTools on' : 'read-only'
+                      current.classic.devtools ? 'Store DevTools on' : 'Store DevTools off'
                     }}</span>
                   }
                 </div>
@@ -180,10 +221,42 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                 }
               </div>
 
+              @if (current.classic?.paused) {
+                <div class="paused">
+                  <p>
+                    <strong>Viewing a past state.</strong> New actions are logged but do not change
+                    the state until you go back to the latest state.
+                  </p>
+                  <button
+                    type="button"
+                    class="btn primary"
+                    [disabled]="busy() || !canRestore()"
+                    [attr.aria-describedby]="canRestore() ? null : 'store-latest-off'"
+                    (click)="backToLatest()"
+                    #latestButton
+                  >
+                    Back to latest
+                  </button>
+                  @if (!canRestore()) {
+                    <p id="store-latest-off" class="hint small">{{ restoreOff }}</p>
+                  }
+                </div>
+              }
+
               <div class="facts">
                 <section class="fact" aria-labelledby="ngrx-state-heading">
-                  <h4 id="ngrx-state-heading">State</h4>
-                  <pre class="tree" tabindex="0" aria-labelledby="ngrx-state-heading">{{
+                  <div class="fact-head">
+                    <h4 id="ngrx-state-heading">State</h4>
+                    <button
+                      type="button"
+                      class="btn copy"
+                      aria-label="Copy state"
+                      (click)="copyState()"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <pre #stateTree class="tree" tabindex="0" aria-labelledby="ngrx-state-heading">{{
                     stateText()
                   }}</pre>
                 </section>
@@ -208,11 +281,14 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                         @for (method of info.methods; track method.name) {
                           <li class="chip mono">
                             {{ method.name }}
-                            @if (method.rx) {
+                            @if (method.signalMethod) {
+                              <span class="tag">signalMethod</span>
+                            } @else if (method.rx) {
                               <span class="tag">rxMethod</span>
                             }
                             <span class="calls"
-                              >{{ method.calls }} {{ method.calls === 1 ? 'call' : 'calls' }}</span
+                              >{{ method.calls }} {{ method.calls === 1 ? 'call' : 'calls'
+                              }}{{ methodDuration(method) }}</span
                             >
                           </li>
                         }
@@ -221,6 +297,53 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                       <p class="muted">No methods.</p>
                     }
                   </section>
+                  @if (info.entities?.length) {
+                    <section class="fact" aria-labelledby="ngrx-entities-heading">
+                      <h4 id="ngrx-entities-heading">Entities</h4>
+                      <div class="entities">
+                        @for (col of info.entities!; track col.idsKey) {
+                          <div class="entity-group">
+                            <div class="entity-head">
+                              <span class="chip mono">{{ col.collection ?? 'entities' }}</span>
+                              <span class="entity-count"
+                                >{{ col.count }} {{ col.count === 1 ? 'entity' : 'entities' }}</span
+                              >
+                            </div>
+                            <ul
+                              class="chips entity-ids"
+                              [attr.aria-label]="(col.collection ?? 'entities') + ' ids'"
+                            >
+                              @for (id of entityIds(col.ids); track id) {
+                                <li class="chip mono">{{ id }}</li>
+                              }
+                              @if (col.count > 30) {
+                                <li
+                                  class="chip more"
+                                  [title]="entityOverflowTitle(col.ids, col.count)"
+                                >
+                                  +{{ col.count - 30 }} more
+                                </li>
+                              }
+                            </ul>
+                            @if (col.selectedId !== undefined) {
+                              <dl class="kv">
+                                <dt>Selected</dt>
+                                <dd>
+                                  @if (col.selected !== undefined) {
+                                    <code [title]="prettyText(col.selected)">{{
+                                      shortText(col.selected)
+                                    }}</code>
+                                  } @else {
+                                    <span class="muted">None selected</span>
+                                  }
+                                </dd>
+                              </dl>
+                            }
+                          </div>
+                        }
+                      </div>
+                    </section>
+                  }
                 }
               </div>
 
@@ -229,6 +352,12 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                   {{ current.classic ? 'Action log' : 'Change log' }}
                   <span class="pill">{{ storeLog().length }}</span>
                 </h4>
+                <app-limit-note
+                  [dropped]="page()?.dropped ?? 0"
+                  [max]="maxLog()"
+                  what="changes on this page"
+                  limit="changeLog"
+                />
                 <div class="log-layout">
                   <ul class="log-list" [attr.aria-label]="current.classic ? 'Actions' : 'Changes'">
                     @for (entry of storeLog(); track entry.seq) {
@@ -236,22 +365,40 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                         <button
                           type="button"
                           class="log-item"
-                          [class.selected]="entry.seq === selectedSeq()"
-                          [attr.aria-pressed]="entry.seq === selectedSeq()"
-                          (click)="selectEntry(entry.seq)"
+                          [class.selected]="entry.seq === selectedChangeSeq()"
+                          [attr.aria-pressed]="entry.seq === selectedChangeSeq()"
+                          [attr.aria-controls]="
+                            entry.seq === selectedChangeSeq() ? 'ngrx-change-detail' : null
+                          "
+                          (click)="selectChange(entry.seq)"
                         >
                           <span class="seq">#{{ entry.seq }}</span>
-                          <span class="log-type" [title]="entry.type">{{ entry.type }}</span>
-                          <span class="log-meta"
-                            >{{
+                          <span class="log-type-row">
+                            <span class="log-type" [title]="entry.type">{{ entry.type }}</span>
+                            @if (entry.causedByEvent; as caused) {
+                              <span
+                                class="tag"
+                                [title]="'Caused by ' + kindLabel('event') + ': ' + caused.type"
+                                >{{ caused.type }}</span
+                              >
+                            }
+                          </span>
+                          <span class="log-meta">
+                            @if (entry.origin) {
+                              <span class="tag">{{ entry.origin }}</span>
+                            }
+                            {{
                               entry.diff.length === 0
                                 ? 'no change'
                                 : entry.diff.length +
                                   (entry.diff.length === 1 ? ' change' : ' changes')
                             }}
                             ·
-                            {{ formatTime(entry.timestamp) }}</span
-                          >
+                            {{ formatTime(entry.timestamp) }}
+                            @if (entry.durationMs !== undefined) {
+                              · {{ formatDuration(entry.durationMs) }}
+                            }
+                          </span>
                         </button>
                       </li>
                     } @empty {
@@ -268,103 +415,319 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
                     }
                   </ul>
 
-                  @if (entry(); as selected) {
-                    <section class="entry" aria-labelledby="ngrx-entry-heading">
-                      <h5 id="ngrx-entry-heading">#{{ selected.seq }} {{ selected.type }}</h5>
-                      <dl class="kv">
-                        <dt>Time</dt>
-                        <dd>{{ formatTime(selected.timestamp) }}</dd>
-                        @if (selected.action !== undefined) {
-                          <dt>Action</dt>
-                          <dd>
-                            <pre class="code">{{ prettyText(selected.action) }}</pre>
-                          </dd>
-                        }
-                        @if (selected.args?.length) {
-                          <dt>Arguments</dt>
-                          <dd>
-                            <pre class="code">{{ prettyText(selected.args) }}</pre>
-                          </dd>
-                        }
-                      </dl>
-                      <h6 class="sub">State diff</h6>
-                      @if (selected.diff.length) {
-                        <ul class="diff">
-                          @for (change of selected.diff; track change.path) {
-                            <li [class]="'diff-row ' + change.op">
-                              <span class="op">{{ opLabel(change.op) }}</span>
-                              <code class="path">{{ change.path }}</code>
-                              <span class="values">
-                                @if (change.op !== 'add') {
-                                  <code class="before">{{ shortText(change.before) }}</code>
-                                }
-                                @if (change.op === 'change') {
-                                  <span class="arrow" aria-hidden="true">→</span
-                                  ><span class="visually-hidden">became</span>
-                                }
-                                @if (change.op !== 'remove') {
-                                  <code class="after">{{ shortText(change.after) }}</code>
-                                }
-                              </span>
-                            </li>
-                          }
-                        </ul>
-                      } @else {
-                        <p class="muted">The state did not change.</p>
-                      }
-
-                      @if (selected.restorable) {
-                        @if (confirmSeq() === selected.seq) {
-                          <div class="confirm" role="group" aria-labelledby="ngrx-confirm-text">
-                            <p id="ngrx-confirm-text">
-                              @if (selected.source === 'store') {
-                                Store DevTools jumps the app state to the state right after action
-                                #{{ selected.seq }}. New actions continue from there.
-                              } @else {
-                                This sets every state key of {{ current.label }} back to its value
-                                right after change #{{ selected.seq }}. Components that read the
-                                store update at once, and a new "Restore" entry is added to the log.
-                              }
-                            </p>
-                            <div class="actions">
-                              <button
-                                type="button"
-                                class="btn primary"
-                                [disabled]="busy()"
-                                (click)="restore(selected.seq)"
-                              >
-                                Restore
-                              </button>
-                              <button type="button" class="btn" (click)="confirmSeq.set(null)">
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        } @else {
-                          <button
-                            type="button"
-                            class="btn restore"
-                            (click)="confirmSeq.set(selected.seq)"
-                          >
-                            Restore this state
-                          </button>
-                        }
-                      } @else if (selected.source === 'store') {
-                        <p class="hint small">
-                          Time travel for &#64;ngrx/store needs <code>provideStoreDevtools()</code>.
-                          Without it this log is read-only.
-                        </p>
-                      }
-                    </section>
+                  @if (changeEntry(); as selected) {
+                    <div id="ngrx-change-detail">
+                      <ng-container
+                        [ngTemplateOutlet]="entryDetailTpl"
+                        [ngTemplateOutletContext]="{
+                          selected: selected,
+                          headingLevel: 5,
+                          idPrefix: 'ngrx-change',
+                        }"
+                      />
+                    </div>
                   }
                 </div>
               </section>
+
+              @if (current.classic) {
+                <section class="dispatch" aria-labelledby="ngrx-dispatch-heading">
+                  <h4 id="ngrx-dispatch-heading">Dispatch an action</h4>
+                  <form class="dispatch-form" (submit)="dispatchAction($event)">
+                    <label>
+                      <span>Type</span>
+                      <input
+                        required
+                        spellcheck="false"
+                        autocomplete="off"
+                        list="ngrx-action-types"
+                        placeholder="e.g. [Cart] Add Item"
+                        [value]="dispatchType()"
+                        (input)="dispatchType.set($any($event.target).value)"
+                      />
+                    </label>
+                    <datalist id="ngrx-action-types">
+                      @for (type of actionTypes(); track type) {
+                        <option [value]="type"></option>
+                      }
+                    </datalist>
+                    <label>
+                      <span>Payload <span class="optional">(JSON object, optional)</span></span>
+                      <textarea
+                        rows="3"
+                        spellcheck="false"
+                        placeholder='e.g. {"id": 7}'
+                        [value]="dispatchPayload()"
+                        (input)="dispatchPayload.set($any($event.target).value)"
+                        [attr.aria-invalid]="payloadError() ? 'true' : null"
+                        aria-describedby="ngrx-payload-error"
+                      ></textarea>
+                    </label>
+                    <p id="ngrx-payload-error" class="field-error">{{ payloadError() }}</p>
+                    <div class="actions">
+                      <button
+                        type="submit"
+                        class="btn primary"
+                        [disabled]="busy() || !canRestore() || !dispatchRequest()"
+                        [attr.aria-describedby]="canRestore() ? null : 'store-dispatch-off'"
+                      >
+                        Dispatch
+                      </button>
+                    </div>
+                    @if (!canRestore()) {
+                      <p id="store-dispatch-off" class="hint small">{{ restoreOff }}</p>
+                    }
+                  </form>
+                </section>
+              }
             </div>
           }
         </div>
       }
       <p class="message" role="status">{{ message() }}</p>
     </section>
+
+    @if (hasEvents()) {
+      <section class="block" aria-labelledby="ngrx-events-heading">
+        <div class="section-head">
+          <h2 id="ngrx-events-heading">Events</h2>
+          <span class="pill">{{ pageEvents().length }}</span>
+        </div>
+        <p class="intro">
+          Events dispatched through &#64;ngrx/signals/events, across every store on this page.
+        </p>
+        <ul class="events-list" aria-label="Dispatched events">
+          @for (evt of pageEvents(); track evt.seq) {
+            <li>
+              <button
+                type="button"
+                class="event-item"
+                [class.selected]="evt.seq === selectedEventSeq()"
+                [attr.aria-pressed]="evt.seq === selectedEventSeq()"
+                [attr.aria-controls]="evt.seq === selectedEventSeq() ? 'ngrx-event-detail' : null"
+                (click)="selectEvent(evt.seq)"
+              >
+                <span class="dot" aria-hidden="true" [style.background]="kindColor('event')"></span>
+                <span class="event-type mono" [title]="evt.eventType ?? evt.type">{{
+                  evt.eventType ?? evt.type
+                }}</span>
+                @if (evt.payload !== undefined) {
+                  <code class="event-payload" [title]="prettyText(evt.payload)">{{
+                    shortText(evt.payload)
+                  }}</code>
+                }
+                <span class="event-time">{{ formatTime(evt.timestamp) }}</span>
+              </button>
+            </li>
+          } @empty {
+            <li class="muted pad">No events match this filter.</li>
+          }
+        </ul>
+        @if (eventEntry(); as selected) {
+          <div id="ngrx-event-detail" tabindex="-1" class="event-detail-focus" #eventDetailHeading>
+            <ng-container
+              [ngTemplateOutlet]="entryDetailTpl"
+              [ngTemplateOutletContext]="{
+                selected: selected,
+                headingLevel: 3,
+                idPrefix: 'ngrx-event',
+              }"
+            />
+          </div>
+        }
+      </section>
+    }
+
+    <!--
+      Shared by both usages above: the per-store log (inside the store() guard) and the
+      page-level Events section (reachable with no live store at all, since a page can
+      dispatch @ngrx/signals/events without any signalStore/signalState instance). Only
+      "selected" is passed through context; everything else (store(), canRestore(), etc.)
+      is read directly since an embedded view still sees the component instance.
+    -->
+    <ng-template
+      #entryDetailTpl
+      let-selected="selected"
+      let-headingLevel="headingLevel"
+      let-idPrefix="idPrefix"
+    >
+      <section class="entry" [attr.aria-labelledby]="idPrefix + '-entry-heading'">
+        <div
+          class="entry-heading"
+          role="heading"
+          [attr.aria-level]="headingLevel"
+          [id]="idPrefix + '-entry-heading'"
+        >
+          #{{ selected.seq }} {{ selected.type }}
+        </div>
+        <dl class="kv">
+          <dt>Time</dt>
+          <dd>{{ formatTime(selected.timestamp) }}</dd>
+          @if (selected.origin) {
+            <dt>Origin</dt>
+            <dd>{{ originText(selected.origin) }}</dd>
+          }
+          @if (selected.durationMs !== undefined) {
+            <dt>Duration</dt>
+            <dd>{{ formatDuration(selected.durationMs) }}</dd>
+          }
+          @if (selected.action !== undefined) {
+            <dt>Action</dt>
+            <dd>
+              <pre class="code">{{ prettyText(selected.action) }}</pre>
+            </dd>
+          }
+          @if (selected.args?.length) {
+            <dt>Arguments</dt>
+            <dd>
+              <pre class="code">{{ prettyText(selected.args) }}</pre>
+            </dd>
+          }
+          @if (selected.source === 'event' && selected.payload !== undefined) {
+            <dt>Payload</dt>
+            <dd>
+              <pre class="code">{{ prettyText(selected.payload) }}</pre>
+            </dd>
+          }
+          @if (selected.causedByEvent; as caused) {
+            <dt>Caused by event</dt>
+            <dd>
+              <code class="mono">{{ caused.type }}</code>
+              @if (caused.payload !== undefined) {
+                <pre class="code">{{ prettyText(caused.payload) }}</pre>
+              }
+            </dd>
+          }
+        </dl>
+        @if (selected.source !== 'event') {
+          <div class="sub-head">
+            <div class="sub" role="heading" [attr.aria-level]="headingLevel + 1">State diff</div>
+            @if (selected.diff.length) {
+              <button
+                type="button"
+                class="btn copy"
+                [attr.aria-label]="'Copy the state diff of #' + selected.seq"
+                (click)="copyDiff(selected)"
+              >
+                Copy
+              </button>
+            }
+          </div>
+          @if (selected.diff.length) {
+            <ul class="diff">
+              @for (change of selected.diff; track change.path) {
+                <li [class]="'diff-row ' + change.op">
+                  <span class="op">{{ opLabel(change.op) }}</span>
+                  <code class="path">{{ change.path }}</code>
+                  <span class="values">
+                    @if (change.op !== 'add') {
+                      <code class="before">{{ shortText(change.before) }}</code>
+                    }
+                    @if (change.op === 'change') {
+                      <span class="arrow" aria-hidden="true">→</span
+                      ><span class="visually-hidden">became</span>
+                    }
+                    @if (change.op !== 'remove') {
+                      <code class="after">{{ shortText(change.after) }}</code>
+                    }
+                  </span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="muted">The state did not change.</p>
+          }
+        }
+
+        @if (selected.restorable && confirmSeq() === selected.seq) {
+          <div
+            class="confirm"
+            role="group"
+            [attr.aria-labelledby]="idPrefix + '-confirm-text'"
+            (keydown.escape)="cancelRestore($event)"
+          >
+            <p [id]="idPrefix + '-confirm-text'">
+              @if (selected.source === 'store') {
+                Store DevTools jumps the app state to the state right after action #{{
+                  selected.seq
+                }}. Until you go back to the latest state, new actions are logged but do not change
+                the state.
+              } @else {
+                @if (store(); as current) {
+                  This sets every state key of {{ current.label }} back to its value right after
+                  change #{{ selected.seq }}. Components that read the store update at once, and a
+                  new "Restore" entry is added to the log.
+                } @else {
+                  This sets every state key of the store back to its value right after change #{{
+                    selected.seq
+                  }}. Components that read the store update at once, and a new "Restore" entry is
+                  added to the log.
+                }
+              }
+            </p>
+            <div class="actions">
+              <button
+                type="button"
+                class="btn primary"
+                [disabled]="busy()"
+                (click)="restore(selected.seq, selected.source === 'store')"
+              >
+                Restore
+              </button>
+              <button type="button" class="btn" (click)="cancelRestore()" #cancelButton>
+                Cancel
+              </button>
+            </div>
+          </div>
+        }
+        @if (confirmSeq() !== selected.seq && (selected.restorable || canAgain(selected))) {
+          <div class="entry-actions">
+            @if (selected.restorable) {
+              <button
+                type="button"
+                class="btn restore"
+                [disabled]="!canRestore()"
+                [attr.aria-describedby]="canRestore() ? null : idPrefix + '-writes-off'"
+                (click)="askRestore(selected.seq)"
+                #restoreButton
+              >
+                Restore this state
+              </button>
+            }
+            @if (canAgain(selected)) {
+              <button
+                type="button"
+                class="btn"
+                [disabled]="busy() || !canRestore()"
+                [attr.aria-describedby]="canRestore() ? null : idPrefix + '-writes-off'"
+                (click)="dispatchAgain(selected.seq)"
+              >
+                Dispatch again
+              </button>
+            }
+          </div>
+          @if (!canRestore()) {
+            <p [id]="idPrefix + '-writes-off'" class="hint small">{{ restoreOff }}</p>
+          }
+        }
+        @if (!selected.restorable && selected.source === 'store') {
+          <p class="hint small">
+            @if (selected.unrestorable === 'dropped') {
+              Store DevTools no longer holds this action, so this state cannot be restored. It was
+              dropped past <code>maxAge</code>, or the Store DevTools history was committed, reset
+              or imported.
+            } @else if (selected.unrestorable === 'not-recorded') {
+              Store DevTools never recorded this action, so this state cannot be restored. An
+              <code>actionsBlocklist</code>, <code>actionsSafelist</code> or
+              <code>predicate</code> option filtered it out, or recording was paused.
+            } @else {
+              Time travel for &#64;ngrx/store needs <code>provideStoreDevtools()</code>. Without it,
+              entries cannot be restored.
+            }
+          </p>
+        }
+      </section>
+    </ng-template>
 
     <section class="block" aria-labelledby="ngrx-source-heading">
       <div class="section-head">
@@ -439,9 +802,11 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
               }
             </li>
           } @empty {
-            <li class="empty compact" role="status">
-              <p class="empty-title">No declarations match.</p>
-              <button type="button" class="btn" (click)="clearFilters()">Clear filters</button>
+            <li>
+              <div class="empty compact" role="status">
+                <p class="empty-title">No declarations match.</p>
+                <button type="button" class="btn" (click)="clearFilters()">Clear filters</button>
+              </div>
             </li>
           }
         </ul>
@@ -457,6 +822,12 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       min-width: 0;
       color: var(--text);
       font-size: 13px;
+    }
+    .intro {
+      max-width: 720px;
+      margin: 0;
+      color: var(--text-2);
+      line-height: 1.5;
     }
     .toolbar {
       position: sticky;
@@ -552,6 +923,32 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
     }
     .sub {
       margin: 14px 0 8px;
+    }
+    .fact-head,
+    .sub-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+    .fact-head {
+      margin-bottom: 10px;
+    }
+    .fact-head h4 {
+      margin: 0;
+    }
+    .sub-head {
+      margin: 14px 0 8px;
+    }
+    .sub-head .sub {
+      margin: 0;
+    }
+    .btn.copy {
+      flex: none;
+      height: 26px;
+      padding: 0 10px;
+      font-size: 12px;
     }
     .pill {
       min-width: 20px;
@@ -696,15 +1093,18 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       transition: background-color 0.15s var(--ease);
     }
     .store-item:hover,
-    .log-item:hover {
+    .log-item:hover,
+    .event-item:hover {
       background: var(--surface-3);
     }
     .store-item:focus-visible,
-    .log-item:focus-visible {
+    .log-item:focus-visible,
+    .event-item:focus-visible {
       @include m.focus-ring(-2px);
     }
     .store-item.selected,
-    .log-item.selected {
+    .log-item.selected,
+    .event-item.selected {
       background: var(--accent-soft);
       box-shadow: inset 2px 0 0 var(--accent);
     }
@@ -828,6 +1228,10 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       flex-wrap: wrap;
       gap: 6px;
     }
+    .methods li {
+      flex-wrap: wrap;
+      row-gap: 2px;
+    }
     .tag {
       padding: 0 5px;
       border-radius: 4px;
@@ -839,6 +1243,79 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       color: var(--text-3);
       font-family: var(--font-sans, inherit);
       font-size: 11px;
+    }
+    .entities {
+      display: grid;
+      gap: 14px;
+    }
+    .entity-group {
+      display: grid;
+      gap: 8px;
+    }
+    .entity-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .entity-count {
+      color: var(--text-2);
+      font-size: 11.5px;
+      font-variant-numeric: tabular-nums;
+    }
+    .entity-ids {
+      margin: 0;
+    }
+    .chip.more {
+      border-style: dashed;
+      color: var(--text-3);
+    }
+    .events-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-height: 260px;
+      overflow: auto;
+      padding: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      @include m.enter;
+    }
+    .event-item {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px 10px;
+      width: 100%;
+      min-width: 0;
+      padding: 7px 10px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: background-color 0.15s var(--ease);
+    }
+    .event-type {
+      flex: none;
+      font-weight: 600;
+      color: var(--text-strong);
+      font-size: 12.5px;
+    }
+    .event-payload {
+      flex: 1 1 160px;
+      min-width: 0;
+      @include m.truncate;
+      color: var(--text-2);
+    }
+    .event-time {
+      flex: none;
+      margin-left: auto;
+      color: var(--text-3);
+      font-size: 11.5px;
+      font-variant-numeric: tabular-nums;
     }
     .log {
       min-width: 0;
@@ -870,9 +1347,15 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       font-size: 11.5px;
       font-variant-numeric: tabular-nums;
     }
+    .log-type-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
     .log-type {
       @include m.truncate;
-      max-width: 100%;
+      min-width: 0;
       font-family: var(--font-mono);
       font-size: 12.5px;
       color: var(--text);
@@ -887,7 +1370,7 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       border-radius: var(--radius-sm);
       @include m.enter(0.25s);
     }
-    .entry h5 {
+    .entry .entry-heading {
       margin: 0 0 12px;
       font-family: var(--font-mono);
       font-size: 13px;
@@ -953,9 +1436,96 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       margin: 0 0 10px;
       line-height: 1.5;
     }
-    .actions {
+    .actions,
+    .entry-actions {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
+    }
+    .entry-actions {
+      margin-top: 14px;
+    }
+    .entry-actions .btn.restore {
+      margin-top: 0;
+    }
+    .dispatch {
+      min-width: 0;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .dispatch-form {
+      display: grid;
+      gap: 10px;
+      max-width: 560px;
+    }
+    .dispatch-form label {
+      display: grid;
+      gap: 6px;
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .optional {
+      color: var(--text-3);
+      font-weight: 400;
+    }
+    .dispatch-form input {
+      width: 100%;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+    }
+    textarea {
+      width: 100%;
+      min-width: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      resize: vertical;
+      transition:
+        border-color 0.15s var(--ease),
+        box-shadow 0.15s var(--ease);
+    }
+    textarea::placeholder {
+      color: var(--text-3);
+    }
+    textarea:focus-visible {
+      @include m.field-focus;
+    }
+    textarea[aria-invalid='true'] {
+      border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+    }
+    .field-error {
+      margin: -4px 0 0;
+      color: var(--danger);
+      font-size: 12px;
+    }
+    .field-error:empty {
+      display: none;
+    }
+    .paused {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 14px;
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+      border-radius: var(--radius-sm);
+      background: color-mix(in srgb, var(--warn) 10%, transparent);
+    }
+    .paused p {
+      flex: 1 1 240px;
+      margin: 0;
+      line-height: 1.5;
+    }
+    .paused .hint.small {
+      flex-basis: 100%;
+      margin-top: 0;
     }
     .message:empty {
       display: none;
@@ -1068,22 +1638,6 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-    .visually-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
     @media (prefers-reduced-motion: reduce) {
       .spinner,
       .status.on .live-dot {
@@ -1119,6 +1673,8 @@ function call(client: DevframeRpcClient | null, name: string, arg?: unknown): Pr
 })
 export class StoreInspector {
   readonly rpc = input<DevframeRpcClient | null>(null);
+  readonly canRestore = computed(() => actionAllowed(this.rpc(), 'ngrx'));
+  protected readonly restoreOff = actionBlockedMessage('ngrx');
 
   readonly filter = signal('');
   readonly kind = signal<string | null>(null);
@@ -1128,10 +1684,18 @@ export class StoreInspector {
   readonly failed = signal(false);
   readonly selectedPageId = signal<string | null>(null);
   private readonly hostPageId = hostPageId();
+  readonly maxLog = computed(() => panelConfig(this.rpc()).limits.changeLog);
   readonly selectedStoreId = signal<string | null>(null);
-  readonly selectedSeq = signal<number | null>(null);
-  readonly confirmSeq = signal<number | null>(null);
+  private readonly focusEventSeq = signal<number | null>(null);
+  private readonly eventDetailHeading = viewChild<ElementRef<HTMLElement>>('eventDetailHeading');
   readonly busy = signal(false);
+  private readonly focusLatest = signal(false);
+  private readonly focusConfirm = signal<'cancel' | 'restore' | null>(null);
+  private readonly cancelButton = viewChild<ElementRef<HTMLButtonElement>>('cancelButton');
+  private readonly restoreButton = viewChild<ElementRef<HTMLButtonElement>>('restoreButton');
+  private readonly stateTree = viewChild<ElementRef<HTMLElement>>('stateTree');
+  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
+  private readonly latestButton = viewChild<ElementRef<HTMLButtonElement>>('latestButton');
   readonly message = signal('');
 
   private readonly destroyRef = inject(DestroyRef);
@@ -1145,6 +1709,39 @@ export class StoreInspector {
       pages[0] ??
       null
     );
+  });
+
+  private readonly logKey = computed<NgrxLogKey>(() => {
+    const page = this.page();
+    return { pageId: page?.pageId ?? null, log: page?.log ?? [] };
+  });
+
+  /**
+   * Counts the change logs this view has shown. It moves on when `page()` switches to another
+   * page (including the fallback when the chosen page closes) and when the app reloads, which
+   * keeps the `pageId` but restarts `seq` at 1, so a seq picked before means another entry now.
+   */
+  private readonly logSession = linkedSignal<NgrxLogKey, number>({
+    source: this.logKey,
+    computation: (key, previous) =>
+      !previous ? 0 : sameNgrxLog(previous.source, key) ? previous.value : previous.value + 1,
+  });
+
+  // Two selection cursors so clicking an event never swaps out the per-store
+  // change-log detail: the change log keeps its own highlighted row, the
+  // Events section keeps its own, and each shows its detail in-place.
+  // All three are seqs, so they reset whenever the change log is another one.
+  readonly selectedChangeSeq = linkedSignal<number, number | null>({
+    source: this.logSession,
+    computation: () => null,
+  });
+  readonly selectedEventSeq = linkedSignal<number, number | null>({
+    source: this.logSession,
+    computation: () => null,
+  });
+  readonly confirmSeq = linkedSignal<number, number | null>({
+    source: this.logSession,
+    computation: () => null,
   });
 
   readonly pageOptions = computed<SelectOption[]>(() =>
@@ -1216,9 +1813,48 @@ export class StoreInspector {
       .reverse();
   });
 
-  readonly entry = computed(
-    () => this.storeLog().find((e) => e.seq === this.selectedSeq()) ?? null,
-  );
+  readonly hasEvents = computed(() => (this.page()?.log ?? []).some((e) => e.source === 'event'));
+
+  readonly pageEvents = computed<NgrxLogEntry[]>(() => {
+    const f = this.filter().trim().toLowerCase();
+    return (this.page()?.log ?? [])
+      .filter((e) => e.source === 'event' && (!f || e.type.toLowerCase().includes(f)))
+      .slice()
+      .reverse();
+  });
+
+  readonly changeEntry = computed<NgrxLogEntry | null>(() => {
+    const seq = this.selectedChangeSeq();
+    if (seq === null) return null;
+    return this.storeLog().find((e) => e.seq === seq) ?? null;
+  });
+
+  readonly eventEntry = computed<NgrxLogEntry | null>(() => {
+    const seq = this.selectedEventSeq();
+    if (seq === null) return null;
+    return this.pageEvents().find((e) => e.seq === seq) ?? null;
+  });
+
+  readonly dispatchType = signal('');
+  readonly dispatchPayload = signal('');
+
+  readonly actionTypes = computed(() => {
+    const types = new Set<string>();
+    for (const entry of this.sourceEntries()) for (const type of entry.types ?? []) types.add(type);
+    for (const entry of this.page()?.log ?? []) {
+      if (entry.source === 'store' && entry.action !== undefined) types.add(entry.type);
+    }
+    return [...types].sort().slice(0, 200);
+  });
+
+  readonly payloadError = computed(() => parsePayload(this.dispatchPayload()).error ?? '');
+
+  readonly dispatchRequest = computed(() => {
+    const type = this.dispatchType().trim();
+    const { payload, error } = parsePayload(this.dispatchPayload());
+    if (!type || error) return null;
+    return { type: 'dispatch' as const, action: type, ...(payload ? { payload } : {}) };
+  });
 
   readonly usesSignals = computed(() =>
     this.sourceEntries().some((e) => e.kind === 'signal-store' || e.kind === 'signal-state'),
@@ -1251,6 +1887,26 @@ export class StoreInspector {
       const client = this.rpc();
       if (client) void this.load(client);
     });
+    afterRenderEffect(() => {
+      const button = this.latestButton();
+      if (!button || !this.focusLatest() || this.busy()) return;
+      this.focusLatest.set(false);
+      button.nativeElement.focus();
+    });
+    effect(() => {
+      const target = this.focusConfirm();
+      const button = target === 'cancel' ? this.cancelButton() : this.restoreButton();
+      if (!target || !button) return;
+      this.focusConfirm.set(null);
+      button.nativeElement.focus();
+    });
+    afterRenderEffect(() => {
+      const seq = this.focusEventSeq();
+      const detail = this.eventDetailHeading();
+      if (seq === null || !detail) return;
+      this.focusEventSeq.set(null);
+      detail.nativeElement.focus();
+    });
     this.destroyRef.onDestroy(() => this.unsubscribe?.());
   }
 
@@ -1266,7 +1922,7 @@ export class StoreInspector {
       .catch(() => this.sourceEntries.set([]))
       .finally(() => this.sourceLoaded.set(true));
     try {
-      const state = await client.scope('ng-devtools').rpc.sharedState('ngrx-store');
+      const state = await client.scope('pangular').rpc.sharedState('ngrx-store');
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         const next = value as Partial<NgrxState> | undefined;
@@ -1288,46 +1944,158 @@ export class StoreInspector {
   selectPage(pageId: string | null) {
     this.selectedPageId.set(pageId);
     this.selectedStoreId.set(null);
-    this.selectedSeq.set(null);
+    this.selectedChangeSeq.set(null);
+    this.selectedEventSeq.set(null);
     this.confirmSeq.set(null);
+    this.message.set('');
   }
 
   selectStore(id: string) {
     this.selectedStoreId.set(id);
-    this.selectedSeq.set(null);
+    this.selectedChangeSeq.set(null);
     this.confirmSeq.set(null);
+    this.message.set('');
   }
 
-  selectEntry(seq: number) {
-    this.selectedSeq.set(this.selectedSeq() === seq ? null : seq);
+  selectChange(seq: number) {
+    this.selectedChangeSeq.set(this.selectedChangeSeq() === seq ? null : seq);
     this.confirmSeq.set(null);
+    this.message.set('');
   }
 
-  async restore(seq: number) {
+  copyState() {
+    return this.copyText(this.stateText());
+  }
+
+  copyDiff(entry: NgrxLogEntry) {
+    return this.copyText(pretty(entry.diff));
+  }
+
+  private async copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      this.message.set('Copied.');
+    } catch {
+      this.message.set('The clipboard is not available here.');
+    }
+  }
+
+  askRestore(seq: number) {
+    this.confirmSeq.set(seq);
+    this.focusConfirm.set('cancel');
+  }
+
+  cancelRestore(event?: Event) {
+    event?.preventDefault();
+    this.confirmSeq.set(null);
+    this.focusConfirm.set('restore');
+  }
+
+  async restore(seq: number, pauses: boolean) {
+    const page = this.page();
+    if (!page) return;
+    this.busy.set(true);
+    this.focusLatest.set(false);
+    let paused = false;
+    try {
+      const result = (await call(this.rpc(), 'request-ngrx-action', {
+        pageId: page.pageId,
+        request: { type: 'restore', seq },
+      })) as { ok?: boolean; message?: string; error?: string; paused?: boolean } | null;
+      this.message.set(result?.error ?? result?.message ?? 'Restored.');
+      paused = pauses && !result?.error && !!result?.paused;
+    } catch {
+      this.message.set('Could not reach the page to restore the state.');
+    } finally {
+      this.busy.set(false);
+      this.confirmSeq.set(null);
+      this.focusLatest.set(paused);
+      if (!paused) this.stateTree()?.nativeElement.focus();
+    }
+  }
+
+  selectEvent(seq: number) {
+    const newSeq = this.selectedEventSeq() === seq ? null : seq;
+    this.selectedEventSeq.set(newSeq);
+    if (newSeq !== null) this.focusEventSeq.set(newSeq);
+  }
+
+  async backToLatest() {
     const page = this.page();
     if (!page) return;
     this.busy.set(true);
     try {
       const result = (await call(this.rpc(), 'request-ngrx-action', {
         pageId: page.pageId,
-        request: { type: 'restore', seq },
+        request: { type: 'latest' },
       })) as { ok?: boolean; message?: string; error?: string } | null;
-      this.message.set(result?.error ?? result?.message ?? 'Restored.');
+      this.focusLatest.set(false);
+      this.stateTree()?.nativeElement.focus();
+      this.message.set(result?.error ?? result?.message ?? 'Back on the latest state.');
     } catch {
-      this.message.set('Could not reach the page to restore the state.');
+      this.message.set('Could not reach the page to go back to the latest state.');
     } finally {
       this.busy.set(false);
-      this.confirmSeq.set(null);
     }
   }
 
+  canAgain(entry: NgrxLogEntry): boolean {
+    return entry.source === 'store' && entry.action !== undefined;
+  }
+
+  async dispatchAction(event: Event) {
+    event.preventDefault();
+    const request = this.dispatchRequest();
+    if (request) await this.send(request, 'Could not reach the page to dispatch the action.');
+  }
+
+  dispatchAgain(seq: number) {
+    return this.send(
+      { type: 'dispatch-again', seq },
+      'Could not reach the page to dispatch the action again.',
+    );
+  }
+
+  private async send(request: Record<string, unknown>, offline: string) {
+    const page = this.page();
+    if (!page || this.busy()) return;
+    const session = this.logSession();
+    this.busy.set(true);
+    try {
+      const result = (await call(this.rpc(), 'request-ngrx-action', {
+        pageId: page.pageId,
+        request,
+      })) as { ok?: boolean; message?: string; error?: string; entry?: NgrxLogEntry } | null;
+      this.message.set(result?.error ?? result?.message ?? 'Dispatched.');
+      if (result?.entry && this.logSession() === session) {
+        this.selectedStoreId.set('store');
+        this.selectedChangeSeq.set(result.entry.seq);
+      }
+    } catch {
+      this.message.set(offline);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  /** Clears the filters from a no-match state and keeps focus on the filter box. */
   clearFilters() {
     this.filter.set('');
     this.kind.set(null);
+    this.filterInput()?.nativeElement.focus();
   }
 
   changeCount(id: string): number {
     return (this.page()?.log ?? []).filter((e) => e.storeId === id).length;
+  }
+
+  entityIds(ids: (string | number)[]): (string | number)[] {
+    return ids.slice(0, 30);
+  }
+
+  entityOverflowTitle(ids: (string | number)[], count: number): string {
+    const overflow = ids.slice(30).join(', ');
+    return count > ids.length ? `${overflow} (first ${ids.length} of ${count} shown)` : overflow;
   }
 
   kindColor(kind: string) {
@@ -1336,6 +2104,10 @@ export class StoreInspector {
 
   kindLabel(kind: string) {
     return KIND_LABELS[kind] ?? kind;
+  }
+
+  originText(origin: NgrxActionOrigin) {
+    return ORIGIN_TEXT[origin] ?? origin;
   }
 
   opLabel(op: string) {
@@ -1350,7 +2122,18 @@ export class StoreInspector {
     return short(value);
   }
 
-  formatTime(ts: number) {
-    return new Date(ts).toLocaleTimeString();
+  readonly formatTime = time;
+
+  formatDuration(ms: number): string {
+    return ms <= 0 ? '<1ms' : `${Math.round(ms)}ms`;
+  }
+
+  methodDuration(method: { lastDurationMs?: number; avgDurationMs?: number }): string {
+    const parts: string[] = [];
+    if (method.avgDurationMs !== undefined)
+      parts.push(`avg ${this.formatDuration(method.avgDurationMs)}`);
+    if (method.lastDurationMs !== undefined)
+      parts.push(`last ${this.formatDuration(method.lastDurationMs)}`);
+    return parts.length ? ` · ${parts.join(' · ')}` : '';
   }
 }

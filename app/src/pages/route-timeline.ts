@@ -1,10 +1,17 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { Component, computed, input, linkedSignal } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
+import { LimitNote } from '../ui/limit-note';
+import { rpcCall } from '../rpc';
+import { time } from '../format';
 import {
   SHARED_STYLES,
+  isReplayableUrl,
   routerAction,
   routerCall,
   tone,
+  type LoopHop,
+  type NavigationLoop,
   type NavigationRecord,
   type RouterPage,
 } from './router-types';
@@ -19,16 +26,18 @@ const PHASE_COLORS: Record<string, string> = {
 
 @Component({
   selector: 'app-route-timeline',
+  imports: [LimitNote],
   template: `
     <div class="toolbar">
       <input
         #filterInput
         class="field"
-        type="text"
+        type="search"
         aria-label="Filter navigations by URL"
         placeholder="Filter by URL"
         [value]="filter()"
         (input)="filter.set($any($event.target).value)"
+        (keydown.escape)="filter.set('')"
       />
       <label class="check">
         <input
@@ -47,9 +56,63 @@ const PHASE_COLORS: Record<string, string> = {
         Record each guard and resolver
       </label>
       <button type="button" class="small export" (click)="exportJson()">Export JSON</button>
+      <button
+        type="button"
+        class="small"
+        aria-label="Clear navigations"
+        [disabled]="!navigationAllowed()"
+        [attr.aria-describedby]="navigationAllowed() ? null : 'route-timeline-writes-off'"
+        (click)="clearNavigations()"
+      >
+        Clear
+      </button>
     </div>
+    <!-- Always in the page, so screen readers announce the first message too. -->
+    <p class="visually-hidden" role="status">{{ message() }}</p>
     @if (message()) {
-      <p class="message" role="status">{{ message() }}</p>
+      <p class="message" aria-hidden="true">{{ message() }}</p>
+    }
+    @if (!navigationAllowed()) {
+      <p id="route-timeline-writes-off" class="message">{{ navigationOff }}</p>
+    }
+    <app-limit-note
+      [dropped]="page().dropped ?? 0"
+      [max]="maxNavigations()"
+      what="navigations"
+      limit="navigations"
+    />
+    @if (loops().length) {
+      <section class="loops" aria-labelledby="loops-heading">
+        <h3 id="loops-heading">
+          {{ loops().length === 1 ? 'Loop detected' : loops().length + ' loops detected' }}
+        </h3>
+        @for (loop of loops(); track $index) {
+          <div class="loop">
+            <p class="chain">
+              <span class="badge" data-tone="bad">{{ loopTitle(loop) }}</span>
+              @for (url of loop.cycle; track $index) {
+                @if (!$first) {
+                  <span class="arrow" aria-hidden="true">→</span>
+                  <span class="visually-hidden">then</span>
+                }
+                <code>{{ url }}</code>
+              }
+            </p>
+            <ol class="hops">
+              @for (hop of loop.hops; track $index) {
+                <li>
+                  <code>{{ hop.from }}</code>
+                  <span class="arrow" aria-hidden="true"> → </span>
+                  <span class="visually-hidden"> to </span>
+                  <code>{{ hop.to }}</code
+                  >: {{ hopCause(hop) }}
+                </li>
+              }
+            </ol>
+            <p class="muted loop-meta">{{ loopMeta(loop) }}</p>
+          </div>
+        }
+      </section>
     }
     @if (items().length) {
       <div class="meta-row">
@@ -64,7 +127,7 @@ const PHASE_COLORS: Record<string, string> = {
       </div>
       <ol class="navs">
         @for (nav of items(); track nav.id) {
-          <li>
+          <li [class.in-loop]="!!loopOf(nav)">
             <div class="head">
               @if (!nav.beforeConnect) {
                 <time>{{ time(nav.startedAt) }}</time>
@@ -81,8 +144,8 @@ const PHASE_COLORS: Record<string, string> = {
                 @if (nav.beforeConnect) {
                   <span class="muted">{{
                     nav.endedAt === undefined && nav.outcome !== 'pending'
-                      ? 'before DevTools connected'
-                      : 'started before DevTools connected'
+                      ? 'before Pangular Inspector connected'
+                      : 'started before Pangular Inspector connected'
                   }}</span>
                 } @else if (nav.phases?.['total'] !== undefined) {
                   <span class="muted ms">{{ nav.phases?.['total'] }}ms</span>
@@ -91,6 +154,13 @@ const PHASE_COLORS: Record<string, string> = {
                 }
                 @if (nav.probe) {
                   <span class="tag">probe</span>
+                }
+                @if (loopOf(nav); as loop) {
+                  <span class="badge" data-tone="bad"
+                    >loop<span class="visually-hidden"
+                      >: part of {{ loopTitle(loop) }} {{ loop.cycle.join(' then ') }}</span
+                    ></span
+                  >
                 }
               </span>
             </div>
@@ -123,6 +193,19 @@ const PHASE_COLORS: Record<string, string> = {
               @if (nav.redirectedFrom !== undefined) {
                 <dt>Redirect of</dt>
                 <dd>#{{ nav.redirectedFrom }}</dd>
+              }
+              @if (loopOf(nav); as loop) {
+                <dt>Loop</dt>
+                <dd class="reason">
+                  {{ loop.cycle.join(' → ') }}
+                  @for (hop of hopsOf(loop, nav); track $index) {
+                    <div>
+                      This navigation: <code>{{ hop.from }}</code> to <code>{{ hop.to }}</code
+                      >,
+                      {{ hopCause(hop) }}
+                    </div>
+                  }
+                </dd>
               }
               @if (nav.redirectTo) {
                 <dt>Redirects to</dt>
@@ -200,13 +283,15 @@ const PHASE_COLORS: Record<string, string> = {
               }
               @if (nav.earlier) {
                 <dt>Earlier</dt>
-                <dd>{{ nav.earlier }} navigation(s) before DevTools connected</dd>
+                <dd>{{ nav.earlier }} navigation(s) before Pangular Inspector connected</dd>
               }
             </dl>
             <div class="actions">
               <button
                 type="button"
                 class="small"
+                [disabled]="!navigationAllowed() || !replayable(nav)"
+                [attr.aria-describedby]="replayNote(nav)"
                 (click)="replay(nav)"
                 [attr.aria-label]="'Replay navigation ' + nav.id"
               >
@@ -220,6 +305,11 @@ const PHASE_COLORS: Record<string, string> = {
               >
                 Copy repro
               </button>
+              @if (!replayable(nav)) {
+                <p id="replay-note-{{ nav.id }}" class="muted replay-note">
+                  Replay is off: the URL is redacted or not relative.
+                </p>
+              }
             </div>
           </li>
         }
@@ -237,7 +327,7 @@ const PHASE_COLORS: Record<string, string> = {
         </div>
       } @else {
         <div class="empty">
-          <p class="empty-title">No navigations since DevTools connected.</p>
+          <p class="empty-title">No navigations since Pangular Inspector connected.</p>
           <p class="muted">Earlier ones are not visible. Click a link in the app to record one.</p>
         </div>
       }
@@ -423,6 +513,49 @@ const PHASE_COLORS: Record<string, string> = {
     .bad {
       color: var(--danger);
     }
+    .navs > li.in-loop {
+      box-shadow: inset 3px 0 0 var(--danger);
+    }
+    .loops {
+      display: grid;
+      gap: 8px;
+      padding: 12px 16px;
+      border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .loops h3 {
+      margin: 0;
+      color: var(--text-strong);
+      font-size: 13px;
+      letter-spacing: normal;
+      text-transform: none;
+    }
+    .loop + .loop {
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+    .chain {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      align-items: center;
+      margin: 0;
+    }
+    .hops {
+      margin: 6px 0 0;
+      padding-left: 20px;
+    }
+    .hops li + li {
+      margin-top: 2px;
+    }
+    .loop-meta {
+      margin: 6px 0 0;
+      font-size: 12px;
+    }
     .actions {
       display: flex;
       flex-wrap: wrap;
@@ -430,6 +563,11 @@ const PHASE_COLORS: Record<string, string> = {
       margin-top: 12px;
       padding-top: 12px;
       border-top: 1px solid var(--border);
+    }
+    .replay-note {
+      align-self: center;
+      margin: 0;
+      font-size: 12px;
     }
     @media (max-width: 480px) {
       .details {
@@ -448,11 +586,28 @@ const PHASE_COLORS: Record<string, string> = {
 export class RouteTimeline {
   page = input.required<RouterPage>();
   rpc = input<DevframeRpcClient | null>(null);
+  readonly maxNavigations = computed(() => panelConfig(this.rpc()).limits.navigations);
+  readonly navigationAllowed = computed(() => actionAllowed(this.rpc(), 'router'));
+  protected readonly navigationOff = actionBlockedMessage('router');
 
   readonly phases = PHASES;
-  readonly filter = signal('');
-  readonly onlyProblems = signal(false);
-  readonly message = signal('');
+  private readonly pageId = computed(() => this.page().pageId);
+  // The component stays mounted when the page picker switches pages, so filters and messages
+  // start over whenever the pageId changes.
+  readonly filter = linkedSignal<string, string>({ source: this.pageId, computation: () => '' });
+  readonly onlyProblems = linkedSignal<string, boolean>({
+    source: this.pageId,
+    computation: () => false,
+  });
+  readonly message = linkedSignal<string, string>({ source: this.pageId, computation: () => '' });
+
+  readonly loops = computed(() => this.page().loops ?? []);
+
+  private readonly loopById = computed(() => {
+    const byId = new Map<number, NavigationLoop>();
+    for (const loop of this.loops()) for (const id of loop.ids) byId.set(id, loop);
+    return byId;
+  });
 
   readonly items = computed(() => {
     const needle = this.filter().toLowerCase();
@@ -463,9 +618,43 @@ export class RouteTimeline {
           (!needle ||
             nav.url.toLowerCase().includes(needle) ||
             !!nav.finalUrl?.toLowerCase().includes(needle)) &&
-          (!this.onlyProblems() || !['succeeded', 'pending'].includes(nav.outcome)),
+          (!this.onlyProblems() || this.isProblem(nav)),
       );
   });
+
+  /** Probes cancel on purpose, so they are not problems; the tab badge skips them too. */
+  private isProblem(nav: NavigationRecord) {
+    if (nav.probe) return false;
+    return !['succeeded', 'pending'].includes(nav.outcome) || this.loopById().has(nav.id);
+  }
+
+  loopOf(nav: NavigationRecord): NavigationLoop | undefined {
+    return this.loopById().get(nav.id);
+  }
+
+  loopTitle(loop: NavigationLoop) {
+    return loop.kind === 'burst' ? 'navigation loop' : 'redirect loop';
+  }
+
+  hopsOf(loop: NavigationLoop, nav: NavigationRecord) {
+    return loop.hops.filter((hop) => hop.id === nav.id);
+  }
+
+  hopCause(hop: LoopHop) {
+    if (hop.via === 'navigate') return `#${hop.id} started by ${hop.by ?? 'code'}`;
+    const via = hop.via === 'redirectTo' ? 'config' : `${hop.via} redirect`;
+    return `${via}${hop.by ? ` ${hop.by}` : hop.via === 'redirectTo' ? ' redirectTo' : ''} in #${hop.id}`;
+  }
+
+  loopMeta(loop: NavigationLoop) {
+    const ids =
+      loop.ids.length > 1
+        ? `Navigations #${loop.ids[0]} to #${loop.ids[loop.ids.length - 1]}`
+        : `Navigation #${loop.ids[0]}`;
+    const bounced = loop.bounces > 1 ? `, came back ${loop.bounces} times` : '';
+    const guards = loop.guards.length ? ` Guards involved: ${loop.guards.join(', ')}.` : '';
+    return `${ids}${bounced}; ${loop.end}.${guards}`;
+  }
 
   reasonText(nav: NavigationRecord) {
     return [nav.code, nav.reason].filter(Boolean).join(': ');
@@ -511,30 +700,53 @@ export class RouteTimeline {
     return result === 'false' || /^(UrlTree|RedirectCommand|threw)/.test(result);
   }
 
-  time(timestamp: number) {
-    return new Date(timestamp).toLocaleTimeString();
-  }
+  readonly time = time;
+
+  /** Counts instrument toggles so only the latest answer touches the checkbox. */
+  private instrumentSeq = 0;
 
   async toggleInstrument(event: Event) {
-    const on = (event.target as HTMLInputElement).checked;
-    const result = await routerAction(this.rpc(), this.page().pageId, { action: 'instrument', on });
+    const checkbox = event.target as HTMLInputElement;
+    const on = checkbox.checked;
+    const pageId = this.pageId();
+    const seq = ++this.instrumentSeq;
+    const result = await routerAction(this.rpc(), pageId, { action: 'instrument', on });
+    // A newer toggle owns the checkbox now; this late answer must not undo it.
+    if (seq !== this.instrumentSeq) return;
+    if (pageId !== this.pageId()) {
+      // The answer is for the page the user left; show this page's state instead.
+      checkbox.checked = !!this.page().instrumented;
+      return;
+    }
+    if (result['error']) {
+      checkbox.checked = !!this.page().instrumented;
+      this.message.set(String(result['error']));
+      return;
+    }
     this.message.set(
-      result?.['error']
-        ? String(result['error'])
-        : on
-          ? 'Recording each guard and resolver.'
-          : 'Stopped recording guards and resolvers.',
+      on ? 'Recording each guard and resolver.' : 'Stopped recording guards and resolvers.',
     );
+  }
+
+  replayable(nav: NavigationRecord) {
+    return isReplayableUrl(nav.url);
+  }
+
+  replayNote(nav: NavigationRecord) {
+    if (!this.navigationAllowed()) return 'route-timeline-writes-off';
+    return this.replayable(nav) ? null : `replay-note-${nav.id}`;
   }
 
   async replay(nav: NavigationRecord) {
     this.message.set(`Replaying #${nav.id}…`);
-    const result = await routerAction(this.rpc(), this.page().pageId, {
+    const pageId = this.pageId();
+    const result = await routerAction(this.rpc(), pageId, {
       action: 'replay',
       id: nav.id,
     });
-    if (!result || result['error']) {
-      this.message.set(String(result?.['error'] ?? 'Replay failed.'));
+    if (pageId !== this.pageId()) return;
+    if (result['error']) {
+      this.message.set(String(result['error']));
       return;
     }
     const replay = result['replay'] as { outcome?: string } | undefined;
@@ -544,20 +756,39 @@ export class RouteTimeline {
   }
 
   async copy(nav: NavigationRecord) {
-    const text = await routerCall<string>(this.rpc(), 'router-export', {
-      pageId: this.page().pageId,
-      id: nav.id,
-    });
+    const pageId = this.pageId();
+    const text = await routerCall<string>(this.rpc(), 'router-export', { pageId, id: nav.id });
+    if (pageId !== this.pageId()) return;
     if (!text) {
       this.message.set('Could not build the repro.');
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
-      this.message.set(`Copied a markdown repro of #${nav.id}.`);
+      if (pageId === this.pageId()) this.message.set(`Copied a markdown repro of #${nav.id}.`);
     } catch {
-      this.message.set('The clipboard is not available here.');
+      if (pageId === this.pageId()) this.message.set('The clipboard is not available here.');
     }
+  }
+
+  /** Drops this page's navigations and loop warnings; focus stays on the Clear button. */
+  async clearNavigations() {
+    const client = this.rpc();
+    const pageId = this.pageId();
+    const clearing = 'Clearing navigations…';
+    // A new message first, so a second clear in a row is announced too.
+    this.message.set(clearing);
+    let text: string;
+    try {
+      if (!client) throw new Error('No connection');
+      await rpcCall(client, 'clear-router-navigations', pageId);
+      text = 'Navigations cleared.';
+    } catch {
+      text = 'Could not clear the navigations.';
+    }
+    // The answer is about the page the user may have left; keep it off the page now shown.
+    if (pageId === this.pageId()) this.message.set(text);
+    else if (this.message() === clearing) this.message.set('');
   }
 
   exportJson() {

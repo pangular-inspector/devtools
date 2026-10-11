@@ -9,7 +9,7 @@
     if (ngVersion || hasNgGlobal) {
       window.postMessage(
         {
-          type: '__NG_DEVTOOLS_ANGULAR_DETECTED__',
+          type: '__PANGULAR_ANGULAR_DETECTED__',
           version: ngVersion,
         },
         '*',

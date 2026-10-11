@@ -1,10 +1,14 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
   input,
+  linkedSignal,
   output,
   signal,
   untracked,
@@ -12,9 +16,12 @@ import {
 import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
+import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
+import { LimitNote } from '../ui/limit-note';
 import { FormsFieldDetail } from './forms-field-detail';
 import { FormsLint, FormsSubmit } from './forms-report';
 import { FormsTimeline } from './forms-timeline';
+import { FormsWebMcp } from './forms-webmcp';
 import {
   FORMS_STYLES,
   KIND_LABELS,
@@ -22,10 +29,12 @@ import {
   actionMessage,
   formAction,
   pageOf,
+  redactLabel,
   type CollectedForm,
   type FormEvent,
   type FormFieldError,
   type FormFieldNode,
+  type WebMcpPage,
 } from './forms-types';
 
 type Tab = 'fields' | 'timeline' | 'submit' | 'lint';
@@ -65,6 +74,8 @@ interface FormsSnapshot {
   forms?: CollectedForm[];
   events?: FormEvent[];
   instrumented?: string[];
+  dropped?: Record<string, number>;
+  webMcp?: WebMcpPage[];
 }
 
 interface FieldRow {
@@ -83,7 +94,16 @@ function countFields(node: FormFieldNode): number {
 
 @Component({
   selector: 'app-forms-inspector',
-  imports: [JsonPipe, FormsFieldDetail, FormsTimeline, FormsSubmit, FormsLint],
+  imports: [
+    JsonPipe,
+    FormsFieldDetail,
+    FormsTimeline,
+    FormsSubmit,
+    FormsLint,
+    FormsWebMcp,
+    LimitNote,
+  ],
+  host: { '(keydown.escape)': 'cancelPick()' },
   template: `
     @if (!rpc()) {
       <div class="empty" role="status">
@@ -173,6 +193,14 @@ function countFields(node: FormFieldNode): number {
               Show {{ visible()[0].label }}
             </button>
           </section>
+        } @else if (hidden(); as label) {
+          <section class="detail gone" aria-labelledby="forms-detail-title">
+            <h2 id="forms-detail-title">{{ label }}</h2>
+            <p class="muted">This form is on another page. Tick "All pages" to see it again.</p>
+            <button type="button" class="small" (click)="allPages.set(true)">
+              Show forms from all pages
+            </button>
+          </section>
         } @else if (selected(); as form) {
           <section class="detail" aria-labelledby="forms-detail-title">
             <div class="detail-head">
@@ -207,22 +235,55 @@ function countFields(node: FormFieldNode): number {
                 <ul>
                   @for (entry of form.errorSummary!; track $index) {
                     <li>
-                      <code>{{ entry.path || '(form)' }}</code> {{ entry.message }}
-                      <code class="kind-tag">{{ entry.kind }}</code>
+                      <button type="button" class="summary-link" (click)="showField(entry.path)">
+                        <span class="sr-only">Show field </span
+                        ><code>{{ entry.path || '(form)' }}</code
+                        ><span class="sr-only">:</span> {{ entry.message }}
+                        <code class="kind-tag">{{ entry.kind }}</code>
+                      </button>
                     </li>
                   }
                 </ul>
               </details>
             }
+            <app-forms-webmcp
+              [tool]="form.webMcp"
+              [page]="webMcpPage(form.id)"
+              [signalForm]="form.kind === 'signal'"
+            />
 
             <div class="action-bar">
               <div class="actions" role="group" aria-label="Form actions">
-                <button type="button" class="small" (click)="act('touch-all')">Touch all</button>
-                <button type="button" class="small" (click)="act('revalidate')">Revalidate</button>
+                <button
+                  type="button"
+                  class="small"
+                  [disabled]="!canWrite()"
+                  [attr.aria-describedby]="canWrite() ? null : 'forms-writes-off'"
+                  (click)="act('touch-all')"
+                >
+                  Touch all
+                </button>
+                <button
+                  type="button"
+                  class="small"
+                  [disabled]="!canWrite()"
+                  [attr.aria-describedby]="canWrite() ? null : 'forms-writes-off'"
+                  (click)="act('revalidate')"
+                >
+                  Revalidate
+                </button>
                 <button type="button" class="small" (click)="act('focus-first-invalid')">
                   Focus first invalid
                 </button>
-                <button type="button" class="small" (click)="pick()">Pick field on page</button>
+                <button
+                  type="button"
+                  class="small"
+                  [class.on]="picking()"
+                  [attr.aria-pressed]="!!picking()"
+                  (click)="picking() ? cancelPick() : pick()"
+                >
+                  {{ picking() ? 'Cancel picking' : 'Pick field on page' }}
+                </button>
                 <span class="divider" aria-hidden="true"></span>
                 <button type="button" class="small" (click)="act('snapshot')">Snapshot</button>
                 @if (snapshot()) {
@@ -230,6 +291,8 @@ function countFields(node: FormFieldNode): number {
                     type="button"
                     class="small"
                     [class.armed]="armed() === 'restore'"
+                    [disabled]="!canWrite()"
+                    [attr.aria-describedby]="canWrite() ? null : 'forms-writes-off'"
                     [attr.title]="'Restore ' + snapshot()"
                     (click)="confirmAct('restore')"
                   >
@@ -241,6 +304,8 @@ function countFields(node: FormFieldNode): number {
                   type="button"
                   class="small danger"
                   [class.armed]="armed() === 'reset'"
+                  [disabled]="!canWrite()"
+                  [attr.aria-describedby]="canWrite() ? null : 'forms-writes-off'"
                   (click)="confirmAct('reset')"
                 >
                   {{ armed() === 'reset' ? 'Confirm reset' : 'Reset' }}
@@ -249,11 +314,16 @@ function countFields(node: FormFieldNode): number {
                   type="button"
                   class="small primary"
                   [class.armed]="armed() === 'submit'"
+                  [disabled]="!canWrite()"
+                  [attr.aria-describedby]="canWrite() ? null : 'forms-writes-off'"
                   (click)="confirmAct('submit')"
                 >
                   {{ armed() === 'submit' ? 'Confirm submit' : 'Submit' }}
                 </button>
               </div>
+              @if (!canWrite()) {
+                <p id="forms-writes-off" class="muted">{{ writesOff }}</p>
+              }
               <p class="status" role="status">{{ message() }}</p>
             </div>
 
@@ -282,6 +352,7 @@ function countFields(node: FormFieldNode): number {
                 @case ('fields') {
                   <div class="filters">
                     <input
+                      #fieldFilter
                       class="filter"
                       type="search"
                       placeholder="Filter fields by path"
@@ -290,6 +361,7 @@ function countFields(node: FormFieldNode): number {
                       spellcheck="false"
                       [value]="filter()"
                       (input)="onFilter($event)"
+                      (keydown.escape)="filter.set('')"
                     />
                     <fieldset class="chips">
                       <legend class="sr-only">Show only fields that are</legend>
@@ -305,6 +377,7 @@ function countFields(node: FormFieldNode): number {
                       }
                     </fieldset>
                   </div>
+                  <p class="sr-only" role="status">{{ filterStatus() }}</p>
 
                   <div class="table-scroll" role="region" aria-label="Fields" tabindex="0">
                     <table class="fields">
@@ -333,13 +406,13 @@ function countFields(node: FormFieldNode): number {
                                 type="button"
                                 class="field"
                                 [attr.aria-label]="
-                                  'Highlight ' + (row.node.path || 'the form') + ' on the page'
+                                  'Show details for ' + (row.node.path || 'the form')
                                 "
                                 [attr.aria-pressed]="row.node.path === fieldPath()"
                                 [attr.title]="row.node.path || '(form)'"
                                 (focus)="highlight(form.id, row.node.path)"
                                 (blur)="highlight(null, '')"
-                                (click)="fieldPath.set(row.node.path)"
+                                (click)="toggleField(row.node.path)"
                               >
                                 {{ row.node.key || '(form)' }}
                               </button>
@@ -389,7 +462,7 @@ function countFields(node: FormFieldNode): number {
                                 <span class="warn">view out of sync</span>
                               }
                               @if (row.node.redacted) {
-                                <span>redacted ({{ row.node.redacted }})</span>
+                                <span>redacted: {{ redactLabel(row.node.redacted) }}</span>
                               }
                               @if (row.node.required) {
                                 <span>required</span>
@@ -461,10 +534,21 @@ function countFields(node: FormFieldNode): number {
                         } @empty {
                           <tr>
                             <td colspan="5" class="no-match">
-                              @if (filter()) {
-                                No field path matches "{{ filter() }}".
-                              } @else {
-                                No field matches the selected filters.
+                              <p>
+                                @if (filter()) {
+                                  No field path matches "{{ filter() }}".
+                                } @else {
+                                  No field matches the selected filters.
+                                }
+                              </p>
+                              @if (filtering()) {
+                                <button
+                                  type="button"
+                                  class="small"
+                                  (click)="clearFilters(fieldFilter)"
+                                >
+                                  Clear filters
+                                </button>
                               }
                             </td>
                           </tr>
@@ -479,10 +563,17 @@ function countFields(node: FormFieldNode): number {
                       [node]="node"
                       [version]="version()"
                       [rpc]="rpc()"
+                      (closed)="closeField()"
                     />
                   }
                 }
                 @case ('timeline') {
+                  <app-limit-note
+                    [dropped]="droppedEvents()"
+                    [max]="maxEvents()"
+                    what="form events on this page"
+                    limit="formTimeline"
+                  />
                   <app-forms-timeline
                     [events]="selectedEvents()"
                     [recording]="recording()"
@@ -493,7 +584,12 @@ function countFields(node: FormFieldNode): number {
                   <app-forms-submit [formId]="form.id" [version]="version()" [rpc]="rpc()" />
                 }
                 @case ('lint') {
-                  <app-forms-lint [formId]="form.id" [version]="version()" [rpc]="rpc()" />
+                  <app-forms-lint
+                    [formId]="form.id"
+                    [version]="version()"
+                    [rpc]="rpc()"
+                    (showField)="showField($event)"
+                  />
                 }
               }
             </div>
@@ -619,8 +715,8 @@ function countFields(node: FormFieldNode): number {
       padding: 0 7px;
       border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
       border-radius: 99px;
-      background: color-mix(in srgb, var(--danger) 12%, transparent);
-      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+      color: var(--danger-text);
       font-size: 11px;
       font-weight: 600;
       line-height: 18px;
@@ -771,13 +867,14 @@ function countFields(node: FormFieldNode): number {
     .totals b.has-errors {
       color: var(--danger);
     }
+    /* Opaque tints so a selected or hovered row behind the badge cannot lower its contrast. */
     .badge {
       display: inline-block;
       padding: 0 8px;
       border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
       border-radius: 99px;
-      background: color-mix(in srgb, var(--ok) 12%, transparent);
-      color: var(--ok);
+      background: color-mix(in srgb, var(--ok) 12%, var(--surface));
+      color: var(--ok-text);
       font-size: 11px;
       font-weight: 600;
       letter-spacing: 0.04em;
@@ -789,13 +886,13 @@ function countFields(node: FormFieldNode): number {
     }
     .badge[data-status='INVALID'] {
       border-color: color-mix(in srgb, var(--danger) 30%, transparent);
-      background: color-mix(in srgb, var(--danger) 12%, transparent);
-      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+      color: var(--danger-text);
     }
     .badge[data-status='PENDING'] {
       border-color: color-mix(in srgb, var(--warn) 30%, transparent);
-      background: color-mix(in srgb, var(--warn) 12%, transparent);
-      color: var(--warn);
+      background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+      color: var(--warn-text);
     }
     .badge[data-status='DISABLED'] {
       border-color: var(--border-strong);
@@ -825,6 +922,11 @@ function countFields(node: FormFieldNode): number {
     }
     .actions .small:not(.primary):not(.danger) {
       max-width: 240px;
+    }
+    .small.on {
+      background: var(--accent-soft);
+      border-color: var(--accent-line);
+      color: var(--text-strong);
     }
     .status:empty {
       height: 0;
@@ -1073,6 +1175,10 @@ function countFields(node: FormFieldNode): number {
     .errors code {
       color: #fde68a;
       overflow-wrap: anywhere;
+
+      @include m.light {
+        color: var(--accent);
+      }
     }
     .value .muted {
       margin-top: 2px;
@@ -1098,8 +1204,8 @@ function countFields(node: FormFieldNode): number {
     }
     .flags span.warn {
       border-color: color-mix(in srgb, var(--warn) 30%, transparent);
-      background: color-mix(in srgb, var(--warn) 12%, transparent);
-      color: var(--warn);
+      background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+      color: var(--warn-text);
     }
     .errors {
       min-width: 180px;
@@ -1134,6 +1240,12 @@ function countFields(node: FormFieldNode): number {
       padding: 24px 12px;
       color: var(--text-2);
       text-align: center;
+    }
+    .fields .no-match p {
+      margin: 0 0 10px;
+    }
+    .fields .no-match p:last-child {
+      margin-bottom: 0;
     }
     .empty {
       display: grid;
@@ -1189,9 +1301,13 @@ function countFields(node: FormFieldNode): number {
 export class FormsInspector {
   rpc = input<DevframeRpcClient | null>(null);
   focus = input<{ id: string } | null>(null);
+  readonly canWrite = computed(() => actionAllowed(this.rpc(), 'forms'));
+  protected readonly redactLabel = redactLabel;
+  protected readonly writesOff = actionBlockedMessage('forms');
   readonly focusHandled = output<void>();
 
   readonly forms = signal<CollectedForm[]>([]);
+  readonly webMcp = signal<WebMcpPage[]>([]);
   readonly events = signal<FormEvent[]>([]);
   readonly loading = signal(true);
   readonly failed = signal(false);
@@ -1215,14 +1331,24 @@ export class FormsInspector {
   readonly chips = CHIPS;
   readonly tab_ = signal<Tab>('fields');
   readonly active = signal(new Set<Chip>());
-  readonly fieldPath = signal<string | null>(null);
+  /** True while the path search or a chip hides fields, the same test `rows` applies. */
+  readonly filtering = computed(() => !!this.filter() || this.active().size > 0);
+  /** Spoken only after Clear filters, never on a poll. */
+  readonly filterStatus = signal('');
   readonly version = signal(0);
   readonly message = signal('');
-  readonly armed = signal<string | null>(null);
-  readonly snapshot = signal<string | null>(null);
+
+  webMcpPage(formId: string): WebMcpPage | undefined {
+    const page = pageOf(formId);
+    return this.webMcp().find((entry) => entry.pageId === page);
+  }
+  readonly picking = signal<string | null>(null);
+  private pickSeq = 0;
 
   private unsubscribe: (() => void) | null = null;
   private readonly destroyRef = inject(DestroyRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
 
   readonly counts = computed(
     () =>
@@ -1234,25 +1360,56 @@ export class FormsInspector {
       ),
   );
 
-  readonly selected = computed(() => {
-    const forms = this.visible();
+  /** The chosen form among every reported form, whether or not "All pages" lists it. */
+  private readonly chosen = computed(() => {
     const id = this.selectedId();
-    if (id === null) return forms[0] ?? null;
+    if (id === null) return null;
+    const forms = this.forms();
     const label = this.selectedLabel();
     const page = pageOf(id);
     return (
       forms.find((f) => f.id === id) ??
       forms.find((f) => f.label === label && pageOf(f.id) === page) ??
-      forms.find((f) => f.label === label) ??
       null
     );
   });
 
+  readonly selected = computed(() => {
+    const forms = this.visible();
+    if (this.selectedId() === null) return forms[0] ?? null;
+    const chosen = this.chosen();
+    return chosen && forms.includes(chosen) ? chosen : null;
+  });
+
+  /** The chosen form left the page. */
   readonly missing = computed(() =>
-    this.selectedId() !== null && !this.selected() && this.visible().length
+    this.selectedId() !== null && !this.chosen() && this.visible().length
       ? (this.selectedLabel() ?? this.selectedId())
       : null,
   );
+
+  /** The chosen form is still on its page, but unticking "All pages" hides it. */
+  readonly hidden = computed(() => {
+    const chosen = this.chosen();
+    return chosen && !this.selected() && this.visible().length ? chosen.label : null;
+  });
+
+  private readonly selectedFormId = computed(() => this.selected()?.id ?? null);
+
+  // Field, armed confirmation and snapshot all belong to one form, so they reset whenever the
+  // selected form changes, including when it falls back to another form without a click.
+  readonly fieldPath = linkedSignal<string | null, string | null>({
+    source: this.selectedFormId,
+    computation: () => null,
+  });
+  readonly armed = linkedSignal<string | null, string | null>({
+    source: this.selectedFormId,
+    computation: () => null,
+  });
+  readonly snapshot = linkedSignal<string | null, string | null>({
+    source: this.selectedFormId,
+    computation: () => null,
+  });
 
   readonly rows = computed(() => {
     const form = this.selected();
@@ -1281,6 +1438,13 @@ export class FormsInspector {
       node.path === path ? node : ((node.children ?? []).map(find).find(Boolean) ?? null);
     return find(form.root);
   });
+
+  readonly dropped = signal<Record<string, number>>({});
+  readonly droppedEvents = computed(() => {
+    const id = this.selected()?.id;
+    return id ? (this.dropped()[pageOf(id)] ?? 0) : 0;
+  });
+  readonly maxEvents = computed(() => panelConfig(this.rpc()).limits.formTimeline);
 
   readonly selectedEvents = computed(() => {
     const id = this.selected()?.id;
@@ -1312,13 +1476,15 @@ export class FormsInspector {
     this.loading.set(true);
     this.failed.set(false);
     try {
-      const state = await client.scope('ng-devtools').rpc.sharedState('forms');
+      const state = await client.scope('pangular').rpc.sharedState('forms');
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         const snapshot = value as FormsSnapshot | undefined;
         this.forms.set(snapshot?.forms ?? []);
         this.events.set(snapshot?.events ?? []);
         this.instrumented.set(snapshot?.instrumented ?? []);
+        this.dropped.set(snapshot?.dropped ?? {});
+        this.webMcp.set(snapshot?.webMcp ?? []);
         this.version.update((v) => v + 1);
       };
       apply(state.value());
@@ -1339,8 +1505,12 @@ export class FormsInspector {
   async pick() {
     const form = this.selected();
     if (!form) return;
-    this.message.set('Click a field in the app (Esc cancels).');
+    const seq = ++this.pickSeq;
+    this.picking.set(form.id);
+    this.message.set('Click a field in the app. Press Escape or Cancel picking to stop.');
     const result = await formAction(this.rpc(), { action: 'pick', formId: form.id });
+    if (seq !== this.pickSeq) return;
+    this.picking.set(null);
     const picked = result as typeof result & { formId?: string; path?: string };
     if (!result.ok || !picked.formId) {
       this.message.set(actionMessage(result));
@@ -1350,6 +1520,12 @@ export class FormsInspector {
     this.tab_.set('fields');
     this.fieldPath.set(picked.path ?? '');
     this.message.set(`Picked ${picked.path || '(form)'}.`);
+  }
+
+  cancelPick() {
+    const formId = this.picking();
+    if (!formId) return;
+    void formAction(this.rpc(), { action: 'cancel-pick', formId });
   }
 
   async setRecording(on: boolean) {
@@ -1373,6 +1549,40 @@ export class FormsInspector {
     this.armed.set(null);
   }
 
+  toggleField(path: string) {
+    this.fieldPath.update((current) => (current === path ? null : path));
+  }
+
+  closeField() {
+    const host = this.host.nativeElement;
+    const row =
+      host.querySelector<HTMLElement>('button.field[aria-pressed="true"]') ??
+      host.querySelector<HTMLElement>('.table-scroll');
+    this.fieldPath.set(null);
+    row?.focus();
+  }
+
+  /** Opens a field from the error summary or a lint finding: Fields tab, filters that hide it cleared, detail focused. */
+  showField(path: string) {
+    this.tab_.set('fields');
+    const listed = () => this.rows().some((row) => row.node.path === path);
+    if (!listed()) this.filter.set('');
+    if (!listed()) this.active.set(new Set());
+    this.fieldPath.set(path);
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement;
+        const row = host.querySelector<HTMLElement>('button.field[aria-pressed="true"]');
+        row?.scrollIntoView?.({ block: 'nearest' });
+        const target =
+          host.querySelector<HTMLElement>('#forms-field-heading') ??
+          host.querySelector<HTMLElement>('.table-scroll');
+        target?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
   toggleChip(chip: Chip) {
     this.active.update((set) => {
       const next = new Set(set);
@@ -1387,7 +1597,7 @@ export class FormsInspector {
     if (!form) return;
     this.armed.set(null);
     const result = await formAction(this.rpc(), { action, formId: form.id, ...extra });
-    if (result.snapshot) this.snapshot.set(result.snapshot);
+    if (result.snapshot && this.selected()?.id === form.id) this.snapshot.set(result.snapshot);
     this.message.set(actionMessage(result));
   }
 
@@ -1420,6 +1630,16 @@ export class FormsInspector {
     return error.from !== undefined ? `${label} on ${error.from || 'the form'}` : label;
   }
 
+  /** Resets the path search and the chips, then hands focus back to the search field. */
+  clearFilters(search: HTMLInputElement) {
+    this.filter.set('');
+    this.active.set(new Set());
+    const count = this.rows().length;
+    const message = `Filters cleared. Showing ${count} ${count === 1 ? 'field' : 'fields'}.`;
+    this.filterStatus.update((current) => (current === message ? `${message}\u00a0` : message));
+    search.focus();
+  }
+
   onFilter(event: Event) {
     this.filter.set((event.target as HTMLInputElement).value);
   }
@@ -1428,7 +1648,7 @@ export class FormsInspector {
     const client = this.rpc();
     if (!client) return;
     void client
-      .scope('ng-devtools')
+      .scope('pangular')
       .rpc.callEvent('request-form-highlight', formId ? { formId, path } : null);
   }
 

@@ -1,0 +1,105 @@
+import {Component, effect, input, signal} from '@angular/core';
+import {LucideDynamicIcon, LucideChevronDown} from '@lucide/angular';
+
+let idCounter = 0;
+
+/**
+ * Disclosure / accordion item. Signal-driven open/close state, full ARIA
+ * (`aria-expanded`, `aria-controls`, region role + `aria-labelledby`).
+ *
+ * Chevron: single down-arrow icon, rotated 180deg on open. 200ms ease.
+ *
+ * Body: outer wrapper is a CSS grid container animating `grid-template-rows`
+ * from `0fr` (closed) to `1fr` (open) over 280ms. Inner wrapper has
+ * `overflow: hidden` + `min-height: 0` so the row fr basis drives height.
+ * Works in Chrome 117+, Safari 17.4+, Firefox 121+.
+ *
+ * `prefers-reduced-motion` zeroes all transitions.
+ */
+@Component({
+  selector: 'ngmd-accordion-item',
+  imports: [LucideDynamicIcon],
+  template: `
+    <div
+      class="ngmd-accordion-item rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden"
+      [class.is-open]="expanded()"
+    >
+      <button
+        type="button"
+        [id]="buttonId"
+        [attr.aria-expanded]="expanded()"
+        [attr.aria-controls]="regionId"
+        (click)="toggle()"
+        class="flex w-full items-center justify-between gap-3 cursor-pointer px-5 py-3 text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left [-webkit-tap-highlight-color:transparent]"
+      >
+        <span class="flex items-center gap-2">
+          @if (image()) {
+            <img
+              [src]="image()"
+              alt=""
+              width="16"
+              height="16"
+              style="display:inline-block;object-fit:contain;flex-shrink:0"
+              aria-hidden="true"
+            />
+          }
+          <span>{{ title() }}</span>
+        </span>
+        <svg
+          [lucideIcon]="chevronIcon"
+          class="size-4 shrink-0 text-zinc-400 transition-transform duration-200"
+          [class]="expanded() ? 'rotate-180' : ''"
+          aria-hidden="true"
+        ></svg>
+      </button>
+      <div
+        [id]="regionId"
+        role="region"
+        [attr.aria-labelledby]="buttonId"
+        [attr.aria-hidden]="!expanded()"
+        [attr.inert]="expanded() ? null : ''"
+        class="ngmd-accordion-body"
+      >
+        <div
+          class="ngmd-accordion-body-inner px-5 pt-4 pb-4 text-sm text-zinc-700 dark:text-zinc-300 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+        >
+          <ng-content></ng-content>
+        </div>
+      </div>
+    </div>
+  `,
+})
+export class NgmdAccordionItem {
+  protected readonly chevronIcon = LucideChevronDown;
+
+  readonly title = input.required<string>();
+  /** Optional brand logo / icon URL rendered as a 16×16 prefix to the title. */
+  readonly image = input<string>('');
+  readonly open = input(false, {
+    transform: (v: boolean | string) => v === '' || v === true || v === 'true',
+  });
+
+  private readonly id = ++idCounter;
+  protected readonly buttonId = `ngmd-acc-btn-${this.id}`;
+  protected readonly regionId = `ngmd-acc-region-${this.id}`;
+
+  protected readonly expanded = signal(false);
+
+  constructor() {
+    effect(() => this.expanded.set(this.open()));
+  }
+
+  protected toggle(): void {
+    this.expanded.update((v) => !v);
+  }
+}
+
+@Component({
+  selector: 'ngmd-accordion',
+  template: `
+    <div class="flex flex-col gap-2">
+      <ng-content></ng-content>
+    </div>
+  `,
+})
+export class NgmdAccordion {}

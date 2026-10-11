@@ -1,3 +1,5 @@
+@use 'sass:string';
+
 @mixin focus-ring($offset: 2px) {
   outline: 2px solid var(--accent);
   outline-offset: $offset;
@@ -33,6 +35,15 @@
   color: #{$color};
 }
 
+// Tinted pill, badge or chip in a theme tone (ok, warn, danger or accent).
+// The text uses the stronger `--<tone>-text` token so it keeps 4.5:1 when the
+// pill sits on a hovered or selected row.
+@mixin tint($tone) {
+  border-color: color-mix(in srgb, var(--#{$tone}) 30%, transparent);
+  background: color-mix(in srgb, var(--#{$tone}) 12%, transparent);
+  color: var(--#{$tone}-text);
+}
+
 @mixin truncate {
   overflow: hidden;
   min-width: 0;
@@ -42,4 +53,19 @@
 
 @mixin enter($duration: 0.35s) {
   animation: enter $duration var(--ease) both;
+}
+
+@mixin light {
+  $host: '';
+  @if not string.index('#{&}', ':host') {
+    $host: ':host ';
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme='dark']) #{$host}& {
+      @content;
+    }
+  }
+  :root[data-theme='light'] #{$host}& {
+    @content;
+  }
 }

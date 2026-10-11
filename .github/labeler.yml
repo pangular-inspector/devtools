@@ -1,0 +1,28 @@
+'area: panel':
+  - changed-files:
+      - any-glob-to-any-file: ['app/**']
+
+'area: package':
+  - changed-files:
+      - any-glob-to-any-file: ['packages/devtools/**', 'bin.mjs']
+
+'area: agents':
+  - changed-files:
+      - any-glob-to-any-file: ['packages/devtools/src/devframe.ts', 'packages/devtools/src/rpc/**']
+
+'area: extension':
+  - changed-files:
+      - any-glob-to-any-file: ['extension/**']
+
+'area: demo':
+  - changed-files:
+      - any-glob-to-any-file: ['src/**', 'public/**', 'examples/**']
+
+'area: docs':
+  - changed-files:
+      - any-glob-to-any-file: ['apps/docs/**', 'docs/**', '*.md']
+
+'area: ci':
+  - changed-files:
+      - any-glob-to-any-file:
+          ['.github/**', '.githooks/**', 'scripts/**', '.claude/**', 'AGENTS.md', 'CLAUDE.md']

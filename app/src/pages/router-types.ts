@@ -1,4 +1,5 @@
 import type { DevframeRpcClient } from 'devframe/client';
+import { rpcTry } from '../rpc';
 
 export interface ActiveRoute {
   path: string;
@@ -59,6 +60,24 @@ export interface NavigationRecord {
   probe?: boolean;
 }
 
+export interface LoopHop {
+  id: number;
+  from: string;
+  to: string;
+  via: string;
+  by?: string;
+}
+
+export interface NavigationLoop {
+  kind: 'redirect' | 'burst' | 'config';
+  ids: number[];
+  cycle: string[];
+  hops: LoopHop[];
+  guards: string[];
+  bounces: number;
+  end: string;
+}
+
 export interface RouteNode {
   id: string;
   path: string;
@@ -112,9 +131,12 @@ export interface OutletInfo {
   route?: string;
   component?: string;
   element?: string;
+  /** Stable id of the routed component's host element, as the component tree uses it. */
+  devtoolsId?: string;
   activated: boolean;
   detached?: boolean;
   inputs?: { input: string; source: string }[];
+  data?: string;
   children?: OutletInfo[];
 }
 
@@ -154,14 +176,17 @@ export interface RouterPage {
     pending?: { id: number; url: string };
   } | null;
   navigations: NavigationRecord[];
+  dropped?: number;
   generation?: number;
   config?: RouteNode[];
+  configTruncated?: number;
   activeIds?: string[];
   setup?: RouterSetup;
   outlets?: OutletInfo[];
   links?: LinkInfo[];
   preloads?: { path: string; startedAt: number; ms?: number; failed?: boolean }[];
   instrumented?: boolean;
+  loops?: NavigationLoop[];
 }
 
 export interface LintFinding {
@@ -173,27 +198,34 @@ export interface LintFinding {
   angular: string;
 }
 
-export function routerCall<T>(
-  client: DevframeRpcClient | null,
-  name: string,
-  arg?: unknown,
-): Promise<T | null> {
-  if (!client) return Promise.resolve(null);
-  const rpc = client.scope('ng-devtools').rpc as unknown as {
-    call: (name: string, ...args: unknown[]) => Promise<unknown>;
-  };
-  return rpc.call(name, ...(arg === undefined ? [] : [arg])).then(
-    (value) => value as T,
-    () => null,
+export type LintResult =
+  | { checked: true; findings: LintFinding[] }
+  | { checked: false; reason: 'no-page' | 'events-only' | 'no-config' };
+
+export const routerCall = rpcTry;
+
+export function isReplayableUrl(url: string): boolean {
+  return (
+    url.startsWith('/') &&
+    !url.startsWith('//') &&
+    !/^\/*[a-z][a-z0-9+.-]*:/i.test(url) &&
+    !url.includes('[redacted]') &&
+    url.length <= 2000
   );
 }
 
-export function routerAction(
+export const PAGE_UNREACHABLE = 'Could not reach the page.';
+
+export async function routerAction(
   client: DevframeRpcClient | null,
   pageId: string | undefined,
   request: Record<string, unknown>,
-): Promise<Record<string, unknown> | null> {
-  return routerCall<Record<string, unknown>>(client, 'request-router-action', { pageId, request });
+): Promise<Record<string, unknown>> {
+  const result = await routerCall<Record<string, unknown>>(client, 'request-router-action', {
+    pageId,
+    request,
+  });
+  return result ?? { error: PAGE_UNREACHABLE };
 }
 
 export const SHARED_STYLES = `
@@ -247,17 +279,17 @@ export const SHARED_STYLES = `
   .badge[data-tone='good'] {
     border-color: color-mix(in srgb, var(--ok) 30%, transparent);
     background: color-mix(in srgb, var(--ok) 12%, transparent);
-    color: var(--ok);
+    color: var(--ok-text);
   }
   .badge[data-tone='warn'] {
     border-color: color-mix(in srgb, var(--warn) 30%, transparent);
     background: color-mix(in srgb, var(--warn) 12%, transparent);
-    color: var(--warn);
+    color: var(--warn-text);
   }
   .badge[data-tone='bad'] {
     border-color: color-mix(in srgb, var(--danger) 30%, transparent);
     background: color-mix(in srgb, var(--danger) 12%, transparent);
-    color: var(--danger);
+    color: var(--danger-text);
   }
   button.small {
     display: inline-flex;
@@ -455,14 +487,6 @@ export const SHARED_STYLES = `
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-  }
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
   @media (max-width: 480px) {
     .facts {

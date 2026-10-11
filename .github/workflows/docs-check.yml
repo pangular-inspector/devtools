@@ -1,0 +1,42 @@
+name: Docs check
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Docs updated with the code
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          NO_DOCS: ${{ contains(github.event.pull_request.labels.*.name, 'no-docs') }}
+        run: |
+          changed=$(git diff --name-only "$BASE...$HEAD")
+          code=$(printf '%s\n' "$changed" | grep -E '^(packages/devtools/src/|app/src/|extension/[^/]+$)' | grep -vE '(__tests__/|\.(spec|test)\.ts$)' || true)
+          docs=$(printf '%s\n' "$changed" | grep -E '^apps/docs/src/content/' || true)
+          if [ -z "$code" ]; then
+            echo "No code changes that need docs."
+          elif [ -n "$docs" ]; then
+            echo "Code and docs both changed."
+          elif [ "$NO_DOCS" = "true" ]; then
+            echo "Code changed without docs, marked no-docs."
+          else
+            echo "::warning title=Docs not updated::This pull request changes code but no page in apps/docs/src/content. Update the docs in this pull request, or add the no-docs label and say why in the description."
+            printf '%s\n' "$code"
+          fi

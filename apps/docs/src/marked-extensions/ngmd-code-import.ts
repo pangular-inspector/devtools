@@ -1,0 +1,108 @@
+import {readFileSync} from 'node:fs';
+import type {MarkedExtension} from 'marked';
+import {highlightCode} from './shiki-shared.ts';
+import {escapeHtml} from './escape-html.ts';
+import {findFences, getAttr, replaceFences} from './fences.ts';
+import {resolveInside} from '../../plugin-utils.ts';
+import config from '../ngmd.config.ts';
+
+/**
+ * Fenced code blocks can import their content from a source file by adding
+ * `file="..."` to the info string. Supports GitHub-style `#L5-L20` line
+ * ranges so docs reference the *real* code instead of a hand-typed copy
+ * that rots out of sync.
+ *
+ *   ```ts file="src/app/hello.ts"
+ *   ```
+ *
+ *   ```ts file="src/app/hello.ts#L5-L20"
+ *   ```
+ *
+ * Renders as a `<div class="ngmd-code-import">` wrapper with a header bar
+ * linking to the file on GitHub (via `ngmd.config.ts > site.githubUrl`).
+ * Lines marked `// ngmd-ignore-line` are stripped from the imported snippet.
+ *
+ * Pre-rendered through the shared shiki highlighter so the output is one
+ * self-contained HTML block — marked never sees the inner fence.
+ */
+
+const IGNORE_LINE_RE = /^.*\/\/\s*ngmd-ignore-line\s*$/;
+
+function loadFile(spec: string): {code: string; rangeFragment: string} {
+  const [path, range] = spec.split('#');
+  let content = readFileSync(resolveInside(process.cwd(), path), 'utf8').replace(/\r\n?/g, '\n');
+
+  let rangeFragment = '';
+  if (range) {
+    const m = range.match(/^L(\d+)(?:-L?(\d+))?$/);
+    if (!m) throw new Error(`invalid line range "#${range}", expected #L5 or #L5-L20`);
+    const start = parseInt(m[1], 10);
+    const end = m[2] ? parseInt(m[2], 10) : start;
+    const lines = content.replace(/\n$/, '').split('\n');
+    if (start < 1 || end < start || end > lines.length) {
+      throw new Error(`line range "#${range}" does not fit the file's ${lines.length} lines`);
+    }
+    content = lines.slice(start - 1, end).join('\n');
+    rangeFragment = m[2] ? `#L${start}-L${end}` : `#L${start}`;
+  }
+
+  const filtered = content
+    .split('\n')
+    .filter((l) => !IGNORE_LINE_RE.test(l))
+    .join('\n');
+
+  return {code: filtered.replace(/\n+$/, ''), rangeFragment};
+}
+
+function githubBlobUrl(filePath: string, rangeFragment: string): string {
+  const repo = config.site.githubUrl.replace(/\.git$/, '');
+  // encodeURI keeps `/` and `.` as-is but escapes brackets, so paths like
+  // `src/app/pages/[...slug].page.ts` resolve on GitHub instead of breaking.
+  const dir = config.site.githubDir ? `${config.site.githubDir.replace(/^\/+|\/+$/g, '')}/` : '';
+  return `${repo}/blob/${config.site.githubBranch ?? 'main'}/${dir}${encodeURI(filePath)}${rangeFragment}`;
+}
+
+export const ngmdCodeImportExtension: MarkedExtension = {
+  hooks: {
+    async preprocess(markdown: string): Promise<string> {
+      const matches: {
+        start: number;
+        end: number;
+        lang: string;
+        filePath: string;
+        rangeFragment: string;
+        code: string;
+      }[] = [];
+
+      for (const f of findFences(markdown)) {
+        const spec = getAttr(f.attrs, 'file');
+        if (!spec) continue;
+        try {
+          const {code, rangeFragment} = loadFile(spec);
+          matches.push({
+            start: f.start,
+            end: f.end,
+            lang: f.lang,
+            filePath: spec.split('#')[0],
+            rangeFragment,
+            code,
+          });
+        } catch (e) {
+          const msg = (e as Error).message ?? String(e);
+          console.warn(`[ngmd-code-import] failed to load "${spec}": ${msg}`);
+        }
+      }
+      if (matches.length === 0) return markdown;
+
+      const renders = await Promise.all(
+        matches.map(async (mt) => {
+          const codeHtml = await highlightCode(mt.code, mt.lang);
+          const headerLabel = mt.filePath + (mt.rangeFragment || '');
+          const headerHtml = `<a class="ngmd-code-import__header" href="${escapeHtml(githubBlobUrl(mt.filePath, mt.rangeFragment))}" target="_blank" rel="noopener noreferrer">${escapeHtml(headerLabel)}</a>`;
+          return `<div class="ngmd-code-import">${headerHtml}${codeHtml}</div>`;
+        }),
+      );
+      return replaceFences(markdown, matches, renders);
+    },
+  },
+};
