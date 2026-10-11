@@ -10,7 +10,9 @@ import { Application, isAndroid } from '@nativescript/core';
 import { connectDevframe } from 'devframe/client';
 import { keepaliveDue } from './change-detection.ts';
 import { collectComponentTree, type ComponentDebugNg } from './component-tree.ts';
+import { configFromConnection } from './config.ts';
 import { elementById } from './element-id.ts';
+import { setRedaction } from './forms-privacy.ts';
 import { hostBySelector } from './host-tree.ts';
 import { collectInjectorTree } from './injector-tree.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
@@ -156,6 +158,7 @@ async function startSession(
   intervalMs: number,
 ): Promise<() => void> {
   const my = rpc.scope('pangular');
+  setRedaction(configFromConnection(rpc.connectionMeta).redaction);
   const pageId = Math.random().toString(36).slice(2, 6);
 
   const tree = nativeScriptTree(angularDebugApi, () => Application.getRootView() as NativeView);
@@ -290,7 +293,7 @@ async function startSession(
       const next = toSignalTarget(request, pageId);
       if (next === undefined) return;
       signalTarget = next;
-      void pushSignalGraph(true);
+      void pushSignalGraph(true).catch(() => {});
     },
   });
 
@@ -301,7 +304,7 @@ async function startSession(
     handler: (request: { pageId?: string; id?: string | null } | null) => {
       if (request?.pageId && request.pageId !== pageId) return;
       componentTarget = typeof request?.id === 'string' ? request.id : null;
-      void pushTree(true);
+      void pushTree(true).catch(() => {});
     },
   });
 
@@ -311,6 +314,7 @@ async function startSession(
     ngrx.stop();
     void Promise.allSettled([
       my.rpc.call('forget-component-page', pageId),
+      my.rpc.call('forget-signal-page', pageId),
       my.rpc.call('forget-injector-page', pageId),
       my.rpc.call('forget-ngrx-page', pageId),
     ]).finally(() => rpc.close?.());

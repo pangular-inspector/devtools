@@ -22,6 +22,7 @@ import {
   isHttpRuleStatus,
   type CacheSkip,
 } from '@pangular-inspector/devtools/config';
+import { prettyJson } from '../format';
 import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 
@@ -216,6 +217,31 @@ function pathOf(url: string): string {
     return url;
   }
 }
+
+const REDACTED_IN_URL = /\[redacted\]|%5Bredacted%5D/gi;
+
+/**
+ * A rule pattern for a recorded call: its path and query, without the origin, so it
+ * matches the relative client URL and the absolute SSR URL. A redacted value becomes
+ * `*`, because the real request carries the secret.
+ */
+function mockPattern(url: string): string {
+  return pathOf(url).replace(REDACTED_IN_URL, '*');
+}
+
+/** The preview as a mock body, when it is complete JSON (the rule form takes JSON only). */
+function jsonBody(preview: string): string | null {
+  const pretty = prettyJson(preview);
+  if (pretty !== null) return pretty;
+  try {
+    JSON.parse(preview);
+    return preview.trim();
+  } catch {
+    return null;
+  }
+}
+
+const STANDARD_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
 const MAX_RULES = 50;
 const MAX_PATTERN = 500;
@@ -482,7 +508,43 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           what="HTTP calls"
           limit="httpCalls"
         />
-        @if (timeline().length) {
+        <div class="filters" role="group" aria-label="Filter the HTTP timeline">
+          <div class="search">
+            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              id="timeline-search"
+              type="search"
+              placeholder="Find a URL or method…"
+              aria-label="Find a URL or method"
+              autocomplete="off"
+              spellcheck="false"
+              [value]="callQuery()"
+              (input)="callQuery.set($any($event.target).value)"
+              (keydown.escape)="callQuery.set('')"
+            />
+          </div>
+          <app-select
+            class="side-filter"
+            ariaLabel="Side"
+            [options]="sideOptions"
+            [(value)]="sideFilter"
+          />
+          <label class="inline failed-toggle">
+            <input
+              type="checkbox"
+              [checked]="failedOnly()"
+              (change)="failedOnly.set($any($event.target).checked)"
+            />
+            Failed only
+          </label>
+          <span class="total" aria-live="polite"
+            >{{ visibleCalls().length }} of {{ timeline().length }}</span
+          >
+        </div>
+        @if (visibleCalls().length) {
           <div class="table-wrap">
             <table>
               <thead>
@@ -497,7 +559,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 </tr>
               </thead>
               <tbody>
-                @for (entry of timeline(); track entry.side + entry.id) {
+                @for (entry of visibleCalls(); track entry.side + entry.id) {
                   <tr
                     [class.selected]="selectedCall()?.id === entry.id"
                     (click)="openCall(entry.id)"
@@ -558,6 +620,20 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               </tbody>
             </table>
           </div>
+        } @else if (timeline().length) {
+          <div class="empty no-match" role="status">
+            <p>No requests match.</p>
+            <p class="muted small">
+              @if (callQuery().trim()) {
+                Nothing matches “{{ callQuery().trim() }}” with these filters.
+              } @else {
+                None of the {{ timeline().length }} requests fit these filters.
+              }
+            </p>
+            <div class="empty-actions">
+              <button type="button" (click)="clearCallFilters()">Clear filters</button>
+            </div>
+          </div>
         } @else {
           <div class="empty">
             <p>No requests yet.</p>
@@ -577,7 +653,29 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           >
             <div class="preview-head">
               <h3 id="preview-heading" tabindex="-1">Response preview</h3>
-              <button type="button" class="ghost" (click)="closePreview()">Close</button>
+              <div class="preview-actions">
+                @if (!detail.error && detail.preview) {
+                  <button
+                    type="button"
+                    class="ghost"
+                    [attr.aria-label]="'Copy the response of ' + detail.method + ' ' + detail.url"
+                    (click)="copyPreview(detail)"
+                  >
+                    Copy
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="ghost"
+                  aria-controls="rule-form"
+                  [disabled]="!canWrite()"
+                  [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
+                  (click)="mockCall(detail)"
+                >
+                  Mock this request
+                </button>
+                <button type="button" class="ghost" (click)="closePreview()">Close</button>
+              </div>
             </div>
             <p class="preview-meta">
               <span class="method">{{ detail.method }}</span>
@@ -595,9 +693,11 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 Matched rule <code>{{ pattern }}</code>
               </p>
             }
-            <pre [class.error]="!!detail.error && !detail.cancelled">{{
-              detail.error ?? detail.preview ?? '(no body)'
-            }}</pre>
+            <pre
+              class="preview-body"
+              tabindex="0"
+              [class.error]="!!detail.error && !detail.cancelled"
+              >{{ detail.error ?? previewText(detail) ?? '(no body)' }}</pre>
           </div>
         }
       </section>
@@ -607,7 +707,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
         @if (!canWrite()) {
           <p id="http-writes-off" class="muted small">{{ writesOff }}</p>
         }
-        <form class="rule-form" (submit)="addRule($event)">
+        <form id="rule-form" class="rule-form" (submit)="addRule($event)">
           <label>
             <span>URL pattern <span class="hint">(substring or * glob)</span></span>
             <input
@@ -625,7 +725,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               <span id="rule-method-label">Method</span>
               <app-select
                 labelledBy="rule-method-label"
-                [options]="methodOptions"
+                [options]="methodOptions()"
                 [value]="draft().method"
                 (valueChange)="setDraft('method', $event ?? '')"
               />
@@ -1315,6 +1415,59 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       text-align: center;
       line-height: 1.5;
     }
+    .empty-actions {
+      display: flex;
+      justify-content: center;
+      margin-top: 8px;
+    }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin: 0 0 12px;
+    }
+    .search {
+      position: relative;
+      flex: 1 1 220px;
+      min-width: 0;
+    }
+    .search-icon {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      width: 14px;
+      height: 14px;
+      transform: translateY(-50%);
+      fill: none;
+      stroke: var(--text-3);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      pointer-events: none;
+    }
+    .search:focus-within .search-icon {
+      stroke: var(--accent);
+    }
+    .filters input[type='search'] {
+      height: var(--control-h);
+      padding-left: 34px;
+    }
+    .filters .side-filter {
+      flex: 0 0 140px;
+    }
+    .failed-toggle {
+      flex: none;
+      height: var(--control-h);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .total {
+      flex: none;
+      color: var(--text-2);
+      font-size: 12px;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
     .table-wrap {
       max-height: min(420px, 60vh);
       overflow: auto;
@@ -1528,10 +1681,19 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     }
     .preview-head {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 4px 8px;
       margin-bottom: 4px;
+    }
+    .preview-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    pre.preview-body {
+      max-height: 320px;
     }
     .preview-head h3 {
       margin: 0;
@@ -1878,8 +2040,32 @@ export class NetworkInspector {
     [...this.pageServerCalls(), ...(this.selected()?.calls ?? [])].sort((a, b) => b.at - a.at),
   );
 
+  readonly callQuery = signal('');
+  readonly sideFilter = signal<HttpSide | 'all' | null>('all');
+  readonly failedOnly = signal(false);
+  readonly sideOptions: SelectOption<HttpSide | 'all'>[] = [
+    { value: 'all', label: 'All sides' },
+    { value: 'server', label: 'SSR' },
+    { value: 'client', label: 'Client' },
+  ];
+
+  readonly visibleCalls = computed(() => {
+    const query = this.callQuery().trim().toLowerCase();
+    const side = this.sideFilter() ?? 'all';
+    const failedOnly = this.failedOnly();
+    return this.timeline().filter(
+      (c) =>
+        (side === 'all' || c.side === side) &&
+        (!failedOnly || this.isFailed(c)) &&
+        (!query ||
+          `${c.method} ${c.url}`.toLowerCase().includes(query) ||
+          `${c.method} ${pathOf(c.url)}`.toLowerCase().includes(query)),
+    );
+  });
+
+  /** Follows the visible rows, so the preview hides while filters hide its call. */
   readonly selectedCall = computed(
-    () => this.timeline().find((c) => c.id === this.selectedCallId()) ?? null,
+    () => this.visibleCalls().find((c) => c.id === this.selectedCallId()) ?? null,
   );
 
   readonly selectedRequest = computed(
@@ -2049,6 +2235,18 @@ export class NetworkInspector {
     return call.cancelled ? 'neutral' : this.statusTone(call.status);
   }
 
+  /** A failed call has a status of 400 or more, no status (ERR) or was cancelled. */
+  isFailed(call: HttpCall): boolean {
+    return !!call.cancelled || !call.status || call.status >= 400;
+  }
+
+  clearCallFilters() {
+    this.callQuery.set('');
+    this.sideFilter.set('all');
+    this.failedOnly.set(false);
+    this.host.nativeElement.querySelector<HTMLInputElement>('#timeline-search')?.focus();
+  }
+
   rulePatternOf(call: HttpCall): string | null {
     if (call.rulePattern) return call.rulePattern;
     if (!call.ruleId) return null;
@@ -2059,6 +2257,43 @@ export class NetworkInspector {
     this.selectedCallId.set(id);
     afterNextRender(
       () => this.host.nativeElement.querySelector<HTMLElement>('#preview-heading')?.focus(),
+      { injector: this.injector },
+    );
+  }
+
+  /** The preview as shown: JSON indented by 2 spaces, other text as recorded (both already redacted). */
+  previewText(call: HttpCall): string | undefined {
+    if (call.preview === undefined) return undefined;
+    return prettyJson(call.preview) ?? call.preview;
+  }
+
+  async copyPreview(call: HttpCall) {
+    const text = this.previewText(call);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      this.message.set('Copied.');
+    } catch {
+      this.message.set('The clipboard is not available here.');
+    }
+  }
+
+  /** Fills the fault rule form from a recorded call and moves focus to it. Nothing is saved. */
+  mockCall(call: HttpCall) {
+    const method = call.method.toUpperCase();
+    const pattern = mockPattern(call.url);
+    const body = call.error || !call.preview ? null : jsonBody(call.preview);
+    this.draft.set({ ...EMPTY_DRAFT, pattern, method, body: body ?? '' });
+    const what = `${method} ${pattern}`;
+    this.message.set(
+      body
+        ? `Filled in a rule for ${what} with the preview as its body. Check it, then add the rule.`
+        : call.preview && !call.error
+          ? `Filled in a rule for ${what}. The preview is not complete JSON, so it is not used as the body.`
+          : `Filled in a rule for ${what}. Set a status, a delay or a body, then add the rule.`,
+    );
+    afterNextRender(
+      () => this.host.nativeElement.querySelector<HTMLInputElement>('#rule-pattern')?.focus(),
       { injector: this.injector },
     );
   }
@@ -2102,10 +2337,13 @@ export class NetworkInspector {
     this.pages().map((page) => ({ value: page.pageId, label: page.title || page.url })),
   );
 
-  readonly methodOptions: SelectOption[] = [
-    { value: '', label: 'Any' },
-    ...['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => ({ value: m, label: m })),
-  ];
+  /** The usual methods, plus the draft's own when "Mock this request" filled in another one. */
+  readonly methodOptions = computed<SelectOption[]>(() => {
+    const draft = this.draft().method;
+    const methods =
+      draft && !STANDARD_METHODS.includes(draft) ? [...STANDARD_METHODS, draft] : STANDARD_METHODS;
+    return [{ value: '', label: 'Any' }, ...methods.map((m) => ({ value: m, label: m }))];
+  });
 
   readonly targetOptions: SelectOption<HttpRule['target']>[] = [
     { value: 'both', label: 'SSR + client' },

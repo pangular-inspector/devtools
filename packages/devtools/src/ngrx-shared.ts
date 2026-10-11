@@ -118,6 +118,8 @@ export interface NgrxPageReport {
   stores: NgrxSignalStoreInfo[];
   classic: NgrxClassicStoreInfo | null;
   log: NgrxLogEntry[];
+  /** The newest seq the server confirmed before this report; `log` holds only later entries. */
+  since?: number;
   /** Entries sent earlier that Store DevTools can no longer restore. */
   unrestorable?: NgrxUnrestorableUpdate[];
 }

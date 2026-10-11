@@ -121,14 +121,35 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
           timing.push(`resolve;dur=${sum((n) => n.resolvers?.ms)}`);
         }
         const existing = headerText(res.getHeader('server-timing'));
-        // A headers object passed to writeHead would override setHeader, so merge into it.
-        const headers = args.find(
-          (arg, i) => i > 0 && arg && typeof arg === 'object' && !Array.isArray(arg),
-        ) as OutgoingHttpHeaders | undefined;
-        const passed = headers ? headerText(headers['server-timing']) : undefined;
-        const value = [existing, passed, ...timing].filter(Boolean).join(', ');
-        if (headers && passed !== undefined) headers['server-timing'] = value;
-        else res.setHeader('server-timing', value);
+        const merge = (passed?: string) => [existing, passed, ...timing].filter(Boolean).join(', ');
+        // Header names are case-insensitive, so `Server-Timing` counts as the same header.
+        const isTiming = (name: unknown) => String(name).toLowerCase() === 'server-timing';
+        // Headers passed to writeHead would override setHeader, so merge into them. Node takes
+        // an object, a flat `[name, value, ...]` array or `[name, value]` pairs.
+        const slot = args.findIndex((arg, i) => i > 0 && arg && typeof arg === 'object');
+        const headers = args[slot];
+        if (Array.isArray(headers)) {
+          // Work on a copy so the caller's array is left as it was.
+          const raw = [...headers] as unknown[];
+          const pairs = Array.isArray(raw[0]);
+          const i = raw.findIndex((entry, n) =>
+            pairs ? isTiming((entry as unknown[])[0]) : n % 2 === 0 && isTiming(entry),
+          );
+          // Added to the array, not with setHeader: Node rejects pairs once a header is set.
+          if (i < 0)
+            raw.push(...(pairs ? [['server-timing', merge()]] : ['server-timing', merge()]));
+          else if (pairs) {
+            const [name, value] = raw[i] as [string, string | string[]];
+            raw[i] = [name, merge(headerText(value))];
+          } else raw[i + 1] = merge(headerText(raw[i + 1] as string | string[]));
+          args[slot] = raw;
+        } else {
+          const object = headers as OutgoingHttpHeaders | undefined;
+          const passedKey = object ? Object.keys(object).find(isTiming) : undefined;
+          const passed = passedKey ? headerText(object?.[passedKey]) : undefined;
+          if (object && passedKey && passed !== undefined) object[passedKey] = merge(passed);
+          else res.setHeader('server-timing', merge());
+        }
       }
       return (writeHead as (...a: unknown[]) => ServerResponse).apply(this, args);
     } as typeof res.writeHead;
@@ -160,12 +181,16 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
       // Angular's Node adapter flushes headers before the body, which would fix the old content-length.
       res.flushHeaders = function () {} as typeof res.flushHeaders;
       res.setHeader('x-pangular-override', 'state-edit');
-      res.write = function (this: ServerResponse, chunk: unknown) {
+      // Callbacks wait until the held HTML is really sent.
+      const callbacks: ((error?: Error | null) => void)[] = [];
+      res.write = function (this: ServerResponse, chunk: unknown, ...rest: unknown[]) {
         if (chunk !== undefined && chunk !== null && typeof chunk !== 'function') {
           chunks.push(
             typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk as Uint8Array),
           );
         }
+        const callback = [chunk, ...rest].find((arg) => typeof arg === 'function');
+        if (callback) callbacks.push(callback as (typeof callbacks)[number]);
         return true;
       } as typeof res.write;
       res.end = function (this: ServerResponse, chunk?: unknown, ...rest: unknown[]) {
@@ -176,7 +201,7 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
         }
         const html = Buffer.concat(chunks).toString('utf8');
         const isHtml = /\btext\/html\b/.test(headerText(res.getHeader('content-type')) ?? '');
-        const hasState = isHtml && /<script\b[^>]*\bid="[^"]*-state"/.test(html);
+        const hasState = isHtml && /<script\b[^>]*\sid="[^"]*-state"/.test(html);
         const edited = hasState ? editTransferState(html, list) : null;
         // Error pages and redirects carry no TransferState, so an edit there is not worth a note.
         for (const o of hasState ? list : []) {
@@ -198,8 +223,12 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
           res.setHeader('content-length', Buffer.byteLength(out));
         }
         res.flushHeaders = flushHeaders;
-        const last = rest.find((arg) => typeof arg === 'function');
-        return (flushEnd as (...a: unknown[]) => ServerResponse).call(this, out, last);
+        const last = [chunk, ...rest].find((arg) => typeof arg === 'function');
+        if (last) callbacks.push(last as (typeof callbacks)[number]);
+        const onSent = callbacks.length
+          ? (error?: Error | null) => callbacks.forEach((callback) => callback(error))
+          : undefined;
+        return (flushEnd as (...a: unknown[]) => ServerResponse).call(this, out, onSent);
       } as typeof res.end;
     }
 

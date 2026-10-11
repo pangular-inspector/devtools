@@ -32,7 +32,7 @@ Select a store to see:
 - Its kind, scope and declaring file. The file appears when the store's state keys match a `signalStore` or `signalState` in your source.
 - **Store DevTools on** or **Store DevTools off**, for the classic Store.
 - **Referenced by**: the component fields that hold it.
-- **State**, **Computed** and **Methods**, with a call count per method. The tab tags `signalMethod` and `rxMethod` members. Once a method has been called, its chip also shows the average and last call duration, in milliseconds.
+- **State**, **Computed** and **Methods**, with a call count per method. **Copy** next to **State** copies the state as shown in the panel, with secrets already redacted. The copy is the panel's formatted text, not strict JSON. The tab tags `signalMethod` and `rxMethod` members. Once a method has been called, its chip also shows the average and last call duration, in milliseconds.
 - **Entities**, for a `signalStore` that calls `withEntities()`. One group per collection, with the entity count and the ids as chips. A group past 30 ids shows the first 30 and a count of the rest.
 
 ### Change log
@@ -45,7 +45,9 @@ Signal stores get a **Change log**. The classic Store gets an **Action log**. Ea
 | `effect`   | An NgRx effect. Effects send their actions through `Store.next`.              |
 | `reactive` | `store.dispatch(() => action)`, which dispatches again when a signal changes. |
 
-Open an entry to see its arguments, or the action and its **Origin** for the classic Store, and a **State diff** with the value before and after each change. The diff lists up to 50 changes. A method-call entry also shows its **Duration**, in milliseconds. An entry caused by a dispatched event shows the event under **Caused by event**. An action entry also has **Dispatch again**.
+Open an entry to see its arguments, or the action and its **Origin** for the classic Store, and a **State diff** with the value before and after each change. The diff lists up to 50 changes. A method-call entry also shows its **Duration**, in milliseconds. An entry caused by a dispatched event shows the event under **Caused by event**. An action entry also has **Dispatch again**. **Copy** next to **State diff** copies that entry's diff in the same format as **State**, one object per change with its `path`, `op`, `before` and `after`. An entry that changed nothing has no diff to copy.
+
+Entry numbers start at 1 again when the app reloads. So when the app reloads, or the selected page closes and the tab shows another one, the open entry closes and a pending **Restore** confirmation is cancelled.
 
 ### Events
 
@@ -187,6 +189,10 @@ The devtools replace state keys with secret-looking names with `[redacted]`, at 
 ### Action origin
 
 The origin comes from the Store calls made while the page is connected. A `store.dispatch(() => action)` that started before the overlay connected shows as `dispatch`. An action sent straight to `ActionsSubject` has no origin.
+
+### Copy needs clipboard access
+
+The copy buttons use the browser clipboard. If the panel cannot write to it, for example in a page without clipboard permission, the tab says **The clipboard is not available here.** instead of **Copied.**
 
 ### Write actions
 
