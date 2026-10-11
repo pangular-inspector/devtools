@@ -199,7 +199,7 @@ With `plugins.CapacitorHttp.enabled`, Capacitor sends `fetch` through the native
 
 ## Plugin calls
 
-The **Capacitor** tab shows the app's plugins, its plugin calls with their arguments and outcome, and its listeners. Native calls show up once the overlay connects. To also log the calls the app makes at startup, and the calls a web implementation answers, load `@pangular-inspector/devtools/capacitor-hook` from the polyfills of your development configuration. See [Capacitor](../inspectors/capacitor.md#web-calls).
+The **Capacitor** tab shows the app's plugins, its plugin calls with their arguments and outcome, and its listeners. Native calls show up once the overlay connects. A third-party plugin shows up like the official ones. For example, with [@erkamyaman/capacitor-foldable](https://www.npmjs.com/package/@erkamyaman/capacitor-foldable), the tab lists the calls to `Foldable.getFoldState()` and the `foldStateChange` listener, and its **Plugin state** card shows the fold state and posture they reported. To also log the calls the app makes at startup, and the calls a web implementation answers, load `@pangular-inspector/devtools/capacitor-hook` from the polyfills of your development configuration. See [Capacitor](../inspectors/capacitor.md#web-calls).
 
 ## Configuration keys
 

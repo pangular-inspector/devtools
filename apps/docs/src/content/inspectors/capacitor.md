@@ -15,6 +15,22 @@ The tab appears in the panel while a Capacitor app reports. In the hub, the **Ca
 
 ## What it shows
 
+### Summary
+
+A strip at the top of the tab sums up the page:
+
+| Item              | What it says                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| **Platform**      | The platform, and whether it is native or web.                                                        |
+| **Calls**         | Every call logged. Select it to show all calls again.                                                 |
+| **Failed**        | Calls that rejected. Select it to keep only those.                                                    |
+| **Slow, 500 ms+** | Calls that took 500 ms or more, or have waited that long for an answer. Select it to keep only those. |
+| **Pending**       | Calls without an answer yet. Select it to keep only those.                                            |
+| **CapacitorHttp** | **On**, **Off** or **Unknown**, as in [Environment](#environment).                                    |
+| **Plugin hints**  | How many rows of the [Plugins](#plugins) table have a note.                                           |
+
+The selected count is marked as pressed, and selecting it again shows all calls. The call counts are left out on a page that logs no calls. A screen reader hears the strip change at most every two seconds, and hears nothing when a call arrives in the list.
+
 ### Environment
 
 | Field             | What it is                                                                                                                       |
@@ -29,33 +45,76 @@ The Capacitor version is not available at runtime, so the tab doesn't show it. W
 
 ### Plugin calls
 
-Each call, newest first, with its time, `Plugin.method()`, its outcome and its duration. The chips say:
+Each call, newest first: `Plugin.method()`, its status, its duration, whether it went to the native bridge, and its time. The status chips have an icon and a label:
 
 | Chip                | Meaning                                                                          |
 | ------------------- | -------------------------------------------------------------------------------- |
 | **OK**              | The call resolved.                                                               |
 | **Error**           | The call rejected.                                                               |
 | **Not implemented** | The platform has no implementation for it: the error code is `UNIMPLEMENTED`.    |
-| **Pending**         | No answer yet.                                                                   |
+| **Pending**         | No answer yet. The row shows how long it has waited, such as `waiting 3 s`.      |
 | **native**, **web** | Whether the call went to the native bridge, or a web implementation answered it. |
 | **stream**          | A method that calls back more than once, such as `Geolocation.watchPosition`.    |
 
-Search by plugin or method, and check **Only failed** to keep the calls that rejected. Select a call to see its arguments, and its result or its error with the code. A stream shows its latest result and how many times it called back.
+A bar next to each duration compares it with the slowest call in the list.
+
+Search by plugin or method, and pick **All calls**, **Failed**, **Slow (500 ms or more)** or **Pending** in the menu next to the search, or select a count in the [summary](#summary). When nothing matches, the tab says which filters hide the calls, with **Clear filters**.
+
+The list is one stop for the Tab key. Use the arrow keys, `Home` and `End` to move between calls, and `Enter` to select one. A selected call stays selected while more calls arrive.
+
+### Call details
+
+A selected call shows three tabs:
+
+| Tab                     | What it shows                                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Arguments**           | The arguments, masked.                                                                                      |
+| **Result** or **Error** | The result, or the error with its code. A stream shows its latest result and how many times it called back. |
+| **Timing**              | When the call started and finished, and how long it took or has waited.                                     |
+
+Use the arrow keys, `Home` and `End` to move between the tabs.
+
+**Copy as JSON** copies the call as the tab holds it. **Copy as code** copies the call as code to paste into the app:
+
+```ts
+await Camera.getPhoto({
+  quality: 90,
+});
+```
+
+Both copy the masked values the tab holds, so a masked value stays masked.
 
 ### Plugins
 
 Every plugin the app imported or the native project has:
 
-| Column        | What it says                                                                                                                                                                                                                                           |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Available** | `Capacitor.isPluginAvailable()` on this platform.                                                                                                                                                                                                      |
-| **Imported**  | The app registered it with `registerPlugin()`, usually by importing its package. On iOS and Android this is **Unknown** unless the [Capacitor hook](#web-calls) loads before `@capacitor/core`, because the native layer lists every installed plugin. |
-| **Native**    | The native project has it.                                                                                                                                                                                                                             |
-| **Note**      | A plugin the app imports that is not available, with a hint to run `npx cap sync`, or a native plugin the app does not import. Plugins `@capacitor/core` registers itself, such as `WebView` and `CapacitorHttp`, get no hint.                         |
+| Column        | What it says                                                                                                                                                                                                                                                                |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Available** | `Capacitor.isPluginAvailable()` on this platform.                                                                                                                                                                                                                           |
+| **Imported**  | The app registered it with `registerPlugin()`, usually by importing its package. On iOS and Android this is **Unknown** unless the [Capacitor hook](#web-calls) loads before `@capacitor/core`, because the native layer lists every installed plugin.                      |
+| **Native**    | The native project has it.                                                                                                                                                                                                                                                  |
+| **Note**      | A plugin the app imports that is not available, with the command to run, such as `npx cap sync android`, and a **Copy** button. Or a native plugin the app does not import. Plugins `@capacitor/core` registers itself, such as `WebView` and `CapacitorHttp`, get no note. |
 
 ### Listeners
 
-Each `addListener` registration: plugin, event, how many events it received, the time of the last one, and whether it is still active. The tab counts events and doesn't keep their payloads.
+Each `addListener` registration: plugin, event, how many events it received, the last event, and whether it is still active. **Last event** shows the payload of the last event, masked like a call result, and its time. Only the last event is kept, not a history.
+
+When the same plugin and event have more than one active listener, each of their rows says how many, such as **2 active listeners: possible leak**. This often means a component adds a listener and never removes it.
+
+### Plugin state
+
+Some plugins get a card with their current state, read from what the app already received: the results of its successful calls and the last event of its listeners. The panel never calls the plugin. Each field says where it came from and when, such as `from foldStateChange, 3 s ago`, or **Not reported yet** when the app never read it. The newest value wins.
+
+The card shows when the page has the plugin. One plugin has a card: `Foldable`, from [@erkamyaman/capacitor-foldable](https://www.npmjs.com/package/@erkamyaman/capacitor-foldable).
+
+| Field                 | Read from                                                                |
+| --------------------- | ------------------------------------------------------------------------ |
+| **Fold state**        | `state` of `getFoldState()` and `foldStateChange`                        |
+| **Posture**           | `posture` of `getFoldState()` and `foldStateChange`                      |
+| **Hinge orientation** | `hingeOrientation` of `getFoldState()` and `foldStateChange`             |
+| **Hinge angle**       | `angle` of `getHingeAngle()` and `hingeAngleChange`                      |
+| **Active display**    | `activeDisplay` of `getFoldState()` and `foldStateChange`                |
+| **Size class**        | `widthClass` and `heightClass` of `getSizeClass()` and `sizeClassChange` |
 
 ## Where the data comes from
 
@@ -98,13 +157,13 @@ The overlay usually starts after bootstrap, so calls your app makes at startup, 
 
 ## Redaction
 
-Arguments, results and errors are masked like other live values, on the page and again on the server with its own [`redaction`](../getting-started/configuration.md#redaction) config:
+Arguments, results, errors and the last event of each listener are masked like other live values, on the page and again on the server with its own [`redaction`](../getting-started/configuration.md#redaction) config:
 
 - Fields with a secret-looking name, JWTs and bearer tokens are masked.
 - Strings are masked like HTTP bodies before they are cut: a JSON string or a form body (`password=...`) has its secret fields masked.
 - A `value` stored under a secret-looking `key` is masked in the arguments and in the result, as in `Preferences.set({key: 'authToken', value})`. Only this shape is recognised: the name has to be in a field called `key`, next to a field called `value`.
 - CapacitorHttp request URLs are masked like the URLs in **SSR & HTTP**, and secret headers are masked by name.
-- Long strings, such as base64 photos, are cut.
+- Long strings, such as base64 photos, are cut. A listener's last event is cut shorter, at 200 characters a string.
 
 Values that no rule recognizes as secret are shown as they are.
 
@@ -112,10 +171,10 @@ The overlay leaves its own requests to the devtools server out of the log.
 
 ## Agent tools
 
-| Tool                     | What it answers                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------- |
-| `list-capacitor-calls`   | Recent plugin calls, with filters for a plugin, failed calls and slow calls.    |
-| `list-capacitor-plugins` | The environment and every plugin, with the same hints as the **Plugins** table. |
+| Tool                     | What it answers                                                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `list-capacitor-calls`   | Recent plugin calls, with filters for a plugin, failed calls and slow calls, then the active listeners with their last event. |
+| `list-capacitor-plugins` | The environment and every plugin, with notes like the **Plugins** table.                                                      |
 
 See [Tools](../agents/tools.md#capacitor) for their arguments.
 
@@ -133,6 +192,9 @@ To turn the inspector off, set `inspectors.capacitor` to `false`. The tab, the d
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Does watching the calls change them?">
     No. The app gets a promise that settles the same way, with the same arguments and results, and a rejection the app leaves unhandled still reaches <code>unhandledrejection</code>. The hook passes everything through once it stops.
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="Does the plugin state card call the plugin?">
+    No. It reads the results and events the app already received. A field the app never read says <strong>Not reported yet</strong>. Call the method in your app, or add the listener, to fill it.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why are my startup calls missing?">
     They ran before the overlay started. Load the Capacitor hook from your polyfills. See <a href="#startup-calls">Startup calls</a>.
