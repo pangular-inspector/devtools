@@ -196,11 +196,13 @@ describe('RouteTree page switch', () => {
     field.dispatchEvent(new Event('input'));
   }
 
-  it('keeps one empty row status region in the page before any row reports', async () => {
+  it('keeps the row and filter status regions empty before anything reports', async () => {
     const fixture = mount(RouteTree, pageA, offline);
     await settle(fixture);
     expect(liveRegion(fixture).textContent?.trim()).toBe('');
-    expect(el(fixture).querySelectorAll('[role="status"]')).toHaveLength(1);
+    const regions = el(fixture).querySelectorAll('[role="status"]');
+    expect(regions).toHaveLength(2);
+    expect(Array.from(regions).map((r) => r.textContent?.trim())).toEqual(['', '']);
   });
 
   it("drops page A's results and typed params after switching to page B", async () => {
@@ -246,6 +248,85 @@ describe('RouteTree page switch', () => {
     expect(el(fixture).querySelector('.result')).toBeNull();
     expect(el(fixture).querySelector('tr.row-result')).toBeNull();
     expect(el(fixture).textContent).not.toContain('Navigation #5');
+  });
+});
+
+describe('RouteTree filter count', () => {
+  const routes: RouteNode[] = [
+    {
+      id: 'r1',
+      path: 'users',
+      fullPath: 'users',
+      kind: 'component',
+      component: 'Users',
+      children: [
+        { id: 'r2', path: ':id', fullPath: 'users/:id', kind: 'component', component: 'User' },
+      ],
+    },
+    { id: 'r3', path: 'about', fullPath: 'about', kind: 'component', component: 'About' },
+  ];
+
+  function filterInput(fixture: ComponentFixture<unknown>): HTMLInputElement {
+    return el(fixture).querySelector<HTMLInputElement>('input.filter')!;
+  }
+
+  function type(fixture: ComponentFixture<unknown>, value: string) {
+    const input = filterInput(fixture);
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+  }
+
+  function summary(fixture: ComponentFixture<unknown>): string {
+    return el(fixture).querySelector('.summary')?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  }
+
+  function filterStatus(fixture: ComponentFixture<unknown>): string {
+    const regions = el(fixture).querySelectorAll('p.visually-hidden[role="status"]');
+    return regions[1]?.textContent?.trim() ?? '';
+  }
+
+  it('shows "N of M routes" while a search filters the tree and says it once', async () => {
+    const fixture = mount(RouteTree, page({ config: routes }), offline);
+    await settle(fixture);
+    expect(summary(fixture)).toContain('3 route(s).');
+    expect(el(fixture).querySelector('.summary .count')).toBeNull();
+
+    type(fixture, 'users');
+    await settle(fixture);
+    expect(el(fixture).querySelector('.summary .count')?.textContent).toBe('2 of 3 routes');
+    expect(filterStatus(fixture)).toBe('2 of 3 routes match.');
+
+    type(fixture, 'zzz');
+    await settle(fixture);
+    expect(el(fixture).querySelector('.summary .count')?.textContent).toBe('0 of 3 routes');
+    expect(filterStatus(fixture)).toBe('No routes match.');
+  });
+
+  it('updates the count on a poll without speaking', async () => {
+    const fixture = mount(RouteTree, page({ config: routes }), offline);
+    await settle(fixture);
+    type(fixture, 'about');
+    await settle(fixture);
+    expect(filterStatus(fixture)).toBe('1 of 3 routes match.');
+
+    const more: RouteNode = { id: 'r4', path: 'contact', fullPath: 'contact', kind: 'component' };
+    fixture.componentRef.setInput('page', page({ config: [...routes, more], reportedAt: 2 }));
+    await settle(fixture);
+    expect(el(fixture).querySelector('.summary .count')?.textContent).toBe('1 of 4 routes');
+    expect(filterStatus(fixture)).toBe('1 of 3 routes match.');
+  });
+
+  it('clears the filter and the spoken count from the empty state', async () => {
+    const fixture = mount(RouteTree, page({ config: routes }), offline);
+    await settle(fixture);
+    type(fixture, 'zzz');
+    await settle(fixture);
+    button(fixture, 'Clear filter').click();
+    await settle(fixture);
+    expect(filterInput(fixture).value).toBe('');
+    expect(document.activeElement).toBe(filterInput(fixture));
+    expect(summary(fixture)).toContain('3 route(s).');
+    expect(filterStatus(fixture)).toBe('');
   });
 });
 

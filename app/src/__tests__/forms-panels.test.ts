@@ -285,6 +285,70 @@ describe('FormsInspector fields', () => {
   });
 });
 
+describe('FormsInspector field filters', () => {
+  async function mounted() {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve(''), [form]),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    return fixture;
+  }
+
+  function search(fixture: ComponentFixture<FormsInspector>): HTMLInputElement {
+    return (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      'input.filter[type="search"]',
+    )!;
+  }
+
+  function status(fixture: ComponentFixture<FormsInspector>): string {
+    const region = (fixture.nativeElement as HTMLElement).querySelector('.panel p[role="status"]');
+    return region?.textContent?.trim() ?? '';
+  }
+
+  it('offers Clear filters when the search and chips hide every field, and resets both', async () => {
+    const fixture = await mounted();
+    const input = search(fixture);
+    input.value = 'nothing';
+    input.dispatchEvent(new Event('input'));
+    fixture.componentInstance.active.set(new Set(['dirty']));
+    await settle(fixture);
+    expect(text(fixture)).toContain('No field path matches "nothing".');
+    expect(status(fixture)).toBe('');
+
+    button(fixture, 'Clear filters').click();
+    await settle(fixture);
+    expect(fixture.componentInstance.filter()).toBe('');
+    expect(fixture.componentInstance.active().size).toBe(0);
+    expect(search(fixture).value).toBe('');
+    expect(document.activeElement).toBe(search(fixture));
+    expect(button(fixture, 'Show details for email')).toBeDefined();
+    expect(status(fixture)).toBe('Filters cleared. Showing 3 fields.');
+  });
+
+  it('offers Clear filters when only a chip hides every field', async () => {
+    const fixture = await mounted();
+    const dirty = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLLabelElement>('.chips label'),
+    ).find((label) => label.textContent?.trim() === 'Dirty')!;
+    dirty.querySelector('input')!.click();
+    await settle(fixture);
+    expect(text(fixture)).toContain('No field matches the selected filters.');
+
+    button(fixture, 'Clear filters').click();
+    await settle(fixture);
+    expect(fixture.componentInstance.active().size).toBe(0);
+    expect(dirty.querySelector('input')!.checked).toBe(false);
+  });
+
+  it('shows no Clear filters while no filter is set', async () => {
+    const fixture = await mounted();
+    expect(() => button(fixture, 'Clear filters')).toThrow();
+  });
+});
+
 describe('FormsInspector status pills', () => {
   // Backgrounds of the stylesheet rules that apply to an element, in source order.
   function backgrounds(element: Element): string[] {

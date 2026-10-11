@@ -45,7 +45,7 @@ Each field shows its value, status, touched and dirty state, and errors. Extra f
 - **Signal Forms**: constraints (`min`, `max`, `minLength`, `maxLength`, `pattern`), `required`, `readonly` and `hidden`, a pending `debounce`, and disabled reasons.
 - **Reactive and template-driven**: whether validators and async validators are attached, the value `reset()` goes back to, `updateOn`, and the bound `ControlValueAccessor`.
 
-Filter by path, or with the **Invalid**, **Dirty**, **Touched**, **Disabled** and **Error not shown** chips. Hover a field to highlight its input in the page.
+Filter by path, or with the **Invalid**, **Dirty**, **Touched**, **Disabled** and **Error not shown** chips. If the filters hide every field, click **Clear filters** to reset the path filter and the chips. Focus returns to the path filter. Hover a field to highlight its input in the page.
 
 ### Error sources
 

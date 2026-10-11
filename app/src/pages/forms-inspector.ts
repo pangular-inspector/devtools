@@ -352,6 +352,7 @@ function countFields(node: FormFieldNode): number {
                 @case ('fields') {
                   <div class="filters">
                     <input
+                      #fieldFilter
                       class="filter"
                       type="search"
                       placeholder="Filter fields by path"
@@ -375,6 +376,7 @@ function countFields(node: FormFieldNode): number {
                       }
                     </fieldset>
                   </div>
+                  <p class="sr-only" role="status">{{ filterStatus() }}</p>
 
                   <div class="table-scroll" role="region" aria-label="Fields" tabindex="0">
                     <table class="fields">
@@ -531,10 +533,21 @@ function countFields(node: FormFieldNode): number {
                         } @empty {
                           <tr>
                             <td colspan="5" class="no-match">
-                              @if (filter()) {
-                                No field path matches "{{ filter() }}".
-                              } @else {
-                                No field matches the selected filters.
+                              <p>
+                                @if (filter()) {
+                                  No field path matches "{{ filter() }}".
+                                } @else {
+                                  No field matches the selected filters.
+                                }
+                              </p>
+                              @if (filtering()) {
+                                <button
+                                  type="button"
+                                  class="small"
+                                  (click)="clearFilters(fieldFilter)"
+                                >
+                                  Clear filters
+                                </button>
                               }
                             </td>
                           </tr>
@@ -1245,6 +1258,12 @@ function countFields(node: FormFieldNode): number {
       color: var(--text-2);
       text-align: center;
     }
+    .fields .no-match p {
+      margin: 0 0 10px;
+    }
+    .fields .no-match p:last-child {
+      margin-bottom: 0;
+    }
     .empty {
       display: grid;
       justify-items: center;
@@ -1329,6 +1348,10 @@ export class FormsInspector {
   readonly chips = CHIPS;
   readonly tab_ = signal<Tab>('fields');
   readonly active = signal(new Set<Chip>());
+  /** True while the path search or a chip hides fields, the same test `rows` applies. */
+  readonly filtering = computed(() => !!this.filter() || this.active().size > 0);
+  /** Spoken only after Clear filters, never on a poll. */
+  readonly filterStatus = signal('');
   readonly version = signal(0);
   readonly message = signal('');
 
@@ -1622,6 +1645,16 @@ export class FormsInspector {
   sourceText(error: FormFieldError) {
     const label = SOURCE_LABELS[error.source ?? ''] ?? error.source ?? '';
     return error.from !== undefined ? `${label} on ${error.from || 'the form'}` : label;
+  }
+
+  /** Resets the path search and the chips, then hands focus back to the search field. */
+  clearFilters(search: HTMLInputElement) {
+    this.filter.set('');
+    this.active.set(new Set());
+    const count = this.rows().length;
+    const message = `Filters cleared. Showing ${count} ${count === 1 ? 'field' : 'fields'}.`;
+    this.filterStatus.update((current) => (current === message ? `${message}\u00a0` : message));
+    search.focus();
   }
 
   onFilter(event: Event) {

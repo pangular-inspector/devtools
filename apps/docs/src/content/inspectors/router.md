@@ -56,6 +56,7 @@ Each navigation in a loop gets a **loop** badge and a red edge. Its details gain
 
 The live route config. The tab merges lazy children in once they load, and marks the active branch.
 
+- Filter the routes by path, component or declaring file. While the filter is set, the summary shows the count, for example "2 of 14 routes", and a screen reader announces it as you type. If nothing matches, click **Clear filter**.
 - **Test a URL** and click **Predict** to see which route matches it, or the nearest ones.
 - **Probe in app** runs the real matcher without navigating.
 - Fill in the params of a route and click **Go** to navigate to it. With a param left empty, **Go** marks the empty field and names the params to fill in.
