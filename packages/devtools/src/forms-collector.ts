@@ -142,7 +142,7 @@ export function attachForms(
   const lastValue = new Map<string, string>();
   const pendingSince = new Map<string, number>();
   const wrappedSubmits = new WeakSet<object>();
-  const signalRoots = new Map<object, { formId: string; unwrap: (() => void)[] }>();
+  const signalRoots = new Map<object, { formId: string; unwrap: Map<object, () => void> }>();
   const setupErrors: string[] = [];
   let foundById = new Map<string, FoundForm>();
   let fieldElements = new WeakMap<object, Element>();
@@ -231,7 +231,8 @@ export function attachForms(
     const entry = signalRoots.get(root);
     if (!entry) return;
     signalRoots.delete(root);
-    for (const unwrap of entry.unwrap.splice(0)) unwrap();
+    for (const unwrap of entry.unwrap.values()) unwrap();
+    entry.unwrap.clear();
     instrumentation?.forgetSignalRoot(root);
   }
 
@@ -284,25 +285,37 @@ export function attachForms(
 
   function wrapSignalSubmit(form: FoundForm) {
     let entry = signalRoots.get(form.root);
-    if (!entry) signalRoots.set(form.root, (entry = { formId: '', unwrap: [] }));
+    if (!entry) signalRoots.set(form.root, (entry = { formId: '', unwrap: new Map() }));
     entry.formId = idOf(form.root);
     const unwrap = entry.unwrap;
+    const reached = new Set<object>();
     const visit = (node: AnyRecord, depth: number) => {
-      wrapSubmitFlag(form.root, node, unwrap);
+      wrapSubmitFlag(form.root, node, unwrap, reached);
       if (depth >= 8) return;
       const children = read(() => node['structure'].materializedChildren() as AnyRecord[], []);
       for (const child of children.slice(0, 200)) visit(child, depth + 1);
     };
     visit(form.root, 0);
+    for (const [flag, restore] of unwrap) {
+      if (reached.has(flag)) continue;
+      restore();
+      unwrap.delete(flag);
+    }
   }
 
-  function wrapSubmitFlag(root: AnyRecord, node: AnyRecord, unwrap: (() => void)[]) {
+  function wrapSubmitFlag(
+    root: AnyRecord,
+    node: AnyRecord,
+    unwrap: Map<object, () => void>,
+    reached: Set<object>,
+  ) {
     const flag = read(() => node['submitState']['selfSubmitting'] as AnyRecord, null);
+    if (flag) reached.add(flag);
     if (!flag || wrappedSubmits.has(flag) || typeof flag['set'] !== 'function') return;
     wrappedSubmits.add(flag);
     const path = node === root ? '' : read(() => fieldPath(node), '');
     const original = flag['set'];
-    unwrap.push(() => {
+    unwrap.set(flag, () => {
       flag['set'] = original;
       wrappedSubmits.delete(flag);
     });
