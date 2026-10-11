@@ -109,6 +109,8 @@ The source-mode notice says to connect the overlay on Angular 20 or later for th
 
 Arrow keys, Home and End move the selection through the tree. The right arrow expands a row or moves to its first child. The left arrow collapses a row or moves to its parent. The first row is selected when nothing else is.
 
+If the selected injector leaves the page because its component or directive was destroyed, the details say so and a screen reader announces it. The tab doesn't pick another injector for you. Click **Show** with the first injector's name, or select a row.
+
 ## Agent tools
 
 | Tool or resource             | Kind     | What it does                                                                                                                                                                                                                                     |
