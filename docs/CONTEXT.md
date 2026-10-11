@@ -53,7 +53,7 @@ The server part an app mounts: `initPangularHub()` for Express, or the Vite plug
 _Avoid_: server (too broad), middleware, proxy
 
 **Dock**:
-The rail of entries the hub shows (Angular, NgRx, Analog, Angular Native, NativeScript and Capacitor), each opening a view of the panel (`hub-docks.ts`).
+The rail of entries the hub shows (All tools, then Angular, NgRx, Analog, Angular Native, NativeScript and Capacitor), each opening a view of the panel, or the full panel for All tools (`hub-docks.ts`).
 _Avoid_: sidebar, menu, tab bar
 
 **Panel**:

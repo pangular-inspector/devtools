@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hubDefaultOrigins, initPangularHub, type PangularHubOptions } from '../hub.ts';
 import { httpRegistry } from '../http-rules.ts';
-import { makeProject } from './analog-fixture.ts';
+import { BASE_FILES, makeProject } from './analog-fixture.ts';
 
 const hubs: { close: () => Promise<void> }[] = [];
 
@@ -17,7 +17,9 @@ async function boot(cwd: string) {
     title: dock.title,
     url: 'url' in dock ? dock.url : undefined,
     frameId: 'frameId' in dock ? dock.frameId : undefined,
+    defaultOrder: dock.defaultOrder ?? 0,
     badge: dock.badge,
+    badgeVariant: dock.badgeVariant,
     groupId: dock.groupId,
     visibility: dock.visibility,
   }));
@@ -52,10 +54,13 @@ afterEach(async () => {
 });
 
 describe('Pangular Inspector hub', () => {
-  it('adds a dock per tool, Analog included even outside Analog apps', async () => {
+  it('adds an All tools dock first, then a dock per tool, Analog included even outside Analog apps', async () => {
     const { docks } = await boot(makeProject({ 'package.json': '{}' }));
     const ours = docks.filter((d) => d.id.startsWith('pangular:'));
-    expect(ours.map((d) => [d.id, d.url])).toEqual([
+    // The rail puts lower orders first.
+    const rail = [...ours].sort((a, b) => a.defaultOrder - b.defaultOrder);
+    expect(rail.map((d) => [d.id, d.url])).toEqual([
+      ['pangular:all', '/__devframes/pangular/'],
       ['pangular:angular', '/__devframes/pangular/?view=angular'],
       ['pangular:ngrx', '/__devframes/pangular/?view=ngrx'],
       ['pangular:analog', '/__devframes/pangular/?view=analog'],
@@ -63,12 +68,89 @@ describe('Pangular Inspector hub', () => {
       ['pangular:nativescript', '/__devframes/pangular/?view=nativescript'],
       ['pangular:capacitor', '/__devframes/pangular/?view=capacitor'],
     ]);
+    expect(rail[0].title).toBe('All tools');
+    expect(rail[0].badge).toBeUndefined();
     expect(ours.filter((d) => d.title.endsWith('Coming Soon'))).toEqual([]);
-    expect(ours.find((d) => d.id === 'pangular:capacitor')?.title).toBe('Capacitor');
-    expect(ours.find((d) => d.id === 'pangular:angular-native')?.title).toBe('Angular Native');
-    expect(ours.some((d) => d.badge || d.groupId)).toBe(false);
+    expect(ours.some((d) => d.groupId)).toBe(false);
     expect(new Set(ours.map((d) => d.frameId))).toEqual(new Set(['pangular']));
     expect(docks.find((d) => d.id === 'pangular')?.visibility).toBe('false');
+  });
+
+  it('marks the docks of tools with nothing to show with a setup badge and says why', async () => {
+    const { docks } = await boot(makeProject({ 'package.json': '{}' }));
+    const status = Object.fromEntries(
+      docks
+        .filter((d) => d.id.startsWith('pangular:'))
+        .map((d) => [d.id, [d.title, d.badge, d.badgeVariant]]),
+    );
+    expect(status).toEqual({
+      'pangular:all': ['All tools', undefined, undefined],
+      'pangular:angular': ['Angular', undefined, undefined],
+      'pangular:ngrx': ['NgRx', undefined, undefined],
+      'pangular:analog': ['Analog: not an Analog app', 'setup', 'info'],
+      'pangular:angular-native': ['Angular Native: no app connected', 'setup', 'info'],
+      'pangular:nativescript': ['NativeScript', undefined, undefined],
+      'pangular:capacitor': ['Capacitor: no app connected', 'setup', 'info'],
+    });
+  });
+
+  it('shows the Analog dock plainly in an Analog app', async () => {
+    const { docks } = await boot(makeProject(BASE_FILES));
+    const analog = docks.find((d) => d.id === 'pangular:analog');
+    expect([analog?.title, analog?.badge]).toEqual(['Analog', undefined]);
+  });
+
+  it('clears a badge while the tool reports and puts it back when the data goes', async () => {
+    const { ctx } = await boot(makeProject({ 'package.json': '{}' }));
+    const update = vi.spyOn(ctx.docks, 'update');
+    const dock = (id: string) => {
+      const entry = ctx.docks.views.get(id);
+      return [entry?.title, entry?.badge];
+    };
+    const invoke = (name: string, arg: unknown) =>
+      ctx.rpc.invokeLocal(name as never, ...([arg] as never));
+    const capacitor = {
+      pageId: 'cap1',
+      url: '/',
+      title: 'App',
+      full: true,
+      info: {
+        platform: 'android',
+        native: true,
+        bridge: true,
+        webCalls: false,
+        env: { serverUrl: '', debug: false, logging: false, capacitorHttp: false, userAgent: 'UA' },
+        plugins: [],
+      },
+      calls: [],
+      listeners: [],
+      dropped: 0,
+    };
+
+    await invoke('pangular:push-capacitor', capacitor);
+    expect(dock('pangular:capacitor')).toEqual(['Capacitor', undefined]);
+    expect(update).toHaveBeenCalledTimes(1);
+    // More reports from the same app change nothing on the rail.
+    await invoke('pangular:push-capacitor', { ...capacitor, title: 'Trips' });
+    expect(update).toHaveBeenCalledTimes(1);
+
+    await invoke('pangular:push-component-tree', {
+      pageId: 'an42',
+      roots: [],
+      count: 0,
+      detail: null,
+      platform: 'angular-native',
+    });
+    expect(dock('pangular:angular-native')).toEqual(['Angular Native', undefined]);
+    // A browser page is no Angular Native app.
+    await invoke('pangular:push-component-tree', { pageId: 'web1', roots: [], count: 0 });
+    expect(update).toHaveBeenCalledTimes(2);
+
+    await invoke('pangular:forget-capacitor-page', 'cap1');
+    expect(dock('pangular:capacitor')).toEqual(['Capacitor: no app connected', 'setup']);
+    await invoke('pangular:forget-component-page', 'an42');
+    expect(dock('pangular:angular-native')).toEqual(['Angular Native: no app connected', 'setup']);
+    expect(update).toHaveBeenCalledTimes(4);
   });
 
   it('serves the dock script, the viewer and the MCP tools', async () => {

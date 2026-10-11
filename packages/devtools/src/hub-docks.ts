@@ -1,5 +1,6 @@
 import type { DevframeHubContext } from '@devframes/hub/node';
 import type { DevframeViewIframe } from '@devframes/hub/types';
+import { PANGULAR_LOGO_DATA_URI } from './brand.ts';
 import {
   resolvePangularConfig,
   type PangularInspector,
@@ -47,19 +48,82 @@ export function dockId(view: HubView): string {
   return `pangular:${view}`;
 }
 
+/** The dock that opens the full panel, with every tab, instead of one view. */
+export const ALL_TOOLS_DOCK_ID = 'pangular:all';
+
+/** The views whose dock says when the tool has nothing to show yet. */
+export const STATUS_VIEWS = ['analog', 'angular-native', 'capacitor'] as const;
+export type StatusView = (typeof STATUS_VIEWS)[number];
+
+/** Why a dock opens its setup steps instead of data, shown as the dock title. */
+export const UNAVAILABLE_TITLES: Record<StatusView, string> = {
+  analog: 'Analog: not an Analog app',
+  'angular-native': 'Angular Native: no app connected',
+  capacitor: 'Capacitor: no app connected',
+};
+
+export const UNAVAILABLE_BADGE = 'setup';
+
+/** Whether each tool has something to show; a missing view counts as available. */
+export type HubDockAvailability = Partial<Record<StatusView, boolean>>;
+
+export interface HubDocks {
+  /** The ids of the registered docks, in rail order. */
+  ids: string[];
+  /**
+   * Marks a tool's dock as having data or not. The hub re-sends every dock to
+   * every client on an update, so this only updates when the state changes.
+   */
+  setAvailable: (view: StatusView, available: boolean) => void;
+}
+
 function isHub(ctx: unknown): ctx is DevframeHubContext {
   return !!ctx && typeof ctx === 'object' && 'docks' in ctx && 'frames' in ctx;
+}
+
+function isStatusView(view: HubView): view is StatusView {
+  return (STATUS_VIEWS as readonly string[]).includes(view);
+}
+
+function withStatus(
+  entry: DevframeViewIframe,
+  view: HubView,
+  available: boolean,
+): DevframeViewIframe {
+  if (available || !isStatusView(view)) return entry;
+  return {
+    ...entry,
+    title: UNAVAILABLE_TITLES[view],
+    badge: UNAVAILABLE_BADGE,
+    badgeVariant: 'info',
+  };
 }
 
 export function registerHubDocks(
   ctx: unknown,
   id: string,
   config: ResolvedPangularConfig = resolvePangularConfig(),
-): string[] {
-  if (!isHub(ctx)) return [];
+  initial: HubDockAvailability = {},
+): HubDocks | undefined {
+  if (!isHub(ctx)) return undefined;
   const base = ctx.frames.find((frame) => frame.id === id)?.base;
-  if (!base) return [];
-  const registered: string[] = [];
+  if (!base) return undefined;
+  // Lower orders come first on the rail. The full panel shares the views'
+  // frame, and the panel switches between them in place when a dock is picked.
+  const allTools: DevframeViewIframe = {
+    type: 'iframe',
+    id: ALL_TOOLS_DOCK_ID,
+    title: 'All tools',
+    icon: PANGULAR_LOGO_DATA_URI,
+    category: 'framework',
+    defaultOrder: -1,
+    url: base,
+    frameId: 'pangular',
+  };
+  ctx.docks.register(allTools);
+  const ids = [allTools.id];
+  const plain = new Map<StatusView, DevframeViewIframe>();
+  const available = new Map<StatusView, boolean>();
   DOCKS.forEach((dock, index) => {
     if (dock.inspector && !config.inspectors[dock.inspector]) return;
     const entry: DevframeViewIframe = {
@@ -72,8 +136,24 @@ export function registerHubDocks(
       url: `${base}?view=${dock.view}`,
       frameId: 'pangular',
     };
-    ctx.docks.register(entry);
-    registered.push(entry.id);
+    if (isStatusView(dock.view)) {
+      const has = initial[dock.view] ?? true;
+      plain.set(dock.view, entry);
+      available.set(dock.view, has);
+      ctx.docks.register(withStatus(entry, dock.view, has));
+    } else {
+      ctx.docks.register(entry);
+    }
+    ids.push(entry.id);
   });
-  return registered;
+  return {
+    ids,
+    setAvailable: (view, has) => {
+      const entry = plain.get(view);
+      if (!entry || available.get(view) === has) return;
+      available.set(view, has);
+      // A whole entry, so a cleared badge is gone rather than merged back in.
+      ctx.docks.update(withStatus(entry, view, has));
+    },
+  };
 }

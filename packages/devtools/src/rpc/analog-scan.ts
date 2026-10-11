@@ -639,6 +639,14 @@ export function servedAnalogRoot(cwd: string): string {
   return analogRoot(viteRoot ?? cwd);
 }
 
+/**
+ * Whether the served project is an Analog app, the same answer as `analog-project`
+ * gives, from the package files alone instead of a full scan.
+ */
+export function isAnalogProject(cwd: string): boolean {
+  return !!analogPackage(analogRoot(servedAnalogRoot(cwd)))?.version;
+}
+
 export function analogRoot(cwd: string): string {
   if (existsSync(join(cwd, 'src/app/pages')) || hasAnalogConfig(cwd)) return cwd;
   let names: string[];

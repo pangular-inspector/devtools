@@ -185,7 +185,7 @@ import {
   summarizePages,
   unknownPageText,
 } from './rpc/pages.ts';
-import { registerHubDocks } from './hub-docks.ts';
+import { trackHubDocks } from './hub-dock-status.ts';
 import { clip } from './text.ts';
 import { setRedaction } from './forms-privacy.ts';
 import {
@@ -3049,7 +3049,11 @@ const pangular = defineDevframe({
         ttl: liveTtl,
       });
     }
-    registerHubDocks(ctx, 'pangular', config);
+    trackHubDocks(ctx, 'pangular', config, {
+      cwd: ctx.cwd,
+      capacitor: capacitorShared,
+      components: componentTree,
+    });
   },
 });
 
