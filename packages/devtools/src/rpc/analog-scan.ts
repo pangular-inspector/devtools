@@ -86,6 +86,8 @@ export interface AnalogLintFinding {
   severity: 'error' | 'warning' | 'info';
   file?: string;
   path?: string;
+  /** Another file the finding is about, such as the page a content file takes over. */
+  relatedFile?: string;
   message: string;
   fix: string;
 }
@@ -409,7 +411,7 @@ export function serverFnsOf(file: string, source: string): AnalogServerFn[] {
   if (!locals.size) locals.add('serverFn');
   const out: AnalogServerFn[] = [];
   for (const match of masked.matchAll(
-    /\bexport\s+(?:const|let|var)\s+(\w+)\s*(?::[^=]+)?=\s*(\w+)\s*\(/g,
+    /\bexport\s+(?:const|let|var)\s+(\w+)\s*(?::[^=]+)?=\s*(\w+)\s*(?:<[^;=()]*?>\s*)?\(/g,
   )) {
     if (!locals.has(match[2])) continue;
     out.push({
@@ -477,6 +479,16 @@ function blockEnd(source: string, open: number): number {
     else if (source[i] === '}' && --depth === 0) return i;
   }
   return source.length;
+}
+
+/** Index of the parenthesis that closes the one at `open`, in a string-masked source. */
+function callEnd(masked: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < masked.length; i++) {
+    if (masked[i] === '(') depth++;
+    else if (masked[i] === ')' && --depth === 0) return i;
+  }
+  return masked.length;
 }
 
 function ruleTiming(body: string, key: string): string | undefined {
@@ -557,7 +569,7 @@ export function analogConfig(root: string): AnalogConfig {
   const source = stripComments(read(join(root, file)));
   const start = source.search(/\banalog\s*\(/);
   if (start < 0) return config;
-  const options = source.slice(start, start + 4000);
+  const options = source.slice(start, callEnd(maskStrings(source), source.indexOf('(', start)) + 1);
   const topLevel = stripBlocks(options.slice(options.indexOf('(') + 1), [
     'nitro',
     'routeRules',
@@ -575,9 +587,16 @@ export function analogConfig(root: string): AnalogConfig {
   if (isStatic !== undefined) config.static = isStatic;
   const prefix = options.match(/\bapiPrefix\s*:\s*['"`]([^'"`]*)['"`]/);
   if (prefix) config.apiPrefix = prefix[1];
-  const prerender = options.match(
-    /\bprerender\s*:\s*\{[\s\S]*?\broutes\s*:\s*(\[[\s\S]*?\]|async|\(|function)/,
-  );
+  const masked = maskStrings(options);
+  const prerenderBlock = /\bprerender\s*:\s*\{/.exec(masked);
+  const prerender = prerenderBlock
+    ? options
+        .slice(
+          prerenderBlock.index,
+          blockEnd(masked, prerenderBlock.index + prerenderBlock[0].length - 1) + 1,
+        )
+        .match(/\broutes\s*:\s*(\[[\s\S]*?\]|async|\(|function)/)
+    : null;
   if (prerender) {
     if (prerender[1].startsWith('[')) {
       config.prerender = Array.from(prerender[1].matchAll(/['"`](\/[^'"`]*)['"`]/g), (m) => m[1]);
@@ -1031,6 +1050,7 @@ export function lintAnalog(project: AnalogProject): AnalogLintFinding[] {
         severity: 'warning',
         file: route.file,
         path: route.fullPath,
+        relatedFile: page.file,
         message: `Files under src/content are routes too, so ${route.file} serves ${route.fullPath} and ${page.file} never renders for it.`,
         fix: 'Move content outside the routed content folder (for example src/content-data with contentDir), or drop the [param] page.',
       });

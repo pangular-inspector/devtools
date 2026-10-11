@@ -500,6 +500,15 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'clear-http-calls': 'http',
   'push-capacitor': 'capacitor',
   'forget-capacitor-page': 'capacitor',
+  'push-analog': 'analog',
+  'forget-analog-page': 'analog',
+  'analog-clear-calls': 'analog',
+  'analog-project': 'analog',
+  'analog-explain-url': 'analog',
+  'analog-lint': 'analog',
+  'analog-render': 'analog',
+  'analog-text': 'analog',
+  'analog-call-api': 'analog',
 };
 
 /**

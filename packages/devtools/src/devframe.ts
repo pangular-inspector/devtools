@@ -174,7 +174,7 @@ import {
 } from './rpc/cd-tools.ts';
 import type { HttpPage, HttpPayloadState, HttpReport, HttpState } from './types.ts';
 
-import { nameServerFns, registerAnalog } from './rpc/analog-register.ts';
+import { analogPages, nameServerFns, registerAnalog } from './rpc/analog-register.ts';
 import { createPageVisibility } from './rpc/page-ttl.ts';
 import {
   PAGE_ARGUMENT,
@@ -3046,6 +3046,7 @@ const pangular = defineDevframe({
             pipes: withUrl(pipePages.values()),
             http: withUrl(httpPages.values()),
             capacitor: withUrl(capacitorPages.values()),
+            analog: withUrl(on.analog ? analogPages() : []),
           },
           visibility.list(),
         );

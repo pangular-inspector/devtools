@@ -145,10 +145,21 @@ export function loadEndpointUrl(
 ): string {
   let path = `/${apiPrefix}/_analog${analogEndpoint(file)}`.replace(/\/{2,}/g, '/');
   for (const [name, value] of Object.entries(params)) {
-    if (name !== '**') path = path.replace(`[${name}]`, value);
+    if (name !== '**') path = path.replace(`[${name}]`, encodeURIComponent(value));
   }
-  const rest = params['**'] ?? Object.values(params).at(-1) ?? '';
-  return path.replace('**', rest);
+  if (!path.includes('**')) return path;
+  const catchAll = file.match(/\[\[?\.{3}([^\]]+)\]\]?/)?.[1];
+  const rest = params['**'] ?? (catchAll ? params[catchAll] : undefined) ?? '';
+  return path.replace('**', rest.split('/').map(encodeSegment).join('/'));
+}
+
+/** Catch-all values hold the URL's own segments, so decode before encoding. */
+function encodeSegment(part: string): string {
+  try {
+    return encodeURIComponent(decodeURIComponent(part));
+  } catch {
+    return encodeURIComponent(part);
+  }
 }
 
 function kindLabel(route: AnalogRoute): string {
@@ -638,7 +649,15 @@ function hasHandler(project: AnalogProject, call: AnalogCall): boolean {
   });
 }
 
-export function analogLint(project: AnalogProject, state: AnalogState): AnalogLintFinding[] {
+/**
+ * Static findings, live call findings and the findings of one page: `page`,
+ * or the most recent page when it is left out.
+ */
+export function analogLint(
+  project: AnalogProject,
+  state: AnalogState,
+  page?: string,
+): AnalogLintFinding[] {
   if (!project.analog) return [];
   const findings = lintAnalog(project);
   const dupes = new Map(duplicateLoads(state.calls).map((d) => [d.route, d]));
@@ -662,7 +681,7 @@ export function analogLint(project: AnalogProject, state: AnalogState): AnalogLi
       fix: 'The browser read did not use the TransferState seed. Read it with injectServerFn and the same input on both sides, and check provideClientHydration().',
     });
   }
-  const report = state.pages[0];
+  const report = pickPage(state, page);
   if (report) {
     for (const path of restartNeeded(project, report)) {
       findings.push({
@@ -701,9 +720,9 @@ export function analogLint(project: AnalogProject, state: AnalogState): AnalogLi
   return findings;
 }
 
-export function analogLintText(project: AnalogProject, state: AnalogState): string {
+export function analogLintText(project: AnalogProject, state: AnalogState, page?: string): string {
   if (!project.analog) return NOT_ANALOG;
-  const findings = analogLint(project, state);
+  const findings = analogLint(project, state, page);
   if (!findings.length) return 'No Analog problems found.';
   const order = { error: 0, warning: 1, info: 2 };
   return `${UNTRUSTED}\n\n${findings

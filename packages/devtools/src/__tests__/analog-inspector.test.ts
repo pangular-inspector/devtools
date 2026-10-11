@@ -226,6 +226,67 @@ describe('Analog panel', () => {
     expect(text).not.toContain('The page has no default export, so Analog renders nothing.');
   });
 
+  it('counts lint errors and warnings apart, leaves info out and links shadowed pages', async () => {
+    const lintArgs: unknown[] = [];
+    let findings = [
+      { rule: 'api-outside-prefix', severity: 'info', path: '/x', message: 'x', fix: 'x' },
+    ];
+    const project = {
+      ...PROJECT,
+      content: [{ file: '/src/content/blog/first.md', slug: 'first', attributes: {} }],
+    };
+    const { el, tab, settle, inspector } = await mount((name, arg) => {
+      if (name === 'analog-project') return project;
+      if (name === 'analog-lint') {
+        lintArgs.push(arg);
+        return findings;
+      }
+      return null;
+    });
+    expect(lintArgs[0]).toBeUndefined();
+    const badge = () => el.querySelector('#analog-tab-lint .count')!;
+    expect(badge().textContent!.trim()).toBe('0');
+    expect(badge().getAttribute('data-tone')).toBe('');
+    findings = [
+      ...findings,
+      { rule: 'restart-needed', severity: 'warning', path: '/y', message: 'y', fix: 'y' },
+      {
+        rule: 'content-shadows-page',
+        severity: 'warning',
+        file: '/src/content/blog/first.md',
+        path: '/blog/first',
+        relatedFile: '/src/app/pages/blog/[slug].page.analog',
+        message: 'Files under src/content are routes too.',
+        fix: 'z',
+      },
+      { rule: 'hydration-error', severity: 'error', path: '/z', message: 'NG0500', fix: 'z' },
+    ] as typeof findings;
+    inspector.view.set('content');
+    await settle();
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    await settle();
+    expect(badge().textContent!.trim()).toBe('3');
+    expect(badge().getAttribute('data-tone')).toBe('bad');
+    await tab('content');
+    expect(el.textContent).toContain('takes over [slug].page.analog');
+  });
+
+  it('asks for the lint of the page the panel is docked in', async () => {
+    const { scopeToPage } = await import('../../../../app/src/page-id.ts');
+    const lintArgs: unknown[] = [];
+    scopeToPage('pgB');
+    try {
+      await mount((name, arg) => {
+        if (name === 'analog-project') return PROJECT;
+        if (name === 'analog-lint') lintArgs.push(arg);
+        return null;
+      });
+    } finally {
+      scopeToPage(null);
+    }
+    expect(lintArgs[0]).toBe('pgB');
+  });
+
   it('names server functions, marks SSR seeds and lists form action outcomes', async () => {
     const id = 'aaaaaaaaaaaaaaaa';
     const state = {

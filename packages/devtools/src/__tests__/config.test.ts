@@ -212,7 +212,7 @@ describe('agent tool and RPC registration', () => {
   it('assigns every tool, resource and RPC function to an inspector or keeps it shared', async () => {
     const { rpc, tools, resources } = await boot();
     const unassigned = rpc.filter((name) => !RPC_INSPECTOR[name] && !SHARED_RPC.includes(name));
-    expect(unassigned.filter((name) => !name.includes('analog'))).toEqual([]);
+    expect(unassigned).toEqual([]);
     for (const id of [...tools, ...resources].filter((id) => !SHARED_RPC.includes(id))) {
       expect(agentAllowed({ id }, resolvePangularConfig({ agent: { tools: offAll() } }))).toBe(
         false,
