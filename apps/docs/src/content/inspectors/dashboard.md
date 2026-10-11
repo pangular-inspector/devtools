@@ -37,12 +37,14 @@ Each card counts what one inspector found. Click a card to open its tab. When th
 | [Injectors](./injectors.md)          | Live injectors on the page, plus their providers. Without a page, the provider declarations in source.       |
 | [NgRx declarations](./ngrx-store.md) | NgRx declarations in source, broken down by kind.                                                            |
 | [Pipes](./pipes.md)                  | Custom pipes in source, plus the built-in pipes in use.                                                      |
+| [Forms](./forms.md)                  | Forms on the page, plus how many are invalid.                                                                |
+| [SSR & HTTP](./ssr-http.md)          | HTTP calls on the page and the server calls made while rendering it, plus how many failed.                   |
 
 Cards of inspectors turned off in the [configuration](../getting-started/configuration.md) are hidden.
 
 ### Card states
 
-A card shows **Counting…** while it loads. It shows **Count unavailable** when the tab can't read its data.
+A card shows **Counting…** while it loads. It shows **Count unavailable** when the tab can't read its data. The Forms and SSR & HTTP cards show 0 until a page reports a form or a call.
 
 ### Configuration block
 
@@ -70,6 +72,8 @@ The **Change detection** chip reads the running page, not the workspace. The pag
 
 The Components, Routes, NgRx and Pipes cards count the source scan. The Signals and Injectors cards use the live page when one is connected, and the source scan otherwise. Opened from the popup or the Chrome extension, they count the page the Dashboard belongs to, like the Signals and Injectors tabs. Opened on its own, they count the page that reported last. The live Signals count covers the graph of the one component the [Signals tab](./signals.md) shows, and counts its signals, computeds, linked signals and effects.
 
+The Forms and SSR & HTTP cards read the live page only, and update while it runs. Opened from the popup or the Chrome extension, they count the page the Dashboard belongs to. Opened on its own, the Forms card counts the forms of every connected page, like the [Forms tab](./forms.md), and the SSR & HTTP card counts the page that reported last. A form counts as invalid when its root is **INVALID**. A call counts as failed when it got no response or a status of 400 or above. Cancelled calls don't count as failed.
+
 ## How to use it
 
 <ngmd-workflow>
@@ -77,7 +81,7 @@ The Components, Routes, NgRx and Pipes cards count the source scan. The Signals 
     Confirm the Angular and TypeScript chips match what you expect. A mismatch usually means a stale install.
   </ngmd-step>
   <ngmd-step title="Open the app in a browser">
-    The Signals and Injectors cards switch to live counts once a page connects.
+    The Signals and Injectors cards switch to live counts once a page connects. The Forms and SSR &amp; HTTP cards fill in as the page renders forms and makes calls.
   </ngmd-step>
   <ngmd-step title="Jump to an inspector">
     Click the card for the area you want to look at. It opens that tab.
@@ -100,7 +104,7 @@ If the project block says **Project details unavailable**, check that the dev se
 
 <ngmd-accordion>
   <ngmd-accordion-item title="Do the cards need the app open in a browser?">
-    No. The source-based cards fill in from the workspace scan. Only the Signals and Injectors cards change when a page connects.
+    No. The source-based cards fill in from the workspace scan. The Signals and Injectors cards change when a page connects, and the Forms and SSR &amp; HTTP cards count only what a connected page reports.
   </ngmd-accordion-item>
 </ngmd-accordion>
 

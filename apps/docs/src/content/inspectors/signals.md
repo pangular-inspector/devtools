@@ -13,6 +13,12 @@ The Signals tab shows the reactive graph of one component, or of the root or a r
 
 ## What it shows
 
+### Page picker
+
+When more than one open page reports a signal graph, a **Page** picker appears in the toolbar. It lists each page by title, or by URL when the page has no title. The tab starts on the first page that reports, and stays on the page you choose when another page reports later. The **Graph of** options follow the chosen page, and each page keeps its own **Graph of** choice.
+
+If the chosen page closes, the tab moves to the page that reported last and announces the change to screen readers. When the panel opens framed by a page, such as the popup on that page, the tab shows that page only and has no **Page** picker.
+
 ### Graph picker
 
 The **Graph of** picker at the top selects whose graph you see. It appears when a live component tree or an injector exists.

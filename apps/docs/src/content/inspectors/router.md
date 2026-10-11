@@ -61,7 +61,7 @@ The live route config. The tab merges lazy children in once they load, and marks
 - Fill in the params of a route and click **Go** to navigate to it. With a param left empty, **Go** marks the empty field and names the params to fill in.
 - **Read lazy** reads the routes of a lazy route that has not loaded.
 
-The result of **Go** and **Read lazy** shows under the row you clicked.
+The result of **Go** and **Read lazy** shows under the row you clicked, and a screen reader announces it. Results and filled-in params belong to one page, so they are cleared when you pick another page.
 
 ### Setup
 

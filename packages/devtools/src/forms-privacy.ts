@@ -60,7 +60,8 @@ const SECRET_PAIRS = new Set([
 const SECRET_AUTOCOMPLETE = /password|one-time-code|cc-/i;
 const MASK_MARKERS = '.sentry-mask, .rr-mask, [data-private], [data-pangular="mask"]';
 const UNMASK_MARKER = '[data-pangular="unmask"]';
-const JWT = /\beyJ[\w-]{5,}\.[\w-]{5,}\.[\w-]{5,}/g;
+/** A JWT, including an unsigned (`alg: none`) one with an empty signature. */
+export const JWT = /eyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]*/g;
 const BEARER = /\bBearer\s+[\w.~+/=-]+/gi;
 
 interface PrivacyConfig {
