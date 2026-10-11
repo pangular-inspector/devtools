@@ -422,18 +422,19 @@ function writeDateInput(element: HTMLInputElement, value: unknown): string | nul
     element.value = '';
     return null;
   }
-  let date: Date | number | null = null;
+  let date: Date | null = null;
   if (typeof value === 'string') {
     element.value = value;
     if (element.value) return null;
     const time = Date.parse(value);
     date = Number.isNaN(time) ? null : new Date(time);
-  } else if (value instanceof Date || typeof value === 'number') date = value;
+  } else if (value instanceof Date) date = value;
+  else if (typeof value === 'number') date = new Date(value);
   if (date !== null && !Number.isNaN(Number(date))) {
     read(() => {
-      if (typeof date === 'number' || element.type === 'datetime-local') {
-        element.valueAsNumber = Number(date);
-      } else element.valueAsDate = date;
+      // valueAsNumber counts months for a month input, so only datetime-local takes it.
+      if (element.type === 'datetime-local') element.valueAsNumber = Number(date);
+      else element.valueAsDate = date;
     }, undefined);
     if (element.value) return null;
   }

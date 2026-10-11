@@ -717,6 +717,7 @@ class Booking {
   reactive = new FormGroup({
     on: new FormControl(''),
     at: new FormControl(''),
+    month: new FormControl(''),
   });
 }
 Component({
@@ -727,6 +728,7 @@ Component({
     <form [formGroup]="reactive">
       <input id="on" type="date" formControlName="on" />
       <input id="at" type="time" formControlName="at" />
+      <input id="month" type="month" formControlName="month" />
     </form>
   `,
 })(Booking);
@@ -766,6 +768,9 @@ describe('user-mode writes to date and time inputs', () => {
 
     expect(await set('reactive', 'at', '09:45')).toMatchObject({ ok: true });
     expect(app.reactive.controls.at.value).toBe('09:45');
+
+    expect(await set('reactive', 'month', Date.UTC(2026, 2, 14))).toMatchObject({ ok: true });
+    expect(app.reactive.controls.month.value).toBe('2026-03');
   });
 });
 
