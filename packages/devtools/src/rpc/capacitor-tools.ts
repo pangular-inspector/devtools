@@ -557,7 +557,7 @@ export function capacitorPluginsText(
       const note =
         plugin.registered === true && !plugin.available && !CORE_PLUGINS.has(plugin.name)
           ? 'Imported but not available here. Run `npx cap sync` if it should be native.'
-          : plugin.native && plugin.registered === false
+          : plugin.native && plugin.registered === false && !CORE_PLUGINS.has(plugin.name)
             ? 'Installed in the native project, not imported by the app.'
             : '';
       const extra = plugin.methods.length - SHOWN_METHODS;

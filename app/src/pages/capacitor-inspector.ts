@@ -266,7 +266,11 @@ function json(value: unknown): string {
                         !corePlugins.has(plugin.name)
                       ) {
                         Not available here. Run <code>npx cap sync</code> if it should be native.
-                      } @else if (plugin.native && plugin.registered === false) {
+                      } @else if (
+                        plugin.native &&
+                        plugin.registered === false &&
+                        !corePlugins.has(plugin.name)
+                      ) {
                         Installed, not imported by the app.
                       }
                     </td>

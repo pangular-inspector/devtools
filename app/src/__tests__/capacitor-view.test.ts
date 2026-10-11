@@ -99,6 +99,13 @@ const page = (extra: Partial<CapacitorPage> = {}): CapacitorPage => ({
       { name: 'Barcode', available: false, registered: true, native: false, methods: [] },
       { name: 'Camera', available: true, registered: true, native: true, methods: ['getPhoto'] },
       { name: 'Haptics', available: true, registered: false, native: true, methods: ['vibrate'] },
+      {
+        name: 'WebView',
+        available: true,
+        registered: false,
+        native: true,
+        methods: ['getServerBasePath'],
+      },
     ],
   },
   calls: [
@@ -210,7 +217,8 @@ describe('Capacitor view', () => {
 
     const plugins = el.querySelector('section[aria-labelledby="cap-plugins-title"]')!.textContent;
     expect(plugins).toContain('Run npx cap sync');
-    expect(plugins).toContain('Installed, not imported by the app.');
+    // Haptics gets the note; WebView, which Capacitor registers itself, does not.
+    expect(plugins?.split('Installed, not imported by the app.')).toHaveLength(2);
     const listeners = el.querySelector('section[aria-labelledby="cap-listeners-title"]')!;
     expect(listeners.textContent).toContain('networkStatusChange');
     expect(listeners.textContent).toContain('Active');

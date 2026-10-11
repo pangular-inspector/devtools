@@ -56,6 +56,13 @@ const info: CapacitorInfo = {
     { name: 'Camera', available: true, registered: true, native: true, methods: ['getPhoto'] },
     { name: 'Barcode', available: false, registered: true, native: false, methods: [] },
     { name: 'Haptics', available: true, registered: false, native: true, methods: ['vibrate'] },
+    {
+      name: 'WebView',
+      available: true,
+      registered: false,
+      native: true,
+      methods: ['setServerBasePath'],
+    },
   ],
 };
 
@@ -299,6 +306,7 @@ describe('list-capacitor-plugins', () => {
       /`Haptics` \| yes \| no \| yes \| `vibrate` \| Installed in the native project/,
     );
     expect(text).toMatch(/`Camera` \| yes \| yes \| yes \| `getPhoto` \|  \|/);
+    expect(text).toMatch(/`WebView` \| yes \| no \| yes \| `setServerBasePath` \|  \|/);
   });
 
   it('says how to connect an app when none reports', async () => {
