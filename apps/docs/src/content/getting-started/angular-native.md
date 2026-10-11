@@ -45,7 +45,7 @@ The **Angular Native** view shows only the tabs an app on a device fills: **Comp
 
 The panel without `?view` also shows the app, in the same tabs as a browser page.
 
-The overlay marks its component reports with `platform: 'angular-native'`, and the view follows the newest app that sends them. It keeps the app it shows while that app reports, and the app keeps its page id when it reconnects. With no app connected, the view says **No Angular Native app is connected** and links to this page. In the hub, the dock's rail entry then has a **setup** badge, and its tooltip reads **Angular Native: no app connected**. The view reads the component reports, so turning off the `components` inspector hides the dock and leaves the view empty.
+The overlay marks its component reports with `platform: 'angular-native'`, and the view follows the newest app that sends them. It keeps the app it shows while that app reports, and the app keeps its page id when it reconnects. With no app connected, the view says **No Angular Native app is connected** and links to this page. In the hub, the dock's tooltip in the rail then reads **Angular Native: no app connected**. The view reads the component reports, so turning off the `components` inspector hides the dock and leaves the view empty.
 
 `list-pages` gives each page's platform, so an agent can tell an Angular Native app from a browser tab. See [Agent tools](../agents/tools.md#list-pages).
 

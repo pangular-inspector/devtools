@@ -126,19 +126,19 @@ When the page's server mounts the hub (`/__devframes/`), the button opens the wh
 
 **All tools** opens the whole panel, the same as `/__devframes/pangular/`: the Dashboard and every tab in one tab bar, including the Store, Analog and Capacitor tabs. The rail keeps **All tools** when you turn inspectors off.
 
-A single dock has an **Open full panel** link in its header. It opens the full panel in the same frame and selects **All tools** in the rail. From the NgRx, Analog and Capacitor docks it lands on the matching tab (`#tab=store`, `#tab=analog`, `#tab=capacitor`). From the Angular and Angular Native docks it lands on the tab you had open. The link shows only on a single view (a URL with `?view=`), so the full panel, the Chrome extension and the popup without the hub don't have it. Outside the hub, it loads the full panel in place of the view.
+A single dock has an **Open full panel** link in its header. It opens the full panel in the same frame and selects **All tools** in the rail. From the NgRx, Analog and Capacitor docks it lands on the matching tab (`#tab=store`, `#tab=analog`, `#tab=capacitor`). From the Angular and Angular Native docks it lands on the tab you had open, and from a dock that shows setup steps it lands on the Dashboard. The link shows only on a single view (a URL with `?view=`), so the full panel, the Chrome extension and the popup without the hub don't have it. Outside the hub, it loads the full panel in place of the view.
 
-### Setup badges
+### Docks with nothing to show
 
-The Analog, Angular Native and Capacitor docks open setup steps when their tool has nothing to show. Their rail entry then carries a **setup** badge, and its tooltip says why:
+The Analog, Angular Native and Capacitor docks open setup steps when their tool has nothing to show. Their rail entry then says why in its tooltip:
 
-| Dock           | Tooltip with the badge             | The badge goes away when             |
+| Dock           | Tooltip                            | Back to the plain name when          |
 | -------------- | ---------------------------------- | ------------------------------------ |
 | Analog         | `Analog: not an Analog app`        | The server restarts in an Analog app |
 | Angular Native | `Angular Native: no app connected` | An Angular Native app reports        |
 | Capacitor      | `Capacitor: no app connected`      | A Capacitor app reports              |
 
-The badge comes back when the app stops reporting and its data expires. The Angular and NgRx docks have no badge. The NativeScript dock always shows setup steps, because a NativeScript app's data shows in the Angular dock, so it has no badge either.
+The tooltip comes back when the app stops reporting and its data expires. The Angular and NgRx docks always have data. The NativeScript dock always shows setup steps, because a NativeScript app's data shows in the Angular dock, so its tooltip stays **NativeScript**.
 
 ### Full-page viewer
 

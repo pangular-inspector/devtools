@@ -11,7 +11,7 @@ description: The platform, plugins, plugin calls and listeners of a Capacitor ap
 
 The Capacitor tab shows a Capacitor app from the inside: its platform and environment, the plugins it can use, each plugin call with its arguments and outcome, and its plugin listeners. The data comes from the running app, through the [browser overlay](../getting-started/overlay.md). To connect an app, follow [Set up Capacitor](../guides/capacitor.md).
 
-The tab appears in the panel while a Capacitor app reports. In the hub, the **Capacitor** dock shows it, and shows the setup steps while no app reports. While no app reports, the dock's rail entry also has a **setup** badge, and its tooltip reads **Capacitor: no app connected**.
+The tab appears in the panel while a Capacitor app reports. In the hub, the **Capacitor** dock shows it, and shows the setup steps while no app reports. While no app reports, the dock's tooltip in the rail reads **Capacitor: no app connected**.
 
 ## What it shows
 
