@@ -120,6 +120,16 @@ Every `HttpClient` request, tagged **SSR** or **Client**. Each row shows the met
 
 A request that was unsubscribed before its response, for example by `switchMap`, a route change or a destroyed component, shows **cancelled** as its status. **ERR** marks a request that failed without a status, such as when the browser is offline or CORS blocks it.
 
+Above the table, these filters narrow the timeline. They combine, and the count next to them shows how many calls are visible, for example **12 of 200**.
+
+| Filter                   | What it keeps                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- |
+| **Find a URL or method** | Calls whose method or URL contains the text, ignoring case. `post /api` matches both. `Escape` clears it. |
+| **Side**                 | **All sides**, **SSR** or **Client** calls.                                                               |
+| **Failed only**          | Calls with a status of 400 or more, **ERR** or **cancelled**.                                             |
+
+If nothing matches, **Clear filters** resets all three. While the filters hide the call that is open in the preview, the preview hides too, and it comes back when the call is visible again.
+
 Click a row for a response preview. The preview opens under the timeline and takes focus. **Close** or `Escape` returns focus to the row. A long timeline scrolls inside its own box. The timeline shows the page's client calls and the SSR calls made while rendering its first URL. **Clear timeline** empties it.
 
 ### Fault injection
