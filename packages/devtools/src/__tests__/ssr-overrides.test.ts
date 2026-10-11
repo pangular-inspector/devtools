@@ -242,6 +242,7 @@ describe('ssrMiddleware overrides', () => {
     expect(res.body).toBe(gzipped.toString());
     expect(recorded[0]).toMatchObject({
       renderMode: 'unknown',
+      compressedBeforeTrace: true,
       headers: { 'content-encoding': 'gzip' },
       overrides: [
         { kind: 'state-edit', applied: false, note: expect.stringContaining('after compression') },
@@ -249,6 +250,34 @@ describe('ssrMiddleware overrides', () => {
     });
     const text = explainSsrRequestText([sanitizeSsrRequest(recorded[0])!], [], [], {});
     expect(text).toContain('mount `ssrMiddleware` after');
+  });
+
+  it('reads and edits the HTML when compression() is mounted before the middleware', () => {
+    ssrRegistry().overrides = [override({ kind: 'state-edit', key: 'a', value: '{"b":2}' })];
+    const res = new FakeResponse();
+    // Like compression(): its header is set during writeHead, and the body is encoded on the way out.
+    const writeHead = res.writeHead;
+    res.writeHead = function (this: FakeResponse, ...args: Parameters<FakeResponse['writeHead']>) {
+      this.setHeader('content-encoding', 'gzip');
+      return writeHead.apply(this, args);
+    };
+    const end = res.end;
+    res.end = function (this: FakeResponse, chunk?: string | Buffer) {
+      if (!this.headersSent) this.writeHead(this.statusCode);
+      return end.call(this, chunk === undefined ? chunk : gzipSync(chunk));
+    };
+    createSsrMiddleware()(request(), res as unknown as ServerResponse, () => {});
+    res.setHeader('content-type', 'text/html');
+    res.end(STATE_HTML);
+    expect(res.sentHeaders['content-encoding']).toBe('gzip');
+    expect(recorded[0]).toMatchObject({
+      renderMode: 'server',
+      headers: { 'content-encoding': 'gzip' },
+      overrides: [{ kind: 'state-edit', applied: true, note: 'set a' }],
+    });
+    expect(recorded[0].compressedBeforeTrace).toBeUndefined();
+    const text = explainSsrRequestText([sanitizeSsrRequest(recorded[0])!], [], [], {});
+    expect(text).not.toContain('already compressed');
   });
 
   it('rewrites the TransferState script before the response is sent', () => {

@@ -88,6 +88,7 @@ interface SsrRequest {
   headers: Record<string, string>;
   navigations?: SsrNavigation[];
   overrides?: { id: string; kind: SsrOverrideKind; applied: boolean; note?: string }[];
+  compressedBeforeTrace?: boolean;
   aborted?: boolean;
 }
 
@@ -2373,8 +2374,9 @@ export class NetworkInspector {
 
   /** The response encoding when a compression middleware ran before `ssrMiddleware` saw the body. */
   compressedWith(req: SsrRequest): string | undefined {
-    const encoding = req.headers['content-encoding'];
-    return encoding && encoding.toLowerCase() !== 'identity' ? encoding : undefined;
+    // The final Content-Encoding is also set when compression runs after ssrMiddleware, as it should.
+    if (!req.compressedBeforeTrace) return undefined;
+    return req.headers['content-encoding'] ?? 'unknown encoding';
   }
 
   renderModeLabel(mode: SsrRequest['renderMode']): string {

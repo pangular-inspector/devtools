@@ -112,9 +112,15 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
     let bytes = 0;
     let sniff = '';
     let done = false;
+    // Whether the body was encoded before it reached this middleware, read when the headers go
+    // out. A compression() mounted before this one sets its header inside that writeHead call, so
+    // its later `Content-Encoding` does not count; one mounted after has already set it.
+    let encodedAtHead: boolean | undefined;
+    const bodyEncoded = () => encodedAtHead ?? encoded(res);
 
     const writeHead = res.writeHead;
     res.writeHead = function (this: ServerResponse, ...args: unknown[]) {
+      encodedAtHead ??= encoded(res);
       if (!renderMs) {
         renderMs = Date.now() - at;
         const timing = [
@@ -218,7 +224,7 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
         const isHtml = /\btext\/html\b/.test(headerText(res.getHeader('content-type')) ?? '');
         // A compression middleware that wraps res.write outside this one hands over encoded
         // bytes, where the TransferState script can't be found. They are sent as they are.
-        const compressed = isHtml && encoded(res);
+        const compressed = isHtml && bodyEncoded();
         const html = compressed ? '' : body.toString('utf8');
         const hasState = isHtml && /<script\b[^>]*\sid="[^"]*-state"/.test(html);
         const edited = hasState ? editTransferState(html, list) : null;
@@ -269,6 +275,8 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
       const type = headerText(res.getHeader('content-type')) ?? '';
       // Static files and API answers that reach this far are not renders.
       if (!aborted && !/\btext\/html\b/.test(type) && res.statusCode < 300) return;
+      const isHtml = /\btext\/html\b/.test(type);
+      const compressed = isHtml && bodyEncoded();
       const headers: Record<string, string> = {};
       for (const name of KEPT_HEADERS) {
         const value = headerText(res.getHeader(name));
@@ -284,15 +292,13 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
         renderMs: renderMs || Date.now() - at,
         bytes,
         // Encoded bytes are not HTML, so only the status is read then.
-        renderMode: renderModeOf(
-          /\btext\/html\b/.test(type) && !encoded(res) ? sniff : '',
-          res.statusCode,
-        ),
+        renderMode: renderModeOf(isHtml && !compressed ? sniff : '', res.statusCode),
         fetches: active.fetches,
         fetchMs: active.fetchMs,
         headers,
         ...(active.navigations?.length ? { navigations: active.navigations } : {}),
         ...(active.overrides?.length ? { overrides: active.overrides } : {}),
+        ...(compressed ? { compressedBeforeTrace: true } : {}),
         ...(aborted ? { aborted: true } : {}),
       };
       registry.record?.(request);
