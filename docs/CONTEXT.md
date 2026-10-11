@@ -24,6 +24,14 @@ _Avoid_: content script, agent, injected script
 One inspector's page-side code inside the overlay, such as `forms-collector.ts` or `pipes-collector.ts`. It reads the app through Angular's debug APIs, gives objects stable ids through a `WeakMap`, and pushes a report tagged with the `pageId`.
 _Avoid_: scraper, probe, watcher
 
+**Plugin call**:
+One call an app makes to a Capacitor plugin method, logged by the Capacitor collector with its arguments, outcome and duration. `native` when it went through the native bridge, `web` when a web implementation (or core's "not implemented" check) answered it in JavaScript.
+_Avoid_: bridge call, native call (for both kinds)
+
+**Capacitor hook**:
+The early part of the Capacitor collector (`capacitor-collector.ts`), loaded through `@pangular-inspector/devtools/capacitor-hook` before `@capacitor/core`. It wraps the native bridge and `registerPlugin` so plugin calls are logged from app start, and the overlay picks up its buffer when it connects.
+_Avoid_: interceptor, patch, monkey patch
+
 **Host tree**:
 The tree Angular rendered into, as the component, injector, signal graph and NgRx collectors walk it: roots, children, parent and a tag for each host (`HostTree` in `host-tree.ts`). In the browser it is the DOM, through `domTree()`; a platform without a DOM describes its own views.
 _Avoid_: view tree, render tree, DOM (when the code does not depend on it)

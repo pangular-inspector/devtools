@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Fifty-nine tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Sixty-one tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -406,6 +406,17 @@ These tools read and change the rules of [Fault injection](../inspectors/ssr-htt
 `set-http-rule` checks its input the way the panel's form does. `pattern` is a substring or a glob where `*` matches anything, up to 500 characters. `target` is `client`, `server` or `both` (the default). `status` is one of the statuses the panel lists. `delayMs` runs from 0 to 10000. `body` is JSON text or a JSON value, up to 100,000 characters. A rule needs a `status`, a `delayMs` or a `body`, and there can be at most 50 rules. A rule that breaks one of these is refused with the reason, and nothing changes. A rule that applies to SSR takes effect on the next page load. Patterns and bodies in the answers are masked like recorded calls.
 
 With [`actions.http`](../getting-started/configuration.md#actions) set to `false`, `set-http-rule` and `remove-http-rule` are dropped, and `list-http-rules` says that no rule applies.
+
+## Capacitor
+
+These tools read what a Capacitor app reported: its platform, its plugins and the plugin calls it made. See [Capacitor](../inspectors/capacitor.md). Reads: page.
+
+| Tool                     | What it answers                                                                                                                                                                                                                               | Arguments                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `list-capacitor-calls`   | Plugin calls, newest first: plugin and method, `native` or `web`, arguments, the result or the error with its code, and the duration. Marks **not implemented** calls and streams, and ends with the active listeners and their event counts. | `plugin`, `failed`, `slowMs`, `limit` |
+| `list-capacitor-plugins` | The platform, the server URL, whether CapacitorHttp and native logging are on, the WebView user agent, and each plugin: available, imported, installed natively, its native methods, and a hint when they disagree.                           | none                                  |
+
+`plugin` keeps calls to one plugin, ignoring case. `failed` keeps calls that failed. `slowMs` keeps calls that took at least that many milliseconds. `limit` defaults to 30 (at most 200). Native calls are logged on iOS and Android. Calls a web implementation answers are logged only when the app loads `@pangular-inspector/devtools/capacitor-hook` before `@capacitor/core`, and the answer says so when it doesn't. Arguments, results and errors are masked with the server's redaction too.
 
 ## Analog
 

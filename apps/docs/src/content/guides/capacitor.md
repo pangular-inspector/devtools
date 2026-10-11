@@ -183,6 +183,10 @@ The app keeps the token it gets in the WebView's storage for that origin. It ask
 
 With `plugins.CapacitorHttp.enabled`, Capacitor sends `fetch` through the native layer. The overlay then streams the hub's server-sent events through the browser's own fetch, which Capacitor keeps as `window.CapacitorWebFetch`. You don't change anything. WebSockets are not affected.
 
+## Plugin calls
+
+The **Capacitor** tab shows the app's plugins, its plugin calls with their arguments and outcome, and its listeners. Native calls show up once the overlay connects. To also log the calls the app makes at startup, and the calls a web implementation answers, load `@pangular-inspector/devtools/capacitor-hook` from the polyfills of your development configuration. See [Capacitor](../inspectors/capacitor.md#web-calls).
+
 ## Configuration keys
 
 These keys are the same in Capacitor 6, 7 and 8. Keep the development ones out of release builds.
@@ -204,6 +208,9 @@ These keys are the same in Capacitor 6, 7 and 8. Keep the development ones out o
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The code dialog keeps coming back">
     The app's origin changed, its storage was cleared, or the code expired before you typed it. Under live reload over Wi-Fi, a new network address is a new origin. Type the newest code the server printed.
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="Plugin calls are empty on the web">
+    On the web, plugins don't use the native bridge, so only the Capacitor hook sees their calls, and only when it loads before <code>&#64;capacitor/core</code>. See <a href="../inspectors/capacitor.md#web-calls">Web calls</a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The overlay connects but stays empty">
     The app is a production build, which has no <code>ng</code> debug global. Build it with the development configuration.

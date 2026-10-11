@@ -201,6 +201,7 @@ const config: NgmdConfig = {
         {label: 'Pipes', href: '/inspectors/pipes', status: 'new'},
         {label: 'SSR & HTTP', href: '/inspectors/ssr-http', status: 'new'},
         {label: 'Analog', href: '/inspectors/analog', status: 'new'},
+        {label: 'Capacitor', href: '/inspectors/capacitor', status: 'new'},
       ],
     },
     {

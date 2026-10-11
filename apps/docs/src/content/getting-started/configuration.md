@@ -99,7 +99,8 @@ type PangularInspector =
   | 'router'
   | 'pipes'
   | 'http'
-  | 'analog';
+  | 'analog'
+  | 'capacitor';
 
 type PangularAction = 'forms' | 'router' | 'ngrx' | 'http' | 'analog';
 
@@ -115,6 +116,7 @@ interface PangularConfig {
     httpCalls?: number;
     changeLog?: number;
     cdCycles?: number;
+    capacitorCalls?: number;
   };
 }
 ```
@@ -155,22 +157,23 @@ The server refuses a blocked action. The panel disables its controls and shows a
 | `redaction.secretNames` | `[]`    | Extra field names to treat as secret, on top of the built-in list. They match by words, like the built-in list, so `passport` also covers `passportNumber`. |
 | `redaction.unmask`      | `[]`    | Field names to show even when they look secret. They join the `unmask` list of `window.__PANGULAR_FORMS__`.                                                 |
 
-Forms, the router, component inputs, signals, NgRx, pipes, Analog previews and SSR & HTTP URLs use the extra secret names. Each list keeps up to 100 names. See [Access and redaction](../security.md#what-is-redacted) for what is redacted and what unmasking allows.
+Forms, the router, component inputs, signals, NgRx, pipes, Analog previews, SSR & HTTP URLs and Capacitor plugin calls use the extra secret names. Each list keeps up to 100 names. See [Access and redaction](../security.md#what-is-redacted) for what is redacted and what unmasking allows.
 
 ### Limits
 
 Values outside the bounds are clamped to the nearest one.
 
-| Option                | Default | Bounds      | What it sets                                                   |
-| --------------------- | ------- | ----------- | -------------------------------------------------------------- |
-| `limits.refreshMs`    | `3000`  | 500 to 8000 | Fallback poll interval, in ms, used before the app bootstraps. |
-| `limits.navigations`  | `50`    | 5 to 500    | Navigations kept per page.                                     |
-| `limits.formTimeline` | `200`   | 10 to 2000  | Form timeline events kept.                                     |
-| `limits.httpCalls`    | `200`   | 10 to 2000  | HTTP calls kept per page and on the server.                    |
-| `limits.changeLog`    | `200`   | 10 to 2000  | NgRx change log entries kept per page.                         |
-| `limits.cdCycles`     | `200`   | 10 to 2000  | Change detection cycles kept per page while recording.         |
+| Option                  | Default | Bounds      | What it sets                                                                          |
+| ----------------------- | ------- | ----------- | ------------------------------------------------------------------------------------- |
+| `limits.refreshMs`      | `3000`  | 500 to 8000 | Fallback poll interval, in ms, used before the app bootstraps.                        |
+| `limits.navigations`    | `50`    | 5 to 500    | Navigations kept per page.                                                            |
+| `limits.formTimeline`   | `200`   | 10 to 2000  | Form timeline events kept.                                                            |
+| `limits.httpCalls`      | `200`   | 10 to 2000  | HTTP calls kept per page and on the server.                                           |
+| `limits.changeLog`      | `200`   | 10 to 2000  | NgRx change log entries kept per page.                                                |
+| `limits.cdCycles`       | `200`   | 10 to 2000  | Change detection cycles kept per page while recording.                                |
+| `limits.capacitorCalls` | `200`   | 10 to 2000  | [Capacitor](../inspectors/capacitor.md) plugin calls kept per page and on the server. |
 
-When a timeline reaches its limit, the oldest entries are dropped. The timeline then shows a note above the list, such as "Showing the latest 200 HTTP calls. 12 older entries were dropped." with the limit to raise. This applies to the **SSR & HTTP** timeline, the router navigation timeline, the forms timeline, the NgRx change log and the change detection recording. The `explain-navigation`, `form-history` and `change-detection` agent tools add the same note, and the `pangular:ngrx-store` resource reports a `dropped` count per page.
+When a timeline reaches its limit, the oldest entries are dropped. The timeline then shows a note above the list, such as "Showing the latest 200 HTTP calls. 12 older entries were dropped." with the limit to raise. This applies to the **SSR & HTTP** timeline, the router navigation timeline, the forms timeline, the NgRx change log, the change detection recording and the Capacitor plugin calls. The `explain-navigation`, `form-history` and `change-detection` agent tools add the same note, and the `pangular:ngrx-store` resource reports a `dropped` count per page.
 
 On Angular 20 and later, the page reports about 250 ms after Angular runs change detection, plus a heartbeat every 4 seconds. `refreshMs` doesn't change that. The page polls every `refreshMs` instead when it can't follow change detection, such as until the app bootstraps. The Analog inspector also reads the page every `refreshMs`. At any value, the page sends its data at least every 8 seconds, even when nothing changed, so the server never drops a page that is still open.
 
