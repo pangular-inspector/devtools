@@ -307,6 +307,23 @@ describe('get-pipes', () => {
       expect(date?.usages).toHaveLength(3);
     });
 
+    it('attaches usage sites to a custom pipe', async () => {
+      const pipes = await pipesFor(`
+        @Pipe({ name: 'appFormat' })
+        export class FormatPipe {}
+
+        @Component({
+          selector: 'app-a',
+          template: '<p>{{ a | appFormat }}</p><p>{{ b | appFormat }}</p>',
+        })
+        export class A {}
+      `);
+      expect(pipes).toEqual([
+        expect.objectContaining({ name: 'appFormat', builtin: false, usageCount: 2 }),
+      ]);
+      expect(pipes[0].usages).toHaveLength(2);
+    });
+
     it('does not mistake logical OR for a pipe', async () => {
       const pipes = await pipesFor(`
         @Component({

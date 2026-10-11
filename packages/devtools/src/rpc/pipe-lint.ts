@@ -42,6 +42,10 @@ export function lintPipesText(cwd: string): string {
   return lines.join('\n');
 }
 
+/** Impure built-ins left out of `impure-pipe-in-for`: `x$ | async` in a loop
+ * is idiomatic and cheap, and `json` has a rule of its own. */
+const EXEMPT_IN_FOR = new Set(['async', 'json']);
+
 export function lintPipes(cwd: string): PipeLintFinding[] {
   const files: { content: string; relPath: string; fullPath: string }[] = [];
   for (const root of sourceRoots(cwd)) {
@@ -60,7 +64,9 @@ export function lintPipes(cwd: string): PipeLintFinding[] {
   }
 
   const purity: PurityMap = new Map();
-  for (const [name, meta] of BUILTIN_PIPES) purity.set(name, meta.isPure);
+  for (const [name, meta] of BUILTIN_PIPES) {
+    if (!EXEMPT_IN_FOR.has(name)) purity.set(name, meta.isPure);
+  }
   for (const { content } of files) {
     for (const scope of classScopes(maskStrings(stripComments(content)), stripComments(content))) {
       if (scope.kind === 'pipe' && scope.pipeName) {

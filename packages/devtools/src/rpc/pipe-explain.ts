@@ -1,6 +1,6 @@
 import { scanPipes } from './get-pipes.ts';
 import { lintPipes, type PipeLintFinding } from './pipe-lint.ts';
-import type { PipesState, PipeUsageInfo } from './pipes-tools.ts';
+import type { PipeCallInfo, PipesState, PipeUsageInfo } from './pipes-tools.ts';
 import { code, untrusted } from './forms-tools.ts';
 
 const MAX_VALUE_CHARS = 200;
@@ -103,13 +103,22 @@ function runtimeText(
         runtime.call.lastCaller ? ` Last caller: ${code(runtime.call.lastCaller)}.` : ''
       }`,
     );
+    const timing = timingText(runtime.call);
+    if (timing) parts.push(timing);
+    if (runtime.call.errorCount) {
+      parts.push(
+        `**Threw** ${runtime.call.errorCount} time(s)${
+          runtime.call.lastError ? `, last error: ${code(capJson(runtime.call.lastError))}` : ''
+        }.`,
+      );
+    }
     const instances = runtime.call.instances;
     if (instances?.length) {
       parts.push(
         `Per instance: ${instances
           .map(
             (i) =>
-              `${i.component} ×${i.callCount} ${code(capArgs(i.lastArgs))} → ${code(capJson(i.lastResult))}`,
+              `${i.component} ×${i.callCount}${i.totalMs !== undefined ? ` (${formatMs(i.totalMs)} total)` : ''} ${code(capArgs(i.lastArgs))} → ${code(capJson(i.lastResult))}`,
           )
           .join('; ')}.`,
       );
@@ -117,12 +126,29 @@ function runtimeText(
   } else {
     parts.push(instrumented ? 'No calls recorded yet.' : RECORD_HINT);
   }
+  if (runtime.staleCheck === 'unavailable') {
+    parts.push(
+      'The stale-argument check is off for this pipe: it could not read the compiled template, which happens in minified or production builds.',
+    );
+  }
   if (runtime.stale) {
     parts.push(
       '**Experimental:** this pure pipe was fed an argument that changed contents without changing reference — it may be showing a stale value.',
     );
   }
   return parts.join(' ');
+}
+
+function formatMs(ms: number): string {
+  return `${ms < 10 ? ms.toFixed(2) : Math.round(ms)} ms`;
+}
+
+function timingText(call: PipeCallInfo): string | undefined {
+  if (call.totalMs === undefined) return undefined;
+  const average = call.callCount ? call.totalMs / call.callCount : 0;
+  return `Time in transform: ${formatMs(call.totalMs)} total, ${formatMs(average)} on average, ${formatMs(call.maxMs ?? 0)} at most${
+    call.lastMs !== undefined ? `, ${formatMs(call.lastMs)} last call` : ''
+  }.`;
 }
 
 function lintLine(f: PipeLintFinding): string {

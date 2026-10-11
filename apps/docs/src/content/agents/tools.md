@@ -351,14 +351,14 @@ It finds impure pipes used inside `@for`, `| json` left in templates, pure pipes
 
 ### Explain a pipe
 
-`explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the last input and output, a stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage, and lint findings. Reads: source, plus the page for live counts.
+`explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the time spent in `transform` and the errors it threw, the last input and output, a stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage, and lint findings. Reads: source, plus the page for live counts.
 
 | Argument | Required | Value                                              |
 | -------- | -------- | -------------------------------------------------- |
 | `name`   | yes      | The pipe name as used after `\|` in a template.    |
 | `page`   | no       | The tab to read. Defaults to the most recent page. |
 
-Live data comes from one tab: the one `page` names, or the most recent. When more than one tab reports pipes, the answer starts with the tab it read. Live counts, input and output appear while recording is on. Start it with [`record-pipes`](#record-pipe-calls) or with **Record calls** in the [Pipes inspector](../inspectors/pipes.md).
+Live data comes from one tab: the one `page` names, or the most recent. When more than one tab reports pipes, the answer starts with the tab it read. Live counts, times, errors, input and output appear while recording is on. Start it with [`record-pipes`](#record-pipe-calls) or with **Record calls** in the [Pipes inspector](../inspectors/pipes.md).
 
 The **Live** line tells these cases apart:
 

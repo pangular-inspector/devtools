@@ -446,6 +446,10 @@ const pangular = defineDevframe({
         draft.async = next.async;
         draft.reportedAt = next.reportedAt;
         draft.instrumented = next.instrumented;
+        if (next.asyncTotal === undefined) delete draft.asyncTotal;
+        else draft.asyncTotal = next.asyncTotal;
+        if (next.pages === undefined) delete draft.pages;
+        else draft.pages = next.pages;
       });
 
     // A closed tab drops its connection at once, so its entries go with it
@@ -2774,7 +2778,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:explain-pipe',
       description:
-        'Explain one pipe by name: where it is declared or used, whether it is pure, live instance/call counts and last input/output when instrumentation is on, an experimental stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage (for `async`), and any lint findings. Use this to answer "why is this pipe slow or stale?"',
+        'Explain one pipe by name: where it is declared or used, whether it is pure, live instance/call counts, time spent in transform, errors thrown and last input/output when instrumentation is on, an experimental stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage (for `async`), and any lint findings. Use this to answer "why is this pipe slow or stale?"',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -2793,7 +2797,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:record-pipes',
       description:
-        "Start or stop recording pipe calls on the running page, the same switch as Record calls in the Pipes panel. Recording wraps each pipe's transform() to count calls and keep the last input, output and caller, and turns on the experimental stale-argument check; pangular:explain-pipe then shows them. `start` records on the page `page` names, or on the most recent page; `stop` stops that page, or every page without `page`. Calls recorded so far stay after a stop.",
+        "Start or stop recording pipe calls on the running page, the same switch as Record calls in the Pipes panel. Recording wraps each pipe's transform() to count and time calls, count errors and keep the last input, output and caller, and turns on the experimental stale-argument check; pangular:explain-pipe then shows them. `start` records on the page `page` names, or on the most recent page; `stop` stops that page, or every page without `page`. Calls recorded so far stay after a stop.",
       safety: 'read',
       inputSchema: {
         type: 'object',
