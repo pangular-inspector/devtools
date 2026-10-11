@@ -565,6 +565,9 @@ const KIND_COLORS: Record<string, string> = {
                     }
                   </ul>
                 }
+                @if (writeHint(); as hint) {
+                  <p class="hint">{{ hint }}</p>
+                }
                 <ng-container
                   [ngTemplateOutlet]="historyTpl"
                   [ngTemplateOutletContext]="{ id: node.id, label: 'Value history' }"
@@ -1355,6 +1358,22 @@ export class SignalInspector {
     return id ? [...(this.graph()?.history?.[id] ?? [])].reverse() : [];
   });
 
+  /** Why a writable signal has no exact set entries, when the panel can tell. */
+  readonly writeHint = computed(() => {
+    const node = this.selectedNode();
+    const g = this.graph();
+    if (!node || !g || g.writeHook === false) return '';
+    if (node.kind !== 'signal' && node.kind !== 'linkedSignal') return '';
+    if (!node.label) {
+      return "This signal has no name, so its history holds sampled values only. Pass a debugName in its options, for example signal(0, { debugName: 'count' }).";
+    }
+    const history = g.history?.[node.id] ?? [];
+    if (history.some((c) => c.source === 'write') || !history.some((c) => c.source === 'sample')) {
+      return '';
+    }
+    return 'Every change here was sampled. Writes are matched by name, kind, version and value, so another live signal with the same name and value can hide them.';
+  });
+
   readonly kindLegend = Object.entries(KIND_COLORS).map(([kind, color]) => ({ kind, color }));
 
   filteredResources = computed(() => {
@@ -1362,7 +1381,11 @@ export class SignalInspector {
     const kind = this.kind();
     if (kind && kind !== 'resource') return [];
     return this.resources().filter(
-      (r) => !q || r.name.toLowerCase().includes(q) || 'resource'.includes(q),
+      (r) =>
+        !q ||
+        r.name.toLowerCase().includes(q) ||
+        // A short query such as `e` would match every resource through its kind.
+        (q.length >= 3 && 'resource'.startsWith(q)),
     );
   });
 
@@ -1634,23 +1657,27 @@ export class SignalInspector {
     return KIND_COLORS[kind] ?? KIND_COLORS['unknown'];
   }
 
-  getDependencies(node: SignalNode): SignalNode[] {
+  /** Producers and consumers of every node, built once per graph. */
+  private readonly relations = computed(() => {
+    const map = new Map<string, { deps: SignalNode[]; consumers: SignalNode[] }>();
     const g = this.graph();
-    if (!g) return [];
-    const idx = g.nodes.findIndex((n) => n.id === node.id);
-    return g.edges
-      .filter((e) => e.consumer === idx)
-      .map((e) => g.nodes[e.producer])
-      .filter(Boolean);
+    if (!g) return map;
+    for (const node of g.nodes) map.set(node.id, { deps: [], consumers: [] });
+    for (const edge of g.edges) {
+      const producer = g.nodes[edge.producer];
+      const consumer = g.nodes[edge.consumer];
+      if (!producer || !consumer) continue;
+      map.get(consumer.id)?.deps.push(producer);
+      map.get(producer.id)?.consumers.push(consumer);
+    }
+    return map;
+  });
+
+  getDependencies(node: SignalNode): SignalNode[] {
+    return this.relations().get(node.id)?.deps ?? [];
   }
 
   getConsumers(node: SignalNode): SignalNode[] {
-    const g = this.graph();
-    if (!g) return [];
-    const idx = g.nodes.findIndex((n) => n.id === node.id);
-    return g.edges
-      .filter((e) => e.producer === idx)
-      .map((e) => g.nodes[e.consumer])
-      .filter(Boolean);
+    return this.relations().get(node.id)?.consumers ?? [];
   }
 }

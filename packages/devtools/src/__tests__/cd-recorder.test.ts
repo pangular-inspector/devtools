@@ -2,7 +2,7 @@
 import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PROFILER_EVENT as E, createCdRecorder } from '../cd-recorder.ts';
+import { OUTPUT_TRIGGER_MS, PROFILER_EVENT as E, createCdRecorder } from '../cd-recorder.ts';
 import { attachChangeDetection } from '../cd-overlay.ts';
 import { changeDetectionText, toCdPage, type CdState } from '../rpc/cd-tools.ts';
 
@@ -90,6 +90,43 @@ describe('change detection recorder', () => {
     expect(recorder.snapshot(() => null).cycles.map((c) => c.trigger)).toEqual([
       undefined,
       undefined,
+    ]);
+  });
+
+  it('drops an output trigger when the next tick starts long after it ended', () => {
+    const clock = clocked();
+    const recorder = createCdRecorder({ maxCycles: 10, now: clock.now });
+    recorder.start();
+    recorder.onEvent(E.OutputStart, new Cart(), function onAdd() {});
+    recorder.onEvent(E.OutputEnd);
+    clock.advance(OUTPUT_TRIGGER_MS + 1);
+    recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionEnd);
+    recorder.onEvent(E.OutputStart, new Price(), function onPick() {});
+    clock.advance(OUTPUT_TRIGGER_MS * 2);
+    recorder.onEvent(E.OutputEnd);
+    clock.advance(4);
+    recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionEnd);
+    expect(recorder.snapshot(() => null).cycles.map((c) => c.trigger)).toEqual([
+      undefined,
+      'Price (onPick)',
+    ]);
+  });
+
+  it('keeps the outer cycle when a nested tick starts and ends inside it', () => {
+    const recorder = createCdRecorder({ maxCycles: 10 });
+    recorder.start();
+    recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionEnd);
+    recorder.onEvent(E.ComponentEnd, new Shell());
+    recorder.onEvent(E.ChangeDetectionEnd);
+    const cycles = recorder.snapshot(() => null).cycles;
+    expect(cycles.map((c) => [c.id, c.checks])).toEqual([
+      [2, 0],
+      [1, 1],
     ]);
   });
 
@@ -184,6 +221,45 @@ describe('change detection in the overlay', () => {
     expect(profilers).toHaveLength(0);
     handlers.get('change-detection-record')!({ pageId: 'other', on: true });
     expect(profilers).toHaveLength(0);
+  });
+
+  it('keeps a running recording when a second start arrives', async () => {
+    const { cd, sent, handlers, emit } = setup('22.1.0');
+    handlers.get('change-detection-record')!({ pageId: 'p1', on: true });
+    emit(E.ChangeDetectionStart);
+    emit(E.ChangeDetectionEnd);
+    handlers.get('change-detection-record')!({ on: true });
+    await cd.push(true);
+    const last = () =>
+      sent.filter((s) => s.name === 'push-change-detection').at(-1)!.args[0] as {
+        cycles: unknown[];
+      };
+    expect(last().cycles).toHaveLength(1);
+    handlers.get('change-detection-record')!({ on: true, clear: true });
+    await cd.push(true);
+    expect(last()).toMatchObject({ recording: true, cycles: [] });
+  });
+
+  it('reads a host again when it could not be read before', async () => {
+    const { cd, ng, sent, handlers, emit } = setup('22.1.0');
+    let ready = false;
+    ng.getHostElement = () => (ready ? document.querySelector('app-root') : null);
+    handlers.get('change-detection-record')!({ pageId: 'p1', on: true });
+    emit(E.ChangeDetectionStart);
+    emit(E.ComponentStart);
+    emit(E.ComponentEnd, new Shell());
+    emit(E.ChangeDetectionEnd);
+    const hosts = () =>
+      (
+        sent.filter((s) => s.name === 'push-change-detection').at(-1)!.args[0] as {
+          hosts: Record<string, number>;
+        }
+      ).hosts;
+    await cd.push(true);
+    expect(hosts()).toEqual({});
+    ready = true;
+    await cd.push(true);
+    expect(Object.values(hosts())).toEqual([1]);
   });
 
   it('sends a stopped recording again after leave, as on a bfcache restore', async () => {

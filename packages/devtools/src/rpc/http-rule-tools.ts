@@ -85,7 +85,7 @@ export function httpRulesText(rules: readonly HttpRule[], writable: boolean): st
 /** Explains why the arguments do not make a valid rule, the way the panel's form does. */
 function ruleProblem(args: SetHttpRuleArgs, body: string | undefined): string | undefined {
   if (typeof args.pattern !== 'string' || !args.pattern.trim()) {
-    return '`pattern` is required: part of the request URL, where `*` matches anything.';
+    return '`pattern` is required: part of the request URL, where `*` matches anything and a leading `^` anchors it at the path start.';
   }
   if (args.pattern.trim().length > MAX_PATTERN) {
     return `\`pattern\` is limited to ${MAX_PATTERN} characters.`;

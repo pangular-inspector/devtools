@@ -521,7 +521,7 @@ function bare(name: string): string {
                 <button
                   type="button"
                   class="defer-row"
-                  [disabled]="!block.owner"
+                  [attr.aria-disabled]="block.owner ? null : 'true'"
                   (click)="showOwner(block)"
                   (focus)="highlightBlock(block)"
                   (blur)="highlight(null)"
@@ -864,7 +864,7 @@ function bare(name: string): string {
       border-color: var(--border);
       text-align: left;
     }
-    .defer-row:disabled {
+    .defer-row[aria-disabled='true'] {
       cursor: default;
     }
     .defer-state {

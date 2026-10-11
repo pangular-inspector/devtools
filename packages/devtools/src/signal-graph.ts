@@ -382,6 +382,11 @@ function pickGraph<H extends object>(
   return empty;
 }
 
+/** The component or environment injector a graph belongs to; node ids are only unique within it. */
+export function signalOwner(graph: Pick<SignalGraph, 'component' | 'injector'>): string {
+  return graph.component?.id ?? graph.injector?.id ?? '';
+}
+
 export function graphKey(graph: SignalGraph): string {
   const nodes = graph.nodes.map((n) => `${n.id}:${n.epoch}`).join(',');
   const edges = graph.edges.map((e) => `${e.consumer}>${e.producer}`).join(',');

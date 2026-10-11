@@ -40,6 +40,8 @@ export interface SsrRequest {
   navigations?: SsrNavigation[];
   /** SSR overrides from the panel that matched this request. */
   overrides?: AppliedOverride[];
+  /** The body was already compressed when `ssrMiddleware` saw it, because compression ran first. */
+  compressedBeforeTrace?: boolean;
   /** The connection closed before the response finished. */
   aborted?: boolean;
 }

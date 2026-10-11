@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { linkedSignal, signal } from '@angular/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
   MAX_CHANGES,
@@ -233,6 +234,33 @@ describe('createSignalHistory', () => {
     expect(out['a'].map((c) => c.value)).toEqual(['[redacted]', '[redacted]']);
   });
 
+  it('serializes writes after the set call, only for the entries the list keeps', async () => {
+    const serialize = vi.fn((v: unknown) => v);
+    const h = createSignalHistory(serialize);
+    const raw: RawSignalNode = { debugName: 'pointer', kind: 'signal', value: 0, version: 0 };
+    for (let i = 1; i <= MAX_CHANGES + 20; i++) write(h.onWrite, raw, i);
+    expect(serialize).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(serialize).toHaveBeenCalledTimes(MAX_CHANGES);
+    expect(serialize).toHaveBeenLastCalledWith(MAX_CHANGES + 20, 'pointer');
+  });
+
+  it('keeps the track of a signal that is still written when newer signals push others out', () => {
+    const h = createSignalHistory(identity);
+    const hot: RawSignalNode = { debugName: 'hot', kind: 'signal', value: 0, version: 0 };
+    write(h.onWrite, hot, 1);
+    const others: RawSignalNode[] = [];
+    for (let i = 0; i < 600; i++) {
+      const raw: RawSignalNode = { debugName: `s${i}`, kind: 'signal', value: 0, version: 0 };
+      others.push(raw);
+      write(h.onWrite, raw, 1);
+      if (i % 100 === 0) write(h.onWrite, hot, (hot.value as number) + 1);
+    }
+    const out = h.collect([graphNode('h', 'hot', hot.version!, hot.value)]);
+    expect(out['h'].map((c) => c.value)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(others).toHaveLength(600);
+  });
+
   it('sends only changes newer than the last push unless asked for everything', () => {
     let at = 0;
     const h = createSignalHistory(identity, () => ++at);
@@ -335,5 +363,28 @@ describe('installSignalWriteHook', () => {
 
   it('returns a restore function when the hook installs', async () => {
     expect(await installSignalWriteHook(vi.fn(), async () => fakeCore())).toBeTypeOf('function');
+  });
+
+  it('records writes to a named linkedSignal with the real Angular hook', async () => {
+    const h = createSignalHistory(identity);
+    const seen: RawSignalNode[] = [];
+    const restore = await installSignalWriteHook((node) => {
+      seen.push(node);
+      h.onWrite(node);
+    });
+    try {
+      const source = signal(['a', 'b'], { debugName: 'options' });
+      const selected = linkedSignal(() => source()[0], { debugName: 'selected' });
+      expect(selected()).toBe('a');
+      selected.set('b');
+      const raw = seen.find((node) => node.debugName === 'selected');
+      expect(raw?.kind).toBe('linkedSignal');
+      const out = h.collect([graphNode('l', 'selected', raw!.version!, 'b', 'linkedSignal')]);
+      expect(out['l']).toEqual([
+        expect.objectContaining({ value: 'b', source: 'write', epoch: raw!.version }),
+      ]);
+    } finally {
+      restore?.();
+    }
   });
 });

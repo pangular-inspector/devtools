@@ -1,8 +1,10 @@
+import type { CdCheck, CdComponentStat, CdCycle, CdRecording, CdReport } from './config.ts';
 import { className } from './injector-tree.ts';
 
 /** Angular's `ProfilerEvent` values that the recorder reads. */
 export const PROFILER_EVENT = {
   OutputStart: 6,
+  OutputEnd: 7,
   ChangeDetectionStart: 12,
   ChangeDetectionEnd: 13,
   ChangeDetectionSyncStart: 14,
@@ -13,44 +15,15 @@ export const PROFILER_EVENT = {
 const TOP_PER_CYCLE = 10;
 const MAX_COMPONENTS = 100;
 const MAX_HOSTS = 2000;
+const MAX_NESTED = 10;
+/**
+ * How long after an output listener ends a tick can still be credited to it.
+ * Zone.js ticks right after the listener and the zoneless scheduler within a
+ * frame; a later tick came from something else, such as a timer or HTTP.
+ */
+export const OUTPUT_TRIGGER_MS = 50;
 
-export interface CdCheck {
-  name: string;
-  checks: number;
-  /** Time in the component's own template and hooks, children excluded. */
-  ms: number;
-}
-
-export interface CdCycle {
-  id: number;
-  at: number;
-  ms: number;
-  /** How many times Angular synchronized the views in this tick. */
-  passes: number;
-  /** The output listener that ran last before the tick, when there was one. */
-  trigger?: string;
-  checks: number;
-  components: CdCheck[];
-}
-
-export interface CdComponentStat {
-  name: string;
-  checks: number;
-  ms: number;
-  maxMs: number;
-  cycles: number;
-}
-
-export interface CdRecording {
-  recording: boolean;
-  startedAt: number | null;
-  cycles: CdCycle[];
-  /** Older cycles removed at `limits.cdCycles`. */
-  dropped: number;
-  components: CdComponentStat[];
-  /** Checks per component host, keyed by the component tree's element id. */
-  hosts: Record<string, number>;
-}
+export type { CdCheck, CdComponentStat, CdCycle, CdRecording, CdReport };
 
 type Ctor = object;
 
@@ -107,7 +80,10 @@ export function createCdRecorder(options: {
   let cycles: RawCycle[] = [];
   let current: RawCycle | null = null;
   let stack: Frame[] = [];
-  let lastOutput: { owner: unknown; listener: unknown } | undefined;
+  // Cycles a nested tick interrupted, such as a recursive `ApplicationRef.tick`
+  // that Angular starts and ends before throwing. They resume when it ends.
+  let outer: { cycle: RawCycle; stack: Frame[] }[] = [];
+  let lastOutput: { owner: unknown; listener: unknown; endedAt?: number } | undefined;
   let totals = new Map<Ctor, CdComponentStat & { lastCycle: number }>();
   let perInstance = new WeakMap<object, number>();
   let instances: WeakRef<object>[] = [];
@@ -119,11 +95,21 @@ export function createCdRecorder(options: {
       case PROFILER_EVENT.OutputStart:
         if (!current) lastOutput = { owner: instance, listener: hook };
         return;
-      case PROFILER_EVENT.ChangeDetectionStart:
+      case PROFILER_EVENT.OutputEnd:
+        if (!current && lastOutput) lastOutput.endedAt = now();
+        return;
+      case PROFILER_EVENT.ChangeDetectionStart: {
+        const start = now();
+        if (lastOutput?.endedAt !== undefined && start - lastOutput.endedAt > OUTPUT_TRIGGER_MS)
+          lastOutput = undefined;
+        if (current) {
+          outer.push({ cycle: current, stack });
+          if (outer.length > MAX_NESTED) outer.shift();
+        }
         current = {
           id: ++seq,
           at: clock(),
-          start: now(),
+          start,
           ms: 0,
           passes: 0,
           trigger: triggerText(lastOutput),
@@ -132,6 +118,7 @@ export function createCdRecorder(options: {
         lastOutput = undefined;
         stack = [];
         return;
+      }
       case PROFILER_EVENT.ChangeDetectionSyncStart:
         if (current) current.passes++;
         return;
@@ -195,8 +182,9 @@ export function createCdRecorder(options: {
           dropped += cycles.length - options.maxCycles;
           cycles = cycles.slice(-options.maxCycles);
         }
-        current = null;
-        stack = [];
+        const resumed = outer.pop();
+        current = resumed?.cycle ?? null;
+        stack = resumed?.stack ?? [];
         return;
       }
     }
@@ -208,6 +196,7 @@ export function createCdRecorder(options: {
     cycles = [];
     current = null;
     stack = [];
+    outer = [];
     lastOutput = undefined;
     totals = new Map();
     perInstance = new WeakMap();
@@ -224,7 +213,7 @@ export function createCdRecorder(options: {
     get hasCycles() {
       return cycles.length > 0;
     },
-    /** Starts a fresh recording. */
+    /** Starts a fresh recording, dropping what was recorded before. */
     start() {
       reset();
       recording = true;
@@ -235,6 +224,7 @@ export function createCdRecorder(options: {
       recording = false;
       current = null;
       stack = [];
+      outer = [];
       lastOutput = undefined;
     },
     clear() {

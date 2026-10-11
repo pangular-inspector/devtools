@@ -34,4 +34,14 @@ describe('impure-pipe-in-for block matching', () => {
     const template = `@for (r of rows; track r) {\n@for (c of r; track c) {\n{{ c | slow }}\n}\n}`;
     expect(lintFor(template)).toHaveLength(1);
   });
+
+  it('does not flag async or json inside a loop', () => {
+    const template = `@for (item of items; track item) { {{ item.price$ | async }} {{ item | json }} }`;
+    expect(lintFor(template)).toEqual([]);
+  });
+
+  it('still flags other impure built-ins inside a loop', () => {
+    const template = `@for (item of items; track item) { {{ item.map | keyvalue }} }`;
+    expect(lintFor(template).map((f) => f.pipe)).toEqual(['keyvalue']);
+  });
 });

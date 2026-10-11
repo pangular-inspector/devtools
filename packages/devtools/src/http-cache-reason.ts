@@ -14,15 +14,11 @@ function uncacheable(headers: Pick<HttpHeaders, 'get'>): boolean {
 }
 
 /**
- * Why Angular's transfer cache did not store a server response, checked in
- * the order of `canUseOrCacheRequest` and `transferCacheInterceptorFn` with
- * their default options. Options such as `filter` can't be read, so they
- * fall into `cache-off-or-filter`.
+ * Why Angular's transfer cache would skip this request before it is sent, with
+ * its default options, or undefined when it may read or store it. The browser
+ * side and `cacheSkipReason` share it, so both agree on what can be cached.
  */
-export function cacheSkipReason(
-  req: HttpRequest<unknown>,
-  response: { ok: boolean; headers?: Pick<HttpHeaders, 'get' | 'has'> } | null,
-): CacheSkip {
+export function requestSkipReason(req: HttpRequest<unknown>): CacheSkip | undefined {
   if (req.transferCache === false) return 'opted-out';
   if (req.method === 'POST' && !req.transferCache) return 'post';
   if (!['GET', 'HEAD', 'POST'].includes(req.method)) return 'method';
@@ -36,6 +32,21 @@ export function cacheSkipReason(
   if (uncacheable(req.headers) || req.cache === 'no-cache' || req.cache === 'no-store') {
     return 'no-cache-request';
   }
+  return undefined;
+}
+
+/**
+ * Why Angular's transfer cache did not store a server response, checked in
+ * the order of `canUseOrCacheRequest` and `transferCacheInterceptorFn` with
+ * their default options. Options such as `filter` can't be read, so they
+ * fall into `cache-off-or-filter`.
+ */
+export function cacheSkipReason(
+  req: HttpRequest<unknown>,
+  response: { ok: boolean; headers?: Pick<HttpHeaders, 'get' | 'has'> } | null,
+): CacheSkip {
+  const skip = requestSkipReason(req);
+  if (skip) return skip;
   if (!response?.ok) return 'error';
   if (response.headers && uncacheable(response.headers)) return 'no-cache-response';
   if (response.headers?.has('set-cookie')) return 'set-cookie';

@@ -503,3 +503,66 @@ describe('injector tree page picker', () => {
     expect(el.textContent).not.toContain('This injector is no longer on the page');
   });
 });
+
+describe('injector tree search and zone', () => {
+  afterEach(() => {
+    scopeToPage(null);
+    document.body.innerHTML = '';
+  });
+
+  const providing = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({
+      injector: {
+        id: `e${i}`,
+        type: 'element',
+        name: `app-${i}`,
+        providerCount: 1,
+        component: 'C',
+      },
+      providers: [{ token: 'Store', type: 'class', isViewProvider: false }],
+      children: [],
+    }));
+
+  it('shows the change detection mode the page reported', async () => {
+    const fixture = await render({ roots: providing(1), environment: [], zone: 'zone-unused' });
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'Change detection: Zoneless, zone.js loaded',
+    );
+  });
+
+  it('says how many more injectors provide the token past the shown chips', async () => {
+    const fixture = await render({ roots: providing(15), environment: [] });
+    fixture.componentInstance.query.set('store');
+    await fixture.whenStable();
+    const where = (fixture.nativeElement as HTMLElement).querySelector('.where')!;
+    expect(where.querySelectorAll('.chip')).toHaveLength(12);
+    expect(where.textContent).toContain('+3 more');
+    expect(where.getAttribute('role')).toBeNull();
+  });
+
+  it('announces one search summary once typing pauses', async () => {
+    const fixture = await render({ roots: providing(2), environment: [] });
+    vi.useFakeTimers();
+    try {
+      const status = () =>
+        (fixture.nativeElement as HTMLElement).querySelector('[role="status"].sr-only')!
+          .textContent;
+      for (const query of ['s', 'st', 'sto', 'store']) {
+        fixture.componentInstance.query.set(query);
+        fixture.detectChanges();
+        await vi.advanceTimersByTimeAsync(100);
+      }
+      expect(status()).toBe('');
+      await vi.advanceTimersByTimeAsync(600);
+      fixture.detectChanges();
+      expect(status()).toBe('2 injectors provide “store”.');
+      fixture.componentInstance.query.set('zzz');
+      fixture.detectChanges();
+      await vi.advanceTimersByTimeAsync(600);
+      fixture.detectChanges();
+      expect(status()).toBe('Nothing here matches “zzz”.');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

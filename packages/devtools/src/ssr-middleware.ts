@@ -17,6 +17,7 @@ const SNIFF_BYTES = 64 * 1024;
 const KEPT_HEADERS = [
   'content-type',
   'content-length',
+  'content-encoding',
   'cache-control',
   'location',
   'vary',
@@ -62,6 +63,38 @@ function headerText(value: number | string | string[] | undefined): string | und
   return Array.isArray(value) ? value.join(', ') : String(value);
 }
 
+/** Told to the user when a compression middleware ran before this one and encoded the body. */
+export const COMPRESSED_NOTE =
+  'the body was already compressed: mount ssrMiddleware after compression';
+
+/**
+ * The value the headers passed to writeHead give `name`, which wins over one set with setHeader.
+ * Node takes an object, a flat `[name, value, ...]` array or `[name, value]` pairs.
+ */
+function passedHeader(args: unknown[], name: string): string | undefined {
+  const headers = args.find((arg, i) => i > 0 && arg && typeof arg === 'object');
+  if (!headers) return undefined;
+  if (Array.isArray(headers)) {
+    const flat: unknown[] = Array.isArray(headers[0]) ? headers.flat() : headers;
+    let value: string | undefined;
+    for (let i = 0; i + 1 < flat.length; i += 2) {
+      if (String(flat[i]).toLowerCase() === name) {
+        value = headerText(flat[i + 1] as string | string[]);
+      }
+    }
+    return value;
+  }
+  const object = headers as OutgoingHttpHeaders;
+  const key = Object.keys(object).find((k) => k.toLowerCase() === name);
+  return key === undefined ? undefined : headerText(object[key]);
+}
+
+/** True when the body is encoded, so its bytes can't be read as HTML. */
+function encoded(res: ServerResponse, passed?: string): boolean {
+  const value = (passed ?? headerText(res.getHeader('content-encoding')))?.trim().toLowerCase();
+  return !!value && value !== 'identity';
+}
+
 /**
  * Traces HTML requests that the Angular SSR engine answers. Each request gets
  * an id, sent to the render in a request header and back to the browser in
@@ -101,9 +134,15 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
     let bytes = 0;
     let sniff = '';
     let done = false;
+    // Whether the body was encoded before it reached this middleware, read when the headers go
+    // out. A compression() mounted before this one sets its header inside that writeHead call, so
+    // its later `Content-Encoding` does not count; one mounted after has already set it.
+    let encodedAtHead: boolean | undefined;
+    const bodyEncoded = () => encodedAtHead ?? encoded(res);
 
     const writeHead = res.writeHead;
     res.writeHead = function (this: ServerResponse, ...args: unknown[]) {
+      encodedAtHead ??= encoded(res, passedHeader(args, 'content-encoding'));
       if (!renderMs) {
         renderMs = Date.now() - at;
         const timing = [
@@ -203,25 +242,32 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
             typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk as Uint8Array),
           );
         }
-        const html = Buffer.concat(chunks).toString('utf8');
+        const body = Buffer.concat(chunks);
         const isHtml = /\btext\/html\b/.test(headerText(res.getHeader('content-type')) ?? '');
+        // A compression middleware that wraps res.write outside this one hands over encoded
+        // bytes, where the TransferState script can't be found. They are sent as they are.
+        const compressed = isHtml && bodyEncoded();
+        const html = compressed ? '' : body.toString('utf8');
         const hasState = isHtml && /<script\b[^>]*\sid="[^"]*-state"/.test(html);
         const edited = hasState ? editTransferState(html, list) : null;
         // Error pages and redirects carry no TransferState, so an edit there is not worth a note.
-        for (const o of hasState ? list : []) {
+        for (const o of compressed || hasState ? list : []) {
           const done = !!edited?.keys.includes(o.key ?? '');
           noteOverride(id, {
             id: o.id,
             kind: 'state-edit',
             applied: done,
-            note: done
-              ? `${o.value === undefined ? 'removed' : 'set'} ${o.key}`
-              : o.value === undefined
-                ? `no entry ${o.key} to remove`
-                : `could not edit the TransferState script for ${o.key}`,
+            note: compressed
+              ? COMPRESSED_NOTE
+              : done
+                ? `${o.value === undefined ? 'removed' : 'set'} ${o.key}`
+                : o.value === undefined
+                  ? `no entry ${o.key} to remove`
+                  : `could not edit the TransferState script for ${o.key}`,
           });
         }
-        const out = edited ? edited.html : html;
+        // Bytes that were not edited go out as they came, in case they were not UTF-8 text.
+        const out = edited ? edited.html : body;
         if (!res.headersSent) {
           res.removeHeader('content-length');
           res.setHeader('content-length', Buffer.byteLength(out));
@@ -252,6 +298,8 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
       const type = headerText(res.getHeader('content-type')) ?? '';
       // Static files and API answers that reach this far are not renders.
       if (!aborted && !/\btext\/html\b/.test(type) && res.statusCode < 300) return;
+      const isHtml = /\btext\/html\b/.test(type);
+      const compressed = isHtml && bodyEncoded();
       const headers: Record<string, string> = {};
       for (const name of KEPT_HEADERS) {
         const value = headerText(res.getHeader(name));
@@ -266,12 +314,14 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
         durationMs: Date.now() - at,
         renderMs: renderMs || Date.now() - at,
         bytes,
-        renderMode: renderModeOf(/\btext\/html\b/.test(type) ? sniff : '', res.statusCode),
+        // Encoded bytes are not HTML, so only the status is read then.
+        renderMode: renderModeOf(isHtml && !compressed ? sniff : '', res.statusCode),
         fetches: active.fetches,
         fetchMs: active.fetchMs,
         headers,
         ...(active.navigations?.length ? { navigations: active.navigations } : {}),
         ...(active.overrides?.length ? { overrides: active.overrides } : {}),
+        ...(compressed ? { compressedBeforeTrace: true } : {}),
         ...(aborted ? { aborted: true } : {}),
       };
       registry.record?.(request);

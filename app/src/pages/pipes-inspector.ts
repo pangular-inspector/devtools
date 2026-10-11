@@ -43,16 +43,27 @@ interface PipeComponentUsage {
   targets?: PipeTarget[];
 }
 
-interface PipeInstanceCall {
+interface PipeCallTiming {
+  totalMs?: number;
+  maxMs?: number;
+  lastMs?: number;
+  errorCount?: number;
+  lastError?: string;
+}
+
+interface PipeInstanceCall extends PipeCallTiming {
   component: string;
   callCount: number;
   lastArgs?: unknown[];
   lastResult?: unknown;
+  lastCaller?: string;
+  target?: PipeTarget;
 }
 
-interface PipeCallInfo {
+interface PipeCallInfo extends PipeCallTiming {
   callCount: number;
   instances?: PipeInstanceCall[];
+  instanceTotal?: number;
   lastArgs?: unknown[];
   lastResult?: unknown;
   lastCaller?: string;
@@ -70,6 +81,7 @@ interface LivePipeInfo {
   components: PipeComponentUsage[];
   call?: PipeCallInfo;
   stale?: StaleFinding;
+  staleCheck?: 'unavailable';
 }
 
 interface AsyncUsageInfo {
@@ -91,10 +103,19 @@ interface PipeLintFinding {
   fix: string;
 }
 
+interface PipesPageSnapshot {
+  pageId: string;
+  pipes: LivePipeInfo[];
+  async: AsyncUsageInfo[];
+  asyncTotal?: number;
+}
+
 interface PipesSnapshot {
   pipes: LivePipeInfo[];
   async: AsyncUsageInfo[];
+  asyncTotal?: number;
   instrumented: string[];
+  pages?: PipesPageSnapshot[];
 }
 
 const RECORD_CONFIRM_MS = 5000;
@@ -244,6 +265,10 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                       {{ p.file }}:{{ p.line }}
                       @if (p.builtin && (p.usageCount ?? 0) > 1) {
                         <span class="more">+{{ (p.usageCount ?? 1) - 1 }} more</span>
+                      } @else if (!p.builtin && p.usageCount) {
+                        <span class="more"
+                          >{{ p.usageCount }} {{ p.usageCount === 1 ? 'use' : 'uses' }}</span
+                        >
                       }
                     </span>
                   </button>
@@ -301,7 +326,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
               </dl>
             </div>
 
-            @if (p.builtin && p.usages?.length) {
+            @if (p.usages?.length) {
               <div class="block">
                 <h3>
                   Used in templates <span class="pill">{{ p.usageCount }}</span>
@@ -359,6 +384,23 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                   @if (live.call; as call) {
                     <dt>Calls</dt>
                     <dd>{{ call.callCount }}</dd>
+                    @if (call.totalMs !== undefined) {
+                      <dt>Time</dt>
+                      <dd>
+                        {{ ms(call.totalMs) }} total,
+                        {{ ms(call.totalMs / call.callCount) }} average,
+                        {{ ms(call.maxMs ?? 0) }} slowest
+                      </dd>
+                    }
+                    @if (call.errorCount) {
+                      <dt>Errors</dt>
+                      <dd>
+                        {{ call.errorCount }}
+                        @if (call.lastError) {
+                          <span class="mono value">{{ call.lastError }}</span>
+                        }
+                      </dd>
+                    }
                     <dt>Last input</dt>
                     <dd class="mono value">{{ describe(call.lastArgs) }}</dd>
                     <dt>Last output</dt>
@@ -368,12 +410,44 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                       <dd>
                         <ul class="sites">
                           @for (i of call.instances; track $index) {
-                            <li class="mono value">
-                              {{ describe(i.lastArgs) }} → {{ describe(i.lastResult) }}
-                              <span class="calls">{{ i.callCount }}×</span>
+                            <li class="instance">
+                              @if (i.target; as target) {
+                                <button
+                                  type="button"
+                                  class="component"
+                                  [attr.aria-label]="'Highlight ' + i.component + ' on the page'"
+                                  (click)="highlight(target, true)"
+                                  (mouseenter)="highlight(target)"
+                                  (mouseleave)="highlight(null)"
+                                  (focus)="highlight(target)"
+                                  (blur)="highlight(null)"
+                                >
+                                  <span class="mono">{{ i.component }}</span>
+                                </button>
+                              } @else {
+                                <span class="component">
+                                  <span class="mono">{{ i.component }}</span>
+                                </span>
+                              }
+                              <span class="mono value">
+                                {{ describe(i.lastArgs) }} → {{ describe(i.lastResult) }}
+                                <span class="calls">{{ i.callCount }}×</span>
+                                @if (i.totalMs !== undefined) {
+                                  <span class="calls">{{ ms(i.totalMs) }}</span>
+                                }
+                              </span>
+                              @if (i.lastCaller) {
+                                <span class="mono value caller">{{ i.lastCaller }}</span>
+                              }
                             </li>
                           }
                         </ul>
+                        @if (call.instanceTotal) {
+                          <p class="hint">
+                            Showing {{ call.instances.length }} of
+                            {{ call.instanceTotal }} instances.
+                          </p>
+                        }
                       </dd>
                     }
                     @if (call.lastCaller) {
@@ -385,6 +459,12 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                     <dd class="muted">None recorded yet.</dd>
                   }
                 </dl>
+                @if (live.staleCheck === 'unavailable') {
+                  <p class="hint">
+                    The stale check is off for this pipe: it couldn't read the compiled template,
+                    which happens in minified builds.
+                  </p>
+                }
                 @if (!live.call && !instrumenting()) {
                   <p class="hint">Turn on “Record calls” to see call counts and values.</p>
                 }
@@ -417,6 +497,9 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
           the work runs twice. A source that changes on every check, like
           <span class="mono">getData() | async</span>, resubscribes each time.
         </p>
+        @if (asyncTotal(); as total) {
+          <p class="hint">Showing {{ async().length }} of {{ total }} subscriptions.</p>
+        }
         <ul class="async-list">
           @for (a of async(); track $index) {
             <li class="async-row" (mouseenter)="highlight(a.target)" (mouseleave)="highlight(null)">
@@ -852,6 +935,18 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       margin-left: 6px;
       color: var(--text-3);
     }
+    .instance {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .instance .component {
+      padding-right: 10px;
+    }
+    .caller {
+      flex-basis: 100%;
+    }
     .chips {
       display: flex;
       flex-wrap: wrap;
@@ -1113,6 +1208,8 @@ export class PipesInspector {
 
   live = signal<LivePipeInfo[]>([]);
   async = signal<AsyncUsageInfo[]>([]);
+  /** Every `| async` usage, set only when the list was cut short. */
+  asyncTotal = signal<number | undefined>(undefined);
   lint = signal<PipeLintFinding[] | null>(null);
   lintFailed = signal(false);
   instrumentedPages = signal<string[]>([]);
@@ -1196,8 +1293,13 @@ export class PipesInspector {
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         const snapshot = value as PipesSnapshot | undefined;
-        this.live.set(snapshot?.pipes ?? []);
-        this.async.set(snapshot?.async ?? []);
+        // With several tabs reporting, show the one this panel belongs to.
+        const pageId = hostPageId();
+        const own = pageId ? snapshot?.pages?.find((page) => page.pageId === pageId) : undefined;
+        const source = own ?? snapshot;
+        this.live.set(source?.pipes ?? []);
+        this.async.set(source?.async ?? []);
+        this.asyncTotal.set(source?.asyncTotal);
         const pages = snapshot?.instrumented ?? [];
         this.instrumentedPages.set(pages);
         if (this.pendingRecord() === pages.length > 0) this.settleRecord(null);
@@ -1252,6 +1354,10 @@ export class PipesInspector {
 
   liveFor(name: string): LivePipeInfo | undefined {
     return this.liveByName().get(name);
+  }
+
+  ms(value: number): string {
+    return `${value < 10 ? value.toFixed(2) : Math.round(value)} ms`;
   }
 
   describe(value: unknown): string {

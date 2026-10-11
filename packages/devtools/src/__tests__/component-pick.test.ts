@@ -52,6 +52,55 @@ describe('startComponentPick', () => {
     expect(later.defaultPrevented).toBe(false);
   });
 
+  it('keeps presses from the page and picks on pointerup, swallowing the click after it', async () => {
+    const { pick, card } = setup();
+    const button = card.querySelector('button')!;
+    const seen: string[] = [];
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'])
+      button.addEventListener(type, () => seen.push(type));
+    const fire = (type: string, target: Element = button) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 });
+      target.dispatchEvent(event);
+      return event;
+    };
+    expect(fire('pointerdown').defaultPrevented).toBe(true);
+    expect(fire('mousedown').defaultPrevented).toBe(true);
+    expect(fire('pointerup').defaultPrevented).toBe(true);
+    expect(await pick.result).toMatchObject({ ok: true, name: 'TripCard' });
+    expect(fire('click').defaultPrevented).toBe(true);
+    expect(seen).toEqual([]);
+    expect(fire('click').defaultPrevented).toBe(false);
+    expect(seen).toEqual(['click']);
+  });
+
+  it('lets presses on the popup through and needs a press before a release picks', async () => {
+    const { pick, card, popup } = setup();
+    const fab = popup.querySelector('.fab')!;
+    const down = new MouseEvent('pointerdown', { bubbles: true, cancelable: true });
+    fab.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(false);
+    card.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, cancelable: true }));
+    pick.cancel();
+    expect(await pick.result).toEqual({ ok: false, error: 'Picking cancelled.' });
+  });
+
+  it('highlights an SVG component host', async () => {
+    document.body.innerHTML = `<app-root ng-version="22.0.0"><svg><g app-bar><rect></rect></g></svg></app-root>`;
+    const root = document.querySelector('app-root')!;
+    const bar = document.querySelector('g')!;
+    const instances = new Map<Element, object>([
+      [root, {}],
+      [bar, {}],
+    ]);
+    const ng: ComponentDebugNg = { getComponent: (el) => instances.get(el) ?? null };
+    const highlight = { show: vi.fn(), clear: vi.fn() };
+    const pick = startComponentPick({ getNg: () => ng, highlight, timeoutMs: 1000 });
+    document.querySelector('rect')!.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(highlight.show).toHaveBeenCalledWith(bar);
+    pick.cancel();
+    await pick.result;
+  });
+
   it('keeps the hover box while the pointer stays and clears it when the pointer leaves the page', async () => {
     const { pick, highlight, card } = setup();
     const button = card.querySelector('button')!;

@@ -1,10 +1,11 @@
 import { CACHE_SKIP_TEXT, isHttpRuleStatus, type CacheSkip } from './config.ts';
+import { urlGlobMatch } from './url-glob.ts';
 
 export type HttpSide = 'client' | 'server';
 
 export interface HttpRule {
   id: string;
-  /** Substring of the request URL, or a glob where `*` matches anything. */
+  /** Substring of the request URL, or a glob where `*` matches anything; a leading `^` anchors it at the path start. */
   pattern: string;
   method?: string;
   enabled: boolean;
@@ -109,21 +110,6 @@ export function clientRules(): HttpRule[] {
   return registry.rules;
 }
 
-/**
- * Unanchored match: `*` spans any characters, and the pattern may appear
- * anywhere, so `/api/*` matches both relative (client) and absolute (SSR) URLs.
- */
-function globMatch(text: string, pattern: string): boolean {
-  let at = 0;
-  for (const part of pattern.split('*')) {
-    if (!part) continue;
-    const found = text.indexOf(part, at);
-    if (found < 0) return false;
-    at = found + part.length;
-  }
-  return true;
-}
-
 /** The status a rule answers with, or undefined when it lets the request through. */
 export function ruleStatus(rule: HttpRule): number | undefined {
   return rule.status ?? (rule.body ? 200 : undefined);
@@ -147,7 +133,7 @@ export function matchRule(
       ruleHasEffect(rule) &&
       (rule.target === 'both' || rule.target === side) &&
       (!rule.method || rule.method.toUpperCase() === method.toUpperCase()) &&
-      globMatch(url, rule.pattern),
+      urlGlobMatch(url, rule.pattern),
   );
 }
 

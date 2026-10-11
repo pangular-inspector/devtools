@@ -97,7 +97,7 @@ export const PIPE_USE = /(?<!\|)\|(?!\|)[ \t]*([A-Za-z_$][\w$]*)/g;
 export function scanPipes(cwd: string): PipeInfo[] {
   const pipes: PipeInfo[] = [];
   const major = angularMajor(cwd);
-  const builtinUsages = new Map<string, UsageSite[]>();
+  const usagesByName = new Map<string, UsageSite[]>();
   for (const root of sourceRoots(cwd)) {
     walkFiles(root, (full, entry) => {
       if (!entry.endsWith('.ts') || entry.endsWith('.spec.ts')) return;
@@ -105,13 +105,19 @@ export function scanPipes(cwd: string): PipeInfo[] {
         const content = readFileSync(full, 'utf-8');
         const relPath = relative(cwd, full);
         pipes.push(...pipesIn(content, relPath, major));
-        collectBuiltinUsages(content, relPath, full, cwd, builtinUsages);
+        collectUsages(content, relPath, full, cwd, usagesByName);
       } catch {
         // skip
       }
     });
   }
-  for (const [name, usages] of builtinUsages) {
+  for (const pipe of pipes) {
+    const usages = usagesByName.get(pipe.name);
+    if (!usages) continue;
+    pipe.usageCount = usages.length;
+    pipe.usages = usages;
+  }
+  for (const [name, usages] of usagesByName) {
     const meta = BUILTIN_PIPES.get(name);
     if (!meta) continue;
     pipes.push({
@@ -167,7 +173,7 @@ export interface TemplateSource {
  * Finds every `@Component(...)` in `content` and its template — inline, or
  * read from `templateUrl` relative to `fullPath` — for any scanner that needs
  * the template's text alongside a way to turn an offset into it back into a
- * line number. Shared by the built-in-pipe usage scan and the pipe linter.
+ * line number. Shared by the pipe usage scan and the pipe linter.
  */
 export function templatesIn(
   content: string,
@@ -202,10 +208,10 @@ export function templatesIn(
 
 /**
  * Finds every `@Component(...)` in `content` and scans its template — inline,
- * or read from `templateUrl` relative to `fullPath` — for uses of a built-in
- * pipe, recording each one into `out`.
+ * or read from `templateUrl` relative to `fullPath` — for pipe uses,
+ * recording each one into `out` by pipe name.
  */
-function collectBuiltinUsages(
+function collectUsages(
   content: string,
   relPath: string,
   fullPath: string,
@@ -273,7 +279,6 @@ function recordUsages(
   out: Map<string, UsageSite[]>,
 ) {
   for (const { name, index } of pipeUsesIn(templateText)) {
-    if (!BUILTIN_PIPES.has(name)) continue;
     const usages = out.get(name) ?? [];
     usages.push({ file, line: lineAt(baseOffset + index) });
     out.set(name, usages);

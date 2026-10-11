@@ -1,41 +1,14 @@
 import { Component, computed, input, signal } from '@angular/core';
+import type { CdReport } from '@pangular-inspector/devtools/config';
 import type { DevframeRpcClient } from 'devframe/client';
 import { panelConfig } from '../devtools-config';
 import { time } from '../format';
 import { rpcCall as call } from '../rpc';
 import { LimitNote } from '../ui/limit-note';
 
-export interface CdCheck {
-  name: string;
-  checks: number;
-  ms: number;
-}
-
-export interface CdCycle {
-  id: number;
-  at: number;
-  ms: number;
-  passes: number;
-  trigger?: string;
-  checks: number;
-  components: CdCheck[];
-}
-
-export interface CdComponentStat extends CdCheck {
-  maxMs: number;
-  cycles: number;
-}
-
-export interface CdPage {
-  pageId: string;
-  supported: boolean;
-  recording: boolean;
-  startedAt: number | null;
-  dropped: number;
-  cycles: CdCycle[];
-  components: CdComponentStat[];
-  hosts: Record<string, number>;
-}
+export type { CdCheck, CdComponentStat, CdCycle } from '@pangular-inspector/devtools/config';
+/** One page's recording, as the page reports it. */
+export type CdPage = CdReport;
 
 const SHOWN = 10;
 const SHOWN_CYCLES = 30;

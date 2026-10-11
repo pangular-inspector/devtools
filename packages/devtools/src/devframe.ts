@@ -17,6 +17,7 @@ import {
   type CapacitorState,
 } from './rpc/capacitor-tools.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
+import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
@@ -24,7 +25,7 @@ import { getBuildMeta } from './rpc/build-meta.ts';
 import { getSignals } from './rpc/get-signals.ts';
 import { SIGNAL_TOOL_MAX, signalGraphText, type InspectSignalsArgs } from './rpc/signal-tools.ts';
 import { createSignalPeeks } from './rpc/signal-peeks.ts';
-import { injectorMatches, isEnvironmentRequest } from './signal-graph.ts';
+import { injectorMatches, isEnvironmentRequest, signalOwner } from './signal-graph.ts';
 import { getProviders } from './rpc/get-providers.ts';
 import { getNgrxStore, scanNgrxStore } from './rpc/get-ngrx-store.ts';
 import {
@@ -446,6 +447,10 @@ const pangular = defineDevframe({
         draft.async = next.async;
         draft.reportedAt = next.reportedAt;
         draft.instrumented = next.instrumented;
+        if (next.asyncTotal === undefined) delete draft.asyncTotal;
+        else draft.asyncTotal = next.asyncTotal;
+        if (next.pages === undefined) delete draft.pages;
+        else draft.pages = next.pages;
       });
 
     // A closed tab drops its connection at once, so its entries go with it
@@ -1087,7 +1092,8 @@ const pangular = defineDevframe({
       id: { type: 'string', description: 'Rule id from list-http-rules. Leave out to add a rule.' },
       pattern: {
         type: 'string',
-        description: 'Part of the request URL, where `*` matches anything, such as /api/orders*.',
+        description:
+          'Part of the request URL, where `*` matches anything, such as /api/orders*. A leading `^` anchors it at the start of the path, such as ^/api/.',
       },
       method: { type: 'string', description: 'Only this method, such as GET. Any when left out.' },
       target: {
@@ -1561,10 +1567,13 @@ const pangular = defineDevframe({
         let delta = true;
         if (incoming?.historyDelta) {
           const { historyDelta, ...rest } = incoming;
-          if (!prev) delta = false;
+          // Node ids are only unique per component or injector, so a delta for a new owner can't
+          // build on the previous history.
+          const base = prev && signalOwner(prev) === signalOwner(rest) ? prev : undefined;
+          if (!base) delta = false;
           const history: Record<string, SignalChange[]> = {};
           for (const { id } of [...(rest.nodes ?? []), ...(rest.resources ?? [])]) {
-            const list = [...(prev?.history?.[id] ?? []), ...(historyDelta[id] ?? [])];
+            const list = [...(base?.history?.[id] ?? []), ...(historyDelta[id] ?? [])];
             if (list.length) history[id] = list.slice(-50);
           }
           graph = { ...rest, history };
@@ -1623,13 +1632,12 @@ const pangular = defineDevframe({
         const pageId = report?.pageId;
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return;
         const zone = ZONE_MODES.find((mode) => mode === report?.zone);
+        const tree = sanitizeInjectorTree(report?.roots, report?.environment);
         injectorPages.set(pageId, {
           pageId,
-          roots: (Array.isArray(report?.roots) ? report.roots : []) as InjectorTreeNode[],
-          environment: (Array.isArray(report?.environment)
-            ? report.environment
-            : []) as InjectorTreeNode[],
-          ...(report?.truncated === true ? { truncated: true } : {}),
+          roots: tree.roots,
+          environment: tree.environment,
+          ...(report?.truncated === true || tree.truncated ? { truncated: true } : {}),
           ...(zone ? { zone } : {}),
           reportedAt: Date.now(),
         });
@@ -1750,7 +1758,7 @@ const pangular = defineDevframe({
       id: 'pangular:injector-tree',
       name: 'Angular Injector Tree',
       description:
-        'DI injector hierarchy last reported by a connected page (`pages[pageId]`, `roots` and `environment` are the latest), with providers at each level. Element injectors list what their components and directives inject; environment injectors list what the services they already created inject. `zone` is the change detection mode: `zoneless`, `zone` (zone.js) or `zone-unused` (zoneless with zone.js still loaded). `truncated: true` means the page has more element injectors than it reports (the first 2000), so the rest are missing. Empty when no page is connected.',
+        'DI injector hierarchy last reported by a connected page (`pages[pageId]`, `roots` and `environment` are the latest), with providers at each level. Element injectors list what their components and directives inject; environment injectors list what the services they already created inject. `zone` is the change detection mode: `zoneless`, `zone` (zone.js) or `zone-unused` (zoneless with zone.js still loaded). `truncated: true` means the page has more element injectors than it reports (the first 2000) or more than 2500 injectors in all, so the rest are missing. Empty when no page is connected.',
       mimeType: 'application/json',
       read: () => ({ text: JSON.stringify(injectorTreeState.value(), null, 2) }),
     });
@@ -2018,7 +2026,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:defer-blocks',
       description:
-        "List the `@defer` blocks the running page renders, read live through Angular's debug API: the owning component, state (placeholder, loading, complete, error), incremental hydration state (dehydrated, hydrated), triggers and whether it has @loading, @placeholder and @error blocks. Flags blocks that failed to load, blocks still on their placeholder after 10 seconds, blocks still dehydrated and `hydrate never` blocks. Each open tab reports its own list; `page` picks one. Lists at most 50 blocks per page in the table and 50 under Needs attention, says how many more are not shown, and cuts the answer at 20,000 characters. Says so when the page has no defer block util (production builds).",
+        "List the `@defer` blocks the running page renders, read live through Angular's debug API: the owning component, state (placeholder, loading, complete, error), incremental hydration state (dehydrated, hydrated), triggers and whether it has @loading, @placeholder and @error blocks. Flags blocks that failed to load, blocks still on their placeholder after 10 seconds (unless they only wait for `on viewport`, `on interaction` or `on hover`, which get a plain note), blocks still dehydrated and `hydrate never` blocks. Each open tab reports its own list; `page` picks one. Lists at most 50 blocks per page in the table and 50 under Needs attention, says how many more are not shown, and cuts the answer at 20,000 characters. Says so when the page has no defer block util (production builds).",
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -2094,7 +2102,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-signals',
       description:
-        "Get the signal graph the running page last reported: signal nodes (signal, computed, linkedSignal, effect), their dependency edges, `component` (instance id, class name, host tag and host path) or `injector` (an environment injector), `resources` (each resource(), httpResource() or rxResource() folded into one entry with status, isLoading, params, value, error and the ids of its internal nodes), `environments` (root and route injectors the page can report), and `history` (recent value changes per node id and status changes per resource id; `write` entries are exact, `sample` entries come from polling and `missed` counts values that went unseen). `changes` on a node or resource counts every change since the page first saw it, past the 50 kept entries. `nodeCount` is set when Angular reported more nodes than the 400 kept. Only signals a template or an effect has read appear. The page reports one graph: the component picked on the Signals page (or via pangular:highlight), otherwise the component the primary router outlet renders deepest, otherwise the first component with a graph. Pass `root` for effects in root services, or a route path (`/admin` or `Route: admin`) for effects in that route's providers; the page reads that injector's graph once, without changing what the Signals page shows. A component selector that does not match the reported graph returns what is available instead; call pangular:highlight with it first to switch the graph to it. Pass `node` (a node id or label) to get only that node with its direct producers and consumers, and `history: false` to leave out value history. The answer is cut at 20,000 characters, first by keeping fewer history entries per node, then fewer nodes, with a note saying what was left out.",
+        "Get the signal graph the running page last reported: signal nodes (signal, computed, linkedSignal, effect), their dependency edges, `component` (instance id, class name, host tag and host path) or `injector` (an environment injector), `resources` (each resource(), httpResource() or rxResource() folded into one entry with status, isLoading, params, value, error and the ids of its internal nodes), `environments` (root and route injectors the page can report), and `history` (recent value changes per node id and status changes per resource id; `write` entries are exact, `sample` entries come from polling and `missed` counts values that went unseen). `changes` on a node or resource counts every change since the page first saw it, past the 50 kept entries. `nodeCount` is set when Angular reported more nodes than the 400 kept. `unnamedSignals` counts the signals, computeds and linkedSignals without a `debugName`; their history is sampled only, so suggest naming them. Only signals a template or an effect has read appear. The page reports one graph: the component picked on the Signals page (or via pangular:highlight), otherwise the component the primary router outlet renders deepest, otherwise the first component with a graph. Pass `root` for effects in root services, or a route path (`/admin` or `Route: admin`) for effects in that route's providers; the page reads that injector's graph once, without changing what the Signals page shows. A component selector that does not match the reported graph returns what is available instead; call pangular:highlight with it first to switch the graph to it. Pass `node` (a node id or label) to get only that node with its direct producers and consumers, and `history: false` to leave out value history. The answer is cut at 20,000 characters, first by keeping fewer history entries per node, then fewer nodes, with a note saying what was left out.",
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -2782,7 +2790,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:explain-pipe',
       description:
-        'Explain one pipe by name: where it is declared or used, whether it is pure, live instance/call counts and last input/output when instrumentation is on, an experimental stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage (for `async`), and any lint findings. Use this to answer "why is this pipe slow or stale?"',
+        'Explain one pipe by name: where it is declared or used, whether it is pure, live instance/call counts, time spent in transform, errors thrown and last input/output when instrumentation is on, an experimental stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage (for `async`), and any lint findings. Use this to answer "why is this pipe slow or stale?"',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -2801,7 +2809,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:record-pipes',
       description:
-        "Start or stop recording pipe calls on the running page, the same switch as Record calls in the Pipes panel. Recording wraps each pipe's transform() to count calls and keep the last input, output and caller, and turns on the experimental stale-argument check; pangular:explain-pipe then shows them. `start` records on the page `page` names, or on the most recent page; `stop` stops that page, or every page without `page`. Calls recorded so far stay after a stop.",
+        "Start or stop recording pipe calls on the running page, the same switch as Record calls in the Pipes panel. Recording wraps each pipe's transform() to count and time calls, count errors and keep the last input, output and caller, and turns on the experimental stale-argument check; pangular:explain-pipe then shows them. `start` records on the page `page` names, or on the most recent page; `stop` stops that page, or every page without `page`. Calls recorded so far stay after a stop.",
       safety: 'read',
       inputSchema: {
         type: 'object',

@@ -79,6 +79,23 @@ class FilterPipe implements PipeTransform {
 }
 Pipe({ name: 'filter' })(FilterPipe);
 
+class ExplodePipe implements PipeTransform {
+  transform(value: string): string {
+    if (value === 'boom') throw new Error(`cannot explode ${value}`);
+    return value;
+  }
+}
+Pipe({ name: 'explode' })(ExplodePipe);
+
+class Explodes {
+  value = signal('start');
+}
+Component({
+  selector: 'app-explodes',
+  imports: [ExplodePipe],
+  template: `<p>{{ value() | explode }}</p>`,
+})(Explodes);
+
 function harness(pageId = 'pg', tree?: HostTree<Element>) {
   const calls: { name: string; args: unknown[] }[] = [];
   const handlers = new Map<string, (...args: any[]) => unknown>();
@@ -164,6 +181,31 @@ describe('pipes collector', () => {
     const currency = report.pipes.find((p) => p.name === 'currency')!;
     expect(currency.call?.callCount).toBeGreaterThan(0);
     expect(currency.call?.lastResult).toBe('$5.00');
+  });
+
+  it('reports time spent and errors thrown by an instrumented transform', async () => {
+    const fixture = await mount(Explodes);
+    const h = harness();
+    h.handlers.get('instrument-pipes')!(true);
+    fixture.componentInstance.value.set('ok');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.componentInstance.value.set('boom');
+    expect(() => fixture.detectChanges()).toThrow();
+    h.collector.push();
+    await Promise.resolve();
+
+    const pipe = h
+      .reports()
+      .at(-1)!
+      .pipes.find((p) => p.name === 'explode')!;
+    expect(pipe.call?.callCount).toBe(2);
+    expect(pipe.call?.errorCount).toBe(1);
+    expect(pipe.call?.lastError).toContain('cannot explode boom');
+    expect(pipe.call?.totalMs).toBeGreaterThanOrEqual(0);
+    expect(pipe.call?.maxMs).toBeGreaterThanOrEqual(0);
+    expect(pipe.call?.lastMs).toBeGreaterThanOrEqual(0);
+    expect(pipe.staleCheck).toBeUndefined();
   });
 
   it('only instruments when the request names this page or no page', async () => {

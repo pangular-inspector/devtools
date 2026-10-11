@@ -13,7 +13,13 @@ export type InspectSignalsArgs = {
   history?: boolean;
 };
 
-type Graph = SignalGraph & { pageId?: string };
+type Graph = SignalGraph & {
+  pageId?: string;
+  /** Signals, computeds and linkedSignals in the whole graph without a `debugName`. */
+  unnamedSignals?: number;
+};
+
+const NAMED_KINDS = new Set(['signal', 'computed', 'linkedSignal']);
 
 const NARROW =
   'Pass `node` with a node id or label to see one node with its producers and consumers, or `history: false` to leave out value history.';
@@ -108,6 +114,8 @@ export function signalGraphText(
     view = { ...view };
     delete view.history;
   }
+  const unnamed = graph.nodes.filter((n) => NAMED_KINDS.has(n.kind) && !n.label).length;
+  if (unnamed) view = { ...view, unnamedSignals: unnamed };
   const full = JSON.stringify(view, null, 2);
   if (full.length <= budget) return full;
 

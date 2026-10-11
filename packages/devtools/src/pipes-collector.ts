@@ -117,7 +117,7 @@ function asyncReportFor(
   usages: PipeUsage[],
   targetOf: (component: unknown) => PipeTarget | undefined,
   history: WeakMap<AnyRecord, AsyncSourceHistory>,
-): AsyncUsageInfo[] {
+): { rows: AsyncUsageInfo[]; total: number } {
   const asyncUsages = usages.filter((u) => u.name === 'async');
   const bySource = new Map<unknown, number>();
   for (const usage of asyncUsages) {
@@ -130,7 +130,7 @@ function asyncReportFor(
     const source = read(() => (usage.instance as { _obj?: unknown })._obj, undefined);
     resubscribing.set(usage.instance, resubscribingOf(history, usage.instance, source));
   }
-  return asyncUsages.slice(0, MAX_ASYNC_USAGES).map((usage) => {
+  const rows = asyncUsages.slice(0, MAX_ASYNC_USAGES).map((usage) => {
     const source = read(() => (usage.instance as { _obj?: unknown })._obj, undefined);
     const hasSource = source !== undefined && source !== null;
     const latestValue = hasSource
@@ -146,10 +146,18 @@ function asyncReportFor(
       ...(target ? { target } : {}),
     };
   });
+  return { rows, total: asyncUsages.length };
 }
 
 interface InstanceStats {
   callCount: number;
+  totalMs: number;
+  maxMs: number;
+  lastMs: number;
+  errorCount: number;
+  /** Raw, described (and redacted) only in `reportFor`. */
+  lastError?: unknown;
+  lastErrorAt?: number;
   /** Raw, not yet described: serializing is deferred to `reportFor` (at most
    * every few seconds) so the per-call hot path stays a couple of stores. */
   lastArgs: unknown[];
@@ -194,11 +202,25 @@ function shapeHash(value: unknown, depth = 0): string {
 
 const MAX_INSTANCE_CALLS = 5;
 
+/** Milliseconds rounded to a hundredth, so the payload stays small. */
+function roundMs(ms: number): number {
+  return Math.round(ms * 100) / 100;
+}
+
+function errorText(error: unknown): string {
+  const message = read(() => (error instanceof Error ? error.message : error), error);
+  return describeValue(message);
+}
+
 function describeCall(s: InstanceStats) {
   return {
     lastArgs: s.lastArgs.map(describeValue),
     lastResult: describeValue(s.lastResult),
     lastCaller: s.lastCaller,
+    totalMs: roundMs(s.totalMs),
+    maxMs: roundMs(s.maxMs),
+    lastMs: roundMs(s.lastMs),
+    ...(s.errorCount ? { errorCount: s.errorCount, lastError: errorText(s.lastError) } : {}),
   };
 }
 
@@ -235,6 +257,12 @@ class StaleTracker {
       this.detected.delete(usage.instance);
     }
     return this.detected.get(usage.instance);
+  }
+
+  /** False once the binding slot could not be recovered for this instance,
+   * e.g. in a minified build; true until then. */
+  checkAvailable(usage: PipeUsage): boolean {
+    return this.checks.get(usage.instance) !== null;
   }
 
   /** Returns true the moment a pure pipe's bound argument is found unchanged
@@ -388,22 +416,35 @@ export function attachPipes<H extends object = Element>(
   }
 
   function onPipeCall(call: PipeCall) {
-    const prev = stats.get(call.instance);
-    if (prev) {
-      prev.callCount++;
-      prev.lastArgs = call.args;
-      prev.lastResult = call.result;
-      prev.lastCaller = call.caller;
-      prev.lastAt = Date.now();
-      return;
+    const at = Date.now();
+    const ms = Number.isFinite(call.ms) && call.ms > 0 ? call.ms : 0;
+    let s = stats.get(call.instance);
+    if (!s) {
+      s = {
+        callCount: 0,
+        totalMs: 0,
+        maxMs: 0,
+        lastMs: 0,
+        errorCount: 0,
+        lastArgs: call.args,
+        lastResult: call.result,
+        lastAt: at,
+      };
+      stats.set(call.instance, s);
     }
-    stats.set(call.instance, {
-      callCount: 1,
-      lastArgs: call.args,
-      lastResult: call.result,
-      lastCaller: call.caller,
-      lastAt: Date.now(),
-    });
+    s.callCount++;
+    s.totalMs += ms;
+    s.lastMs = ms;
+    if (ms > s.maxMs) s.maxMs = ms;
+    s.lastArgs = call.args;
+    s.lastResult = call.result;
+    s.lastCaller = call.caller;
+    s.lastAt = at;
+    if (call.error) {
+      s.errorCount++;
+      s.lastError = call.error.thrown;
+      s.lastErrorAt = at;
+    }
   }
 
   function reportFor(
@@ -436,12 +477,22 @@ export function attachPipes<H extends object = Element>(
       const components = Array.from(byComponent.values());
 
       let callCount = 0;
+      let totalMs = 0;
+      let maxMs = 0;
+      let errorCount = 0;
+      let lastFailed: InstanceStats | undefined;
       const called: { usage: PipeUsage; stats: InstanceStats }[] = [];
       let staleAt: number | undefined;
       for (const usage of group) {
         const s = stats.get(usage.instance);
         if (s) {
           callCount += s.callCount;
+          totalMs += s.totalMs;
+          maxMs = Math.max(maxMs, s.maxMs);
+          errorCount += s.errorCount;
+          if (s.lastErrorAt !== undefined && (lastFailed?.lastErrorAt ?? -1) < s.lastErrorAt) {
+            lastFailed = s;
+          }
           called.push({ usage, stats: s });
         }
         // Only while instrumented: the check has a real (capped) cost, and
@@ -449,6 +500,10 @@ export function attachPipes<H extends object = Element>(
         const since = instrumented ? staleTracker.staleSince(usage) : undefined;
         if (since !== undefined && (staleAt === undefined || since < staleAt)) staleAt = since;
       }
+      const staleUnavailable =
+        instrumented &&
+        group[0].isPure &&
+        group.every((usage) => !staleTracker.checkAvailable(usage));
 
       called.sort((a, b) => b.stats.lastAt - a.stats.lastAt);
       const latest = called[0]?.stats;
@@ -456,11 +511,15 @@ export function attachPipes<H extends object = Element>(
       // `x | other | p`), so a single "last" would misrepresent them.
       const instances: PipeInstanceCall[] | undefined =
         called.length > 1
-          ? called.slice(0, MAX_INSTANCE_CALLS).map(({ usage, stats: s }) => ({
-              component: componentName(usage.component),
-              callCount: s.callCount,
-              ...describeCall(s),
-            }))
+          ? called.slice(0, MAX_INSTANCE_CALLS).map(({ usage, stats: s }) => {
+              const target = targetOf(usage.component);
+              return {
+                component: componentName(usage.component),
+                callCount: s.callCount,
+                ...describeCall(s),
+                ...(target ? { target } : {}),
+              };
+            })
           : undefined;
 
       out.push({
@@ -472,12 +531,19 @@ export function attachPipes<H extends object = Element>(
         call:
           callCount > 0 && latest
             ? {
-                callCount,
                 ...describeCall(latest),
+                callCount,
+                totalMs: roundMs(totalMs),
+                maxMs: roundMs(maxMs),
+                ...(errorCount && lastFailed
+                  ? { errorCount, lastError: errorText(lastFailed.lastError) }
+                  : {}),
                 instances,
+                ...(called.length > MAX_INSTANCE_CALLS ? { instanceTotal: called.length } : {}),
               }
             : undefined,
         stale: staleAt !== undefined ? { detectedAt: staleAt } : undefined,
+        ...(staleUnavailable ? { staleCheck: 'unavailable' as const } : {}),
       });
     }
     return out;
@@ -494,10 +560,12 @@ export function attachPipes<H extends object = Element>(
         for (const usage of usages) instrumentation.addPipe(usage);
       }
       const targets = targetOf(ng);
+      const asyncReport = asyncReportFor(usages, targets, asyncHistory);
       const report: PipePageReport = {
         pageId,
         pipes: reportFor(usages, targets),
-        async: asyncReportFor(usages, targets, asyncHistory),
+        async: asyncReport.rows,
+        ...(asyncReport.total > asyncReport.rows.length ? { asyncTotal: asyncReport.total } : {}),
         instrumented,
       };
       const payload = JSON.stringify(report);

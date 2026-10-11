@@ -279,7 +279,12 @@ async function startSession(
     }
     lastInjectorJson = json;
     injectorSentAt = Date.now();
-    await my.rpc.call('push-injector-tree', { ...report, pageId });
+    try {
+      await my.rpc.call('push-injector-tree', { ...report, pageId });
+    } catch (error) {
+      lastInjectorJson = '';
+      throw error;
+    }
   }
 
   const ngrx = on.ngrx

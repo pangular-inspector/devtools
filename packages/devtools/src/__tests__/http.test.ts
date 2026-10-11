@@ -68,6 +68,16 @@ describe('matchRule', () => {
     expect(matchRule('/api/products/7', 'GET', rules, 'client')).toBeUndefined();
   });
 
+  it('anchors a pattern that starts with ^ at the path start', () => {
+    const rules = [rule({ pattern: '^/api/' })];
+    expect(matchRule('/api/products', 'GET', rules, 'client')).toBeDefined();
+    expect(matchRule('http://localhost:4000/api/products', 'GET', rules, 'server')).toBeDefined();
+    expect(matchRule('/v1/api/products', 'GET', rules, 'client')).toBeUndefined();
+    expect(matchRule('/search?next=/api/x', 'GET', rules, 'client')).toBeUndefined();
+    expect(matchRule('/apiv2', 'GET', [rule({ pattern: '^/api*/x' })], 'client')).toBeUndefined();
+    expect(matchRule('/apiv2/x', 'GET', [rule({ pattern: '^/api*/x' })], 'client')).toBeDefined();
+  });
+
   it('filters by method, side and enabled flag', () => {
     expect(matchRule('/api/products', 'post', [rule({ method: 'POST' })], 'client')).toBeDefined();
     expect(matchRule('/api/products', 'GET', [rule({ method: 'POST' })], 'client')).toBeUndefined();
@@ -549,6 +559,18 @@ describe('interceptor', () => {
     expect(httpRegistry().calls?.map((c) => c.cacheHit)).toEqual([true, false]);
   });
 
+  it('counts an opted-in POST delivered later as a cache hit only for the same body', async () => {
+    const post = (body: unknown) =>
+      new HttpRequest('POST', '/api/search', body, { transferCache: true });
+    document.body.innerHTML = stateScript(post({ q: 'a' }));
+    const send = (req: HttpRequest<unknown>) =>
+      new Promise<void>((resolve) => run(req, later([])).subscribe({ complete: resolve }));
+    await send(post({ q: 'b' }));
+    await send(new HttpRequest('POST', '/api/search', { q: 'a' }));
+    await send(post({ q: 'a' }));
+    expect(httpRegistry().calls?.map((c) => c.cacheHit)).toEqual([false, false, true]);
+  });
+
   it('does not count a request with other params as a cache hit', async () => {
     const page = (n: number) =>
       new HttpRequest('GET', '/api/feed', null, {
@@ -576,7 +598,8 @@ describe('interceptor', () => {
     );
     await get(new HttpRequest('GET', '/api/trips', null, { transferCache: false }));
     await get(new HttpRequest('GET', '/api/trips', null, { withCredentials: true }));
-    expect(httpRegistry().calls?.map((c) => c.cacheHit)).toEqual([false, false, false]);
+    await get(new HttpRequest('GET', '/api/trips', null, { credentials: 'include' }));
+    expect(httpRegistry().calls?.map((c) => c.cacheHit)).toEqual([false, false, false, false]);
 
     const stable = Injector.create({
       providers: [
@@ -773,6 +796,21 @@ describe('hydration scanner', () => {
     for (let i = 0; i < 10; i++) scanner(counters);
     expect(calls).toBe(3);
     scanner({ hydratedNodes: 5 });
+    expect(calls).toBe(4);
+  });
+
+  it('rescans after a while when ngDevMode has no counters', async () => {
+    const { createHydrationScanner } = await import('../http-overlay.ts');
+    let calls = 0;
+    const scanner = createHydrationScanner(() => {
+      calls++;
+      return { hydrated: 0, skipped: 0, mismatched: 0, mismatches: [] };
+    });
+    for (let i = 0; i < 10; i++) scanner(undefined, 1000);
+    expect(calls).toBe(3);
+    scanner(undefined, 2000);
+    expect(calls).toBe(3);
+    scanner(undefined, 6000);
     expect(calls).toBe(4);
   });
 });

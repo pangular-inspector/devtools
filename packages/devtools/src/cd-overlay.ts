@@ -1,5 +1,5 @@
 import { addProfilerListener, keepaliveDue } from './change-detection.ts';
-import { createCdRecorder, type CdRecording } from './cd-recorder.ts';
+import { createCdRecorder, type CdReport } from './cd-recorder.ts';
 import { elementId } from './element-id.ts';
 
 interface RpcScope {
@@ -15,11 +15,7 @@ interface RpcScope {
   };
 }
 
-export interface CdReport extends CdRecording {
-  pageId: string;
-  /** False when the page has no profiler hook to record with (before Angular 20). */
-  supported: boolean;
-}
+export type { CdReport } from './cd-recorder.ts';
 
 /**
  * Records change detection cycles while the panel or an agent turns recording
@@ -33,14 +29,15 @@ export function attachChangeDetection(
   tickMs: () => number = () => 0,
 ) {
   const recorder = createCdRecorder({ maxCycles });
-  const hostIds = new WeakMap<object, string | null>();
+  const hostIds = new WeakMap<object, string>();
   let removeListener: (() => void) | null = null;
   let supported = true;
   let lastJson = '';
   let sentAt = 0;
 
   const hostId = (instance: object) => {
-    if (hostIds.has(instance)) return hostIds.get(instance)!;
+    const known = hostIds.get(instance);
+    if (known) return known;
     let id: string | null = null;
     try {
       const ng = getNg() as { getHostElement?: (instance: object) => unknown } | undefined;
@@ -49,7 +46,8 @@ export function attachChangeDetection(
     } catch {
       id = null;
     }
-    hostIds.set(instance, id);
+    // A host that cannot be read yet is tried again on the next snapshot.
+    if (id) hostIds.set(instance, id);
     return id;
   };
 
@@ -57,7 +55,9 @@ export function attachChangeDetection(
     if (on) {
       removeListener ??= addProfilerListener(getNg(), recorder.onEvent);
       supported = removeListener !== null;
-      if (supported) recorder.start();
+      // A second start, such as an agent start sent to every tab, keeps the
+      // recording that is running. Only `clear` empties it.
+      if (supported && !recorder.recording) recorder.start();
       return;
     }
     recorder.stop();

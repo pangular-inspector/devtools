@@ -88,6 +88,7 @@ interface SsrRequest {
   headers: Record<string, string>;
   navigations?: SsrNavigation[];
   overrides?: { id: string; kind: SsrOverrideKind; applied: boolean; note?: string }[];
+  compressedBeforeTrace?: boolean;
   aborted?: boolean;
 }
 
@@ -417,6 +418,14 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                   <dd>{{ requestPage()?.title || requestPage()?.url || 'not connected' }}</dd>
                 </div>
               </dl>
+              @if (compressedWith(req); as encoding) {
+                <p class="muted small">
+                  The body was already compressed ({{ encoding }}) when
+                  <code>ssrMiddleware</code> saw it, so the render mode can't be read and
+                  TransferState edits can't apply. Mount <code>ssrMiddleware</code> after
+                  <code>compression()</code>.
+                </p>
+              }
               @if (req.overrides?.length) {
                 <h3>Overrides from the panel</h3>
                 <p class="muted small">
@@ -745,7 +754,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
         }
         <form id="rule-form" class="rule-form" (submit)="addRule($event)">
           <label>
-            <span>URL pattern <span class="hint">(substring or * glob)</span></span>
+            <span
+              >URL pattern <span class="hint">(substring or * glob, ^ anchors the path)</span></span
+            >
             <input
               id="rule-pattern"
               required
@@ -914,7 +925,10 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             />
           </div>
           <label>
-            <span>Page pattern <span class="hint">(substring or * glob)</span></span>
+            <span
+              >Page pattern
+              <span class="hint">(substring or * glob, ^ anchors the path)</span></span
+            >
             <input
               id="override-pattern"
               required
@@ -2356,6 +2370,13 @@ export class NetworkInspector {
     return first?.cacheSkip && matches.every((c) => c.cacheSkip === first.cacheSkip)
       ? this.skipText(first.cacheSkip)
       : '';
+  }
+
+  /** The response encoding when a compression middleware ran before `ssrMiddleware` saw the body. */
+  compressedWith(req: SsrRequest): string | undefined {
+    // The final Content-Encoding is also set when compression runs after ssrMiddleware, as it should.
+    if (!req.compressedBeforeTrace) return undefined;
+    return req.headers['content-encoding'] ?? 'unknown encoding';
   }
 
   renderModeLabel(mode: SsrRequest['renderMode']): string {

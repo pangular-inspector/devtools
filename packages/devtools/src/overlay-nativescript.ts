@@ -162,6 +162,11 @@ async function startSession(
   setRedaction(configFromConnection(rpc.connectionMeta).redaction);
   const pageId = Math.random().toString(36).slice(2, 6);
 
+  const pingKnows = async (name: string) => {
+    const answer = (await my.rpc.call(name, pageId)) as { known?: boolean } | undefined;
+    return answer?.known !== false;
+  };
+
   const tree = nativeScriptTree(angularDebugApi, () => Application.getRootView() as NativeView);
 
   let componentTarget: string | null = null;
@@ -234,17 +239,18 @@ async function startSession(
     if (!ng) return;
     const report = collectInjectorTree(ng, tree);
     const json = JSON.stringify(report);
-    if (json === lastInjectorJson && !keepaliveDue(injectorSentAt, intervalMs)) return;
-    const previous = { json: lastInjectorJson, sentAt: injectorSentAt };
+    if (json === lastInjectorJson) {
+      if (!keepaliveDue(injectorSentAt, intervalMs)) return;
+      injectorSentAt = Date.now();
+      if (await pingKnows('ping-injector-tree')) return;
+    }
     lastInjectorJson = json;
     injectorSentAt = Date.now();
     try {
       await my.rpc.call('push-injector-tree', { ...report, pageId });
     } catch (error) {
-      if (lastInjectorJson === json) {
-        lastInjectorJson = previous.json;
-        injectorSentAt = previous.sentAt;
-      }
+      // Sent again on the next tick, even when the page did not change.
+      if (lastInjectorJson === json) lastInjectorJson = '';
       throw error;
     }
   }

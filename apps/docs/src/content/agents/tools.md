@@ -116,7 +116,7 @@ Without `page`, it lists the most recent tab that has a component tree and names
 
 ### defer-blocks
 
-The `@defer` blocks of each page: the component that holds each one, its state, its incremental hydration state, its triggers and whether it has `@loading`, `@placeholder` and `@error` blocks. A **Needs attention** list names blocks that failed to load and blocks still on their placeholder after 10 seconds. Reads: page.
+The `@defer` blocks of each page: the component that holds each one, its state, its incremental hydration state, its triggers and whether it has `@loading`, `@placeholder` and `@error` blocks. A **Needs attention** list names blocks that failed to load and blocks still on their placeholder after 10 seconds. A block whose triggers only wait for the user (`on viewport`, `on interaction` or `on hover`) is not listed there: its row notes that it is waiting for its trigger. Reads: page.
 
 | Argument | Required | Value           |
 | -------- | -------- | --------------- |
@@ -130,10 +130,10 @@ Each page lists at most 50 blocks in the table and 50 under **Needs attention**,
 
 Change detection cycles recorded with Angular's profiler: the slowest components by self time, the most often checked components, and the latest cycles with their duration, component checks, sync passes and the output that ran before each one. Reads: page. Needs Angular 20 or later.
 
-| Argument | Required | Value                                                                                                          |
-| -------- | -------- | -------------------------------------------------------------------------------------------------------------- |
-| `record` | no       | `start` starts a fresh recording, `stop` stops it and keeps the cycles, `clear` empties it. Leave out to read. |
-| `limit`  | no       | Rows per list. Default 10, at most 50.                                                                         |
+| Argument | Required | Value                                                                                                                                                                            |
+| -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `record` | no       | `start` starts a fresh recording on a page that is not recording and leaves a running one as it is, `stop` stops it and keeps the cycles, `clear` empties it. Leave out to read. |
+| `limit`  | no       | Rows per list. Default 10, at most 50.                                                                                                                                           |
 
 Without `page`, it reads the page that is recording, and `record` goes to every connected page. A `page` that names no connected tab gets the list of connected tabs. A connected tab that has not recorded yet gets a hint to start a recording there. The answer starts with the change detection mode of the page it reports on: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many.
 
@@ -149,12 +149,13 @@ The signal graph the page reported: nodes (`signal`, `computed`, `linkedSignal`,
 
 The answer also holds:
 
-| Field          | Value                                                                                                                         |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `resources`    | One entry per `resource()`, `httpResource()` or `rxResource()`: `status`, `isLoading`, `params`, `value`, `error`, `nodeIds`. |
-| `environments` | The root and route injectors the page can report, with `id` and `name`.                                                       |
-| `changes`      | On a node or resource, every change since the page first saw it. The history keeps the last 50.                               |
-| `nodeCount`    | Set when Angular reported more than the 400 nodes the page keeps.                                                             |
+| Field            | Value                                                                                                                         |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `resources`      | One entry per `resource()`, `httpResource()` or `rxResource()`: `status`, `isLoading`, `params`, `value`, `error`, `nodeIds`. |
+| `environments`   | The root and route injectors the page can report, with `id` and `name`.                                                       |
+| `changes`        | On a node or resource, every change since the page first saw it. The history keeps the last 50.                               |
+| `nodeCount`      | Set when Angular reported more than the 400 nodes the page keeps.                                                             |
+| `unnamedSignals` | Set when signals, computeds or linkedSignals in the graph have no `debugName`. Their history holds sampled values only.       |
 
 The answer is cut at 20,000 characters. A graph that is too long first keeps fewer history entries per node, then keeps the first nodes that fit. A note under the JSON says how many history entries and nodes it left out. Pass `node` or `history: false` to see the rest.
 
@@ -352,14 +353,14 @@ It finds impure pipes used inside `@for`, `| json` left in templates, pure pipes
 
 ### Explain a pipe
 
-`explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the last input and output, a stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage, and lint findings. Reads: source, plus the page for live counts.
+`explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the time spent in `transform` and the errors it threw, the last input and output, a stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage, and lint findings. Reads: source, plus the page for live counts.
 
 | Argument | Required | Value                                              |
 | -------- | -------- | -------------------------------------------------- |
 | `name`   | yes      | The pipe name as used after `\|` in a template.    |
 | `page`   | no       | The tab to read. Defaults to the most recent page. |
 
-Live data comes from one tab: the one `page` names, or the most recent. When more than one tab reports pipes, the answer starts with the tab it read. Live counts, input and output appear while recording is on. Start it with [`record-pipes`](#record-pipe-calls) or with **Record calls** in the [Pipes inspector](../inspectors/pipes.md).
+Live data comes from one tab: the one `page` names, or the most recent. When more than one tab reports pipes, the answer starts with the tab it read. Live counts, times, errors, input and output appear while recording is on. Start it with [`record-pipes`](#record-pipe-calls) or with **Record calls** in the [Pipes inspector](../inspectors/pipes.md).
 
 The **Live** line tells these cases apart:
 
@@ -405,7 +406,7 @@ These tools read and change the rules of [Fault injection](../inspectors/ssr-htt
 | `set-http-rule`    | Adds a rule, or replaces the rule with `id`, and returns the saved rules.                                                                             | `pattern` (required), `id`, `method`, `target`, `status`, `delayMs`, `body`, `enabled` |
 | `remove-http-rule` | Removes the rule with `id` and returns the rules left.                                                                                                | `id` (required)                                                                        |
 
-`set-http-rule` checks its input the way the panel's form does. `pattern` is a substring or a glob where `*` matches anything, up to 500 characters. `target` is `client`, `server` or `both` (the default). `status` is one of the statuses the panel lists. `delayMs` runs from 0 to 10000. `body` is JSON text or a JSON value, up to 100,000 characters. A rule needs a `status`, a `delayMs` or a `body`, and there can be at most 50 rules. A rule that breaks one of these is refused with the reason, and nothing changes. A rule that applies to SSR takes effect on the next page load. Patterns and bodies in the answers are masked like recorded calls.
+`set-http-rule` checks its input the way the panel's form does. `pattern` is a substring or a glob where `*` matches anything, up to 500 characters. A leading `^` anchors it at the start of the URL path. `target` is `client`, `server` or `both` (the default). `status` is one of the statuses the panel lists. `delayMs` runs from 0 to 10000. `body` is JSON text or a JSON value, up to 100,000 characters. A rule needs a `status`, a `delayMs` or a `body`, and there can be at most 50 rules. A rule that breaks one of these is refused with the reason, and nothing changes. A rule that applies to SSR takes effect on the next page load. Patterns and bodies in the answers are masked like recorded calls.
 
 With [`actions.http`](../getting-started/configuration.md#actions) set to `false`, `set-http-rule` and `remove-http-rule` are dropped, and `list-http-rules` says that no rule applies.
 

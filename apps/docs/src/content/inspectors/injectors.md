@@ -22,6 +22,8 @@ A switch at the top picks the view:
 
 Each row shows a kind letter (`C`, `D` or `E`), the tag or injector name, the component or directive classes, and icons with the number of injected and provided tokens.
 
+The toolbar also shows the change detection mode the page reported: **Zoneless**, **zone.js**, or **Zoneless, zone.js loaded** when zone.js is on the page but the app doesn't use it.
+
 ### Page picker
 
 When more than one open page reports an injector tree, a **Page** picker appears in the toolbar. It lists each page by title, or by URL when the page has no title. The tab starts on the page that reported last, and stays on the page you choose when another page reports later. Each page keeps its own selected injector and expanded rows, and hovering a row highlights the element in the chosen page.
@@ -30,7 +32,7 @@ If the chosen page closes, the tab moves to the page that reported last and anno
 
 ### Search and filters
 
-- Search for a token, component, directive or injector. When a token matches, **Provided by** chips list the injectors that provide it. Click one to jump there.
+- Search for a token, component, directive or injector. When a token matches, **Provided by** chips list the injectors that provide it. Click one to jump there. The row shows up to 12 chips, then **+N more**. Once typing pauses, a screen reader announces how many injectors provide the token, or that nothing matches.
 - **Components only** hides elements without a component. It keeps an element when it is an ancestor of one that stays. It is on by default, in the Elements view only.
 - **With providers** hides injectors that provide nothing.
 - Hover or focus an element injector to highlight its element in the page.
@@ -45,7 +47,7 @@ For element injectors, **Injected here** lists each token requested at this leve
 
 ### Injected by its services
 
-For environment injectors, **Injected by its services** lists what the services this injector created inject, and which injector answered. Each row says which service asked. Services that Angular has not created yet are left out, because reading their dependencies would create them. A `providedIn: 'root'` service shows on the root injector once something injects it.
+For environment injectors, **Injected by its services** lists what the services this injector created inject, and which injector answered. Each row says which service asked. `InjectionToken` providers built by a factory, such as `useFactory`, are listed too, with the token as the one that asked. Services that Angular has not created yet are left out, because reading their dependencies would create them. A `providedIn: 'root'` service shows on the root injector once something injects it.
 
 ### Provides
 
@@ -133,7 +135,7 @@ See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
 ### Up to 2000 element injectors
 
-The page reports at most 2000 element injectors. Past that, a notice above the tree says so, and a lookup path or a provider can point to an injector that isn't listed. `inspect-providers` says it too. Environment injectors have no cap.
+The page reports at most 2000 element injectors. Past that, a notice above the tree says so, and a lookup path or a provider can point to an injector that isn't listed. `inspect-providers` says it too. Environment injectors are kept after them, up to 2500 injectors in all, so they never push element injectors out.
 
 ### Some injectors can't be highlighted
 

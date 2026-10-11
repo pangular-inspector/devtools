@@ -18,8 +18,8 @@ const empty = (rect: Box) => rect.width === 0 && rect.height === 0;
 
 /**
  * Where an element is drawn. A host with `display: contents` or one that is
- * hidden has an empty rect, so its children stand in for it; `null` when
- * nothing of it is on the page.
+ * hidden has an empty rect, so its children and the children of its shadow
+ * root stand in for it; `null` when nothing of it is on the page.
  */
 export function highlightBox(el: Element): Box | null {
   const rect = el.getBoundingClientRect();
@@ -29,7 +29,9 @@ export function highlightBox(el: Element): Box | null {
   let left = Infinity;
   let right = -Infinity;
   let bottom = -Infinity;
-  for (const child of Array.from(el.children)) {
+  // A `display: contents` host may render only through its shadow root.
+  const children = [...Array.from(el.shadowRoot?.children ?? []), ...Array.from(el.children)];
+  for (const child of children) {
     const box = highlightBox(child);
     if (!box) continue;
     top = Math.min(top, box.top);
