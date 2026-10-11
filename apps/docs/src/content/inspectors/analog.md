@@ -50,7 +50,18 @@ Type a URL into **Test a URL** and click **Explain** to see which files render i
 
 ### Server
 
-Page renders (server rendered or client only), `load()` fetches, form actions, server functions and API calls. Each row shows the status, the time, who called it, and a redacted response preview. Filter by kind, and click **Clear calls** to empty the list.
+Page renders (server rendered or client only), `load()` fetches, form actions, server functions and API calls, newest first. Each row shows the status, the time, who called it, and a redacted response preview.
+
+| Control                                 | What it does                                                                                           |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Kind filter                             | Show one kind of call. Each choice counts every call of that kind.                                     |
+| **Find a URL, path or function** search | Keeps calls whose URL, route path, server function name or file contains the text. `Escape` clears it. |
+| **Failed only**                         | Keeps calls with a status of 400 or more, no status, or a form action that failed.                     |
+| **Clear calls**                         | Empties the list on the dev server. The tab says **Calls cleared.** or **Could not clear the calls.**  |
+
+The filters combine, and the count next to them reads like **12 of 80**. If nothing matches, click **Clear filters** to reset the search, **Failed only** and the kind.
+
+The list renders the newest 150 matching calls. If more match, a note says **Showing the newest 150 of** the matching total. Once the dev server holds 200 calls, the note also says that it drops older ones.
 
 - **Actions** are form submissions to a page's `action` (any method other than GET on the page endpoint). Each one shows its outcome: **succeeded**, **redirected** (with the target), **validation errors** (a `fail()` response, with the redacted errors) or **failed**.
 - **Server fn** rows show the function name and file instead of the opaque `/_analog/fn/<id>` URL. During server rendering, server functions run in-process and skip HTTP. The tab shows the reads that seeded TransferState as **ran during server rendering**, with the method `SSR`.
@@ -191,7 +202,7 @@ Response previews and `load()` data redact secret-looking keys, tokens, `Bearer`
 
 ### Call history size
 
-The server keeps the last 200 calls. It cuts previews to 1000 characters, and page renders have no preview.
+The server keeps the last 200 calls, and the **Server** tab renders the newest 150 that match its filters. The server cuts previews to 1000 characters, and page renders have no preview.
 
 ## FAQ
 

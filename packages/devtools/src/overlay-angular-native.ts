@@ -25,6 +25,7 @@ import {
   type SignalTarget,
 } from './signal-graph.ts';
 import { createSignalHistory, installSignalWriteHook } from './signal-history.ts';
+import { registerSignalPeek } from './signal-peek.ts';
 
 export type { AngularNativeNode } from './overlay-angular-native-views.ts';
 
@@ -338,6 +339,12 @@ async function startSession(
       void pushSignalGraph(true).catch(() => {});
     },
   });
+  registerSignalPeek(
+    my.rpc,
+    pageId,
+    (target) => collectSignalGraph(angularDebugApi(), target, tree),
+    signalHistory,
+  );
 
   my.rpc.register({
     name: 'inspect-component-in-page',

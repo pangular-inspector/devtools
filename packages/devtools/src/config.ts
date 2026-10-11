@@ -408,14 +408,14 @@ export const ACTION_TOOLS: Record<PangularAction, readonly string[]> = {
   forms: ['form-action', 'fill-form'],
   router: [],
   ngrx: ['dispatch-ngrx-action'],
-  http: [],
+  http: ['set-http-rule', 'remove-http-rule'],
   analog: ['analog-call-api'],
 };
 
 export function actionBlockedMessage(action: PangularAction): string {
   const what = {
     forms: 'Writing to forms',
-    router: 'Navigating',
+    router: 'Navigating and clearing navigations',
     ngrx: 'Restoring NgRx state and dispatching actions',
     http: 'Changing HTTP mock rules and clearing HTTP calls',
     analog: 'Calling API routes',
@@ -446,6 +446,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'ping-signal-graph': 'signals',
   'forget-signal-page': 'signals',
   'select-signal-target': 'signals',
+  'signal-graph-peek-result': 'signals',
   'get-providers': 'injectors',
   'push-injector-tree': 'injectors',
   'ping-injector-tree': 'injectors',
@@ -472,6 +473,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'router-match': 'router',
   'router-export': 'router',
   'forget-router-page': 'router',
+  'clear-router-navigations': 'router',
   'get-pipes': 'pipes',
   'push-pipes': 'pipes',
   'forget-pipes-page': 'pipes',
@@ -530,9 +532,13 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   navigate: 'router',
   'lint-pipes': 'pipes',
   'explain-pipe': 'pipes',
+  'record-pipes': 'pipes',
   'list-ssr-requests': 'http',
   'explain-ssr-request': 'http',
   'list-http-calls': 'http',
+  'list-http-rules': 'http',
+  'set-http-rule': 'http',
+  'remove-http-rule': 'http',
 };
 
 /**
@@ -577,12 +583,16 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'router-config',
   'export-navigation',
   'navigate',
+  'record-pipes',
   'analog-current-page',
   'analog-server-calls',
   'analog-call-api',
   'list-ssr-requests',
   'explain-ssr-request',
   'list-http-calls',
+  'list-http-rules',
+  'set-http-rule',
+  'remove-http-rule',
 ];
 
 export function isPageAgentEntry(id: string): boolean {

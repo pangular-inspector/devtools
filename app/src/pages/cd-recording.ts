@@ -55,7 +55,8 @@ const SHOWN_CYCLES = 30;
         @if (cycles().length) {
           <button type="button" (click)="clear()">Clear</button>
         }
-        <p class="status" role="status">{{ status() }}</p>
+        <p class="status">{{ status() }}</p>
+        <p class="sr-only" role="status">{{ announcement() }}</p>
       </div>
       <p class="hint">
         Records each change detection cycle with Angular's profiler: how long it took, how many
@@ -266,6 +267,12 @@ export class CdRecording {
   readonly rpc = input<DevframeRpcClient | null>(null);
 
   protected readonly message = signal('');
+  /**
+   * What a screen reader hears. It changes only when Record, Stop or Clear finishes or fails.
+   * The visible status also counts cycles as they arrive, which would make a screen reader talk
+   * many times a second while the app is used, so it sits outside any live region.
+   */
+  protected readonly announcement = signal('');
   readonly recording = computed(() => this.page()?.recording === true);
   readonly cycles = computed(() => this.page()?.cycles ?? []);
   readonly maxCycles = computed(() => panelConfig(this.rpc()).limits.cdCycles);
@@ -289,23 +296,43 @@ export class CdRecording {
   }
 
   async toggle() {
-    await this.send({ on: !this.recording() }, this.recording() ? '' : 'Starting…');
+    if (this.recording()) {
+      await this.send({ on: false }, '', () => {
+        const count = this.cycles().length;
+        return `Recording stopped. ${count} ${count === 1 ? 'cycle' : 'cycles'} recorded.`;
+      });
+    } else {
+      await this.send({ on: true }, 'Starting…', () => 'Recording started.');
+    }
   }
 
   async clear() {
-    await this.send({ clear: true }, '');
+    await this.send({ clear: true }, '', () => 'Cleared the recorded cycles.');
   }
 
-  private async send(request: { on?: boolean; clear?: boolean }, pending: string) {
+  private async send(
+    request: { on?: boolean; clear?: boolean },
+    pending: string,
+    done: () => string,
+  ) {
     this.message.set(pending);
     try {
+      if (!this.rpc()) throw new Error('no client');
       await call(this.rpc(), 'request-change-detection-record', {
         pageId: this.pageId(),
         ...request,
       });
       this.message.set('');
+      this.announce(done());
     } catch {
-      this.message.set('Could not reach the page.');
+      const failed = 'Could not reach the page.';
+      this.message.set(failed);
+      this.announce(failed);
     }
+  }
+
+  /** Sets the live message, changing it slightly when it repeats so screen readers say it again. */
+  private announce(message: string) {
+    this.announcement.update((current) => (current === message ? `${message} ` : message));
   }
 }
