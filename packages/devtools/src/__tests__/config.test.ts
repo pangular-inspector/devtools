@@ -284,6 +284,22 @@ describe('agent tool and RPC registration', () => {
     expect(tools).toContain('list-routes');
   });
 
+  it('keeps record-pipes with its inspector, not behind a write action', async () => {
+    const pipeTools = ['explain-pipe', 'record-pipes'];
+    expect((await boot()).tools).toEqual(expect.arrayContaining(pipeTools));
+    // Recording is instrumentation, like change detection recording, so
+    // blocking actions or read-only mode leaves it in place.
+    const blocked = await boot({ actions: false, agent: { readOnly: true } });
+    expect(blocked.tools).toEqual(expect.arrayContaining(pipeTools));
+    expect(blocked.actionTools).not.toContain('record-pipes');
+    const hidden = await boot({ agent: { tools: { pipes: false } } });
+    expect(hidden.tools.filter((id) => pipeTools.includes(id))).toEqual([]);
+    expect(hidden.rpc).toContain('request-instrument-pipes');
+    const off = await boot({ inspectors: { pipes: false } });
+    expect(off.tools.filter((id) => pipeTools.includes(id))).toEqual([]);
+    expect(off.rpc).not.toContain('request-instrument-pipes');
+  });
+
   it('hides one inspector from the agent while its panel keeps working', async () => {
     const { rpc, tools, resources } = await boot({ agent: { tools: { router: false } } });
     expect(tools.some((id) => AGENT_INSPECTOR[id] === 'router')).toBe(false);

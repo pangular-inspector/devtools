@@ -85,7 +85,7 @@ const NOT_IN_USE =
   '**Live:** not in use on the connected page(s). No rendered component uses this pipe right now. Pipe discovery is always on, so this does not depend on recording.';
 
 const RECORD_HINT =
-  'No calls recorded, recording is off. Click **Record calls** in the Pipes panel for call counts, last input/output and stale-argument detection.';
+  'No calls recorded, recording is off. Start it with pangular:record-pipes (or **Record calls** in the Pipes panel) for call counts, last input/output and stale-argument detection.';
 
 function runtimeText(
   runtime: PipeUsageInfo | undefined,

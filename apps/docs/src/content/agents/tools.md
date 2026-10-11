@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Fifty-eight tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Fifty-nine tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -352,20 +352,32 @@ It finds impure pipes used inside `@for`, `| json` left in templates, pure pipes
 
 `explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the last input and output, a stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage, and lint findings. Reads: source, plus the page for live counts.
 
-| Argument | Required | Value                                           |
-| -------- | -------- | ----------------------------------------------- |
-| `name`   | yes      | The pipe name as used after `\|` in a template. |
+| Argument | Required | Value                                              |
+| -------- | -------- | -------------------------------------------------- |
+| `name`   | yes      | The pipe name as used after `\|` in a template.    |
+| `page`   | no       | The tab to read. Defaults to the most recent page. |
 
-Live counts, input and output appear when recording is on in the [Pipes inspector](../inspectors/pipes.md).
+Live data comes from one tab: the one `page` names, or the most recent. When more than one tab reports pipes, the answer starts with the tab it read. Live counts, input and output appear while recording is on. Start it with [`record-pipes`](#record-pipe-calls) or with **Record calls** in the [Pipes inspector](../inspectors/pipes.md).
 
 The **Live** line tells these cases apart:
 
-| Case                                | What the tool says                                                    |
-| ----------------------------------- | --------------------------------------------------------------------- |
-| No page is connected                | There is no live data. The stdio server always reports this.          |
-| A page is connected, pipe not used  | No rendered component on the page uses the pipe.                      |
-| Pipe in use, recording off          | Instance count and components, plus a hint to click **Record calls**. |
-| Pipe in use, recording on, no calls | Instance count and components, and that no calls are recorded yet.    |
+| Case                                | What the tool says                                                 |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| No page is connected                | There is no live data. The stdio server always reports this.       |
+| A page is connected, pipe not used  | No rendered component on the page uses the pipe.                   |
+| Pipe in use, recording off          | Instance count and components, plus a hint to start recording.     |
+| Pipe in use, recording on, no calls | Instance count and components, and that no calls are recorded yet. |
+
+### Record pipe calls
+
+`record-pipes` starts or stops call recording on a page, the same switch as **Record calls** in the panel. Reads: page.
+
+| Argument | Required | Value                                                                                          |
+| -------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `action` | yes      | `start` or `stop`.                                                                             |
+| `page`   | no       | The tab to record on. Defaults to the most recent page for `start`, and every page for `stop`. |
+
+`start` records on the tab `page` names, or on the most recent tab. Other tabs stay unpatched. `stop` stops that tab, or every tab without `page`. Each recording starts from zero, and the calls recorded so far stay after a stop. Call `record-pipes` with `action: "start"`, use the app, then call `explain-pipe`. Recording is instrumentation, like the `record` argument of `change-detection`, so `agent.readOnly` and `actions` leave the tool in place. `agent.tools.pipes: false` hides it.
 
 ## SSR & HTTP
 

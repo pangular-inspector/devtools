@@ -6,7 +6,7 @@ import { getComponents } from './rpc/get-components.ts';
 import { getPipes } from './rpc/get-pipes.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
-import { explainPipeText } from './rpc/pipe-explain.ts';
+import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
 import { getBuildMeta } from './rpc/build-meta.ts';
 import { getSignals } from './rpc/get-signals.ts';
@@ -456,18 +456,21 @@ const pangular = defineDevframe({
       },
     });
 
+    // Shared by the panel's Record calls button and the record-pipes agent tool.
+    const requestPipeRecording = (message: unknown) => {
+      const request = pipeInstrumentRequest(message, pipePages);
+      // No page has reported yet: starting now would patch every connected tab.
+      if (request.on && !request.pageId) return { request, pages: { pages: 0 } };
+      void my.rpc.broadcast({ method: 'instrument-pipes', args: [request], optional: true });
+      if (!request.pageId) return { request, pages: { pages: pipePages.size } };
+      return { request, pages: { pages: pipePages.has(request.pageId) ? 1 : 0 } };
+    };
+
     register({
       name: 'request-instrument-pipes',
       type: 'action',
       jsonSerializable: true,
-      handler: (message: unknown) => {
-        const request = pipeInstrumentRequest(message, pipePages);
-        // No page has reported yet: starting now would patch every connected tab.
-        if (request.on && !request.pageId) return { pages: 0 };
-        void my.rpc.broadcast({ method: 'instrument-pipes', args: [request], optional: true });
-        if (!request.pageId) return { pages: pipePages.size };
-        return { pages: pipePages.has(request.pageId) ? 1 : 0 };
-      },
+      handler: (message: unknown) => requestPipeRecording(message).pages,
     });
 
     register({
@@ -2649,19 +2652,34 @@ const pangular = defineDevframe({
         type: 'object',
         properties: {
           name: { type: 'string', description: 'The pipe name as used after `|` in a template.' },
+          page: PAGE_ARGUMENT,
         },
         required: ['name'],
       },
-      handler: async (args: { name?: string }) => {
+      handler: async (args: { name?: string; page?: string }) => {
         if (!args?.name) return { markdown: 'Pass a pipe `name`.' };
-        return {
-          markdown: explainPipeText(
-            args.name,
-            ctx.cwd,
-            pipesState.value() as PipesState,
-            pipePages.size,
-          ),
-        };
+        return { markdown: explainPipeOnPage(args.name, ctx.cwd, pipePages, pageArgument(args)) };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:record-pipes',
+      description:
+        "Start or stop recording pipe calls on the running page, the same switch as Record calls in the Pipes panel. Recording wraps each pipe's transform() to count calls and keep the last input, output and caller, and turns on the experimental stale-argument check; pangular:explain-pipe then shows them. `start` records on the page `page` names, or on the most recent page; `stop` stops that page, or every page without `page`. Calls recorded so far stay after a stop.",
+      safety: 'read',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['start', 'stop'] },
+          page: PAGE_ARGUMENT,
+        },
+        required: ['action'],
+      },
+      handler: async (args: { action?: string; page?: string }) => {
+        const asked = pipeRecordRequest(args?.action, pipePages, pageArgument(args));
+        if ('markdown' in asked) return asked;
+        const sent = requestPipeRecording(asked.request);
+        return { markdown: pipeRecordText(sent.request, sent.pages.pages) };
       },
     });
 
