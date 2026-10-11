@@ -34,7 +34,9 @@ Every navigation as one story:
 - Router warnings, and the cancel or error reason. The tab explains NG04xxx errors.
 - When the navigation error handler redirects, the navigation names the error handler as the cause and keeps the error that triggered it, with its error code.
 
-Filter by URL, or check **Only problems** to keep the navigations that did not succeed and the ones in a loop. Each row has **Replay** and **Copy repro** (a markdown repro). **Replay** is off for a navigation whose URL is redacted or not relative, and a note under the row says why. **Export JSON** saves the list.
+Filter by URL, or check **Only problems** to keep the navigations that did not succeed and the ones in a loop. **Only problems** leaves out the navigations that **Probe in app** cancels, the way the problem count on the **Navigations** tab does. Each row has **Replay** and **Copy repro** (a markdown repro). **Replay** is off for a navigation whose URL is redacted or not relative, and a note under the row says why. **Export JSON** saves the list.
+
+**Clear** empties the list and its loop warnings for the page you are looking at, so you can test a flow from a clean list without reloading the app. Other tabs keep their navigations. A navigation still running stays in the list. With [`actions.router`](../getting-started/configuration.md#actions) set to `false`, **Clear** is off.
 
 ### Loop detection
 
@@ -138,7 +140,7 @@ Without that recording, the guards listed for a navigation are candidates: the `
 
 <ngmd-workflow>
   <ngmd-step title="Open Navigations">
-    Check <strong>Only problems</strong> to hide the navigations that succeeded outside a loop.
+    Check <strong>Only problems</strong> to hide the navigations that succeeded outside a loop, and the probes.
   </ngmd-step>
   <ngmd-step title="Read the story">
     The phase bar shows where it stopped. The guard rows show which guard returned <code>false</code> or a <code>UrlTree</code>.
@@ -232,7 +234,7 @@ The page keeps the last 50 navigations and 50 preloads. Set the navigation count
     No. It runs the real matcher with <code>skipLocationChange</code> and stops after recognition. <code>canActivate</code>, <code>canDeactivate</code> and resolvers do not run. If a <code>canMatch</code> guard or the navigation error handler redirects, the probe stops the redirected navigation too and names its target.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why is Probe in app turned off?">
-    The probe runs your app's <code>canMatch</code> guards, so <a href="../getting-started/configuration.md#actions"><code>actions.router</code></a> set to <code>false</code> turns it off, along with <strong>Go</strong>, <strong>Abort</strong> and <strong>Replay</strong>. <strong>Record each guard and resolver</strong> and <strong>Read lazy</strong> stay on.
+    The probe runs your app's <code>canMatch</code> guards, so <a href="../getting-started/configuration.md#actions"><code>actions.router</code></a> set to <code>false</code> turns it off, along with <strong>Go</strong>, <strong>Abort</strong>, <strong>Replay</strong> and <strong>Clear</strong>. <strong>Record each guard and resolver</strong> and <strong>Read lazy</strong> stay on.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why is the source table collapsed?">
     The live config is available, so it is the better source. Click <strong>Show table</strong> to open the source list.

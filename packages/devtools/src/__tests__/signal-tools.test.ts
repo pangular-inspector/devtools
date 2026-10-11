@@ -1,6 +1,7 @@
 import { createHostContext } from 'devframe/node';
 import { describe, expect, it } from 'vitest';
 import pangular from '../devframe.ts';
+import { UNTRUSTED } from '../rpc/forms-tools.ts';
 import { routerActionText } from '../rpc/router-tools.ts';
 import { SIGNAL_TOOL_MAX, signalGraphText } from '../rpc/signal-tools.ts';
 import type { SignalChange, SignalGraph } from '../types.ts';
@@ -164,10 +165,14 @@ describe('inspect-signals tool', () => {
     const { push, call } = await boot();
     await push('push-signal-graph', { pageId: 'p1', ...bigGraph() });
     const capped = await call('inspect-signals', { selector: 'app-root' });
+    // The notice counts toward the cap, so the graph gets what is left of it.
+    expect(capped.startsWith(`${UNTRUSTED}\n\n`)).toBe(true);
     expect(capped.length).toBeLessThanOrEqual(SIGNAL_TOOL_MAX);
-    expect(capped).toMatch(/Cut to fit 20,000 characters/);
+    expect(capped).toMatch(/Cut to fit 19,\d{3} characters/);
     const one = JSON.parse(
-      await call('inspect-signals', { selector: 'app-root', node: 'n5', history: false }),
+      (await call('inspect-signals', { selector: 'app-root', node: 'n5', history: false })).slice(
+        UNTRUSTED.length,
+      ),
     ) as SignalGraph;
     expect(one.nodes.map((n) => n.id)).toEqual(['n4', 'n5', 'n6']);
     expect(one.history).toBeUndefined();
@@ -177,7 +182,7 @@ describe('inspect-signals tool', () => {
     const { push, call } = await boot();
     await push('push-signal-graph', { pageId: 'p1', ...bigGraph() });
     const text = await call('inspect-signals', { selector: 'app-other' });
-    expect(text).toMatch(/^No signal graph for `app-other`/);
+    expect(text.startsWith(`${UNTRUSTED}\n\nNo signal graph for \`app-other\``)).toBe(true);
     expect(text.length).toBeLessThanOrEqual(SIGNAL_TOOL_MAX);
     expect(text).toMatch(/Cut to fit/);
   });

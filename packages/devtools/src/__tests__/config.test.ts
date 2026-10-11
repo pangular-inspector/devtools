@@ -230,6 +230,8 @@ describe('agent tool and RPC registration', () => {
         'form-action',
         'highlight',
         'navigate',
+        'remove-http-rule',
+        'set-http-rule',
       ].sort(),
     );
     expect(tools).toContain('inspect-forms');
@@ -244,7 +246,14 @@ describe('agent tool and RPC registration', () => {
   it('drops the agent tools of a blocked action and keeps the rest', async () => {
     const forms = await boot({ actions: { forms: false } });
     expect(forms.actionTools.sort()).toEqual(
-      ['analog-call-api', 'dispatch-ngrx-action', 'highlight', 'navigate'].sort(),
+      [
+        'analog-call-api',
+        'dispatch-ngrx-action',
+        'highlight',
+        'navigate',
+        'remove-http-rule',
+        'set-http-rule',
+      ].sort(),
     );
     expect(forms.tools).toEqual(expect.arrayContaining(['inspect-forms', 'form-history']));
     const router = await boot({ actions: { router: false } });
@@ -257,6 +266,10 @@ describe('agent tool and RPC registration', () => {
     const ngrx = await boot({ actions: { ngrx: false } });
     expect(ngrx.actionTools).not.toContain('dispatch-ngrx-action');
     expect(ngrx.tools).toContain('get-ngrx-store');
+    const http = await boot({ actions: { http: false } });
+    expect(http.actionTools).not.toContain('set-http-rule');
+    expect(http.actionTools).not.toContain('remove-http-rule');
+    expect(http.tools).toContain('list-http-rules');
   });
 
   it('leaves out the RPC functions, tools and resources of a disabled inspector', async () => {
@@ -269,6 +282,22 @@ describe('agent tool and RPC registration', () => {
     expect(resources).not.toContain('forms');
     expect(rpc).toContain('push-router');
     expect(tools).toContain('list-routes');
+  });
+
+  it('keeps record-pipes with its inspector, not behind a write action', async () => {
+    const pipeTools = ['explain-pipe', 'record-pipes'];
+    expect((await boot()).tools).toEqual(expect.arrayContaining(pipeTools));
+    // Recording is instrumentation, like change detection recording, so
+    // blocking actions or read-only mode leaves it in place.
+    const blocked = await boot({ actions: false, agent: { readOnly: true } });
+    expect(blocked.tools).toEqual(expect.arrayContaining(pipeTools));
+    expect(blocked.actionTools).not.toContain('record-pipes');
+    const hidden = await boot({ agent: { tools: { pipes: false } } });
+    expect(hidden.tools.filter((id) => pipeTools.includes(id))).toEqual([]);
+    expect(hidden.rpc).toContain('request-instrument-pipes');
+    const off = await boot({ inspectors: { pipes: false } });
+    expect(off.tools.filter((id) => pipeTools.includes(id))).toEqual([]);
+    expect(off.rpc).not.toContain('request-instrument-pipes');
   });
 
   it('hides one inspector from the agent while its panel keeps working', async () => {
@@ -315,6 +344,7 @@ describe('panel actions', () => {
     });
     await expect(invoke('set-http-rules', [])).rejects.toThrow('actions.http');
     await expect(invoke('clear-http-calls', undefined)).rejects.toThrow('actions.http');
+    await expect(invoke('clear-router-navigations', 'p1')).rejects.toThrow('actions.router');
     expect(await invoke('analog-call-api', { path: '/api/x' })).toEqual({
       error: expect.stringContaining('actions.analog'),
     });
@@ -329,7 +359,10 @@ describe('panel actions', () => {
     }) as never);
     expect(
       await invoke('request-router-action', { request: { action: 'probe', url: '/' } }),
-    ).toEqual({ error: 'Navigating is turned off in the devtools config (actions.router).' });
+    ).toEqual({
+      error:
+        'Navigating and clearing navigations is turned off in the devtools config (actions.router).',
+    });
     expect(
       await invoke('request-router-action', { request: { action: 'instrument', on: true } }),
     ).toEqual({ ok: true });

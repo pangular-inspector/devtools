@@ -1,7 +1,8 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { Component, computed, input, linkedSignal } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
 import { LimitNote } from '../ui/limit-note';
+import { rpcCall } from '../rpc';
 import { time } from '../format';
 import {
   SHARED_STYLES,
@@ -54,9 +55,21 @@ const PHASE_COLORS: Record<string, string> = {
         Record each guard and resolver
       </label>
       <button type="button" class="small export" (click)="exportJson()">Export JSON</button>
+      <button
+        type="button"
+        class="small"
+        aria-label="Clear navigations"
+        [disabled]="!navigationAllowed()"
+        [attr.aria-describedby]="navigationAllowed() ? null : 'route-timeline-writes-off'"
+        (click)="clearNavigations()"
+      >
+        Clear
+      </button>
     </div>
+    <!-- Always in the page, so screen readers announce the first message too. -->
+    <p class="visually-hidden" role="status">{{ message() }}</p>
     @if (message()) {
-      <p class="message" role="status">{{ message() }}</p>
+      <p class="message" aria-hidden="true">{{ message() }}</p>
     }
     @if (!navigationAllowed()) {
       <p id="route-timeline-writes-off" class="message">{{ navigationOff }}</p>
@@ -577,9 +590,15 @@ export class RouteTimeline {
   protected readonly navigationOff = actionBlockedMessage('router');
 
   readonly phases = PHASES;
-  readonly filter = signal('');
-  readonly onlyProblems = signal(false);
-  readonly message = signal('');
+  private readonly pageId = computed(() => this.page().pageId);
+  // The component stays mounted when the page picker switches pages, so filters and messages
+  // start over whenever the pageId changes.
+  readonly filter = linkedSignal<string, string>({ source: this.pageId, computation: () => '' });
+  readonly onlyProblems = linkedSignal<string, boolean>({
+    source: this.pageId,
+    computation: () => false,
+  });
+  readonly message = linkedSignal<string, string>({ source: this.pageId, computation: () => '' });
 
   readonly loops = computed(() => this.page().loops ?? []);
 
@@ -598,11 +617,15 @@ export class RouteTimeline {
           (!needle ||
             nav.url.toLowerCase().includes(needle) ||
             !!nav.finalUrl?.toLowerCase().includes(needle)) &&
-          (!this.onlyProblems() ||
-            !['succeeded', 'pending'].includes(nav.outcome) ||
-            this.loopById().has(nav.id)),
+          (!this.onlyProblems() || this.isProblem(nav)),
       );
   });
+
+  /** Probes cancel on purpose, so they are not problems; the tab badge skips them too. */
+  private isProblem(nav: NavigationRecord) {
+    if (nav.probe) return false;
+    return !['succeeded', 'pending'].includes(nav.outcome) || this.loopById().has(nav.id);
+  }
 
   loopOf(nav: NavigationRecord): NavigationLoop | undefined {
     return this.loopById().get(nav.id);
@@ -678,10 +701,22 @@ export class RouteTimeline {
 
   readonly time = time;
 
+  /** Counts instrument toggles so only the latest answer touches the checkbox. */
+  private instrumentSeq = 0;
+
   async toggleInstrument(event: Event) {
     const checkbox = event.target as HTMLInputElement;
     const on = checkbox.checked;
-    const result = await routerAction(this.rpc(), this.page().pageId, { action: 'instrument', on });
+    const pageId = this.pageId();
+    const seq = ++this.instrumentSeq;
+    const result = await routerAction(this.rpc(), pageId, { action: 'instrument', on });
+    // A newer toggle owns the checkbox now; this late answer must not undo it.
+    if (seq !== this.instrumentSeq) return;
+    if (pageId !== this.pageId()) {
+      // The answer is for the page the user left; show this page's state instead.
+      checkbox.checked = !!this.page().instrumented;
+      return;
+    }
     if (result['error']) {
       checkbox.checked = !!this.page().instrumented;
       this.message.set(String(result['error']));
@@ -703,10 +738,12 @@ export class RouteTimeline {
 
   async replay(nav: NavigationRecord) {
     this.message.set(`Replaying #${nav.id}…`);
-    const result = await routerAction(this.rpc(), this.page().pageId, {
+    const pageId = this.pageId();
+    const result = await routerAction(this.rpc(), pageId, {
       action: 'replay',
       id: nav.id,
     });
+    if (pageId !== this.pageId()) return;
     if (result['error']) {
       this.message.set(String(result['error']));
       return;
@@ -718,20 +755,39 @@ export class RouteTimeline {
   }
 
   async copy(nav: NavigationRecord) {
-    const text = await routerCall<string>(this.rpc(), 'router-export', {
-      pageId: this.page().pageId,
-      id: nav.id,
-    });
+    const pageId = this.pageId();
+    const text = await routerCall<string>(this.rpc(), 'router-export', { pageId, id: nav.id });
+    if (pageId !== this.pageId()) return;
     if (!text) {
       this.message.set('Could not build the repro.');
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
-      this.message.set(`Copied a markdown repro of #${nav.id}.`);
+      if (pageId === this.pageId()) this.message.set(`Copied a markdown repro of #${nav.id}.`);
     } catch {
-      this.message.set('The clipboard is not available here.');
+      if (pageId === this.pageId()) this.message.set('The clipboard is not available here.');
     }
+  }
+
+  /** Drops this page's navigations and loop warnings; focus stays on the Clear button. */
+  async clearNavigations() {
+    const client = this.rpc();
+    const pageId = this.pageId();
+    const clearing = 'Clearing navigations…';
+    // A new message first, so a second clear in a row is announced too.
+    this.message.set(clearing);
+    let text: string;
+    try {
+      if (!client) throw new Error('No connection');
+      await rpcCall(client, 'clear-router-navigations', pageId);
+      text = 'Navigations cleared.';
+    } catch {
+      text = 'Could not clear the navigations.';
+    }
+    // The answer is about the page the user may have left; keep it off the page now shown.
+    if (pageId === this.pageId()) this.message.set(text);
+    else if (this.message() === clearing) this.message.set('');
   }
 
   exportJson() {
