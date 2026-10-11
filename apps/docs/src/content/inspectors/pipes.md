@@ -53,6 +53,8 @@ A source that changes on three reports in a row, like `getData() | async` return
 | `signal-read-in-pure-pipe` | warning, info | A pure pipe whose `transform()` reads a `signal`, `input`, `computed`, `linkedSignal`, `toSignal` or `model` field of the pipe (warning). A call with no arguments on an injected service, like `this.rates.current()`, might be a signal read (info). |
 | `async-on-call`            | info          | A method call piped to `\| async`, like `getUsers() \| async`. If the method builds a new Observable each time, `AsyncPipe` resubscribes on every check. Signal, `input`, `computed` and `toSignal` fields of the component are skipped.               |
 
+If the pipe in a finding is in the pipe list, its name is a button. Click it to select that pipe and open its details. A search or **Show pipes** filter that hides the pipe is cleared first; filters that already show it stay. A pipe that is not in the list, like one from a library, stays plain text.
+
 ## Where the data comes from
 
 <ngmd-card-grid columns="3">
