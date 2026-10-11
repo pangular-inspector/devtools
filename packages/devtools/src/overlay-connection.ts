@@ -7,6 +7,7 @@ type ConnectionMeta = NonNullable<ConnectOptions['connectionMeta']>;
 export interface OverlayConnectionInput {
   baseURL?: string | string[];
   connectionMeta?: { configs?: Record<string, unknown> };
+  authToken?: string;
 }
 
 let warnedNoConfig = false;
@@ -45,6 +46,7 @@ export function overlayConnectOptions(
   return {
     baseURL: options.baseURL ?? defaultBases,
     ...(meta ? { connectionMeta: meta as ConnectionMeta } : {}),
+    ...(options.authToken ? { authToken: options.authToken } : {}),
     ...(typeof webFetch === 'function'
       ? { sseOptions: { fetch: (webFetch as typeof fetch).bind(globalThis) } }
       : {}),

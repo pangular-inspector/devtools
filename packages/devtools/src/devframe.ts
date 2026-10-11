@@ -202,6 +202,7 @@ import {
 
 export * from './config.ts';
 
+import { registerAuthTokens } from './auth-tokens.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 type CapacitorToolArgs = {
@@ -3036,6 +3037,11 @@ export interface PangularHostOptions {
    * for the stdio MCP server, which no page can reach.
    */
   pageTools?: boolean;
+  /**
+   * Pairing tokens a client may send to be trusted without the one-time code.
+   * Server-only: they never go into the published config.
+   */
+  authTokens?: string[];
 }
 
 export function createPangular(options: PangularConfig = {}, host: PangularHostOptions = {}) {
@@ -3046,6 +3052,11 @@ export function createPangular(options: PangularConfig = {}, host: PangularHostO
     ...pangular,
     setup: (ctx, info) => {
       const withConfig: SetupInfo = { ...info, config, pageTools: host.pageTools };
+      if (host.authTokens?.length && !registerAuthTokens(ctx, host.authTokens)) {
+        console.warn(
+          '[pangular] The pairing tokens could not be registered, so clients need the one-time code.',
+        );
+      }
       return pangular.setup(ctx, withConfig);
     },
   });

@@ -143,6 +143,11 @@ export interface OverlayOptions {
    * Capacitor WebView, where that fetch is blocked.
    */
   connectionMeta?: OverlayConnectionMeta;
+  /**
+   * A pairing token the server trusts (`auth: {tokens}`, or `--auth-token` on
+   * the CLI), so the page skips the one-time code. A dev secret: don't commit it.
+   */
+  authToken?: string;
 }
 
 let current: { stop: () => void } | null = null;

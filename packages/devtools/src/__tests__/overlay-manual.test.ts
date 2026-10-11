@@ -5,6 +5,7 @@ interface ConnectOptions {
   baseURL?: string | string[];
   connectionMeta?: unknown;
   sseOptions?: { fetch?: (input: string) => Promise<unknown> };
+  authToken?: string;
 }
 
 const connects: ConnectOptions[] = [];
@@ -206,6 +207,18 @@ describe.sequential('overlay connection options', () => {
     // Bound to the window: a native fetch called on nothing throws "Illegal invocation".
     await expect(sseFetch!('http://192.168.1.20:4000/__devframes/__sse')).resolves.toBe(globalThis);
     expect(webFetch).toHaveBeenCalledWith('http://192.168.1.20:4000/__devframes/__sse');
+  });
+
+  it('passes a pairing token to devframe, so the page skips the one-time code', async () => {
+    const { initOverlay } = await loadManual();
+    stops.push(
+      await initOverlay({
+        baseURL: 'http://192.168.1.20:4000/__devframes/pangular/',
+        connectionMeta: serverMeta,
+        authToken: 'pairing-token-0123456789abcdef',
+      }),
+    );
+    expect(connects[0].authToken).toBe('pairing-token-0123456789abcdef');
   });
 
   it('leaves the SSE fetch to devframe without CapacitorHttp', async () => {

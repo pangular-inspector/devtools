@@ -8,6 +8,7 @@ import type { InitHubOptions } from '@devframes/hub/initiate';
 import type { WsOriginRegistry } from 'devframe/rpc/transports/ws-server';
 import { isAllowedOrigin } from 'devframe/utils/origin';
 import { createPangular } from './devframe.ts';
+import { authTokensFrom, isAuthTokens, type PangularAuthTokens } from './auth-tokens.ts';
 import { PANGULAR_EXTENSION_ORIGINS, isAllowedExtensionOrigin } from './extension-origin.ts';
 import { pickPangularConfig, type PangularConfig } from './config.ts';
 import { PANGULAR_LOGO_DATA_URI } from './brand.ts';
@@ -21,8 +22,13 @@ export type { PangularConfig } from './config.ts';
 
 const PANGULAR_MCP_TOKEN_ENV = 'PANGULAR_MCP_TOKEN';
 
-export type PangularHubOptions = Partial<Omit<InitHubOptions, 'devframes' | 'ui'>> &
+export type PangularHubOptions = Partial<Omit<InitHubOptions, 'devframes' | 'ui' | 'auth'>> &
   PangularConfig & {
+    /**
+     * The one-time code. `false` turns it off. `{tokens}` keeps it on and also
+     * trusts clients that send one of the tokens, such as an app on a phone.
+     */
+    auth?: InitHubOptions['auth'] | PangularAuthTokens;
     /** The app's browser build folder, so a forced Client render can serve `index.csr.html`. */
     browserDistFolder?: string;
   };
@@ -102,7 +108,10 @@ function mcpToken(): string {
   return token;
 }
 
-function hubMcpFor(options: PangularHubOptions): InitHubOptions['mcp'] {
+function hubMcpFor(options: {
+  mcp?: InitHubOptions['mcp'];
+  auth?: unknown;
+}): InitHubOptions['mcp'] {
   if (options.mcp !== undefined || options.auth === false) return options.mcp;
   return { authorization: mcpToken() };
 }
@@ -112,16 +121,19 @@ function hubMcpFor(options: PangularHubOptions): InitHubOptions['mcp'] {
  * again after a rebuild gets a fresh hub, and the previous one is closed.
  */
 export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
-  const { browserDistFolder, ...hubOptions } = options;
+  const { browserDistFolder, auth: authOption, ...hubOptions } = options;
   const { config, rest } = pickPangularConfig(hubOptions);
+  const authTokens = isAuthTokens(authOption) ? authTokensFrom(authOption.tokens) : [];
+  const auth = isAuthTokens(authOption) ? undefined : authOption;
   const hub = initHub({
     name: 'pangular',
     version: pkg.version,
     base: PANGULAR_HUB_BASE,
     ...rest,
+    ...(auth === undefined ? {} : { auth }),
     allowedOrigins: hubAllowedOrigins(rest.allowedOrigins),
-    mcp: hubMcpFor(rest),
-    devframes: [createPangular(config)],
+    mcp: hubMcpFor({ ...rest, auth }),
+    devframes: [createPangular(config, { authTokens })],
     ui: hubUi(),
   });
   const hubs = (hubRegistry().hubs ??= new Map());
