@@ -148,6 +148,7 @@ import {
   byRecency,
   listPagesText,
   pageArgument,
+  pageDetails,
   summarizePages,
   unknownPageText,
 } from './rpc/pages.ts';
@@ -2604,15 +2605,19 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:list-pages',
       description:
-        'List the browser tabs and Angular Native apps that report live data to this server, newest first: page id, URL, platform (`browser` or `Angular Native`), seconds since the last report and which inspectors report. Pass a page id as `page` to the live tools to pick a page; without it they use the most recent page.',
+        'List the browser tabs and Angular Native apps that report live data to this server, newest first: page id, URL, title, platform (`browser` or `Angular Native`), seconds since the last report (marked `background` for a tab in the background, which stops reporting until shown again) and which inspectors report. The URL comes from the HTTP or router report, or from the component tree when those have none. Pass a page id as `page` to the live tools to pick a page; without it they use the most recent page.',
       safety: 'read',
       inputSchema: { type: 'object', properties: {} },
       handler: async () => {
-        const urls = new Map<string, string>();
-        for (const page of routerPages.values()) {
-          if (page.snapshot?.url) urls.set(page.pageId, page.snapshot.url);
-        }
-        for (const page of httpPages.values()) urls.set(page.pageId, page.url);
+        const details = pageDetails({
+          router: [...routerPages.values()].map((page) => ({
+            pageId: page.pageId,
+            reportedAt: page.reportedAt,
+            url: page.snapshot?.url,
+          })),
+          http: httpPages.values(),
+          components: componentPages.values(),
+        });
         const platforms = new Map<string, string>();
         for (const page of componentPages.values()) {
           if (page.platform) platforms.set(page.pageId, page.platform);
@@ -2621,19 +2626,22 @@ const pangular = defineDevframe({
           [...pages].map((page) => ({
             pageId: page.pageId,
             reportedAt: page.reportedAt,
-            url: urls.get(page.pageId),
+            ...details.get(page.pageId),
             platform: platforms.get(page.pageId),
           }));
-        const pages = summarizePages({
-          components: withUrl(componentPages.values()),
-          signals: withUrl([...signalPages].map(([pageId, entry]) => ({ pageId, ...entry }))),
-          injectors: withUrl(injectorPages.values()),
-          ngrx: withUrl(ngrxPages.values()),
-          forms: withUrl(formPages.values()),
-          router: withUrl(routerPages.values()),
-          pipes: withUrl(pipePages.values()),
-          http: withUrl(httpPages.values()),
-        });
+        const pages = summarizePages(
+          {
+            components: withUrl(componentPages.values()),
+            signals: withUrl([...signalPages].map(([pageId, entry]) => ({ pageId, ...entry }))),
+            injectors: withUrl(injectorPages.values()),
+            ngrx: withUrl(ngrxPages.values()),
+            forms: withUrl(formPages.values()),
+            router: withUrl(routerPages.values()),
+            pipes: withUrl(pipePages.values()),
+            http: withUrl(httpPages.values()),
+          },
+          visibility.list(),
+        );
         return { markdown: listPagesText(pages) };
       },
     });
