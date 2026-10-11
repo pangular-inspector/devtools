@@ -104,6 +104,16 @@ describe('NetworkInspector accessibility', () => {
     expect(status()).toBe('Rule removed.');
   });
 
+  it('keeps a newer message over a pending repeat', async () => {
+    const inspector = await mount();
+    inspector.message.set('Rule removed.');
+    await fixture.whenStable();
+    inspector['announce']('Rule removed.');
+    inspector.message.set('Could not save the rules.');
+    await settle();
+    expect(status()).toBe('Could not save the rules.');
+  });
+
   it('moves focus the same way when an override is removed', async () => {
     const inspector = await mount();
     inspector.overrides.set([

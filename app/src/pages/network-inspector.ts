@@ -2670,7 +2670,13 @@ export class NetworkInspector {
       return;
     }
     this.message.set('');
-    afterNextRender(() => this.message.set(text), { injector: this.injector });
+    // A newer message set before the render wins over this restore.
+    afterNextRender(
+      () => {
+        if (this.message() === '') this.message.set(text);
+      },
+      { injector: this.injector },
+    );
   }
 
   private async saveOverrides(next: SsrOverride[], done: string): Promise<boolean> {
