@@ -241,6 +241,12 @@ describe('injector tree selection that leaves the page', () => {
     vi.unstubAllGlobals();
     expect(fixture.componentInstance.selected()?.injector.id).toBe('a');
     expect(el.textContent).not.toContain('This injector is no longer on the page');
+
+    // A second injector going away changes the status text, so it is read out again.
+    const before = status?.textContent;
+    await push({ roots: [element('d', 'app-d')], environment: [] });
+    expect(status?.textContent?.trim()).toBe('The selected injector is no longer on the page.');
+    expect(status?.textContent).not.toBe(before);
   });
 
   it('still shows the first injector while nothing is chosen', async () => {

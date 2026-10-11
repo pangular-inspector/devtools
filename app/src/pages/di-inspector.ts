@@ -1494,7 +1494,9 @@ export class DiInspector {
   private syncGone() {
     const gone = this.gone() !== null;
     if (gone && !this.wasGone) {
-      this.announcement.set('The selected injector is no longer on the page.');
+      // A trailing no-break space makes a repeat differ, so screen readers say it again.
+      const message = 'The selected injector is no longer on the page.';
+      this.announcement.update((current) => (current === message ? `${message}\u00a0` : message));
     }
     this.wasGone = gone;
   }
