@@ -80,6 +80,8 @@ A bundled build loads the app from `capacitor://localhost` on iOS and from `http
 
 The overlay is bundled into the app here, so install the package in the app first, even when the server runs on its own. See [Installation](../getting-started/installation.md).
 
+If the app has no native project yet, install the platform package before you add it: `npm i @capacitor/android`, then `npx cap add android`, or `npm i @capacitor/ios`, then `npx cap add ios`. Without the package, `npx cap add` fails with `Could not find the android platform`.
+
 ### Start the overlay
 
 ```ts {8-14}
@@ -100,6 +102,10 @@ bootstrapApplication(App, appConfig)
   })
   .catch((err) => console.error(err));
 ```
+
+An NgModule app, such as one from `ionic start` with NgModules, starts with `platformBrowserDynamic().bootstrapModule(AppModule)`. Add the same `.then(...)` block to that call.
+
+On an Android emulator or a phone on USB, `localhost` reaches your machine only after `adb reverse tcp:9999 tcp:9999`, with your server's port. Run it again after the device restarts. A phone on Wi-Fi uses your machine's network address instead, as in [The connection info](#the-connection-info).
 
 Started with `--host 0.0.0.0`, the standalone CLI prints this call with your network address and its whole connection info, config included, ready to paste.
 
