@@ -77,6 +77,9 @@ export function attachCapacitor(my: RpcScope, pageId: string, options: Capacitor
   // A page that leaves while a push is on its way forgets itself once the
   // push lands, so that push can't bring the page back.
   let forgetAfterPush = false;
+  // Separate RPC calls may arrive out of order, so a push waits for a forget
+  // still on its way, or the server could drop the page it just got.
+  let forgetting: Promise<unknown> | undefined;
   let stopped = false;
   let disabled = false;
   let failures = 0;
@@ -133,6 +136,7 @@ export function attachCapacitor(my: RpcScope, pageId: string, options: Capacitor
     };
     pushing = true;
     try {
+      if (forgetting) await forgetting;
       const answer = (await outsideAngular(() => my.rpc.call('push-capacitor', report))) as
         { known?: boolean } | null | undefined;
       lastSentAt = Date.now();
@@ -174,7 +178,13 @@ export function attachCapacitor(my: RpcScope, pageId: string, options: Capacitor
 
   const forget = () => {
     sent = false;
-    void my.rpc.call('forget-capacitor-page', pageId).catch(() => {});
+    const done: Promise<unknown> = my.rpc
+      .call('forget-capacitor-page', pageId)
+      .catch(() => {})
+      .finally(() => {
+        if (forgetting === done) forgetting = undefined;
+      });
+    forgetting = done;
   };
 
   const stopTicking = () => {

@@ -172,6 +172,30 @@ describe('attachCapacitor', () => {
     expect(rpc.calls).toHaveLength(2);
   });
 
+  it('waits for a forget on its way before it reports again after pageshow', async () => {
+    let forgotten!: () => void;
+    const rpc = fakeRpc();
+    const call = rpc.my.rpc.call.getMockImplementation()!;
+    rpc.my.rpc.call.mockImplementation(async (name: string, arg: unknown) => {
+      if (name === 'forget-capacitor-page') await new Promise<void>((done) => (forgotten = done));
+      return call(name, arg);
+    });
+    const capacitor = attach(rpc, { Capacitor: fakeCapacitor() });
+    await vi.advanceTimersByTimeAsync(0);
+
+    capacitor.leave();
+    capacitor.resume();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(rpc.pushes()).toHaveLength(1);
+    forgotten();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(rpc.calls.map(([name]) => name)).toEqual([
+      'push-capacitor',
+      'forget-capacitor-page',
+      'push-capacitor',
+    ]);
+  });
+
   it('restores the bridge when it stops', () => {
     const cap = fakeCapacitor();
     const original = cap.nativePromise;
