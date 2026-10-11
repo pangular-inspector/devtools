@@ -273,6 +273,10 @@ try {
     for (const view of VIEWS) {
       await page.goto(`${base}?view=${view}`);
       await page.locator('.status.connected').waitFor();
+      // Every view links to the full panel, so axe checks the link in each one.
+      if (!(await page.locator('header a.full-panel').count())) {
+        failures.push(`${colorScheme} view=${view}: no Open full panel link`);
+      }
       await check(page, `${colorScheme} view=${view}`);
     }
     await context.close();

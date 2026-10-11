@@ -33,7 +33,8 @@ import { capacitorPages } from './pages/capacitor-types';
 import { TabIcon } from './pages/tab-icon';
 import { styleHubRail } from './hub-rail-style';
 import { ThemeService } from './theme.service';
-import { followHubDocks, selectHubDock } from './hub-dock-sync';
+import { followHubDocks, inHub, selectHubDock } from './hub-dock-sync';
+import { fullPanelHref, isPlainClick } from './full-panel';
 import { panelConfig, tabEnabled } from './devtools-config';
 import { hostPageId, scopeToPage } from './page-id';
 import { angularNativePage, type PlatformPage } from './native-page';
@@ -52,6 +53,10 @@ const HUB_VIEWS = [
 ] as const;
 
 type View = (typeof HUB_VIEWS)[number];
+
+/** The hub dock that opens this panel without a view, with every tab. */
+const ALL_TOOLS = 'all';
+const HUB_DOCKS = [ALL_TOOLS, ...HUB_VIEWS] as const;
 
 const VIEW_TITLE: Record<View, string> = {
   angular: 'Angular',
@@ -370,6 +375,17 @@ function readView(): View | null {
           }
         }
       </nav>
+      @if (fullPanelLink(); as link) {
+        <a class="full-panel" [href]="link.href" (click)="openFullPanel($event, link.tab)">
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" />
+            <rect x="14" y="14" width="7" height="7" rx="1.5" />
+          </svg>
+          Open full panel
+        </a>
+      }
       <span
         class="status"
         [class.connected]="connected()"
@@ -642,6 +658,42 @@ function readView(): View | null {
         border-color 0.2s var(--ease),
         background-color 0.2s var(--ease);
     }
+    .full-panel {
+      display: inline-flex;
+      flex-shrink: 0;
+      align-items: center;
+      gap: 6px;
+      height: 28px;
+      margin-left: auto;
+      padding: 0 10px;
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      text-decoration: none;
+      white-space: nowrap;
+      transition:
+        background-color 0.16s var(--ease),
+        color 0.16s var(--ease);
+      svg {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+      }
+      &:hover {
+        background: var(--surface-2);
+        color: var(--text-strong);
+      }
+      &:focus-visible {
+        @include m.focus-ring(2px);
+      }
+    }
+    .full-panel + .status {
+      margin-left: 0;
+    }
     .dot {
       position: relative;
       display: grid;
@@ -843,6 +895,15 @@ export class App implements OnInit, OnDestroy {
     return tabs.filter((t) => t.id === 'dashboard' || t.id === tab);
   });
 
+  /** The link from a hub view to the full panel, on the tab that shows the same content. */
+  protected readonly fullPanelLink = computed(() => {
+    const view = this.view();
+    // The extension has no hub and no views to leave.
+    if (!view || location.protocol === 'chrome-extension:') return null;
+    const tab = VIEW_TAB[view] ?? (this.comingSoon() ? undefined : this.tab());
+    return { tab, href: fullPanelHref(location.href, tab) };
+  });
+
   tab = linkedSignal<Tab>(() => {
     const view = this.view();
     return (view && (VIEW_TAB[view] ?? VIEW_TABS[view]?.[0])) || 'dashboard';
@@ -924,9 +985,11 @@ export class App implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    if (this.view()) {
-      this.stopFollowing = followHubDocks(HUB_VIEWS, (view) => this.showView(view));
-    }
+    // The views and the full panel share one hub frame, so whichever loaded
+    // first follows the rail.
+    this.stopFollowing = followHubDocks(HUB_DOCKS, (dock) =>
+      dock === ALL_TOOLS ? this.showFullPanel() : this.showView(dock),
+    );
     const restored = initialTab(
       location.hash,
       storedTab(this.tabScope()),
@@ -1004,6 +1067,32 @@ export class App implements OnInit, OnDestroy {
     url.searchParams.set('view', view);
     url.hash = '';
     history.replaceState(history.state, '', url);
+  }
+
+  /** Leaves the hub view for the full panel in place, on `target` when it has that tab. */
+  private showFullPanel(target?: Tab) {
+    if (!this.view()) return;
+    scopeToPage(null);
+    this.view.set(null);
+    const url = new URL(location.href);
+    url.searchParams.delete('view');
+    url.hash = target ? `tab=${target}` : '';
+    history.replaceState(history.state, '', url);
+    const wanted = target ?? storedTab(this.tabScope());
+    const available = this.availableTabs().map((t) => t.id);
+    const restored = initialTab(url.hash, wanted, available);
+    if (restored) this.setTab(restored);
+    // The tab exists once a Capacitor app reports; watchCapacitor opens it then.
+    else if (wanted === 'capacitor') this.restoreCapacitor = true;
+  }
+
+  openFullPanel(event: MouseEvent, tab: Tab | undefined) {
+    // Outside the hub, and for a new tab or window, the link navigates.
+    if (!isPlainClick(event) || !inHub()) return;
+    event.preventDefault();
+    this.showFullPanel(tab);
+    this.focusCurrentTab();
+    void selectHubDock(ALL_TOOLS);
   }
 
   formFocus = signal<{ id: string } | null>(null);
@@ -1123,6 +1212,11 @@ export class App implements OnInit, OnDestroy {
     const active = document.activeElement;
     const main = this.main()?.nativeElement;
     if (active && active !== document.body && !main?.contains(active)) return;
+    this.focusCurrentTab();
+  }
+
+  /** Moves focus to the selected tab, or the content, once the next render settles. */
+  private focusCurrentTab() {
     afterNextRender(
       () => {
         const now = document.activeElement;

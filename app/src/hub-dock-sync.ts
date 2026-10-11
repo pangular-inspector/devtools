@@ -51,6 +51,11 @@ export function followHubDocks<T extends string>(
   return () => offs.forEach((off) => off());
 }
 
+/** Whether the panel runs inside the hub, which can switch its docks. */
+export function inHub(): boolean {
+  return !!hubContext();
+}
+
 export async function selectHubDock(view: string): Promise<boolean> {
   const ctx = hubContext();
   if (!ctx) return false;
