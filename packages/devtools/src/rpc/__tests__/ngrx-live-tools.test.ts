@@ -306,3 +306,47 @@ describe('withUntrustedPreamble', () => {
     expect(text.length).toBeLessThanOrEqual(NGRX_LIVE_TOOL_MAX + 200);
   });
 });
+
+describe('an unknown page', () => {
+  function twoPages(): NgrxPages {
+    const pages: NgrxPages = new Map();
+    for (const [pid, at] of [
+      ['p1', 1_000],
+      ['p2', 2_000],
+    ] as const) {
+      mergeNgrxReport(
+        pages,
+        {
+          pageId: pid,
+          session: 's',
+          url: `/${pid}`,
+          title: '',
+          stores: [store()],
+          classic: null,
+          log: [logEntry({ seq: 1 })],
+        },
+        [],
+        at,
+      );
+    }
+    return pages;
+  }
+
+  const tools = [
+    ['inspect-signal-store', (pages: NgrxPages) => inspectSignalStoreText(pages, 'p3')],
+    ['signal-store-history', (pages: NgrxPages) => signalStoreHistoryText(pages, 'p3')],
+  ] as const;
+
+  for (const [name, answer] of tools) {
+    it(`${name} lists the pages that do report, newest first`, () => {
+      const text = answer(twoPages());
+      expect(text).toContain('No page `p3` is reporting NgRx state.');
+      expect(text).toMatch(/`p2`.*`p1`/);
+      expect(text).not.toMatch(/no ngrx state has been reported/i);
+    });
+
+    it(`${name} still says nothing was reported when no page reports`, () => {
+      expect(answer(new Map())).toMatch(/no ngrx state has been reported/i);
+    });
+  }
+});

@@ -494,6 +494,7 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'component-tree': 'components',
   highlight: 'components',
   'inspect-component': 'components',
+  'list-components': 'components',
   'defer-blocks': 'components',
   'change-detection': 'components',
   'signal-graph': 'signals',
@@ -531,6 +532,7 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'explain-pipe': 'pipes',
   'list-ssr-requests': 'http',
   'explain-ssr-request': 'http',
+  'list-http-calls': 'http',
 };
 
 /**
@@ -542,6 +544,7 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'component-tree',
   'highlight',
   'inspect-component',
+  'list-components',
   'defer-blocks',
   'change-detection',
   'signal-graph',
@@ -579,6 +582,7 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'analog-call-api',
   'list-ssr-requests',
   'explain-ssr-request',
+  'list-http-calls',
 ];
 
 export function isPageAgentEntry(id: string): boolean {
