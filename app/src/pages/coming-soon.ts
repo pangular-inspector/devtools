@@ -9,8 +9,6 @@ export interface ComingSoonInfo {
   color: string;
   plans: string[];
   plansTitle?: string;
-  pr?: number;
-  author?: { name: string; login: string };
   link?: { label: string; href: string };
 }
 
@@ -95,28 +93,6 @@ export interface ComingSoonInfo {
       <h2 id="soon-title">{{ info().heading }}</h2>
       <p class="summary">{{ info().summary }}</p>
 
-      @if (info().author; as author) {
-        <a
-          class="author"
-          [href]="'https://github.com/pangular-inspector/devtools/pull/' + info().pr"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img
-            [src]="'https://github.com/' + author.login + '.png?size=96'"
-            width="40"
-            height="40"
-            alt=""
-          />
-          <span class="who">
-            <span class="by">Being built by</span>
-            <strong>{{ author.name }}</strong>
-            <span class="login">&#64;{{ author.login }} · PR #{{ info().pr }}</span>
-          </span>
-          <span class="go" aria-hidden="true">→</span>
-          <span class="sr-only">(opens in a new tab)</span>
-        </a>
-      }
       @if (info().link; as link) {
         <a class="author cta" [href]="link.href" target="_blank" rel="noopener noreferrer">
           <span class="who"
@@ -309,11 +285,6 @@ export interface ComingSoonInfo {
     .cta {
       padding: 8px 16px;
     }
-    .author img {
-      flex: none;
-      border-radius: 50%;
-      background: var(--surface-3);
-    }
     .who {
       display: grid;
       min-width: 0;
@@ -323,15 +294,6 @@ export interface ComingSoonInfo {
       overflow: hidden;
       color: var(--text-strong);
       font-size: 14px;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .by,
-    .login {
-      overflow: hidden;
-      color: var(--text-2);
-      font-size: 12px;
-      font-variant-numeric: tabular-nums;
       text-overflow: ellipsis;
       white-space: nowrap;
     }

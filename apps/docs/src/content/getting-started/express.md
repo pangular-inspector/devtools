@@ -175,7 +175,7 @@ A floating button appears on your page. It opens the devtools with one dock entr
 | Analog         | File routes, server calls, render modes and lint (a notice in non-Analog apps)                    |
 | Angular Native | Components, signals, injectors and store of a connected [Angular Native](./angular-native.md) app |
 | NativeScript   | Setup steps for [NativeScript apps](../guides/nativescript.md)                                    |
-| Capacitor      | A **Coming Soon** placeholder                                                                     |
+| Capacitor      | Setup steps for [Capacitor and Ionic apps](../guides/capacitor.md)                                |
 
 [Popup and hub](./popup-and-hub.md) covers the panel, its dock modes and deep links.
 

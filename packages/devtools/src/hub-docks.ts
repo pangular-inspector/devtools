@@ -28,7 +28,6 @@ const DOCKS: {
   view: HubView;
   title: string;
   icon: string;
-  soon?: boolean;
   inspector?: PangularInspector;
 }[] = [
   { view: 'angular', title: 'Angular', icon: 'logos:angular-icon' },
@@ -41,7 +40,7 @@ const DOCKS: {
     inspector: 'components',
   },
   { view: 'nativescript', title: 'NativeScript', icon: 'logos:nativescript' },
-  { view: 'capacitor', title: 'Capacitor', icon: 'logos:capacitorjs-icon', soon: true },
+  { view: 'capacitor', title: 'Capacitor', icon: 'logos:capacitorjs-icon' },
 ];
 
 export function dockId(view: HubView): string {
@@ -66,7 +65,7 @@ export function registerHubDocks(
     const entry: DevframeViewIframe = {
       type: 'iframe',
       id: dockId(dock.view),
-      title: dock.soon ? `${dock.title} · Coming Soon` : dock.title,
+      title: dock.title,
       icon: dock.icon,
       category: 'framework',
       defaultOrder: index,

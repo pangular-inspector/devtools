@@ -119,7 +119,7 @@ When the page's server mounts the hub (`/__devframes/`), the button opens the wh
 | Analog         | The Analog tab, or a notice in apps that do not use Analog                                                                                   |
 | Angular Native | Components, Signals, Injectors and Store for a connected [Angular Native](./angular-native.md) app, or a setup notice when none is connected |
 | NativeScript   | Setup steps for [NativeScript apps](../guides/nativescript.md)                                                                               |
-| Capacitor      | A **Coming Soon** placeholder                                                                                                                |
+| Capacitor      | Setup steps for [Capacitor and Ionic apps](../guides/capacitor.md)                                                                           |
 
 ### Full-page viewer
 
