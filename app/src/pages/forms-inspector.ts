@@ -690,7 +690,7 @@ function countFields(node: FormFieldNode): number {
       padding: 0 7px;
       border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
       border-radius: 99px;
-      background: color-mix(in srgb, var(--danger) 12%, transparent);
+      background: color-mix(in srgb, var(--danger) 12%, var(--surface));
       color: var(--danger);
       font-size: 11px;
       font-weight: 600;
@@ -842,12 +842,13 @@ function countFields(node: FormFieldNode): number {
     .totals b.has-errors {
       color: var(--danger);
     }
+    /* Opaque tints so a selected or hovered row behind the badge cannot lower its contrast. */
     .badge {
       display: inline-block;
       padding: 0 8px;
       border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
       border-radius: 99px;
-      background: color-mix(in srgb, var(--ok) 12%, transparent);
+      background: color-mix(in srgb, var(--ok) 12%, var(--surface));
       color: var(--ok);
       font-size: 11px;
       font-weight: 600;
@@ -860,12 +861,12 @@ function countFields(node: FormFieldNode): number {
     }
     .badge[data-status='INVALID'] {
       border-color: color-mix(in srgb, var(--danger) 30%, transparent);
-      background: color-mix(in srgb, var(--danger) 12%, transparent);
+      background: color-mix(in srgb, var(--danger) 12%, var(--surface));
       color: var(--danger);
     }
     .badge[data-status='PENDING'] {
       border-color: color-mix(in srgb, var(--warn) 30%, transparent);
-      background: color-mix(in srgb, var(--warn) 12%, transparent);
+      background: color-mix(in srgb, var(--warn) 12%, var(--surface));
       color: var(--warn);
     }
     .badge[data-status='DISABLED'] {
@@ -1178,7 +1179,7 @@ function countFields(node: FormFieldNode): number {
     }
     .flags span.warn {
       border-color: color-mix(in srgb, var(--warn) 30%, transparent);
-      background: color-mix(in srgb, var(--warn) 12%, transparent);
+      background: color-mix(in srgb, var(--warn) 12%, var(--surface));
       color: var(--warn);
     }
     .errors {

@@ -285,6 +285,64 @@ describe('FormsInspector fields', () => {
   });
 });
 
+describe('FormsInspector status pills', () => {
+  // Backgrounds of the stylesheet rules that apply to an element, in source order.
+  function backgrounds(element: Element): string[] {
+    const found: string[] = [];
+    for (const sheet of Array.from(document.styleSheets)) {
+      for (const rule of Array.from(sheet.cssRules)) {
+        if (!(rule instanceof CSSStyleRule) || !element.matches(rule.selectorText)) continue;
+        const match = /background:\s*([^;]+);/.exec(rule.cssText);
+        if (match) found.push(match[1].trim());
+      }
+    }
+    return found;
+  }
+
+  it('gives the status badge on a selected row an opaque background', async () => {
+    const invalid: CollectedForm = {
+      ...form,
+      root: {
+        ...form.root,
+        status: 'INVALID',
+        children: [
+          field('email', {
+            status: 'INVALID',
+            errors: [{ kind: 'required', message: 'Required' }],
+          }),
+          field('name', { status: 'PENDING' }),
+          field('phone'),
+        ],
+      },
+    };
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve(''), [invalid]),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    button(fixture, 'Show details for email').click();
+    await settle(fixture);
+
+    const row = host.querySelector('.fields tbody tr:has(.field[aria-pressed="true"])');
+    const pills = [
+      row?.querySelector('.badge[data-status="INVALID"]'),
+      host.querySelector('.badge[data-status="PENDING"]'),
+      host.querySelector('.badge[data-status="VALID"]'),
+      host.querySelector('.form-item.active .count'),
+    ];
+    for (const pill of pills) {
+      expect(pill).not.toBeNull();
+      const applied = backgrounds(pill!);
+      expect(applied.length).toBeGreaterThan(0);
+      // A tint mixed with transparent lets the selected-row tint show through it.
+      expect(applied.at(-1)).not.toContain('transparent');
+    }
+  });
+});
+
 describe('FormsInspector pick', () => {
   it('turns into Cancel picking and cancels from the button and Escape', async () => {
     const calls: Record<string, unknown>[] = [];
