@@ -461,6 +461,38 @@ describe('createCapacitorHook', () => {
     expect(hook.snapshot().listeners?.[0].removed).toBe(true);
   });
 
+  it('keeps only the last event of a listener, masked when a snapshot reads it', () => {
+    const { win, cap, fire } = fakeCapacitor();
+    const hook = collect(win);
+    const id = cap.nativeCallback(
+      'Foldable',
+      'addListener',
+      { eventName: 'foldStateChange' },
+      () => {},
+    );
+    fire(id, { state: 'flat', posture: 'flat' });
+    const event = {
+      state: 'half-opened',
+      posture: 'tabletop',
+      password: 'hunter2',
+      note: 'y'.repeat(500),
+    };
+    fire(id, event);
+    // An error carries no event, so the last one stays.
+    fire(id, undefined, { message: 'gone' });
+
+    const [listener] = hook.snapshot().listeners ?? [];
+    const last = listener.last as Record<string, unknown>;
+    expect(listener.events).toBe(3);
+    expect(last['state']).toBe('half-opened');
+    expect(last['posture']).toBe('tabletop');
+    expect(last['password']).toBe('[redacted]');
+    expect(String(last['note']).length).toBeLessThanOrEqual(201);
+    // A copy, not the app's own object.
+    expect(listener.last).not.toBe(event);
+    expect(event.password).toBe('hunter2');
+  });
+
   it('logs a callback method as a stream and counts how often it calls back', () => {
     const { win, cap, fire } = fakeCapacitor();
     const hook = collect(win);

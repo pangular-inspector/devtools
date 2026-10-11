@@ -4,7 +4,7 @@ import type {
   CapacitorListener,
   CapacitorPluginInfo,
 } from '../capacitor-collector.ts';
-import { CORE_PLUGINS, isUnimplemented } from '../capacitor-collector.ts';
+import { CORE_PLUGINS, LAST_EVENT_LIMITS, isUnimplemented } from '../capacitor-collector.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import { hasSecretKey, maskedArgs, maskedResult } from '../capacitor-redact.ts';
 import { clip } from '../text.ts';
@@ -191,6 +191,11 @@ function toListener(value: unknown): CapacitorListener | null {
   const addedAt = finite(value['addedAt']);
   if (!id || !plugin || addedAt === undefined) return null;
   const lastEventAt = finite(value['lastEventAt']);
+  // Masked again like a call result, with the server's own redaction.
+  const last =
+    value['last'] === undefined
+      ? undefined
+      : maskedResult(plugin, false, value['last'], LAST_EVENT_LIMITS);
   return {
     id,
     plugin,
@@ -199,6 +204,7 @@ function toListener(value: unknown): CapacitorListener | null {
     events: finite(value['events']) ?? 0,
     ...(lastEventAt !== undefined ? { lastEventAt } : {}),
     ...(value['removed'] === true ? { removed: true } : {}),
+    ...(last !== undefined ? { last } : {}),
   };
 }
 
@@ -521,7 +527,12 @@ export function capacitorCallsText(
   if (listeners.length) {
     lines.push(
       '',
-      `Active listeners: ${listeners.map((l) => `${code(`${l.plugin} ${l.event}`)} (${l.events} events)`).join(', ')}.`,
+      `Active listeners: ${listeners
+        .map((l) => {
+          const last = l.last === undefined ? '' : `, last \`${json(l.last, 120)}\``;
+          return `${code(`${l.plugin} ${l.event}`)} (${l.events} events${last})`;
+        })
+        .join(', ')}.`,
     );
   }
   return capped(lines.join('\n'), NARROW_CALLS);

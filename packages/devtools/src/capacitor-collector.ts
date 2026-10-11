@@ -90,6 +90,11 @@ export interface CapacitorListener {
   events: number;
   lastEventAt?: number;
   removed?: boolean;
+  /**
+   * The payload of the last event, masked like a call result. Only the last
+   * one is kept, and it is masked when a push reads it, not on every event.
+   */
+  last?: unknown;
 }
 
 /** The part of `window.Capacitor` the hook reads. */
@@ -125,6 +130,8 @@ type BridgeName = 'nativePromise' | 'nativeCallback';
 
 const DEFAULT_MAX_CALLS = 200;
 const VALUE_LIMITS = { depth: 4, keys: 20, items: 20, text: 300, budget: 400 };
+/** Smaller than a call's: a listener's last event is a glance at the latest state. */
+export const LAST_EVENT_LIMITS = { depth: 4, keys: 30, items: 30, text: 200, budget: 300 };
 const MAX_LISTENERS = 100;
 const MAX_PLUGINS = 200;
 const LISTENER_METHODS = new Set(['addListener', 'removeListener']);
@@ -285,6 +292,8 @@ export interface CapacitorHookOptions {
 export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptions = {}) {
   const entries: Entry[] = [];
   const listeners = new Map<string, CapacitorListener>();
+  // The raw payload of each listener's newest event, until a snapshot masks it.
+  const unmaskedLast = new Map<CapacitorListener, unknown>();
   const subscribers = new Set<() => void>();
   let maxCalls = options.maxCalls ?? DEFAULT_MAX_CALLS;
   let ignore: ((plugin: string, method: string, args: unknown) => boolean) | undefined;
@@ -485,6 +494,8 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
             if (listener && active) {
               listener.events++;
               listener.lastEventAt = Date.now();
+              // The bridge passes (data, error); an error carries no event.
+              if (!data[1]) unmaskedLast.set(listener, data[0]);
               listenersRev = ++revision;
               changed();
             }
@@ -505,7 +516,10 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
       if (listeners.size > MAX_LISTENERS) {
         const oldest =
           [...listeners.values()].find((entry) => entry.removed) ?? listeners.values().next().value;
-        if (oldest) listeners.delete(oldest.id);
+        if (oldest) {
+          listeners.delete(oldest.id);
+          unmaskedLast.delete(oldest);
+        }
       }
       listenersRev = ++revision;
       changed();
@@ -656,6 +670,19 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
     }, undefined);
   };
 
+  /** Masks the events that arrived since the last snapshot, one per listener. */
+  const maskLastEvents = () => {
+    for (const [listener, data] of unmaskedLast) {
+      const last = read(
+        () => maskedResult(listener.plugin, false, data, LAST_EVENT_LIMITS),
+        undefined,
+      );
+      if (last === undefined) delete listener.last;
+      else listener.last = last;
+    }
+    unmaskedLast.clear();
+  };
+
   trapRegisterPlugin();
   install();
   read(() => win.addEventListener?.('unhandledrejection', onUnhandled), undefined);
@@ -686,6 +713,7 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
      */
     snapshot(since?: number) {
       const after = since ?? -1;
+      maskLastEvents();
       return {
         calls: entries.filter((entry) => entry.rev > after).map((entry) => entry.call),
         ...(since === undefined || listenersRev > since
@@ -699,6 +727,7 @@ export function createCapacitorHook(win: HookWindow, options: CapacitorHookOptio
     stop() {
       active = false;
       subscribers.clear();
+      unmaskedLast.clear();
       read(() => win.removeEventListener?.('unhandledrejection', onUnhandled), undefined);
       if (win.__pangularCapacitorHook === hook) delete win.__pangularCapacitorHook;
       if (!wrapped) return;

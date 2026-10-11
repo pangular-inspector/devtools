@@ -235,6 +235,41 @@ describe('list-capacitor-calls', () => {
     expect(all).toContain('"quality":90');
   });
 
+  it("keeps each listener's last event, masked again with the server's redaction", async () => {
+    const { push, tool, state } = await boot(
+      createPangular({ redaction: { secretNames: ['voucher'] } }),
+    );
+    await push(
+      'push-capacitor',
+      report({
+        calls: [call(1)],
+        listeners: [
+          {
+            id: '7',
+            plugin: 'Network',
+            event: 'networkStatusChange',
+            addedAt: 1,
+            events: 2,
+            lastEventAt: 2,
+            last: { connected: true, voucher: 'SAVE-50', note: 'x'.repeat(500) },
+          },
+          { id: '8', plugin: 'App', event: 'pause', addedAt: 1, events: 1, lastEventAt: 2 },
+        ],
+      }),
+    );
+    const all = await tool();
+    expect(all).toContain('`Network networkStatusChange` (2 events, last `{"connected":true,');
+    expect(all).toContain('`App pause` (1 events)');
+    expect(all).not.toContain('SAVE-50');
+    const shown = (await state()).pages['cap1'] as {
+      listeners: { last?: Record<string, unknown> }[];
+    };
+    expect(shown.listeners[0].last?.['connected']).toBe(true);
+    expect(shown.listeners[0].last?.['voucher']).not.toBe('SAVE-50');
+    expect(String(shown.listeners[0].last?.['note']).length).toBeLessThanOrEqual(201);
+    expect(shown.listeners[1]).not.toHaveProperty('last');
+  });
+
   it('answers a page argument that names no Capacitor page with the ones that report', async () => {
     const { push, tool } = await boot();
     await push('push-capacitor', report());
