@@ -742,8 +742,13 @@ function probe(router: AnyRecord, navigations: NavigationRecord[], url: string):
     const current = navigationIdOf(router);
     targetId = current < 0 ? current : current + 1;
     setCaller('probe from DevTools', true);
+    // 'reload' so probing the current URL is matched instead of skipped as the same URL.
     const promise = read(
-      () => router['navigateByUrl'](url, { skipLocationChange: true }) as Promise<unknown>,
+      () =>
+        router['navigateByUrl'](url, {
+          skipLocationChange: true,
+          onSameUrlNavigation: 'reload',
+        }) as Promise<unknown>,
       null,
     );
     promise?.catch?.(() => {});
