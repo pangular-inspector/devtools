@@ -178,6 +178,18 @@ describe('Analog MCP tools', () => {
     expect(out.configPaths[0].length).toBeLessThanOrEqual(501);
   });
 
+  it('masks a JWT that the first cut splits in its claims', () => {
+    const jwt = (claims: string) =>
+      `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(claims).toString('base64url')}.c2lnbmF0dXJl`;
+    const first = jwt(JSON.stringify({ sub: 'a'.repeat(380) }));
+    const second = jwt(JSON.stringify({ sub: 'secretUser', pad: 'b'.repeat(200) }));
+    const error = `Hydration failed: token ${first} then ${second}`;
+    expect(error.indexOf(second)).toBeLessThan(600);
+    expect(error.indexOf(second) + second.length).toBeGreaterThan(600);
+    const out = redactAnalogReport({ ...report, hydrationErrors: [error] });
+    expect(out.hydrationErrors[0]).not.toContain('eyJ');
+  });
+
   it('analog-lint reads hydration errors from the page it is asked about', async () => {
     const { ctx, call, push } = await boot(makeProject(BASE_FILES));
     await push('push-analog', { ...report, pageId: 'pgA', hydrationErrors: ['NG0500: from A'] });
@@ -192,6 +204,16 @@ describe('Analog MCP tools', () => {
     const findings = await rpc.invokeLocal('pangular:analog-lint', 'pgA');
     expect(findings.map((f) => f.message)).toContain('NG0500: from A');
     expect(findings.map((f) => f.message)).not.toContain('NG0501: from B');
+  });
+
+  it('analog-lint says when the page it is asked about sends no report', async () => {
+    const { call, push } = await boot(makeProject(BASE_FILES));
+    await push('push-analog', { ...report, pageId: 'p1', hydrationErrors: ['NG0500'] });
+    const text = await call('analog-lint', { page: 'stale' });
+    expect(text).not.toContain('No Analog problems found.');
+    expect(text).toContain('No page `stale` is reporting Analog data');
+    expect(text).toContain('`p1`');
+    expect(await call('analog-lint')).toContain('NG0500');
   });
 
   it('list-pages names pages that send Analog reports', async () => {

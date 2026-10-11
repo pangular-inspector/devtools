@@ -9,12 +9,18 @@ const MAX_PREVIEW = 1001;
 const MAX_PATH = 500;
 const MAX_ERROR = 300;
 
+/** A JWT cut before its signature, which the JWT pattern no longer matches. */
+const PARTIAL_JWT = /eyJ[\w-]*(?:\.[\w-]*)?$/;
+
 /**
  * Clips `value` to twice `max` before redacting it, so an oversized field
- * costs little to redact, and to `max` after.
+ * costs little to redact, and to `max` after. A JWT that the first cut splits
+ * is dropped, so its header and claims cannot slip past the redaction.
  */
 function capped(value: string, max: number, redact: (text: string) => string = (t) => t) {
-  return clip(redact(clip(value, max * 2)), max);
+  const head =
+    value.length > max * 2 ? `${value.slice(0, max * 2).replace(PARTIAL_JWT, '')}…` : value;
+  return clip(redact(head), max);
 }
 
 /**

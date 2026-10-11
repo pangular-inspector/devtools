@@ -723,13 +723,28 @@ export function analogLint(
 export function analogLintText(project: AnalogProject, state: AnalogState, page?: string): string {
   if (!project.analog) return NOT_ANALOG;
   const findings = analogLint(project, state, page);
-  if (!findings.length) return 'No Analog problems found.';
+  const missing = page && !state.pages.some((p) => p.pageId === page) ? page : undefined;
+  if (!findings.length && !missing) return 'No Analog problems found.';
   const order = { error: 0, warning: 1, info: 2 };
-  return `${UNTRUSTED}\n\n${findings
+  const lines = findings
     .sort((a, b) => order[a.severity] - order[b.severity])
     .map(
       (f) =>
         `- **${f.severity}** ${f.rule}${f.file ? ` in ${code(f.file)}` : ''}${f.path ? ` at ${code(f.path)}` : ''}: ${f.message} Fix: ${f.fix}`,
-    )
-    .join('\n')}`;
+    );
+  if (missing) {
+    lines.unshift(unknownLintPage(missing, state.pages), '');
+    if (!findings.length) lines.push('No problems found in the files or API calls.');
+  }
+  return `${UNTRUSTED}\n\n${lines.join('\n')}`;
+}
+
+/** Says that `page` sends no Analog report, so its hydration errors and restart checks are left out. */
+function unknownLintPage(page: string, pages: readonly AnalogRuntimeReport[]): string {
+  const known = pages.map((p) => `${code(p.pageId)} (${code(p.url)})`).join(', ');
+  return `No page ${code(page)} is reporting Analog data, so its hydration errors and restart checks are left out. ${
+    known
+      ? `Pages that report Analog data: ${known}. Pass one of these ids as \`page\`, or leave \`page\` out for the most recent.`
+      : 'No page reports Analog data right now.'
+  }`;
 }
