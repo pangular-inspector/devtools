@@ -98,6 +98,7 @@ import {
   type PipesState,
 } from './rpc/pipes-tools.ts';
 import {
+  clearRouterNavigations,
   currentRouter,
   expireRouterPages,
   explainNavigationText,
@@ -595,6 +596,18 @@ const pangular = defineDevframe({
           page: typeof message?.pageId === 'string' ? message.pageId : undefined,
           id: typeof message?.id === 'number' ? message.id : undefined,
         }),
+    });
+
+    register({
+      name: 'clear-router-navigations',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (pageId: unknown) => {
+        if (!config.actions.router) throw new Error(actionBlockedMessage('router'));
+        if (typeof pageId !== 'string') throw new Error('Give the id of the page to clear.');
+        if (clearRouterNavigations(routerPages, pageId)) applyRouter(currentRouter(routerPages));
+        void my.rpc.broadcast({ method: 'router-clear', args: [{ pageId }], optional: true });
+      },
     });
 
     register({

@@ -464,7 +464,7 @@ describe('router MCP tools', () => {
     }) as never);
     for (const action of ['navigate', 'abort', 'replay', 'probe']) {
       expect(await call('navigate', { action, url: '/users/9', id: 3 })).toBe(
-        'Navigating is turned off in the devtools config (actions.router).',
+        'Navigating and clearing navigations is turned off in the devtools config (actions.router).',
       );
     }
     expect(await call('navigate', { action: 'instrument', on: true })).toContain('"ok": true');

@@ -369,6 +369,22 @@ export function touchRouterPage(pages: Pages, pageId: unknown, now = Date.now())
   return true;
 }
 
+/**
+ * Drops one page's navigation history, its loop warnings and its dropped
+ * count. A navigation still in progress stays, as it does in the page.
+ * Returns false when the page is unknown.
+ */
+export function clearRouterNavigations(pages: Pages, pageId: string, now = Date.now()): boolean {
+  const page = pages.get(pageId);
+  if (!page) return false;
+  const navigations = page.navigations.filter((nav) => nav.outcome === 'pending');
+  const next: RouterPage = { ...page, navigations, changedAt: now };
+  delete next.dropped;
+  next.loops = detectLoops(navigations, next.config);
+  pages.set(pageId, next);
+  return true;
+}
+
 export function mergeRouterReport(
   pages: Pages,
   report: RouterReport,

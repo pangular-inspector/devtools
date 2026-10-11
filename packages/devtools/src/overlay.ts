@@ -8,6 +8,7 @@ import { allowClientRules, httpRegistry } from './http-rules.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
 import { collectInjectorTree } from './injector-tree.ts';
 import {
+  clearNavigations,
   droppedNavigations,
   findRouters,
   redactMessage,
@@ -581,6 +582,18 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       runAction(router, navigations, message.request, setInstrumented).then(respond, (error) =>
         respond({ error: String((error as Error)?.message ?? error) }),
       );
+    },
+  });
+
+  my.rpc.register({
+    name: 'router-clear',
+    type: 'event',
+    jsonSerializable: true,
+    handler: (message: { pageId?: unknown } | undefined) => {
+      if (!on.router || message?.pageId !== pageId) return;
+      clearNavigations(navigations);
+      lastRouterPayload = '';
+      scheduleRouterPush();
     },
   });
 

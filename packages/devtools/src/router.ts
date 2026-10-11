@@ -828,6 +828,17 @@ export function trimNavigations(navigations: NavigationRecord[], max: number) {
   droppedNavigationCounts.set(navigations, droppedNavigations(navigations) + extra);
 }
 
+/**
+ * Empties the list for the panel's Clear button and forgets the dropped count.
+ * A navigation still in progress stays, so its later events and any action
+ * waiting for its outcome still find it.
+ */
+export function clearNavigations(navigations: NavigationRecord[]) {
+  const pending = navigations.filter((nav) => nav.outcome === 'pending');
+  navigations.splice(0, navigations.length, ...pending);
+  droppedNavigationCounts.delete(navigations);
+}
+
 /** How many navigations `trimNavigations` removed from this list. */
 export function droppedNavigations(navigations: NavigationRecord[]): number {
   return droppedNavigationCounts.get(navigations) ?? 0;

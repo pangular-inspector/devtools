@@ -415,7 +415,7 @@ export const ACTION_TOOLS: Record<PangularAction, readonly string[]> = {
 export function actionBlockedMessage(action: PangularAction): string {
   const what = {
     forms: 'Writing to forms',
-    router: 'Navigating',
+    router: 'Navigating and clearing navigations',
     ngrx: 'Restoring NgRx state and dispatching actions',
     http: 'Changing HTTP mock rules and clearing HTTP calls',
     analog: 'Calling API routes',
@@ -472,6 +472,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'router-match': 'router',
   'router-export': 'router',
   'forget-router-page': 'router',
+  'clear-router-navigations': 'router',
   'get-pipes': 'pipes',
   'push-pipes': 'pipes',
   'forget-pipes-page': 'pipes',

@@ -315,6 +315,7 @@ describe('panel actions', () => {
     });
     await expect(invoke('set-http-rules', [])).rejects.toThrow('actions.http');
     await expect(invoke('clear-http-calls', undefined)).rejects.toThrow('actions.http');
+    await expect(invoke('clear-router-navigations', 'p1')).rejects.toThrow('actions.router');
     expect(await invoke('analog-call-api', { path: '/api/x' })).toEqual({
       error: expect.stringContaining('actions.analog'),
     });
@@ -329,7 +330,10 @@ describe('panel actions', () => {
     }) as never);
     expect(
       await invoke('request-router-action', { request: { action: 'probe', url: '/' } }),
-    ).toEqual({ error: 'Navigating is turned off in the devtools config (actions.router).' });
+    ).toEqual({
+      error:
+        'Navigating and clearing navigations is turned off in the devtools config (actions.router).',
+    });
     expect(
       await invoke('request-router-action', { request: { action: 'instrument', on: true } }),
     ).toEqual({ ok: true });

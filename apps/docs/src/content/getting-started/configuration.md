@@ -135,18 +135,18 @@ If you open a tab that is turned off, the panel says so and names the `inspector
 
 Actions are the writes that the panel and agents make to your app or the server.
 
-| Option           | Default | What `false` blocks                                                                                                                                                               |
-| ---------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `actions.forms`  | `true`  | Form writes: set value, fill, mark touched, untouched, dirty or pristine, touch all, revalidate, reset, enable, disable, submit and restore. Drops `form-action` and `fill-form`. |
-| `actions.router` | `true`  | Navigate, abort, replay and probe. Probe runs your app's `canMatch` guards. The `navigate` agent tool stays for `instrument` and `resolve-lazy` and refuses the other four.       |
-| `actions.ngrx`   | `true`  | Restoring NgRx state from the change log and dispatching `@ngrx/store` actions. Drops the `dispatch-ngrx-action` agent tool.                                                      |
-| `actions.http`   | `true`  | Editing fault injection rules and SSR overrides, and clearing the HTTP timeline.                                                                                                  |
-| `actions.analog` | `true`  | The Analog request playground. Drops the `analog-call-api` agent tool.                                                                                                            |
-| `actions`        | `true`  | All of the above.                                                                                                                                                                 |
+| Option           | Default | What `false` blocks                                                                                                                                                                                            |
+| ---------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `actions.forms`  | `true`  | Form writes: set value, fill, mark touched, untouched, dirty or pristine, touch all, revalidate, reset, enable, disable, submit and restore. Drops `form-action` and `fill-form`.                              |
+| `actions.router` | `true`  | Navigate, abort, replay and probe, and clearing the navigations list. Probe runs your app's `canMatch` guards. The `navigate` agent tool stays for `instrument` and `resolve-lazy` and refuses the other four. |
+| `actions.ngrx`   | `true`  | Restoring NgRx state from the change log and dispatching `@ngrx/store` actions. Drops the `dispatch-ngrx-action` agent tool.                                                                                   |
+| `actions.http`   | `true`  | Editing fault injection rules and SSR overrides, and clearing the HTTP timeline.                                                                                                                               |
+| `actions.analog` | `true`  | The Analog request playground. Drops the `analog-call-api` agent tool.                                                                                                                                         |
+| `actions`        | `true`  | All of the above.                                                                                                                                                                                              |
 
 Pass `actions: false` to block every action, or an object to block some. Keys you leave out of the object stay on.
 
-The server refuses a blocked action. The panel disables its controls and shows a note that names the option, for example: **Navigating is turned off in the devtools config (actions.router).**
+The server refuses a blocked action. The panel disables its controls and shows a note that names the option, for example: **Navigating and clearing navigations is turned off in the devtools config (actions.router).**
 
 ### Redaction
 

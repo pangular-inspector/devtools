@@ -243,7 +243,7 @@ Use `explain-navigation` for "why was I redirected". Pass `perf: true` for "why 
 
 The page's result comes back as a JSON block cut at 15,000 characters. A cut result ends with a note saying so.
 
-`action` is required. Only same-origin URLs that start with `/` are accepted. With `actions.router` set to `false`, `navigate`, `abort`, `replay` and `probe` answer **Navigating is turned off in the devtools config (actions.router).** `instrument` and `resolve-lazy` still work. `agent.readOnly` drops the whole tool.
+`action` is required. Only same-origin URLs that start with `/` are accepted. With `actions.router` set to `false`, `navigate`, `abort`, `replay` and `probe` answer **Navigating and clearing navigations is turned off in the devtools config (actions.router).** `instrument` and `resolve-lazy` still work. `agent.readOnly` drops the whole tool.
 
 `waitFor` sets when `navigate` answers:
 

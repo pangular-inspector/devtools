@@ -155,7 +155,7 @@ describe('RouteTree row actions', () => {
     expect(probe.disabled).toBe(true);
     expect(probe.getAttribute('aria-describedby')).toBe('route-tree-writes-off');
     expect(hint?.textContent?.trim()).toBe(
-      'Navigating is turned off in the devtools config (actions.router).',
+      'Navigating and clearing navigations is turned off in the devtools config (actions.router).',
     );
     expect(button(fixture, 'Navigate to users/:id').disabled).toBe(true);
     expect(button(fixture, 'Read lazy routes of lazy').disabled).toBe(false);
