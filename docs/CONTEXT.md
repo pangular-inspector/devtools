@@ -9,7 +9,7 @@ One browser tab running the inspected app with the overlay loaded. Several pages
 _Avoid_: tab (a tab is a view in the panel), client, window
 
 **Platform**:
-What renders a page: a browser, or Angular Native on a device or simulator. The Angular Native overlay marks its component reports with `platform: 'angular-native'`; a report without one is a browser page. The Angular Native view and `list-pages` read it.
+What renders a page: a browser, Angular Native on a device or simulator, or a Capacitor app's native WebView. The Angular Native overlay marks its component reports with `platform: 'angular-native'`; a report without one is a browser page. The Angular Native view and `list-pages` read it. `list-pages` also labels a page whose Capacitor report has a native bridge `Capacitor (android)` or `Capacitor (ios)`, from that report's platform. A Capacitor page without a native bridge, such as the app in a desktop browser, shows as `browser`.
 _Avoid_: target, runtime, device type
 
 **pageId**:
@@ -41,7 +41,7 @@ A report a collector sends to the server over RPC, such as `push-component-tree`
 _Avoid_: sync, upload, post
 
 **Inspector**:
-One area the devtools can look at: `components`, `injectors`, `signals`, `ngrx`, `forms`, `router`, `pipes`, `http` and `analog` (`PANGULAR_INSPECTORS` in `config.ts`). An inspector owns a collector, its RPC functions, its agent tools and its view in the panel, and `inspectors` in the config turns all of them off together.
+One area the devtools can look at: `components`, `injectors`, `signals`, `ngrx`, `forms`, `router`, `pipes`, `http`, `analog` and `capacitor` (`PANGULAR_INSPECTORS` in `config.ts`). An inspector owns a collector, its RPC functions, its agent tools and its view in the panel, and `inspectors` in the config turns all of them off together.
 _Avoid_: plugin, module, feature
 
 **Devframe**:
