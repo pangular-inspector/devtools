@@ -289,6 +289,37 @@ describe('createCapacitorHook', () => {
     });
   });
 
+  it('keeps CORS header values in a CapacitorHttp response', async () => {
+    const { win, cap } = fakeCapacitor({
+      'CapacitorHttp.request': async () => ({
+        status: 200,
+        headers: {
+          'Access-Control-Allow-Credentials': 'true',
+          'Access-Control-Allow-Origin': 'https://localhost',
+          'Set-Cookie': 'session=opaque-session-1',
+        },
+      }),
+    });
+    const hook = collect(win);
+
+    await cap.nativePromise('CapacitorHttp', 'request', {
+      url: 'https://api.example.com/me',
+      method: 'GET',
+      headers: { 'X-Api-Key': 'opaque-key-1' },
+    });
+    await settle();
+
+    const [call] = hook.calls();
+    expect(call.result).toMatchObject({
+      headers: {
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Origin': 'https://localhost',
+      },
+    });
+    expect(JSON.stringify(hook.calls())).not.toContain('opaque-session-1');
+    expect(JSON.stringify(hook.calls())).not.toContain('opaque-key-1');
+  });
+
   it('masks secrets inside string bodies: JSON, form fields and JSON stored as a value', async () => {
     const { win, cap } = fakeCapacitor({
       'CapacitorHttp.request': async () => ({

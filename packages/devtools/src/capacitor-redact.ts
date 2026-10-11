@@ -2,9 +2,9 @@
 // when it logs a call, and the server runs it again with its own
 // `redaction` config, so a call logged before the page knew that config (or by
 // a page without it) is masked the same way.
-import { REDACTED } from './forms-privacy.ts';
+import { REDACTED, redactReason } from './forms-privacy.ts';
 import { redactPreview } from './http-redact.ts';
-import { redactUrl } from './router.ts';
+import { redactText, redactUrl } from './router.ts';
 import { isSecretName, serialize, type SerializeLimits } from './serialize.ts';
 import { clip } from './text.ts';
 
@@ -49,9 +49,41 @@ function withUrlMasked(plugin: string, value: unknown): unknown {
     : value;
 }
 
+// CORS headers hold origins, methods and `true`, never a secret, but a name
+// such as `Access-Control-Allow-Credentials` reads like one.
+const PLAIN_HEADER = /^access-control-/i;
+
+/**
+ * Masks a CapacitorHttp request or response, keeping the values of its CORS
+ * headers. Other plugins' values are masked as they are.
+ */
+function maskedCall(plugin: string, value: unknown, limits: SerializeLimits): unknown {
+  if (plugin !== 'CapacitorHttp' || !isObject(value) || !isObject(value['headers'])) {
+    return maskedValue(value, limits);
+  }
+  const kept: Record<string, string> = {};
+  const rest: Record<string, unknown> = {};
+  for (const [name, item] of Object.entries(value['headers'])) {
+    const plain = PLAIN_HEADER.test(name) && redactReason(name) !== 'config';
+    if (plain && typeof item === 'string') kept[name] = item;
+    else rest[name] = item;
+  }
+  const masked = maskedValue({ ...value, headers: rest }, limits);
+  if (!isObject(masked) || !isObject(masked['headers'])) return masked;
+  const text = limits.text ?? 500;
+  for (const [name, item] of Object.entries(kept)) {
+    masked['headers'][name] = clip(redactText(item), text);
+  }
+  return masked;
+}
+
 /** A call's arguments, masked. */
 export function maskedArgs(plugin: string, args: unknown, limits: SerializeLimits): unknown {
-  return maskedValue(withUrlMasked(plugin, withValueMasked(args, hasSecretKey(args))), limits);
+  return maskedCall(
+    plugin,
+    withUrlMasked(plugin, withValueMasked(args, hasSecretKey(args))),
+    limits,
+  );
 }
 
 /** A call's result, masked. `secretKey` says whether its arguments had a secret `key`. */
@@ -61,5 +93,5 @@ export function maskedResult(
   result: unknown,
   limits: SerializeLimits,
 ): unknown {
-  return maskedValue(withUrlMasked(plugin, withValueMasked(result, secretKey)), limits);
+  return maskedCall(plugin, withUrlMasked(plugin, withValueMasked(result, secretKey)), limits);
 }
