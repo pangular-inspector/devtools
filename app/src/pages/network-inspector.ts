@@ -10,6 +10,7 @@ import {
   input,
   linkedSignal,
   signal,
+  untracked,
 } from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
@@ -566,9 +567,8 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             />
             Failed only
           </label>
-          <span class="total" aria-live="polite"
-            >{{ visibleCalls().length }} of {{ timeline().length }}</span
-          >
+          <span class="total">{{ visibleCalls().length }} of {{ timeline().length }}</span>
+          <span class="sr-only" role="status">{{ filterStatus() }}</span>
         </div>
         @if (visibleCalls().length) {
           <div class="table-wrap">
@@ -2155,6 +2155,17 @@ export class NetworkInspector {
           `${c.method} ${c.url}`.toLowerCase().includes(query) ||
           `${c.method} ${pathOf(c.url)}`.toLowerCase().includes(query)),
     );
+  });
+
+  /**
+   * The count, announced only when a filter changes. The visible count also changes with every
+   * call the app makes, which would make a screen reader talk while the user uses the app.
+   */
+  readonly filterStatus = computed(() => {
+    this.callQuery();
+    this.sideFilter();
+    this.failedOnly();
+    return untracked(() => `${this.visibleCalls().length} of ${this.timeline().length}`);
   });
 
   /** Follows the visible rows, so the preview hides while filters hide its call. */
