@@ -162,7 +162,11 @@ await initOverlay({
 | `websocket` | The WebSocket endpoint. A relative path, such as `'__ws'`, resolves against `baseURL`.         |
 | `configs`   | The server's devtools config. Without it, the overlay uses the [defaults](./configuration.md). |
 
-With `connectionMeta`, the overlay resolves paths against one `baseURL`, so pass a single URL, not a list. The endpoints must still accept the page's origin. [Set up Capacitor](../guides/capacitor.md) uses this for an app in a mobile WebView.
+With `connectionMeta`, the overlay resolves paths against one `baseURL`, so pass a single URL. `initOverlay` rejects a list, or no `baseURL`, with an error that says so.
+
+Without `configs`, the page runs every inspector with the default limits and redaction, and the server's `redaction.secretNames` are not applied on the page. The overlay logs a warning once. To use the server's config, pass the whole `__connection.json` of the server as `connectionMeta`.
+
+The endpoints must still accept the page's origin. [Set up Capacitor](../guides/capacitor.md) uses this for an app in a mobile WebView.
 
 ## Stop the overlay
 

@@ -9,79 +9,75 @@ description: Inspect an Ionic or Capacitor Angular app on a simulator, an emulat
 
 # Set up Capacitor
 
-This guide adds the devtools to an Ionic or Capacitor *Angular app. The app runs in a WebView, so the [browser overlay](../getting-started/overlay.md) works there as it does in a browser. What changes is how it reaches the devtools server. The WebView serves the app from `capacitor://localhost` on iOS and from `https://localhost` on Android, not from the server. So you start the overlay yourself, tell it where the server is, and let the WebView reach your machine.
+This guide adds the devtools to an Ionic or Capacitor *Angular app. The app runs in a WebView, so the [browser overlay](../getting-started/overlay.md) works there as it does in a browser. What changes is how it reaches the devtools server, and that depends on where the WebView loads the app from:
+
+- With live reload, the WebView loads the app from your dev server. If the devtools are mounted in that server, the overlay finds them like in a browser.
+- A bundled build loads the app from `capacitor://localhost` on iOS and `https://localhost` on Android. The devtools server is on another origin, so you start the overlay yourself and pass the connection info.
 
 <ngmd-callout type="warning" title="Development builds only">
   Every setting on this page, in the app and on the server, is for development builds. Keep them out of the builds you release.
 </ngmd-callout>
 
-## What you get
+## Which setup you need
 
-<ngmd-card-grid columns="2">
-  <ngmd-card icon="layers" title="Every browser inspector">
-    Components, signals, injectors, router, forms, pipes, HTTP and NgRx, as for a page in a browser.
-  </ngmd-card>
-  <ngmd-card icon="search" title="Highlight">
-    Hovering a row in the devtools outlines the element in the WebView.
-  </ngmd-card>
-  <ngmd-card icon="compass" title="One more page">
-    The app reports with its own page id, so it shows up next to your browser tabs.
-  </ngmd-card>
-  <ngmd-card icon="terminal" title="MCP endpoint">
-    Agents read the app through the server's MCP endpoint, as for any other page.
-  </ngmd-card>
-</ngmd-card-grid>
+| Your devtools server             | iOS simulator, Android emulator, USB device           | Phone over Wi-Fi                                                         |
+| -------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------ |
+| Express hub in `server.ts`       | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `allowedOrigins` |
+| Vite plugin (Analog)             | [Live reload on localhost](#live-reload-on-localhost) | Not supported                                                            |
+| Standalone CLI behind `ng serve` | [Live reload on localhost](#live-reload-on-localhost) | [A bundled build](#a-bundled-build)                                      |
+| Standalone CLI on its own        | [A bundled build](#a-bundled-build)                   | [A bundled build](#a-bundled-build)                                      |
 
-## The flow
+The Vite plugin answers only requests that come from your machine. A phone on Wi-Fi does not, and the plugin has no option for it. The standalone CLI accepts only loopback origins and has no `allowedOrigins` option, so a page served from your network address can't reach it.
+
+## Live reload on localhost
+
+`npx cap run <platform> --live-reload` points the WebView at your dev server by setting `server.url` for that run. It does not start the dev server. Start it yourself, then pass its port and `--host localhost`. Without `--host`, Capacitor uses your machine's network address, and the port defaults to 3000.
+
+The page is then on `http://localhost:<port>`, the same origin as the devtools in that server. Load the overlay the usual way, as in [Browser overlay](../getting-started/overlay.md), with `@pangular-inspector/devtools/overlay`. It finds the server next to the page and adds the floating button inside the app.
 
 <ngmd-workflow>
-  <ngmd-step title="Pick a server">
-    The standalone CLI, the Express hub or the Vite plugin. Each one reaches different devices.
+  <ngmd-step title="Mount the devtools in the dev server">
+    The <a href="../getting-started/express.md">Express hub</a> in <code>server.ts</code>, the <a href="../getting-started/vite.md">Vite plugin</a>, or the standalone CLI behind the <code>ng serve</code> proxy, as in <a href="../getting-started/installation.md#client-only-angular-cli-app">Client-only Angular CLI app</a>.
   </ngmd-step>
-  <ngmd-step title="Start the overlay">
-    Call <code>initOverlay()</code> from <code>&#64;pangular-inspector/devtools/overlay-manual</code> in <code>src/main.ts</code>, with the server's address and connection info.
+  <ngmd-step title="Start the dev server">
+    For example <code>ng serve --port 4200</code>.
   </ngmd-step>
-  <ngmd-step title="Let the app reach your machine">
-    Allow plain HTTP in the Android and iOS projects of a development build.
+  <ngmd-step title="Forward the port on Android">
+    For the Android emulator or a USB device, run <code>adb reverse tcp:4200 tcp:4200</code>. The iOS simulator shares your machine's <code>localhost</code>.
   </ngmd-step>
-  <ngmd-step title="Run the server and the app">
-    Start the server where the device can reach it, run the app, and enter the one-time code once.
+  <ngmd-step title="Run the app">
+    <code>npx cap run ios --live-reload --host localhost --port 4200</code>, or the same with <code>android</code>.
   </ngmd-step>
 </ngmd-workflow>
 
-## Step 1: Pick a server
+On Android, live reload also allows cleartext traffic for that run, and puts both settings back when you stop it with Ctrl+C.
 
-An Ionic app usually has no server of its own, so the [standalone CLI](../getting-started/cli.md) is the usual choice. If the app already mounts the [Express hub](../getting-started/express.md) or the [Vite plugin](../getting-started/vite.md), you can keep it, within these limits:
+## Live reload over Wi-Fi
 
-| Server                       | iOS simulator | Android emulator, USB device | Device over Wi-Fi |
-| ---------------------------- | ------------- | ---------------------------- | ----------------- |
-| Standalone CLI               | Yes           | Yes                          | Yes               |
-| Express hub with `ws: false` | Yes           | Yes                          | Yes               |
-| Vite plugin                  | No            | Yes, through `adb reverse`   | No                |
+A phone on Wi-Fi loads the app from your machine's network address, such as `http://192.168.1.20:4200`. Only the Express hub accepts that origin, once it is in `allowedOrigins`:
 
-The Vite plugin answers only requests from your machine, and only from `http:` and `https:` origins. An Android emulator or a USB device reaches it through `adb reverse`, which arrives from your machine. A device on Wi-Fi does not, and the iOS origin `capacitor://localhost` is never accepted, even in `allowedOrigins`. For those, run the standalone CLI next to your Vite dev server.
+```ts {6}
+// src/server.ts
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
 
-Install the package in the app:
-
-```bash group="install" name="npm" image="https://cdn.simpleicons.org/npm/CB3837" active
-npm install @pangular-inspector/devtools devframe
+const devtools = initPangularHub({
+  ws: false,
+  allowedOrigins: ['http://192.168.1.20:4200'],
+});
+app.use(devtools.nodeMiddleware);
 ```
 
-```bash group="install" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220"
-pnpm add @pangular-inspector/devtools devframe
-```
+Then start the dev server on every interface, `ng serve --host 0.0.0.0 --port 4200`, and run `npx cap run ios --live-reload --host 192.168.1.20 --port 4200`. The overlay loads as in a browser, through `@pangular-inspector/devtools/overlay`.
 
-```bash group="install" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
-yarn add @pangular-inspector/devtools devframe
-```
+<ngmd-alert severity="warning" label="Keep the one-time code on">
+  On a network address, anyone on the network can reach the server, and the origin check alone does not stop a client that sends an allowed <code>Origin</code>. The one-time code keeps them out. Don't pass <code>auth: false</code> in this setup, and use a trusted network.
+</ngmd-alert>
 
-```bash group="install" name="bun" image="https://bun.sh/logo.svg"
-bun add @pangular-inspector/devtools devframe
-```
+## A bundled build
 
-## Step 2: Start the overlay
+A bundled build loads the app from `capacitor://localhost` on iOS and from `https://localhost` on Android. Start the overlay yourself with `@pangular-inspector/devtools/overlay-manual`, and pass the server's address and its connection info.
 
-Import `initOverlay` from `@pangular-inspector/devtools/overlay-manual` after bootstrap, in development only. This example reports to the standalone CLI on a machine at `192.168.1.20`:
+### Start the overlay
 
 ```ts {6-12}
 // src/main.ts
@@ -102,17 +98,13 @@ bootstrapApplication(App, appConfig)
   .catch((err) => console.error(err));
 ```
 
-The `ngDevMode` check keeps the overlay out of production builds, which also have no `ng` debug global to read. So build the app with the development configuration before you run it on a device, for example `ng build --configuration development`.
+The `ngDevMode` check keeps the overlay out of production builds, which also have no `ng` debug global to read. So build the app with the development configuration before you sync it, for example `ng build --configuration development`.
 
-### Why the manual entry
+`@pangular-inspector/devtools/overlay` would start an overlay on import and look for the server next to the page, which fails here, and it would add the floating button to the app. `overlay-manual` starts nothing until you call `initOverlay` and adds no button, so you open the devtools in your desktop browser.
 
-`@pangular-inspector/devtools/overlay` starts an overlay on import and looks for the server next to the page. In a WebView that page is `capacitor://localhost` or `https://localhost`, so that attempt fails. It also adds the floating button to the app. `@pangular-inspector/devtools/overlay-manual` exports the same functions, starts nothing until you call `initOverlay` and adds no button. You open the devtools in your desktop browser instead.
+### The connection info
 
-### Why `connectionMeta`
-
-Without `connectionMeta`, the overlay first fetches `__connection.json` from `baseURL`. The servers send that file without CORS headers, so the WebView blocks the request and the overlay logs `[pangular] No devtools server found`. `connectionMeta` is the content of that file, passed in, so the overlay connects straight to the server's live endpoint.
-
-### Values for each server
+Without `connectionMeta`, the overlay first fetches `__connection.json` from `baseURL`. The servers send that file without CORS headers, so the WebView blocks it and the overlay logs `[pangular] No devtools server found`. `connectionMeta` is the content of that file, passed in.
 
 | Server                       | `baseURL`                                     | `connectionMeta`                                                 |
 | ---------------------------- | --------------------------------------------- | ---------------------------------------------------------------- |
@@ -120,28 +112,24 @@ Without `connectionMeta`, the overlay first fetches `__connection.json` from `ba
 | Express hub with `ws: false` | `http://<address>:4000/__devframes/pangular/` | `{backend: 'sse', sse: {path: '/__devframes/__sse'}}`            |
 | Vite plugin                  | `http://localhost:5173/__devframes/pangular/` | `{backend: 'websocket', websocket: {path: '/__devframes/__ws'}}` |
 
-Use your server's port in place of `9999`, `4000` or `5173`. The hub's WebSocket side-car (`ws: {sidecar: true}`) listens on `localhost` on a port it picks itself, so a device can't reach it. Use `ws: false` for this setup.
+- Pass one `baseURL`, not a list. `initOverlay` refuses a list with `connectionMeta`.
+- Use your server's port in place of `9999`, `4000` or `5173`.
+- The hub's WebSocket side-car (`ws: {sidecar: true}`) listens on `localhost` on a port it picks, so a device can't reach it. Use `ws: false`.
+- The Vite plugin works here only for Android through `adb reverse`. It refuses the iOS origin `capacitor://localhost`, which `allowedOrigins` can't add.
 
-The overlay applies the inspectors, `redaction` and `limits` it finds in `connectionMeta.configs`. Without `configs`, it uses the defaults: every inspector on and only the built-in secret names redacted. If your server has a [config](../getting-started/configuration.md), open its `__connection.json` in your desktop browser, for example `http://localhost:9999/__connection.json`, and pass the whole object as `connectionMeta`.
+The short forms above carry no `configs`, so the overlay uses the default inspectors, limits and redaction, and logs a warning. The server's `redaction.secretNames` are then not applied on the page. If your server has a [config](../getting-started/configuration.md), open its `__connection.json` in your desktop browser, for example `http://localhost:9999/__connection.json`, and pass the whole object as `connectionMeta`.
 
-### The address
+| Where the app runs      | `<address>`                                                                |
+| ----------------------- | -------------------------------------------------------------------------- |
+| iOS simulator           | `localhost`                                                                |
+| Android emulator or USB | `localhost`, after `adb reverse tcp:9999 tcp:9999` with your server's port |
+| Phone over Wi-Fi        | Your machine's network address, such as `192.168.1.20`                     |
 
-| Where the app runs      | `<address>`                                                                 |
-| ----------------------- | --------------------------------------------------------------------------- |
-| iOS simulator           | `localhost`. The simulator shares your machine's network.                   |
-| Android emulator        | `localhost`, after `adb reverse tcp:9999 tcp:9999` with your server's port. |
-| Android device over USB | `localhost`, after `adb reverse tcp:9999 tcp:9999` with your server's port. |
-| Any device over Wi-Fi   | Your machine's address on the network, such as `192.168.1.20`.              |
+Each server accepts `capacitor://localhost` and `https://localhost` without an `allowedOrigins` entry, because their host is `localhost`. The Vite plugin is the exception for iOS.
 
-Each server accepts the app's origin, `capacitor://localhost` or `https://localhost`, without an `allowedOrigins` entry, because its host is `localhost`. The Vite plugin is the exception for iOS, as Step 1 explains.
+### Let the app reach your machine
 
-## Step 3: Let the app reach your machine
-
-The devtools server speaks plain HTTP. Both platforms block that by default, so allow it in development builds.
-
-### Android
-
-The app's page is `https://localhost` and the server is plain HTTP, so the WebView blocks the connection as mixed content. Android also blocks cleartext traffic to other hosts. Allow both in `capacitor.config.ts`, behind a flag of your own so they stay out of release builds:
+The page is `https://localhost` on Android and the server is plain HTTP, so the Android WebView blocks the connection as mixed content. Android also blocks cleartext traffic. Allow both in a development build:
 
 ```ts {4,10-11}
 // capacitor.config.ts
@@ -160,11 +148,9 @@ const config: CapacitorConfig = {
 export default config;
 ```
 
-Capacitor applies both on `npx cap sync`, which `npx cap run` also runs, so set the flag there: `CAPACITOR_DEVTOOLS=1 npx cap run android`. `server.cleartext` adds `android:usesCleartextTraffic="true"` to the app's manifest. Setting `server.androidScheme` to `'http'` also avoids mixed content, but it changes the app's origin, so the WebView no longer sees the data the app stored under `https://localhost`.
+Capacitor applies both on `npx cap sync`, which `npx cap run` also runs, so set the flag there: `CAPACITOR_DEVTOOLS=1 npx cap run android`. `server.cleartext` sets `android:usesCleartextTraffic` in the manifest of the `capacitor-cordova-android-plugins` module, which Android merges into the app. Setting `server.androidScheme` to `'http'` also avoids mixed content, but it changes the app's origin, so the WebView no longer sees the data the app stored under `https://localhost`.
 
-### iOS
-
-App Transport Security also covers the WebView's requests. To let a development build reach your machine over plain HTTP, allow local networking in `ios/App/App/Info.plist`:
+On iOS, App Transport Security can block plain HTTP to a network address. If it does, allow local networking in a development build's `ios/App/App/Info.plist`:
 
 ```html
 <!-- ios/App/App/Info.plist (excerpt) -->
@@ -175,13 +161,9 @@ App Transport Security also covers the WebView's requests. To let a development 
 </dict>
 ```
 
-Remove it, or keep it in a debug-only `Info.plist`, before you release.
+### Run the server where the device reaches it
 
-## Step 4: Run the server and the app
-
-### Listen where the device can reach
-
-The iOS simulator, the Android emulator and `adb reverse` all reach your machine's `localhost`, so the default listen address works. A device on Wi-Fi needs the server to listen on your network address:
+The simulator, the emulator and `adb reverse` reach your machine's `localhost`. A phone on Wi-Fi needs the server on your network address:
 
 | Server         | How                                                                                                     |
 | -------------- | ------------------------------------------------------------------------------------------------------- |
@@ -189,48 +171,45 @@ The iOS simulator, the Android emulator and `adb reverse` all reach your machine
 | Express hub    | `app.listen(port)` listens on every interface by default. Under `ng serve`, pass `--host 0.0.0.0`.      |
 | Vite plugin    | Not possible. It refuses requests that do not come from your machine.                                   |
 
-Run the standalone CLI in the app's folder, so the source scanners read its `src/`:
+Keep `localhost` in what the CLI listens on. With `--host 192.168.1.20` alone, the panel is only on that address, and the server refuses the panel's own origin there. Run the CLI in the app's folder, so the source scanners read its `src/`.
 
-```bash
-cd my-ionic-app
-npx @pangular-inspector/devtools dev --host 0.0.0.0
-```
+## The one-time code on a device
 
-Keep `localhost` in what the CLI listens on. With `--host 192.168.1.20` alone, the panel is only on that address, and the server refuses the panel's own origin there.
+The standalone CLI and the Express hub ask for a one-time code by default. When the app connects, it shows a dialog asking for the code, and the server prints the code in its terminal. Type the code in the app. The link the server prints next to it opens the server, not the app, so it doesn't help on a phone.
 
-<ngmd-alert severity="warning" label="Keep the one-time code on">
-  On a network address, any host on the network can reach the server, and the origin check alone does not stop a client that sends <code>Origin: https://localhost</code>. The one-time code is what keeps them out. Don't pass <code>--no-auth</code> to the CLI or <code>auth: false</code> to the hub in this setup, and use a trusted network.
-</ngmd-alert>
+The app keeps the token it gets in the WebView's storage for that origin. It asks again when that storage is cleared, and under live reload over Wi-Fi when your machine's address changes, since the origin changes with it. The Vite plugin leaves the code off while it only allows your machine, so it never asks.
 
-### Enter the one-time code
+## CapacitorHttp
 
-The CLI and the Express hub ask for a one-time code by default. When the app connects, it shows a dialog that asks for the code, and the server prints the code in its terminal. Type it in the app. The app keeps the token it gets in the WebView's storage, so it asks again only after that storage is cleared.
+With `plugins.CapacitorHttp.enabled`, Capacitor sends `fetch` through the native layer. The overlay then streams the hub's server-sent events through the browser's own fetch, which Capacitor keeps as `window.CapacitorWebFetch`. You don't change anything. WebSockets are not affected.
 
-The Vite plugin leaves the code off while it only allows your machine, so the app connects without a dialog.
+## Configuration keys
 
-### Run the app
+These keys are the same in Capacitor 6, 7 and 8. Keep the development ones out of release builds.
 
-Build the web app in development mode and run it with your usual Capacitor command, for example `CAPACITOR_DEVTOOLS=1 npx cap run android` or `npx cap run ios`. Then open the devtools in your desktop browser:
+| Key                             | Default       | What it does here                                                             |
+| ------------------------------- | ------------- | ----------------------------------------------------------------------------- |
+| `server.url`                    | none          | Loads the app from a dev server. `npx cap run --live-reload` sets it.         |
+| `server.cleartext`              | `false`       | Allows plain HTTP on Android. Development only.                               |
+| `server.androidScheme`          | `'https'`     | The scheme of the bundled app on Android.                                     |
+| `server.iosScheme`              | `'capacitor'` | The scheme of the bundled app on iOS. It can't be `http` or `https`.          |
+| `android.allowMixedContent`     | `false`       | Lets an `https://localhost` page reach a plain HTTP server. Development only. |
+| `plugins.CapacitorHttp.enabled` | `false`       | Sends `fetch` through the native layer. See [CapacitorHttp](#capacitorhttp).  |
 
-| Server         | Where                                                      |
-| -------------- | ---------------------------------------------------------- |
-| Standalone CLI | `http://localhost:9999/`                                   |
-| Express hub    | `http://localhost:4000/__devframes/`, the **Angular** dock |
-| Vite plugin    | `http://localhost:5173/__devframes/`, the **Angular** dock |
-
-The app reports as one more page, and the tabs fill as soon as it does. The **Capacitor** dock in the hub links back to this guide.
-
-## FAQ
+## Troubleshooting
 
 <ngmd-accordion>
-  <ngmd-accordion-item title="The devtools show no data from the app" open>
-    Inspect the WebView, with Safari's <strong>Develop</strong> menu for iOS or <code>chrome://inspect</code> for Android, and read the console. <code>[pangular] No devtools server found</code> means <code>connectionMeta</code> is missing. A <strong>Mixed Content</strong> message means <code>allowMixedContent</code> is off, and the overlay sends nothing. A failed connection to the address means the server is not running, listens only on <code>localhost</code>, or the address is wrong for where the app runs.
+  <ngmd-accordion-item title="The panel never shows the app" open>
+    Inspect the WebView, with Safari's <strong>Develop</strong> menu for iOS or <code>chrome://inspect</code> for Android, and read the console. <code>[pangular] No devtools server found</code> in a bundled build means <code>connectionMeta</code> is missing. A <strong>Mixed Content</strong> message means <code>allowMixedContent</code> is off, and the overlay sends nothing. A failed connection to the address means the server is not running, listens only on <code>localhost</code>, or the address is wrong for where the app runs. A <code>403</code> under live reload over Wi-Fi means the page's origin is missing from <code>allowedOrigins</code>.
   </ngmd-accordion-item>
-  <ngmd-accordion-item title="Does it work with live reload?">
-    With live reload, the WebView loads the app from your dev server, so the page's origin is that server's network address, such as <code>http://192.168.1.20:8100</code>, not <code>localhost</code>. The Express hub accepts it once you add it to <code>allowedOrigins</code>. The standalone CLI has no <code>allowedOrigins</code> option and refuses that origin.
+  <ngmd-accordion-item title="The code dialog keeps coming back">
+    The app's origin changed, its storage was cleared, or the code expired before you typed it. Under live reload over Wi-Fi, a new network address is a new origin. Type the newest code the server printed.
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="The overlay connects but stays empty">
+    The app is a production build, which has no <code>ng</code> debug global. Build it with the development configuration.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Does it ship in a release build?">
-    No. The dynamic import runs only while <code>ngDevMode</code> is on, so the overlay stays out of production bundles. The Android and iOS settings in Step 3 are yours to keep out of release builds.
+    No. The dynamic import runs only while <code>ngDevMode</code> is on, so the overlay stays out of production bundles. The Android, iOS and server settings on this page are yours to keep out of release builds.
   </ngmd-accordion-item>
 </ngmd-accordion>
 
