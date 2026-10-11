@@ -151,6 +151,37 @@ describe('NetworkInspector timeline filters', () => {
     expect(host().querySelector('tr.selected button')?.getAttribute('data-call-id')).toBe('c1');
   });
 
+  it('announces the count when a filter changes, not when calls arrive', async () => {
+    const status = () => host().querySelector('.filters [role="status"]')!.textContent!.trim();
+    expect(host().querySelector('.filters .total')!.closest('[aria-live], [role="status"]')).toBe(
+      null,
+    );
+
+    await type('products');
+    expect(status()).toBe('2 of 6');
+
+    fixture.componentInstance.serverCalls.update((calls) => [
+      ...calls,
+      call({ id: 's3', side: 'server', url: 'http://localhost/api/products/2', at: 1007 }),
+    ]);
+    await fixture.whenStable();
+    expect(total()).toBe('3 of 7');
+    expect(status()).toBe('2 of 6');
+
+    await type('');
+    expect(status()).toBe('7 of 7');
+  });
+
+  it('announces a filter change again when the counts stay the same', async () => {
+    const raw = () => host().querySelector('.filters [role="status"]')!.textContent!;
+    await type('products');
+    const first = raw();
+    expect(first.trim()).toBe('2 of 6');
+    await type('product');
+    expect(raw().trim()).toBe('2 of 6');
+    expect(raw()).not.toBe(first);
+  });
+
   it('keeps the empty state when there are no calls at all', async () => {
     fixture.componentInstance.serverCalls.set([]);
     fixture.componentInstance.pages.set([]);
