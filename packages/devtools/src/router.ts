@@ -1,3 +1,4 @@
+import { JWT } from './forms-privacy.ts';
 import { REDACTED, isSensitive, serializeFormValue } from './forms.ts';
 import { clip } from './text.ts';
 
@@ -114,7 +115,6 @@ const CANCEL_CODES = [
   'Aborted',
 ];
 const SKIP_CODES = ['IgnoredSameUrlNavigation', 'IgnoredByUrlHandlingStrategy'];
-const JWT = /eyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]{4,}/g;
 const BEARER = /Bearer\s+[\w.~+/-]+=*/gi;
 const LONG_TOKEN = /(?<=[/=])[A-Za-z0-9_-]{32,}(?=[/?#&;]|$)/g;
 
