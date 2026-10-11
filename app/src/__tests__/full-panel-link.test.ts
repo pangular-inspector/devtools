@@ -112,6 +112,12 @@ describe('Open full panel link', () => {
     expect(link(el)?.getAttribute('href')).toBe(`${BASE}?theme=light#tab=dashboard`);
   });
 
+  it('links a view with nothing to show to the Dashboard, not to a remembered tab', async () => {
+    const { el } = await open(`${BASE}?view=angular-native`);
+    expect(el.textContent).toContain('No Angular Native app is connected');
+    expect(link(el)?.getAttribute('href')).toBe(`${BASE}#tab=dashboard`);
+  });
+
   it('is not shown on the full panel', async () => {
     const { el } = await open(BASE);
     expect(link(el)).toBeNull();
