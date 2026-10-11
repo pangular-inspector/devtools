@@ -106,7 +106,8 @@ pangular({
 | `base`           | `'/__devframes/'`                                             | Where the hub is mounted.                                                |
 | `apiPrefix`      | Analog's `apiPrefix`, or `'api'`                              | The prefix of your server routes, used to classify API calls.            |
 | `allowedOrigins` | none                                                          | Extra exact origins allowed to reach the devtools, for example a tunnel. |
-| `auth`           | on if a non-loopback host or origin is allowed, otherwise off | Whether the devtools ask for the one-time code.                          |
+| `auth`           | on if a non-loopback host or origin is allowed, otherwise off | Whether the devtools ask for the one-time code, and its pairing tokens.  |
+| `allowLan`       | `false`                                                       | Answer other machines, such as a phone on Wi-Fi, from listed origins.    |
 
 The plugin also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](./configuration.md).
 
@@ -128,11 +129,12 @@ The plugin reads each entry the way a browser sends an origin: it drops a path o
 
 A tunnel forwards other people's requests to your machine, and those requests arrive from a loopback address. So the plugin turns the one-time code on when Vite's `server.allowedHosts` or `allowedOrigins` allows anything other than `localhost` or a loopback address (`allowedHosts: true` counts too). The server prints the code in the terminal, and a browser reads data only after it exchanges that code.
 
-| Value   | Effect                                                              |
-| ------- | ------------------------------------------------------------------- |
-| not set | The code is on only if a non-loopback host or origin is allowed.    |
-| `true`  | The code is always on.                                              |
-| `false` | The code is always off. The loopback and origin checks still apply. |
+| Value             | Effect                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| not set           | The code is on only if a non-loopback host or origin is allowed.                                             |
+| `true`            | The code is always on.                                                                                       |
+| `false`           | The code is always off. The loopback and origin checks still apply.                                          |
+| `{tokens: [...]}` | The code is on, and a client that sends one of the [pairing tokens](../security.md#pairing-tokens) skips it. |
 
 While the code is on, the HTTP MCP endpoint also asks for a bearer token. See [Send a token](../agents/mcp-server.md#send-a-token).
 
@@ -171,6 +173,21 @@ pangular({allowedOrigins: ['https://tunnel.example']});
 ```
 
 A non-loopback entry in `server.allowedHosts` or `allowedOrigins` turns the one-time code on. See [`auth`](#auth).
+
+### Other devices on your network
+
+The plugin answers only your machine. To reach the devtools from a phone on Wi-Fi, for example a [Capacitor](../guides/capacitor.md) app under live reload, set `allowLan` and list the page's origin:
+
+```ts
+// vite.config.ts
+pangular({allowLan: true, allowedOrigins: ['http://192.168.1.20:5173']});
+```
+
+Start Vite on every interface too, with `server.host: true`. A request from another machine then passes only when its origin is in `allowedOrigins`. A same-origin request without an `Origin` header passes when the `Host` it was sent to is listed. The one-time code stays on: with `auth: false`, the plugin ignores `allowLan` and prints a warning.
+
+<ngmd-alert severity="warning" label="Your network can reach the devtools">
+  With <code>allowLan</code>, any device on the network can send requests that claim a listed origin. Only the one-time code, or a pairing token, keeps it from reading your app's data. Use it on a trusted network, and turn it off when you're done.
+</ngmd-alert>
 
 ## Angular CLI apps
 

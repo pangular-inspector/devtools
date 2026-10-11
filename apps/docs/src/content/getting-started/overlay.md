@@ -168,6 +168,27 @@ Without `configs`, the page runs every inspector with the default limits and red
 
 The endpoints must still accept the page's origin. [Set up Capacitor](../guides/capacitor.md) uses this for an app in a mobile WebView.
 
+### Skip the one-time code
+
+If the server has [pairing tokens](../security.md#pairing-tokens), pass one as `authToken` and the page is trusted without the code:
+
+```ts
+// src/devtools-token.ts (listed in .gitignore)
+export const devtoolsToken = 'the value of PANGULAR_AUTH_TOKEN on your machine';
+```
+
+```ts
+// src/main.ts (excerpt, inside the ngDevMode check)
+const {devtoolsToken} = await import('./devtools-token');
+await initOverlay({
+  baseURL: 'http://192.168.1.20:9999/',
+  connectionMeta: {backend: 'websocket', websocket: {path: '__ws'}},
+  authToken: devtoolsToken,
+});
+```
+
+The token is a development secret. Keep the file out of git.
+
 ## Stop the overlay
 
 Call `disposeOverlay` to turn the overlay off:

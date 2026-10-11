@@ -19,7 +19,7 @@ The devtools read your running app and send what they find to a server on your m
 
 <ngmd-card-grid columns="2">
   <ngmd-card icon="zap" title="Vite plugin">
-    Loopback requests only. A request that sends an <code>Origin</code> must come from a loopback host, the Pangular Inspector extension, an entry in <code>allowedOrigins</code> or Vite's <code>server.allowedHosts</code>. Asks for a one-time code when a non-loopback host or origin is allowed.
+    Loopback requests only, unless <code>allowLan</code> is on. A request that sends an <code>Origin</code> must come from a loopback host, the Pangular Inspector extension, an entry in <code>allowedOrigins</code> or Vite's <code>server.allowedHosts</code>. Asks for a one-time code when a non-loopback host or origin is allowed.
   </ngmd-card>
   <ngmd-card icon="layers" title="Express hub">
     A one-time code and an origin check that accepts loopback origins and the Pangular Inspector extension. Both on by default.
@@ -44,6 +44,8 @@ In detail, a request to the devtools must:
 - have no `Origin` header, or an origin that is a loopback host, the [Pangular Inspector extension](#chrome-extension), an entry in `allowedOrigins`, or a host that Vite's `server.allowedHosts` accepts.
 
 Other requests get `403` with the message "Pangular Inspector only answers requests from this machine." WebSocket upgrades follow the same rules.
+
+With `allowLan: true`, the plugin also answers other machines, such as a phone on Wi-Fi, whose origin is in `allowedOrigins`. It needs the one-time code on, and ignores `allowLan` with `auth: false`. See [Other devices on your network](./getting-started/vite.md#other-devices-on-your-network).
 
 If you open the dev server through another hostname that points to your machine (for example `myapp.test`), list it in Vite's `server.allowedHosts` and the devtools trust it too. Add other origins with `allowedOrigins`:
 
@@ -105,7 +107,24 @@ A list keeps loopback origins and the Pangular Inspector extension. See [Chrome 
 
 ### Standalone CLI
 
-The CLI server binds to `localhost` and asks for a one-time code. `--host` changes the bind address and `--no-auth` turns the code off. See [Standalone CLI](./getting-started/cli.md).
+The CLI server binds to `localhost` and asks for a one-time code. `--host` changes the bind address and `--no-auth` turns the code off. `--allowed-origin` adds an origin to the loopback origins it accepts, and `--auth-token` adds [pairing tokens](#pairing-tokens). See [Standalone CLI](./getting-started/cli.md).
+
+### Pairing tokens
+
+A pairing token lets a client skip the one-time code, for example an app on a phone, where typing the code is awkward. The code stays on for every other client, and a wrong token falls back to it.
+
+| Server         | How to set tokens                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------ |
+| Express hub    | `initPangularHub({auth: {tokens: [process.env['PANGULAR_AUTH_TOKEN']!]}})`                       |
+| Vite plugin    | `pangular({auth: {tokens: [process.env['PANGULAR_AUTH_TOKEN']!]}})`                              |
+| Standalone CLI | The `PANGULAR_AUTH_TOKEN` environment variable (comma-separated for several), or `--auth-token`. |
+
+The page sends the token as the `authToken` option of [`initOverlay`](./getting-started/overlay.md#skip-the-one-time-code).
+
+- A token is a development secret. Read it from an environment variable, and keep it out of committed config and source.
+- Use a long random value. Tokens shorter than 16 characters are ignored with a warning, for example the output of `openssl rand -hex 16` works.
+- The servers never print a whole token. The CLI prints its first characters.
+- Tokens stay on the server. They are not part of the config that pages receive in `__connection.json`.
 
 ### MCP endpoint
 

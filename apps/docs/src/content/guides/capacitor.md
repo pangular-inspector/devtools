@@ -20,14 +20,14 @@ This guide adds the devtools to an Ionic or Capacitor *Angular app. The app runs
 
 ## Which setup you need
 
-| Your devtools server             | iOS simulator, Android emulator, USB device           | Phone over Wi-Fi                                                         |
-| -------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------ |
-| Express hub in `server.ts`       | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `allowedOrigins` |
-| Vite plugin (Analog)             | [Live reload on localhost](#live-reload-on-localhost) | Not supported                                                            |
-| Standalone CLI behind `ng serve` | [Live reload on localhost](#live-reload-on-localhost) | [A bundled build](#a-bundled-build)                                      |
-| Standalone CLI on its own        | [A bundled build](#a-bundled-build)                   | [A bundled build](#a-bundled-build)                                      |
+| Your devtools server             | iOS simulator, Android emulator, USB device           | Phone over Wi-Fi                                                           |
+| -------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------- |
+| Express hub in `server.ts`       | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `allowedOrigins`   |
+| Vite plugin (Analog)             | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `allowLan`         |
+| Standalone CLI behind `ng serve` | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `--allowed-origin` |
+| Standalone CLI on its own        | [A bundled build](#a-bundled-build)                   | [A bundled build](#a-bundled-build)                                        |
 
-The Vite plugin answers only requests that come from your machine. A phone on Wi-Fi does not, and the plugin has no option for it. The standalone CLI accepts only loopback origins and has no `allowedOrigins` option, so a page served from your network address can't reach it.
+Over Wi-Fi, the page's origin is your machine's network address, not `localhost`, so the server has to allow that origin. A bundled build works with any server that the phone can reach.
 
 ## Live reload on localhost
 
@@ -54,20 +54,15 @@ On Android, live reload also allows cleartext traffic for that run, and puts bot
 
 ## Live reload over Wi-Fi
 
-A phone on Wi-Fi loads the app from your machine's network address, such as `http://192.168.1.20:4200`. Only the Express hub accepts that origin, once it is in `allowedOrigins`:
+A phone on Wi-Fi loads the app from your machine's network address, such as `http://192.168.1.20:4200`. Allow that origin on your devtools server:
 
-```ts {6}
-// src/server.ts
-import {initPangularHub} from '@pangular-inspector/devtools/hub';
+| Server                           | Allow the page's origin                                                                                                                                                                                     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Express hub                      | `initPangularHub({ws: false, allowedOrigins: ['http://192.168.1.20:4200']})`                                                                                                                                |
+| Vite plugin                      | `pangular({allowLan: true, allowedOrigins: ['http://192.168.1.20:5173']})`, with Vite's `server.host: true`. See [Other devices on your network](../getting-started/vite.md#other-devices-on-your-network). |
+| Standalone CLI behind `ng serve` | `npx @pangular-inspector/devtools dev --allowed-origin http://192.168.1.20:4200`                                                                                                                            |
 
-const devtools = initPangularHub({
-  ws: false,
-  allowedOrigins: ['http://192.168.1.20:4200'],
-});
-app.use(devtools.nodeMiddleware);
-```
-
-Then start the dev server on every interface, `ng serve --host 0.0.0.0 --port 4200`, and run `npx cap run ios --live-reload --host 192.168.1.20 --port 4200`. The overlay loads as in a browser, through `@pangular-inspector/devtools/overlay`.
+Then start the dev server on every interface, for example `ng serve --host 0.0.0.0 --port 4200`, and run `npx cap run ios --live-reload --host 192.168.1.20 --port 4200`. The overlay loads as in a browser, through `@pangular-inspector/devtools/overlay`.
 
 <ngmd-alert severity="warning" label="Keep the one-time code on">
   On a network address, anyone on the network can reach the server, and the origin check alone does not stop a client that sends an allowed <code>Origin</code>. The one-time code keeps them out. Don't pass <code>auth: false</code> in this setup, and use a trusted network.
@@ -97,6 +92,8 @@ bootstrapApplication(App, appConfig)
   })
   .catch((err) => console.error(err));
 ```
+
+Started with `--host 0.0.0.0`, the standalone CLI prints this call with your network address and its whole connection info, config included, ready to paste.
 
 The `ngDevMode` check keeps the overlay out of production builds, which also have no `ng` debug global to read. So build the app with the development configuration before you sync it, for example `ng build --configuration development`.
 
@@ -169,7 +166,7 @@ The simulator, the emulator and `adb reverse` reach your machine's `localhost`. 
 | -------------- | ------------------------------------------------------------------------------------------------------- |
 | Standalone CLI | `npx @pangular-inspector/devtools dev --host 0.0.0.0` listens on every interface, `localhost` included. |
 | Express hub    | `app.listen(port)` listens on every interface by default. Under `ng serve`, pass `--host 0.0.0.0`.      |
-| Vite plugin    | Not possible. It refuses requests that do not come from your machine.                                   |
+| Vite plugin    | Not for a bundled build: `allowLan` needs a network origin, and the app's origin is `localhost`.        |
 
 Keep `localhost` in what the CLI listens on. With `--host 192.168.1.20` alone, the panel is only on that address, and the server refuses the panel's own origin there. Run the CLI in the app's folder, so the source scanners read its `src/`.
 
@@ -178,6 +175,8 @@ Keep `localhost` in what the CLI listens on. With `--host 192.168.1.20` alone, t
 The standalone CLI and the Express hub ask for a one-time code by default. When the app connects, it shows a dialog asking for the code, and the server prints the code in its terminal. Type the code in the app. The link the server prints next to it opens the server, not the app, so it doesn't help on a phone.
 
 The app keeps the token it gets in the WebView's storage for that origin. It asks again when that storage is cleared, and under live reload over Wi-Fi when your machine's address changes, since the origin changes with it. The Vite plugin leaves the code off while it only allows your machine, so it never asks.
+
+To skip the dialog, give the server a [pairing token](../security.md#pairing-tokens) and pass it to `initOverlay` as `authToken`. See [Skip the one-time code](../getting-started/overlay.md#skip-the-one-time-code). A wrong token falls back to the dialog.
 
 ## CapacitorHttp
 
@@ -207,7 +206,7 @@ These keys are the same in Capacitor 6, 7 and 8. Keep the development ones out o
     Inspect the WebView, with Safari's <strong>Develop</strong> menu for iOS or <code>chrome://inspect</code> for Android, and read the console. <code>[pangular] No devtools server found</code> in a bundled build means <code>connectionMeta</code> is missing. A <strong>Mixed Content</strong> message means <code>allowMixedContent</code> is off, and the overlay sends nothing. A failed connection to the address means the server is not running, listens only on <code>localhost</code>, or the address is wrong for where the app runs. A <code>403</code> under live reload over Wi-Fi means the page's origin is missing from <code>allowedOrigins</code>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The code dialog keeps coming back">
-    The app's origin changed, its storage was cleared, or the code expired before you typed it. Under live reload over Wi-Fi, a new network address is a new origin. Type the newest code the server printed.
+    The app's origin changed, its storage was cleared, or the code expired before you typed it. Under live reload over Wi-Fi, another network address is another origin. Type the newest code the server printed.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Plugin calls are empty on the web">
     On the web, plugins don't use the native bridge, so only the Capacitor hook sees their calls, and only when it loads before <code>&#64;capacitor/core</code>. See <a href="../inspectors/capacitor.md#web-calls">Web calls</a>.
