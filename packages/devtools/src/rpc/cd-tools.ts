@@ -161,7 +161,9 @@ export function changeDetectionText(
   if (!page.supported) {
     return `Page ${code(page.pageId)} can't record change detection: it needs Angular 20 or later in a development build.`;
   }
-  const limit = Math.max(1, Math.min(Math.floor(args.limit ?? 10), 50));
+  // Agents send strings, NaN and null too: anything that is not a finite number is the default.
+  const asked = Number(args.limit ?? 10);
+  const limit = Math.max(1, Math.min(Math.floor(Number.isFinite(asked) ? asked : 10), 50));
   const status = page.recording ? 'Recording is on.' : 'Recording is off.';
   if (!page.cycles.length && !page.components.length) {
     return `${status} No change detection cycle was recorded on page ${code(page.pageId)} yet. Use the app, then call this tool again.`;
