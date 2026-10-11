@@ -21,9 +21,10 @@ Each row shows the class name and the host tag. Routed components get a chip wit
 - The toolbar counts the instances on the page. While you filter, it shows how many instances match, like **2 of 40**. Ancestors kept to show where a match sits don't count.
 - **Hover or focus** a row to highlight its host element in the page.
 - **Click** a row, or press Enter or Space, to select it. Click it again to clear the selection.
+- **Expand all** opens every row and **Collapse all** closes them down to the top level. Both are off while you filter, because the filter already opens every row that leads to a match.
 - **Pick component on page** selects the component behind an element you click in the app. See [Pick a component on the page](#pick-a-component-on-the-page).
 
-Screen readers hear the match count when the filter changes. Components that the app adds or removes are not announced.
+Screen readers hear the match count when the filter changes, and a short message after **Expand all** or **Collapse all**. Components that the app adds or removes are not announced.
 
 ### Pages
 
@@ -194,7 +195,9 @@ To go the other way, select a component and click **Reveal in Elements** in its 
 
 ### Keyboard
 
-Use the arrow keys, Home and End to move through the tree. The right arrow expands a row or moves to its first child. The left arrow collapses a row or moves to its parent.
+Use the arrow keys, Home and End to move through the tree. The right arrow expands a row or moves to its first child. The left arrow collapses a row or moves to its parent. The `*` key expands the focused row and every row at the same level under the same parent.
+
+After **Collapse all**, the row you return to with Tab is the closest visible parent of the row you were on.
 
 ## Agent tools
 
@@ -203,6 +206,7 @@ Use the arrow keys, Home and End to move through the tree. The right arrow expan
 | `pangular:get-components`    | tool     | Lists components and directives from source, with selector, kind, inputs, outputs, change detection, file and line.                                                                   |
 | `pangular:highlight`         | tool     | Highlights a component in the page and selects it. Takes an instance id, class name, host tag or CSS selector. Also retargets the Signals graph. Lists every instance a name matches. |
 | `pangular:inspect-component` | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services.                                                           |
+| `pangular:list-components`   | tool     | Returns the live tree of one page as an indented outline with routed and directive markers. Takes a `filter` and a `depth`.                                                           |
 | `pangular:defer-blocks`      | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                  |
 | `pangular:change-detection`  | tool     | Starts, stops or clears a change detection recording, and returns the slowest and most often checked components and the latest cycles.                                                |
 | `pangular:component-tree`    | resource | The live tree per page, with the detail of the selected instance and the defer blocks.                                                                                                |

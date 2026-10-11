@@ -4,7 +4,9 @@ import {
   droppedNavigations,
   findRouter,
   nameOf,
+  noteWarning,
   redactText,
+  redactUrl,
   serializeRoute,
   trimNavigations,
   type ActiveRoute,
@@ -181,7 +183,19 @@ describe('router reports', () => {
       navigations: [{ ...nav(1), requests: { count: 1, urls: [u] } }],
     });
     expect(isRouterReport(withRequests(url))).toBe(true);
-    expect(isRouterReport(withRequests('x'.repeat(2001)))).toBe(false);
+    expect(isRouterReport(withRequests('x'.repeat(2002)))).toBe(false);
+  });
+
+  it('accepts a long warning and request URL after the page clips them', () => {
+    const navigations = [nav(1)];
+    noteWarning(navigations, 'w'.repeat(400));
+    navigations[0].requests = {
+      count: 1,
+      urls: [redactUrl(`https://x.test/${'page/'.repeat(600)}`)],
+    };
+    expect(navigations[0].warnings?.[0]).toHaveLength(301);
+    expect(navigations[0].requests.urls[0]).toHaveLength(2001);
+    expect(isRouterReport({ pageId: 'a', snapshot: null, navigations })).toBe(true);
   });
 
   it('accepts what the overlay sends and rejects what the tools cannot read', () => {
