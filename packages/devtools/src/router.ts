@@ -1,3 +1,4 @@
+import { redactCredentials } from './credential-redact.ts';
 import { JWT } from './forms-privacy.ts';
 import { REDACTED, isSensitive, serializeFormValue } from './forms.ts';
 import { clip } from './text.ts';
@@ -235,7 +236,8 @@ function segmentForm(secret: string): string {
 
 /**
  * Hides the values of secret-looking query, matrix and fragment keys
- * (`?token=…`, `;api_key=…`, `#access_token=…`), JWTs and bearer tokens, and
+ * (`?token=…`, `;api_key=…`, `#access_token=…`), URL passwords, `Authorization`
+ * credentials (`Basic`, `Digest`, `Token`), JWTs and bearer tokens, and
  * any of the given secret route param values, wherever they appear in a URL or
  * a message. In `url` mode a value runs to the next separator and long opaque
  * tokens (not UUIDs or ULIDs) are hidden too; in messages it also stops at quotes.
@@ -246,7 +248,7 @@ export function redactText(
   mode: 'url' | 'text' = 'text',
   depth = 0,
 ): string {
-  let out = text.replace(
+  let out = redactCredentials(text, REDACTED).replace(
     mode === 'url' ? URL_PAIR : TEXT_PAIR,
     (match, sep: string, key: string, value: string) => {
       if (isSecretKey(decode(key))) return `${sep}${key}=${REDACTED}`;
