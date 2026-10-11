@@ -269,6 +269,32 @@ describe('ssrMiddleware overrides', () => {
     }
   });
 
+  it('edits a prerendered page on reload instead of letting its ETag answer 304', () => {
+    ssrRegistry().overrides = [override({ kind: 'state-edit', key: 'a', value: '{"b":2}' })];
+    // What Angular's engine does for a prerendered page: 304 when the browser's ETag matches.
+    const etag = '"abc123"';
+    const serve = (req: IncomingMessage, res: FakeResponse) => () => {
+      if (req.headers['if-none-match'] === etag) {
+        res.statusCode = 304;
+        res.end();
+        return;
+      }
+      res.setHeader('content-type', 'text/html;charset=UTF-8');
+      res.setHeader('etag', etag);
+      res.end(STATE_HTML);
+    };
+    // A reload of a page the browser already has sends its ETag.
+    const reload = request();
+    reload.headers['if-none-match'] = etag;
+    const res = new FakeResponse();
+    createSsrMiddleware()(reload, res as unknown as ServerResponse, serve(reload, res));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('{"a":{"b":2},"keep":2}');
+    // The edited copy must not be cached under the file's ETag, or a reload after the override
+    // is removed answers 304 and the browser keeps showing the edit.
+    expect(res.sentHeaders).not.toHaveProperty('etag');
+  });
+
   it('does not report an edit on a page without TransferState, such as an error page', () => {
     ssrRegistry().overrides = [override({ kind: 'state-edit', key: 'a', value: '1' })];
     const res = new FakeResponse();

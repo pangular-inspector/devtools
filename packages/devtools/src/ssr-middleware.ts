@@ -181,6 +181,10 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
       // Angular's Node adapter flushes headers before the body, which would fix the old content-length.
       res.flushHeaders = function () {} as typeof res.flushHeaders;
       res.setHeader('x-pangular-override', 'state-edit');
+      // A browser that has the page sends its ETag, and a prerendered page then answers 304, which
+      // would leave the cached copy without the edit.
+      delete req.headers['if-none-match'];
+      delete req.headers['if-modified-since'];
       // Callbacks wait until the held HTML is really sent.
       const callbacks: ((error?: Error | null) => void)[] = [];
       res.write = function (this: ServerResponse, chunk: unknown, ...rest: unknown[]) {
@@ -221,6 +225,12 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
         if (!res.headersSent) {
           res.removeHeader('content-length');
           res.setHeader('content-length', Buffer.byteLength(out));
+          // The validators describe the unedited page. Kept, they would let the browser revalidate
+          // its edited copy with a 304 after the override is removed.
+          if (edited) {
+            res.removeHeader('etag');
+            res.removeHeader('last-modified');
+          }
         }
         res.flushHeaders = flushHeaders;
         const last = [chunk, ...rest].find((arg) => typeof arg === 'function');
