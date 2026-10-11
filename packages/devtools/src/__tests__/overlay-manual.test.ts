@@ -10,6 +10,7 @@ interface ConnectOptions {
 
 const connects: ConnectOptions[] = [];
 const calls: string[] = [];
+const errorListeners: ((error: Error) => void)[] = [];
 
 // The real `setupDevframeConnection` decides whether `__connection.json` is
 // fetched, so the tests check devframe's behaviour, not only what is passed in.
@@ -24,6 +25,12 @@ vi.mock('devframe/client', async (importOriginal) => {
       );
       return {
         close: vi.fn(),
+        events: {
+          on: vi.fn((event: string, listener: (error: Error) => void) => {
+            if (event === 'connection:error') errorListeners.push(listener);
+            return () => errorListeners.splice(errorListeners.indexOf(listener), 1);
+          }),
+        },
         connectionMeta: connection.connectionMeta,
         connection: { metaBaseUrl: connection.metaBaseUrl },
         scope: () => ({
@@ -70,6 +77,7 @@ async function loadAuto() {
 beforeEach(() => {
   connects.length = 0;
   calls.length = 0;
+  errorListeners.length = 0;
   fetches.length = 0;
   document.body.innerHTML = '';
   for (const key of DEVFRAME_GLOBALS) delete (globalThis as Record<string, unknown>)[key];
@@ -137,13 +145,71 @@ describe.sequential('overlay connectionMeta', () => {
         },
       }),
     );
-    await new Promise((resolve) => setTimeout(resolve, 100));
     // The overlay's own module instance, loaded after `vi.resetModules()`.
     const { isSecretKey } = await import('../forms-privacy.ts');
+    await vi.waitFor(() => expect(calls).toContain('push-injector-tree'));
 
     expect(isSecretKey('voucherCode')).toBe(true);
     expect(calls).not.toContain('push-component-tree');
-    expect(calls).toContain('push-injector-tree');
+  });
+
+  it('points a device app at the network, mixed content and cleartext when no server answers', async () => {
+    vi.stubGlobal('Capacitor', { getPlatform: () => 'android' });
+    const { initOverlay } = await loadManual();
+    const failure = initOverlay({ baseURL: 'http://192.168.1.20:9999/' });
+    await expect(failure).rejects.toThrow('No devtools server found');
+    await expect(failure).rejects.toThrow(/mixed content.*cleartext/);
+  });
+
+  it('warns once when the server refuses the authToken or cannot be reached', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { initOverlay } = await loadManual();
+    stops.push(
+      await initOverlay({
+        baseURL: 'http://192.168.1.20:9999/',
+        connectionMeta: { ...serverMeta, configs: { pangular: {} } },
+        authToken: 'pairing-token-0123456789abcdef',
+      }),
+    );
+    const emit = (error: Error) => errorListeners.forEach((listener) => listener(error));
+    const auth = Object.assign(new Error('refused'), { kind: 'auth' });
+    emit(auth);
+    emit(auth);
+    emit(Object.assign(new Error('Failed to fetch'), { kind: 'connection' }));
+    emit(Object.assign(new Error('Failed to fetch'), { kind: 'connection' }));
+    const messages = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
+
+    expect(messages.filter((m) => m.includes('refused the authToken'))).toHaveLength(1);
+    expect(messages.filter((m) => m.includes("Can't reach the devtools server"))).toHaveLength(1);
+    expect(messages.join('\n')).not.toContain('pairing-token-0123456789abcdef');
+  });
+
+  it('stays quiet about a refused stored token when no authToken was passed', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { initOverlay } = await loadManual();
+    stops.push(
+      await initOverlay({
+        baseURL: 'http://192.168.1.20:9999/',
+        connectionMeta: { ...serverMeta, configs: { pangular: {} } },
+      }),
+    );
+    errorListeners.forEach((listener) => listener(Object.assign(new Error('x'), { kind: 'auth' })));
+    const messages = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
+    expect(messages.some((m) => m.includes('authToken'))).toBe(false);
+  });
+
+  it('accepts an imported __connection.json as connectionMeta', async () => {
+    // What `import meta from './__connection.json'` gives TypeScript: `backend` is a string.
+    const imported: { backend: string; websocket: { path: string } } = JSON.parse(
+      '{"backend":"websocket","websocket":{"path":"__ws"}}',
+    );
+    const { initOverlay } = await loadManual();
+    stops.push(
+      await initOverlay({ baseURL: 'http://192.168.1.20:9999/', connectionMeta: imported }),
+    );
+    expect(connects[0].connectionMeta).toEqual(imported);
   });
 });
 

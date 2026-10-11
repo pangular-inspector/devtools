@@ -95,8 +95,27 @@ describe('the setup snippet', () => {
     expect(text).toContain('On your network: http://192.168.1.20:9999/');
     expect(text).toContain("baseURL: 'http://192.168.1.20:9999/'");
     expect(text).toContain(`connectionMeta: ${JSON.stringify(meta)}`);
-    expect(text).toContain('authToken: /* one of the pairing tokens');
+    expect(text).toContain("// authToken: '<one of the pairing tokens>'");
+    expect(text).not.toMatch(/authToken: .*undefined/);
     expect(setupSnippetLines([], 9999, meta, false)).toEqual([]);
+  });
+
+  it('prints code that runs as pasted: no top-level await, and the overlay only in dev mode', async () => {
+    const meta = { backend: 'websocket', websocket: { path: '__ws' } };
+    const lines = setupSnippetLines(['192.168.1.20'], 9999, meta, true);
+    const start = lines.findIndex((line) => line.includes('bootstrapApplication('));
+    const code = lines
+      .slice(start)
+      .map((line) => line.slice(4))
+      .join('\n');
+    expect(code.split('\n')[0]).toBe('bootstrapApplication(App, appConfig)');
+    expect(code).toContain("if (typeof ngDevMode === 'undefined' || ngDevMode) {");
+    // A plain function body rejects a top-level await, so this also checks there is none.
+    const run = new Function('bootstrapApplication', 'App', 'appConfig', 'ngDevMode', code);
+    const bootstrap = vi.fn(() => Promise.resolve());
+    run(bootstrap, {}, {}, false);
+    await Promise.resolve();
+    expect(bootstrap).toHaveBeenCalledOnce();
   });
 });
 
@@ -143,6 +162,58 @@ describe('pangular dev', () => {
     });
     expect(warnings.some((message) => message.includes('Unknown option'))).toBe(false);
     expect(warnings.some((message) => message.includes('allowedOrigins'))).toBe(false);
+  });
+
+  it('prints the startup lines first, then the snippet, with a time limit on its fetch', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'pangular-cli-'));
+    dirs.push(root);
+    writeFileSync(join(root, 'angular.json'), '{}');
+    const log = vi.fn();
+    const cwd = process.cwd();
+    const { createPangularCli } = await import('../cli.ts');
+    try {
+      await createPangularCli({ log, env: {} }).parse([
+        'node',
+        'pangular',
+        'dev',
+        '--root',
+        root,
+        '--host',
+        '192.168.1.20',
+        '--port',
+        '9990',
+        '--no-open',
+      ]);
+    } finally {
+      process.chdir(cwd);
+    }
+    const onReady = devServer.options[0]['onReady'] as (info: {
+      origin: string;
+      port: number;
+    }) => Promise<void>;
+    let signal: unknown;
+    let printedBefore = -1;
+    const fetchStub = vi.fn(async (_url: string, init?: { signal?: unknown }) => {
+      signal = init?.signal;
+      printedBefore = log.mock.calls.length;
+      return {
+        ok: true,
+        json: async () => ({ backend: 'websocket', websocket: { path: '__ws' } }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchStub);
+    try {
+      await onReady({ origin: 'http://192.168.1.20:9990', port: 9990 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(fetchStub).toHaveBeenCalledWith('http://192.168.1.20:9990/__connection.json', {
+      signal: expect.any(AbortSignal),
+    });
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(printedBefore).toBe(1);
+    expect(String(log.mock.calls[0][0])).toContain('http://192.168.1.20:9990');
+    expect(String(log.mock.calls[1][0])).toContain('bootstrapApplication(App, appConfig)');
   });
 
   it("keeps devframe's default origin check without --allowed-origin", async () => {

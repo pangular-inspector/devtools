@@ -112,7 +112,7 @@ Without `connectionMeta`, the overlay first fetches `__connection.json` from `ba
 - Pass one `baseURL`, not a list. `initOverlay` refuses a list with `connectionMeta`.
 - Use your server's port in place of `9999`, `4000` or `5173`.
 - The hub's WebSocket side-car (`ws: {sidecar: true}`) listens on `localhost` on a port it picks, so a device can't reach it. Use `ws: false`.
-- The Vite plugin works here only for Android through `adb reverse`. It refuses the iOS origin `capacitor://localhost`, which `allowedOrigins` can't add.
+- With the Vite plugin, add `capacitor://localhost` to its `allowedOrigins` for iOS. Android's `https://localhost` needs no entry, but only reaches Vite through the emulator or `adb reverse`.
 
 The short forms above carry no `configs`, so the overlay uses the default inspectors, limits and redaction, and logs a warning. The server's `redaction.secretNames` are then not applied on the page. If your server has a [config](../getting-started/configuration.md), open its `__connection.json` in your desktop browser, for example `http://localhost:9999/__connection.json`, and pass the whole object as `connectionMeta`.
 
@@ -122,7 +122,7 @@ The short forms above carry no `configs`, so the overlay uses the default inspec
 | Android emulator or USB | `localhost`, after `adb reverse tcp:9999 tcp:9999` with your server's port |
 | Phone over Wi-Fi        | Your machine's network address, such as `192.168.1.20`                     |
 
-Each server accepts `capacitor://localhost` and `https://localhost` without an `allowedOrigins` entry, because their host is `localhost`. The Vite plugin is the exception for iOS.
+The standalone CLI and the Express hub accept `capacitor://localhost` and `https://localhost` without an `allowedOrigins` entry, because their host is `localhost`. The Vite plugin accepts `https://localhost` the same way, and `capacitor://localhost` once it is in `allowedOrigins`. That entry also turns the one-time code on.
 
 ### Let the app reach your machine
 
@@ -162,11 +162,11 @@ On iOS, App Transport Security can block plain HTTP to a network address. If it 
 
 The simulator, the emulator and `adb reverse` reach your machine's `localhost`. A phone on Wi-Fi needs the server on your network address:
 
-| Server         | How                                                                                                     |
-| -------------- | ------------------------------------------------------------------------------------------------------- |
-| Standalone CLI | `npx @pangular-inspector/devtools dev --host 0.0.0.0` listens on every interface, `localhost` included. |
-| Express hub    | `app.listen(port)` listens on every interface by default. Under `ng serve`, pass `--host 0.0.0.0`.      |
-| Vite plugin    | Not for a bundled build: `allowLan` needs a network origin, and the app's origin is `localhost`.        |
+| Server         | How                                                                                                                                                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Standalone CLI | `npx @pangular-inspector/devtools dev --host 0.0.0.0` listens on every interface, `localhost` included.                                                                                                                       |
+| Express hub    | `app.listen(port)` listens on every interface by default. Under `ng serve`, pass `--host 0.0.0.0`.                                                                                                                            |
+| Vite plugin    | For an iOS phone: `capacitor://localhost` in `allowedOrigins`, `allowLan: true`, and Vite started with `--host`. An Android phone can't use it over Wi-Fi: `https://localhost` is not a network origin, so use `adb reverse`. |
 
 Keep `localhost` in what the CLI listens on. With `--host 192.168.1.20` alone, the panel is only on that address, and the server refuses the panel's own origin there. Run the CLI in the app's folder, so the source scanners read its `src/`.
 

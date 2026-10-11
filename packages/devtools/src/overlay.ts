@@ -1,6 +1,6 @@
 import { connectDevframe } from 'devframe/client';
 import { overlayPopup } from './overlay-popup.ts';
-import { overlayConnectOptions } from './overlay-connection.ts';
+import { overlayConnectOptions, warnOnConnectionTrouble } from './overlay-connection.ts';
 export { registerNgrxSignals } from './ngrx-register.ts';
 import { attachAnalog } from './analog-runtime.ts';
 import { attachForms } from './forms-collector.ts';
@@ -130,7 +130,9 @@ type DevframeConnectionMeta = NonNullable<
  * The content of a devtools server's `__connection.json`. `configs` is loose,
  * so the whole file, with its `pangular` config, can be passed as it is.
  */
-export type OverlayConnectionMeta = Omit<DevframeConnectionMeta, 'configs'> & {
+export type OverlayConnectionMeta = Omit<DevframeConnectionMeta, 'configs' | 'backend'> & {
+  /** A string, so an imported `__connection.json` type-checks as it is. */
+  backend: string;
   configs?: Record<string, unknown>;
 };
 
@@ -202,24 +204,29 @@ export async function disposeOverlay(): Promise<void> {
 // misses the documented `/__pangular/` mount in a host app.
 const DEFAULT_BASES = ['./', '/__pangular/', '/__devframes/pangular/'];
 
-function noServerError(bases: string | string[], cause: unknown): Error {
+function noServerError(bases: string | string[], cause: unknown, manual: boolean): Error {
   const tried = (Array.isArray(bases) ? bases : [bases]).join(', ');
   return new Error(
     `[pangular] No devtools server found (tried ${tried}). ` +
-      'Mount initPangularHub() or the pangular() Vite plugin in your dev server, before the SSR handler. ' +
-      `On a custom path, pass it to initOverlay({baseURL}). See ${SETUP_URL}`,
+      (manual
+        ? "From an app on a device, check that the server listens on the network (--host 0.0.0.0) and allows the app's origin, and that the WebView may load http: an https page blocks it as mixed content, and Android blocks cleartext unless the app allows it. See https://pangular-inspector.dev/guides/capacitor/"
+        : 'Mount initPangularHub() or the pangular() Vite plugin in your dev server, before the SSR handler. ' +
+          `On a custom path, pass it to initOverlay({baseURL}). See ${SETUP_URL}`),
     { cause },
   );
 }
 
 async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) => boolean) {
   const bases = options.baseURL ?? DEFAULT_BASES;
+  // Started by hand for another origin, such as a Capacitor WebView.
+  const manual = !!options.connectionMeta || !!(globalThis as { Capacitor?: unknown }).Capacitor;
   const rpc = await connectDevframe(overlayConnectOptions(options, DEFAULT_BASES)).catch(
     (error: unknown) => {
-      throw noServerError(bases, error);
+      throw noServerError(bases, error, manual);
     },
   );
   if (!own(() => rpc.close?.())) return;
+  if (!own(warnOnConnectionTrouble(rpc, options))) return;
   const metaUrl = rpc.connection?.metaBaseUrl;
   if (metaUrl) {
     void overlayPopup()

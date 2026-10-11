@@ -179,3 +179,38 @@ describe('pangularVite allowLan', () => {
     expect(call(PHONE, { origin: LAN_ORIGIN })).toBe(403);
   });
 });
+
+describe('pangularVite and the iOS origin capacitor://localhost', () => {
+  const IOS = 'capacitor://localhost';
+
+  it('keeps capacitor://localhost in allowedOrigins instead of dropping it', async () => {
+    const { normalizeAllowedOrigins } = await import('../allowed-origins.ts');
+    const warn = vi.fn();
+    expect(
+      normalizeAllowedOrigins([IOS, 'Capacitor://LocalHost/', 'ionic://localhost'], warn),
+    ).toEqual([IOS, 'ionic://localhost']);
+    expect(warn.mock.calls.some(([m]) => String(m).includes('Ignoring'))).toBe(false);
+  });
+
+  it('answers a listed capacitor://localhost and turns the one-time code on', () => {
+    const { call, auth, warn } = pluginGate({ allowedOrigins: [IOS] });
+    expect(auth).toBe(true);
+    expect(call('127.0.0.1', { origin: IOS })).toBe('next');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('answers a phone on Wi-Fi from capacitor://localhost with allowLan', () => {
+    const { call } = pluginGate({ allowLan: true, allowedOrigins: [IOS] });
+    expect(call(PHONE, { origin: IOS })).toBe('next');
+  });
+
+  it('still refuses capacitor://localhost when it is not listed, and Origin: null', () => {
+    const { call } = pluginGate({ allowedOrigins: [LAN_ORIGIN] });
+    expect(call('127.0.0.1', { origin: IOS })).toBe(403);
+    expect(call('127.0.0.1', { origin: 'null' })).toBe(403);
+    const listed = pluginGate({ allowLan: true, allowedOrigins: [IOS] });
+    expect(listed.call('127.0.0.1', { origin: 'null' })).toBe(403);
+    expect(listed.call(PHONE, { origin: 'null' })).toBe(403);
+    expect(listed.call('127.0.0.1', { origin: 'capacitor://evil.example' })).toBe(403);
+  });
+});

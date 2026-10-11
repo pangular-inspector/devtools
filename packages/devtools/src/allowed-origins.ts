@@ -1,8 +1,15 @@
 import { extensionOrigin } from './extension-origin.ts';
 
-function webOrigin(entry: string): string {
+/**
+ * The origin a browser sends for `entry`. A scheme the URL standard has no
+ * origin for, such as Capacitor's `capacitor://localhost` on iOS, keeps its
+ * `scheme://host`, which is what the WebView sends.
+ */
+export function webOrigin(entry: string): string {
   try {
-    return new URL(entry).origin;
+    const url = new URL(entry);
+    if (url.origin !== 'null') return url.origin;
+    return url.host ? `${url.protocol}//${url.host.toLowerCase()}` : 'null';
   } catch {
     return 'null';
   }
@@ -21,7 +28,7 @@ export function normalizeAllowedOrigins(
     const origin = extensionOrigin(entry) ?? webOrigin(entry);
     if (origin === 'null') {
       warn(
-        `[pangular] Ignoring allowedOrigins entry "${entry}": it is not an origin such as https://tunnel.example.`,
+        `[pangular] Ignoring allowedOrigins entry "${entry}": it is not an origin such as https://tunnel.example or capacitor://localhost.`,
       );
       continue;
     }

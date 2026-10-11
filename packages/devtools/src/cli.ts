@@ -18,6 +18,7 @@ import type { PangularConfig } from './config.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 export const PANGULAR_CONFIG_FILE = 'pangular.config.json';
+const SNIPPET_FETCH_MS = 2000;
 const DEFAULT_PORT = 9999;
 
 /**
@@ -302,18 +303,20 @@ export function createPangularCli(options: PangularCliOptions = {}) {
   };
 
   const onReady = async ({ origin, port }: { origin: string; port: number }) => {
-    const lines = [
-      ...startupLines(origin, port, { mcp: mcpOn, requestedPort }),
-      ...accessLines(access),
-    ];
+    log(
+      `\n${[...startupLines(origin, port, { mcp: mcpOn, requestedPort }), ...accessLines(access)].join('\n')}\n`,
+    );
     const addresses = networkAddresses(listenHost);
-    if (addresses.length) {
-      const meta = await fetch(`http://${addresses[0]}:${port}/__connection.json`)
-        .then((response) => (response.ok ? response.json() : undefined))
-        .catch(() => undefined);
-      lines.push(...setupSnippetLines(addresses, port, meta, access.authTokens.length > 0));
-    }
-    log(`\n${lines.join('\n')}\n`);
+    if (!addresses.length) return;
+    // The server's own connection info, so the printed call carries its config.
+    // A server that doesn't answer in time just gets no snippet.
+    const meta = await fetch(`http://${addresses[0]}:${port}/__connection.json`, {
+      signal: AbortSignal.timeout(SNIPPET_FETCH_MS),
+    })
+      .then((response) => (response.ok ? response.json() : undefined))
+      .catch(() => undefined);
+    const snippet = setupSnippetLines(addresses, port, meta, access.authTokens.length > 0);
+    if (snippet.length) log(`${snippet.join('\n')}\n`);
   };
 
   const { cli } = createCac(definition, {

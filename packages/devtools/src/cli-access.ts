@@ -94,13 +94,21 @@ export function setupSnippetLines(
   return [
     `  On your network: ${urls.join(', ')}`,
     '  For an app on a device (Capacitor, development builds only), in src/main.ts:',
-    "    const {initOverlay} = await import('@pangular-inspector/devtools/overlay-manual');",
-    '    await initOverlay({',
-    `      baseURL: '${urls[0]}',`,
-    `      connectionMeta: ${meta},`,
+    '    bootstrapApplication(App, appConfig)',
+    '      .then(async () => {',
+    "        if (typeof ngDevMode === 'undefined' || ngDevMode) {",
+    "          const {initOverlay} = await import('@pangular-inspector/devtools/overlay-manual');",
+    '          await initOverlay({',
+    `            baseURL: '${urls[0]}',`,
+    `            connectionMeta: ${meta},`,
     ...(tokens
-      ? ['      authToken: /* one of the pairing tokens, kept out of git */ undefined,']
+      ? [
+          "            // authToken: '<one of the pairing tokens>', kept out of git: see the Capacitor guide",
+        ]
       : []),
-    '    });',
+    '          });',
+    '        }',
+    '      })',
+    '      .catch((err) => console.error(err));',
   ];
 }

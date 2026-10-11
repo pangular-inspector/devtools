@@ -189,6 +189,8 @@ await initOverlay({
 
 The token is a development secret. Keep the file out of git. The page keeps the token in its `localStorage`, and sends it in the query string of its connection URL. See [Pairing tokens](../security.md#pairing-tokens).
 
+When the server refuses the token, the overlay logs a warning in the console and asks for the code instead. With `connectionMeta`, it also logs a warning once when it can't reach the server.
+
 ## Stop the overlay
 
 Call `disposeOverlay` to turn the overlay off:

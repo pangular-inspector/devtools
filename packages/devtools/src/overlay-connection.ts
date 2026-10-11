@@ -57,3 +57,43 @@ export function overlayConnectOptions(
 export function resetConnectionWarnings() {
   warnedNoConfig = false;
 }
+
+interface ConnectionEvents {
+  events: {
+    on(event: 'connection:error', listener: (error: Error) => void): (() => void) | void;
+  };
+}
+
+/**
+ * Warns once when a manually started overlay can't use its connection: the
+ * server refused the `authToken`, or the transport failed. `connectDevframe()`
+ * resolves before either shows, so without this the overlay just stays quiet.
+ */
+export function warnOnConnectionTrouble(
+  rpc: ConnectionEvents,
+  options: OverlayConnectionInput,
+  warn: (message: string) => void = console.warn,
+): () => void {
+  const manual = !!options.connectionMeta;
+  if (!manual && !options.authToken) return () => {};
+  let warnedAuth = false;
+  let warnedConnection = false;
+  const off = rpc.events.on('connection:error', (error) => {
+    const kind = (error as { kind?: string }).kind;
+    if (kind === 'auth') {
+      if (!options.authToken || warnedAuth) return;
+      warnedAuth = true;
+      warn(
+        "[pangular] The devtools server refused the authToken. Pass one of the server's pairing tokens (auth: {tokens} on the hub or Vite plugin, --auth-token or PANGULAR_AUTH_TOKEN on the CLI). The server ignores them with auth off, as with --no-auth.",
+      );
+      return;
+    }
+    if (!manual || warnedConnection) return;
+    warnedConnection = true;
+    const base = Array.isArray(options.baseURL) ? options.baseURL[0] : options.baseURL;
+    warn(
+      `[pangular] Can't reach the devtools server at ${base ?? 'the given baseURL'} (${error.message}). From a device, check that it is on the same network, that the server listens on it (--host 0.0.0.0) and allows the app's origin, and that the WebView may load http: an https page blocks it as mixed content, and Android blocks cleartext unless the app allows it.`,
+    );
+  });
+  return typeof off === 'function' ? off : () => {};
+}

@@ -10,7 +10,7 @@ import { analogMiddleware, setDevOrigin } from './analog-server-log.ts';
 import { analogConfig, setAnalogRoot } from './rpc/analog-scan.ts';
 import { releaseServerState } from './server-state.ts';
 import { extensionOrigin, isAllowedExtensionOrigin } from './extension-origin.ts';
-import { normalizeAllowedOrigins } from './allowed-origins.ts';
+import { normalizeAllowedOrigins, webOrigin } from './allowed-origins.ts';
 import { pickPangularConfig, resolvePangularConfig, type PangularConfig } from './config.ts';
 
 export type { PangularConfig } from './config.ts';
@@ -65,8 +65,9 @@ export function isAllowedHubOrigin(
     if (url.protocol === 'chrome-extension:') {
       return isAllowedExtensionOrigin(origin, policy.allowedOrigins);
     }
+    // Listed origins first, so a scheme such as capacitor:// can be allowed too.
+    if (policy.allowedOrigins?.includes(webOrigin(origin))) return true;
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
-    if (policy.allowedOrigins?.includes(url.origin)) return true;
     return isLoopbackHostname(url.hostname) || hostAllowed(url.hostname, policy.allowedHosts);
   } catch {
     return false;
