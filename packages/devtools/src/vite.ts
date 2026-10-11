@@ -166,6 +166,9 @@ export function isAllowedHubRequest(
   return false;
 }
 
+/** A `Host` header that is a plain host or IP, with an optional port. */
+const HOST_HEADER = /^(?:[a-z0-9.-]+|\[[0-9a-f:.]+\])(?::\d{1,5})?$/i;
+
 /**
  * A request from another machine passes only with `lan` on and an origin
  * listed in `allowedOrigins`. A same-origin GET carries no `Origin`, so its
@@ -179,7 +182,10 @@ function isAllowedLanRequest(req: IncomingMessage, policy: HubOriginPolicy): boo
     const host = req.headers?.host;
     if (!host) return false;
     const secure = (req.socket as { encrypted?: boolean } | undefined)?.encrypted === true;
-    origin = `${secure ? 'https' : 'http'}://${host.toLowerCase()}`;
+    // Only a plain host and port, then read like an allowedOrigins entry:
+    // `Host: 192.168.1.20:80` is the origin `http://192.168.1.20`.
+    if (!HOST_HEADER.test(host)) return false;
+    origin = webOrigin(`${secure ? 'https' : 'http'}://${host}`);
   }
   return policy.allowedOrigins.includes(origin);
 }

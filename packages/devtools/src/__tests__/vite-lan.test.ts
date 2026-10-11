@@ -92,6 +92,22 @@ describe('hub request gate on the network', () => {
     expect(check(PHONE, { host: 'evil.example' })).toBe(403);
   });
 
+  it('with lan on, reads the Host like an origin: default port dropped, host lowercased', () => {
+    const check = gate({
+      allowedOrigins: ['http://192.168.1.20', 'http://phone.local:5173'],
+      lan: true,
+    });
+    expect(check(PHONE, { host: '192.168.1.20:80' })).toBe('next');
+    expect(check(PHONE, { host: '192.168.1.20' })).toBe('next');
+    expect(check(PHONE, { host: 'Phone.LOCAL:5173' })).toBe('next');
+    // It can't widen access: another host or port is still refused.
+    expect(check(PHONE, { host: '192.168.1.20:8080' })).toBe(403);
+    expect(check(PHONE, { host: '192.168.1.21:80' })).toBe(403);
+    expect(check(PHONE, { host: '192.168.1.20@evil.example' })).toBe(403);
+    expect(check(PHONE, { host: '192.168.1.20/x' })).toBe(403);
+    expect(check(PHONE, { host: 'evil.example' })).toBe(403);
+  });
+
   it('with lan on and no origins listed, refuses other machines', () => {
     expect(gate({ lan: true })(PHONE, { origin: LAN_ORIGIN })).toBe(403);
   });
