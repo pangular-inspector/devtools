@@ -360,6 +360,7 @@ function countFields(node: FormFieldNode): number {
                       spellcheck="false"
                       [value]="filter()"
                       (input)="onFilter($event)"
+                      (keydown.escape)="filter.set('')"
                     />
                     <fieldset class="chips">
                       <legend class="sr-only">Show only fields that are</legend>

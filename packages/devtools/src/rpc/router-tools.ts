@@ -52,7 +52,8 @@ const MAX_NAVIGATIONS = 50;
 const MAX_PAGES = 20;
 const MAX_RESOURCE_CHARS = 100_000;
 const MAX_TEXT = 4_000;
-const MAX_TOOL_CHARS = 20_000;
+/** Longest markdown a tool answer shows before {@link capped} cuts it. */
+export const MAX_TOOL_CHARS = 20_000;
 const MAX_ROUTES = 1_000;
 const MAX_CHILDREN = 200;
 const MAX_ROUTE_DEPTH = 13;
@@ -369,6 +370,22 @@ export function touchRouterPage(pages: Pages, pageId: unknown, now = Date.now())
   return true;
 }
 
+/**
+ * Drops one page's navigation history, its loop warnings and its dropped
+ * count. A navigation still in progress stays, as it does in the page.
+ * Returns false when the page is unknown.
+ */
+export function clearRouterNavigations(pages: Pages, pageId: string, now = Date.now()): boolean {
+  const page = pages.get(pageId);
+  if (!page) return false;
+  const navigations = page.navigations.filter((nav) => nav.outcome === 'pending');
+  const next: RouterPage = { ...page, navigations, changedAt: now };
+  delete next.dropped;
+  next.loops = detectLoops(navigations, next.config);
+  pages.set(pageId, next);
+  return true;
+}
+
 export function mergeRouterReport(
   pages: Pages,
   report: RouterReport,
@@ -425,10 +442,14 @@ export function json(value: unknown): string {
   return code(text.length > 500 ? `${text.slice(0, 500)}…` : text);
 }
 
-export function capped(text: string): string {
-  return text.length > MAX_TOOL_CHARS
-    ? `${text.slice(0, MAX_TOOL_CHARS)}… (truncated; pass \`page\`, \`url\` or a smaller \`limit\`)`
-    : text;
+/**
+ * Cuts an answer so that, with the note on how to narrow it (`narrow`
+ * defaults to the router arguments), it is at most {@link MAX_TOOL_CHARS}.
+ */
+export function capped(text: string, narrow = 'pass `page`, `url` or a smaller `limit`'): string {
+  if (text.length <= MAX_TOOL_CHARS) return text;
+  const suffix = `… (truncated; ${narrow})`;
+  return `${text.slice(0, Math.max(0, MAX_TOOL_CHARS - suffix.length))}${suffix}`;
 }
 
 /** Longest JSON a router action answer shows before it is cut. */

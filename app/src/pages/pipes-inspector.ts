@@ -9,6 +9,7 @@ import {
   inject,
   input,
   signal,
+  viewChild,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
@@ -125,6 +126,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
           <path d="m20 20-3.5-3.5" />
         </svg>
         <input
+          #filterInput
           type="search"
           placeholder="Find a pipe, class or file…"
           aria-label="Find a pipe, class or file"
@@ -1096,6 +1098,7 @@ export class PipesInspector {
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
+  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
 
   rpc = input<DevframeRpcClient | null>(null);
 
@@ -1316,6 +1319,7 @@ export class PipesInspector {
   clearFilters() {
     this.filter.set('');
     this.kind.set('all');
+    this.filterInput()?.nativeElement.focus();
   }
 
   highlightPipe(live: LivePipeInfo | undefined) {

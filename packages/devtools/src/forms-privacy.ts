@@ -1,3 +1,5 @@
+import { redactCredentials } from './credential-redact.ts';
+
 export const REDACTED = '[redacted]';
 
 export type RedactReason = 'key' | 'input-type' | 'autocomplete' | 'marker' | 'parent' | 'config';
@@ -55,6 +57,11 @@ const SECRET_PAIRS = new Set([
   'securitycode',
   'sessionid',
   'sessionkey',
+  'authheader',
+  'authkey',
+  'authcode',
+  'basicauth',
+  'bearer',
 ]);
 
 const SECRET_AUTOCOMPLETE = /password|one-time-code|cc-/i;
@@ -170,7 +177,9 @@ function safeQuery(element: Element, selector: string): boolean {
 }
 
 export function redactMessage(text: string, secrets: Iterable<string> = []): string {
-  let out = text.replace(JWT, REDACTED).replace(BEARER, `Bearer ${REDACTED}`);
+  let out = redactCredentials(text, REDACTED)
+    .replace(JWT, REDACTED)
+    .replace(BEARER, `Bearer ${REDACTED}`);
   const longestFirst = [...secrets].filter((secret) => secret.length >= 3);
   longestFirst.sort((a, b) => b.length - a.length);
   for (const secret of longestFirst) out = out.split(secret).join(REDACTED);
