@@ -1,6 +1,7 @@
 import { MAX_INJECTOR_NODES, NULL_INJECTOR_ID } from '../injector-tree.ts';
 import type { InjectorPage, InjectorTreeNode } from '../types.ts';
 import { zoneModeText } from '../zone-mode.ts';
+import { untrusted } from './forms-tools.ts';
 
 export const MAX_TOOL_CHARS = 20_000;
 
@@ -95,7 +96,9 @@ export function inspectProvidersText(
   if (!selector && !token) {
     const zone = zoneModeText(page.zone, pageId);
     return capped(
-      `This is the injector tree for the whole page \`${pageId}\`. Element injectors list what each component and directive injected and which injector supplied it (\`providedBy\` is an injector id). Environment injectors run from the platform down to the root and any route injectors; their \`dependencies\` list what the services they already created inject (\`from\` is the service). To look at one component or one token, ${NARROW}.${zone ? ` ${zone}` : ''}${notes}\n\nElement injectors:\n\n${JSON.stringify(roots)}\n\nEnvironment injectors:\n\n${JSON.stringify(environment)}`,
+      untrusted(
+        `This is the injector tree for the whole page \`${pageId}\`. Element injectors list what each component and directive injected and which injector supplied it (\`providedBy\` is an injector id). Environment injectors run from the platform down to the root and any route injectors; their \`dependencies\` list what the services they already created inject (\`from\` is the service). To look at one component or one token, ${NARROW}.${zone ? ` ${zone}` : ''}${notes}\n\nElement injectors:\n\n${JSON.stringify(roots)}\n\nEnvironment injectors:\n\n${JSON.stringify(environment)}`,
+      ),
     );
   }
 
@@ -110,7 +113,9 @@ export function inspectProvidersText(
     const list = (names: string[]) => names.map((name) => `\`${name}\``).join(', ');
     const tags = [...new Set(elements.map((node) => node.injector.name))].slice(0, 20);
     const envNames = [...new Set(environments.map((node) => node.injector.name))].slice(0, 10);
-    return `No element or environment injector on page \`${pageId}\` matches \`${selector}\`. Pass a tag name, a component or directive class name, an environment injector name, or an injector id. Tags on the page: ${list(tags)}. Environment injectors: ${envNames.length ? list(envNames) : 'none reported'}.${notes}`;
+    return untrusted(
+      `No element or environment injector on page \`${pageId}\` matches \`${selector}\`. Pass a tag name, a component or directive class name, an environment injector name, or an injector id. Tags on the page: ${list(tags)}. Environment injectors: ${envNames.length ? list(envNames) : 'none reported'}.${notes}`,
+    );
   }
 
   const sections: string[] = [];
@@ -204,5 +209,5 @@ export function inspectProvidersText(
     }
   }
 
-  return capped(`${sections.join('\n\n')}${notes}`);
+  return capped(untrusted(`${sections.join('\n\n')}${notes}`));
 }

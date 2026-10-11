@@ -241,4 +241,68 @@ describe('SignalInspector', () => {
     await fixture.whenStable();
     expect(host.textContent).toContain('user');
   });
+
+  describe('filter box focus and Escape', () => {
+    afterEach(() => {
+      document.body.innerHTML = '';
+    });
+
+    function filterBox(host: HTMLElement): HTMLInputElement {
+      const box = host.querySelector<HTMLInputElement>(
+        'input[aria-label="Filter signals by name or kind"]',
+      );
+      if (!box) throw new Error('No filter box');
+      return box;
+    }
+
+    function clearButton(host: HTMLElement): HTMLButtonElement {
+      const clear = Array.from(host.querySelectorAll('button')).find(
+        (b) => b.textContent?.trim() === 'Clear filters',
+      );
+      if (!clear) throw new Error('No Clear filters button');
+      return clear;
+    }
+
+    it('keeps focus on the filter box after Clear filters in the live graph', async () => {
+      const fixture = await render(graph);
+      const host = fixture.nativeElement as HTMLElement;
+      document.body.append(host);
+      fixture.componentInstance.filter.set('zzz');
+      await fixture.whenStable();
+      clearButton(host).focus();
+      clearButton(host).click();
+      await fixture.whenStable();
+      expect(host.textContent).not.toContain('No signals match.');
+      expect(document.activeElement).toBe(filterBox(host));
+    });
+
+    it('keeps focus on the filter box after Clear filters in the source scan', async () => {
+      const fixture = await render(null as unknown as Record<string, unknown>);
+      const host = fixture.nativeElement as HTMLElement;
+      document.body.append(host);
+      fixture.componentInstance.sourceSignals.set([
+        { name: 'count', kind: 'signal', file: 'src/app.ts', line: 3 },
+      ]);
+      fixture.componentInstance.filter.set('zzz');
+      await fixture.whenStable();
+      clearButton(host).focus();
+      clearButton(host).click();
+      await fixture.whenStable();
+      expect(host.textContent).toContain('count');
+      expect(document.activeElement).toBe(filterBox(host));
+    });
+
+    it('clears the filter box on Escape', async () => {
+      const fixture = await render(graph);
+      const host = fixture.nativeElement as HTMLElement;
+      const box = filterBox(host);
+      expect(box.type).toBe('search');
+      fixture.componentInstance.filter.set('query');
+      await fixture.whenStable();
+      box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await fixture.whenStable();
+      expect(fixture.componentInstance.filter()).toBe('');
+      expect(box.value).toBe('');
+    });
+  });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ComponentPage, LiveComponentNode } from '../../types.ts';
-import { componentOutlineText, listComponentsText, routedHosts } from '../component-outline.ts';
+import {
+  LIST_COMPONENTS_DESCRIPTION,
+  componentOutlineText,
+  listComponentsText,
+  routedHosts,
+} from '../component-outline.ts';
 
 const node = (
   id: string,
@@ -146,5 +151,25 @@ describe('list-components answer', () => {
     expect(listComponentsText([older, newer], () => undefined, { page: 'old' })).toContain(
       'Old <app-old> c1',
     );
+  });
+});
+
+describe('list-components description', () => {
+  it('describes the answers the tool gives', () => {
+    // No page answers with a note, not an empty result.
+    expect(listComponentsText([], () => undefined)).toMatch(/^No component tree has been reported/);
+    expect(LIST_COMPONENTS_DESCRIPTION).not.toMatch(/Empty when no page is connected/);
+    expect(LIST_COMPONENTS_DESCRIPTION).toContain('no component tree has been reported');
+    // Without `page` it skips a newer page with no tree and names the others.
+    const empty = page({ pageId: 'p2', roots: [], reportedAt: 5 });
+    const text = listComponentsText(
+      [page(), empty, page({ pageId: 'p3', reportedAt: 0 })],
+      () => undefined,
+    );
+    expect(text).toContain('Page `p1`');
+    expect(text).toContain('Other pages report a component tree too: `p3`');
+    expect(LIST_COMPONENTS_DESCRIPTION).toContain('most recent page that has a component tree');
+    expect(LIST_COMPONENTS_DESCRIPTION).toContain('names the other tabs');
+    expect(LIST_COMPONENTS_DESCRIPTION).toContain('(+N below)');
   });
 });

@@ -85,7 +85,7 @@ An offline HTML build of the panel over the source scan, written by `pangular bu
 _Avoid_: export, snapshot, static site
 
 **Redaction**:
-Masking values before they reach the panel or an agent: field names that look secret (plus `redaction.secretNames`), JWTs and bearer tokens. It runs in `serialize` and the redaction helpers, and `redaction.unmask` lists the names to show anyway.
+Masking values before they reach the panel or an agent: field names that look secret (plus `redaction.secretNames`), URL passwords, `Authorization` credentials (`Basic`, `Digest`, `Token`), JWTs and bearer tokens. It runs in `serialize` and the redaction helpers, and `redaction.unmask` lists the names to show anyway.
 _Avoid_: sanitizing, scrubbing, hiding
 
 **One-time code**:

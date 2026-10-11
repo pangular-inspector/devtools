@@ -93,3 +93,20 @@ describe('Analog project load', () => {
     expect(fixture.componentInstance.project()).not.toBeNull();
   });
 });
+
+describe('Analog route filter', () => {
+  it('clears on Escape', async () => {
+    const fixture = await render(client());
+    const box = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '#route-filter',
+    )!;
+    box.value = 'products';
+    box.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    expect(fixture.componentInstance.filter()).toBe('products');
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await settle(fixture);
+    expect(fixture.componentInstance.filter()).toBe('');
+    expect(box.value).toBe('');
+  });
+});
