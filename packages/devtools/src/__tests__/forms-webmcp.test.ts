@@ -289,3 +289,46 @@ describe('watchWebMcp', () => {
     });
   });
 });
+
+describe('WebMCP audit fixes', () => {
+  it('names the field nested past the depth limit', () => {
+    let deep: Record<string, unknown> = { leaf: 'x' };
+    for (let i = 0; i < 11; i++) deep = { a: deep };
+    const shape = inferShape(deep);
+    expect(shape.schema).toBeUndefined();
+    expect(shape.blocking).toEqual([
+      { path: 'a.a.a.a.a.a.a.a.a.a', reason: 'nested deeper than 10 levels' },
+    ]);
+  });
+
+  it('patches a modelContext added after the overlay loaded', async () => {
+    const watcher = watch();
+    expect(watcher.describe([]).page).toBeUndefined();
+    const { tools } = fakeContext();
+    expect(watcher.describe([]).page).toMatchObject({ modelContext: true });
+    await (navigator as any).modelContext.registerTool({
+      name: 'late',
+      description: 'Registered after load',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => ({ content: [] }),
+    });
+    expect(tools.has('late')).toBe(true);
+    expect(watcher.describe([]).page?.tools.map((t) => t.name)).toEqual(['late']);
+  });
+
+  it('counts only the synchronous part of a call as agent activity', async () => {
+    const { tools } = fakeContext();
+    const watcher = watch();
+    let release!: () => void;
+    await (navigator as any).modelContext.registerTool({
+      name: 'slow',
+      description: '',
+      inputSchema: { type: 'object', properties: {} },
+      execute: () => new Promise<void>((resolve) => (release = resolve)),
+    });
+    const pending = tools.get('slow')!.execute({});
+    expect(watcher.active()).toBe(false);
+    release();
+    await pending;
+  });
+});

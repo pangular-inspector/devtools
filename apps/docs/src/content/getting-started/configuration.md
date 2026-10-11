@@ -148,6 +148,8 @@ Actions are the writes that the panel and agents make to your app or the server.
 
 Pass `actions: false` to block every action, or an object to block some. Keys you leave out of the object stay on.
 
+`actions.forms` leaves the panel's **Record details** and **Store as global** on. They don't change the form: **Record details** wraps form methods to record who called them, and **Store as global** sets `$form` and `$control` in the page console only when the page has not defined them itself.
+
 The server refuses a blocked action. The panel disables its controls and shows a note that names the option, for example: **Navigating and clearing navigations is turned off in the devtools config (actions.router).**
 
 ### Redaction

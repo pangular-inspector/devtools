@@ -354,6 +354,21 @@ describe('panel actions', () => {
     expect(await invoke('get-http-rules', undefined)).toEqual([]);
   });
 
+  it('refuses a form action without formId unless it acts on the page', async () => {
+    const { ctx, invoke } = await boot();
+    const broadcast = vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: never) => {
+      const { requestId } = (options as { args: [{ requestId: string }] }).args[0];
+      await invoke('form-action-result', { requestId, result: { ok: true } });
+    }) as never);
+    expect(await invoke('request-form-action', { action: 'focus' })).toEqual({
+      ok: false,
+      error: 'focus needs a formId.',
+    });
+    expect(broadcast).not.toHaveBeenCalled();
+    expect(await invoke('request-form-action', { action: 'cancel-pick' })).toEqual({ ok: true });
+    expect(broadcast).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses a panel probe with router actions off and lets record and resolve lazy through', async () => {
     const { ctx, invoke } = await boot({ actions: { router: false } });
     const broadcast = vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: never) => {

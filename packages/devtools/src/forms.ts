@@ -166,6 +166,7 @@ const MAX_REDACT_WINDOW = 65536;
 const MAX_VALUE_ITEMS = 20;
 const MAX_VALUE_DEPTH = 3;
 const MAX_DETAIL = 120;
+const MAX_SHADOW_DEPTH = 32;
 
 type AnyRecord = Record<string, any>;
 
@@ -211,8 +212,53 @@ function uidOf(target: object): string {
   return uid;
 }
 
+const MAX_HASH_NODES = 10_000;
+
+/**
+ * A hash of the whole value, unclipped, so an edit past the display limits of
+ * `serializeFormValue` still counts as a change. Stops after `MAX_HASH_NODES` nodes.
+ */
+export function valueHash(value: unknown): string {
+  let hash = 0x811c9dc5;
+  let nodes = 0;
+  const mix = (text: string) => {
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+  };
+  const seen = new WeakSet<object>();
+  const visit = (item: unknown) => {
+    if (++nodes > MAX_HASH_NODES) return;
+    if (item === null || typeof item !== 'object') {
+      mix(`${typeof item}:${typeof item === 'function' ? 'ƒ' : String(item)};`);
+      return;
+    }
+    if (item instanceof Date) return mix(`date:${item.getTime()};`);
+    if (typeof Node !== 'undefined' && item instanceof Node) return mix(`node:${item.nodeName};`);
+    if (seen.has(item)) return mix('cycle;');
+    seen.add(item);
+    const entries: [unknown, unknown][] =
+      item instanceof Map
+        ? Array.from(item.entries())
+        : item instanceof Set
+          ? Array.from(item, (entry, index) => [index, entry])
+          : Object.keys(item)
+              .filter((key) => !key.startsWith('__ng'))
+              .map((key) => [key, read(() => (item as AnyRecord)[key], undefined)]);
+    mix(Array.isArray(item) ? `[${entries.length}` : `{${entries.length}`);
+    for (const [key, child] of entries) {
+      mix(`${String(key)}=`);
+      visit(child);
+    }
+    mix(Array.isArray(item) ? ']' : '}');
+  };
+  visit(value);
+  return (hash >>> 0).toString(36);
+}
+
 function changedOf(target: object, value: unknown, dirty: boolean): boolean | undefined {
-  const text = JSON.stringify(serializeFormValue(value)) ?? 'undefined';
+  const text = valueHash(value);
   if (!dirty || !baselines.has(target)) {
     baselines.set(target, text);
     return undefined;
@@ -772,17 +818,28 @@ export function formIdFor(label: string): string {
   return id || 'form';
 }
 
+/**
+ * Gives each form root a stable id for as long as it is on the page. Ids of roots that are
+ * gone are released, so a form recreated by a route round trip gets its old id back, and
+ * `~n` only tells apart forms that are on the page at the same time.
+ */
 export function createFormIds(pageId: string) {
   const assigned = new WeakMap<object, string>();
-  const used = new Set<string>();
+  const live = new Map<string, object>();
   return (forms: FoundForm[], labels: Map<object, string>): WeakMap<object, string> => {
+    const present = new Set(forms.map((form) => form.root));
+    for (const [id, root] of live) {
+      if (present.has(root)) continue;
+      live.delete(id);
+      assigned.delete(root);
+    }
     for (const form of forms) {
       if (assigned.has(form.root)) continue;
       const base = formIdFor(labels.get(form.root) ?? 'form');
       const stem = base.replace(/~\d+$/, '');
       let id = `${base}@${pageId}`;
-      for (let n = 2; used.has(id); n++) id = `${stem}~${n}@${pageId}`;
-      used.add(id);
+      for (let n = 2; live.has(id); n++) id = `${stem}~${n}@${pageId}`;
+      live.set(id, form.root);
       assigned.set(form.root, id);
     }
     return assigned;
@@ -823,6 +880,32 @@ function compatControls(root: AnyRecord): AnyRecord[] {
     }
   };
   visit(root);
+  return out;
+}
+
+/**
+ * Every element under `root`, including the ones inside open shadow roots, so forms in
+ * `ViewEncapsulation.ShadowDom` components are found. With an element, it comes first.
+ * `onShadowRoot` sees each shadow root on the way.
+ */
+export function pageElements(
+  root: Document | Element = document,
+  onShadowRoot?: (shadow: ShadowRoot) => void,
+): Element[] {
+  const out: Element[] = [];
+  const visit = (scope: Document | Element | ShadowRoot, depth: number) => {
+    const add = (el: Element) => {
+      out.push(el);
+      const shadow = el.shadowRoot;
+      if (shadow && depth < MAX_SHADOW_DEPTH) {
+        onShadowRoot?.(shadow);
+        visit(shadow, depth + 1);
+      }
+    };
+    if (scope instanceof Element) add(scope);
+    for (const el of Array.from(scope.querySelectorAll('*'))) add(el);
+  };
+  visit(root, 0);
   return out;
 }
 

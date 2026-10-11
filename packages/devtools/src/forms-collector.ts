@@ -5,6 +5,7 @@ import {
   diffForms,
   findFieldElement,
   findForms,
+  pageElements,
   createFormIds,
   formLabels,
   propertyHolding,
@@ -37,6 +38,7 @@ import {
 import { redactMessage } from './forms-privacy.ts';
 import { fieldPath, probeEveryTime } from './forms-read.ts';
 import { watchWebMcp } from './forms-webmcp.ts';
+import { FORMLESS_FORM_ACTIONS } from './config.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -123,16 +125,40 @@ export function attachForms(
   const assignIds = createFormIds(pageId);
   let ids = new WeakMap<object, string>();
   const idOf = (root: object) => ids.get(root) ?? `form@${pageId}`;
+  // Directive hosts from the last scan. Elements added since then are scanned on the next
+  // push; a full rescan runs at most once per heartbeat, as a safety net.
   let hosts: Element[] | null = null;
-  let hostsStale = true;
+  const added = new Set<Element>();
+  let lastFullScan = 0;
+  const observed = new WeakSet<Node>();
   const observer =
     typeof MutationObserver === 'function'
-      ? new MutationObserver(() => {
-          hostsStale = true;
+      ? new MutationObserver((records) => {
+          for (const record of records) {
+            for (const node of Array.from(record.addedNodes)) {
+              if (node.nodeType === 1) added.add(node as Element);
+            }
+          }
         })
       : null;
-  observer?.observe(document.documentElement, { childList: true, subtree: true });
+  const observe = (target: Node) => {
+    if (!observer || observed.has(target)) return;
+    observed.add(target);
+    observer.observe(target, { childList: true, subtree: true });
+  };
+  observe(document.documentElement);
+  const scanAll = () => pageElements(document, observe);
+  /** The elements worth scanning: the cached hosts plus what was added since the last scan. */
+  const knownElements = (): Element[] => {
+    if (!hosts || !observer) return scanAll();
+    const out = new Set(hosts.filter((el) => el.isConnected));
+    for (const el of added) {
+      if (el.isConnected) for (const inner of pageElements(el, observe)) out.add(inner);
+    }
+    return [...out];
+  };
   let lastForms: CollectedForm[] = [];
+  let lastRoots = new Map<string, object>();
   let lastPayload = '';
   let lastPushAt = 0;
   const formEvents: FormEvent[] = [];
@@ -237,9 +263,20 @@ export function attachForms(
   }
 
   function watchRoots(found: FoundForm[]) {
-    const live = new Set<object>();
+    const live = new Set(found.map((form) => form.root));
+    // Forget the forms that are gone first: a recreated form can take over their id.
+    for (const [root, { formId, stop }] of watched) {
+      if (live.has(root)) continue;
+      stop();
+      watched.delete(root);
+      forgetKeys(formId);
+    }
+    for (const [root, { formId }] of signalRoots) {
+      if (live.has(root)) continue;
+      unwrapSignalRoot(root);
+      forgetKeys(formId);
+    }
     for (const form of found) {
-      live.add(form.root);
       if (form.kind === 'signal') {
         wrapSignalSubmit(form);
         continue;
@@ -269,17 +306,6 @@ export function attachForms(
       if (!stop) continue;
       watched.set(form.root, { formId, stop });
       seedStatuses(formId, serializeControl(form.root, fieldElements));
-    }
-    for (const [root, { formId, stop }] of watched) {
-      if (live.has(root)) continue;
-      stop();
-      watched.delete(root);
-      forgetKeys(formId);
-    }
-    for (const [root, { formId }] of signalRoots) {
-      if (live.has(root)) continue;
-      unwrapSignalRoot(root);
-      forgetKeys(formId);
     }
   }
 
@@ -366,26 +392,27 @@ export function attachForms(
     try {
       const ng = getNg();
       if (!ng?.getDirectives) return;
-      const rescan = hostsStale || !hosts || !observer;
-      const found = findForms(
-        ng,
-        rescan ? document.querySelectorAll('*') : hosts!.filter((el) => el.isConnected),
-      );
-      if (rescan) {
-        hosts = found.hosts ?? null;
-        hostsStale = false;
-      }
+      const now = Date.now();
+      const full = !hosts || !observer || (added.size > 0 && now - lastFullScan >= HEARTBEAT_MS);
+      const found = findForms(ng, full ? scanAll() : knownElements());
+      if (full) lastFullScan = now;
+      added.clear();
+      hosts = found.hosts ?? null;
       const labels = formLabels(found.forms);
       ids = assignIds(found.forms, labels);
       foundById = new Map(found.forms.map((form) => [idOf(form.root), form]));
       fieldElements = found.elements;
       watchRoots(found.forms);
       const forms = collectForms(found, (root) => idOf(root));
-      const now = Date.now();
       for (const form of forms) stampPending(form.id, form.root, now);
       const streamed = new Set(Array.from(watched.values(), ({ formId }) => formId));
       const agentSincePush = webMcp.takeActivity();
-      for (const event of diffForms(lastForms, forms)) {
+      // A form recreated under the same id starts over instead of diffing against the old one.
+      const comparable = lastForms.filter(
+        (form) => lastRoots.get(form.id) === foundById.get(form.id)?.root,
+      );
+      lastRoots = new Map(found.forms.map((form) => [idOf(form.root), form.root]));
+      for (const event of diffForms(comparable, forms)) {
         if (!streamed.has(event.formId) || DIFFED_FOR_ALL.includes(event.type)) {
           const caller = signalCallers.get(event.formId);
           const origin: EventOrigin | undefined = devtoolsSincePush
@@ -540,8 +567,11 @@ export function attachForms(
         cancelPick = null;
         resolve(result);
       };
+      // The first node of the composed path, so fields inside open shadow roots can be picked.
+      const targetOf = (event: Event) => event.composedPath?.()[0] ?? event.target;
       const onHover = (event: Event) => {
-        if (event.target instanceof HTMLElement) highlight.show(event.target);
+        const target = targetOf(event);
+        if (target instanceof HTMLElement) highlight.show(target);
       };
       const onLeave = (event: MouseEvent) => {
         if (!event.relatedTarget) highlight.clear();
@@ -549,7 +579,8 @@ export function attachForms(
       const onClick = (event: Event) => {
         event.preventDefault();
         event.stopPropagation();
-        const target = event.target instanceof Element ? event.target : null;
+        const picked = targetOf(event);
+        const target = picked instanceof Element ? picked : null;
         const field =
           target?.closest('input, select, textarea, [formcontrolname], [ngmodel]') ?? target;
         finish(
@@ -647,13 +678,7 @@ export function attachForms(
       const found = foundById.get(target.formId);
       if (!found) return;
       try {
-        const el = findFieldElement(
-          ng,
-          document.querySelectorAll('*'),
-          found,
-          target.path,
-          fieldElements,
-        );
+        const el = findFieldElement(ng, knownElements(), found, target.path, fieldElements);
         if (el instanceof HTMLElement) highlight.show(el);
       } catch {
         return;
@@ -682,7 +707,9 @@ export function attachForms(
         return respond({ ok: false, error: 'Unknown form action.' });
       const request = message.request;
       if (request.formId && !foundById.has(request.formId) && request.action !== 'locate') return;
-      if (!request.formId && !foundById.size && request.action !== 'locate') return;
+      if (!request.formId && !FORMLESS_FORM_ACTIONS.includes(request.action)) {
+        return respond({ ok: false, error: `${request.action} needs a formId.` });
+      }
       if (request.action === 'locate') {
         let el: Element | null = null;
         try {
@@ -696,7 +723,7 @@ export function attachForms(
         ng,
         forms: foundById,
         elements: fieldElements,
-        all: () => document.querySelectorAll('*'),
+        all: knownElements,
       };
       if (request.action === 'instrument') return respond(setInstrumented(request.value !== false));
       if (request.action === 'pick') {

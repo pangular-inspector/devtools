@@ -334,6 +334,8 @@ When a write goes through a native `<select>` (`mode: user`, the default for `fi
 
 `form-action` accepts these actions: `set-value`, `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`, `touch-all`, `revalidate`, `reset`, `enable`, `disable`, `submit`, `focus`, `focus-first-invalid`, `store-as-global`, `snapshot`, `restore` and `instrument`.
 
+`form-action` and `fill-form` always act on the form `form` names. `store-as-global` does not overwrite a `$form` or `$control` that the page defined itself, unless you pass `force`.
+
 `snapshot` keeps a copy of the form value, so it refuses a form whose value cannot be cloned, such as a control that holds a function. `inspect-forms` with `includeValues: false` also leaves out uncommitted input, model drift and metadata.
 
 <ngmd-callout type="warning" title="Some actions need confirm">

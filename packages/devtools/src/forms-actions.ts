@@ -18,6 +18,7 @@ import {
 import { childPath, splitPath } from './forms-path.ts';
 import { fieldPath, submitSetup } from './forms-read.ts';
 import { clip } from './text.ts';
+import { FORMLESS_FORM_ACTIONS } from './config.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -101,6 +102,9 @@ const snapshots = new Map<
 >();
 
 const MAX_GUARDED_NODES = 5000;
+
+/** What `store-as-global` last wrote, so it only overwrites globals it set itself. */
+const storedGlobals = new Map<string, unknown>();
 
 export function secretInside(
   value: unknown,
@@ -404,7 +408,44 @@ function dispatchPick(element: Element): void {
   element.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-function nativeWrite(element: Element, value: unknown): boolean {
+const DATE_INPUTS = new Set(['date', 'datetime-local', 'time', 'month', 'week']);
+
+/**
+ * Writes a date or time input in its wire format. A string already in that format is
+ * written as is. A `Date`, a timestamp or another date string goes through `valueAsDate`
+ * (or `valueAsNumber` for `datetime-local`), in UTC like Signal Forms does. Returns a
+ * problem, and leaves the input as it was, when the value is not a valid date.
+ */
+function writeDateInput(element: HTMLInputElement, value: unknown): string | null {
+  const previous = element.value;
+  if (value == null || value === '') {
+    element.value = '';
+    return null;
+  }
+  let date: Date | number | null = null;
+  if (typeof value === 'string') {
+    element.value = value;
+    if (element.value) return null;
+    const time = Date.parse(value);
+    date = Number.isNaN(time) ? null : new Date(time);
+  } else if (value instanceof Date || typeof value === 'number') date = value;
+  if (date !== null && !Number.isNaN(Number(date))) {
+    read(() => {
+      if (typeof date === 'number' || element.type === 'datetime-local') {
+        element.valueAsNumber = Number(date);
+      } else element.valueAsDate = date;
+    }, undefined);
+    if (element.value) return null;
+  }
+  element.value = previous;
+  return `is a ${element.type} input and ${label(value)} is not a valid ${element.type} value`;
+}
+
+/**
+ * Writes a native input or textarea and fires its events. Returns false when the element
+ * can't be written this way, or a problem when the value doesn't fit the input.
+ */
+function nativeWrite(element: Element, value: unknown): boolean | string {
   if (element instanceof HTMLInputElement) {
     if (element.type === 'file') return false;
     if (element.type === 'checkbox') {
@@ -424,7 +465,10 @@ function nativeWrite(element: Element, value: unknown): boolean {
       dispatchPick(target);
       return true;
     }
-    element.value = value == null ? '' : String(value);
+    if (DATE_INPUTS.has(element.type)) {
+      const problem = writeDateInput(element, value);
+      if (problem) return problem;
+    } else element.value = value == null ? '' : String(value);
     element.dispatchEvent(new Event('input', { bubbles: true }));
     element.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
@@ -545,7 +589,9 @@ function writeValue(
       ? null
       : `holds ${label(stored)} after the write`;
   }
-  if (viaDom && nativeWrite(element, value)) {
+  const written = viaDom ? nativeWrite(element, value) : false;
+  if (typeof written === 'string') return written;
+  if (viaDom && written) {
     if (mode === 'user') element.dispatchEvent(new Event('blur'));
     const picked =
       element instanceof HTMLInputElement &&
@@ -688,7 +734,10 @@ export async function runFormAction(
     if (!request.selector) return fail('Pass a CSS selector.');
     return locate(ctx, request.selector);
   }
-  const found = request.formId ? ctx.forms.get(request.formId) : ctx.forms.values().next().value;
+  if (!request.formId && !FORMLESS_FORM_ACTIONS.includes(request.action)) {
+    return fail(`${request.action} needs a formId.`);
+  }
+  const found = request.formId ? ctx.forms.get(request.formId) : undefined;
   if (!found) return fail(`No form ${request.formId ?? ''} on this page.`);
   if (CONFIRM_ACTIONS.includes(request.action) || (request.action === 'fill' && request.submit)) {
     if (request.confirm !== true) {
@@ -896,8 +945,18 @@ async function perform(
     case 'store-as-global': {
       const target = signal ? read(() => found.root['fieldTree'], found.root) : found.root;
       const w = window as unknown as AnyRecord;
+      const taken = (['$form', '$control'] as const).find(
+        (name) => w[name] !== undefined && w[name] !== storedGlobals.get(name),
+      );
+      if (taken && !request.force) {
+        return fail(
+          `The page already defines ${taken}, so it was not overwritten. Call again with force: true to replace it.`,
+        );
+      }
       w['$form'] = target;
       w['$control'] = signal ? read(() => nodeAt(found, path, true)?.['fieldTree'], null) : node();
+      storedGlobals.set('$form', w['$form']);
+      storedGlobals.set('$control', w['$control']);
       const expression = expressionFor(found, path);
       return {
         ok: true,

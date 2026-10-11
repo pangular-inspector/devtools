@@ -387,6 +387,14 @@ export function pickPangularConfig<T extends PangularConfig>(
   return { config: { inspectors, agent, actions, redaction, limits }, rest };
 }
 
+/** Form actions that work without a `formId`: they act on the page, not on one form. */
+export const FORMLESS_FORM_ACTIONS: readonly string[] = [
+  'locate',
+  'pick',
+  'cancel-pick',
+  'instrument',
+];
+
 /** Form actions that change the form or its validity, as opposed to reading or focusing it. */
 export const FORM_WRITE_ACTIONS: readonly string[] = [
   'set-value',
