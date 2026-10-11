@@ -110,16 +110,35 @@ The panel follows the color scheme of the hub, which follows your system unless 
 
 ### Docks in the side rail
 
-When the page's server mounts the hub (`/__devframes/`), the button opens the whole hub. A side rail shows one dock per tool:
+When the page's server mounts the hub (`/__devframes/`), the button opens the whole hub. A side rail shows **All tools** first, then one dock per tool:
 
 | Dock           | Shows                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| All tools      | The full panel, with every tab in one tab bar (`/__devframes/pangular/`)                                                                     |
 | Angular        | Dashboard, Components, Routes, Signals, Injectors, Forms, Pipes, and SSR & HTTP                                                              |
 | NgRx           | The Store tab                                                                                                                                |
 | Analog         | The Analog tab, or a notice in apps that do not use Analog                                                                                   |
 | Angular Native | Components, Signals, Injectors and Store for a connected [Angular Native](./angular-native.md) app, or a setup notice when none is connected |
 | NativeScript   | Setup steps for [NativeScript apps](../guides/nativescript.md)                                                                               |
 | Capacitor      | Plugin calls of a connected [Capacitor app](../inspectors/capacitor.md), or setup steps when none is connected                               |
+
+### The full panel
+
+**All tools** opens the whole panel, the same as `/__devframes/pangular/`: the Dashboard and every tab in one tab bar, including the Store, Analog and Capacitor tabs. The rail keeps **All tools** when you turn inspectors off.
+
+A single dock has an **Open full panel** link in its header. It opens the full panel in the same frame and selects **All tools** in the rail. From the NgRx, Analog and Capacitor docks it lands on the matching tab (`#tab=store`, `#tab=analog`, `#tab=capacitor`). From the Angular and Angular Native docks it lands on the tab you had open. The link shows only on a single view (a URL with `?view=`), so the full panel, the Chrome extension and the popup without the hub don't have it. Outside the hub, it loads the full panel in place of the view.
+
+### Setup badges
+
+The Analog, Angular Native and Capacitor docks open setup steps when their tool has nothing to show. Their rail entry then carries a **setup** badge, and its tooltip says why:
+
+| Dock           | Tooltip with the badge             | The badge goes away when             |
+| -------------- | ---------------------------------- | ------------------------------------ |
+| Analog         | `Analog: not an Analog app`        | The server restarts in an Analog app |
+| Angular Native | `Angular Native: no app connected` | An Angular Native app reports        |
+| Capacitor      | `Capacitor: no app connected`      | A Capacitor app reports              |
+
+The badge comes back when the app stops reporting and its data expires. The Angular and NgRx docks have no badge. The NativeScript dock always shows setup steps, because a NativeScript app's data shows in the Angular dock, so it has no badge either.
 
 ### Full-page viewer
 
@@ -147,6 +166,7 @@ The URL hash selects a tab. Open `/__devframes/pangular/#tab=signals` to land on
 | Pipes      | `#tab=pipes`      |
 | SSR & HTTP | `#tab=network`    |
 | Analog     | `#tab=analog`     |
+| Capacitor  | `#tab=capacitor`  |
 
 ### Last tab
 
