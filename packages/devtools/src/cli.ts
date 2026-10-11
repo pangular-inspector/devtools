@@ -4,6 +4,15 @@ import process from 'node:process';
 import type { CAC, Command } from 'cac';
 import { defineDevframe } from 'devframe';
 import { createCac } from 'devframe/adapters/cac';
+import { createDevServer, resolveDevServerPort } from 'devframe/adapters/dev';
+import {
+  accessLines,
+  cliAccess,
+  networkAddresses,
+  setupSnippetLines,
+  type CliAccess,
+  type CliAccessFlags,
+} from './cli-access.ts';
 import pangular, { createPangular } from './devframe.ts';
 import type { PangularConfig } from './config.ts';
 import pkg from '../package.json' with { type: 'json' };
@@ -72,7 +81,7 @@ export function guardReportOutDir(cli: CAC, invokedFrom = process.cwd()) {
   });
 }
 
-export interface PangularCliFlags {
+export interface PangularCliFlags extends CliAccessFlags {
   root?: string;
   config?: string;
   readOnly?: boolean;
@@ -191,6 +200,8 @@ export function createPangularCli(options: PangularCliOptions = {}) {
   let current = createPangular();
   let requestedPort: number | undefined;
   let mcpOn = true;
+  let access: CliAccess = { allowedOrigins: [], authTokens: [] };
+  let listenHost = 'localhost';
   const definition = defineDevframe({
     ...pangular,
     cli: { ...pangular.cli, command: 'pangular' },
@@ -199,14 +210,25 @@ export function createPangularCli(options: PangularCliOptions = {}) {
 
   const prepare = (command: string, flags: PangularCliFlags) => {
     const root = resolveCliRoot(flags, env);
-    const config = loadCliConfig(flags, root, env);
+    // `allowedOrigins` is a server option, so it stays out of the published config.
+    const { allowedOrigins: fileOrigins, ...config } = loadCliConfig(
+      flags,
+      root,
+      env,
+    ) as PangularConfig & {
+      allowedOrigins?: unknown;
+    };
+    access = cliAccess(flags, fileOrigins, env);
     if (root !== process.cwd()) process.chdir(root);
     if (!looksLikeAngularProject(root)) {
       console.error(
         `[pangular] ${root} has no angular.json and no package.json that depends on @angular/core, so the source scans find nothing. Pass --root <dir> or set PANGULAR_ROOT to your project folder.`,
       );
     }
-    current = createPangular(config, { pageTools: command !== 'mcp' });
+    current = createPangular(config, {
+      pageTools: command !== 'mcp',
+      authTokens: command === 'mcp' ? [] : access.authTokens,
+    });
   };
 
   const configureCli = (cli: CAC) => {
@@ -214,14 +236,35 @@ export function createPangularCli(options: PangularCliOptions = {}) {
     cli.option('--root <dir>', 'Project folder to scan (default: the working directory)');
     cli.option('--config <file>', `Devtools config as JSON (default: ${PANGULAR_CONFIG_FILE})`);
     cli.option('--read-only', 'Drop the agent tools that act on the page or the server');
+    cli.option(
+      '--allowed-origin <origin>',
+      'An extra origin allowed to reach the server, such as http://192.168.1.20:8100 (repeat for more)',
+    );
+    cli.option(
+      '--auth-token <token>',
+      'A pairing token a client may send instead of the one-time code (repeat for more; prefer PANGULAR_AUTH_TOKEN)',
+    );
     const defaultCommand = cli.commands.find((command) => command.isDefaultCommand);
-    const startDev = defaultCommand?.commandAction;
-    if (defaultCommand && startDev) {
-      const run = async (flags: PangularCliFlags & { port?: number; mcp?: boolean }) => {
+    if (defaultCommand) {
+      const run = async (
+        flags: PangularCliFlags & { port?: number; host?: string; mcp?: boolean },
+      ) => {
         prepare('dev', flags);
         requestedPort = flags.port === undefined ? undefined : Number(flags.port);
         mcpOn = flags.mcp !== false;
-        await startDev([], flags);
+        listenHost = flags.host ?? 'localhost';
+        // createCac's own dev action, plus the origins it does not forward.
+        const port =
+          requestedPort ??
+          (await resolveDevServerPort(definition, { host: listenHost, defaultPort: DEFAULT_PORT }));
+        await createDevServer(definition, {
+          host: listenHost,
+          port,
+          flags: flags as Record<string, unknown>,
+          mcp: flags.mcp ?? true,
+          ...(access.allowedOrigins.length ? { allowedOrigins: access.allowedOrigins } : {}),
+          onReady,
+        });
       };
       copyCommand(cli, defaultCommand, 'dev', 'Start a local dev server (the default)').action(run);
       defaultCommand.description = 'Same as dev';
@@ -245,13 +288,26 @@ export function createPangularCli(options: PangularCliOptions = {}) {
     }
   };
 
+  const onReady = async ({ origin, port }: { origin: string; port: number }) => {
+    const lines = [
+      ...startupLines(origin, port, { mcp: mcpOn, requestedPort }),
+      ...accessLines(access),
+    ];
+    const addresses = networkAddresses(listenHost);
+    if (addresses.length) {
+      const meta = await fetch(`http://${addresses[0]}:${port}/__connection.json`)
+        .then((response) => (response.ok ? response.json() : undefined))
+        .catch(() => undefined);
+      lines.push(...setupSnippetLines(addresses, port, meta, access.authTokens.length > 0));
+    }
+    log(`\n${lines.join('\n')}\n`);
+  };
+
   const { cli } = createCac(definition, {
     mcp: true,
     defaultPort: DEFAULT_PORT,
     configureCli,
-    onReady: ({ origin, port }) => {
-      log(`\n${startupLines(origin, port, { mcp: mcpOn, requestedPort }).join('\n')}\n`);
-    },
+    onReady,
   });
   cli.globalCommand.versionNumber = pkg.version;
 
