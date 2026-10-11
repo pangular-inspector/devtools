@@ -294,6 +294,16 @@ describe('forms MCP tools', () => {
     expect(await call('explain-submit', {})).toContain('2 forms match');
   });
 
+  it('explain-form-invalid and form-payload narrow to a path', async () => {
+    const { call } = await withForms();
+    const explained = await call('explain-form-invalid', { form: 'Signup', path: 'email' });
+    expect(explained).toContain('[email] is not a valid email address');
+    expect(explained).not.toContain('validators now report min');
+    expect(await call('form-payload', { form: 'Signup', path: 'password' })).toContain(
+      'form.value at `password`: "[redacted]"',
+    );
+  });
+
   it('form-payload shows what value drops and what Signal Forms keeps', async () => {
     const { call } = await withForms();
     const reactive = await call('form-payload', { form: 'Signup' });
