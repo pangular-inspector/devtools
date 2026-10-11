@@ -608,7 +608,10 @@ const pangular = defineDevframe({
         const requestId = `a${++actionSeq}`;
         const timer = setTimeout(() => {
           pendingActions.delete(requestId);
-          resolve({ error: 'No page answered within 15s. Is the app open in a browser?' });
+          resolve({
+            error:
+              'No page answered within 15s. Is the app open in a browser, or the device app in the foreground?',
+          });
         }, 15_000);
         timer.unref?.();
         pendingActions.set(requestId, (result) => {
@@ -1223,7 +1226,7 @@ const pangular = defineDevframe({
           pendingFormActions.delete(requestId);
           resolve({
             ok: false,
-            error: `No page answered within ${Math.round(timeoutMs / 1000)}s. Is the app open in a browser, with that form on screen?`,
+            error: `No page answered within ${Math.round(timeoutMs / 1000)}s. Is the app open in a browser (or the device app in the foreground), with that form on screen?`,
           });
         }, timeoutMs);
         timer.unref?.();
@@ -1461,7 +1464,11 @@ const pangular = defineDevframe({
           const requestId = `pick${++pickSeq}`;
           const timer = setTimeout(() => {
             pendingPicks.delete(requestId);
-            resolve({ ok: false, error: 'The page did not answer. Is the app still open?' });
+            resolve({
+              ok: false,
+              error:
+                'The page did not answer. Is the app still open in a browser, or the device app in the foreground?',
+            });
           }, 20_000);
           timer.unref?.();
           pendingPicks.set(requestId, (result) => {
@@ -1679,7 +1686,10 @@ const pangular = defineDevframe({
         const requestId = `n${++ngrxSeq}`;
         const timer = setTimeout(() => {
           pendingNgrx.delete(requestId);
-          resolve({ error: 'No page answered within 10s. Is the app open in a browser?' });
+          resolve({
+            error:
+              'No page answered within 10s. Is the app open in a browser, or the device app in the foreground?',
+          });
         }, 10_000);
         timer.unref?.();
         pendingNgrx.set(requestId, (result) => {
@@ -2981,7 +2991,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:list-pages',
       description:
-        'List the browser tabs and Angular Native apps that report live data to this server, newest first: page id, URL, title, platform (`browser` or `Angular Native`), seconds since the last report (marked `background` for a tab in the background, which stops reporting until shown again) and which inspectors report. The URL comes from the HTTP or router report, or from the component tree when those have none. Pass a page id as `page` to the live tools to pick a page; without it they use the most recent page.',
+        'List the browser tabs, Angular Native apps and Capacitor apps that report live data to this server, newest first: page id, URL, title, platform (`browser`, `Angular Native`, or `Capacitor (android)` / `Capacitor (ios)` for an app in a native WebView), seconds since the last report (marked `background` for a tab in the background, which stops reporting until shown again) and which inspectors report. The URL comes from the HTTP or router report, or from the component tree when those have none. Pass a page id as `page` to the live tools to pick a page; without it they use the most recent page.',
       safety: 'read',
       inputSchema: { type: 'object', properties: {} },
       handler: async () => {
@@ -2997,6 +3007,11 @@ const pangular = defineDevframe({
         const platforms = new Map<string, string>();
         for (const page of componentPages.values()) {
           if (page.platform) platforms.set(page.pageId, page.platform);
+        }
+        for (const page of capacitorPages.values()) {
+          if (page.info.bridge && !platforms.has(page.pageId)) {
+            platforms.set(page.pageId, `capacitor-${page.info.platform}`);
+          }
         }
         const withUrl = <T extends { pageId: string; reportedAt: number }>(pages: Iterable<T>) =>
           [...pages].map((page) => ({

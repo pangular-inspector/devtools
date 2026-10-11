@@ -302,6 +302,139 @@ describe('list-capacitor-plugins', () => {
     const { plugins } = await boot();
     expect(await plugins()).toMatch(/No Capacitor app reports to this server/);
   });
+
+  it('answers a page argument that names no Capacitor page with the ones that report', async () => {
+    const { push, plugins } = await boot();
+    await push('push-capacitor', report());
+    const text = await plugins({ page: 'nope' });
+    expect(text).toContain('No page `nope` is reporting Capacitor plugins');
+    expect(text).toContain('`cap1`');
+  });
+
+  it('says so when the app has no plugins', async () => {
+    const { push, plugins } = await boot();
+    await push('push-capacitor', report({ info: { ...info, plugins: [] } }));
+    expect(await plugins()).toContain('No plugins are registered or installed.');
+  });
+
+  it('shows an unknown CapacitorHttp state and imported state as unknown', async () => {
+    const { push, plugins } = await boot();
+    await push(
+      'push-capacitor',
+      report({
+        info: {
+          ...info,
+          env: { ...info.env, capacitorHttp: null },
+          plugins: [
+            { name: 'Camera', available: true, registered: null, native: true, methods: [] },
+          ],
+        },
+      }),
+    );
+    const text = await plugins();
+    expect(text).toContain('CapacitorHttp unknown');
+    expect(text).toMatch(/`Camera` \| yes \| unknown \| yes \|/);
+  });
+
+  it('is gone with the inspector turned off', async () => {
+    const { ctx } = await boot(createPangular({ inspectors: { capacitor: false } }));
+    const tools = ctx.agent.list().tools.map((entry: { id: string }) => entry.id);
+    expect(tools).not.toContain('pangular:list-capacitor-plugins');
+  });
+});
+
+describe('capacitor tools across pages and long answers', () => {
+  const webInfo: CapacitorInfo = { ...info, platform: 'web', native: false, bridge: false };
+
+  it('answers for the device, not a newer desktop tab, and names the other pages', async () => {
+    const { push, tool, plugins } = await boot();
+    await push('push-capacitor', report({ calls: [call(1)] }));
+    await push('push-capacitor', report({ pageId: 'desk', url: '/home', info: webInfo }));
+    const calls = await tool();
+    expect(calls).toContain('Page `cap1` (`/trips`): platform `android`, native.');
+    expect(calls).toContain('Other pages report too: `desk` (web, `/home`).');
+    expect(await plugins()).toContain('Other pages report too: `desk` (web, `/home`).');
+    const asked = await tool({ page: 'desk' });
+    expect(asked).toContain('Page `desk`');
+    expect(asked).not.toContain('Other pages report too');
+  });
+
+  it('labels a native Capacitor page in list-pages', async () => {
+    const { ctx, push } = await boot();
+    await push('push-capacitor', report());
+    await push('push-capacitor', report({ pageId: 'desk', info: webInfo }));
+    const text = ((await ctx.agent.invoke('pangular:list-pages', {})) as { markdown: string })
+      .markdown;
+    expect(text).toMatch(/\| `cap1` \|.*\| Capacitor \(android\) \|/);
+    expect(text).toMatch(/\| `desk` \|.*\| browser \|/);
+  });
+
+  it('counts the time a pending call has waited for slowMs', async () => {
+    const { push, tool } = await boot();
+    await push(
+      'push-capacitor',
+      report({
+        calls: [
+          call(1, { status: 'pending', durationMs: undefined, startedAt: Date.now() - 9_000 }),
+          call(2, { method: 'checkPermissions', durationMs: 5 }),
+        ],
+      }),
+    );
+    const text = await tool({ slowMs: 5_000 });
+    expect(text).toContain('`Camera.getPhoto()`');
+    expect(text).not.toContain('checkPermissions');
+  });
+
+  it('cuts a long answer and lists at most 20 methods a plugin', async () => {
+    const { push, tool, plugins } = await boot();
+    const big = 'x'.repeat(390);
+    await push(
+      'push-capacitor',
+      report({
+        info: {
+          ...info,
+          plugins: Array.from({ length: 150 }, (_, at) => ({
+            name: `Plugin${at}`,
+            available: true,
+            registered: true,
+            native: true,
+            methods: Array.from({ length: 30 }, (_, m) => `method${m}WithALongName`),
+          })),
+        },
+        calls: Array.from({ length: 200 }, (_, at) =>
+          call(at + 1, { args: { a: big, b: big }, result: { c: big } }),
+        ),
+      }),
+    );
+    const calls = await tool({ limit: 200 });
+    expect(calls.length).toBeLessThanOrEqual(20_000);
+    expect(calls).toMatch(
+      /\(truncated; pass `page`, `plugin`, `failed`, `slowMs` or a smaller `limit`\)$/,
+    );
+    const list = await plugins();
+    expect(list.length).toBeLessThanOrEqual(20_000);
+    expect(list).toContain('`method19WithALongName` +10 more');
+    expect(list).not.toContain('method20WithALongName');
+  });
+
+  it('puts the web-calls notice in its own paragraph', async () => {
+    const { push, tool } = await boot();
+    await push('push-capacitor', report());
+    expect(await tool()).toContain('platform `android`, native.\n\nOnly native calls are logged');
+  });
+
+  it('says how many calls the page and the server dropped', async () => {
+    const { push, tool } = await boot();
+    await push('push-capacitor', report({ calls: [call(1)], dropped: 7 }));
+    expect(await tool()).toContain('7 older calls were dropped (`limits.capacitorCalls`).');
+  });
+
+  it('names both entry points when no app reports', async () => {
+    const { tool } = await boot();
+    const text = await tool();
+    expect(text).toContain('`@pangular-inspector/devtools/overlay`');
+    expect(text).toContain('`@pangular-inspector/devtools/overlay-manual`');
+  });
 });
 
 describe('capacitor page store', () => {

@@ -41,7 +41,7 @@ If `page` names a tab that doesn't report that data, the tool answers `No page <
 
 ### list-pages
 
-Lists the tabs and [Angular Native](../getting-started/angular-native.md) apps that report to the server, newest first: page id, URL, title, platform (`browser` or `Angular Native`), seconds since the last report, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
+Lists the tabs, [Angular Native](../getting-started/angular-native.md) apps and [Capacitor](../guides/capacitor.md) apps that report to the server, newest first: page id, URL, title, platform (`browser`, `Angular Native`, or `Capacitor (android)` and `Capacitor (ios)` for an app in a native WebView), seconds since the last report, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
 
 The URL comes from the HTTP or router report. A page that sends neither (no router, and no [HTTP setup](../getting-started/express.md)) still shows the URL its component tree reports, which also stands in when the other reports are more than 15 seconds older. A tab in the background stops reporting until it is shown again, so its last report is marked `(background)`: an old time there means the data is the last known state, not that the page is gone.
 
@@ -416,7 +416,7 @@ These tools read what a Capacitor app reported: its platform, its plugins and th
 | `list-capacitor-calls`   | Plugin calls, newest first: plugin and method, `native` or `web`, arguments, the result or the error with its code, and the duration. Marks **not implemented** calls and streams, and ends with the active listeners and their event counts. | `plugin`, `failed`, `slowMs`, `limit` |
 | `list-capacitor-plugins` | The platform, the server URL, whether CapacitorHttp and native logging are on, the WebView user agent, and each plugin: available, imported, installed natively, its native methods, and a hint when they disagree.                           | none                                  |
 
-`plugin` keeps calls to one plugin, ignoring case. `failed` keeps calls that failed. `slowMs` keeps calls that took at least that many milliseconds. `limit` defaults to 30 (at most 200). Native calls are logged on iOS and Android. Calls a web implementation answers are logged only when the app loads `@pangular-inspector/devtools/capacitor-hook` before `@capacitor/core`, and the answer says so when it doesn't. Arguments, results and errors are masked with the server's redaction too.
+`plugin` keeps calls to one plugin, ignoring case. `failed` keeps calls that failed. `slowMs` keeps calls that took at least that many milliseconds, counting a pending call's time so far. `limit` defaults to 30 (at most 200). Without `page`, both tools answer for the most recent page with a native bridge, so a desktop tab of the same app doesn't hide the device, and they name the other pages that report. A long answer is cut at about 20,000 characters with a note on how to narrow it, and a plugin lists its first 20 methods. Native calls are logged on iOS and Android. Calls a web implementation answers are logged only when the app loads `@pangular-inspector/devtools/capacitor-hook` before `@capacitor/core`, and the answer says so when it doesn't. Arguments, results and errors are masked with the server's redaction too.
 
 ## Analog
 
