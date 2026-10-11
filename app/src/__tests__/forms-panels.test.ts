@@ -86,7 +86,48 @@ describe('FormsLint', () => {
     await settle(fixture);
     expect(text(fixture)).toContain('No problems found');
   });
+
+  it('turns a finding path into a Show field button and leaves form-level findings as text', async () => {
+    const fixture = TestBed.createComponent(FormsLint);
+    fixture.componentRef.setInput('formId', form.id);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(() => Promise.resolve(lintFindings)),
+    );
+    const shown: string[] = [];
+    fixture.componentInstance.showField.subscribe((path) => shown.push(path));
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const items = host.querySelectorAll('.findings li');
+    expect(items).toHaveLength(2);
+    expect(items[1].querySelector('button')).toBeNull();
+
+    const link = items[0].querySelector<HTMLButtonElement>('button.summary-link');
+    expect(link?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Show field address.zip');
+    link!.click();
+    expect(shown).toEqual(['address.zip']);
+  });
 });
+
+const lintFindings = [
+  {
+    rule: 'missing-label',
+    severity: 'warning',
+    form: 'signup@p1',
+    label: 'Signup.form',
+    path: 'address.zip',
+    message: 'The input has no label.',
+    fix: 'Add a label.',
+  },
+  {
+    rule: 'no-submit',
+    severity: 'info',
+    form: 'signup@p1',
+    label: 'Signup.form',
+    message: 'The form has no submit button.',
+    fix: 'Add a submit button.',
+  },
+];
 
 describe('FormsSubmit', () => {
   it('shows a failure instead of loading forever when the explain call fails', async () => {
@@ -423,6 +464,46 @@ describe('FormsInspector error summary', () => {
     await settle(fixture);
     expect(inspector.filter()).toBe('nam');
     expect(inspector.fieldPath()).toBe('name');
+  });
+});
+
+describe('FormsInspector lint', () => {
+  it('opens the field of a finding on the Fields tab with focus on the detail heading', async () => {
+    const nested: CollectedForm = {
+      ...form,
+      root: {
+        ...form.root,
+        children: [
+          field('email'),
+          { ...field('address'), type: 'group', children: [field('address.zip')] },
+        ],
+      },
+    };
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient(
+        (name) => Promise.resolve(name.includes('lint') ? lintFindings : 'about zip'),
+        [nested],
+      ),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const inspector = fixture.componentInstance;
+    inspector.filter.set('email');
+    inspector.tab_.set('lint');
+    await settle(fixture);
+
+    expect(host.querySelectorAll('app-forms-lint button.summary-link')).toHaveLength(1);
+    button(fixture, 'Show field address.zip').click();
+    await settle(fixture);
+
+    expect(inspector.tab_()).toBe('fields');
+    expect(inspector.filter()).toBe('');
+    expect(inspector.fieldPath()).toBe('address.zip');
+    expect(host.querySelector('app-forms-field-detail')).not.toBeNull();
+    expect(document.activeElement?.id).toBe('forms-field-heading');
   });
 });
 
