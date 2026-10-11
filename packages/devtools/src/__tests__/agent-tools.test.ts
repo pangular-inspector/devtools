@@ -558,6 +558,43 @@ describe('agent tools', () => {
     expect(text).not.toContain('abc.def.ghi');
   });
 
+  it('registers list-http-calls and answers from the calls a page pushed', async () => {
+    const { ctx, push } = await boot();
+    const tool = ctx.agent.list().tools.find((t) => t.id === 'pangular:list-http-calls');
+    expect(tool?.safety).toBe('read');
+    const list = async (args: Record<string, unknown> = {}) =>
+      ((await ctx.agent.invoke('pangular:list-http-calls', args)) as { markdown: string }).markdown;
+    expect(await list()).toMatch(/No HttpClient calls recorded/);
+    await push('push-http', {
+      pageId: 'p1',
+      url: '/items',
+      initialUrl: '/items',
+      title: 'Items',
+      hydration: null,
+      full: true,
+      calls: [
+        {
+          id: 'c1',
+          url: '/api/items?api_key=s3cr3t-value-123',
+          method: 'GET',
+          status: 500,
+          durationMs: 8,
+          side: 'client',
+          cacheHit: false,
+          faulted: true,
+          at: Date.now(),
+        },
+      ],
+      payload: { found: false, size: 0, entries: [] },
+    });
+    const text = await list({ failed: true });
+    expect(text).toMatch(/\| client \| GET `\/api\/items\?api_key=[^`]*` \| 500 \|/);
+    expect(text).not.toContain('s3cr3t-value-123');
+    expect(await list({ page: 'gone' })).toMatch(
+      /^No page `gone` is reporting HTTP calls\. Pages that report HTTP calls: `p1`/,
+    );
+  });
+
   it('expires injector trees a page stopped reporting', async () => {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     const { push, call } = await boot();
