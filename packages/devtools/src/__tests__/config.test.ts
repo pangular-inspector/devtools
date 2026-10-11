@@ -230,6 +230,8 @@ describe('agent tool and RPC registration', () => {
         'form-action',
         'highlight',
         'navigate',
+        'remove-http-rule',
+        'set-http-rule',
       ].sort(),
     );
     expect(tools).toContain('inspect-forms');
@@ -244,7 +246,14 @@ describe('agent tool and RPC registration', () => {
   it('drops the agent tools of a blocked action and keeps the rest', async () => {
     const forms = await boot({ actions: { forms: false } });
     expect(forms.actionTools.sort()).toEqual(
-      ['analog-call-api', 'dispatch-ngrx-action', 'highlight', 'navigate'].sort(),
+      [
+        'analog-call-api',
+        'dispatch-ngrx-action',
+        'highlight',
+        'navigate',
+        'remove-http-rule',
+        'set-http-rule',
+      ].sort(),
     );
     expect(forms.tools).toEqual(expect.arrayContaining(['inspect-forms', 'form-history']));
     const router = await boot({ actions: { router: false } });
@@ -257,6 +266,10 @@ describe('agent tool and RPC registration', () => {
     const ngrx = await boot({ actions: { ngrx: false } });
     expect(ngrx.actionTools).not.toContain('dispatch-ngrx-action');
     expect(ngrx.tools).toContain('get-ngrx-store');
+    const http = await boot({ actions: { http: false } });
+    expect(http.actionTools).not.toContain('set-http-rule');
+    expect(http.actionTools).not.toContain('remove-http-rule');
+    expect(http.tools).toContain('list-http-rules');
   });
 
   it('leaves out the RPC functions, tools and resources of a disabled inspector', async () => {

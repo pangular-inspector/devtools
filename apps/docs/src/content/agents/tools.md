@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Fifty-five tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Fifty-eight tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -48,12 +48,12 @@ The URL comes from the HTTP or router report. A page that sends neither (no rout
 ### Action tools
 
 <ngmd-alert severity="important">
-  <code>highlight</code>, <code>navigate</code>, <code>dispatch-ngrx-action</code>, <code>form-action</code>, <code>fill-form</code> and <code>analog-call-api</code> act on the app. Every other tool is marked read-only for your client.
+  <code>highlight</code>, <code>navigate</code>, <code>dispatch-ngrx-action</code>, <code>form-action</code>, <code>fill-form</code>, <code>set-http-rule</code>, <code>remove-http-rule</code> and <code>analog-call-api</code> act on the app. Every other tool is marked read-only for your client.
 </ngmd-alert>
 
 ### Turn tools off
 
-The server decides which tools exist. Set `agent.readOnly` to drop the six action tools. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `actions.router` is the exception: `navigate` stays and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
+The server decides which tools exist. Set `agent.readOnly` to drop the eight action tools. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `actions.router` is the exception: `navigate` stays and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ## Source scan
 
@@ -93,6 +93,8 @@ The live detail of one component instance: inputs, outputs and whether a parent 
 
 A class name or tag that matches several instances answers for the first and lists the ids of all of them. When nothing matches and the page's tree stopped at a [limit](../inspectors/components.md#selection), `inspect-component` and `highlight` say which one, since the instance can be past it. Secret-looking values are redacted.
 
+The answer stops at 20,000 characters. Past that, each value longer than 1,000 characters shows only the start of its JSON, then each list (inputs, outputs, properties, listeners, directives, injected services, and the inputs and outputs of each directive) keeps fewer entries. A note names the cut values and says how many entries are not shown. The `detail` of the `component-tree` resource has every value in full.
+
 ### list-components
 
 The live component tree of one page as an indented outline, one line per instance: class name, host tag and instance id, as in `ProductCard <app-card> c12`. Reads: page.
@@ -121,6 +123,8 @@ The `@defer` blocks of each page: the component that holds each one, its state, 
 | `pageId` | no       | Same as `page`. |
 
 Without a development build, the page has no util to read defer blocks, and the answer says so.
+
+Each page lists at most 50 blocks in the table and 50 under **Needs attention**, with a note on how many more are not shown. The whole answer stops at 20,000 characters. If several tabs report, pass `page` to read one. The **Defer blocks** list on the [Components](../inspectors/components.md#defer-blocks) page has every block.
 
 ### change-detection
 
@@ -154,7 +158,7 @@ The answer also holds:
 
 The answer is cut at 20,000 characters. A graph that is too long first keeps fewer history entries per node, then keeps the first nodes that fit. A note under the JSON says how many history entries and nodes it left out. Pass `node` or `history: false` to see the rest.
 
-With `root` or a route path, the tool switches the page's graph to the effects of that injector and waits up to 1.5 seconds for it. If no injector matches, the answer lists the ones the page knows. On Angular 20.0, the answer says the live graph needs Angular 20.1 or later.
+With `root` or a route path, the tool asks the page for the effects of that injector and waits up to 1.5 seconds for the answer. It reads that graph once and leaves the Signals page on the target it shows. If no injector matches, the answer lists the ones the page knows. On Angular 20.0, the answer says the live graph needs Angular 20.1 or later.
 
 <ngmd-callout type="tip" title="One graph per page">
   The page reports one graph: the component picked on the Signals page or with <code>highlight</code>, otherwise the deepest component in the primary router outlet. Call <code>highlight</code> first to switch the graph to another component. Only signals a template or an effect has read appear.
@@ -284,13 +288,26 @@ Two arguments come up in almost every tool:
 | Tool                     | What it answers                                                                                                                                                                                                                                                                                                         | Arguments                                      |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | `inspect-forms`          | Without arguments, each form with its status and error count, plus WebMCP tool state for Signal Forms that set `experimentalWebMcpTool`. With `form`, its field tree: value, status, touched, dirty and errors, and a `webMcp` entry with the tool name, inputs, registration status, blocking fields and recent calls. | `form`, `path`, `onlyInvalid`, `includeValues` |
-| `explain-form-invalid`   | Which fields make a form invalid, and why: the failing validator, its message, the value and whether it was touched. Without `form`, every invalid or pending form.                                                                                                                                                     | `form`                                         |
+| `explain-form-invalid`   | Which fields make a form invalid, and why: the failing validator, its message, the value and whether it was touched. Without `form`, every invalid or pending form.                                                                                                                                                     | `form`, `path`                                 |
 | `explain-field`          | One field: where each error comes from, why validation is skipped, the binding and DOM facts like the label and visible error text.                                                                                                                                                                                     | `form`, `path`, or `selector` (a CSS selector) |
 | `explain-submit`         | What submit does, and why it might do nothing.                                                                                                                                                                                                                                                                          | `form`                                         |
-| `form-payload`           | What the form sends: `value` against `getRawValue()`, fields that are sent without validation, and which fields the user changed.                                                                                                                                                                                       | `form`                                         |
+| `form-payload`           | What the form sends: `value` against `getRawValue()`, fields that are sent without validation, and which fields the user changed.                                                                                                                                                                                       | `form`, `path`                                 |
 | `explain-custom-control` | How a field is bound to its element, and what is wrong with the binding, such as value drift or a missing `setDisabledState`.                                                                                                                                                                                           | `form`, `path`                                 |
 
 For "why is this form invalid", call `explain-form-invalid` first. The tools redact passwords and other secret-looking values.
+
+Answers about large forms are cut to keep an agent's context small. Each cut ends with a note on what was left out and how to narrow the answer:
+
+| Tool                   | Cap                                                                                                                                                                                                                                                                                                                         | Narrow with                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `inspect-forms`        | As many fields per form as fit in 20,000 characters, at most 200, taken level by level from the start of the tree. A group that lost fields carries `notShown` with the count. Values, error messages and metadata over 300 characters are cut. If not even one field fits, each form shows only its status and `notShown`. | `path`, `form` or `onlyInvalid`               |
+| `explain-form-invalid` | 100 problems per form, then `… and N more not shown`.                                                                                                                                                                                                                                                                       | `path`                                        |
+| `form-payload`         | 8,000 characters per value.                                                                                                                                                                                                                                                                                                 | `path`                                        |
+| `export-form`          | The same field cap as `inspect-forms` for a snapshot. A fixture, header included, fits in 20,000 characters, and its header lists at most 20 failing fields.                                                                                                                                                                | `inspect-forms` or `form-payload` with `path` |
+| `lint-forms`           | 100 findings.                                                                                                                                                                                                                                                                                                               | `form`                                        |
+| `form-diff`            | 100 changed fields.                                                                                                                                                                                                                                                                                                         | `form` or a later `since` marker              |
+
+With `path`, `inspect-forms`, `explain-form-invalid` and `form-payload` start at that group or field, so a cut part of the form can be read one group at a time.
 
 ### Track changes
 
@@ -364,6 +381,20 @@ These tools read the HttpClient calls that `withPangular()` recorded and the SSR
 
 `list-http-calls` lists every tab and the server when you leave out `page`. With `page`, it lists that tab and the server calls of the SSR request that served it. `url` keeps calls whose URL contains the text. `failed` keeps calls with a status of 400 or more, no response, an error, or a cancel. `limit` defaults to 30 (at most 200). `preview` adds each call's response preview. Secrets in URLs, errors and previews are masked, and `url` matches the masked URL.
 
+### Fault rules <ngmd-badge variant="alpha">Action</ngmd-badge>
+
+These tools read and change the rules of [Fault injection](../inspectors/ssr-http.md#fault-injection), the same rules the panel shows. Rules live on the devtools server and apply to every connected tab, so the tools take no `page`. Reads: page.
+
+| Tool               | What it does                                                                                                                                          | Arguments                                                                              |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `list-http-rules`  | Lists the rules in match order: id, on or off, method, URL pattern, where it applies (client, SSR or both) and its effect (status, delay, mock body). | none                                                                                   |
+| `set-http-rule`    | Adds a rule, or replaces the rule with `id`, and returns the saved rules.                                                                             | `pattern` (required), `id`, `method`, `target`, `status`, `delayMs`, `body`, `enabled` |
+| `remove-http-rule` | Removes the rule with `id` and returns the rules left.                                                                                                | `id` (required)                                                                        |
+
+`set-http-rule` checks its input the way the panel's form does. `pattern` is a substring or a glob where `*` matches anything, up to 500 characters. `target` is `client`, `server` or `both` (the default). `status` is one of the statuses the panel lists. `delayMs` runs from 0 to 10000. `body` is JSON text or a JSON value, up to 100,000 characters. A rule needs a `status`, a `delayMs` or a `body`, and there can be at most 50 rules. A rule that breaks one of these is refused with the reason, and nothing changes. A rule that applies to SSR takes effect on the next page load. Patterns and bodies in the answers are masked like recorded calls.
+
+With [`actions.http`](../getting-started/configuration.md#actions) set to `false`, `set-http-rule` and `remove-http-rule` are dropped, and `list-http-rules` says that no rule applies.
+
 ## Analog
 
 These tools cover *Analog apps. Most read your source. Some also read what the Vite plugin recorded.
@@ -415,7 +446,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 `devframe_state_read` reads the devtools' live shared state. Call it without arguments to list the keys, then with `key` to read a value as JSON.
 
-Use it for data that has no dedicated tool, such as fault rules and TransferState payloads (`pangular:http`, `pangular:http-payloads`) or live pipe usage (`pangular:pipe-usage`). See [Resources](./resources.md) for every key.
+Use it for data that has no dedicated tool, such as hydration data and TransferState payloads (`pangular:http`, `pangular:http-payloads`) or live pipe usage (`pangular:pipe-usage`). See [Resources](./resources.md) for every key.
 
 ## Where to next
 

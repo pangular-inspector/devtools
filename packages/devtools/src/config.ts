@@ -408,7 +408,7 @@ export const ACTION_TOOLS: Record<PangularAction, readonly string[]> = {
   forms: ['form-action', 'fill-form'],
   router: [],
   ngrx: ['dispatch-ngrx-action'],
-  http: [],
+  http: ['set-http-rule', 'remove-http-rule'],
   analog: ['analog-call-api'],
 };
 
@@ -446,6 +446,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'ping-signal-graph': 'signals',
   'forget-signal-page': 'signals',
   'select-signal-target': 'signals',
+  'signal-graph-peek-result': 'signals',
   'get-providers': 'injectors',
   'push-injector-tree': 'injectors',
   'ping-injector-tree': 'injectors',
@@ -533,6 +534,9 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'list-ssr-requests': 'http',
   'explain-ssr-request': 'http',
   'list-http-calls': 'http',
+  'list-http-rules': 'http',
+  'set-http-rule': 'http',
+  'remove-http-rule': 'http',
 };
 
 /**
@@ -583,6 +587,9 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'list-ssr-requests',
   'explain-ssr-request',
   'list-http-calls',
+  'list-http-rules',
+  'set-http-rule',
+  'remove-http-rule',
 ];
 
 export function isPageAgentEntry(id: string): boolean {

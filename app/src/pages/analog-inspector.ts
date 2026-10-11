@@ -1,6 +1,7 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -256,6 +257,11 @@ const LINT_TEXT: Record<string, { title: string; summary: string }> = {
   },
 };
 type Kind = 'all' | AnalogCall['kind'];
+
+/** Rows the call list renders at most, newest first. */
+const MAX_SHOWN_CALLS = 150;
+/** Calls the dev server keeps (`MAX_CALLS` in packages/devtools/src/analog-server-log.ts). */
+const MAX_SERVER_CALLS = 200;
 
 const STATIC_MESSAGES = new Set([
   'missing-default-export',
@@ -546,6 +552,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                 TransferState seed.
               </div>
             }
+            <h2 id="analog-calls-heading">Server calls</h2>
             <div class="calls-bar">
               <fieldset class="segmented">
                 <legend class="sr-only">Show calls of kind</legend>
@@ -555,6 +562,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                       type="radio"
                       name="analog-kind"
                       class="sr-only"
+                      [attr.data-kind]="k"
                       [checked]="kind() === k"
                       (change)="kind.set(k)"
                     />
@@ -562,15 +570,60 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   </label>
                 }
               </fieldset>
-              <button
-                type="button"
-                class="btn ghost"
-                [disabled]="!allCalls().length"
-                (click)="clearCalls()"
-              >
-                Clear calls
-              </button>
+              <div class="calls-actions">
+                <button
+                  type="button"
+                  class="btn ghost"
+                  [disabled]="!allCalls().length"
+                  (click)="clearCalls()"
+                >
+                  Clear calls
+                </button>
+                <span class="calls-message" role="status">{{ callsMessage() }}</span>
+              </div>
             </div>
+            <div class="call-filters" role="group" aria-label="Filter the server calls">
+              <div class="search">
+                <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+                <input
+                  id="analog-call-search"
+                  class="field"
+                  type="search"
+                  placeholder="Find a URL, path or function…"
+                  aria-label="Find a URL, path or function"
+                  autocomplete="off"
+                  spellcheck="false"
+                  [value]="callQuery()"
+                  (input)="callQuery.set($any($event.target).value)"
+                  (keydown.escape)="callQuery.set('')"
+                />
+              </div>
+              <label class="check">
+                <input
+                  type="checkbox"
+                  [checked]="failedOnly()"
+                  (change)="failedOnly.set($any($event.target).checked)"
+                />
+                Failed only
+              </label>
+              <span class="total" aria-live="polite"
+                >{{ matchingCalls().length }} of {{ allCalls().length }}</span
+              >
+            </div>
+            @if (shownCount() < matchingCalls().length || serverFull()) {
+              <p class="note">
+                @if (shownCount() < matchingCalls().length) {
+                  Showing the newest {{ shownCount() }} of {{ matchingCalls().length }}.
+                }
+                @if (serverFull()) {
+                  The dev server keeps only the newest {{ maxServerCalls }} calls and drops older
+                  ones.
+                }
+              </p>
+            }
             @if (calls().length) {
               <div class="table-wrap" role="region" aria-label="Server calls" tabindex="0">
                 <table>
@@ -645,6 +698,22 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                     }
                   </tbody>
                 </table>
+              </div>
+            } @else if (allCalls().length && callFiltered()) {
+              <div class="empty-box no-match" role="status">
+                <p class="empty-lead">No calls match.</p>
+                <p class="muted">
+                  @if (callQuery().trim()) {
+                    Nothing matches “{{ callQuery().trim() }}” with these filters.
+                  } @else {
+                    None of the {{ allCalls().length }} calls fit these filters.
+                  }
+                </p>
+                <div class="empty-actions">
+                  <button type="button" class="btn ghost" (click)="clearCallFilters()">
+                    Clear filters
+                  </button>
+                </div>
               </div>
             } @else {
               <div class="empty-box">
@@ -787,7 +856,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   [value]="apiBody()"
                   (input)="apiBody.set($any($event.target).value)"
                 ></textarea>
-                <label class="check"
+                <label class="check confirm-send"
                   ><input
                     type="checkbox"
                     [checked]="confirmSend()"
@@ -1875,6 +1944,73 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       justify-content: space-between;
       gap: 8px;
     }
+    .calls-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: center;
+    }
+    .calls-message {
+      color: var(--text-2);
+      font-size: 12.5px;
+    }
+    .call-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: center;
+    }
+    .search {
+      position: relative;
+      flex: 1 1 220px;
+      min-width: 0;
+    }
+    .search .field {
+      width: 100%;
+      padding-left: 34px;
+    }
+    .search-icon {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      width: 14px;
+      height: 14px;
+      transform: translateY(-50%);
+      fill: none;
+      stroke: var(--text-3);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      pointer-events: none;
+    }
+    .search:focus-within .search-icon {
+      stroke: var(--accent);
+    }
+    .call-filters .check {
+      flex: none;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .total {
+      flex: none;
+      color: var(--text-2);
+      font-size: 12px;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .note {
+      margin: 0;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+    .empty-actions {
+      display: flex;
+      justify-content: center;
+      margin-top: 8px;
+    }
     .segmented {
       display: inline-flex;
       flex-wrap: wrap;
@@ -2141,6 +2277,7 @@ export class AnalogInspector {
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private refreshRun = 0;
   private readonly destroyRef = inject(DestroyRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private readonly hostPageId = hostPageId();
 
@@ -2150,13 +2287,27 @@ export class AnalogInspector {
   });
   readonly openFiles = computed(() => new Set((this.page()?.chain ?? []).map((c) => c.file)));
   readonly allCalls = computed(() => this.state().calls ?? []);
-  readonly calls = computed(() => {
+  readonly maxServerCalls = MAX_SERVER_CALLS;
+  readonly callQuery = signal('');
+  readonly failedOnly = signal(false);
+  readonly callsMessage = signal('');
+  /** True when the search or the failed filter is on, so an empty list is a no-match. */
+  readonly callFiltered = computed(() => !!this.callQuery().trim() || this.failedOnly());
+  /** Every call that passes the kind, search and failed filters, oldest first. */
+  readonly matchingCalls = computed(() => {
     const kind = this.kind();
-    return this.allCalls()
-      .filter((c) => kind === 'all' || c.kind === kind)
-      .slice(-150)
-      .reverse();
+    const query = this.callQuery().trim().toLowerCase();
+    const failedOnly = this.failedOnly();
+    return this.allCalls().filter(
+      (c) =>
+        (kind === 'all' || c.kind === kind) &&
+        (!failedOnly || this.isFailed(c)) &&
+        (!query || this.callText(c).includes(query)),
+    );
   });
+  readonly calls = computed(() => this.matchingCalls().slice(-MAX_SHOWN_CALLS).reverse());
+  readonly shownCount = computed(() => this.calls().length);
+  readonly serverFull = computed(() => this.allCalls().length >= MAX_SERVER_CALLS);
   readonly allRoutes = computed(() => walk(this.project()?.routes ?? []));
   readonly pageCount = computed(
     () => this.allRoutes().filter((r) => r.route.file && r.route.kind !== 'layout').length,
@@ -2405,8 +2556,40 @@ export class AnalogInspector {
     queueMicrotask(() => document.getElementById('api-path')?.focus());
   }
 
+  /** A failed call answered with 400 or more, never answered, or ended in an error outcome. */
+  isFailed(c: AnalogCall): boolean {
+    return !c.status || c.status >= 400 || c.outcome === 'error';
+  }
+
+  private callText(c: AnalogCall): string {
+    const fn = this.fnOf(c);
+    return [c.url, c.route, fn?.name, fn?.file].filter(Boolean).join(' ').toLowerCase();
+  }
+
+  clearCallFilters() {
+    this.callQuery.set('');
+    this.failedOnly.set(false);
+    this.kind.set('all');
+    queueMicrotask(() =>
+      this.host.nativeElement.querySelector<HTMLInputElement>('#analog-call-search')?.focus(),
+    );
+  }
+
   async clearCalls() {
-    await call(this.rpc(), 'analog-clear-calls');
+    const client = this.rpc();
+    try {
+      if (!client) throw new Error('No devtools server');
+      await rpcCall(client, 'analog-clear-calls');
+      this.callsMessage.set('Calls cleared.');
+      // The button is disabled once the list is empty, so hand focus to the kind filter.
+      queueMicrotask(() =>
+        this.host.nativeElement
+          .querySelector<HTMLInputElement>('input[name="analog-kind"]:checked')
+          ?.focus(),
+      );
+    } catch {
+      this.callsMessage.set('Could not clear the calls.');
+    }
   }
 
   async explain() {
