@@ -74,6 +74,9 @@ export function attachCapacitor(my: RpcScope, pageId: string, options: Capacitor
   let lastSentAt = 0;
   let sent = false;
   let left = false;
+  // A page that leaves while a push is on its way forgets itself once the
+  // push lands, so that push can't bring the page back.
+  let forgetAfterPush = false;
   let stopped = false;
   let disabled = false;
   let failures = 0;
@@ -158,10 +161,20 @@ export function attachCapacitor(my: RpcScope, pageId: string, options: Capacitor
     } finally {
       pushing = false;
     }
+    if (forgetAfterPush) {
+      forgetAfterPush = false;
+      if (left) forget();
+      return;
+    }
     if (again) {
       again = false;
       schedule(Math.max(0, retryAt - Date.now()));
     }
+  };
+
+  const forget = () => {
+    sent = false;
+    void my.rpc.call('forget-capacitor-page', pageId).catch(() => {});
   };
 
   const stopTicking = () => {
@@ -205,13 +218,14 @@ export function attachCapacitor(my: RpcScope, pageId: string, options: Capacitor
       full = true;
       clearTimeout(timer);
       timer = undefined;
-      // Only a page the server heard from has anything to forget.
-      if (sent) void my.rpc.call('forget-capacitor-page', pageId).catch(() => {});
-      sent = false;
+      // Only a page the server heard from, or is about to, has anything to forget.
+      if (pushing) forgetAfterPush = true;
+      else if (sent) forget();
     },
     /** After `pageshow`, a page back from the cache reports again. */
     resume() {
       left = false;
+      forgetAfterPush = false;
       if (attach()) schedule(0);
     },
     stop() {

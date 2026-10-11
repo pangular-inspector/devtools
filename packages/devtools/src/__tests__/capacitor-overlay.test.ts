@@ -152,6 +152,26 @@ describe('attachCapacitor', () => {
     expect(rpc.pushes().at(-1)?.full).toBe(true);
   });
 
+  it('forgets a page that leaves while its first push is on its way, once the push lands', async () => {
+    let land!: () => void;
+    const rpc = fakeRpc();
+    const call = rpc.my.rpc.call.getMockImplementation()!;
+    rpc.my.rpc.call.mockImplementation(async (name: string, arg: unknown) => {
+      if (name === 'push-capacitor' && !land) await new Promise<void>((done) => (land = done));
+      return call(name, arg);
+    });
+    const capacitor = attach(rpc, { Capacitor: fakeCapacitor() });
+    await vi.advanceTimersByTimeAsync(0);
+
+    capacitor.leave();
+    expect(rpc.calls).toEqual([]);
+    land();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(rpc.calls.map(([name]) => name)).toEqual(['push-capacitor', 'forget-capacitor-page']);
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(rpc.calls).toHaveLength(2);
+  });
+
   it('restores the bridge when it stops', () => {
     const cap = fakeCapacitor();
     const original = cap.nativePromise;
