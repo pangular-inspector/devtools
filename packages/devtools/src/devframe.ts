@@ -11,6 +11,7 @@ import { trackPageSessions } from './rpc/page-sessions.ts';
 import { getBuildMeta } from './rpc/build-meta.ts';
 import { getSignals } from './rpc/get-signals.ts';
 import { SIGNAL_TOOL_MAX, signalGraphText, type InspectSignalsArgs } from './rpc/signal-tools.ts';
+import { createSignalPeeks } from './rpc/signal-peeks.ts';
 import { injectorMatches, isEnvironmentRequest } from './signal-graph.ts';
 import { getProviders } from './rpc/get-providers.ts';
 import { getNgrxStore, scanNgrxStore } from './rpc/get-ngrx-store.ts';
@@ -58,6 +59,7 @@ import {
   truncationText,
 } from './rpc/component-tools.ts';
 import { LIST_COMPONENTS_DESCRIPTION, listComponentsText } from './rpc/component-outline.ts';
+import { inspectComponentText } from './rpc/component-detail-text.ts';
 import {
   explainFormsText,
   formsResourceText,
@@ -316,6 +318,7 @@ const pangular = defineDevframe({
       },
     });
     const signalPages = new Map<string, { graph: PageGraph; reportedAt: number }>();
+    const signalPeeks = createSignalPeeks();
 
     const injectorTreeState = await my.rpc.sharedState('injector-tree', {
       initialValue: {
@@ -1360,6 +1363,13 @@ const pangular = defineDevframe({
     });
 
     register({
+      name: 'signal-graph-peek-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: unknown) => signalPeeks.answer(message),
+    });
+
+    register({
       name: 'forget-signal-page',
       type: 'action',
       jsonSerializable: true,
@@ -1684,7 +1694,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-component',
       description:
-        'Get the live detail of one component instance: inputs, outputs with whether a parent listens, other own properties (signals and resources unwrapped), DOM listeners, host directives, change detection, encapsulation, host path, injected services and the source file and line of the class when a dev build has them. Pass an instance id from the pangular:component-tree resource, a class name or a host tag. This selects the instance on its page (the panel follows) and waits for the page to report it. A class name or tag that matches several instances answers for the first and lists the ids of all of them. Secret-looking values are redacted.',
+        'Get the live detail of one component instance: inputs, outputs with whether a parent listens, other own properties (signals and resources unwrapped), DOM listeners, host directives, change detection, encapsulation, host path, injected services and the source file and line of the class when a dev build has them. Pass an instance id from the pangular:component-tree resource, a class name or a host tag. This selects the instance on its page (the panel follows) and waits for the page to report it. A class name or tag that matches several instances answers for the first and lists the ids of all of them. Secret-looking values are redacted. Past 20,000 characters, values longer than 1,000 characters show only their start, then each list keeps fewer entries, with a note saying what was left out; the `detail` of the pangular:component-tree resource has it all.',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -1728,7 +1738,10 @@ const pangular = defineDevframe({
           };
         }
         return {
-          markdown: `Live detail of \`${detail.name}\` (\`<${detail.tag}>\`, instance \`${detail.id}\` on page \`${hit.pageId}\`), read from the running page.${others ? `\n\n${others}` : ''}\n\n${JSON.stringify(detail, null, 2)}`,
+          markdown: inspectComponentText(
+            detail,
+            `Live detail of \`${detail.name}\` (\`<${detail.tag}>\`, instance \`${detail.id}\` on page \`${hit.pageId}\`), read from the running page.${others ? `\n\n${others}` : ''}`,
+          ),
         };
       },
     });
@@ -1768,7 +1781,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:defer-blocks',
       description:
-        "List the `@defer` blocks the running page renders, read live through Angular's debug API: the owning component, state (placeholder, loading, complete, error), incremental hydration state (dehydrated, hydrated), triggers and whether it has @loading, @placeholder and @error blocks. Flags blocks that failed to load, blocks still on their placeholder after 10 seconds, blocks still dehydrated and `hydrate never` blocks. Each open tab reports its own list; `page` picks one. Says so when the page has no defer block util (production builds).",
+        "List the `@defer` blocks the running page renders, read live through Angular's debug API: the owning component, state (placeholder, loading, complete, error), incremental hydration state (dehydrated, hydrated), triggers and whether it has @loading, @placeholder and @error blocks. Flags blocks that failed to load, blocks still on their placeholder after 10 seconds, blocks still dehydrated and `hydrate never` blocks. Each open tab reports its own list; `page` picks one. Lists at most 50 blocks per page in the table and 50 under Needs attention, says how many more are not shown, and cuts the answer at 20,000 characters. Says so when the page has no defer block util (production builds).",
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -1834,7 +1847,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-signals',
       description:
-        "Get the signal graph the running page last reported: signal nodes (signal, computed, linkedSignal, effect), their dependency edges, `component` (instance id, class name, host tag and host path) or `injector` (an environment injector), `resources` (each resource(), httpResource() or rxResource() folded into one entry with status, isLoading, params, value, error and the ids of its internal nodes), `environments` (root and route injectors the page can report), and `history` (recent value changes per node id and status changes per resource id; `write` entries are exact, `sample` entries come from polling and `missed` counts values that went unseen). `changes` on a node or resource counts every change since the page first saw it, past the 50 kept entries. `nodeCount` is set when Angular reported more nodes than the 400 kept. Only signals a template or an effect has read appear. The page reports one graph: the component picked on the Signals page (or via pangular:highlight), otherwise the component the primary router outlet renders deepest, otherwise the first component with a graph. Pass `root` for effects in root services, or a route path (`/admin` or `Route: admin`) for effects in that route's providers; this switches the page's graph to that injector. A component selector that does not match the reported graph returns what is available instead; call pangular:highlight with it first to switch the graph to it. Pass `node` (a node id or label) to get only that node with its direct producers and consumers, and `history: false` to leave out value history. The answer is cut at 20,000 characters, first by keeping fewer history entries per node, then fewer nodes, with a note saying what was left out.",
+        "Get the signal graph the running page last reported: signal nodes (signal, computed, linkedSignal, effect), their dependency edges, `component` (instance id, class name, host tag and host path) or `injector` (an environment injector), `resources` (each resource(), httpResource() or rxResource() folded into one entry with status, isLoading, params, value, error and the ids of its internal nodes), `environments` (root and route injectors the page can report), and `history` (recent value changes per node id and status changes per resource id; `write` entries are exact, `sample` entries come from polling and `missed` counts values that went unseen). `changes` on a node or resource counts every change since the page first saw it, past the 50 kept entries. `nodeCount` is set when Angular reported more nodes than the 400 kept. Only signals a template or an effect has read appear. The page reports one graph: the component picked on the Signals page (or via pangular:highlight), otherwise the component the primary router outlet renders deepest, otherwise the first component with a graph. Pass `root` for effects in root services, or a route path (`/admin` or `Route: admin`) for effects in that route's providers; the page reads that injector's graph once, without changing what the Signals page shows. A component selector that does not match the reported graph returns what is available instead; call pangular:highlight with it first to switch the graph to it. Pass `node` (a node id or label) to get only that node with its direct producers and consumers, and `history: false` to leave out value history. The answer is cut at 20,000 characters, first by keeping fewer history entries per node, then fewer nodes, with a note saying what was left out.",
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -1876,15 +1889,21 @@ const pangular = defineDevframe({
           ).find((entry) => matches(entry.graph))?.graph;
         let matched = latestMatch();
         if (!matched && signalPages.size && isEnvironmentRequest(args.selector)) {
-          void my.rpc.broadcast({
-            method: 'select-signal-component',
-            args: [page ? { pageId: page, env: args.selector } : { env: args.selector }],
-            optional: true,
-          });
-          for (let waited = 0; !matched && waited < ENV_WAIT_MS; waited += 50) {
-            await new Promise((resolve) => setTimeout(resolve, 50));
-            matched = latestMatch();
-          }
+          // Ask for this injector's graph once. The page answers without
+          // changing its selected target, so the Signals page keeps its view.
+          const peeked = await signalPeeks.request(
+            (request) =>
+              void my.rpc.broadcast({
+                method: 'peek-signal-graph',
+                args: [request],
+                optional: true,
+              }),
+            args.selector,
+            page,
+            page ? [page] : [...signalPages.keys()],
+            ENV_WAIT_MS,
+          );
+          if (peeked && matches(peeked)) matched = peeked;
         }
         const graph =
           matched ??

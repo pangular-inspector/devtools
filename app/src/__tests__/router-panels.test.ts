@@ -319,6 +319,69 @@ describe('RouteTree edge cases', () => {
     );
   });
 
+  function message(fixture: ComponentFixture<unknown>) {
+    return el(fixture).querySelector('p.message[role="status"]')?.textContent?.trim() ?? null;
+  }
+
+  const oneRoute = page({
+    config: [{ id: 'r1', path: 'a', fullPath: 'a', kind: 'component', component: 'A' }],
+  });
+  const matchedA = { matched: true, chain: oneRoute.config!, params: {}, notes: [], nearest: [] };
+
+  it('asks for a URL when Predict or Probe is used with an empty box', async () => {
+    const calls: string[] = [];
+    const fixture = mount(RouteTree, oneRoute, (name) => {
+      calls.push(name);
+      return Promise.resolve(null);
+    });
+    await settle(fixture);
+    await submitUrl(fixture, '   ');
+    expect(message(fixture)).toBe('Type a URL to predict, for example /users/42.');
+    expect(document.activeElement?.id).toBe('test-url');
+
+    button(fixture, 'Probe in app').click();
+    await settle(fixture);
+    expect(message(fixture)).toBe('Type a URL to probe, for example /users/42.');
+    expect(calls).toEqual([]);
+  });
+
+  it('labels a Predict result with its URL and clears it when the URL changes', async () => {
+    const fixture = mount(RouteTree, oneRoute, () => Promise.resolve(matchedA));
+    await settle(fixture);
+    await submitUrl(fixture, '/a');
+    const result = el(fixture).querySelector('.result');
+    expect(result?.textContent?.replace(/\s+/g, ' ')).toContain('Result for /a:');
+
+    const input = el(fixture).querySelector<HTMLInputElement>('#test-url')!;
+    input.value = '/b';
+    input.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    expect(el(fixture).querySelector('.result')).toBeNull();
+  });
+
+  it('drops Predict and Probe answers for a URL that was edited since', async () => {
+    const answers: ((value: unknown) => void)[] = [];
+    const fixture = mount(
+      RouteTree,
+      oneRoute,
+      () => new Promise((resolve) => answers.push(resolve)),
+    );
+    await settle(fixture);
+    await submitUrl(fixture, '/a');
+    button(fixture, 'Probe in app').click();
+    await settle(fixture);
+    expect(answers).toHaveLength(2);
+
+    const input = el(fixture).querySelector<HTMLInputElement>('#test-url')!;
+    input.value = '/b';
+    input.dispatchEvent(new Event('input'));
+    answers[0](matchedA);
+    answers[1]({ matched: true });
+    await settle(fixture);
+    expect(el(fixture).querySelector('.result')).toBeNull();
+    expect(message(fixture)).toBeNull();
+  });
+
   it('offers no Go button for a custom matcher route', async () => {
     const fixture = mount(
       RouteTree,
@@ -406,6 +469,40 @@ describe('RouteTimeline guard recording', () => {
   });
 });
 
+describe('RouteTimeline guard recording across pages', () => {
+  function checkbox(fixture: ComponentFixture<unknown>) {
+    return Array.from(el(fixture).querySelectorAll<HTMLInputElement>('input[type=checkbox]')).find(
+      (input) => input.parentElement?.textContent?.includes('Record each guard'),
+    )!;
+  }
+
+  it('does not let a late answer from the page left behind undo a newer toggle', async () => {
+    const answers: Array<(value: unknown) => void> = [];
+    const fixture = mount(
+      RouteTimeline,
+      page({ pageId: 'a', instrumented: false }),
+      () => new Promise((resolve) => answers.push(resolve)),
+    );
+    await settle(fixture);
+    checkbox(fixture).click();
+
+    fixture.componentRef.setInput('page', page({ pageId: 'b', instrumented: false }));
+    await settle(fixture);
+    const input = checkbox(fixture);
+    if (input.checked) input.click();
+    input.click();
+    expect(input.checked).toBe(true);
+
+    answers[0]({ ok: true });
+    await settle(fixture);
+    expect(input.checked).toBe(true);
+
+    for (const answer of answers.slice(1)) answer({ ok: true });
+    await settle(fixture);
+    expect(input.checked).toBe(true);
+  });
+});
+
 describe('RouteTimeline replay', () => {
   it('turns Replay off for redacted and absolute URLs, with a note', async () => {
     const calls: unknown[] = [];
@@ -436,6 +533,91 @@ describe('RouteTimeline replay', () => {
     ok.click();
     await settle(fixture);
     expect(calls).toEqual([{ pageId: 'p1', request: { action: 'replay', id: 1 } }]);
+  });
+});
+
+describe('RouteTimeline page switch', () => {
+  const pageA = page({ pageId: 'a', navigations: [nav(7, '/users/1'), nav(8, '/x')] });
+  const pageB = page({ pageId: 'b', navigations: [nav(2, '/users/2')] });
+
+  it("drops page A's message and filters after switching to page B", async () => {
+    const fixture = mount(RouteTimeline, pageA, () =>
+      Promise.resolve({ replay: { outcome: 'succeeded' }, same: true }),
+    );
+    await settle(fixture);
+    button(fixture, 'Replay navigation 7').click();
+    const filter = el(fixture).querySelector<HTMLInputElement>('input[aria-label^="Filter"]')!;
+    filter.value = 'users';
+    filter.dispatchEvent(new Event('input'));
+    const only = Array.from(
+      el(fixture).querySelectorAll<HTMLInputElement>('input[type=checkbox]'),
+    ).find((input) => input.parentElement?.textContent?.includes('Only problems'))!;
+    only.click();
+    await settle(fixture);
+    expect(el(fixture).textContent).toContain('Replay of #7: succeeded');
+
+    fixture.componentRef.setInput('page', pageB);
+    await settle(fixture);
+    expect(el(fixture).querySelector('p.message[role="status"]')).toBeNull();
+    expect(filter.value).toBe('');
+    expect(only.checked).toBe(false);
+    expect(fixture.componentInstance.filter()).toBe('');
+    expect(fixture.componentInstance.onlyProblems()).toBe(false);
+  });
+
+  it('ignores a replay of page A that finishes after the switch', async () => {
+    const answers: ((value: unknown) => void)[] = [];
+    const fixture = mount(
+      RouteTimeline,
+      pageA,
+      () => new Promise((resolve) => answers.push(resolve)),
+    );
+    await settle(fixture);
+    button(fixture, 'Replay navigation 7').click();
+    await settle(fixture);
+    expect(el(fixture).textContent).toContain('Replaying #7');
+
+    fixture.componentRef.setInput('page', pageB);
+    await settle(fixture);
+    expect(el(fixture).textContent).not.toContain('Replaying #7');
+    answers[0]({ replay: { outcome: 'succeeded' }, same: true });
+    await settle(fixture);
+    expect(el(fixture).textContent).not.toContain('Replay of #7');
+    expect(el(fixture).querySelector('p.message[role="status"]')).toBeNull();
+  });
+});
+
+describe('RouteCurrent page switch', () => {
+  const pending = (pageId: string) =>
+    page({ pageId, snapshot: { ...page().snapshot!, pending: { id: 4, url: '/slow' } } });
+
+  it("drops page A's Abort message after switching to page B", async () => {
+    const fixture = mount(RouteCurrent, pending('a'), () => Promise.resolve({ aborted: 4 }));
+    await settle(fixture);
+    button(fixture, 'Abort').click();
+    await settle(fixture);
+    expect(el(fixture).textContent).toContain('Aborted navigation #4.');
+
+    fixture.componentRef.setInput('page', pending('b'));
+    await settle(fixture);
+    expect(el(fixture).textContent).not.toContain('Aborted navigation #4.');
+  });
+
+  it('ignores an Abort answer for page A that arrives after the switch', async () => {
+    const answers: ((value: unknown) => void)[] = [];
+    const fixture = mount(
+      RouteCurrent,
+      pending('a'),
+      () => new Promise((resolve) => answers.push(resolve)),
+    );
+    await settle(fixture);
+    button(fixture, 'Abort').click();
+    await settle(fixture);
+    fixture.componentRef.setInput('page', pending('b'));
+    await settle(fixture);
+    answers[0]({ aborted: 4 });
+    await settle(fixture);
+    expect(el(fixture).textContent).not.toContain('Aborted navigation #4.');
   });
 });
 
