@@ -63,6 +63,31 @@ describe('agent tools', () => {
     expect(await push('ping-change-detection', 'p1')).toEqual({ known: false });
   });
 
+  it('answer change detection for an unknown page with the connected tabs', async () => {
+    const { push, call } = await boot();
+    await push('push-injector-tree', {
+      pageId: 'live',
+      roots: [injectorRoot('app-root')],
+      environment: [],
+      zone: 'zone',
+    });
+    const reading = await call('change-detection', '', { page: 'gone' });
+    expect(reading).toMatch(
+      /^No page `gone` is reporting change detection\. Pages that report change detection: `live`\./,
+    );
+    // Recording on a closed tab is not reported as started.
+    const recording = await call('change-detection', '', { page: 'gone', record: 'start' });
+    expect(recording).toMatch(/^No page `gone` is reporting change detection/);
+    expect(recording).not.toMatch(/Recording started/);
+    // A connected tab that has not recorded yet can still start a recording.
+    expect(await call('change-detection', '', { page: 'live', record: 'start' })).toMatch(
+      /Recording started/,
+    );
+    expect(await call('change-detection', '', { page: 'live' })).toContain(
+      'Page `live` has no change detection recording yet.',
+    );
+  });
+
   it('report the zone mode of the page that recorded, not the latest tab', async () => {
     vi.useFakeTimers();
     const { push, call } = await boot();

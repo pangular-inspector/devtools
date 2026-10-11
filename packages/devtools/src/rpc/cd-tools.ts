@@ -3,6 +3,7 @@ import type { CdCheck, CdComponentStat, CdCycle } from '../cd-recorder.ts';
 import { droppedNote } from '../timeline-limits.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
+import { unknownPageText, type ReportingPage } from './pages.ts';
 
 export interface CdPage extends CdReport {
   reportedAt: number;
@@ -111,6 +112,32 @@ export function expireCdPages(
   return changed;
 }
 
+/**
+ * The answer when `page` names a tab that is not connected: the shared
+ * unknown-page text, listing the connected tabs. A connected tab that has not
+ * recorded yet is not unknown, since `record` can start a recording there.
+ * Undefined when the page is known.
+ */
+export function cdUnknownPageText(
+  pageId: string,
+  state: CdState,
+  connected: Iterable<ReportingPage>,
+): string | undefined {
+  const pages = new Map<string, ReportingPage>();
+  const all: ReportingPage[] = [...connected, ...Object.values(state.pages)];
+  for (const page of all) {
+    const seen = pages.get(page.pageId);
+    pages.set(page.pageId, {
+      pageId: page.pageId,
+      url: seen?.url ?? page.url,
+      reportedAt: Math.max(seen?.reportedAt ?? 0, page.reportedAt ?? 0),
+    });
+  }
+  return pages.has(pageId)
+    ? undefined
+    : unknownPageText(pageId, [...pages.values()], 'change detection');
+}
+
 /** The page the change-detection tool reports: the one asked for, else recording, else latest. */
 export function pickCdPage(state: CdState, pageId?: string): CdPage | undefined {
   const pages = Object.values(state.pages);
@@ -128,7 +155,7 @@ export function changeDetectionText(
   const page = pickCdPage(state, args.page);
   if (!page) {
     return args.page
-      ? `No page ${code(args.page)} has a change detection recording.`
+      ? `Page ${code(args.page)} has no change detection recording yet. Call this tool with \`record: "start"\` and this \`page\`, use the app, then call it again.`
       : 'No change detection recording yet. Call this tool with `record: "start"`, use the app, then call it again.';
   }
   if (!page.supported) {

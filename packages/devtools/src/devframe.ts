@@ -138,6 +138,7 @@ import { sanitizeSsrOverrides } from './ssr-overrides.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import { listHttpCallsText } from './rpc/http-tools.ts';
 import {
+  cdUnknownPageText,
   changeDetectionText,
   expireCdPages,
   pickCdPage,
@@ -159,6 +160,7 @@ import {
   unknownPageText,
 } from './rpc/pages.ts';
 import { registerHubDocks } from './hub-docks.ts';
+import { clip } from './text.ts';
 import { setRedaction } from './forms-privacy.ts';
 import {
   FORM_WRITE_ACTIONS,
@@ -1794,6 +1796,13 @@ const pangular = defineDevframe({
         },
       },
       handler: async (args: { record?: string; page?: string; limit?: number }) => {
+        const unknown =
+          args?.page &&
+          cdUnknownPageText(args.page, cdState.value() as CdState, [
+            ...componentPages.values(),
+            ...injectorPages.values(),
+          ]);
+        if (unknown) return { markdown: unknown };
         if (args?.record === 'start' || args?.record === 'stop' || args?.record === 'clear') {
           requestCdRecord({
             pageId: args.page,
@@ -1895,7 +1904,7 @@ const pangular = defineDevframe({
           const hint = isEnvironmentRequest(args.selector)
             ? ` No environment injector on the page matches it${known ? `; the page knows ${known}` : ''}.`
             : '';
-          const head = `No signal graph for \`${args.selector}\`.${hint} The live graph covers \`${covers}\`:\n\n`;
+          const head = `No signal graph for \`${clip(args.selector, 200)}\`.${hint} The live graph covers \`${covers}\`:\n\n`;
           return {
             markdown: (
               head + signalGraphText(graph, view, Math.max(0, SIGNAL_TOOL_MAX - head.length))
