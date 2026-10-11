@@ -10,6 +10,7 @@ import {
   input,
   linkedSignal,
   signal,
+  viewChild,
 } from '@angular/core';
 import { DatePipe, JsonPipe, NgTemplateOutlet } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
@@ -143,11 +144,13 @@ const KIND_COLORS: Record<string, string> = {
   template: `
     <div class="toolbar">
       <input
-        type="text"
+        #filterInput
+        type="search"
         placeholder="Filter by name or kind…"
         aria-label="Filter signals by name or kind"
         [value]="filter()"
         (input)="filter.set($any($event.target).value)"
+        (keydown.escape)="filter.set('')"
       />
       @if (pageOptions().length > 1) {
         <div class="picker page-picker">
@@ -1222,6 +1225,7 @@ export class SignalInspector {
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
   private readonly injector = inject(Injector);
   private readonly pageId = hostPageId();
   private readonly cleanups: (() => void)[] = [];
@@ -1529,7 +1533,13 @@ export class SignalInspector {
     }
   }
 
+  /** Clears the filters from a no-match state and keeps focus on the filter box. */
   clearFilters() {
+    this.resetFilters();
+    this.filterInput()?.nativeElement.focus();
+  }
+
+  private resetFilters() {
     this.filter.set('');
     this.kind.set(null);
   }
@@ -1545,7 +1555,7 @@ export class SignalInspector {
     const hidden = resource
       ? !this.filteredResources().some((r) => r.id === id)
       : !this.filteredNodes().some((n) => n.id === id);
-    if (hidden) this.clearFilters();
+    if (hidden) this.resetFilters();
     this.jumpedPast.set(hidden ? { id, label: resource?.name ?? node.label ?? node.id } : null);
     this.selectedId.set(id);
     this.showInternals.set(!!resource);

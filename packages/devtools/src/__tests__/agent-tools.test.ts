@@ -1,6 +1,7 @@
 import { createHostContext } from 'devframe/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pangular from '../devframe.ts';
+import { UNTRUSTED } from '../rpc/forms-tools.ts';
 
 async function boot() {
   const host = {
@@ -37,6 +38,12 @@ const injectorRoot = (name: string) => ({
   children: [],
 });
 
+/** The signal graph JSON behind the untrusted-data notice of inspect-signals. */
+const signalJson = (markdown: string) => {
+  expect(markdown.startsWith(UNTRUSTED)).toBe(true);
+  return JSON.parse(markdown.slice(UNTRUSTED.length));
+};
+
 const elementInjectors = (markdown: string) =>
   JSON.parse(markdown.split(/Element injectors:|Environment injectors:/)[1]!);
 
@@ -61,6 +68,73 @@ describe('agent tools', () => {
     expect(await push('ping-change-detection', 'p1')).toEqual({ known: true });
     await push('forget-change-detection-page', 'p1');
     expect(await push('ping-change-detection', 'p1')).toEqual({ known: false });
+  });
+
+  it('answer change detection for an unknown page with the connected tabs', async () => {
+    const { push, call } = await boot();
+    await push('push-injector-tree', {
+      pageId: 'live',
+      roots: [injectorRoot('app-root')],
+      environment: [],
+      zone: 'zone',
+    });
+    const reading = await call('change-detection', '', { page: 'gone' });
+    expect(reading).toMatch(
+      /^No page `gone` is reporting change detection\. Pages that report change detection: `live`\./,
+    );
+    // Recording on a closed tab is not reported as started.
+    const recording = await call('change-detection', '', { page: 'gone', record: 'start' });
+    expect(recording).toMatch(/^No page `gone` is reporting change detection/);
+    expect(recording).not.toMatch(/Recording started/);
+    // A connected tab that has not recorded yet can still start a recording.
+    expect(await call('change-detection', '', { page: 'live', record: 'start' })).toMatch(
+      /Recording started/,
+    );
+    expect(await call('change-detection', '', { page: 'live' })).toContain(
+      'Page `live` has no change detection recording yet.',
+    );
+  });
+
+  it('treat a tab whose connection dropped as unknown to change detection', async () => {
+    const { ctx, push, call } = await boot();
+    const host = ctx.rpc as unknown as {
+      getCurrentRpcSession: () => unknown;
+      _emitSessionDisconnected: (meta: { id: number }) => void;
+    };
+    const cdReport = (pageId: string) => ({
+      pageId,
+      supported: true,
+      recording: true,
+      startedAt: 1,
+      dropped: 0,
+      cycles: [{ id: 1, at: 1, ms: 2, passes: 1, checks: 1, components: [] }],
+      components: [{ name: 'Cart', checks: 1, ms: 2, maxMs: 2, cycles: 1 }],
+      hosts: {},
+    });
+    host.getCurrentRpcSession = () => ({ meta: { id: 1 } });
+    await push('push-injector-tree', {
+      pageId: 'tab-1',
+      roots: [injectorRoot('app-root')],
+      environment: [],
+      zone: 'zone',
+    });
+    await push('push-change-detection', cdReport('tab-1'));
+    host.getCurrentRpcSession = () => ({ meta: { id: 2 } });
+    await push('push-change-detection', cdReport('tab-2'));
+
+    // tab-1 stays loaded but its connection drops: no record request reaches it.
+    host._emitSessionDisconnected({ id: 1 });
+    const start = await call('change-detection', '', { page: 'tab-1', record: 'start' });
+    expect(start).toMatch(/^No page `tab-1` is reporting change detection/);
+    expect(start).toContain('`tab-2`');
+    expect(await call('change-detection', '', { page: 'tab-1' })).toMatch(/^No page `tab-1`/);
+
+    // Once it reports again on a new connection, it is known again.
+    host.getCurrentRpcSession = () => ({ meta: { id: 3 } });
+    await push('ping-injector-tree', 'tab-1');
+    expect(await call('change-detection', '', { page: 'tab-1', record: 'start' })).toMatch(
+      /Recording started/,
+    );
   });
 
   it('report the zone mode of the page that recorded, not the latest tab', async () => {
@@ -168,7 +242,7 @@ describe('agent tools', () => {
 
     // The payload matters, not how it is worded around.
     const signals = await call('inspect-signals', 'app-root');
-    expect(JSON.parse(signals)).toMatchObject({ nodes: [{ label: 'count' }] });
+    expect(signalJson(signals)).toMatchObject({ nodes: [{ label: 'count' }] });
 
     const other = await call('inspect-signals', 'app-other');
     expect(other).toMatch(/app-other/);
@@ -242,7 +316,7 @@ describe('agent tools', () => {
       componentSelector: 'app-card',
       component: { id: 'c2', name: 'Card', tag: 'app-card', path: 'app-root > app-card' },
     });
-    expect(JSON.parse(await call('inspect-signals', 'Card'))).toMatchObject({
+    expect(signalJson(await call('inspect-signals', 'Card'))).toMatchObject({
       component: { name: 'Card' },
     });
   });
@@ -263,18 +337,18 @@ describe('agent tools', () => {
       componentSelector: 'app-x',
       component: { id: 'c9', name: 'X', tag: 'app-x', path: 'app-root > app-x' },
     });
-    expect(JSON.parse(await call('inspect-signals', 'Card'))).toMatchObject({
+    expect(signalJson(await call('inspect-signals', 'Card'))).toMatchObject({
       pageId: 'p1',
       nodes: [{ label: 'open' }],
     });
-    expect(JSON.parse(await call('inspect-signals', 'c9'))).toMatchObject({ pageId: 'p2' });
+    expect(signalJson(await call('inspect-signals', 'c9'))).toMatchObject({ pageId: 'p2' });
     const missing = await call('inspect-signals', 'app-none');
     expect(missing).toMatch(/No signal graph for `app-none`/);
     expect(missing).toMatch(/app-x/);
   });
 
-  it('switches inspect-signals to the root injector and waits for its graph', async () => {
-    const { push, call } = await boot();
+  it('reads a root injector graph for inspect-signals without switching the panel', async () => {
+    const { ctx, push, call } = await boot();
     const card = {
       pageId: 'p1',
       nodes: [{ id: 'a', kind: 'signal', label: 'open', epoch: 0 }],
@@ -287,22 +361,119 @@ describe('agent tools', () => {
       ],
     };
     await push('push-signal-graph', card);
-    const answer = call('inspect-signals', 'root');
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    await push('push-signal-graph', {
-      pageId: 'p1',
+    const rootGraph = {
       nodes: [{ id: 'e', kind: 'effect', label: 'persistTrips', epoch: 1 }],
       edges: [],
       injector: { id: 'inj-1', name: 'Root' },
       environments: card.environments,
       source: 'selected',
+    };
+    const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
+    const asked: unknown[] = [];
+    broadcast.mockImplementation(async (options: { method: string; args: unknown[] }) => {
+      if (options.method !== 'pangular:peek-signal-graph') return;
+      const request = options.args[0] as { requestId: string; pageId?: string; env: string };
+      asked.push(request);
+      setTimeout(() => {
+        void push('signal-graph-peek-result', {
+          requestId: request.requestId,
+          pageId: 'p1',
+          graph: { ...rootGraph, pageId: 'p1' },
+        });
+      }, 10);
     });
-    expect(JSON.parse(await answer)).toMatchObject({
+    expect(signalJson(await call('inspect-signals', 'root'))).toMatchObject({
+      pageId: 'p1',
       injector: { name: 'Root' },
       nodes: [{ label: 'persistTrips' }],
     });
-    expect(JSON.parse(await call('inspect-signals', 'inj-1'))).toMatchObject({
+    expect(asked).toEqual([{ requestId: expect.any(String), env: 'root' }]);
+    expect(signalJson(await call('inspect-signals', 'inj-1', { page: 'p1' }))).toMatchObject({
       injector: { id: 'inj-1' },
+    });
+    expect(asked[1]).toMatchObject({ pageId: 'p1', env: 'inj-1' });
+    // The panel keeps showing the component it showed before.
+    const methods = broadcast.mock.calls.map(([options]) => (options as { method: string }).method);
+    expect(methods).not.toContain('pangular:select-signal-component');
+    const state = (
+      await (
+        ctx.rpc as unknown as {
+          sharedState: {
+            get: (key: string) => Promise<{ value: () => Record<string, unknown> }>;
+          };
+        }
+      ).sharedState.get('pangular:signal-graph')
+    ).value() as { graph: { pageId: string }; pages: Record<string, unknown> };
+    expect(state.graph).toMatchObject({ componentSelector: 'app-card' });
+    expect(state.pages['p1']).toMatchObject({ componentSelector: 'app-card' });
+    expect(signalJson(await call('inspect-signals', 'app-card'))).toMatchObject({
+      component: { id: 'c2' },
+    });
+  });
+
+  it('ignores a peek answer for another request or a non-matching injector', async () => {
+    const { ctx, push, call } = await boot();
+    await push('push-signal-graph', {
+      pageId: 'p1',
+      nodes: [],
+      edges: [],
+      componentSelector: 'app-card',
+      environments: [{ id: 'inj-1', name: 'Root' }],
+    });
+    vi.spyOn(ctx.rpc, 'broadcast').mockImplementation(
+      async (options: { method: string; args: unknown[] }) => {
+        if (options.method !== 'pangular:peek-signal-graph') return;
+        const { requestId } = options.args[0] as { requestId: string };
+        void push('signal-graph-peek-result', { requestId: 'other', pageId: 'p1', graph: null });
+        void push('signal-graph-peek-result', {
+          requestId,
+          pageId: 'p1',
+          graph: { nodes: [], edges: [], injector: { id: 'inj-1', name: 'Root' } },
+        });
+      },
+    );
+    const missing = await call('inspect-signals', '/admin');
+    expect(missing).toMatch(/No signal graph for `\/admin`/);
+    expect(missing).toMatch(/the page knows `Root`/);
+  }, 10_000);
+
+  it('waits for a known page when a page without a signal graph answers first', async () => {
+    const { ctx, push, call } = await boot();
+    const environments = [{ id: 'inj-1', name: 'Root' }];
+    for (const pageId of ['p1', 'p2']) {
+      await push('push-signal-graph', {
+        pageId,
+        nodes: [],
+        edges: [],
+        componentSelector: 'app-card',
+        environments,
+      });
+    }
+    vi.spyOn(ctx.rpc, 'broadcast').mockImplementation(
+      async (options: { method: string; args: unknown[] }) => {
+        if (options.method !== 'pangular:peek-signal-graph') return;
+        const { requestId } = options.args[0] as { requestId: string };
+        // p3 never reported a graph; its empty answer must not end the wait.
+        void push('signal-graph-peek-result', { requestId, pageId: 'p3', graph: null });
+        void push('signal-graph-peek-result', { requestId, pageId: 'p2', graph: null });
+        setTimeout(() => {
+          void push('signal-graph-peek-result', {
+            requestId,
+            pageId: 'p1',
+            graph: {
+              nodes: [{ id: 'e', kind: 'effect', label: 'persistTrips', epoch: 1 }],
+              edges: [],
+              injector: { id: 'inj-1', name: 'Root' },
+              environments,
+            },
+          });
+        }, 20);
+      },
+    );
+    expect(signalJson(await call('inspect-signals', 'root'))).toMatchObject({
+      pageId: 'p1',
+      injector: { name: 'Root' },
+      nodes: [{ label: 'persistTrips' }],
     });
   });
 
@@ -344,7 +515,7 @@ describe('agent tools', () => {
       ...base,
       historyDelta: { 'resource:3': [{ epoch: 2, value: 'resolved', at: 2, source: 'sample' }] },
     });
-    const graph = JSON.parse(await call('inspect-signals', 'app-root'));
+    const graph = signalJson(await call('inspect-signals', 'app-root'));
     expect(graph.history['resource:3'].map((c: { value: string }) => c.value)).toEqual([
       'loading',
       'resolved',
@@ -385,7 +556,7 @@ describe('agent tools', () => {
     expect(Object.keys((await signalState())['pages'] as object)).toEqual(['p2']);
     expect(await signalState()).toMatchObject({ graph: { pageId: 'p2' } });
     expect(await push('ping-signal-graph', 'p3')).toEqual({ known: false });
-    expect(JSON.parse(await call('inspect-signals', 'app-root'))).toMatchObject({
+    expect(signalJson(await call('inspect-signals', 'app-root'))).toMatchObject({
       nodes: [{ label: 'second' }],
     });
 
@@ -680,7 +851,7 @@ describe('agent tools', () => {
     });
     await push('push-signal-graph', graph('p1', 'first'));
     await push('push-signal-graph', graph('p2', 'second'));
-    expect(JSON.parse(await call('inspect-signals', 'Card', { page: 'p1' }))).toMatchObject({
+    expect(signalJson(await call('inspect-signals', 'Card', { page: 'p1' }))).toMatchObject({
       pageId: 'p1',
       nodes: [{ label: 'first' }],
     });
@@ -767,8 +938,9 @@ describe('agent tools', () => {
     const text = await list({ failed: true });
     expect(text).toMatch(/\| client \| GET `\/api\/items\?api_key=[^`]*` \| 500 \|/);
     expect(text).not.toContain('s3cr3t-value-123');
+    // The other pages are listed with their URL, which comes from the page.
     expect(await list({ page: 'gone' })).toMatch(
-      /^No page `gone` is reporting HTTP calls\. Pages that report HTTP calls: `p1`/,
+      /^_Labels.*_\n\nNo page `gone` is reporting HTTP calls\. Pages that report HTTP calls: `p1`/,
     );
   });
 

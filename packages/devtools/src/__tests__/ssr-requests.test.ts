@@ -13,7 +13,12 @@ import { pangularHttpInterceptor } from '../http.ts';
 import { httpRegistry, type HttpCall } from '../http-rules.ts';
 import { createSsrMiddleware, renderModeOf } from '../ssr-middleware.ts';
 import { SSR_REQUEST_HEADER, ssrRegistry, type SsrRequest } from '../ssr-registry.ts';
-import { explainSsrRequestText, sanitizeSsrRequest, ssrRequestStory } from '../rpc/ssr-tools.ts';
+import {
+  explainSsrRequestText,
+  listSsrRequestsText,
+  sanitizeSsrRequest,
+  ssrRequestStory,
+} from '../rpc/ssr-tools.ts';
 import type { HttpPage, HttpState } from '../types.ts';
 
 class FakeResponse extends EventEmitter {
@@ -317,6 +322,19 @@ const page = (overrides: Partial<HttpPage> = {}): HttpPage => ({
   firstSeenAt: 1100,
   reportedAt: 1100,
   ...overrides,
+});
+
+describe('list-ssr-requests limit', () => {
+  it('falls back to the default limit when `limit` is not a number', () => {
+    const requests = Array.from({ length: 25 }, (_, i) => ssrRequest({ id: `r${i}`, at: i }));
+    const rows = (limit: unknown) =>
+      listSsrRequestsText(requests, [], { limit: limit as never }, 100)
+        .split('\n')
+        .filter((line) => /^\| `r\d+` \|/.test(line)).length;
+    for (const limit of ['abc', Number.NaN, null, Infinity]) expect(rows(limit)).toBe(20);
+    expect(rows('3')).toBe(3);
+    expect(rows(-5)).toBe(1);
+  });
 });
 
 describe('ssrRequestStory', () => {

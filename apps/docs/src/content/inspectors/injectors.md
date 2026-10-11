@@ -22,6 +22,12 @@ A switch at the top picks the view:
 
 Each row shows a kind letter (`C`, `D` or `E`), the tag or injector name, the component or directive classes, and icons with the number of injected and provided tokens.
 
+### Page picker
+
+When more than one open page reports an injector tree, a **Page** picker appears in the toolbar. It lists each page by title, or by URL when the page has no title. The tab starts on the page that reported last, and stays on the page you choose when another page reports later. Each page keeps its own selected injector and expanded rows, and hovering a row highlights the element in the chosen page.
+
+If the chosen page closes, the tab moves to the page that reported last and announces the change to screen readers. When the panel opens framed by a page, such as the popup on that page, the tab shows that page only and has no **Page** picker.
+
 ### Search and filters
 
 - Search for a token, component, directive or injector. When a token matches, **Provided by** chips list the injectors that provide it. Click one to jump there.
@@ -108,6 +114,8 @@ The source-mode notice says to connect the overlay on Angular 20 or later for th
 ### Keyboard
 
 Arrow keys, Home and End move the selection through the tree. The right arrow expands a row or moves to its first child. The left arrow collapses a row or moves to its parent. The first row is selected when nothing else is.
+
+Press Escape in the search box to clear it. When the search matches nothing, **Clear search** clears it and moves focus back to the search box. In the source scan view, **Clear filter** does the same.
 
 If the selected injector leaves the page because its component or directive was destroyed, the details say so and a screen reader announces it. The tab doesn't pick another injector for you. Click **Show** with the first injector's name, or select a row.
 

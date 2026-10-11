@@ -8,6 +8,7 @@ import { allowClientRules, httpRegistry } from './http-rules.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
 import { collectInjectorTree } from './injector-tree.ts';
 import {
+  clearNavigations,
   droppedNavigations,
   findRouters,
   redactMessage,
@@ -35,6 +36,7 @@ import {
   type PreloadRecord,
 } from './router-actions.ts';
 import { createSignalHistory, installSignalWriteHook } from './signal-history.ts';
+import { registerSignalPeek } from './signal-peek.ts';
 export { installSignalWriteHook } from './signal-history.ts';
 import { collectComponentTree, componentHostOf } from './component-tree.ts';
 import { startComponentPick } from './component-pick.ts';
@@ -585,6 +587,18 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   });
 
   my.rpc.register({
+    name: 'router-clear',
+    type: 'event',
+    jsonSerializable: true,
+    handler: (message: { pageId?: unknown } | undefined) => {
+      if (!on.router || message?.pageId !== pageId) return;
+      clearNavigations(navigations);
+      lastRouterPayload = '';
+      scheduleRouterPush();
+    },
+  });
+
+  my.rpc.register({
     name: 'select-signal-component',
     type: 'event',
     jsonSerializable: true,
@@ -595,6 +609,12 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       void pushSignalGraph(true).catch(() => {});
     },
   });
+  registerSignalPeek(
+    my.rpc,
+    pageId,
+    (target) => collectSignalGraph(getNg(), target),
+    signalHistory,
+  );
 
   my.rpc.register({
     name: 'inspect-component-in-page',

@@ -264,4 +264,32 @@ describe('change detection agent text', () => {
     );
     expect(toCdPage({ pageId: 5 }, 10)).toBeNull();
   });
+
+  it('falls back to the default limit when `limit` is not a number', () => {
+    const components = Array.from({ length: 15 }, (_, i) => ({
+      name: `Row${i}`,
+      checks: i + 1,
+      ms: i + 1,
+      maxMs: 1,
+      cycles: 1,
+    }));
+    const page = toCdPage(
+      {
+        pageId: 'p1',
+        supported: true,
+        recording: true,
+        cycles: components.map((_, i) => ({ id: i, at: i, ms: 1, passes: 1, checks: 1 })),
+        components,
+      },
+      200,
+    )!;
+    const state: CdState = { pages: { p1: page } };
+    const slowest = (limit: unknown) =>
+      changeDetectionText(state, { limit: limit as never })
+        .split('**Slowest components**\n')[1]!
+        .split('\n\n')[0]!
+        .split('\n').length;
+    for (const limit of ['abc', Number.NaN, null, Infinity]) expect(slowest(limit)).toBe(10);
+    expect(slowest('3')).toBe(3);
+  });
 });

@@ -1,6 +1,6 @@
 import { redactMessage, redactUrl } from '../router.ts';
 import { clip } from '../text.ts';
-import { code } from './forms-tools.ts';
+import { code, untrusted } from './forms-tools.ts';
 import { PAGE_TTL_MS } from './page-ttl.ts';
 
 export interface ReportingPage {
@@ -24,7 +24,9 @@ export function unknownPageText(pageId: string, pages: readonly ReportingPage[],
   const others = known.length
     ? `Pages that report ${what}: ${list}. Pass one of these ids as \`page\`, or leave \`page\` out for the most recent.`
     : `No page reports ${what} right now.`;
-  return `No page ${code(pageId)} is reporting ${what}. ${others}`;
+  const text = `No page ${code(pageId)} is reporting ${what}. ${others}`;
+  // Page URLs come from the page, so they sit behind the notice.
+  return known.some((page) => page.url) ? untrusted(text) : text;
 }
 
 /** The value of `page`, or of an older alias such as `pageId`. */

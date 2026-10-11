@@ -129,8 +129,9 @@ Look for **resubscribing** rows in **Async subscriptions**, and for `async-on-ca
 | `pangular:get-pipes`    | no     | Custom pipes and the built-in pipes in use.                                                                                                                             |
 | `pangular:lint-pipes`   | no     | Runs the lint rules above.                                                                                                                                              |
 | `pangular:explain-pipe` | partly | One pipe by `name`: where it is declared or used, purity, live counts, last input and output, the stale warning, resubscribing `\| async` usages and the lint findings. |
+| `pangular:record-pipes` | yes    | Starts or stops call recording with `action`, like **Record calls**.                                                                                                    |
 
-Agents can't turn recording on. To give `explain-pipe` call data, click **Record calls** in the panel first. See [Tools](../agents/tools.md).
+`explain-pipe` and `record-pipes` take `page` to pick a tab, and default to the most recent one, except that `record-pipes` with `action: "stop"` and no `page` stops recording on every tab. To give `explain-pipe` call data, call `record-pipes` with `action: "start"` or click **Record calls** in the panel, then use the app. See [Tools](../agents/tools.md#pipes).
 
 ## Limits and gotchas
 
@@ -154,7 +155,7 @@ Recording is off by default. Reload the page and it is off again.
 
 <ngmd-accordion>
   <ngmd-accordion-item title="Why does explain-pipe return no call data?">
-    Recording is off. Agents can't turn it on. Click <strong>Record calls</strong> in the panel first.
+    Recording is off. Call <code>pangular:record-pipes</code> with <code>action: "start"</code>, or click <strong>Record calls</strong> in the panel, then use the app.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why isn't a pipe from another package listed as built-in?">
     The built-in list covers the <code>&#64;angular/common</code> pipes only.
