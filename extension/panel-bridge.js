@@ -18,6 +18,8 @@ const REFUSED_DOCS = {
 const PATHS = ['/__pangular/', '/__devframes/pangular/', '/__devframe/', '/'];
 const CONNECTION_FILES = ['__devframe/__connection.json', '__connection.json'];
 const PROBE_TIMEOUT_MS = 1500;
+// The first path gets this long on its own before the rest are sent.
+const PROBE_HEAD_START_MS = 150;
 // Keep in step with PANGULAR_EXTENSION_IDS in packages/devtools/src/extension-origin.ts.
 const PINNED_ORIGINS = ['chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk'];
 const REFUSED_TEXT_LIMIT = 200;
@@ -131,26 +133,41 @@ async function waitForPageId(run) {
 }
 
 // The first candidate, in PATHS order, that answers with a connection file, and the
-// status of each probe. All probes run at once, so a missing server costs one timeout.
+// status of each probe. The first candidate gets a short head start; then the rest run at
+// once, so a missing server costs one timeout. Probes still running once a winner is
+// known are aborted.
 async function findConnection(candidates) {
   const probes = candidates.map((candidate) => ({ url: candidate.url, status: null, text: '' }));
-  const answers = candidates.map((candidate, index) => probe(candidate, probes[index]));
-  for (const [index, answer] of answers.entries()) {
-    if (await answer) {
-      return { found: candidates[index], probes: probes.slice(0, index + 1) };
-    }
+  const losers = new AbortController();
+  const answers = [probe(candidates[0], probes[0], losers.signal)];
+  const headStart = await Promise.race([
+    answers[0],
+    new Promise((resolve) => setTimeout(() => resolve(null), PROBE_HEAD_START_MS)),
+  ]);
+  if (headStart) return { found: candidates[0], probes: probes.slice(0, 1) };
+  for (let index = 1; index < candidates.length; index++) {
+    answers.push(probe(candidates[index], probes[index], losers.signal));
   }
-  return { found: null, probes };
+  try {
+    for (const [index, answer] of answers.entries()) {
+      if (await answer) {
+        return { found: candidates[index], probes: probes.slice(0, index + 1) };
+      }
+    }
+    return { found: null, probes };
+  } finally {
+    losers.abort();
+  }
 }
 
 // Whether `candidate` answers with a connection file; records its status in `result`.
-async function probe(candidate, result) {
+async function probe(candidate, result, cancel) {
   try {
     const response = await fetch(candidate.url, {
       credentials: 'omit',
       cache: 'no-store',
       redirect: 'error',
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      signal: AbortSignal.any([cancel, AbortSignal.timeout(PROBE_TIMEOUT_MS)]),
     });
     result.status = response.status;
     if (!response.ok) {

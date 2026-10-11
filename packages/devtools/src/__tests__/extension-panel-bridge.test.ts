@@ -21,7 +21,7 @@ interface Setup {
   extensionId?: string;
   granted?: boolean;
   grant?: boolean;
-  fetch?: (url: string) => Promise<Response>;
+  fetch?: (url: string, init?: RequestInit) => Promise<Response>;
   inspect?: (expression: string) => unknown;
 }
 
@@ -35,7 +35,7 @@ function open(setup: Setup = {}) {
   const origin = setup.origin ?? 'http://localhost:4200';
   let granted = setup.granted ?? true;
   const navigated: Listener[] = [];
-  const fetch = vi.fn((url: string) => (setup.fetch ?? offline)(url));
+  const fetch = vi.fn((url: string, init?: RequestInit) => (setup.fetch ?? offline)(url, init));
   const request = vi.fn(async () => {
     granted = setup.grant ?? false;
     return granted;
@@ -74,6 +74,7 @@ function open(setup: Setup = {}) {
     document,
     location,
     fetch,
+    AbortController,
     AbortSignal,
     URL,
     setTimeout,
@@ -361,33 +362,52 @@ describe('extension panel bridge', () => {
     );
   });
 
-  it('sends every probe at once and prefers the earliest path that answers', async () => {
+  it('gives the first path a head start, then prefers the earliest path that answers', async () => {
     const answers = new Map<string, (response: Response) => void>();
+    const signals = new Map<string, AbortSignal>();
     const panel = open({
       pageId: () => 'page-1',
-      fetch: (url) => new Promise((resolve) => answers.set(url, resolve)),
+      fetch: (url, init) => {
+        signals.set(url, init!.signal!);
+        return new Promise((resolve) => answers.set(url, resolve));
+      },
     });
     await vi.advanceTimersByTimeAsync(0);
+    expect(panel.fetch.mock.calls.map(([url]) => url)).toEqual([
+      'http://localhost:4200/__pangular/__devframe/__connection.json',
+    ]);
+
+    await vi.advanceTimersByTimeAsync(150);
     const urls = panel.fetch.mock.calls.map(([url]) => url);
-    expect(urls.length).toBeGreaterThan(1);
+    expect(urls.length).toBeGreaterThan(2);
     expect([...answers.keys()]).toEqual(urls);
 
     answers.get('http://localhost:4200/__connection.json')!(new Response('{}', { status: 200 }));
     await vi.advanceTimersByTimeAsync(0);
     expect(panel.frame.style.display).toBe('none');
 
-    answers.get('http://localhost:4200/__devframes/pangular/__connection.json')!(
-      new Response('{}', { status: 200 }),
-    );
-    for (const [url, answer] of answers) {
-      if (!url.endsWith('/__devframes/pangular/__connection.json')) {
-        answer(new Response('', { status: 404 }));
-      }
+    const winner = 'http://localhost:4200/__devframes/pangular/__connection.json';
+    answers.get(winner)!(new Response('{}', { status: 200 }));
+    for (const url of urls.slice(0, urls.indexOf(winner))) {
+      answers.get(url)!(new Response('', { status: 404 }));
     }
     await vi.advanceTimersByTimeAsync(0);
     expect(new URL(panel.frame.src).searchParams.get('baseURL')).toBe(
       'http://localhost:4200/__devframes/pangular/',
     );
+    for (const url of urls.slice(urls.indexOf(winner) + 1)) {
+      expect(signals.get(url)!.aborted, url).toBe(true);
+    }
+  });
+
+  it('sends one probe when the first path answers within its head start', async () => {
+    const panel = open({
+      pageId: () => 'page-1',
+      fetch: found('/__pangular/__devframe/__connection.json'),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(panel.fetch).toHaveBeenCalledTimes(1);
+    expect(panel.frame.style.display).toBe('block');
   });
 
   it('pins the same extension origins the server trusts', () => {
