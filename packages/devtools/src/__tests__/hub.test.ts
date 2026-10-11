@@ -69,28 +69,28 @@ describe('Pangular Inspector hub', () => {
       ['pangular:capacitor', '/__devframes/pangular/?view=capacitor'],
     ]);
     expect(rail[0].title).toBe('All tools');
-    expect(rail[0].badge).toBeUndefined();
     expect(ours.filter((d) => d.title.endsWith('Coming Soon'))).toEqual([]);
     expect(ours.some((d) => d.groupId)).toBe(false);
     expect(new Set(ours.map((d) => d.frameId))).toEqual(new Set(['pangular']));
     expect(docks.find((d) => d.id === 'pangular')?.visibility).toBe('false');
   });
 
-  it('marks the docks of tools with nothing to show with a setup badge and says why', async () => {
+  it('titles the docks of tools with nothing to show with the reason, and adds no badge', async () => {
     const { docks } = await boot(makeProject({ 'package.json': '{}' }));
     const status = Object.fromEntries(
       docks
         .filter((d) => d.id.startsWith('pangular:'))
         .map((d) => [d.id, [d.title, d.badge, d.badgeVariant]]),
     );
+    // The hub fades a badge with its button, so it would fail axe and cover the icon.
     expect(status).toEqual({
       'pangular:all': ['All tools', undefined, undefined],
       'pangular:angular': ['Angular', undefined, undefined],
       'pangular:ngrx': ['NgRx', undefined, undefined],
-      'pangular:analog': ['Analog: not an Analog app', 'setup', 'info'],
-      'pangular:angular-native': ['Angular Native: no app connected', 'setup', 'info'],
+      'pangular:analog': ['Analog: not an Analog app', undefined, undefined],
+      'pangular:angular-native': ['Angular Native: no app connected', undefined, undefined],
       'pangular:nativescript': ['NativeScript', undefined, undefined],
-      'pangular:capacitor': ['Capacitor: no app connected', 'setup', 'info'],
+      'pangular:capacitor': ['Capacitor: no app connected', undefined, undefined],
     });
   });
 
@@ -100,7 +100,7 @@ describe('Pangular Inspector hub', () => {
     expect([analog?.title, analog?.badge]).toEqual(['Analog', undefined]);
   });
 
-  it('clears a badge while the tool reports and puts it back when the data goes', async () => {
+  it('restores the plain title while the tool reports and puts the reason back when the data goes', async () => {
     const { ctx } = await boot(makeProject({ 'package.json': '{}' }));
     const update = vi.spyOn(ctx.docks, 'update');
     const dock = (id: string) => {
@@ -147,9 +147,12 @@ describe('Pangular Inspector hub', () => {
     expect(update).toHaveBeenCalledTimes(2);
 
     await invoke('pangular:forget-capacitor-page', 'cap1');
-    expect(dock('pangular:capacitor')).toEqual(['Capacitor: no app connected', 'setup']);
+    expect(dock('pangular:capacitor')).toEqual(['Capacitor: no app connected', undefined]);
     await invoke('pangular:forget-component-page', 'an42');
-    expect(dock('pangular:angular-native')).toEqual(['Angular Native: no app connected', 'setup']);
+    expect(dock('pangular:angular-native')).toEqual([
+      'Angular Native: no app connected',
+      undefined,
+    ]);
     expect(update).toHaveBeenCalledTimes(4);
   });
 

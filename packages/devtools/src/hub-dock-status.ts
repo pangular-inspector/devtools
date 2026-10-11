@@ -38,9 +38,9 @@ export function angularNativeReporting(state: unknown): boolean {
 }
 
 /**
- * Registers the hub docks and keeps the setup badge of the Analog, Angular
+ * Registers the hub docks and keeps the explaining title of the Analog, Angular
  * Native and Capacitor docks in step with the data their views show. A
- * NativeScript app reports like a browser page, so its dock gets no badge.
+ * NativeScript app reports like a browser page, so its dock keeps its plain title.
  */
 export function trackHubDocks(
   ctx: unknown,

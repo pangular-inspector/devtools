@@ -79,24 +79,19 @@ describe('hub docks', () => {
       components,
     });
     const capacitorDock = () => hub.docks.views.get('pangular:capacitor')!;
-    expect(capacitorDock()).toMatchObject({
-      title: 'Capacitor: no app connected',
-      badge: 'setup',
-      badgeVariant: 'info',
-    });
+    expect(capacitorDock().title).toBe('Capacitor: no app connected');
+    expect('badge' in capacitorDock()).toBe(false);
 
     capacitor.set({ pages: { cap1: capacitorPage } });
     capacitor.set({ pages: { cap1: capacitorPage, cap2: { ...capacitorPage, pageId: 'cap2' } } });
     expect(hub.docks.update).toHaveBeenCalledTimes(1);
     expect(capacitorDock().title).toBe('Capacitor');
-    expect('badge' in capacitorDock()).toBe(false);
-    expect('badgeVariant' in capacitorDock()).toBe(false);
 
     components.set({ pages: { web1: { pageId: 'web1' } } });
     expect(hub.docks.update).toHaveBeenCalledTimes(1);
 
     capacitor.set({ pages: {} });
-    expect(capacitorDock().badge).toBe('setup');
+    expect(capacitorDock().title).toBe('Capacitor: no app connected');
     expect(hub.docks.update).toHaveBeenCalledTimes(2);
   });
 });

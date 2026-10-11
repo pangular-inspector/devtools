@@ -62,8 +62,6 @@ export const UNAVAILABLE_TITLES: Record<StatusView, string> = {
   capacitor: 'Capacitor: no app connected',
 };
 
-export const UNAVAILABLE_BADGE = 'setup';
-
 /** Whether each tool has something to show; a missing view counts as available. */
 export type HubDockAvailability = Partial<Record<StatusView, boolean>>;
 
@@ -91,12 +89,9 @@ function withStatus(
   available: boolean,
 ): DevframeViewIframe {
   if (available || !isStatusView(view)) return entry;
-  return {
-    ...entry,
-    title: UNAVAILABLE_TITLES[view],
-    badge: UNAVAILABLE_BADGE,
-    badgeVariant: 'info',
-  };
+  // The title only: the hub fades a badge with its button, so a badge would
+  // fail the contrast check and cover the icon.
+  return { ...entry, title: UNAVAILABLE_TITLES[view] };
 }
 
 export function registerHubDocks(
@@ -152,7 +147,7 @@ export function registerHubDocks(
       const entry = plain.get(view);
       if (!entry || available.get(view) === has) return;
       available.set(view, has);
-      // A whole entry, so a cleared badge is gone rather than merged back in.
+      // A whole entry, so the plain title replaces the explaining one.
       ctx.docks.update(withStatus(entry, view, has));
     },
   };
