@@ -204,25 +204,36 @@ export async function disposeOverlay(): Promise<void> {
 // misses the documented `/__pangular/` mount in a host app.
 const DEFAULT_BASES = ['./', '/__pangular/', '/__devframes/pangular/'];
 
-function noServerError(bases: string | string[], cause: unknown, manual: boolean): Error {
+const SERVER_HINT =
+  'Mount initPangularHub() or the pangular() Vite plugin in your dev server, before the SSR handler. ' +
+  `On a custom path, pass it to initOverlay({baseURL}). See ${SETUP_URL}`;
+const DEVICE_HINT =
+  "From an app on a device, check that the server listens on the network (--host 0.0.0.0) and allows the app's origin, and that the WebView may load http: an https page blocks it as mixed content, and Android blocks cleartext unless the app allows it. See https://pangular-inspector.dev/guides/capacitor/";
+
+/**
+ * `manual`: the overlay was given `connectionMeta`, so only the device and
+ * network hints apply. `device`: it runs in a Capacitor WebView without it,
+ * which may be live reload from the dev server, so it gets both hints.
+ */
+function noServerError(
+  bases: string | string[],
+  cause: unknown,
+  { device, manual }: { device: boolean; manual: boolean },
+): Error {
   const tried = (Array.isArray(bases) ? bases : [bases]).join(', ');
-  return new Error(
-    `[pangular] No devtools server found (tried ${tried}). ` +
-      (manual
-        ? "From an app on a device, check that the server listens on the network (--host 0.0.0.0) and allows the app's origin, and that the WebView may load http: an https page blocks it as mixed content, and Android blocks cleartext unless the app allows it. See https://pangular-inspector.dev/guides/capacitor/"
-        : 'Mount initPangularHub() or the pangular() Vite plugin in your dev server, before the SSR handler. ' +
-          `On a custom path, pass it to initOverlay({baseURL}). See ${SETUP_URL}`),
-    { cause },
-  );
+  const hints = manual ? DEVICE_HINT : device ? `${SERVER_HINT} ${DEVICE_HINT}` : SERVER_HINT;
+  return new Error(`[pangular] No devtools server found (tried ${tried}). ${hints}`, { cause });
 }
 
 async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) => boolean) {
   const bases = options.baseURL ?? DEFAULT_BASES;
-  // Started by hand for another origin, such as a Capacitor WebView.
-  const manual = !!options.connectionMeta || !!(globalThis as { Capacitor?: unknown }).Capacitor;
+  const where = {
+    device: !!(globalThis as { Capacitor?: unknown }).Capacitor,
+    manual: !!options.connectionMeta,
+  };
   const rpc = await connectDevframe(overlayConnectOptions(options, DEFAULT_BASES)).catch(
     (error: unknown) => {
-      throw noServerError(bases, error, manual);
+      throw noServerError(bases, error, where);
     },
   );
   if (!own(() => rpc.close?.())) return;

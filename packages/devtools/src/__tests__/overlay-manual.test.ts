@@ -159,6 +159,15 @@ describe.sequential('overlay connectionMeta', () => {
     const failure = initOverlay({ baseURL: 'http://192.168.1.20:9999/' });
     await expect(failure).rejects.toThrow('No devtools server found');
     await expect(failure).rejects.toThrow(/mixed content.*cleartext/);
+    // Without connectionMeta it may be live reload, so the dev server hints stay too.
+    await expect(failure).rejects.toThrow('Mount initPangularHub()');
+  });
+
+  it('keeps to the server hints in a browser, without Capacitor', async () => {
+    const { initOverlay } = await loadManual();
+    const failure = initOverlay({ baseURL: 'http://localhost:4200/' });
+    await expect(failure).rejects.toThrow('Mount initPangularHub()');
+    await expect(failure).rejects.not.toThrow(/mixed content/);
   });
 
   it('warns once when the server refuses the authToken or cannot be reached', async () => {
