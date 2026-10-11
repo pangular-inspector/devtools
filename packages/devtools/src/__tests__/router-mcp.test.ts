@@ -443,7 +443,7 @@ describe('router MCP tools', () => {
       /Page `bare` reports no Router/,
     );
     const unknown = await call('navigate', { action: 'probe', url: '/', page: 'gone' });
-    expect(unknown).toMatch(/^No page `gone` is reporting router state\. Pages that report/);
+    expect(unknown).toMatch(/^_Labels.*_\n\nNo page `gone` is reporting router state\. Pages/);
     expect(unknown).toContain('`bare`');
     expect(unknown).not.toMatch(/stdio/);
     expect(await call('navigate', { action: 'resolve-lazy' })).toContain('routeId is required');

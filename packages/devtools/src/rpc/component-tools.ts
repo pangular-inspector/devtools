@@ -1,5 +1,6 @@
 import type { ComponentPage, DeferBlockInfo, LiveComponentNode } from '../types.ts';
 import { redactMessage, redactUrl } from '../router.ts';
+import { untrusted } from './forms-tools.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
 import { capped } from './router-tools.ts';
 
@@ -189,7 +190,7 @@ export function deferBlocksText(pages: ComponentPage[], now = Date.now()): strin
     ].join('\n');
   });
   return capped(
-    sections.join('\n\n'),
+    untrusted(sections.join('\n\n')),
     pages.length > 1
       ? 'pass `page` to read one tab'
       : 'see the Defer blocks list on the Components page of the panel',

@@ -222,7 +222,7 @@ describe('defer-blocks tool', () => {
     expect(await call('defer-blocks', { pageId: 'p2' })).not.toContain('`p1`');
     expect(await call('defer-blocks', { page: 'p2' })).not.toContain('`p1`');
     expect(await call('defer-blocks', { page: 'gone' })).toMatch(
-      /^No page `gone` is reporting a component tree\./,
+      /^_Labels.*_\n\nNo page `gone` is reporting a component tree\./,
     );
   });
 });

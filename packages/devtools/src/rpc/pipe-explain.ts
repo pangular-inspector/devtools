@@ -1,7 +1,7 @@
 import { scanPipes } from './get-pipes.ts';
 import { lintPipes, type PipeLintFinding } from './pipe-lint.ts';
 import type { PipesState, PipeUsageInfo } from './pipes-tools.ts';
-import { code } from './forms-tools.ts';
+import { code, untrusted } from './forms-tools.ts';
 
 const MAX_VALUE_CHARS = 200;
 
@@ -75,7 +75,7 @@ export function explainPipeText(
     lines.push(...findings.map((f) => lintLine(f)));
   }
 
-  return lines.join('\n');
+  return untrusted(lines.join('\n'));
 }
 
 const NO_PAGE =
