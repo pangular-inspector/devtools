@@ -17,6 +17,7 @@ import {
   type CapacitorState,
 } from './rpc/capacitor-tools.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
+import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
@@ -1612,13 +1613,12 @@ const pangular = defineDevframe({
         const pageId = report?.pageId;
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return;
         const zone = ZONE_MODES.find((mode) => mode === report?.zone);
+        const tree = sanitizeInjectorTree(report?.roots, report?.environment);
         injectorPages.set(pageId, {
           pageId,
-          roots: (Array.isArray(report?.roots) ? report.roots : []) as InjectorTreeNode[],
-          environment: (Array.isArray(report?.environment)
-            ? report.environment
-            : []) as InjectorTreeNode[],
-          ...(report?.truncated === true ? { truncated: true } : {}),
+          roots: tree.roots,
+          environment: tree.environment,
+          ...(report?.truncated === true || tree.truncated ? { truncated: true } : {}),
           ...(zone ? { zone } : {}),
           reportedAt: Date.now(),
         });
@@ -1739,7 +1739,7 @@ const pangular = defineDevframe({
       id: 'pangular:injector-tree',
       name: 'Angular Injector Tree',
       description:
-        'DI injector hierarchy last reported by a connected page (`pages[pageId]`, `roots` and `environment` are the latest), with providers at each level. Element injectors list what their components and directives inject; environment injectors list what the services they already created inject. `zone` is the change detection mode: `zoneless`, `zone` (zone.js) or `zone-unused` (zoneless with zone.js still loaded). `truncated: true` means the page has more element injectors than it reports (the first 2000), so the rest are missing. Empty when no page is connected.',
+        'DI injector hierarchy last reported by a connected page (`pages[pageId]`, `roots` and `environment` are the latest), with providers at each level. Element injectors list what their components and directives inject; environment injectors list what the services they already created inject. `zone` is the change detection mode: `zoneless`, `zone` (zone.js) or `zone-unused` (zoneless with zone.js still loaded). `truncated: true` means the page has more element injectors than it reports (the first 2000) or more than 2500 injectors in all, so the rest are missing. Empty when no page is connected.',
       mimeType: 'application/json',
       read: () => ({ text: JSON.stringify(injectorTreeState.value(), null, 2) }),
     });

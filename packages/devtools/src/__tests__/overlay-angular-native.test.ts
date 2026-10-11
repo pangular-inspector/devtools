@@ -470,6 +470,35 @@ describe('initAngularNativeOverlay', () => {
     dispose();
   });
 
+  it('sends the injector tree again on the next tick after a rejected push', async () => {
+    const { root, ng } = fixture();
+    g['ng'] = ng;
+    const session = fakeRpc();
+    const scope = session.rpc.scope;
+    let rejected = false;
+    session.rpc.scope = () => {
+      const scoped = scope();
+      const call = scoped.rpc.call;
+      scoped.rpc.call = vi.fn(async (name: string, arg: unknown) => {
+        const answer = await call(name, arg);
+        if (name === 'push-injector-tree' && !rejected) {
+          rejected = true;
+          throw new Error('socket down');
+        }
+        return answer;
+      });
+      return scoped;
+    };
+    connectDevframe.mockResolvedValue(session.rpc);
+    const { initAngularNativeOverlay } = await import('../overlay-angular-native.ts');
+    const dispose = initAngularNativeOverlay({ root: asNode(root), intervalMs: 1000 });
+    await vi.waitFor(() => expect(rejected).toBe(true));
+    await vi.advanceTimersByTimeAsync(1500);
+    const pushes = session.calls.filter(([name]) => name === 'push-injector-tree');
+    expect(pushes.length).toBeGreaterThanOrEqual(2);
+    dispose();
+  });
+
   it('retries a rejected full history push as a full push, not a delta', async () => {
     const { root, ng } = fixture();
     g['ng'] = ng;
