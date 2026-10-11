@@ -1784,7 +1784,7 @@ const pangular = defineDevframe({
       id: 'pangular:forms',
       name: 'Angular Forms',
       description:
-        "Every form a connected page last reported (Signal Forms, reactive and template-driven), with each field's value, status, touched, dirty and errors, plus recent changes. Empty when no page is connected.",
+        "Every form a connected page last reported (Signal Forms, reactive and template-driven), with each field's value, status, touched, dirty and errors, plus recent changes. The JSON starts with an `_untrusted` notice. Empty when no page is connected.",
       mimeType: 'application/json',
       read: () => ({ text: formsResourceText(formsState.value() as FormsState) }),
     });
@@ -1793,7 +1793,7 @@ const pangular = defineDevframe({
       id: 'pangular:router',
       name: 'Angular Router',
       description:
-        'The active route tree (params, data, guards, resolvers) and recent navigations of each connected page. Empty when no page is connected.',
+        'The active route tree (params, data, guards, resolvers) and recent navigations of each connected page. The JSON starts with an `_untrusted` notice. Empty when no page is connected.',
       mimeType: 'application/json',
       read: () => ({ text: routerResourceText(routerState.value() as RouterState) }),
     });

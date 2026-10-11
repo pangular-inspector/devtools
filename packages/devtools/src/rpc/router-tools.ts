@@ -7,6 +7,7 @@ import { fixedTtl, type PageTtl } from './page-ttl.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 import { unknownPageText } from './pages.ts';
 import { droppedNote } from '../timeline-limits.ts';
+import { RESOURCE_UNTRUSTED, withUntrustedNotice } from './resource-text.ts';
 import {
   describeLoop,
   detectLoops,
@@ -830,9 +831,10 @@ function slim(nav: NavigationRecord) {
 }
 
 export function routerResourceText(state: RouterState): string {
-  const json = JSON.stringify(state);
+  const json = JSON.stringify(withUntrustedNotice(state));
   if (json.length <= MAX_RESOURCE_CHARS) return json;
   const out = {
+    _untrusted: RESOURCE_UNTRUSTED,
     truncated: true,
     note: 'The router state is too large for this resource. Use inspect-route, explain-navigation and list-routes instead.',
     pages: [] as {

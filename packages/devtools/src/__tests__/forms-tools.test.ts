@@ -1,5 +1,6 @@
 import '@angular/compiler';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
+import { RESOURCE_UNTRUSTED } from '../rpc/resource-text.ts';
 import { describe, expect, it } from 'vitest';
 import { serializeControl, type CollectedForm, type FormFieldNode } from '../forms.ts';
 import {
@@ -376,6 +377,11 @@ describe('value hiding and resource size', () => {
     const text = formsResourceText({ forms: [big], events, reportedAt: 1 });
     const parsed = JSON.parse(text);
     expect(parsed.truncated).toBe(true);
+    expect(Object.keys(parsed)[0]).toBe('_untrusted');
+    expect(parsed._untrusted).toBe(RESOURCE_UNTRUSTED);
+    const small = JSON.parse(formsResourceText({ forms: [], events: [], reportedAt: 1 }));
+    expect(Object.keys(small)[0]).toBe('_untrusted');
+    expect(small).toMatchObject({ _untrusted: RESOURCE_UNTRUSTED, forms: [] });
     expect(parsed.forms[0]).toMatchObject({ id: 'form-1', fields: 101 });
     expect(parsed.events).toHaveLength(50);
     expect(parsed.events[0].timestamp).toBe(10);

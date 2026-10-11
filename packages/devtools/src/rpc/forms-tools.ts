@@ -19,6 +19,7 @@ import {
 } from './forms-cap.ts';
 import { fixedTtl, type PageTtl } from './page-ttl.ts';
 import { clip } from '../text.ts';
+import { RESOURCE_UNTRUSTED, withUntrustedNotice } from './resource-text.ts';
 
 export interface FormsState {
   forms: CollectedForm[];
@@ -381,9 +382,10 @@ export function explainFormsText(
 }
 
 export function formsResourceText(state: FormsState): string {
-  const json = JSON.stringify(state);
+  const json = JSON.stringify(withUntrustedNotice(state));
   if (json.length <= MAX_TOOL_CHARS * 5) return json;
   return JSON.stringify({
+    _untrusted: RESOURCE_UNTRUSTED,
     truncated: true,
     note: 'The full forms state is too large for this resource. Use the inspect-forms tool with `form`, `path` or `onlyInvalid` to read it.',
     reportedAt: state.reportedAt,

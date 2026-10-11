@@ -7,6 +7,14 @@ export const RESOURCE_UNTRUSTED =
 /** Sentence each live-state resource description ends with, so agents know the fallback shape. */
 export const LIVE_RESOURCE_NOTE = `The JSON starts with an \`_untrusted\` notice. Past ${MAX_RESOURCE_CHARS.toLocaleString('en-US')} characters it holds only \`truncated: true\`, \`pages\` as a list of connected page ids and a \`note\` that names the tools to read the data with instead.`;
 
+/** `state` led by the `_untrusted` notice. The server's notice always wins
+ * over an `_untrusted` key already in `state`. */
+export function withUntrustedNotice(state: object): Record<string, unknown> {
+  return Object.assign({ _untrusted: RESOURCE_UNTRUSTED }, state, {
+    _untrusted: RESOURCE_UNTRUSTED,
+  });
+}
+
 function pageIdsOf(pages: unknown): string[] {
   if (Array.isArray(pages)) {
     return pages
@@ -24,7 +32,7 @@ function pageIdsOf(pages: unknown): string[] {
  * ids and a note that names the tools to read the data with instead.
  */
 export function liveResourceText(state: object, instead: string): string {
-  const json = JSON.stringify({ _untrusted: RESOURCE_UNTRUSTED, ...state });
+  const json = JSON.stringify(withUntrustedNotice(state));
   if (json.length <= MAX_RESOURCE_CHARS) return json;
   return JSON.stringify({
     _untrusted: RESOURCE_UNTRUSTED,
