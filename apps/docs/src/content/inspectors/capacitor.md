@@ -67,7 +67,7 @@ The log starts when the overlay starts, unless the app loads the Capacitor hook 
 
 A call that a plugin's web implementation answers never reaches the native bridge, and neither does the **Not implemented** error that `@capacitor/core` raises for a method no platform implements. The tab sees these calls only when `@pangular-inspector/devtools/capacitor-hook` runs before `@capacitor/core`. On the web, without the hook, the tab says that calls aren't shown.
 
-Add the hook to the polyfills of your development configuration, so it loads before your app and stays out of production builds:
+Add the hook to the polyfills of your development configuration, so it loads before your app and stays out of production builds. A configuration's `polyfills` replace the list in the build's `options`, so copy that list and add the hook to it:
 
 ```json
 // angular.json (excerpt)
@@ -88,7 +88,7 @@ Add the hook to the polyfills of your development configuration, so it loads bef
 }
 ```
 
-Leave `zone.js` out if your app doesn't use it. The hook starts on import, and does nothing when `ngDevMode` is off.
+This sample assumes the base list is `["zone.js"]`. Leave `zone.js` out if your app doesn't use it. The hook starts on import, and does nothing when `ngDevMode` is off.
 
 If the hook runs after `@capacitor/core`, it logs native calls only and changes nothing else. In that case, the tab still records a **Not implemented** error that your app leaves unhandled.
 
@@ -132,7 +132,7 @@ To turn the inspector off, set `inspectors.capacitor` to `false`. The tab, the d
     On the web, plugins don't use the native bridge. Load the Capacitor hook before <code>&#64;capacitor/core</code> to log the calls their web implementations answer. See <a href="#web-calls">Web calls</a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Does watching the calls change them?">
-    No. The wrappers hand the app the same promise, arguments and results, and the hook passes everything through once it stops.
+    No. The app gets a promise that settles the same way, with the same arguments and results, and a rejection the app leaves unhandled still reaches <code>unhandledrejection</code>. The hook passes everything through once it stops.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why are my startup calls missing?">
     They ran before the overlay started. Load the Capacitor hook from your polyfills. See <a href="#startup-calls">Startup calls</a>.

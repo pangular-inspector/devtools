@@ -172,9 +172,29 @@ The endpoints must still accept the page's origin. [Set up Capacitor](../guides/
 
 If the server has [pairing tokens](../security.md#pairing-tokens), pass one as `authToken` and the page is trusted without the code:
 
+Commit a stub that holds no token, so every clone builds:
+
 ```ts
-// src/devtools-token.ts (listed in .gitignore)
-export const devtoolsToken = 'the value of PANGULAR_AUTH_TOKEN on your machine';
+// src/devtools-token.ts (committed)
+export const devtoolsToken: string | undefined = undefined;
+```
+
+Keep the real token in a second file that git ignores, and swap it in with a build configuration of your own:
+
+```ts
+// src/devtools-token.local.ts (listed in .gitignore)
+export const devtoolsToken: string | undefined = 'the value of PANGULAR_AUTH_TOKEN on your machine';
+```
+
+```json
+// angular.json (excerpt, under projects.my-app.architect.build.configurations)
+{
+  "device": {
+    "fileReplacements": [
+      {"replace": "src/devtools-token.ts", "with": "src/devtools-token.local.ts"}
+    ]
+  }
+}
 ```
 
 ```ts
@@ -187,7 +207,9 @@ await initOverlay({
 });
 ```
 
-The token is a development secret. Keep the file out of git. The page keeps the token in its `localStorage`, and sends it in the query string of its connection URL. See [Pairing tokens](../security.md#pairing-tokens).
+Build with `ng build --configuration development,device`. Without the `device` configuration, as in a clone that has no local file, the stub leaves `authToken` out and the page asks for the code.
+
+The token is a development secret. Keep the local file out of git. The page keeps the token in its `localStorage`, and sends it in the query string of its connection URL. See [Pairing tokens](../security.md#pairing-tokens).
 
 When the server refuses the token, the overlay logs a warning in the console and asks for the code instead. With `connectionMeta`, it also logs a warning once when it can't reach the server.
 

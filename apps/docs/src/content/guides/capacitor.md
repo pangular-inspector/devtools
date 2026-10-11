@@ -20,18 +20,18 @@ This guide adds the devtools to an Ionic or Capacitor *Angular app. The app runs
 
 ## Which setup you need
 
-| Your devtools server             | iOS simulator, Android emulator, USB device           | Phone over Wi-Fi                                                           |
+| Your devtools server             | iOS simulator, Android emulator or USB device         | Phone over Wi-Fi, and any iPhone or iPad                                   |
 | -------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------- |
 | Express hub in `server.ts`       | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `allowedOrigins`   |
 | Vite plugin (Analog)             | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `allowLan`         |
 | Standalone CLI behind `ng serve` | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `--allowed-origin` |
 | Standalone CLI on its own        | [A bundled build](#a-bundled-build)                   | [A bundled build](#a-bundled-build)                                        |
 
-Over Wi-Fi, the page's origin is your machine's network address, not `localhost`, so the server has to allow that origin. A bundled build works with any server that the phone can reach.
+USB applies to Android only: `adb reverse` forwards the port. An iPhone or iPad reaches your machine over the network, even when it is plugged in. Over Wi-Fi, the page's origin is your machine's network address, not `localhost`, so the server has to allow that origin. A bundled build works with the standalone CLI and the Express hub, and with the Vite plugin for iOS. See [Run the server where the device reaches it](#run-the-server-where-the-device-reaches-it).
 
 ## Live reload on localhost
 
-`npx cap run <platform> --live-reload` points the WebView at your dev server by setting `server.url` for that run. It does not start the dev server. Start it yourself, then pass its port and `--host localhost`. Without `--host`, Capacitor uses your machine's network address, and the port defaults to 3000.
+These steps use the Capacitor CLI of Capacitor 6, 7 and 8. `npx cap run <platform> --live-reload` points the WebView at your dev server by setting `server.url` for that run. It does not start the dev server. Start it yourself, then pass its port and `--host localhost`. Without `--host`, Capacitor uses your machine's network address, and the port defaults to 3000.
 
 The page is then on `http://localhost:<port>`, the same origin as the devtools in that server. Load the overlay the usual way, as in [Browser overlay](../getting-started/overlay.md), with `@pangular-inspector/devtools/overlay`. It finds the server next to the page and adds the floating button inside the app.
 
@@ -43,7 +43,7 @@ The page is then on `http://localhost:<port>`, the same origin as the devtools i
     For example <code>ng serve --port 4200</code>.
   </ngmd-step>
   <ngmd-step title="Forward the port on Android">
-    For the Android emulator or a USB device, run <code>adb reverse tcp:4200 tcp:4200</code>. The iOS simulator shares your machine's <code>localhost</code>.
+    For the Android emulator or a USB device, run <code>adb reverse tcp:4200 tcp:4200</code>, or add <code>--forwardPorts 4200:4200</code> to the run command below, which runs it for you. The iOS simulator shares your machine's <code>localhost</code>.
   </ngmd-step>
   <ngmd-step title="Run the app">
     <code>npx cap run ios --live-reload --host localhost --port 4200</code>, or the same with <code>android</code>.
@@ -64,6 +64,12 @@ A phone on Wi-Fi loads the app from your machine's network address, such as `htt
 
 Then start the dev server on every interface, for example `ng serve --host 0.0.0.0 --port 4200`, and run `npx cap run ios --live-reload --host 192.168.1.20 --port 4200`. The overlay loads as in a browser, through `@pangular-inspector/devtools/overlay`.
 
+With SSR, Angular also checks the host of each request it renders, and refuses your network address with `URL with hostname "192.168.1.20" is not allowed`. Allow it in `security.allowedHosts`, in the build options of `angular.json`, or for one run with the `NG_ALLOWED_HOSTS` environment variable:
+
+```bash
+NG_ALLOWED_HOSTS=192.168.1.20 ng serve --host 0.0.0.0 --port 4200
+```
+
 <ngmd-alert severity="warning" label="Keep the one-time code on">
   On a network address, anyone on the network can reach the server, and the origin check alone does not stop a client that sends an allowed <code>Origin</code>. The one-time code keeps them out. Don't pass <code>auth: false</code> in this setup, and use a trusted network.
 </ngmd-alert>
@@ -72,9 +78,11 @@ Then start the dev server on every interface, for example `ng serve --host 0.0.0
 
 A bundled build loads the app from `capacitor://localhost` on iOS and from `https://localhost` on Android. Start the overlay yourself with `@pangular-inspector/devtools/overlay-manual`, and pass the server's address and its connection info.
 
+The overlay is bundled into the app here, so install the package in the app first, even when the server runs on its own. See [Installation](../getting-started/installation.md).
+
 ### Start the overlay
 
-```ts {6-12}
+```ts {8-14}
 // src/main.ts
 import {bootstrapApplication} from '@angular/platform-browser';
 import {App} from './app/app';
@@ -114,13 +122,14 @@ Without `connectionMeta`, the overlay first fetches `__connection.json` from `ba
 - The hub's WebSocket side-car (`ws: {sidecar: true}`) listens on `localhost` on a port it picks, so a device can't reach it. Use `ws: false`.
 - With the Vite plugin, add `capacitor://localhost` to its `allowedOrigins` for iOS. Android's `https://localhost` needs no entry, but only reaches Vite through the emulator or `adb reverse`.
 
-The short forms above carry no `configs`, so the overlay uses the default inspectors, limits and redaction, and logs a warning. The server's `redaction.secretNames` are then not applied on the page. If your server has a [config](../getting-started/configuration.md), open its `__connection.json` in your desktop browser, for example `http://localhost:9999/__connection.json`, and pass the whole object as `connectionMeta`.
+The short forms above carry no `configs`, so the overlay uses the default inspectors, limits and redaction, and logs a warning. The server's `redaction.secretNames` are then not applied on the page. The warning only says that the page runs with the defaults, so it can be ignored when the server has no config. If your server has a [config](../getting-started/configuration.md), open its `__connection.json` in your desktop browser and pass the whole object as `connectionMeta`: `http://localhost:9999/__connection.json` for the CLI, or `http://localhost:4000/__devframes/pangular/__connection.json` for the hub.
 
 | Where the app runs      | `<address>`                                                                |
 | ----------------------- | -------------------------------------------------------------------------- |
 | iOS simulator           | `localhost`                                                                |
 | Android emulator or USB | `localhost`, after `adb reverse tcp:9999 tcp:9999` with your server's port |
 | Phone over Wi-Fi        | Your machine's network address, such as `192.168.1.20`                     |
+| iPhone or iPad          | Your machine's network address, over Wi-Fi or USB                          |
 
 The standalone CLI and the Express hub accept `capacitor://localhost` and `https://localhost` without an `allowedOrigins` entry, because their host is `localhost`. The Vite plugin accepts `https://localhost` the same way, and `capacitor://localhost` once it is in `allowedOrigins`. That entry also turns the one-time code on.
 
@@ -128,16 +137,14 @@ The standalone CLI and the Express hub accept `capacitor://localhost` and `https
 
 The page is `https://localhost` on Android and the server is plain HTTP, so the Android WebView blocks the connection as mixed content. Android also blocks cleartext traffic. Allow both in a development build:
 
-```ts {4,10-11}
+```ts {4,8-9}
 // capacitor.config.ts
 import type {CapacitorConfig} from '@capacitor/cli';
 
 const devtools = process.env['CAPACITOR_DEVTOOLS'] === '1';
 
 const config: CapacitorConfig = {
-  appId: 'com.example.trips',
-  appName: 'Trips',
-  webDir: 'www',
+  // Your appId, appName, webDir and other keys, as they are.
   server: devtools ? {cleartext: true} : undefined,
   android: devtools ? {allowMixedContent: true} : undefined,
 };
@@ -145,7 +152,9 @@ const config: CapacitorConfig = {
 export default config;
 ```
 
-Capacitor applies both on `npx cap sync`, which `npx cap run` also runs, so set the flag there: `CAPACITOR_DEVTOOLS=1 npx cap run android`. `server.cleartext` sets `android:usesCleartextTraffic` in the manifest of the `capacitor-cordova-android-plugins` module, which Android merges into the app. Setting `server.androidScheme` to `'http'` also avoids mixed content, but it changes the app's origin, so the WebView no longer sees the data the app stored under `https://localhost`.
+If your config already has a `server` or `android` block, add the keys to it instead.
+
+With `adb reverse`, the server is at `http://localhost`, which Chromium may not count as mixed content. Keep both settings anyway: they cost nothing in a development build. Capacitor applies both on `npx cap sync`, which `npx cap run` also runs, so set the flag there: `CAPACITOR_DEVTOOLS=1 npx cap run android`. `server.cleartext` sets `android:usesCleartextTraffic` in the manifest of the `capacitor-cordova-android-plugins` module, which Android merges into the app. Setting `server.androidScheme` to `'http'` also avoids mixed content, but it changes the app's origin, so the WebView no longer sees the data the app stored under `https://localhost`.
 
 On iOS, App Transport Security can block plain HTTP to a network address. If it does, allow local networking in a development build's `ios/App/App/Info.plist`:
 
@@ -203,7 +212,7 @@ These keys are the same in Capacitor 6, 7 and 8. Keep the development ones out o
 
 <ngmd-accordion>
   <ngmd-accordion-item title="The panel never shows the app" open>
-    Inspect the WebView, with Safari's <strong>Develop</strong> menu for iOS or <code>chrome://inspect</code> for Android, and read the console. <code>[pangular] No devtools server found</code> in a bundled build means <code>connectionMeta</code> is missing. A <strong>Mixed Content</strong> message means <code>allowMixedContent</code> is off, and the overlay sends nothing. A failed connection to the address means the server is not running, listens only on <code>localhost</code>, or the address is wrong for where the app runs. A <code>403</code> under live reload over Wi-Fi means the page's origin is missing from <code>allowedOrigins</code>.
+    Inspect the WebView, with Safari's <strong>Develop</strong> menu for iOS or <code>chrome://inspect</code> for Android, and read the console. <code>[pangular] No devtools server found</code> in a bundled build means <code>connectionMeta</code> is missing, or the WebView blocked the request. A <strong>Mixed Content</strong> message next to it means <code>allowMixedContent</code> is off, and a cleartext error means <code>server.cleartext</code> is. In both cases the overlay sends nothing. A failed connection to the address means the server is not running, listens only on <code>localhost</code>, or the address is wrong for where the app runs. A <code>403</code> under live reload over Wi-Fi means the page's origin is missing from <code>allowedOrigins</code>. A <code>400</code> page with <code>is not allowed</code> under SSR means the address is missing from Angular's <code>security.allowedHosts</code>, as in <a href="#live-reload-over-wi-fi">Live reload over Wi-Fi</a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The code dialog keeps coming back">
     The app's origin changed, its storage was cleared, or the code expired before you typed it. Under live reload over Wi-Fi, another network address is another origin. Type the newest code the server printed.

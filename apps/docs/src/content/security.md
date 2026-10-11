@@ -122,7 +122,7 @@ A pairing token lets a client skip the one-time code, for example an app on a ph
 The page sends the token as the `authToken` option of [`initOverlay`](./getting-started/overlay.md#skip-the-one-time-code).
 
 - A token is a development secret. Read it from an environment variable, and keep it out of committed config and source.
-- Use a long random value. Tokens shorter than 16 characters are ignored with a warning, for example the output of `openssl rand -hex 16` works.
+- Use a long random value, such as the output of `openssl rand -hex 16`. Tokens shorter than 16 characters are ignored with a warning.
 - The servers never print a token. The CLI prints a short hash of each, to tell them apart.
 - Tokens stay on the server. They are not part of the config that pages receive in `__connection.json`.
 - The page sends the token in the query string of its WebSocket or server-sent events URL (`devframe_auth_token`), so it can show up in proxy or server logs, and in the browser console when the connection is refused, such as a mixed content warning.

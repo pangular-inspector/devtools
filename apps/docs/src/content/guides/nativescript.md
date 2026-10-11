@@ -114,11 +114,13 @@ The server listens on `localhost` only, which the iOS simulator and the Android 
 A physical device reaches your machine over the network, so the server has to listen on an interface the device can reach:
 
 ```bash
-npx @pangular-inspector/devtools dev --host 192.168.1.20 --no-auth
+npx @pangular-inspector/devtools dev --host 192.168.1.20 --allowed-origin http://192.168.1.20:9999 --no-auth
 ```
 
+The server then listens on that address only, not on `localhost`, so open the panel at `http://192.168.1.20:9999/`. `--allowed-origin` lets the panel's own origin through there. Use your machine's address and the server's port.
+
 <ngmd-alert severity="warning" label="Trusted networks only">
-  With <code>--host</code> and <code>--no-auth</code>, every host that can reach that address can call the devtools RPC and MCP endpoints without a code. Use it on a trusted network only, and bind to the one interface the device uses rather than <code>0.0.0.0</code>.
+  With <code>--host</code> and <code>--no-auth</code>, every host that can reach that address can call the devtools RPC and MCP endpoints without a code. Use it on a trusted network only. Binding to the one address the device uses, as above, keeps the server off your other interfaces, which <code>0.0.0.0</code> would not.
 </ngmd-alert>
 
 See [Standalone CLI](../getting-started/cli.md) for the other server options and [Security](../security.md) for what `--no-auth` turns off.
