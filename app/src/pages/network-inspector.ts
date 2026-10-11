@@ -238,6 +238,9 @@ function pagePattern(url: string): string {
   return path === '/' ? '' : path;
 }
 
+/** A part the server masked in a payload key, plain or URL-encoded. */
+const REDACTED_PART = /\[redacted\]|%5Bredacted%5D/i;
+
 /** The longest TransferState key `set-ssr-overrides` keeps (see `sanitizeSsrOverrides`). */
 const MAX_OVERRIDE_KEY = 200;
 const MAX_RULES = 50;
@@ -2207,6 +2210,7 @@ export class NetworkInspector {
   selectPage(pageId: string | null) {
     if (pageId) this.selectedPageId.set(pageId);
     this.selectedCallId.set(null);
+    this.overrideFromPayload.set(null);
   }
 
   setDraft<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
@@ -2268,11 +2272,14 @@ export class NetworkInspector {
 
   setOverrideDraft<K extends keyof OverrideDraft>(key: K, value: OverrideDraft[K]) {
     this.overrideDraft.update((d) => ({ ...d, [key]: value }));
+    // The "filled in from the payload" note only describes the entry the form was filled from.
+    if (key === 'kind' && value !== 'state-edit') this.overrideFromPayload.set(null);
   }
 
   patchOverride(key: keyof OverrideDraft, event: Event) {
     const value = (event.target as HTMLInputElement).value;
     this.overrideDraft.update((d) => ({ ...d, [key]: value }));
+    if (key === 'key') this.overrideFromPayload.set(null);
   }
 
   async copyKey(key: string) {
@@ -2286,11 +2293,17 @@ export class NetworkInspector {
 
   /**
    * The edit needs HTTP writes and a key the server keeps exactly: it trims keys and drops longer
-   * ones than it accepts.
+   * ones than it accepts. A key with a redacted part can never match the real one.
    */
   canEditEntry(entry: PayloadEntry): boolean {
     const { key } = entry;
-    return this.canWrite() && !!key && key === key.trim() && key.length <= MAX_OVERRIDE_KEY;
+    return (
+      this.canWrite() &&
+      !!key &&
+      key === key.trim() &&
+      key.length <= MAX_OVERRIDE_KEY &&
+      !REDACTED_PART.test(key)
+    );
   }
 
   /**

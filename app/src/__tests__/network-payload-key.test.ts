@@ -155,6 +155,28 @@ describe('NetworkInspector TransferState keys', () => {
     expect(inspector.canEditEntry(entry(' greeting'))).toBe(false);
     expect(inspector.canEditEntry(entry(''))).toBe(false);
     expect(inspector.canEditEntry(entry('k'.repeat(201)))).toBe(false);
+    expect(inspector.canEditEntry(entry('/api/reset?token=[redacted]'))).toBe(false);
+    expect(inspector.canEditEntry(entry('/api/reset?token=%5Bredacted%5D'))).toBe(false);
+  });
+
+  it('drops the payload note once the form no longer edits that entry', async () => {
+    const host = await render(client());
+    const inspector = fixture.componentInstance;
+    entries(host)[0]
+      .querySelector<HTMLButtonElement>(
+        `button[aria-label="Edit in SSR overrides, key ${HTTP_KEY}"]`,
+      )!
+      .click();
+    await fixture.whenStable();
+    expect(inspector.overrideFromPayload()).toBe('http');
+    const key = host.querySelector<HTMLInputElement>('#override-key')!;
+    key.value = 'other';
+    key.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(inspector.overrideFromPayload()).toBeNull();
+    expect(host.querySelector('#override-value-note')?.textContent ?? '').not.toContain(
+      'redacted copy',
+    );
   });
 
   it('hides the edit action when HTTP writes are off but keeps Copy', async () => {
