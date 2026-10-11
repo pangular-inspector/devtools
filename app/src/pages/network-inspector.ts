@@ -22,6 +22,7 @@ import {
   isHttpRuleStatus,
   type CacheSkip,
 } from '@pangular-inspector/devtools/config';
+import { prettyJson } from '../format';
 import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 
@@ -216,6 +217,31 @@ function pathOf(url: string): string {
     return url;
   }
 }
+
+const REDACTED_IN_URL = /\[redacted\]|%5Bredacted%5D/gi;
+
+/**
+ * A rule pattern for a recorded call: its path and query, without the origin, so it
+ * matches the relative client URL and the absolute SSR URL. A redacted value becomes
+ * `*`, because the real request carries the secret.
+ */
+function mockPattern(url: string): string {
+  return pathOf(url).replace(REDACTED_IN_URL, '*');
+}
+
+/** The preview as a mock body, when it is complete JSON (the rule form takes JSON only). */
+function jsonBody(preview: string): string | null {
+  const pretty = prettyJson(preview);
+  if (pretty !== null) return pretty;
+  try {
+    JSON.parse(preview);
+    return preview.trim();
+  } catch {
+    return null;
+  }
+}
+
+const STANDARD_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
 const MAX_RULES = 50;
 const MAX_PATTERN = 500;
@@ -627,7 +653,29 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           >
             <div class="preview-head">
               <h3 id="preview-heading" tabindex="-1">Response preview</h3>
-              <button type="button" class="ghost" (click)="closePreview()">Close</button>
+              <div class="preview-actions">
+                @if (!detail.error && detail.preview) {
+                  <button
+                    type="button"
+                    class="ghost"
+                    [attr.aria-label]="'Copy the response of ' + detail.method + ' ' + detail.url"
+                    (click)="copyPreview(detail)"
+                  >
+                    Copy
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="ghost"
+                  aria-controls="rule-form"
+                  [disabled]="!canWrite()"
+                  [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
+                  (click)="mockCall(detail)"
+                >
+                  Mock this request
+                </button>
+                <button type="button" class="ghost" (click)="closePreview()">Close</button>
+              </div>
             </div>
             <p class="preview-meta">
               <span class="method">{{ detail.method }}</span>
@@ -645,9 +693,11 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 Matched rule <code>{{ pattern }}</code>
               </p>
             }
-            <pre [class.error]="!!detail.error && !detail.cancelled">{{
-              detail.error ?? detail.preview ?? '(no body)'
-            }}</pre>
+            <pre
+              class="preview-body"
+              tabindex="0"
+              [class.error]="!!detail.error && !detail.cancelled"
+              >{{ detail.error ?? previewText(detail) ?? '(no body)' }}</pre>
           </div>
         }
       </section>
@@ -657,7 +707,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
         @if (!canWrite()) {
           <p id="http-writes-off" class="muted small">{{ writesOff }}</p>
         }
-        <form class="rule-form" (submit)="addRule($event)">
+        <form id="rule-form" class="rule-form" (submit)="addRule($event)">
           <label>
             <span>URL pattern <span class="hint">(substring or * glob)</span></span>
             <input
@@ -675,7 +725,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               <span id="rule-method-label">Method</span>
               <app-select
                 labelledBy="rule-method-label"
-                [options]="methodOptions"
+                [options]="methodOptions()"
                 [value]="draft().method"
                 (valueChange)="setDraft('method', $event ?? '')"
               />
@@ -1631,10 +1681,19 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     }
     .preview-head {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 4px 8px;
       margin-bottom: 4px;
+    }
+    .preview-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    pre.preview-body {
+      max-height: 320px;
     }
     .preview-head h3 {
       margin: 0;
@@ -2202,6 +2261,43 @@ export class NetworkInspector {
     );
   }
 
+  /** The preview as shown: JSON indented by 2 spaces, other text as recorded (both already redacted). */
+  previewText(call: HttpCall): string | undefined {
+    if (call.preview === undefined) return undefined;
+    return prettyJson(call.preview) ?? call.preview;
+  }
+
+  async copyPreview(call: HttpCall) {
+    const text = this.previewText(call);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      this.message.set('Copied.');
+    } catch {
+      this.message.set('The clipboard is not available here.');
+    }
+  }
+
+  /** Fills the fault rule form from a recorded call and moves focus to it. Nothing is saved. */
+  mockCall(call: HttpCall) {
+    const method = call.method.toUpperCase();
+    const pattern = mockPattern(call.url);
+    const body = call.error || !call.preview ? null : jsonBody(call.preview);
+    this.draft.set({ ...EMPTY_DRAFT, pattern, method, body: body ?? '' });
+    const what = `${method} ${pattern}`;
+    this.message.set(
+      body
+        ? `Filled in a rule for ${what} with the preview as its body. Check it, then add the rule.`
+        : call.preview && !call.error
+          ? `Filled in a rule for ${what}. The preview is not complete JSON, so it is not used as the body.`
+          : `Filled in a rule for ${what}. Set a status, a delay or a body, then add the rule.`,
+    );
+    afterNextRender(
+      () => this.host.nativeElement.querySelector<HTMLInputElement>('#rule-pattern')?.focus(),
+      { injector: this.injector },
+    );
+  }
+
   closePreview() {
     const id = this.selectedCallId();
     this.selectedCallId.set(null);
@@ -2241,10 +2337,13 @@ export class NetworkInspector {
     this.pages().map((page) => ({ value: page.pageId, label: page.title || page.url })),
   );
 
-  readonly methodOptions: SelectOption[] = [
-    { value: '', label: 'Any' },
-    ...['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => ({ value: m, label: m })),
-  ];
+  /** The usual methods, plus the draft's own when "Mock this request" filled in another one. */
+  readonly methodOptions = computed<SelectOption[]>(() => {
+    const draft = this.draft().method;
+    const methods =
+      draft && !STANDARD_METHODS.includes(draft) ? [...STANDARD_METHODS, draft] : STANDARD_METHODS;
+    return [{ value: '', label: 'Any' }, ...methods.map((m) => ({ value: m, label: m }))];
+  });
 
   readonly targetOptions: SelectOption<HttpRule['target']>[] = [
     { value: 'both', label: 'SSR + client' },

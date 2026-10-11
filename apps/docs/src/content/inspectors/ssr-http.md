@@ -130,7 +130,7 @@ Above the table, these filters narrow the timeline. They combine, and the count 
 
 If nothing matches, **Clear filters** resets all three. While the filters hide the call that is open in the preview, the preview hides too, and it comes back when the call is visible again.
 
-Click a row for a response preview. The preview opens under the timeline and takes focus. **Close** or `Escape` returns focus to the row. A long timeline scrolls inside its own box. The timeline shows the page's client calls and the SSR calls made while rendering its first URL. **Clear timeline** empties it.
+Click a row for a response preview. The preview opens under the timeline and takes focus. A JSON body is indented by 2 spaces. Other text, and a body clipped at 2000 characters, shows as recorded. The preview is redacted before it reaches the panel, so masked values stay masked. **Copy** puts the shown preview on the clipboard. **Mock this request** fills in the [fault rule form](#fault-injection) from the call. **Close** or `Escape` returns focus to the row. A long timeline scrolls inside its own box. The timeline shows the page's client calls and the SSR calls made while rendering its first URL. **Clear timeline** empties it.
 
 ### Fault injection
 
@@ -143,6 +143,8 @@ Add a rule with these fields:
 - **Delay (ms)** up to 10000, and an optional JSON body.
 
 A status of 400 or more fails the request with an `HttpErrorResponse`. A lower status returns the body as a mocked response. A body with the status on **None** returns it with status 200. A stored rule with a status outside the list loses that status, and is dropped when nothing else is left to change. A rule with only a delay passes the request through, later. A rule needs a status, a delay or a body, so **Add rule** stays off until it has one. The form clears after each added rule. The first enabled rule that matches wins.
+
+To start from a call you already made, open it in the timeline and click **Mock this request**. The form gets the call's method and its path and query as the URL pattern, without the origin, so the rule matches the client and SSR URLs. A redacted value in the URL becomes `*`. When the preview is complete JSON, it becomes the body, with redacted values still masked. Focus moves to **URL pattern**. Nothing is saved until you click **Add rule**, so check the body and pick a status first.
 
 The body follows the request's `responseType`. A `json` request gets the parsed JSON (or the raw string when it does not parse) with `content-type: application/json`. A `text` request gets the string with `text/plain`. A `blob` request gets a `Blob`, and an `arraybuffer` request an `ArrayBuffer`, both with `application/octet-stream`. The same value is the `error` of an injected failure.
 
