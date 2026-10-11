@@ -1,4 +1,13 @@
-import { Component, computed, ElementRef, input, output, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  computed,
+  ElementRef,
+  input,
+  output,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import { time } from '../format';
 import { Select, type SelectOption } from '../ui/select';
 import { FORMS_STYLES, type FormEvent } from './forms-types';
@@ -76,7 +85,8 @@ const EVENT_TYPES = [
         />
       </div>
       <app-select ariaLabel="Event type" [options]="typeOptions()" [(value)]="typeFilter" />
-      <span class="total" aria-live="polite">{{ summary() }}</span>
+      <span class="total">{{ summary() }}</span>
+      <span class="sr-only" role="status">{{ filterStatus() }}</span>
     </div>
     @if (shown().length) {
       <ol class="events">
@@ -508,6 +518,17 @@ export class FormsTimeline {
       return `Showing the latest ${TIMELINE_SHOWN} of ${matching}${scope}`;
     if (this.filtered()) return `${matching} of ${total} ${noun(total)}`;
     return `${total} ${noun(total)}`;
+  });
+
+  /**
+   * The count, announced only when a filter changes. The visible count also changes with every
+   * recorded event, which would make a screen reader talk while the user types in the app.
+   */
+  readonly filterStatus = computed(() => {
+    this.filter();
+    this.typeFilter();
+    this.pathFilter();
+    return untracked(() => this.summary());
   });
 
   clearFilters() {

@@ -112,6 +112,19 @@ describe('FormsTimeline filters', () => {
     expect(root(fixture).querySelector('.events')).toBeNull();
   });
 
+  it('announces the count when a filter changes, not on every new event', async () => {
+    const fixture = await setup(EVENTS);
+    const status = () => root(fixture).querySelector('[role="status"]')?.textContent?.trim();
+    expect(root(fixture).querySelector('.total')?.hasAttribute('aria-live')).toBe(false);
+    await typePath(fixture, 'name');
+    const filtered = status();
+    expect(filtered).toBe(total(fixture));
+    fixture.componentRef.setInput('events', [...EVENTS, event(7, 'name', 'value')]);
+    await fixture.whenStable();
+    expect(total(fixture)).not.toBe(filtered);
+    expect(status()).toBe(filtered);
+  });
+
   it('shows Clear filters when the filters hide everything and resets all three', async () => {
     const fixture = await setup(EVENTS);
     await typePath(fixture, 'nothing');
