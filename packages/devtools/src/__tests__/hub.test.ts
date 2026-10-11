@@ -2,6 +2,7 @@ import { connect } from 'node:net';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hubDefaultOrigins, initPangularHub, type PangularHubOptions } from '../hub.ts';
+import { httpRegistry } from '../http-rules.ts';
 import { makeProject } from './analog-fixture.ts';
 
 const hubs: { close: () => Promise<void> }[] = [];
@@ -285,5 +286,23 @@ describe('Pangular Inspector hub on a server that reloads server.ts', () => {
     expect(mcp.status).toBe(200);
     expect(await listening(second.port)).toBe(true);
     if (first.port !== second.port) expect(await listening(first.port)).toBe(false);
+  });
+});
+
+describe('Pangular Inspector hub server state', () => {
+  it('turns off server HTTP capture when the hub that owns it closes', async () => {
+    const { hub, ctx } = await boot(makeProject({ 'package.json': '{}' }));
+    expect(httpRegistry().owner).toBe(ctx);
+    expect(typeof httpRegistry().record).toBe('function');
+    await hub.close();
+    expect(httpRegistry().record).toBeUndefined();
+  });
+
+  it('leaves a newer hub its capture when an older one closes', async () => {
+    const first = await boot(makeProject({ 'package.json': '{}' }));
+    const second = await boot(makeProject({ 'package.json': '{}' }));
+    await first.hub.close();
+    expect(httpRegistry().owner).toBe(second.ctx);
+    expect(typeof httpRegistry().record).toBe('function');
   });
 });

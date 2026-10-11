@@ -1,4 +1,4 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { Component, computed, input, linkedSignal, signal } from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { actionAllowed, actionBlockedMessage } from '../devtools-config';
@@ -76,6 +76,7 @@ interface MatchResult {
     @if (message()) {
       <p class="message" role="status">{{ message() }}</p>
     }
+    <p class="visually-hidden" role="status">{{ rowResult()?.text }}</p>
     @if (!navigationAllowed()) {
       <p id="route-tree-writes-off" class="message">{{ navigationOff }}</p>
     }
@@ -237,7 +238,7 @@ interface MatchResult {
               @if (rowResult()?.id === row.node.id) {
                 <tr class="row-result">
                   <td colspan="5">
-                    <p id="route-tree-row-result" role="status">{{ rowResult()?.text }}</p>
+                    <p id="route-tree-row-result">{{ rowResult()?.text }}</p>
                   </td>
                 </tr>
               }
@@ -405,11 +406,27 @@ export class RouteTree {
 
   readonly filter = signal('');
   readonly testUrl = signal('');
-  readonly match = signal<MatchResult | null>(null);
-  readonly message = signal('');
-  readonly rowResult = signal<{ id: string; text: string } | null>(null);
-  protected readonly paramValues = signal<Record<string, Record<string, string>>>({});
-  private readonly checkedRow = signal<string | null>(null);
+  private readonly pageId = computed(() => this.page().pageId);
+  // Results, messages and typed params belong to one page. The component stays mounted when
+  // the page picker switches pages, so they start over whenever the pageId changes.
+  readonly match = linkedSignal<string, MatchResult | null>({
+    source: this.pageId,
+    computation: () => null,
+  });
+  readonly message = linkedSignal<string, string>({ source: this.pageId, computation: () => '' });
+  readonly rowResult = linkedSignal<string, { id: string; text: string } | null>({
+    source: this.pageId,
+    computation: () => null,
+  });
+  protected readonly paramValues = linkedSignal<string, Record<string, Record<string, string>>>({
+    source: this.pageId,
+    computation: () => ({}),
+  });
+  private readonly checkedRow = linkedSignal<string, string | null>({
+    source: this.pageId,
+    computation: () => null,
+  });
+  private predictSeq = 0;
 
   readonly active = computed(() => new Set(this.page().activeIds ?? []));
 
@@ -484,10 +501,10 @@ export class RouteTree {
   async predict() {
     const url = this.testUrl().trim();
     if (!url) return;
-    const result = await routerCall<MatchResult>(this.rpc(), 'router-match', {
-      pageId: this.page().pageId,
-      url,
-    });
+    const seq = ++this.predictSeq;
+    const pageId = this.pageId();
+    const result = await routerCall<MatchResult>(this.rpc(), 'router-match', { pageId, url });
+    if (seq !== this.predictSeq || pageId !== this.pageId()) return;
     this.match.set(result);
     if (result) {
       if (this.message() === PAGE_UNREACHABLE) this.message.set('');
@@ -500,7 +517,9 @@ export class RouteTree {
     const url = this.testUrl().trim();
     if (!url) return;
     this.message.set('Running the real matcher in the app…');
-    const result = await routerAction(this.rpc(), this.page().pageId, { action: 'probe', url });
+    const pageId = this.pageId();
+    const result = await routerAction(this.rpc(), pageId, { action: 'probe', url });
+    if (pageId !== this.pageId()) return;
     if (result['error']) {
       this.message.set(String(result['error']));
       return;
@@ -529,11 +548,13 @@ export class RouteTree {
     }
     this.checkedRow.set(null);
     this.rowResult.set({ id: node.id, text: `Navigating to ${node.fullPath}…` });
-    const result = await routerAction(this.rpc(), this.page().pageId, {
+    const pageId = this.pageId();
+    const result = await routerAction(this.rpc(), pageId, {
       action: 'navigate',
       pattern: node.fullPath,
       params: this.paramValues()[node.id] ?? {},
     });
+    if (pageId !== this.pageId()) return;
     this.rowResult.set({
       id: node.id,
       text: result['error']
@@ -543,10 +564,12 @@ export class RouteTree {
   }
 
   async resolveLazy(node: RouteNode) {
-    const result = await routerAction(this.rpc(), this.page().pageId, {
+    const pageId = this.pageId();
+    const result = await routerAction(this.rpc(), pageId, {
       action: 'resolve-lazy',
       id: node.id,
     });
+    if (pageId !== this.pageId()) return;
     if (result['error']) {
       this.rowResult.set({ id: node.id, text: String(result['error']) });
       return;
