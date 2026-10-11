@@ -41,6 +41,14 @@ function anchorOf(roots: unknown[]): Node | null {
   return after instanceof Comment ? after : (nodes[0] ?? null);
 }
 
+function isDeferBlock(raw: unknown): raw is RawDeferBlock & { state: string } {
+  if (!raw || typeof raw !== 'object') return false;
+  const block = raw as RawDeferBlock;
+  return (
+    typeof block.state === 'string' && (typeof block.type !== 'number' || block.type === DEFER_TYPE)
+  );
+}
+
 function timeOf(value: unknown): number | null {
   return typeof value === 'number' ? value : null;
 }
@@ -52,12 +60,15 @@ function timeOf(value: unknown): number | null {
  * Angular gives no `hostNode` (Angular 20), a block is known by the comment
  * Angular places right after its root nodes, which stays put while the block
  * moves from placeholder to content. Only a block with no root nodes falls
- * back to its position among such blocks under its Angular root.
+ * back to its position among such blocks under its Angular root. When such a
+ * block renders and gains an anchor, the anchor takes over its id and timing
+ * as long as the block list under that root kept its length.
  */
 export function createDeferTracker(now: () => number = Date.now) {
   const ids = new WeakMap<object, string>();
   const seen = new WeakMap<object, { key: string; since: number; hydratedAt?: number }>();
   const byPosition = new WeakMap<Element, object[]>();
+  const lastHosts = new WeakMap<Element, object[]>();
   let nextId = 0;
 
   const positionKey = (root: Element, index: number) => {
@@ -67,6 +78,21 @@ export function createDeferTracker(now: () => number = Date.now) {
       byPosition.set(root, keys);
     }
     return (keys[index] ??= {});
+  };
+
+  /** Moves a positional block's id and timing onto the anchor it now has. */
+  const adopt = (root: Element, anchor: Node, index: number, count: number) => {
+    if (ids.has(anchor)) return;
+    const last = lastHosts.get(root);
+    const keys = byPosition.get(root);
+    const previous = last?.length === count ? last[index] : undefined;
+    const slot = previous && keys ? keys.indexOf(previous) : -1;
+    if (!previous || !keys || slot === -1) return;
+    keys.splice(slot, 1);
+    const id = ids.get(previous);
+    const record = seen.get(previous);
+    if (id) ids.set(anchor, id);
+    if (record) seen.set(anchor, record);
   };
 
   const idOf = (host: object) => {
@@ -96,14 +122,18 @@ export function createDeferTracker(now: () => number = Date.now) {
       const out: DeferBlockInfo[] = [];
       for (const root of angularRoots(doc)) {
         const blocks = read(() => util.call(ng, root) ?? [], [] as unknown[]);
+        const valid = Array.isArray(blocks) ? blocks.filter(isDeferBlock) : [];
+        const order: object[] = [];
         let position = 0;
-        for (const raw of blocks as RawDeferBlock[]) {
+        for (const [index, raw] of valid.entries()) {
           if (out.length >= MAX_BLOCKS) return out;
-          if (!raw || typeof raw !== 'object' || typeof raw.state !== 'string') continue;
-          if (typeof raw.type === 'number' && raw.type !== DEFER_TYPE) continue;
           const roots: unknown[] = Array.isArray(raw.rootNodes) ? raw.rootNodes : [];
           const hostNode = raw.hostNode instanceof Node ? raw.hostNode : anchorOf(roots);
+          if (hostNode && !(raw.hostNode instanceof Node)) {
+            adopt(root, hostNode, index, valid.length);
+          }
           const host = hostNode ?? positionKey(root, position++);
+          order.push(host);
           if (hosts.has(host)) continue;
           hosts.add(host);
           const hydration = HYDRATION.has(raw.incrementalHydrationState as string)
@@ -154,6 +184,7 @@ export function createDeferTracker(now: () => number = Date.now) {
           if (record.hydratedAt !== undefined) block.hydratedAt = record.hydratedAt;
           out.push(block);
         }
+        lastHosts.set(root, order);
       }
       return out;
     },

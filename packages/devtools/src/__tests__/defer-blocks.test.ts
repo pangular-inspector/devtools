@@ -191,6 +191,39 @@ describe('createDeferTracker', () => {
     expect(third[1]).toMatchObject({ id: first.id, state: 'complete', since: 3000 });
     expect(third[0].id).toBe(second[0].id);
   });
+
+  it('keeps the id of a block without a hostNode or a placeholder once it renders', () => {
+    const { reviews, anchor, instances } = page();
+    const section = reviews.querySelector('section')!;
+    let clock = 1000;
+    const empty = { placeholderBlock: { exists: false, minimumTime: null } };
+    let raw: unknown[] = [
+      { ...block({ ...empty, state: 'initial' }), type: undefined },
+      { ...block({ ...empty, state: 'initial' }), type: undefined },
+    ];
+    const ng: DeferDebugNg = {
+      getComponent: (el) => instances.get(el) ?? null,
+      ɵgetDeferBlocks: () => raw,
+    };
+    const tracker = createDeferTracker(() => clock);
+    const first = tracker.collect(ng)!;
+
+    clock = 2000;
+    raw = [
+      { ...block({ ...empty, state: 'complete', rootNodes: [section] }), type: undefined },
+      { ...block({ ...empty, state: 'initial' }), type: undefined },
+    ];
+    const second = tracker.collect(ng)!;
+    expect(section.nextSibling).toBe(anchor);
+    expect(second.map((b) => b.id)).toEqual(first.map((b) => b.id));
+    expect(second[0]).toMatchObject({ state: 'complete', since: 2000 });
+    expect(second[1]).toMatchObject({ state: 'initial', since: 1000 });
+
+    clock = 3000;
+    const third = tracker.collect(ng)!;
+    expect(third.map((b) => b.id)).toEqual(first.map((b) => b.id));
+    expect(third[0].since).toBe(2000);
+  });
 });
 
 describe('deferBlocksText', () => {
