@@ -52,7 +52,11 @@ export interface CapacitorPageView {
   title: string;
   reportedAt: number;
   info: CapacitorInfo;
-  calls: CapacitorCall[];
+  /**
+   * Keyed by call id, so adding a call or dropping the oldest is one small
+   * patch. In an array, dropping the first entry would rewrite every index.
+   */
+  calls: Record<string, CapacitorCall>;
   listeners: CapacitorListener[];
   dropped: number;
 }
@@ -295,7 +299,7 @@ function view(page: CapacitorPage): CapacitorPageView {
     title: page.title,
     reportedAt: page.reportedAt,
     info: page.info,
-    calls: [...page.calls.values()],
+    calls: Object.fromEntries([...page.calls].map(([id, call]) => [String(id), call])),
     listeners: page.listeners,
     dropped: page.dropped + page.serverDropped,
   };
@@ -327,15 +331,26 @@ export function patchCapacitorState(
   if (shown.dropped !== dropped) shown.dropped = dropped;
   if (report.info) shown.info = page.info;
   if (report.listeners) shown.listeners = page.listeners;
-  for (let at = shown.calls.length - 1; at >= 0; at--) {
-    if (!page.calls.has(shown.calls[at].id)) shown.calls.splice(at, 1);
+  for (const id of Object.keys(shown.calls)) {
+    if (!page.calls.has(Number(id))) delete shown.calls[id];
   }
   for (const call of report.calls) {
     const stored = page.calls.get(call.id);
-    if (!stored) continue;
-    const at = shown.calls.findIndex((entry) => entry.id === call.id);
-    if (at === -1) shown.calls.push(stored);
-    else shown.calls[at] = stored;
+    if (stored) shown.calls[String(call.id)] = stored;
+  }
+}
+
+/**
+ * Brings the shared state in line with the pages after some went (forgotten,
+ * expired or disconnected): removes those and adds any it lacks, leaving the
+ * others untouched.
+ */
+export function syncCapacitorState(draft: CapacitorState, pages: Map<string, CapacitorPage>): void {
+  for (const id of Object.keys(draft.pages)) {
+    if (!pages.has(id)) delete draft.pages[id];
+  }
+  for (const [id, page] of pages) {
+    if (!draft.pages[id]) draft.pages[id] = view(page);
   }
 }
 

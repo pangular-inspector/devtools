@@ -1,5 +1,6 @@
 import type { DevframeSetupInfo, RemoteAssets } from 'devframe';
 import { defineDevframe } from 'devframe';
+import { createSharedState } from 'devframe/utils/shared-state';
 import { PANGULAR_LOGO_DATA_URI } from './brand.ts';
 import { getRoutes } from './rpc/get-routes.ts';
 import { getComponents } from './rpc/get-components.ts';
@@ -7,10 +8,10 @@ import { getPipes } from './rpc/get-pipes.ts';
 import {
   capacitorCallsText,
   capacitorPluginsText,
-  capacitorState,
   expireCapacitorPages,
   mergeCapacitorReport,
   patchCapacitorState,
+  syncCapacitorState,
   toCapacitorReport,
   type CapacitorPage,
   type CapacitorState,
@@ -504,13 +505,16 @@ const pangular = defineDevframe({
     });
 
     const capacitorPages = new Map<string, CapacitorPage>();
+    // With patches on, a push sends the panel what changed, not every page:
+    // devframe's own shared states send the whole value on each change.
     const capacitorShared = await my.rpc.sharedState('capacitor', {
-      initialValue: { pages: {} } as CapacitorState,
+      sharedState: createSharedState<CapacitorState>({
+        initialValue: { pages: {} },
+        enablePatches: true,
+      }),
     });
     const applyCapacitor = () =>
-      capacitorShared.mutate((draft) => {
-        draft.pages = capacitorState(capacitorPages).pages;
-      });
+      capacitorShared.mutate((draft) => syncCapacitorState(draft, capacitorPages));
     const capacitorSessions = trackPageSessions(ctx.rpc, (pageIds) => {
       let removed = false;
       for (const pageId of pageIds) removed = capacitorPages.delete(pageId) || removed;

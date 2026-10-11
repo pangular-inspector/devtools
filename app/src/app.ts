@@ -1082,6 +1082,8 @@ export class App implements OnInit, OnDestroy {
     try {
       const state = await client.scope('pangular').rpc.sharedState('capacitor');
       const apply = (value: unknown) => {
+        // A state the client hasn't loaded from the server yet says nothing.
+        if (value === undefined) return;
         const reporting = capacitorPages(value).length > 0;
         this.capacitorReporting.set(reporting);
         this.capacitorKnown.set(true);

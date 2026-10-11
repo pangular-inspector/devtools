@@ -14,11 +14,21 @@ vi.mock('devframe/client', () => ({
 
 const { App } = await import('../app');
 
-function fakeClient(initial: Record<string, CapacitorPage>) {
+/** The shape the server sends: calls keyed by id. */
+function wire(pages: Record<string, CapacitorPage>) {
+  return Object.fromEntries(
+    Object.entries(pages).map(([id, page]) => [
+      id,
+      { ...page, calls: Object.fromEntries(page.calls.map((c) => [String(c.id), c])) },
+    ]),
+  );
+}
+
+function fakeClient(initial: Record<string, CapacitorPage> | undefined) {
   let pages = initial;
   const listeners = new Set<(value: unknown) => void>();
   const capacitor = {
-    value: () => ({ pages }),
+    value: () => (pages ? { pages: wire(pages) } : undefined),
     on: (_event: string, listener: (value: unknown) => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -37,7 +47,7 @@ function fakeClient(initial: Record<string, CapacitorPage>) {
   } as unknown as DevframeRpcClient;
   const report = (next: Record<string, CapacitorPage>) => {
     pages = next;
-    for (const listener of listeners) listener({ pages });
+    for (const listener of listeners) listener({ pages: wire(next) });
   };
   return { client, report };
 }
@@ -345,6 +355,19 @@ describe('Capacitor view across pages and updates', () => {
     );
     expect(rows[0]).toBe('WebView No Yes No');
     expect(rows[1]).toBe('Camera Yes Unknown Yes');
+  });
+
+  it('waits for a real server value before it shows the setup steps', async () => {
+    const fixture = TestBed.createComponent(App);
+    await settle(fixture);
+    const { client, report } = fakeClient(undefined);
+    connection.resolve(client);
+    await settle(fixture);
+    expect(host(fixture).querySelector('#soon-title')).toBeNull();
+
+    report({});
+    await settle(fixture);
+    expect(host(fixture).querySelector('#soon-title')?.textContent).toBe('Inspect Capacitor apps');
   });
 
   it('says how many older calls were dropped and which limit to raise', async () => {

@@ -263,8 +263,11 @@ describe('list-capacitor-calls', () => {
       report({ full: false, info: undefined, calls: [call(1), call(2)] }),
     );
 
-    const page = (await state()).pages['cap1'] as { calls: CapacitorCall[]; info: unknown };
-    expect(page.calls.map((c) => [c.id, c.status])).toEqual([
+    const page = (await state()).pages['cap1'] as {
+      calls: Record<string, CapacitorCall>;
+      info: unknown;
+    };
+    expect(Object.values(page.calls).map((c) => [c.id, c.status])).toEqual([
       [1, 'ok'],
       [2, 'ok'],
     ]);
@@ -501,7 +504,7 @@ describe('patchCapacitorState', () => {
     mergeCapacitorReport(pages, report({ calls: [call(1), call(2, { status: 'pending' })] }), 50);
     const draft = capacitorState(pages);
     const shown = draft.pages['cap1'];
-    const first = shown.calls[0];
+    const first = shown.calls['1'];
     const info = shown.info;
 
     const partial = report({
@@ -514,9 +517,9 @@ describe('patchCapacitorState', () => {
     patchCapacitorState(draft, pages, partial);
 
     expect(draft.pages['cap1']).toBe(shown);
-    expect(shown.calls[0]).toBe(first);
+    expect(shown.calls['1']).toBe(first);
     expect(shown.info).toBe(info);
-    expect(shown.calls.map((c) => [c.id, c.status])).toEqual([
+    expect(Object.values(shown.calls).map((c) => [c.id, c.status])).toEqual([
       [1, 'ok'],
       [2, 'ok'],
     ]);
@@ -530,7 +533,7 @@ describe('patchCapacitorState', () => {
     mergeCapacitorReport(pages, partial, 2);
     patchCapacitorState(draft, pages, partial);
 
-    expect(draft.pages['cap1'].calls.map((c) => c.id)).toEqual([2, 3]);
+    expect(Object.keys(draft.pages['cap1'].calls)).toEqual(['2', '3']);
     expect(draft.pages['cap1'].dropped).toBe(1);
   });
 });

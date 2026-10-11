@@ -80,6 +80,8 @@ const capacitorInfo = (platform, bridge) => ({
     { name: 'WebView', available: false, registered: true, native: false, methods: [] },
   ],
 });
+// The server keys each page's calls by id.
+const byId = (calls) => Object.fromEntries(calls.map((call) => [String(call.id), call]));
 const CAPACITOR_SEED = {
   pages: {
     device: {
@@ -88,7 +90,7 @@ const CAPACITOR_SEED = {
       title: 'Trips',
       reportedAt: now,
       info: capacitorInfo('android', true),
-      calls: [
+      calls: byId([
         capacitorCall(1),
         capacitorCall(2, {
           method: 'pickLimitedLibraryPhotos',
@@ -109,7 +111,7 @@ const CAPACITOR_SEED = {
           result: undefined,
           durationMs: undefined,
         }),
-      ],
+      ]),
       listeners: [
         {
           id: '1',
@@ -136,7 +138,7 @@ const CAPACITOR_SEED = {
       title: 'Desktop',
       reportedAt: now - 1000,
       info: capacitorInfo('web', false),
-      calls: [],
+      calls: {},
       listeners: [],
       dropped: 0,
     },

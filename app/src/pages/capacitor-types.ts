@@ -51,6 +51,7 @@ export interface CapacitorListener {
   removed?: boolean;
 }
 
+/** A page as the panel reads it. On the wire, `calls` is keyed by call id. */
 export interface CapacitorPage {
   pageId: string;
   url: string;
@@ -113,12 +114,32 @@ export function defaultCapacitorPage(
   );
 }
 
+// The server keys calls by id, so that a push patches one entry. The panel
+// reads them as a list, oldest first. The same server page object, which the
+// shared state keeps when a push leaves it alone, gives the same list.
+const readPages = new WeakMap<object, CapacitorPage>();
+
+function readPage(page: CapacitorPage): CapacitorPage {
+  const calls = page.calls as unknown;
+  if (Array.isArray(calls)) return page;
+  let read = readPages.get(page);
+  if (!read) {
+    const list = Object.values((calls ?? {}) as Record<string, CapacitorCall>).filter(
+      (call) => !!call && typeof call.id === 'number',
+    );
+    read = { ...page, calls: list.sort((a, b) => a.id - b.id) };
+    readPages.set(page, read);
+  }
+  return read;
+}
+
 /** Pages from the shared state, newest first, skipping anything malformed. */
 export function capacitorPages(value: unknown): CapacitorPage[] {
   const pages = (value as { pages?: unknown } | null | undefined)?.pages;
   if (!pages || typeof pages !== 'object') return [];
   return Object.values(pages as Record<string, CapacitorPage>)
     .filter((page) => page && typeof page.pageId === 'string' && !!page.info)
+    .map(readPage)
     .sort((a, b) => b.reportedAt - a.reportedAt);
 }
 
