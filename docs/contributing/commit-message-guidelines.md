@@ -5,7 +5,7 @@ Every commit follows one format, with scopes that match the areas of this reposi
 Every commit is checked twice:
 
 - **Locally**, by a `commit-msg` git hook that `pnpm install` turns on (it sets `core.hooksPath` to `.githooks` and `commit.template` to [`.gitmessage`](../../.gitmessage)). It warns and lets the commit through; fix the message with `git commit --amend` before you push.
-- **In CI**, on every pull request: each commit and the pull request title. Pull requests are squash merged, so **the title becomes the commit on `main`**. For now the CI check only warns: problems show up as annotations on the pull request, and the check stays green.
+- **In CI**, on every pull request: each commit and the pull request title. Pull requests are squash merged, so **the title becomes the commit on `main`**. A title that breaks the format fails the check. Problems in the individual commits only warn: they show up as annotations on the pull request, and the check stays green.
 
 Run `pnpm commit:check` to check the commits on your branch before you push. To fix an older commit, reword it with `git rebase -i` and force-push your branch. While a review is in progress, prefer [fixup commits](./using-fixup-commits.md). `fixup!` and `squash!` commits and merge commits are skipped.
 

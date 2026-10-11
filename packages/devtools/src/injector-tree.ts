@@ -74,9 +74,17 @@ export function providerKind(provider: unknown): ProviderInfo['type'] {
   return 'unknown';
 }
 
+/**
+ * Angular's own element tokens (`ElementRef`, `Injector`, `DestroyRef` and so
+ * on) carry a `__NG_ELEMENT_ID__` factory or a negative marker. Angular also
+ * stamps a non-negative bloom id on every token a component or directive
+ * provides, so a number of zero or more is an app provider.
+ */
 function isBuiltInElementToken(record: ProviderRecord): boolean {
+  if (record.provider !== record.token) return false;
   const token = record.token as { __NG_ELEMENT_ID__?: unknown } | null;
-  return record.provider === record.token && !!token && '__NG_ELEMENT_ID__' in token;
+  const id = token?.__NG_ELEMENT_ID__;
+  return typeof id === 'function' || (typeof id === 'number' && id < 0);
 }
 
 type RecordReader = (injector: unknown) => ProviderRecord[];

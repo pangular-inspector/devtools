@@ -124,6 +124,35 @@ describe('createDeferTracker', () => {
       { hydrateNever: true, hydration: 'not-configured' },
     ]);
   });
+
+  it('keeps blocks without a hostNode, known by their position under the root', () => {
+    const { reviews, instances } = page();
+    const section = reviews.querySelector('section')!;
+    let clock = 1000;
+    let raw: unknown[] = [
+      { ...block({ rootNodes: [section] }), type: undefined },
+      { ...block({ state: 'complete' }), type: undefined },
+    ];
+    const ng: DeferDebugNg = {
+      getComponent: (el) => instances.get(el) ?? null,
+      ɵgetDeferBlocks: () => raw,
+    };
+    const tracker = createDeferTracker(() => clock);
+    const first = tracker.collect(ng)!;
+    expect(first).toHaveLength(2);
+    expect(first[0]).toMatchObject({ state: 'placeholder', owner: { name: 'TripReviews' } });
+    expect(first[1].owner).toBeUndefined();
+
+    clock = 2000;
+    raw = [
+      { ...block({ state: 'complete', rootNodes: [section] }), type: undefined },
+      { ...block({ state: 'complete' }), type: undefined },
+    ];
+    const second = tracker.collect(ng)!;
+    expect(second.map((b) => b.id)).toEqual(first.map((b) => b.id));
+    expect(second[0]).toMatchObject({ state: 'complete', since: 2000 });
+    expect(second[1].since).toBe(1000);
+  });
 });
 
 describe('deferBlocksText', () => {

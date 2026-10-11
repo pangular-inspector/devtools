@@ -19,6 +19,8 @@ jobs:
     name: Angular ${{ matrix.angular }} on Node.js 22
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The prerelease entry reports a private API rename early without failing the run.
+    continue-on-error: ${{ matrix.prerelease == true }}
     strategy:
       fail-fast: false
       matrix:
@@ -29,6 +31,9 @@ jobs:
             range: '^21.0.0'
           - angular: '22'
             range: '^22.0.0'
+          - angular: 'next'
+            range: 'next'
+            prerelease: true
     steps:
       - uses: actions/checkout@v7
         with:

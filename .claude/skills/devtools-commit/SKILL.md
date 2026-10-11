@@ -22,7 +22,7 @@ The rules are in `docs/contributing/commit-message-guidelines.md`. Summary:
 ## Pull requests
 
 - Pull requests are squash merged; the title becomes the commit on `main`, so it must follow the header format.
-- A `commit-msg` hook (`scripts/commit-message.mjs`, enabled by `pnpm install`) warns about a bad message as you commit; CI checks the title and every commit in the pull request and, for now, reports problems as warnings. Run `pnpm commit:check` before pushing, and fix flagged messages with `git commit --amend` or a reword rebase.
+- A `commit-msg` hook (`scripts/commit-message.mjs`, enabled by `pnpm install`) warns about a bad message as you commit; CI checks the title and every commit in the pull request: a bad title fails the check, and problems in the commits show as warnings. Run `pnpm commit:check` before pushing, and fix flagged messages with `git commit --amend` or a reword rebase.
 - Address review feedback with fixup commits (`docs/contributing/using-fixup-commits.md`).
 - One feature per pull request, with its tests (including agent tool tests when tools change).
 - Rebuild and commit `extension/ui` when `app/` changed.

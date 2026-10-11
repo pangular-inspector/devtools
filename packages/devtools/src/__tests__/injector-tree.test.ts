@@ -9,7 +9,14 @@ import {
 import { zoneModeOf } from '../zone-mode.ts';
 
 class ElementRef {
-  static __NG_ELEMENT_ID__ = 1;
+  static __NG_ELEMENT_ID__ = () => null;
+}
+class Injector {
+  static __NG_ELEMENT_ID__ = -1;
+}
+/** Angular stamps a bloom id on every class an element provides. */
+class CardState {
+  static __NG_ELEMENT_ID__ = 0;
 }
 class Store {}
 class Logger {}
@@ -63,6 +70,8 @@ function fakeNg() {
         if (inj.el === card)
           return [
             { token: ElementRef, provider: ElementRef },
+            { token: Injector, provider: Injector },
+            { token: CardState, provider: CardState },
             {
               token: Logger,
               provider: { provide: Logger, useFactory: () => 0 },
@@ -98,8 +107,11 @@ describe('collectInjectorTree', () => {
   it('drops built-in element tokens and names provider kinds', () => {
     const { ng } = fakeNg();
     const card = collectInjectorTree(ng).roots[0].children[0];
-    expect(card.providers).toEqual([{ token: 'Logger', type: 'factory', isViewProvider: true }]);
-    expect(card.injector.providerCount).toBe(1);
+    expect(card.providers).toEqual([
+      { token: 'CardState', type: 'class', isViewProvider: false },
+      { token: 'Logger', type: 'factory', isViewProvider: true },
+    ]);
+    expect(card.injector.providerCount).toBe(2);
   });
 
   it('builds the environment chain from the platform down', () => {
