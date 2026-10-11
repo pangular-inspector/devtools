@@ -8,6 +8,7 @@ const clients: Client[] = [];
 const restoreHook = vi.fn();
 let hookGate: Promise<void> = Promise.resolve();
 let hookInstalls = 0;
+let connectionMeta: { configs?: object } = {};
 
 vi.mock('@nativescript/core', () => ({
   Application: { getRootView: () => null },
@@ -19,6 +20,7 @@ vi.mock('devframe/client', () => ({
     clients.push({ options });
     return {
       status: 'connected',
+      connectionMeta,
       close: vi.fn(),
       scope: () => ({ rpc: { call: vi.fn(async () => undefined), register: vi.fn() } }),
     };
@@ -53,10 +55,23 @@ describe('NativeScript overlay sessions', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    connectionMeta = {};
+    (await import('../forms-privacy.ts')).setRedaction();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('applies the redaction config from the connection', async () => {
+    connectionMeta = { configs: { pangular: { redaction: { secretNames: ['licenseNumber'] } } } };
+    const { isSecretName } = await import('../serialize.ts');
+    const { initNativeScriptOverlay } = await import('../overlay-nativescript.ts');
+    expect(isSecretName('licenseNumber')).toBe(false);
+    const dispose = initNativeScriptOverlay({ baseURL: 'http://localhost:9999/', retryMs: 100 });
+    await flush();
+    expect(isSecretName('licenseNumber')).toBe(true);
+    dispose();
   });
 
   it('tears down a session whose socket closed while it was still starting', async () => {

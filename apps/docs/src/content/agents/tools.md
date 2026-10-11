@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Fifty-three tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Fifty-four tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -41,7 +41,9 @@ If `page` names a tab that doesn't report that data, the tool answers `No page <
 
 ### list-pages
 
-Lists the tabs and [Angular Native](../getting-started/angular-native.md) apps that report to the server, newest first: page id, URL, platform (`browser` or `Angular Native`), seconds since the last report, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
+Lists the tabs and [Angular Native](../getting-started/angular-native.md) apps that report to the server, newest first: page id, URL, title, platform (`browser` or `Angular Native`), seconds since the last report, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
+
+The URL comes from the HTTP or router report. A page that sends neither (no router, and no [HTTP setup](../getting-started/express.md)) still shows the URL its component tree reports, which also stands in when the other reports are more than 15 seconds older. A tab in the background stops reporting until it is shown again, so its last report is marked `(background)`: an old time there means the data is the last known state, not that the page is gone.
 
 ### Action tools
 
@@ -116,9 +118,11 @@ Without `page`, it reads the page that is recording, and `record` goes to every 
 
 The signal graph the page reported: nodes (`signal`, `computed`, `linkedSignal`, `effect`), dependency edges, the component or injector they belong to, and recent value history per node. Reads: page.
 
-| Argument   | Required | Value                                                                                                                              |
-| ---------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `selector` | yes      | Host tag, class name or instance id of the component, like `app-root`. Or `root`, or a route path like `/admin` or `Route: admin`. |
+| Argument   | Required | Value                                                                                                                                                        |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `selector` | yes      | Host tag, class name or instance id of the component, like `app-root`. Or `root`, or a route path like `/admin` or `Route: admin`.                           |
+| `node`     | no       | A node id or label. The answer holds only that node, or every node with that label, with its direct producers and consumers and their resources and history. |
+| `history`  | no       | `false` leaves out the value history. Defaults to `true`.                                                                                                    |
 
 The answer also holds:
 
@@ -128,6 +132,8 @@ The answer also holds:
 | `environments` | The root and route injectors the page can report, with `id` and `name`.                                                       |
 | `changes`      | On a node or resource, every change since the page first saw it. The history keeps the last 50.                               |
 | `nodeCount`    | Set when Angular reported more than the 400 nodes the page keeps.                                                             |
+
+The answer is cut at 20,000 characters. A graph that is too long first keeps fewer history entries per node, then keeps the first nodes that fit. A note under the JSON says how many history entries and nodes it left out. Pass `node` or `history: false` to see the rest.
 
 With `root` or a route path, the tool switches the page's graph to the effects of that injector and waits up to 1.5 seconds for it. If no injector matches, the answer lists the ones the page knows. On Angular 20.0, the answer says the live graph needs Angular 20.1 or later.
 
@@ -213,6 +219,8 @@ Use `explain-navigation` for "why was I redirected". Pass `perf: true` for "why 
 | `probe`        | Runs the real matcher for `url` without navigating. It runs `canMatch` and may load lazy chunks. | `url`                                                                                                   |
 | `instrument`   | Turns per-guard and per-resolver recording on or off.                                            | `on`                                                                                                    |
 | `resolve-lazy` | Reads the routes of an unloaded lazy route without registering them.                             | `routeId`, from `list-routes`                                                                           |
+
+The page's result comes back as a JSON block cut at 15,000 characters. A cut result ends with a note saying so.
 
 `action` is required. Only same-origin URLs that start with `/` are accepted. With `actions.router` set to `false`, `navigate`, `abort`, `replay` and `probe` answer **Navigating is turned off in the devtools config (actions.router).** `instrument` and `resolve-lazy` still work. `agent.readOnly` drops the whole tool.
 
@@ -304,7 +312,7 @@ It finds impure pipes used inside `@for`, `| json` left in templates, pure pipes
 
 ### Explain a pipe
 
-`explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the last input and output, a stale-value warning, `| async` usages that resubscribe on every check, and lint findings. Reads: source, plus the page for live counts.
+`explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the last input and output, a stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage, and lint findings. Reads: source, plus the page for live counts.
 
 | Argument | Required | Value                                           |
 | -------- | -------- | ----------------------------------------------- |
@@ -312,16 +320,28 @@ It finds impure pipes used inside `@for`, `| json` left in templates, pure pipes
 
 Live counts, input and output appear when recording is on in the [Pipes inspector](../inspectors/pipes.md).
 
+The **Live** line tells these cases apart:
+
+| Case                                | What the tool says                                                    |
+| ----------------------------------- | --------------------------------------------------------------------- |
+| No page is connected                | There is no live data. The stdio server always reports this.          |
+| A page is connected, pipe not used  | No rendered component on the page uses the pipe.                      |
+| Pipe in use, recording off          | Instance count and components, plus a hint to click **Record calls**. |
+| Pipe in use, recording on, no calls | Instance count and components, and that no calls are recorded yet.    |
+
 ## SSR & HTTP
 
-These tools read the SSR requests that `ssrMiddleware` traced in your server. See [SSR requests](../inspectors/ssr-http.md#ssr-requests). Reads: page.
+These tools read the HttpClient calls that `withPangular()` recorded and the SSR requests that `ssrMiddleware` traced in your server. See [SSR & HTTP](../inspectors/ssr-http.md). Reads: page.
 
-| Tool                  | What it answers                                                                                                                                                                                                                        | Arguments   |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`     |
-| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url` |
+| Tool                  | What it answers                                                                                                                                                                                                                        | Arguments                           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`                             |
+| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url`                         |
+| `list-http-calls`     | The app's HttpClient calls, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, transfer cache hit and the matched rule.                                                      | `url`, `failed`, `limit`, `preview` |
 
 `explain-ssr-request` picks the request by `id`, else the newest one for `url`, else the newest one.
+
+`list-http-calls` lists every tab and the server when you leave out `page`. With `page`, it lists that tab and the server calls of the SSR request that served it. `url` keeps calls whose URL contains the text. `failed` keeps calls with a status of 400 or more, no response, an error, or a cancel. `limit` defaults to 30 (at most 200). `preview` adds each call's response preview. Secrets in URLs, errors and previews are masked, and `url` matches the masked URL.
 
 ## Analog
 
@@ -374,7 +394,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 `devframe_state_read` reads the devtools' live shared state. Call it without arguments to list the keys, then with `key` to read a value as JSON.
 
-Use it for data that has no dedicated tool, such as the SSR & HTTP timeline (`pangular:http`) or live pipe usage (`pangular:pipe-usage`). See [Resources](./resources.md) for every key.
+Use it for data that has no dedicated tool, such as fault rules and TransferState payloads (`pangular:http`, `pangular:http-payloads`) or live pipe usage (`pangular:pipe-usage`). See [Resources](./resources.md) for every key.
 
 ## Where to next
 

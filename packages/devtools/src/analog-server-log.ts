@@ -1,8 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { isRedactedKey } from './forms-privacy.ts';
+import { JWT, isRedactedKey } from './forms-privacy.ts';
 import { redactJsonText } from './json-text-redact.ts';
 
-const JWT = /\beyJ[\w-]{5,}\.[\w-]{5,}\.[\w-]{5,}/g;
 const BEARER = /\bBearer\s+[\w.~+/=-]+/gi;
 const QUERY_PAIR = /([?&])([^=&#\s"'\\]*)=([^&#\s"'\\]*)/g;
 const SECRET_QUERY_KEY =

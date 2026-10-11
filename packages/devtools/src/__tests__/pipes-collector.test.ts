@@ -563,6 +563,7 @@ describe('pipes collector', () => {
       'json',
       '/nonexistent',
       mergePipePageReport(new Map(), report, 0),
+      1,
     );
     expect(markdown).toContain('[redacted]');
     expect(markdown).not.toContain('hunter3');
@@ -761,6 +762,7 @@ describe('pipes collector', () => {
       'async',
       '/nonexistent',
       mergePipePageReport(new Map(), h.reports().at(-1)!, 0),
+      1,
     );
     expect(markdown).toContain('**Resubscribing:** 1');
     expect(markdown).toContain('Feed');

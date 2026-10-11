@@ -531,6 +531,7 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'explain-pipe': 'pipes',
   'list-ssr-requests': 'http',
   'explain-ssr-request': 'http',
+  'list-http-calls': 'http',
 };
 
 /**
@@ -579,6 +580,7 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'analog-call-api',
   'list-ssr-requests',
   'explain-ssr-request',
+  'list-http-calls',
 ];
 
 export function isPageAgentEntry(id: string): boolean {
