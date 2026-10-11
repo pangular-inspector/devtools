@@ -44,7 +44,11 @@ const detail = (value: unknown) =>
 export function scanHydration(root: Node): HydrationScan {
   const scan: HydrationScan = { hydrated: 0, skipped: 0, mismatched: 0, mismatches: [] };
   const doc = root.ownerDocument ?? (root as Document);
-  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ALL);
+  // Angular marks elements, text nodes and the comments that anchor containers.
+  const walker = doc.createTreeWalker(
+    root,
+    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT,
+  );
   let seen = 0;
   for (let node: Node | null = walker.currentNode; node && seen < MAX_NODES; seen++) {
     const info = (node as unknown as Record<string, unknown>)[INFO_KEY] as

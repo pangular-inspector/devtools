@@ -17,6 +17,7 @@ const SNIFF_BYTES = 64 * 1024;
 const KEPT_HEADERS = [
   'content-type',
   'content-length',
+  'content-encoding',
   'cache-control',
   'location',
   'vary',
@@ -60,6 +61,16 @@ export function renderModeOf(html: string, status = 200): SsrRenderMode {
 function headerText(value: number | string | string[] | undefined): string | undefined {
   if (value === undefined) return undefined;
   return Array.isArray(value) ? value.join(', ') : String(value);
+}
+
+/** Told to the user when a compression middleware ran before this one and encoded the body. */
+export const COMPRESSED_NOTE =
+  'the body was already compressed: mount ssrMiddleware after compression';
+
+/** True when the body is encoded, so its bytes can't be read as HTML. */
+function encoded(res: ServerResponse): boolean {
+  const value = headerText(res.getHeader('content-encoding'))?.trim().toLowerCase();
+  return !!value && value !== 'identity';
 }
 
 /**
@@ -203,25 +214,31 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
             typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk as Uint8Array),
           );
         }
-        const html = Buffer.concat(chunks).toString('utf8');
+        const body = Buffer.concat(chunks);
         const isHtml = /\btext\/html\b/.test(headerText(res.getHeader('content-type')) ?? '');
+        // A compression middleware that wraps res.write outside this one hands over encoded
+        // bytes, where the TransferState script can't be found. They are sent as they are.
+        const compressed = isHtml && encoded(res);
+        const html = compressed ? '' : body.toString('utf8');
         const hasState = isHtml && /<script\b[^>]*\sid="[^"]*-state"/.test(html);
         const edited = hasState ? editTransferState(html, list) : null;
         // Error pages and redirects carry no TransferState, so an edit there is not worth a note.
-        for (const o of hasState ? list : []) {
+        for (const o of compressed || hasState ? list : []) {
           const done = !!edited?.keys.includes(o.key ?? '');
           noteOverride(id, {
             id: o.id,
             kind: 'state-edit',
             applied: done,
-            note: done
-              ? `${o.value === undefined ? 'removed' : 'set'} ${o.key}`
-              : o.value === undefined
-                ? `no entry ${o.key} to remove`
-                : `could not edit the TransferState script for ${o.key}`,
+            note: compressed
+              ? COMPRESSED_NOTE
+              : done
+                ? `${o.value === undefined ? 'removed' : 'set'} ${o.key}`
+                : o.value === undefined
+                  ? `no entry ${o.key} to remove`
+                  : `could not edit the TransferState script for ${o.key}`,
           });
         }
-        const out = edited ? edited.html : html;
+        const out = compressed ? body : edited ? edited.html : html;
         if (!res.headersSent) {
           res.removeHeader('content-length');
           res.setHeader('content-length', Buffer.byteLength(out));
@@ -266,7 +283,11 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
         durationMs: Date.now() - at,
         renderMs: renderMs || Date.now() - at,
         bytes,
-        renderMode: renderModeOf(/\btext\/html\b/.test(type) ? sniff : '', res.statusCode),
+        // Encoded bytes are not HTML, so only the status is read then.
+        renderMode: renderModeOf(
+          /\btext\/html\b/.test(type) && !encoded(res) ? sniff : '',
+          res.statusCode,
+        ),
         fetches: active.fetches,
         fetchMs: active.fetchMs,
         headers,

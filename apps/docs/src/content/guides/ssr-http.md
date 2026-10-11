@@ -97,7 +97,7 @@ export const appConfig: ApplicationConfig = {
 
 ### How transfer cache hits are detected
 
-A call counts as a transfer cache hit when the cached response comes back right away. It also counts when the page's TransferState holds a GET or HEAD entry for the same URL. So an async interceptor after `withPangular()` does not hide cache hits.
+A browser call counts as a transfer cache hit when the cached response comes back right away. Server calls never count as hits, since only the browser reads the cache. It also counts when the page's TransferState holds a GET or HEAD entry for the same URL. So an async interceptor after `withPangular()` does not hide cache hits.
 
 ## Step 3: Mount the hub in server.ts
 
@@ -123,7 +123,7 @@ app.use(devtools.ssrMiddleware);
 export const reqHandler = createNodeRequestHandler(app);
 ```
 
-`ssrMiddleware` is optional. It traces each server render for the **SSR requests** table and adds a `Server-Timing` header to the response. Put it before the Angular handler. With `providePangularHttp()` in the app config, each request also shows the router's guard and resolver times.
+`ssrMiddleware` is optional. It traces each server render for the **SSR requests** table and adds a `Server-Timing` header to the response. Put it before the Angular handler, and after `compression()` if you use it. With `providePangularHttp()` in the app config, each request also shows the router's guard and resolver times.
 
 This is adapted from the demo app's `src/server.ts`. It keeps the one-time code and the origin check on, which are the defaults. See [Angular CLI and Express](../getting-started/express.md) for every option.
 

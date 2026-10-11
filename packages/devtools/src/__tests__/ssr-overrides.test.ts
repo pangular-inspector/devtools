@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
+import { gzipSync } from 'node:zlib';
 import { join } from 'node:path';
 import {
   ApplicationRef,
@@ -228,6 +229,26 @@ describe('ssrMiddleware overrides', () => {
         note: 'could not edit the TransferState script for a',
       }),
     ]);
+  });
+
+  it('leaves a compressed body alone and says to mount the middleware after compression', () => {
+    ssrRegistry().overrides = [override({ kind: 'state-edit', key: 'a', value: '{"b":2}' })];
+    const res = new FakeResponse();
+    createSsrMiddleware()(request(), res as unknown as ServerResponse, () => {});
+    res.setHeader('content-type', 'text/html');
+    res.setHeader('content-encoding', 'gzip');
+    const gzipped = gzipSync(STATE_HTML);
+    res.end(gzipped);
+    expect(res.body).toBe(gzipped.toString());
+    expect(recorded[0]).toMatchObject({
+      renderMode: 'unknown',
+      headers: { 'content-encoding': 'gzip' },
+      overrides: [
+        { kind: 'state-edit', applied: false, note: expect.stringContaining('after compression') },
+      ],
+    });
+    const text = explainSsrRequestText([sanitizeSsrRequest(recorded[0])!], [], [], {});
+    expect(text).toContain('mount `ssrMiddleware` after');
   });
 
   it('rewrites the TransferState script before the response is sent', () => {

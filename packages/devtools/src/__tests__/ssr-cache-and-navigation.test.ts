@@ -95,7 +95,8 @@ describe('interceptor transfer cache outcome', () => {
 
   it('marks a stored response, and gives the reason for one that was not', () => {
     const get = new HttpRequest('GET', 'http://localhost/api/products');
-    expect(run(get, true)).toMatchObject({ cacheStored: true });
+    // A synchronous answer on the server is not a transfer cache hit: only the browser replays.
+    expect(run(get, true)).toMatchObject({ cacheStored: true, cacheHit: false });
     expect(run(get, true)).not.toHaveProperty('cacheSkip');
     expect(run(new HttpRequest('POST', 'http://localhost/api/quote', {}), false)).toMatchObject({
       cacheStored: false,

@@ -24,7 +24,7 @@ import type { Subscription } from 'rxjs';
 
 import { redactMessage } from './forms-privacy.ts';
 import { transferCacheKeys } from './http-cache-key.ts';
-import { cacheSkipReason, type CacheSkip } from './http-cache-reason.ts';
+import { cacheSkipReason, requestSkipReason, type CacheSkip } from './http-cache-reason.ts';
 import { appIdOf, isHydrationMessage } from './http-hydration.ts';
 
 import {
@@ -168,16 +168,9 @@ function transferWindowOpen(): boolean {
   return !stableApps.has(appRef);
 }
 
+/** True when Angular's transfer cache, with its default options, may answer this request. */
 export function transferCacheEligible(req: HttpRequest<unknown>): boolean {
-  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
-  if (req.transferCache === false || req.withCredentials) return false;
-  if (req.cache === 'no-cache' || req.cache === 'no-store') return false;
-  const headers = req.headers;
-  if (['authorization', 'proxy-authorization', 'cookie'].some((name) => headers.has(name))) {
-    return false;
-  }
-  const cacheControl = headers.get('cache-control') ?? '';
-  return !/(^|,)\s*(no-store|private|no-cache)\b/i.test(cacheControl);
+  return requestSkipReason(req) === undefined;
 }
 
 function devMode(): boolean {
@@ -289,7 +282,8 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
           const fromPayload = claimable && claimTransferEntry(req);
           done({
             status: event.status,
-            cacheHit: side === 'client' ? cacheable && (sync || fromPayload) : !mocked && sync,
+            // Only the browser reads the transfer cache. On the server, cacheStored says what it kept.
+            cacheHit: cacheable && (sync || fromPayload),
             preview: preview(mocked ? rule?.body : event.body),
             ...serverCache({ ok: event.ok, headers: event.headers }),
           });

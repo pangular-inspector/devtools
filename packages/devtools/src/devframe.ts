@@ -1091,7 +1091,8 @@ const pangular = defineDevframe({
       id: { type: 'string', description: 'Rule id from list-http-rules. Leave out to add a rule.' },
       pattern: {
         type: 'string',
-        description: 'Part of the request URL, where `*` matches anything, such as /api/orders*.',
+        description:
+          'Part of the request URL, where `*` matches anything, such as /api/orders*. A leading `^` anchors it at the start of the path, such as ^/api/.',
       },
       method: { type: 'string', description: 'Only this method, such as GET. Any when left out.' },
       target: {
