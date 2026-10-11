@@ -988,6 +988,7 @@ claude mcp add pangular -- \\
       logo: '/logos/angular-native.svg',
       size: 17,
     },
+    {name: 'Capacitor', url: '/guides/capacitor', logo: '/logos/capacitor.svg', size: 16},
   ];
 
   readonly maintainers = [
@@ -995,14 +996,7 @@ claude mcp add pangular -- \\
     {name: 'Santosh Yadav', login: 'santoshyadavdev', role: 'Maintainer'},
   ];
 
-  readonly comingSoon: StackItem[] = [
-    {
-      name: 'Capacitor',
-      url: 'https://github.com/pangular-inspector/devtools/pull/21',
-      logo: '/logos/capacitor.svg',
-      size: 16,
-    },
-  ];
+  readonly comingSoon: StackItem[] = [];
 
   readonly reasons: {
     icon: LucideIconInput;
@@ -1027,7 +1021,7 @@ claude mcp add pangular -- \\
       title: 'Wherever Angular runs',
       link: '/getting-started/installation',
       description:
-        'Browser apps with SSR and NgRx, Analog, NativeScript and Angular Native, with Capacitor coming soon.',
+        'Browser apps with SSR and NgRx, Analog, NativeScript, Angular Native and Capacitor.',
     },
     {
       icon: LucideZap,
