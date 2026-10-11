@@ -9,7 +9,7 @@ description: Add the devtools Vite plugin to an Analog app or another Vite-based
 
 # Vite and Analog
 
-For *Analog apps, add the *Vite plugin next to `analog()` and load the overlay in `main.ts`. The plugin mounts the devtools hub on the Vite dev server. It works the same in any Angular app built with its own `vite.config.ts`, not only in Analog. The Angular CLI dev server is not one of them: see [Angular CLI apps](#angular-cli-apps).
+For *Analog apps, add the *Vite plugin next to `analog()` and load the overlay in `main.ts`. The plugin mounts the devtools hub on the Vite dev server. It works the same in any Angular app built with its own `vite.config.ts`, not only in Analog. If you serve your app with `ng serve`, this plugin does not apply, because the Angular CLI dev server does not accept Vite plugins. See [Angular CLI apps](#angular-cli-apps).
 
 ## Setup at a glance
 
