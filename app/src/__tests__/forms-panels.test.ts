@@ -1,6 +1,7 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { DevframeRpcClient } from 'devframe/client';
 import { afterEach, describe, expect, it } from 'vitest';
+import { scopeToPage } from '../page-id';
 import { FormsFieldDetail } from '../pages/forms-field-detail';
 import { FormsInspector } from '../pages/forms-inspector';
 import { FormsLint, FormsSubmit } from '../pages/forms-report';
@@ -541,6 +542,76 @@ describe('FormsInspector selection', () => {
         (b) => b.textContent?.trim() === 'Submit',
       ),
     ).toBe(false);
+  });
+
+  it('drops the armed confirmation, snapshot and field when the selection falls back to another form', async () => {
+    const calls: Record<string, unknown>[] = [];
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((name, arg) => {
+        if (name !== 'request-form-action') return Promise.resolve('');
+        calls.push(arg);
+        return Promise.resolve({ ok: true });
+      }),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const inspector = fixture.componentInstance;
+    const a: CollectedForm = { ...form, id: 'a@p1', label: 'A' };
+    const b: CollectedForm = { ...form, id: 'b@p1', label: 'B' };
+    inspector.forms.set([a, b]);
+    await settle(fixture);
+    expect(inspector.selected()?.id).toBe('a@p1');
+    inspector.toggleField('email');
+    inspector.snapshot.set('#1');
+    inspector.confirmAct('reset');
+    await settle(fixture);
+    expect(button(fixture, 'Confirm reset')).toBeTruthy();
+
+    inspector.forms.set([b]);
+    await settle(fixture);
+    expect(inspector.selected()?.id).toBe('b@p1');
+    expect(inspector.armed()).toBeNull();
+    expect(inspector.snapshot()).toBeNull();
+    expect(inspector.fieldPath()).toBeNull();
+    button(fixture, 'Reset').click();
+    await settle(fixture);
+    expect(calls).toEqual([]);
+    expect(button(fixture, 'Confirm reset')).toBeTruthy();
+  });
+
+  it('says a form hidden by "All pages" is on another page, not gone', async () => {
+    scopeToPage('p1');
+    try {
+      const fixture = TestBed.createComponent(FormsInspector);
+      fixture.componentRef.setInput(
+        'rpc',
+        fakeClient(() => Promise.resolve('ok')),
+      );
+      document.body.append(fixture.nativeElement);
+      await settle(fixture);
+      const inspector = fixture.componentInstance;
+      inspector.forms.set([
+        { ...form, id: 'here@p1', label: 'Here' },
+        { ...form, id: 'there@p2', label: 'There' },
+      ]);
+      inspector.selectForm('there@p2');
+      await settle(fixture);
+      expect(inspector.allPages()).toBe(true);
+      expect(inspector.selected()?.id).toBe('there@p2');
+
+      inspector.allPages.set(false);
+      await settle(fixture);
+      expect(inspector.missing()).toBeNull();
+      expect(text(fixture)).not.toContain('This form is no longer on the page');
+      expect(text(fixture)).toContain('This form is on another page');
+      button(fixture, 'Show forms from all pages').click();
+      await settle(fixture);
+      expect(inspector.selected()?.id).toBe('there@p2');
+    } finally {
+      scopeToPage(null);
+    }
   });
 });
 

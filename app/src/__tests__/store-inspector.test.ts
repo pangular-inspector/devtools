@@ -1,6 +1,6 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { DevframeRpcClient } from 'devframe/client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { StoreInspector } from '../pages/store-inspector';
 import type {
   NgrxLogEntry,
@@ -193,6 +193,87 @@ describe('StoreInspector restore', () => {
     expect(button(fixture, 'Restore this state')).toBeUndefined();
     expect(root(fixture).textContent).toMatch(/never recorded this action/);
     expect(root(fixture).textContent).toContain('actionsBlocklist');
+  });
+});
+
+describe('StoreInspector copy', () => {
+  const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  let copied: string[] = [];
+
+  function stubClipboard(writeText?: (text: string) => Promise<void>) {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: writeText ? { writeText } : undefined,
+    });
+  }
+
+  beforeEach(() => {
+    copied = [];
+    stubClipboard((text) => {
+      copied.push(text);
+      return Promise.resolve();
+    });
+  });
+
+  afterEach(() => {
+    if (original) Object.defineProperty(navigator, 'clipboard', original);
+    else delete (navigator as { clipboard?: unknown }).clipboard;
+  });
+
+  function copyButton(fixture: ComponentFixture<unknown>, label: string) {
+    return root(fixture).querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+  }
+
+  function message(fixture: ComponentFixture<unknown>) {
+    const el = root(fixture).querySelector('.message[role="status"]');
+    return el?.textContent?.trim();
+  }
+
+  it('copies the formatted state shown in the panel', async () => {
+    const { fixture } = await mount([]);
+    const shown = root(fixture).querySelector('pre.tree')!.textContent;
+    copyButton(fixture, 'Copy state')!.click();
+    await settle(fixture);
+    expect(copied).toEqual([shown]);
+    expect(copied[0]).toBe('{\n  items: []\n}');
+    expect(message(fixture)).toBe('Copied.');
+  });
+
+  it('copies the state diff of the selected entry', async () => {
+    const diff = [{ path: 'items.0', op: 'add' as const, after: { id: 1 } }];
+    const { fixture } = await mount([entry(1, { diff })]);
+    expect(copyButton(fixture, 'Copy the state diff of #1')).toBeNull();
+    root(fixture).querySelector<HTMLButtonElement>('.log-item')!.click();
+    await settle(fixture);
+    copyButton(fixture, 'Copy the state diff of #1')!.click();
+    await settle(fixture);
+    expect(copied).toEqual([
+      '[\n  {\n    path: "items.0",\n    op: "add",\n    after: {\n      id: 1\n    }\n  }\n]',
+    ]);
+    expect(message(fixture)).toBe('Copied.');
+  });
+
+  it('offers no diff copy when the entry changed nothing', async () => {
+    const { fixture } = await mount([entry(1)]);
+    root(fixture).querySelector<HTMLButtonElement>('.log-item')!.click();
+    await settle(fixture);
+    expect(copyButton(fixture, 'Copy the state diff of #1')).toBeNull();
+  });
+
+  it('says so when the clipboard is missing', async () => {
+    stubClipboard();
+    const { fixture } = await mount([]);
+    copyButton(fixture, 'Copy state')!.click();
+    await settle(fixture);
+    expect(message(fixture)).toBe('The clipboard is not available here.');
+  });
+
+  it('says so when the clipboard rejects the write', async () => {
+    stubClipboard(() => Promise.reject(new Error('denied')));
+    const { fixture } = await mount([]);
+    copyButton(fixture, 'Copy state')!.click();
+    await settle(fixture);
+    expect(message(fixture)).toBe('The clipboard is not available here.');
   });
 });
 
