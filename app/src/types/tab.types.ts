@@ -8,7 +8,8 @@ export type Tab =
   | 'store'
   | 'forms'
   | 'network'
-  | 'analog';
+  | 'analog'
+  | 'capacitor';
 
 export type Tabs = {
   id: Tab;

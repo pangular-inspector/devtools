@@ -29,6 +29,7 @@ const TAB_INSPECTOR: Partial<Record<Tab, PangularInspector>> = {
   pipes: 'pipes',
   network: 'http',
   analog: 'analog',
+  capacitor: 'capacitor',
 };
 
 export function tabEnabled(tab: Tab, config: ResolvedPangularConfig): boolean {

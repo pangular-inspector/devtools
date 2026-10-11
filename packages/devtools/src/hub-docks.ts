@@ -40,7 +40,7 @@ const DOCKS: {
     inspector: 'components',
   },
   { view: 'nativescript', title: 'NativeScript', icon: 'logos:nativescript' },
-  { view: 'capacitor', title: 'Capacitor', icon: 'logos:capacitorjs-icon' },
+  { view: 'capacitor', title: 'Capacitor', icon: 'logos:capacitorjs-icon', inspector: 'capacitor' },
 ];
 
 export function dockId(view: HubView): string {

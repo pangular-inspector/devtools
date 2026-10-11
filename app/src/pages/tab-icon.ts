@@ -66,6 +66,12 @@ import { Component, input } from '@angular/core';
         @case ('analog') {
           <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
         }
+        @case ('capacitor') {
+          <rect x="7" y="2" width="10" height="20" rx="2" />
+          <path d="M11 18h2" />
+          <path d="m10 7 4 4" />
+          <path d="m14 7-4 4" />
+        }
       }
     </svg>
   `,
