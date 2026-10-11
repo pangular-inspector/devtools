@@ -7,10 +7,14 @@ import {
   effect,
   inject,
   input,
+  linkedSignal,
   signal,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
+import { pickPage, type ReportedPage } from '../live-pages';
 import { hostPageId } from '../page-id';
+import { Select, type SelectOption } from '../ui/select';
 
 interface ProviderInfo {
   token: string;
@@ -61,6 +65,17 @@ interface Row {
 
 type TreeView = 'element' | 'environment';
 
+interface InjectorPage {
+  roots?: unknown;
+  environment?: unknown;
+  truncated?: unknown;
+  reportedAt?: unknown;
+}
+
+interface InjectorTreeState extends InjectorPage {
+  pages?: Record<string, InjectorPage>;
+}
+
 const NULL_ID = 'inj-null';
 
 const KIND_TONE: Record<string, string> = {
@@ -85,8 +100,22 @@ function isTree(value: unknown): value is InjectorNode[] {
 
 @Component({
   selector: 'app-di-inspector',
+  imports: [NgTemplateOutlet, Select],
   template: `
     <p class="sr-only" role="status">{{ announcement() }}</p>
+    <ng-template #pagePicker>
+      @if (pageOptions().length > 1) {
+        <div class="page-picker">
+          <span class="label-key" id="di-page-label">Page</span>
+          <app-select
+            labelledBy="di-page-label"
+            [options]="pageOptions()"
+            [value]="shownPageId()"
+            (valueChange)="selectPage($event)"
+          />
+        </div>
+      }
+    </ng-template>
     @if (roots().length > 0) {
       <p class="intro">
         Every component and directive gets an injector. When it asks for a token, Angular walks up
@@ -128,6 +157,7 @@ function isTree(value: unknown): value is InjectorNode[] {
             (keydown.escape)="query.set('')"
           />
         </div>
+        <ng-container [ngTemplateOutlet]="pagePicker" />
         @if (view() === 'element') {
           <label class="checkbox">
             <input
@@ -440,6 +470,11 @@ function isTree(value: unknown): value is InjectorNode[] {
         <p class="state-title">Loading dependency injection data…</p>
       </div>
     } @else if (sourceProviders().length === 0) {
+      @if (pageOptions().length > 1) {
+        <div class="toolbar">
+          <ng-container [ngTemplateOutlet]="pagePicker" />
+        </div>
+      }
       <div class="state">
         <p class="state-title">No DI data found</p>
         <p class="state-hint">
@@ -465,6 +500,7 @@ function isTree(value: unknown): value is InjectorNode[] {
             (keydown.escape)="query.set('')"
           />
         </div>
+        <ng-container [ngTemplateOutlet]="pagePicker" />
         <span class="total" aria-live="polite">
           {{ sourceMatchCount() }} of {{ sourceProviders().length }}
         </span>
@@ -554,6 +590,22 @@ function isTree(value: unknown): value is InjectorNode[] {
       -webkit-backdrop-filter: blur(10px);
       border: 1px solid var(--border);
       border-radius: var(--radius);
+    }
+    .page-picker {
+      display: flex;
+      flex: 0 1 240px;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .page-picker app-select {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .label-key {
+      flex: none;
+      color: var(--text-2);
+      font-size: 12px;
     }
     .segmented {
       display: inline-flex;
@@ -1278,20 +1330,94 @@ export class DiInspector {
   private readonly injector = inject(Injector);
 
   readonly nullId = NULL_ID;
-  readonly roots = signal<InjectorNode[]>([]);
-  readonly environment = signal<InjectorNode[]>([]);
+  private readonly hostPage = hostPageId();
+  private readonly treeState = signal<InjectorTreeState | null>(null);
+  private readonly pageTitles = signal<Record<string, { title?: string; url?: string }>>({});
+  readonly chosenPageId = signal<string | null>(null);
+
+  // Older servers send only the newest tree, without the per-page map.
+  private readonly treePages = computed<Record<string, InjectorPage>>(() => {
+    const state = this.treeState();
+    if (!state) return {};
+    const pages = state.pages && typeof state.pages === 'object' ? state.pages : {};
+    if (Object.keys(pages).length || this.hostPage) return pages;
+    return { '': state };
+  });
+
+  // A page that reports later never takes over from the one shown.
+  readonly shownPageId = linkedSignal<
+    { pages: Record<string, InjectorPage>; chosen: string | null },
+    string | null
+  >({
+    source: () => ({ pages: this.treePages(), chosen: this.chosenPageId() }),
+    computation: ({ pages, chosen }, previous) => {
+      const reported: Record<string, ReportedPage> = {};
+      for (const [pageId, page] of Object.entries(pages)) {
+        const at = typeof page?.reportedAt === 'number' ? page.reportedAt : 0;
+        reported[pageId] = { pageId, reportedAt: at };
+      }
+      return pickPage(reported, {
+        chosen,
+        host: this.hostPage,
+        previous: previous?.value ?? null,
+      });
+    },
+  });
+
+  private readonly shownPage = computed(() => {
+    const pageId = this.shownPageId();
+    return pageId === null ? null : (this.treePages()[pageId] ?? null);
+  });
+  readonly roots = computed<InjectorNode[]>(() => {
+    const roots = this.shownPage()?.roots;
+    return isTree(roots) ? roots : [];
+  });
+  readonly environment = computed<InjectorNode[]>(() => {
+    const environment = this.shownPage()?.environment;
+    return isTree(environment) ? environment : [];
+  });
+  readonly truncated = computed(() => this.shownPage()?.truncated === true);
+
+  private readonly multiPage = computed(
+    () => !this.hostPage && Object.keys(this.treePages()).length > 1,
+  );
+  readonly pageOptions = computed<SelectOption[]>(() => {
+    if (!this.multiPage()) return [];
+    const titles = this.pageTitles();
+    return Object.keys(this.treePages()).map((pageId) => {
+      const page = titles[pageId];
+      return {
+        value: pageId,
+        label: page?.title || page?.url || `Page ${pageId}`,
+        hint: page?.url,
+      };
+    });
+  });
+
+  /** Injector ids belong to one page, so each page keeps its own selection and expansion. */
+  private readonly pageKey = computed(() => this.shownPageId() ?? '');
+  private perPage<T>(initial: () => T) {
+    const saved = new Map<string, T>();
+    return linkedSignal<string, T>({
+      source: this.pageKey,
+      computation: (key, previous) => {
+        if (previous) saved.set(previous.source, previous.value);
+        return saved.has(key) ? (saved.get(key) as T) : initial();
+      },
+    });
+  }
+
   readonly sourceProviders = signal<SourceProvider[]>([]);
   readonly loaded = signal(false);
-  readonly truncated = signal(false);
   readonly view = signal<TreeView>('element');
   readonly query = signal('');
   readonly onlyProviding = signal(false);
   readonly componentsOnly = signal(true);
-  readonly collapsed = signal<ReadonlySet<string>>(new Set());
-  readonly selectedId = signal<string | null>(null);
-  readonly focusId = signal<string | null>(null);
+  readonly collapsed = this.perPage<ReadonlySet<string>>(() => new Set());
+  readonly selectedId = this.perPage<string | null>(() => null);
+  readonly focusId = this.perPage<string | null>(() => null);
   readonly announcement = signal('');
-  private readonly selectedLabel = signal<string | null>(null);
+  private readonly selectedLabel = this.perPage<string | null>(() => null);
   private wasGone = false;
 
   private readonly index = computed(() => {
@@ -1434,6 +1560,34 @@ export class DiInspector {
       void this.loadInjectorTree(client);
       void this.loadSourceProviders(client);
     });
+    // Page titles come from the component tree, and are only needed for the Page picker.
+    effect((onCleanup) => {
+      const client = this.rpc();
+      if (!client || !this.multiPage()) return;
+      let live = true;
+      let stop: (() => void) | null = null;
+      onCleanup(() => {
+        live = false;
+        stop?.();
+      });
+      client
+        .scope('pangular')
+        .rpc.sharedState('component-tree')
+        .then((state) => {
+          if (!live) return;
+          const apply = (value: unknown) => {
+            const pages = (value as { pages?: unknown } | null)?.pages;
+            this.pageTitles.set(
+              pages && typeof pages === 'object'
+                ? (pages as Record<string, { title?: string; url?: string }>)
+                : {},
+            );
+          };
+          apply(state.value());
+          stop = state.on('updated', apply);
+        })
+        .catch(() => {});
+    });
     this.destroyRef.onDestroy(() => {
       this.stopTree?.();
       this.highlight(null);
@@ -1501,6 +1655,24 @@ export class DiInspector {
     this.wasGone = gone;
   }
 
+  selectPage(pageId: string | null) {
+    if (!pageId || pageId === this.shownPageId()) return;
+    this.chosenPageId.set(pageId);
+    this.wasGone = this.gone() !== null;
+    const label = this.pageOptions().find((o) => o.value === pageId)?.label ?? pageId;
+    this.announcement.set(`Showing the injectors of ${label}.`);
+  }
+
+  private notePageGone(pages: Record<string, InjectorPage> | undefined) {
+    const chosen = this.chosenPageId();
+    if (!chosen || pages?.[chosen]) return;
+    const label = this.pageOptions().find((o) => o.value === chosen)?.label ?? 'The chosen page';
+    this.chosenPageId.set(null);
+    this.announcement.set(`${label} closed, so this shows another page.`);
+    // The page that takes over brings its own selection; only a gone injector there is news.
+    this.wasGone = true;
+  }
+
   toggle(id: string, event?: Event) {
     event?.stopPropagation();
     if (this.normalizedQuery()) return;
@@ -1537,7 +1709,7 @@ export class DiInspector {
     const client = this.rpc();
     if (!client) return;
     const selector = node?.injector.type === 'element' ? (node.injector.selector ?? null) : null;
-    const target = selector ? { pageId: hostPageId(), selector } : null;
+    const target = selector ? { pageId: this.shownPageId() || null, selector } : null;
     void client
       .scope('pangular')
       .rpc.call('request-page-highlight', target)
@@ -1616,18 +1788,10 @@ export class DiInspector {
       return;
     }
     if (this.destroyRef.destroyed || this.rpc() !== client || load !== this.treeLoad) return;
-    const pageId = hostPageId();
     const apply = (value: unknown) => {
-      const shared = value as {
-        roots?: unknown;
-        environment?: unknown;
-        truncated?: unknown;
-        pages?: Record<string, { roots?: unknown; environment?: unknown; truncated?: unknown }>;
-      } | null;
-      const next = pageId ? shared?.pages?.[pageId] : shared;
-      this.roots.set(isTree(next?.roots) ? next.roots : []);
-      this.environment.set(isTree(next?.environment) ? next.environment : []);
-      this.truncated.set(next?.truncated === true);
+      const next = value && typeof value === 'object' ? (value as InjectorTreeState) : null;
+      this.notePageGone(next?.pages);
+      this.treeState.set(next);
       this.syncGone();
     };
     apply(state.value());

@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import type { DevframeRpcClient } from 'devframe/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { scopeToPage } from '../page-id';
@@ -287,5 +287,158 @@ describe('injector tree page selection', () => {
   it('follows the shared top level when the panel has no page id', async () => {
     const fixture = await render({ roots: [node('shared')], environment: [] });
     expect(fixture.componentInstance.roots().map((n) => n.injector.name)).toEqual(['shared']);
+  });
+});
+
+describe('injector tree page picker', () => {
+  afterEach(() => {
+    scopeToPage(null);
+    document.body.innerHTML = '';
+  });
+
+  const element = (id: string, name: string) => ({
+    injector: { id, type: 'element', name, providerCount: 0, component: name, selector: name },
+    providers: [],
+    children: [],
+  });
+  const pageA = { pageId: 'A', reportedAt: 1, roots: [element('a1', 'app-a')], environment: [] };
+  const pageB = { pageId: 'B', reportedAt: 2, roots: [element('b1', 'app-b')], environment: [] };
+  const titles = {
+    pages: { A: { title: 'Tab A', url: '/a' }, B: { title: 'Tab B', url: '/b' } },
+  };
+  const shared = (...pages: (typeof pageA)[]) => {
+    const latest = [...pages].sort((x, y) => y.reportedAt - x.reportedAt)[0];
+    return {
+      roots: latest?.roots ?? [],
+      environment: [],
+      pages: Object.fromEntries(pages.map((page) => [page.pageId, page])),
+    };
+  };
+
+  async function renderPages(first: unknown) {
+    const listeners = new Set<(value: unknown) => void>();
+    const calls: unknown[][] = [];
+    const rpc = {
+      call: (...args: unknown[]) => {
+        calls.push(args);
+        return Promise.resolve([]);
+      },
+      callEvent: () => Promise.resolve(),
+      sharedState: (name: string) =>
+        Promise.resolve({
+          value: () => (name === 'injector-tree' ? first : titles),
+          on: (_event: string, listener: (value: unknown) => void) => {
+            if (name === 'injector-tree') listeners.add(listener);
+            return () => listeners.delete(listener);
+          },
+        }),
+    };
+    const fixture = TestBed.createComponent(DiInspector);
+    fixture.componentRef.setInput('rpc', {
+      connectionMeta: {},
+      scope: () => ({ rpc }),
+    } as unknown as DevframeRpcClient);
+    document.body.append(fixture.nativeElement);
+    const settle = async () => {
+      for (let i = 0; i < 3; i++) {
+        await new Promise((resolve) => setTimeout(resolve));
+        await fixture.whenStable();
+      }
+    };
+    await settle();
+    const push = async (value: unknown) => {
+      for (const listener of listeners) listener(value);
+      await settle();
+    };
+    return { fixture, push, calls, el: fixture.nativeElement as HTMLElement };
+  }
+
+  const trigger = (el: HTMLElement) =>
+    el.querySelector<HTMLButtonElement>('[aria-labelledby="di-page-label"][role="combobox"]');
+
+  async function choose(fixture: ComponentFixture<DiInspector>, label: string) {
+    const el = fixture.nativeElement as HTMLElement;
+    trigger(el)!.click();
+    await fixture.whenStable();
+    const option = Array.from(el.querySelectorAll<HTMLElement>('[role="option"]')).find((o) =>
+      o.textContent?.includes(label),
+    );
+    expect(option).toBeDefined();
+    option!.click();
+    await fixture.whenStable();
+  }
+
+  const names = (fixture: ComponentFixture<DiInspector>) =>
+    fixture.componentInstance.roots().map((n) => n.injector.name);
+  const notice = (el: HTMLElement) =>
+    el.querySelector('[role="status"].sr-only')?.textContent?.trim();
+
+  it('shows no page picker when one page reports', async () => {
+    const { el, fixture } = await renderPages(shared(pageA));
+    expect(trigger(el)).toBeNull();
+    expect(names(fixture)).toEqual(['app-a']);
+  });
+
+  it('shows no page picker when the panel belongs to a page', async () => {
+    scopeToPage('A');
+    const { el, fixture } = await renderPages(shared(pageA, pageB));
+    expect(trigger(el)).toBeNull();
+    expect(names(fixture)).toEqual(['app-a']);
+  });
+
+  it('switches the tree to the chosen page and highlights on that page', async () => {
+    const { fixture, el, calls } = await renderPages(shared(pageA, pageB));
+    expect(trigger(el)?.textContent).toContain('Tab B');
+    expect(names(fixture)).toEqual(['app-b']);
+
+    await choose(fixture, 'Tab A');
+    expect(names(fixture)).toEqual(['app-a']);
+    expect(el.querySelector('.row[data-id="a1"]')).not.toBeNull();
+    expect(el.querySelector('.row[data-id="b1"]')).toBeNull();
+    expect(notice(el)).toBe('Showing the injectors of Tab A.');
+
+    fixture.componentInstance.highlight(fixture.componentInstance.roots()[0]);
+    expect(calls).toContainEqual(['request-page-highlight', { pageId: 'A', selector: 'app-a' }]);
+  });
+
+  it('stays on the page it shows when another page reports later', async () => {
+    const { fixture, push } = await renderPages(shared(pageA));
+    fixture.componentInstance.select('a1');
+    await push(shared(pageA, { ...pageB, reportedAt: 5 }));
+    expect(names(fixture)).toEqual(['app-a']);
+    expect(fixture.componentInstance.selected()?.injector.id).toBe('a1');
+    expect(fixture.componentInstance.gone()).toBeNull();
+  });
+
+  it('keeps the chosen page and its selection when the other page reports', async () => {
+    const { fixture, push, el } = await renderPages(shared(pageA, pageB));
+    await choose(fixture, 'Tab A');
+    fixture.componentInstance.select('a1');
+    await push(shared(pageA, { ...pageB, reportedAt: 9, roots: [element('b2', 'app-b2')] }));
+    expect(names(fixture)).toEqual(['app-a']);
+    expect(fixture.componentInstance.selected()?.injector.id).toBe('a1');
+    expect(el.textContent).not.toContain('This injector is no longer on the page');
+  });
+
+  it('keeps a selection per page', async () => {
+    const twoRoots = { ...pageB, roots: [element('b1', 'app-b'), element('b2', 'app-b2')] };
+    const { fixture } = await renderPages(shared(pageA, twoRoots));
+    fixture.componentInstance.select('b2');
+    await choose(fixture, 'Tab A');
+    expect(fixture.componentInstance.selectedId()).toBeNull();
+    expect(fixture.componentInstance.gone()).toBeNull();
+    await choose(fixture, 'Tab B');
+    expect(fixture.componentInstance.selected()?.injector.id).toBe('b2');
+  });
+
+  it('falls back to another page and announces it when the chosen page closes', async () => {
+    const { fixture, push, el } = await renderPages(shared(pageA, pageB));
+    await choose(fixture, 'Tab A');
+    fixture.componentInstance.select('a1');
+    await push(shared(pageB));
+    expect(names(fixture)).toEqual(['app-b']);
+    expect(trigger(el)).toBeNull();
+    expect(notice(el)).toBe('Tab A closed, so this shows another page.');
+    expect(el.textContent).not.toContain('This injector is no longer on the page');
   });
 });
