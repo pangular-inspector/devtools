@@ -22,6 +22,7 @@ import {
   type AnyRecord,
   type NavigationRecord,
   type RouterDebugApi,
+  WRAPPED,
 } from './router.ts';
 
 export interface PreloadRecord {
@@ -372,8 +373,6 @@ function track(result: unknown, record: Recorder): unknown {
   record(result);
   return result;
 }
-
-const WRAPPED = '__pangularOriginal';
 
 interface Wrapping {
   restore: (() => void)[];

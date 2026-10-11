@@ -367,12 +367,8 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
     primary.forEach((node, index) => {
       const own = parts(node.path);
       if (own.length !== 1 || !own[0].startsWith(':') || node.guards?.canMatch) return;
-      // With children and no empty-path child, a one-segment URL leaves nothing for the
-      // children to match, so the router backtracks to the later literal route.
-      const endsHere = node.children?.length
-        ? node.children.some((child) => child.path === '')
-        : !(node.kind === 'lazy' && node.lazy === 'unloaded');
-      if (!endsHere) return;
+      // Children don't stop it: when the URL ends at this route, Angular matches it with no
+      // child activated (recognize's NoLeftoversInUrl) and never backtracks to the literal.
       for (const later of primary.slice(index + 1)) {
         const laterParts = parts(later.path);
         if (laterParts.length === 1 && !laterParts[0].startsWith(':') && laterParts[0] !== '**') {

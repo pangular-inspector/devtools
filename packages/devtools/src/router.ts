@@ -97,6 +97,9 @@ export interface RouterDebugApi {
 export type AnyRecord = Record<string, any>;
 
 export const MAX_DEPTH = 12;
+
+/** Key on a wrapped guard or resolver that holds the app's own function. */
+export const WRAPPED = '__pangularOriginal';
 const MAX_REASON = 300;
 const MAX_URL = 2000;
 const URL_SECRET_KEY =

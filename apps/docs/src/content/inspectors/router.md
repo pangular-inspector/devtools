@@ -89,7 +89,7 @@ How the router is set up (`provideRouter`, `forRoot or other` or `unknown`), the
 Route config mistakes, each with a fix:
 
 - Unreachable routes after `**`, and duplicate paths.
-- A `:param` that shadows a later literal path. A `:param` route with children counts only when it has an empty-path child, because otherwise the router backtracks to the literal route.
+- A `:param` that shadows a later literal path. This includes a `:param` route with children or `loadChildren`, because when the URL ends at it the router matches it with no child and never reaches the literal route.
 - Empty-path redirects with `pathMatch: 'prefix'`, which redirect every URL, and redirect cycles.
 - Redirect loops seen at runtime (rule `redirect-loop`), with the hops and the guards involved.
 - Deprecated class guards and `canLoad`.

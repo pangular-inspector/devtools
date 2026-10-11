@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventType, applyRouterEvent, type NavigationRecord } from '../router.ts';
 import { configSignature, type RouteNode } from '../router-config.ts';
-import { runAction } from '../router-actions.ts';
+import { instrument, runAction } from '../router-actions.ts';
 import { lintRoutes } from '../rpc/router-config-tools.ts';
 import { explainNavigationText, type RouterPage, type RouterState } from '../rpc/router-tools.ts';
 
@@ -37,18 +37,32 @@ describe('router config signature', () => {
     expect(configSignature(router)).not.toBe(renamed);
     expect(configSignature(router)).toBe(configSignature(router));
   });
+
+  it('changes when a guard is swapped for another at the same index, but not when it is instrumented', () => {
+    const first = () => true;
+    const routes: Record<string, unknown>[] = [{ path: 'a', canActivate: [first] }];
+    const router = { config: routes, events: events() };
+    const before = configSignature(router);
+    const stop = instrument(router, []);
+    expect((routes[0]['canActivate'] as unknown[])[0]).not.toBe(first);
+    expect(configSignature(router)).toBe(before);
+    stop();
+    (routes[0]['canActivate'] as unknown[])[0] = () => false;
+    expect(configSignature(router)).not.toBe(before);
+  });
 });
 
 describe('router lint', () => {
-  it('flags a param route with children only when it can end on its own segment', () => {
+  it('flags a param route that shadows a literal, with or without children', () => {
     const rules = (config: RouteNode[]) =>
       lintRoutes(page({ config })).filter((f) => f.rule === 'param-shadows-literal');
+    // Angular matches '/new' as ':id' with no child activated; it does not backtrack.
     const withChildren = node('/:id', {
       kind: 'children',
       component: undefined,
       children: [node('/:id/edit', { path: 'edit' })],
     });
-    expect(rules([withChildren, node('/new')])).toHaveLength(0);
+    expect(rules([withChildren, node('/new')])).toHaveLength(1);
     const withEmptyChild = {
       ...withChildren,
       children: [node('/:id', { path: '' }), node('/:id/edit', { path: 'edit' })],
@@ -57,13 +71,13 @@ describe('router lint', () => {
     expect(rules([node('/:id'), node('/new')])).toHaveLength(1);
   });
 
-  it('flags an unloaded loadComponent param route, but not unloaded loadChildren', () => {
+  it('flags unloaded lazy param routes, loadComponent and loadChildren alike', () => {
     const rules = (config: RouteNode[]) =>
       lintRoutes(page({ config })).filter((f) => f.rule === 'param-shadows-literal');
     const lazyComponent = node('/:id', { lazy: 'unloaded', component: undefined });
     expect(rules([lazyComponent, node('/new')])).toHaveLength(1);
     const lazyChildren = node('/:id', { kind: 'lazy', lazy: 'unloaded', component: undefined });
-    expect(rules([lazyChildren, node('/new')])).toHaveLength(0);
+    expect(rules([lazyChildren, node('/new')])).toHaveLength(1);
   });
 
   it('says Angular stays silent about an empty-path prefix redirect', () => {

@@ -7,6 +7,7 @@ import {
   nameOf,
   read,
   resolversOf,
+  WRAPPED,
   type AnyRecord,
   type RouteGuards,
 } from './router.ts';
@@ -216,13 +217,31 @@ const SIGNATURE_GUARDS = [
   'canLoad',
 ];
 
-/** What an in-place edit of a route changes: its path, redirect and guard counts. */
+const guardIds = new WeakMap<object, number>();
+let nextGuardId = 0;
+
+/**
+ * A stable id per guard function, class or token, so swapping one guard for
+ * another at the same index changes the signature. Instrumentation wraps
+ * guards in place, so the id is taken from the app's own function.
+ */
+function guardId(entry: unknown): string {
+  if ((typeof entry !== 'function' && typeof entry !== 'object') || entry === null) {
+    return typeof entry;
+  }
+  const own = ((entry as AnyRecord)[WRAPPED] as object | undefined) ?? entry;
+  let id = guardIds.get(own);
+  if (id === undefined) guardIds.set(own, (id = ++nextGuardId));
+  return String(id);
+}
+
+/** What an in-place edit of a route changes: its path, redirect and guards. */
 function routeShape(route: AnyRecord): string {
   return read(() => {
     const redirect = route['redirectTo'];
     const guards = SIGNATURE_GUARDS.map((kind) => {
       const list = route[kind];
-      return Array.isArray(list) ? list.length : 0;
+      return Array.isArray(list) ? list.map(guardId).join('+') : '-';
     });
     return `${String(route['path'] ?? '')}|${typeof redirect === 'string' ? redirect : typeof redirect}|${guards.join(',')}`;
   }, '');
