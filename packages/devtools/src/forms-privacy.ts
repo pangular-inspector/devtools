@@ -38,13 +38,18 @@ const SECRET_WORDS = new Set([
   'csc',
   'ssn',
   'iban',
-  'card',
-  'cc',
   'credential',
   'credentials',
   'cookie',
   'authorization',
   'jwt',
+  'signature',
+  'sig',
+  'salt',
+  'nonce',
+  'privkey',
+  'dsn',
+  'sid',
 ]);
 
 const SECRET_PAIRS = new Set([
@@ -54,6 +59,22 @@ const SECRET_PAIRS = new Set([
   'accesskey',
   'ccnum',
   'ccnumber',
+  'ccexp',
+  'cccvc',
+  'cccvv',
+  'cardnum',
+  'cardnumber',
+  'cardno',
+  'cardcvc',
+  'cardcvv',
+  'cardexp',
+  'cardexpiry',
+  'cardpin',
+  'creditcard',
+  'debitcard',
+  'mfacode',
+  'recoverycode',
+  'recoverykey',
   'securitycode',
   'sessionid',
   'sessionkey',
@@ -63,6 +84,12 @@ const SECRET_PAIRS = new Set([
   'basicauth',
   'bearer',
 ]);
+
+/**
+ * Secret only as the whole key: a `card` or `cc` field holds a card number,
+ * while `cardTitle` or `ccList` (email CC) do not.
+ */
+const SECRET_WHOLE_KEYS = new Set(['card', 'cc']);
 
 const SECRET_AUTOCOMPLETE = /password|one-time-code|cc-/i;
 const MASK_MARKERS = '.sentry-mask, .rr-mask, [data-private], [data-pangular="mask"]';
@@ -129,7 +156,8 @@ function containsName(words: string[], name: string): boolean {
 export function isSecretKey(key: string): boolean {
   const words = wordsOf(key).map(singular);
   if (words.some((word) => SECRET_WORDS.has(word))) return true;
-  if (SECRET_PAIRS.has(words.join(''))) return true;
+  const whole = words.join('');
+  if (SECRET_PAIRS.has(whole) || SECRET_WHOLE_KEYS.has(whole)) return true;
   if (words.some((word, i) => i > 0 && SECRET_PAIRS.has(words[i - 1] + word))) return true;
   return secretNames.some((name) => containsName(words, name));
 }

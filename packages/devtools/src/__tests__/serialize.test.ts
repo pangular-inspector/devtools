@@ -48,12 +48,51 @@ describe('serialize', () => {
     expect(serialize(NaN)).toBe('NaN');
     expect(serialize(function load() {})).toBe('[Function load]');
     expect(serialize(document.createElement('app-card'))).toBe('<app-card>');
+    let reads = 0;
     const throwing = {
       get boom() {
+        reads++;
         throw new Error('no');
       },
     };
-    expect(serialize(throwing)).toEqual({ boom: '[Unreadable]' });
+    expect(serialize(throwing)).toEqual({ boom: '[Getter]' });
+    expect(reads).toBe(0);
+  });
+
+  it('hides only the node that cannot be read', () => {
+    const { proxy, revoke } = Proxy.revocable({ a: 1 }, {});
+    revoke();
+    expect(serialize({ ok: 1, broken: proxy, list: [proxy, 2] })).toEqual({
+      ok: 1,
+      broken: '[Unreadable]',
+      list: ['[Unreadable]', 2],
+    });
+  });
+
+  it('keeps one level of an error cause, redacted', () => {
+    const inner = new Error('deeper');
+    const error = new Error('save failed', {
+      cause: { url: '/api?token=abc123', status: 500, inner },
+    });
+    expect(serialize(error)).toEqual({
+      $type: 'Error',
+      message: 'Error: save failed',
+      cause: { url: '/api?token=[redacted]', status: 500, inner: 'Error: deeper' },
+    });
+    const chained = new TypeError('outer', { cause: new Error('inner', { cause: inner }) });
+    expect(serialize(chained)).toEqual({
+      $type: 'TypeError',
+      message: 'TypeError: outer',
+      cause: 'Error: inner',
+    });
+    expect(serialize(new Error('plain'))).toBe('Error: plain');
+  });
+
+  it('masks secret key=value pairs inside strings', () => {
+    expect(serialize({ note: 'token=abc123' })).toEqual({ note: 'token=[redacted]' });
+    expect(serialize('password=hunter2&user=a')).toBe('password=[redacted]&user=a');
+    expect(serialize({ query: 'api_key=XYZ' })).toEqual({ query: 'api_key=[redacted]' });
+    expect(serialize('page=2&sort=name')).toBe('page=2&sort=name');
   });
 
   it('redacts secret keys and token-looking strings', () => {

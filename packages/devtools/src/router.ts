@@ -1,6 +1,5 @@
-import { redactCredentials } from './credential-redact.ts';
-import { JWT } from './forms-privacy.ts';
-import { REDACTED, isSensitive, serializeFormValue } from './forms.ts';
+import { REDACTED, serializeFormValue } from './forms.ts';
+import { decode, isSecretKey, knownSecrets, redactText, rememberSecret } from './text-redact.ts';
 import { clip } from './text.ts';
 
 export interface RouteGuards {
@@ -99,8 +98,6 @@ export type AnyRecord = Record<string, any>;
 export const MAX_DEPTH = 12;
 const MAX_REASON = 300;
 const MAX_URL = 2000;
-const URL_SECRET_KEY =
-  /^(code|key|sig|signature|session|session_?id|sid|auth|authorization|jwt|credentials?|x-amz-(signature|credential|security-token)|x-goog-(signature|credential))$/i;
 const GUARD_KINDS = [
   'canActivate',
   'canActivateChild',
@@ -116,21 +113,6 @@ const CANCEL_CODES = [
   'Aborted',
 ];
 const SKIP_CODES = ['IgnoredSameUrlNavigation', 'IgnoredByUrlHandlingStrategy'];
-const BEARER = /Bearer\s+[\w.~+/-]+=*/gi;
-const LONG_TOKEN = /(?<=[/=])[A-Za-z0-9_-]{32,}(?=[/?#&;]|$)/g;
-
-function isOpaqueToken(token: string): boolean {
-  if (UUID_OR_ULID.test(token)) return false;
-  if (/^[0-9a-f]{32,}$/i.test(token)) return true;
-  return (
-    /\d/.test(token) &&
-    /[a-z]/.test(token) &&
-    /[A-Z]/.test(token) &&
-    (token.match(/-/g) ?? []).length <= 2
-  );
-}
-const UUID_OR_ULID =
-  /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9A-HJKMNP-TV-Z]{26})$/i;
 
 export const EventType = {
   NavigationStart: 0,
@@ -163,7 +145,6 @@ interface NavState {
 }
 
 const navState = new WeakMap<NavigationRecord, NavState>();
-const knownSecrets = new Set<string>();
 const seenRoutes = new WeakSet<object>();
 
 let pendingCaller: { text: string; at: number; sticky?: boolean } | null = null;
@@ -193,7 +174,7 @@ export function read<T>(fn: () => T, fallback: T): T {
   }
 }
 
-export { clip };
+export { clip, isSecretKey, redactText };
 
 function now(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -208,82 +189,13 @@ export function nameOf(value: unknown): string {
   return String(value);
 }
 
-export function isSecretKey(key: string): boolean {
-  return isSensitive(key) || URL_SECRET_KEY.test(key);
-}
-
-function decode(text: string): string {
-  try {
-    return decodeURIComponent(text);
-  } catch {
-    return text;
-  }
-}
-
-const TEXT_PAIR = /(^|[?&#;])([^=&#;?\s"'/]+)=([^&#;\s"']*)/g;
-const URL_PAIR = /(^|[?&#;])([^=&#;?\s/]+)=([^&#;\s]*)/g;
-
-function segmentForm(secret: string): string {
-  return encodeURIComponent(secret)
-    .replace(/%40/g, '@')
-    .replace(/%3A/gi, ':')
-    .replace(/%24/g, '$')
-    .replace(/%2C/gi, ',')
-    .replace(/%26/gi, '&')
-    .replace(/\(/g, '%28')
-    .replace(/\)/g, '%29');
-}
-
-/**
- * Hides the values of secret-looking query, matrix and fragment keys
- * (`?token=…`, `;api_key=…`, `#access_token=…`), URL passwords, `Authorization`
- * credentials (`Basic`, `Digest`, `Token`), JWTs and bearer tokens, and
- * any of the given secret route param values, wherever they appear in a URL or
- * a message. In `url` mode a value runs to the next separator and long opaque
- * tokens (not UUIDs or ULIDs) are hidden too; in messages it also stops at quotes.
- */
-export function redactText(
-  text: string,
-  secrets: Iterable<string> = [],
-  mode: 'url' | 'text' = 'text',
-  depth = 0,
-): string {
-  let out = redactCredentials(text, REDACTED).replace(
-    mode === 'url' ? URL_PAIR : TEXT_PAIR,
-    (match, sep: string, key: string, value: string) => {
-      if (isSecretKey(decode(key))) return `${sep}${key}=${REDACTED}`;
-      const decoded = decode(value);
-      if (depth > 1 || decoded === value || !decoded.includes('=')) return match;
-      const inner = redactText(decoded, secrets, mode, depth + 1);
-      return inner === decoded ? match : `${sep}${key}=${encodeURIComponent(inner)}`;
-    },
-  );
-  out = out.replace(JWT, REDACTED).replace(BEARER, `Bearer ${REDACTED}`);
-  if (mode === 'url') {
-    out = out.replace(LONG_TOKEN, (token) => (isOpaqueToken(token) ? REDACTED : token));
-  }
-  for (const secret of secrets) {
-    if (secret.length < 3) continue;
-    for (const form of new Set([secret, encodeURIComponent(secret), segmentForm(secret)])) {
-      out = out.split(form).join(REDACTED);
-    }
-  }
-  return out;
-}
-
-function remember(secret: string) {
-  knownSecrets.delete(secret);
-  knownSecrets.add(secret);
-  if (knownSecrets.size > 100) knownSecrets.delete(knownSecrets.values().next().value!);
-}
-
 export function secretParamsOf(root: AnyRecord | null): string[] {
   const secrets = chainOf(root).flatMap((route) =>
     Object.entries(read(() => route['params'] as Record<string, unknown>, {}))
       .filter(([key, value]) => isSecretKey(key) && typeof value === 'string')
       .map(([, value]) => value as string),
   );
-  for (const secret of secrets) remember(secret);
+  for (const secret of secrets) rememberSecret(secret);
   return secrets;
 }
 
@@ -599,7 +511,7 @@ export function configSecretsFor(router: AnyRecord | undefined, url: string): st
     0,
   );
   const secrets = out.filter((secret) => secret.length >= 3);
-  for (const secret of secrets) remember(secret);
+  for (const secret of secrets) rememberSecret(secret);
   return secrets;
 }
 

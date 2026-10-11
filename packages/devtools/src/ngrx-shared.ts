@@ -1,4 +1,5 @@
-import { isRedactedKey, REDACTED, redactMessage } from './forms-privacy.ts';
+import { isRedactedKey, REDACTED } from './forms-privacy.ts';
+import { redactText } from './serialize.ts';
 import { clip, overflowKey } from './text.ts';
 
 export interface NgrxSignalStoreInfo {
@@ -205,7 +206,7 @@ export function serialize(value: unknown, options: SerializeOptions = {}): unkno
         return { [TYPE_KEY]: 'undefined' };
       case 'string':
         return clip(
-          redactMessage(val.length > REDACT_WINDOW ? val.slice(0, REDACT_WINDOW) : val),
+          redactText(val.length > REDACT_WINDOW ? val.slice(0, REDACT_WINDOW) : val),
           maxString,
         );
       case 'number':
@@ -229,7 +230,7 @@ export function serialize(value: unknown, options: SerializeOptions = {}): unkno
     }
     if (obj instanceof RegExp) return { [TYPE_KEY]: 'RegExp', value: String(obj) };
     if (obj instanceof Error) {
-      return { [TYPE_KEY]: 'Error', name: obj.name, message: redactMessage(obj.message) };
+      return { [TYPE_KEY]: 'Error', name: obj.name, message: redactText(obj.message) };
     }
     if (depth >= maxDepth) {
       if (Array.isArray(obj)) return `[Array(${obj.length})]`;

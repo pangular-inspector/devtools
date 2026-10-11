@@ -43,7 +43,7 @@ In detail, a request to the devtools must:
 - come from a loopback address (any `127.x.x.x` address or `::1`), and
 - have no `Origin` header, or an origin that is a loopback host, the [Pangular Inspector extension](#chrome-extension), an entry in `allowedOrigins`, or a host that Vite's `server.allowedHosts` accepts.
 
-Other requests get `403` with the message "Pangular Inspector only answers requests from this machine." WebSocket upgrades follow the same rules.
+Other requests get `403` with the message "Pangular Inspector only answers requests from this machine." A request from another machine also gets the fix: set `allowLan: true` and list its origin in `allowedOrigins`. WebSocket upgrades follow the same rules.
 
 With `allowLan: true`, the plugin also answers other machines, such as a phone on Wi-Fi, whose origin is in `allowedOrigins`. It needs the one-time code on, and ignores `allowLan` with `auth: false`. See [Other devices on your network](./getting-started/vite.md#other-devices-on-your-network).
 
@@ -192,7 +192,7 @@ A refused write names the reason and the unmask that lifts it. The panel, `form-
 
 <ngmd-accordion>
   <ngmd-accordion-item title="The full list of secret words">
-    password, passwd, passphrase, passcode, pass, pwd, secret, token, otp, totp, pin, cvv, cvc, csc, ssn, iban, card, cc, credential, credentials, cookie, authorization and jwt. Names are split on camelCase and punctuation, so <code>userPassword</code> and <code>card_number</code> both match. The pairs apiKey, privateKey, secretKey, accessKey, ccNum, ccNumber, securityCode, sessionId, sessionKey, authHeader, authKey, authCode and basicAuth match as well, and so does a name that is only bearer. <code>auth</code> on its own is not secret, so an <code>auth</code> state slice stays readable, but credentials inside it are still masked by value (see <a href="#credentials-inside-values">Credentials inside values</a>). Every inspector uses this list.
+    password, passwd, passphrase, passcode, pass, pwd, secret, token, otp, totp, pin, cvv, cvc, csc, ssn, iban, credential, credentials, cookie, authorization, jwt, signature, sig, salt, nonce, privkey, dsn and sid. Names are split on camelCase and punctuation, so <code>userPassword</code> and <code>card_number</code> both match. The pairs apiKey, privateKey, secretKey, accessKey, ccNum, ccNumber, ccExp, cardNumber, cardNo, cardCvc, cardExp, creditCard, debitCard, mfaCode, recoveryCode, recoveryKey, securityCode, sessionId, sessionKey, authHeader, authKey, authCode and basicAuth match as well, and so does a name that is only bearer, card or cc. <code>cardTitle</code>, <code>cardId</code> and <code>ccList</code> stay readable. <code>auth</code> on its own is not secret, so an <code>auth</code> state slice stays readable, but credentials inside it are still masked by value (see <a href="#credentials-inside-values">Credentials inside values</a>). Every inspector uses this list.
   </ngmd-accordion-item>
 </ngmd-accordion>
 
@@ -200,15 +200,18 @@ A refused write names the reason and the unmask that lifts it. The panel, `form-
 
 Some credentials are hidden wherever they appear in a string, whatever the key is called. Every inspector, the panel and the agent tools get the same masking:
 
-| Value                                                                                                                                   | Shown as                        |
-| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| A URL with a password, such as `https://alice:pw@host`                                                                                  | `https://alice:[redacted]@host` |
-| `Basic` followed by base64 of `user:password`                                                                                           | `Basic [redacted]`              |
-| `Digest` followed by its `name="value"` parameters                                                                                      | `Digest [redacted]`             |
-| `Token` followed by an opaque token with letters and digits                                                                             | `Token [redacted]`              |
-| `Bearer` followed by a token                                                                                                            | `Bearer [redacted]`             |
-| Any of `Basic`, `Bearer`, `Digest`, `Token`, `Negotiate`, `NTLM`, `ApiKey` and similar after `Authorization:` or `Proxy-Authorization:` | the scheme, then `[redacted]`   |
-| A JWT                                                                                                                                   | `[redacted]`                    |
+| Value                                                                                                                                   | Shown as                          |
+| --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| A URL with a password, such as `https://alice:pw@host`                                                                                  | `https://alice:[redacted]@host`   |
+| `Basic` followed by base64 of `user:password`                                                                                           | `Basic [redacted]`                |
+| `Digest` followed by its `name="value"` parameters                                                                                      | `Digest [redacted]`               |
+| `Token` followed by an opaque token with letters and digits                                                                             | `Token [redacted]`                |
+| `Bearer` followed by a token                                                                                                            | `Bearer [redacted]`               |
+| Any of `Basic`, `Bearer`, `Digest`, `Token`, `Negotiate`, `NTLM`, `ApiKey` and similar after `Authorization:` or `Proxy-Authorization:` | the scheme, then `[redacted]`     |
+| A JWT                                                                                                                                   | `[redacted]`                      |
+| A Stripe secret or restricted key, a GitHub or Slack token, an AWS access key ID or a Google API key, such as `sk_live_…`               | the prefix, then `[redacted]`     |
+| A PEM private key block                                                                                                                 | its first line, then `[redacted]` |
+| A DSN with a 32-character hex key, such as `https://<key>@o1.ingest.sentry.io/42`                                                       | `https://[redacted]@…`            |
 
 The URL user stays visible, so you can tell which account a call uses. Ordinary words are left alone: `Basic plan`, `Token expired` and `Digest of the week` don't match.
 
@@ -228,7 +231,7 @@ A secret route param is known from the route config before a navigation is recog
 
 ### Components, signals, NgRx and pipes
 
-Component inputs, signal values, NgRx state, and pipe inputs, outputs and async values use the same secret names and the same `mask` and `unmask` lists as forms. A value whose name looks secret is replaced with `[redacted]`. JWTs and bearer tokens inside strings and error messages are replaced too, NgRx strings and errors included, and so are tokens used as object keys. The URL and title of the NgRx page, and the request URL of an `httpResource`, are redacted like router URLs.
+Component inputs, signal values, NgRx state, and pipe inputs, outputs and async values use the same secret names and the same `mask` and `unmask` lists as forms. A value whose name looks secret is replaced with `[redacted]`. JWTs, bearer tokens and `key=value` pairs under secret keys (such as `token=abc123` or `password=…&user=a`) inside strings and error messages are replaced too, NgRx strings and errors included, and so are tokens used as object keys. The URL and title of the NgRx page, and the request URL of an `httpResource`, are redacted like router URLs.
 
 ### Analog
 

@@ -68,12 +68,37 @@ export const hubDefaultOrigins: WsOriginRegistry = {
     (origin !== undefined && isAllowedExtensionOrigin(origin)) || isAllowedOrigin(origin, []),
 };
 
-function hubAllowedOrigins(
+let warnedOriginCheckOff = false;
+
+/**
+ * The origin check the hub runs: the defaults, a list plus the published
+ * extension, or a custom registry that also accepts the published extension.
+ * `false` turns the check off, and says so once.
+ */
+export function hubAllowedOrigins(
   allowedOrigins: InitHubOptions['allowedOrigins'],
+  warn: (message: string) => void = console.warn,
 ): NonNullable<InitHubOptions['allowedOrigins']> {
   if (allowedOrigins === undefined) return hubDefaultOrigins;
+  if (allowedOrigins === false) {
+    if (!warnedOriginCheckOff) {
+      warnedOriginCheckOff = true;
+      warn(
+        '[pangular] allowedOrigins is false: the devtools hub accepts requests from any origin.',
+      );
+    }
+    return false;
+  }
   if (Array.isArray(allowedOrigins)) return [...allowedOrigins, ...PANGULAR_EXTENSION_ORIGINS];
-  return allowedOrigins;
+  const custom = allowedOrigins as WsOriginRegistry;
+  return {
+    get token() {
+      return custom.token;
+    },
+    registerFromUrl: (url: string) => custom.registerFromUrl(url),
+    isAllowed: (origin: string | undefined) =>
+      (origin !== undefined && isAllowedExtensionOrigin(origin)) || custom.isAllowed(origin),
+  };
 }
 
 type PangularHub = ReturnType<typeof initHub> & {

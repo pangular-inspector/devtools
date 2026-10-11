@@ -72,6 +72,25 @@ describe('hub request gate on the network', () => {
     expect(check('127.0.0.1', { origin: LAN_ORIGIN })).toBe('next');
   });
 
+  it('tells another machine how to allow it in the 403 body', () => {
+    const middleware = hubRequestGate('/__devframes/', {});
+    const refuse = (remoteAddress: string) => {
+      const res = { statusCode: 200, end: vi.fn() };
+      middleware(
+        {
+          url: '/__devframes/',
+          headers: { origin: 'http://evil.example' },
+          socket: { remoteAddress },
+        } as never,
+        res as never,
+        vi.fn(),
+      );
+      return res.end.mock.calls[0][0] as string;
+    };
+    expect(refuse(PHONE)).toContain('set allowLan: true and list their origin in allowedOrigins');
+    expect(refuse('127.0.0.1')).toBe('Pangular Inspector only answers requests from this machine.');
+  });
+
   it('with lan on, answers another machine whose origin is listed', () => {
     const check = gate({ allowedOrigins: [LAN_ORIGIN], lan: true });
     expect(check(PHONE, { origin: LAN_ORIGIN })).toBe('next');

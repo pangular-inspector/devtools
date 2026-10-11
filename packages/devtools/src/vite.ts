@@ -202,6 +202,8 @@ export function blockedOriginReporter(warn: (message: string) => void) {
   };
 }
 
+const REFUSED = 'Pangular Inspector only answers requests from this machine.';
+
 export function hubRequestGate(
   base: string,
   policy: HubOriginPolicy = {},
@@ -216,7 +218,11 @@ export function hubRequestGate(
     }
     if (forHub && !isAllowedHubRequest(req, policy, onBlockedOrigin)) {
       res.statusCode = 403;
-      res.end('Pangular Inspector only answers requests from this machine.');
+      res.end(
+        isLoopback(req.socket?.remoteAddress)
+          ? REFUSED
+          : `${REFUSED} To answer other machines, set allowLan: true and list their origin in allowedOrigins.`,
+      );
       return;
     }
     next();

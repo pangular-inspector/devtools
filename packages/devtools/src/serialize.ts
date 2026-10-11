@@ -1,4 +1,5 @@
 import { REDACTED, redactMessage, redactReason } from './forms-privacy.ts';
+import { knownSecrets, redactText as redactPairs } from './text-redact.ts';
 import { clip as clipText } from './text.ts';
 
 export { REDACTED };
@@ -12,13 +13,16 @@ export interface SerializeLimits {
 }
 
 export const TRUNCATED = '[Truncated]';
+const UNREADABLE = '[Unreadable]';
+const GETTER = '[Getter]';
 
 export function isSecretName(name: unknown): boolean {
   return typeof name === 'string' && !!name && redactReason(name) !== null;
 }
 
+/** Masks credentials, JWTs, bearer tokens, secret `key=value` pairs and known secret values. */
 export function redactText(text: string): string {
-  return redactMessage(text);
+  return redactPairs(text, knownSecrets);
 }
 
 const REDACT_WINDOW = 65536;
@@ -81,12 +85,24 @@ export function serialize(value: unknown, limits: SerializeLimits = {}): unknown
   const walkNamed = (key: unknown, v: unknown, level: number): unknown =>
     isSecretName(key) && !keepsUnderSecret(v) ? REDACTED : walk(v, level);
 
+  const errorText = (error: Error): string =>
+    clipText(redactText(`${error.name}: ${error.message}`), maxText);
+
+  // One node that throws (a revoked Proxy, a hostile `instanceof`) only hides itself.
   const walk = (v: unknown, level: number): unknown => {
+    try {
+      return walkNode(v, level);
+    } catch {
+      return UNREADABLE;
+    }
+  };
+
+  const walkNode = (v: unknown, level: number): unknown => {
     if (--budget < 0) return TRUNCATED;
     if (v === null || v === undefined || typeof v === 'boolean') return v;
     if (typeof v === 'number') return Number.isFinite(v) ? v : String(v);
     if (typeof v === 'string') {
-      const text = redactMessage(head(v));
+      const text = redactText(head(v));
       return clipText(v.length > REDACT_WINDOW ? `${text}…` : text, maxText);
     }
     if (typeof v === 'bigint') return `${v}n`;
@@ -97,7 +113,16 @@ export function serialize(value: unknown, limits: SerializeLimits = {}): unknown
     if (path.has(v)) return '[Circular]';
     if (v instanceof Date) return Number.isNaN(v.getTime()) ? 'Invalid Date' : v.toISOString();
     if (v instanceof RegExp) return String(v);
-    if (v instanceof Error) return clipText(redactMessage(`${v.name}: ${v.message}`), maxText);
+    if (v instanceof Error) {
+      const cause = ownValue(v, 'cause');
+      if (cause === undefined || cause === GETTER || level >= maxDepth) return errorText(v);
+      // One level of `cause`: a nested Error shows as text only.
+      return {
+        $type: typeName(v),
+        message: errorText(v),
+        cause: cause instanceof Error ? errorText(cause) : walk(cause, level + 1),
+      };
+    }
     if (typeof Element !== 'undefined' && v instanceof Element) {
       return `<${v.tagName.toLowerCase()}>`;
     }
@@ -137,13 +162,11 @@ export function serialize(value: unknown, limits: SerializeLimits = {}): unknown
       const out: Record<string, unknown> = plain ? {} : { $type: typeName(v) };
       const keys = Object.keys(v);
       for (const key of keys.slice(0, maxKeys)) {
-        let item: unknown;
-        try {
-          item = (v as Record<string, unknown>)[key];
-        } catch {
-          item = '[Unreadable]';
-        }
-        setKey(out, safeKey(key, out), walkNamed(key, item, level + 1));
+        // Through the descriptor, so a getter on a live page object never runs.
+        const item = ownValue(v, key);
+        const shown =
+          item === GETTER || item === UNREADABLE ? item : walkNamed(key, item, level + 1);
+        setKey(out, safeKey(key, out), shown);
       }
       // Through safeKey, so the marker never replaces a real `…` key.
       if (keys.length > maxKeys) setKey(out, safeKey('…', out), `${keys.length - maxKeys} more`);
@@ -153,10 +176,17 @@ export function serialize(value: unknown, limits: SerializeLimits = {}): unknown
     }
   };
 
+  return walk(value, 0);
+}
+
+/** An own property's value, `[Getter]` for an accessor, `[Unreadable]` when the read throws. */
+function ownValue(target: object, key: string): unknown {
   try {
-    return walk(value, 0);
+    const descriptor = Object.getOwnPropertyDescriptor(target, key);
+    if (!descriptor) return undefined;
+    return 'value' in descriptor ? descriptor.value : GETTER;
   } catch {
-    return '[Unreadable]';
+    return UNREADABLE;
   }
 }
 

@@ -1,8 +1,9 @@
 /**
  * Credentials that ride inside text rather than under a secret key: the
  * password in a URL's userinfo (`https://user:pass@host`) and the credential of
- * an `Authorization` value (`Basic …`, `Digest …`, `Token …`). Bearer tokens
- * and JWTs have their own patterns next to the callers.
+ * an `Authorization` value (`Basic …`, `Digest …`, `Token …`), well-known key
+ * shapes (Stripe, GitHub, Slack, AWS, Google), PEM private keys and DSN keys.
+ * Bearer tokens and JWTs have their own patterns next to the callers.
  */
 
 /** `scheme://user:password@`; the user is kept, the password is hidden. */
@@ -21,6 +22,24 @@ const DIGEST =
 
 /** `Token <opaque>` as used by Django REST Framework and GitHub. */
 const TOKEN = /\b(Token)([ \t]+)([\w.~+/-]{8,}=*)/g;
+
+/**
+ * High-confidence key shapes that are secret whatever key holds them: Stripe
+ * secret and restricted keys, GitHub tokens, Slack tokens, AWS access key IDs
+ * and Google API keys. The prefix is kept so the kind of key stays visible.
+ */
+const PREFIXED =
+  /\b(sk_live_|sk_test_|rk_live_|rk_test_|whsec_|gh[pousr]_|github_pat_|xox[abpors]-|AKIA|ASIA|AIza)([A-Za-z\d_-]+)/g;
+
+/** The minimum length after each prefix, so `sk_live_` in prose or code stays readable. */
+const PREFIX_MIN: Record<string, number> = { AKIA: 16, ASIA: 16, AIza: 30 };
+
+/** A PEM private key block; an unterminated one is hidden to the end of the text. */
+const PEM_PRIVATE_KEY =
+  /-----BEGIN ([A-Z\d ]*)PRIVATE KEY-----(?:[\s\S]*?-----END \1PRIVATE KEY-----|[\s\S]*$)/g;
+
+/** A Sentry-style DSN, `https://<32 hex key>@host/…`: a userinfo with no password. */
+const DSN_KEY = /\b([a-z][a-z\d+.-]*:\/\/)[\da-f]{32}@/gi;
 
 function decodesToPair(text: string): boolean {
   try {
@@ -49,5 +68,10 @@ export function redactCredentials(text: string, mask: string): string {
     .replace(DIGEST, (_, scheme: string, gap: string) => `${scheme}${gap}${mask}`)
     .replace(TOKEN, (whole, scheme: string, gap: string, credential: string) =>
       looksOpaque(credential) ? `${scheme}${gap}${mask}` : whole,
+    )
+    .replace(PEM_PRIVATE_KEY, (_, kind: string) => `-----BEGIN ${kind}PRIVATE KEY-----${mask}`)
+    .replace(DSN_KEY, (_, scheme: string) => `${scheme}${mask}@`)
+    .replace(PREFIXED, (whole, prefix: string, rest: string) =>
+      rest.length >= (PREFIX_MIN[prefix] ?? 16) ? `${prefix}${mask}` : whole,
     );
 }

@@ -24,7 +24,7 @@ describe('URL passwords', () => {
     expect(redactText(url)).toBe(safe);
     expect(redactMessage(url)).toBe(safe);
     expect(serialize(url)).toBe(safe);
-    expect(ngrxSerialize({ dsn: url })).toEqual({ dsn: safe });
+    expect(ngrxSerialize({ endpoint: url })).toEqual({ endpoint: safe });
     expect(serverLogMessage(`GET ${url}`)).toBe(`GET ${safe}`);
   });
 
@@ -104,6 +104,53 @@ describe('Authorization credentials', () => {
   });
 });
 
+describe('well-known secret shapes', () => {
+  const secrets: [string, string][] = [
+    ['sk_live_51Hx9QaLkdW3n4bZ0Tq8YxF2', `sk_live_${REDACTED}`],
+    ['rk_test_51Hx9QaLkdW3n4bZ0Tq8YxF2', `rk_test_${REDACTED}`],
+    ['ghp_1234567890abcdefghijABCDEFGHIJklmnop', `ghp_${REDACTED}`],
+    ['github_pat_11ABCDEFG0123456789_abcdefghij', `github_pat_${REDACTED}`],
+    ['xoxb-1234567890-0987654321-AbCdEfGhIjKl', `xoxb-${REDACTED}`],
+    ['AKIAIOSFODNN7EXAMPLE', `AKIA${REDACTED}`],
+    ['AIzaSyA1234567890abcdefghijklmnopqrstu', `AIza${REDACTED}`],
+    [
+      'https://0123456789abcdef0123456789abcdef@o1.ingest.sentry.io/42',
+      `https://${REDACTED}@o1.ingest.sentry.io/42`,
+    ],
+    [
+      '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----',
+      `-----BEGIN RSA PRIVATE KEY-----${REDACTED}`,
+    ],
+    ['-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkq', `-----BEGIN PRIVATE KEY-----${REDACTED}`],
+  ];
+
+  it('hides them under neutral keys in every helper', () => {
+    for (const [secret, safe] of secrets) {
+      expect(serialize({ value: secret }), secret).toEqual({ value: safe });
+      expect(redactMessage(secret), secret).toBe(safe);
+      expect(redactText(secret), secret).toBe(safe);
+      expect(ngrxSerialize({ value: secret }), secret).toEqual({ value: safe });
+    }
+  });
+
+  it('hides secret key=value pairs in component and NgRx strings', () => {
+    expect(serialize({ note: 'token=abc123' })).toEqual({ note: `token=${REDACTED}` });
+    expect(ngrxSerialize({ note: 'token=abc123' })).toEqual({ note: `token=${REDACTED}` });
+  });
+
+  it('leaves prefixes without a key body alone', () => {
+    for (const text of [
+      'Use an sk_live_ key in production',
+      'ghp_ tokens are personal',
+      'AKIA keys belong to IAM users',
+      'mailto:someone@example.com',
+      'https://user@example.com/repo.git',
+    ]) {
+      expect(redactMessage(text), text).toBe(text);
+    }
+  });
+});
+
 describe('secret key names', () => {
   const masked = [
     'authorization',
@@ -125,6 +172,22 @@ describe('secret key names', () => {
     'authKey',
     'auth_code',
     'basicAuth',
+    'signature',
+    'requestSig',
+    'passwordSalt',
+    'cspNonce',
+    'privkey',
+    'sentryDsn',
+    'sid',
+    'card',
+    'cc',
+    'cardNumber',
+    'creditCard',
+    'cc_number',
+    'ccExp',
+    'cardCvc',
+    'mfaCode',
+    'recoveryCodes',
   ];
   const kept = [
     'author',
@@ -139,6 +202,13 @@ describe('secret key names', () => {
     'isAuthenticated',
     'keyboard',
     'monkey',
+    'cardTitle',
+    'cardId',
+    'ccList',
+    'accessibility',
+    'design',
+    'consider',
+    'saltwater',
   ];
 
   it('masks credential-looking keys', () => {
