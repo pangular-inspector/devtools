@@ -1,4 +1,4 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, computed, input, linkedSignal, output } from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
@@ -343,7 +343,10 @@ export class RouteCurrent {
   /** A routed component, and the page it is on, to select in the Components tab. */
   readonly showComponent = output<ComponentFocus>();
 
-  readonly message = signal('');
+  private readonly pageId = computed(() => this.page().pageId);
+  // The component stays mounted when the page picker switches pages, so the message of one page
+  // starts over on the next.
+  readonly message = linkedSignal<string, string>({ source: this.pageId, computation: () => '' });
 
   readonly rows = computed(() => {
     const rows: RouteRow[] = [];
@@ -387,7 +390,9 @@ export class RouteCurrent {
   }
 
   async abort() {
-    const result = await routerAction(this.rpc(), this.page().pageId, { action: 'abort' });
+    const pageId = this.pageId();
+    const result = await routerAction(this.rpc(), pageId, { action: 'abort' });
+    if (pageId !== this.pageId()) return;
     this.message.set(
       result['error'] ? String(result['error']) : `Aborted navigation #${result['aborted']}.`,
     );
