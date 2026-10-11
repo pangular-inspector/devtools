@@ -2272,8 +2272,8 @@ const pangular = defineDevframe({
           limit: {
             type: 'integer',
             minimum: 1,
-            maximum: 50,
-            description: 'How many navigations to return (default 5, at most 50).',
+            maximum: limits.navigations,
+            description: `How many navigations to return (default 5, at most ${limits.navigations}).`,
           },
           perf: {
             type: 'boolean',
@@ -2290,7 +2290,7 @@ const pangular = defineDevframe({
       }) => {
         const state = routerState.value() as RouterState;
         if (!state.pages.length) return { markdown: noRouter };
-        return { markdown: explainNavigationText(state, args) };
+        return { markdown: explainNavigationText(state, args, Date.now(), limits.navigations) };
       },
     });
 

@@ -227,7 +227,8 @@ describe('router MCP tools', () => {
     );
     expect(text).toContain('redirect from #3');
     expect(text).toContain('error `NG04002`: No route matches the URL');
-    expect(text).toContain('Instrumentation is on.');
+    expect(text).toContain('Instrumentation is on,');
+    expect(text).not.toContain('turn it on');
     expect(await call('explain-navigation', { id: 4 })).not.toContain('#3 `/admin`');
     const perf = await call('explain-navigation', { perf: true });
     expect(perf).toContain('#3 `/admin` 12ms, mostly guards (3ms)');
