@@ -11,23 +11,24 @@ type PageGraph = SignalGraph & { pageId?: string };
 export function createSignalPeeks() {
   const pending = new Map<
     string,
-    { pageId?: string; left: number; done: (graph: PageGraph | null) => void }
+    { pageId?: string; waiting: Set<string>; done: (graph: PageGraph | null) => void }
   >();
   let seq = 0;
 
   /**
    * Sends one request and resolves with the first graph a page returns, or
-   * null when every asked page answered without one or none answered within
-   * `timeoutMs`.
+   * null when every page in `pages` answered without one or none answered
+   * within `timeoutMs`. Empty answers from pages outside `pages` (an overlay
+   * that never reported a graph) do not count toward that early null.
    */
   function request(
     send: (message: { requestId: string; env: string; pageId?: string }) => void,
     env: string,
     pageId: string | undefined,
-    pages: number,
+    pages: readonly string[],
     timeoutMs: number,
   ): Promise<PageGraph | null> {
-    if (pages < 1) return Promise.resolve(null);
+    if (!pages.length) return Promise.resolve(null);
     return new Promise((resolve) => {
       const requestId = `peek${++seq}`;
       const timer = setTimeout(() => done(null), timeoutMs);
@@ -37,7 +38,7 @@ export function createSignalPeeks() {
         pending.delete(requestId);
         resolve(graph);
       };
-      pending.set(requestId, { pageId, left: pages, done });
+      pending.set(requestId, { pageId, waiting: new Set(pages), done });
       send(pageId ? { requestId, env, pageId } : { requestId, env });
     });
   }
@@ -53,7 +54,8 @@ export function createSignalPeeks() {
       entry.done({ ...(graph as PageGraph), pageId });
       return;
     }
-    if (--entry.left <= 0) entry.done(null);
+    entry.waiting.delete(pageId);
+    if (!entry.waiting.size) entry.done(null);
   }
 
   return { request, answer };

@@ -363,6 +363,46 @@ describe('agent tools', () => {
     expect(missing).toMatch(/the page knows `Root`/);
   }, 10_000);
 
+  it('waits for a known page when a page without a signal graph answers first', async () => {
+    const { ctx, push, call } = await boot();
+    const environments = [{ id: 'inj-1', name: 'Root' }];
+    for (const pageId of ['p1', 'p2']) {
+      await push('push-signal-graph', {
+        pageId,
+        nodes: [],
+        edges: [],
+        componentSelector: 'app-card',
+        environments,
+      });
+    }
+    vi.spyOn(ctx.rpc, 'broadcast').mockImplementation(
+      async (options: { method: string; args: unknown[] }) => {
+        if (options.method !== 'pangular:peek-signal-graph') return;
+        const { requestId } = options.args[0] as { requestId: string };
+        // p3 never reported a graph; its empty answer must not end the wait.
+        void push('signal-graph-peek-result', { requestId, pageId: 'p3', graph: null });
+        void push('signal-graph-peek-result', { requestId, pageId: 'p2', graph: null });
+        setTimeout(() => {
+          void push('signal-graph-peek-result', {
+            requestId,
+            pageId: 'p1',
+            graph: {
+              nodes: [{ id: 'e', kind: 'effect', label: 'persistTrips', epoch: 1 }],
+              edges: [],
+              injector: { id: 'inj-1', name: 'Root' },
+              environments,
+            },
+          });
+        }, 20);
+      },
+    );
+    expect(JSON.parse(await call('inspect-signals', 'root'))).toMatchObject({
+      pageId: 'p1',
+      injector: { name: 'Root' },
+      nodes: [{ label: 'persistTrips' }],
+    });
+  });
+
   it('names the known injectors when a route path matches none', async () => {
     const { push, call } = await boot();
     await push('push-signal-graph', {

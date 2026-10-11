@@ -1883,7 +1883,7 @@ const pangular = defineDevframe({
               }),
             args.selector,
             page,
-            page ? 1 : signalPages.size,
+            page ? [page] : [...signalPages.keys()],
             ENV_WAIT_MS,
           );
           if (peeked && matches(peeked)) matched = peeked;

@@ -134,7 +134,7 @@ describe('createSignalPeeks', () => {
   it('resolves with the first graph from the asked page and ignores other pages', async () => {
     const peeks = createSignalPeeks();
     const sent: { requestId: string; env: string; pageId?: string }[] = [];
-    const answer = peeks.request((message) => sent.push(message), 'root', 'p1', 1, 1000);
+    const answer = peeks.request((message) => sent.push(message), 'root', 'p1', ['p1'], 1000);
     const { requestId } = sent[0]!;
     expect(sent[0]).toEqual({ requestId, env: 'root', pageId: 'p1' });
     peeks.answer({ requestId, pageId: 'p2', graph: { nodes: [], edges: [] } });
@@ -145,16 +145,43 @@ describe('createSignalPeeks', () => {
   it('resolves null once every asked page answered without a graph', async () => {
     const peeks = createSignalPeeks();
     let requestId = '';
-    const answer = peeks.request((m) => (requestId = m.requestId), 'root', undefined, 2, 60_000);
+    const answer = peeks.request(
+      (m) => (requestId = m.requestId),
+      'root',
+      undefined,
+      ['p1', 'p2'],
+      60_000,
+    );
+    peeks.answer({ requestId, pageId: 'p1', graph: null });
     peeks.answer({ requestId, pageId: 'p1', graph: null });
     peeks.answer({ requestId, pageId: 'p2', graph: null });
     expect(await answer).toBeNull();
   });
 
+  it('does not count an empty answer from a page that was not expected', async () => {
+    const peeks = createSignalPeeks();
+    let requestId = '';
+    let settled = false;
+    const answer = peeks.request(
+      (m) => (requestId = m.requestId),
+      'root',
+      undefined,
+      ['p1', 'p2'],
+      60_000,
+    );
+    void answer.then(() => (settled = true));
+    peeks.answer({ requestId, pageId: 'p3', graph: null });
+    peeks.answer({ requestId, pageId: 'p2', graph: null });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    peeks.answer({ requestId, pageId: 'p1', graph: { nodes: [{ id: 'e' }], edges: [] } });
+    expect(await answer).toMatchObject({ pageId: 'p1', nodes: [{ id: 'e' }] });
+  });
+
   it('resolves null when no page answers in time', async () => {
     vi.useFakeTimers();
     const peeks = createSignalPeeks();
-    const answer = peeks.request(() => {}, 'root', undefined, 1, 1500);
+    const answer = peeks.request(() => {}, 'root', undefined, ['p1'], 1500);
     await vi.advanceTimersByTimeAsync(1500);
     expect(await answer).toBeNull();
   });
