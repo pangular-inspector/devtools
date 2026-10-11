@@ -2273,7 +2273,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-forms',
       description:
-        'Inspect the forms on the running page (Signal Forms, reactive and template-driven). Without arguments it lists each form with its status and error count. Pass `form` for its field tree (value, status, touched, dirty, errors per field). Signal Forms that set `experimentalWebMcpTool` also carry `webMcp`: the tool name, description, inputs, registration status (registered, or failed with the fields that blocked schema inference), required fields that changed since registration, duplicate names and recent agent calls. Password and other secret-looking values are redacted. For "why is this form invalid", call explain-form-invalid first.',
+        'Inspect the forms on the running page (Signal Forms, reactive and template-driven). Without arguments it lists each form with its status and error count. Pass `form` for its field tree (value, status, touched, dirty, errors per field). A tree shows as many fields as fit in 20,000 characters (at most 200 per form) and cuts values over 300 characters; a group that lost fields carries `notShown`, and a note names a `path` to read them. Signal Forms that set `experimentalWebMcpTool` also carry `webMcp`: the tool name, description, inputs, registration status (registered, or failed with the fields that blocked schema inference), required fields that changed since registration, duplicate names and recent agent calls. Password and other secret-looking values are redacted. For "why is this form invalid", call explain-form-invalid first.',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -2311,7 +2311,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:explain-form-invalid',
       description:
-        'Explain why forms on the running page are invalid: each failing field with its current value, the validator that failed, its message and whether it was touched, plus fields waiting on async validators and disabled reasons. Without `form` it covers every form that is invalid or waiting on async validation.',
+        'Explain why forms on the running page are invalid: each failing field with its current value, the validator that failed, its message and whether it was touched, plus fields waiting on async validators and disabled reasons. Without `form` it covers every form that is invalid or waiting on async validation. Lists at most 100 problems per form; pass `path` to explain one group.',
       safety: 'read',
       inputSchema: {
         type: 'object',
@@ -2321,9 +2321,14 @@ const pangular = defineDevframe({
             type: 'string',
             description: 'Page id (the part after @ in a form id) when several tabs are connected.',
           },
+          path: {
+            type: 'string',
+            description:
+              'Dotted field path to explain only that group or field, e.g. address or items.3. Applies to every matched form.',
+          },
         },
       },
-      handler: async (args: { form?: string; page?: string }) => {
+      handler: async (args: { form?: string; page?: string; path?: string }) => {
         const state = formsState.value() as FormsState;
         if (!state.forms.length) return { markdown: noForms };
         const elsewhere = unknownFormPage(args);
@@ -2404,9 +2409,12 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:form-payload',
       description:
-        'Show what a form would send: form.value vs getRawValue() with the disabled fields form.value drops (reactive), or the hidden/disabled/readonly fields Signal Forms keeps in the value without validating them, plus which fields the user changed.',
+        'Show what a form would send: form.value vs getRawValue() with the disabled fields form.value drops (reactive), or the hidden/disabled/readonly fields Signal Forms keeps in the value without validating them, plus which fields the user changed. Each value is cut at 8,000 characters; pass `path` for one group.',
       safety: 'read',
-      inputSchema: { type: 'object', properties: { form: formProperty, page: formPageProperty } },
+      inputSchema: {
+        type: 'object',
+        properties: { form: formProperty, path: pathProperty, page: formPageProperty },
+      },
       handler: withForms(formPayloadText),
     });
 
@@ -2527,7 +2535,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:export-form',
       description:
-        'Export a form as a JSON snapshot (tree, status, raw value) or as a test fixture (setValue / signal model plus the expected status) with a repro header. Secret values stay [redacted].',
+        'Export a form as a JSON snapshot (tree, status, raw value) or as a test fixture (setValue / signal model plus the expected status) with a repro header. Secret values stay [redacted]. A snapshot keeps as many fields as fit in 20,000 characters (at most 200) and notes what was cut.',
       safety: 'read',
       inputSchema: {
         type: 'object',

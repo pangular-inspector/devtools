@@ -19,6 +19,18 @@ import {
   type FormsState,
 } from './forms-tools.ts';
 import { droppedNote } from '../timeline-limits.ts';
+import { clip } from '../text.ts';
+import {
+  FORM_TOOL_MAX_CHARS,
+  MAX_FIELD_VALUE_CHARS,
+  MAX_FORM_LINES,
+  MAX_FORM_VALUE_CHARS,
+  capFieldTree,
+  capLines,
+  capText,
+  fitFields,
+  valueJson,
+} from './forms-cap.ts';
 
 export interface FieldArgs {
   form?: string;
@@ -119,10 +131,7 @@ export function explainFieldText(
   const form = pickForm(state, args);
   if (typeof form === 'string') return form;
   const node = subtreeAt(form.root, args.path ?? '');
-  if (!node) {
-    const top = (form.root.children ?? []).map((c) => c.key).join(', ');
-    return `No field at ${code(args.path ?? '')} in ${form.id}; top-level fields: ${top}.`;
-  }
+  if (!node) return missingPath(form, args.path ?? '');
   const where = code(node.path || '(form)');
   const lines = [`${where} in ${code(form.label)} (${form.kind}, ${form.id}): ${flags(node)}.`];
   if (node.type === 'control') {
@@ -320,7 +329,7 @@ interface Payload {
   changed: string[];
 }
 
-export function payloadOf(form: CollectedForm): Payload {
+export function payloadOf(form: CollectedForm, root: FormFieldNode = form.root): Payload {
   const excluded: string[] = [];
   const unvalidated: string[] = [];
   const changed: string[] = [];
@@ -334,7 +343,7 @@ export function payloadOf(form: CollectedForm): Payload {
     const entries = kids.map((child) => [child.key, build(child, raw)] as const);
     return node.type === 'array' ? entries.map(([, v]) => v) : Object.fromEntries(entries);
   };
-  walk(form.root, (node) => {
+  walk(root, (node) => {
     if (!node.path) return;
     if (form.kind !== 'signal' && node.status === 'DISABLED') excluded.push(node.path);
     if (form.kind === 'signal' && node.skipped && node.hiddenBy !== 'parent')
@@ -345,8 +354,8 @@ export function payloadOf(form: CollectedForm): Payload {
     (p) => !excluded.some((q) => q !== p && p.startsWith(`${q}.`)),
   );
   return {
-    value: build(form.root, false),
-    raw: build(form.root, true),
+    value: build(root, false),
+    raw: build(root, true),
     excluded: topExcluded,
     unvalidated,
     changed,
@@ -356,28 +365,45 @@ export function payloadOf(form: CollectedForm): Payload {
 export function formPayloadText(state: FormsState, args: FieldArgs, now = Date.now()): string {
   const form = pickForm(state, args);
   if (typeof form === 'string') return form;
-  const p = payloadOf(form);
+  const start = args.path ? subtreeAt(form.root, args.path) : form.root;
+  if (!start) return missingPath(form, args.path ?? '');
+  const p = payloadOf(form, start);
+  const narrow = 'pass `path` to show one group';
+  const where = start === form.root ? '' : ` at ${code(start.path)}`;
   const lines = [
-    `${form.kind === 'signal' ? 'form().value()' : 'form.value'}: ${JSON.stringify(p.value)}`,
+    `${form.kind === 'signal' ? 'form().value()' : 'form.value'}${where}: ${valueJson(p.value, narrow)}`,
   ];
   if (form.kind !== 'signal') {
     lines.push(
       p.excluded.length
-        ? `Left out of form.value because they are disabled: ${p.excluded.map(code).join(', ')}. Use getRawValue() to include them: ${JSON.stringify(p.raw)}`
+        ? `Left out of form.value because they are disabled: ${list(p.excluded)}. Use getRawValue() to include them: ${valueJson(p.raw, narrow)}`
         : 'getRawValue() is the same (nothing disabled).',
     );
   } else if (p.unvalidated.length) {
     lines.push(
-      `Sent but not validated (Signal Forms keeps hidden, disabled and readonly fields in the value): ${p.unvalidated.map(code).join(', ')}. Strip them before sending if the server should not get them.`,
+      `Sent but not validated (Signal Forms keeps hidden, disabled and readonly fields in the value): ${list(p.unvalidated)}. Strip them before sending if the server should not get them.`,
     );
   }
   lines.push(
     p.changed.length
-      ? `Changed by the user: ${p.changed.map(code).join(', ')}.`
+      ? `Changed by the user: ${list(p.changed)}.`
       : 'No field changed since it was created or last reset.',
   );
   if (JSON.stringify(p.raw).includes(REDACTED)) lines.push('Secret values show as [redacted].');
   return `${UNTRUSTED}\n\n${lines.join('\n')}${freshness(state, now, [form])}`;
+}
+
+function missingPath(form: CollectedForm, path: string): string {
+  const top = (form.root.children ?? []).map((c) => c.key).join(', ');
+  return `No field at ${code(path)} in ${form.id}; top-level fields: ${top}.`;
+}
+
+/** Field paths as code, the first `MAX_FORM_LINES` of them. */
+function list(paths: string[]): string {
+  const shown = paths.slice(0, MAX_FORM_LINES).map(code).join(', ');
+  return paths.length > MAX_FORM_LINES
+    ? `${shown} and ${paths.length - MAX_FORM_LINES} more not shown (pass \`path\` to narrow it down)`
+    : shown;
 }
 
 export interface HistoryArgs extends FieldArgs {
@@ -459,7 +485,11 @@ export function formDiffText(state: FormsState, args: FieldArgs & { since?: numb
     since && oldest > since + 1
       ? '\n\n_Older events were dropped from the buffer; the diff may be incomplete._'
       : '';
-  return `${UNTRUSTED}\n\n${lines.length ? lines.join('\n') : 'Changes cancelled out.'}\n\nMarker now: ${marker}.${gap}`;
+  const shown = capLines(
+    lines.filter((line): line is string => !!line),
+    'pass `form`, or a later `since` marker, to narrow it down',
+  );
+  return `${UNTRUSTED}\n\n${shown.length ? shown.join('\n') : 'Changes cancelled out.'}\n\nMarker now: ${marker}.${gap}`;
 }
 
 export function lintFormsFor(
@@ -492,7 +522,7 @@ export function lintFormsText(
       (f) =>
         `- **${f.severity}** ${f.rule}${f.label ? ` in ${code(f.label)}` : ''}${f.path ? ` at ${code(f.path)}` : ''}: ${f.message} Fix: ${f.fix}`,
     );
-  return `${UNTRUSTED}\n\n${lines.join('\n')}`;
+  return `${UNTRUSTED}\n\n${capLines(lines, 'pass `form` to lint one form').join('\n')}`;
 }
 
 export function explainCustomControlText(state: FormsState, args: FieldArgs): string {
@@ -562,14 +592,43 @@ export function exportFormText(
     '// Secret values are [redacted]; replace them before running.',
   ].join('\n');
   if (args.format !== 'fixture') {
-    return `${UNTRUSTED}\n\n\`\`\`json\n${literal({ id: form.id, label: form.label, kind: form.kind, status: form.root.status, value: p.raw, root: form.root })}\n\`\`\``;
+    const raw = JSON.stringify(p.raw) ?? '';
+    const value = raw.length > MAX_FORM_VALUE_CHARS ? clip(raw, MAX_FORM_VALUE_CHARS) : p.raw;
+    const { tree, text: json } = fitFields((fields) => {
+      const tree = capFieldTree(form.root, fields);
+      const text = literal({
+        id: form.id,
+        label: form.label,
+        kind: form.kind,
+        status: form.root.status,
+        value,
+        root: tree.root,
+      });
+      return { tree, text };
+    }, FORM_TOOL_MAX_CHARS);
+    const cuts = [
+      ...(tree.shown < tree.total
+        ? [
+            `showing ${tree.shown} of ${tree.total} fields (groups that lost fields carry \`notShown\`)`,
+          ]
+        : []),
+      ...(tree.clipped
+        ? [`${tree.clipped} field value(s) cut at ${MAX_FIELD_VALUE_CHARS} characters`]
+        : []),
+      ...(value !== p.raw ? [`value cut at ${MAX_FORM_VALUE_CHARS} characters`] : []),
+    ];
+    const note = cuts.length ? `\n\n_Snapshot cut: ${cuts.join('; ')}. ${EXPORT_NARROW}._` : '';
+    return `${UNTRUSTED}\n\n\`\`\`json\n${capText(json, EXPORT_NARROW)}\n\`\`\`${note}`;
   }
   const body =
     form.kind === 'signal'
       ? `const model = signal(${literal(p.raw)});\n// const f = form(model, schema);\n// expect(f().valid()).toBe(${form.root.status === 'VALID'});`
       : `form.${p.excluded.length ? 'patchValue' : 'setValue'}(${literal(p.raw)});\n${p.excluded.map((path) => `form.get('${path}')?.disable();`).join('\n')}\nexpect(form.status).toBe('${form.root.status}');`;
-  return `${UNTRUSTED}\n\n\`\`\`ts\n${header}\n${body}\n\`\`\``;
+  return `${UNTRUSTED}\n\n\`\`\`ts\n${header}\n${capText(body, EXPORT_NARROW)}\n\`\`\``;
 }
+
+const EXPORT_NARROW =
+  'read the rest with inspect-forms or form-payload and a `path`, one group at a time';
 
 export type WaitUntil = 'settled' | 'valid' | 'not-pending' | 'submitted';
 
