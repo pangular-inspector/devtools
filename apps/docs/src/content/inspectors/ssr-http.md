@@ -120,7 +120,7 @@ Every `HttpClient` request, tagged **SSR** or **Client**. Each row shows the met
 
 A request that was unsubscribed before its response, for example by `switchMap`, a route change or a destroyed component, shows **cancelled** as its status. **ERR** marks a request that failed without a status, such as when the browser is offline or CORS blocks it.
 
-Above the table, these filters narrow the timeline. They combine, and the count next to them shows how many calls are visible, for example **12 of 200**.
+Above the table, these filters narrow the timeline. They combine, and the count next to them shows how many calls are visible, for example **12 of 200**. The count shows once the timeline has a call.
 
 | Filter                   | What it keeps                                                                                             |
 | ------------------------ | --------------------------------------------------------------------------------------------------------- |
@@ -142,7 +142,7 @@ Add a rule with these fields:
 - **Status**: **None**, or a status from the list. The list has the standard 2xx to 5xx statuses, plus `499` (nginx) and `520` to `524` (Cloudflare). Type the code, for example `503`, to jump to it.
 - **Delay (ms)** up to 10000, and an optional JSON body.
 
-A status of 400 or more fails the request with an `HttpErrorResponse`. A lower status returns the body as a mocked response. A body with the status on **None** returns it with status 200. A stored rule with a status outside the list loses that status, and is dropped when nothing else is left to change. A rule with only a delay passes the request through, later. A rule needs a status, a delay or a body, so **Add rule** stays off until it has one. The form clears after each added rule. The first enabled rule that matches wins.
+A status of 400 or more fails the request with an `HttpErrorResponse`. A lower status returns the body as a mocked response. A body with the status on **None** returns it with status 200. A stored rule with a status outside the list loses that status, and is dropped when nothing else is left to change. A rule with only a delay passes the request through, later. A rule needs a status, a delay or a body, so **Add rule** stays off until it has one. The form clears after each added rule. The first enabled rule that matches wins. After **Remove**, focus moves to the next rule's **Remove** button, the previous one when the last rule went, or the **Rules** heading when none are left. **SSR overrides** work the same way.
 
 To start from a call you already made, open it in the timeline and click **Mock this request**. The form gets the call's method and its path and query as the URL pattern, without the origin, so the rule matches the client and SSR URLs. A redacted value in the URL becomes `*`. When the preview is complete JSON, it becomes the body, with redacted values still masked. Focus moves to **URL pattern**. Nothing is saved until you click **Add rule**, so check the body and pick a status first.
 
