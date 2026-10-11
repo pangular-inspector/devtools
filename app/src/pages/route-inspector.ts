@@ -1,14 +1,28 @@
-import { Component, computed, effect, input, linkedSignal, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  computed,
+  effect,
+  input,
+  linkedSignal,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { isStaticReport } from '../rpc';
 import { LiveRoute } from './live-route';
 import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types';
+import type { ComponentFocus } from '../types/component-focus.types';
 
 @Component({
   selector: 'app-route-inspector',
   imports: [LiveRoute],
   template: `
-    <app-live-route [rpc]="rpc()" [sources]="routes()" />
+    <app-live-route
+      [rpc]="rpc()"
+      [sources]="routes()"
+      (showComponent)="showComponent.emit($event)"
+    />
 
     <section class="config" aria-labelledby="config-heading">
       <div class="section-head">
@@ -223,6 +237,7 @@ import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types'
 })
 export class RouteInspector {
   rpc = input<DevframeRpcClient | null>(null);
+  readonly showComponent = output<ComponentFocus>();
   staticReport = computed(() => isStaticReport(this.rpc()));
 
   routes = signal<SourceRoute[]>([]);

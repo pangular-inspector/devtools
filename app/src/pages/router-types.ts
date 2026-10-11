@@ -131,6 +131,8 @@ export interface OutletInfo {
   route?: string;
   component?: string;
   element?: string;
+  /** Stable id of the routed component's host element, as the component tree uses it. */
+  devtoolsId?: string;
   activated: boolean;
   detached?: boolean;
   inputs?: { input: string; source: string }[];

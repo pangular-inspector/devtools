@@ -6,6 +6,7 @@ import {
   inject,
   input,
   linkedSignal,
+  output,
   signal,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
@@ -17,6 +18,7 @@ import { RouteTimeline } from './route-timeline';
 import { RouteTree } from './route-tree';
 import type { RouterPage, SourceRoute } from './router-types';
 import { Select } from '../ui/select';
+import type { ComponentFocus } from '../types/component-focus.types';
 
 const TABS = [
   { id: 'current', label: 'Current' },
@@ -86,7 +88,11 @@ type TabId = (typeof TABS)[number]['id'];
       >
         @switch (selected()) {
           @case ('current') {
-            <app-route-current [page]="current" [rpc]="rpc()" />
+            <app-route-current
+              [page]="current"
+              [rpc]="rpc()"
+              (showComponent)="showComponent.emit($event)"
+            />
           }
           @case ('navigations') {
             <app-route-timeline [page]="current" [rpc]="rpc()" />
@@ -267,6 +273,7 @@ type TabId = (typeof TABS)[number]['id'];
 export class LiveRoute {
   rpc = input<DevframeRpcClient | null>(null);
   sources = input<SourceRoute[]>([]);
+  readonly showComponent = output<ComponentFocus>();
 
   readonly tabs = TABS;
   readonly selected = signal<TabId>('current');
