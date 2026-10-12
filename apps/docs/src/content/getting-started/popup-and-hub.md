@@ -1,6 +1,6 @@
 ---
 title: Popup and hub
-description: The floating button, the panel and its dock modes, the hub rail and deep links.
+description: The floating button, the panel and its dock modes, the splitter, the pop-out window, the hub rail and deep links.
 ---
 
 <ngmd-hero title="Popup and hub" gradient>
@@ -74,14 +74,41 @@ The values above are the defaults.
     A free panel on top of your app. Drag it by the toolbar with a mouse, finger or pen, and resize it from the corner.
   </ngmd-card>
   <ngmd-card icon="box" title="Bottom">
-    Full width, 40% of the viewport height. Resize it vertically.
+    Full width, 40% of the viewport height until you resize it. Drag the splitter on its top edge.
   </ngmd-card>
   <ngmd-card icon="compass" title="Right">
-    40% of the viewport width, full height. Resize it horizontally.
+    40% of the viewport width until you resize it, full height. Drag the splitter on its left edge.
   </ngmd-card>
 </ngmd-card-grid>
 
-You can drag only the floating panel. Switch modes from the buttons in the panel toolbar. The floating panel always stays inside the window: when the window shrinks, the panel moves and shrinks to fit, and grows back to its saved size when there is room again.
+You can drag only the floating panel. Switch modes from the buttons in the panel toolbar, or from the [command palette](./command-palette.md). The floating panel always stays inside the window: when the window shrinks, the panel moves and shrinks to fit, and grows back to its saved size when there is room again.
+
+### Resize a docked panel
+
+A docked panel has a splitter on the edge that faces your app. Drag it with a mouse, finger or pen, or focus it with <kbd>Tab</kbd> and use the keyboard:
+
+| Key                                | Bottom dock                       | Right dock                        |
+| ---------------------------------- | --------------------------------- | --------------------------------- |
+| <kbd>↑</kbd> and <kbd>↓</kbd>      | Taller and shorter by 16 pixels   | Nothing                           |
+| <kbd>←</kbd> and <kbd>→</kbd>      | Nothing                           | Wider and narrower by 16 pixels   |
+| <kbd>Shift</kbd> with an arrow key | 64 pixels at a time               | 64 pixels at a time               |
+| <kbd>Home</kbd> and <kbd>End</kbd> | The smallest and the largest size | The smallest and the largest size |
+
+A bottom dock is at least 120 pixels high and a right dock at least 280 pixels wide. Both leave 48 pixels of the window for your app. Double-click the splitter, or run **Popup: reset the docked size** from the command palette, to go back to 40%. The bottom and right docks each keep their own size, and a saved size shrinks to fit a smaller window.
+
+Screen readers announce the splitter as a separator named **Resize the panel**, with its current, smallest and largest size in pixels.
+
+### Open in its own window
+
+The **Open in its own window** button in the panel toolbar, or **Popup: open in its own window** in the command palette, opens the panel in a separate browser window and closes it on the page. Use it to keep the devtools on a second screen.
+
+The window shows the full panel without the hub rail, and its address carries the page's id (`?pageId=`), so it keeps showing this browser tab after a reload of the app. If you passed `src` to `createDevtoolsPopup`, the window opens that address instead. Each tab gets its own window, and popping out again reuses it.
+
+To bring the panel back into the page, click the floating button (its name is **Bring Pangular Inspector back into the page** while the window is open), press the popup shortcut, or run **Popup: back into the page** from the command palette in the window. Each closes the window and opens the panel on the page. Closing the window yourself also gives the button its usual job back.
+
+If the browser blocks the window, the panel stays on the page and says so. Allow pop-ups for your app's address and try again.
+
+### Top layer
 
 The button and the panel sit in the browser top layer, like a `<dialog>`, a popover or a CDK overlay (MatDialog, MatMenu, MatSelect). When one of those opens, the button and the panel move back above it. A modal `<dialog>` makes the rest of the page inert, so they stay under it until it closes.
 
@@ -96,6 +123,7 @@ The button and the panel sit in the browser top layer, like a `<dialog>`, a popo
 | Move through a long list  | <kbd>↑</kbd>, <kbd>↓</kbd>, <kbd>Home</kbd> and <kbd>End</kbd> in the SSR & HTTP timeline, the Store changes and events, and the Signals list. Each list is one <kbd>Tab</kbd> stop |
 | Close the panel           | <kbd>Escape</kbd>, outside a search box with text                                                                                                                                   |
 | Move the floating panel   | Drag its toolbar                                                                                                                                                                    |
+| Resize a docked panel     | Drag the splitter, or focus it and use the arrow keys, <kbd>Home</kbd> and <kbd>End</kbd>. See [Resize a docked panel](#resize-a-docked-panel)                                      |
 | Reset the panel position  | Double-click its toolbar                                                                                                                                                            |
 | Move the button           | Drag it, or focus it and use the arrow keys                                                                                                                                         |
 | Move the button further   | Hold <kbd>Shift</kbd> with the arrow keys                                                                                                                                           |
@@ -105,7 +133,7 @@ In a search box that has text, <kbd>Escape</kbd> clears the box and leaves the p
 
 ### Saved layout
 
-The panel saves its position, size, dock mode and [passive mode](./settings.md#passive-mode) in `localStorage` under `pangular-popup`, so it keeps its layout across reloads. Clear that key to reset it.
+The panel saves its position, size, dock mode, the size of each docked side and [passive mode](./settings.md#passive-mode) in `localStorage` under `pangular-popup`, so it keeps its layout across reloads. Clear that key to reset it.
 
 ### Passive mode
 
@@ -124,7 +152,7 @@ When the page's server mounts the hub (`/__devframes/`), the button opens the wh
 | Dock           | Shows                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | All tools      | The full panel, with every tab in one tab bar (`/__devframes/pangular/`)                                                                     |
-| Angular        | Dashboard, Components, Routes, Signals, Injectors, Forms, Pipes, and SSR & HTTP                                                              |
+| Angular        | Dashboard, Timeline, Components, Routes, Signals, Injectors, Forms, Pipes, SSR & HTTP, and Errors                                            |
 | NgRx           | The Store tab                                                                                                                                |
 | Analog         | The Analog tab, or a notice in apps that do not use Analog                                                                                   |
 | Angular Native | Components, Signals, Injectors and Store for a connected [Angular Native](./angular-native.md) app, or a setup notice when none is connected |
@@ -167,6 +195,10 @@ A dock shows how many items it has that you have not seen yet: NgRx writes on **
 
 Messages follow the config. An inspector that is off posts nothing (forms errors need `inspectors.forms`, failed navigations `inspectors.router`, hydration messages `inspectors.http`), and an agent tool turned off with `agent.tools`, `agent.readOnly` or `actions` posts nothing either. See [Configuration](./configuration.md).
 
+### Terminals dock
+
+With `terminals: true`, the hub also has a **Terminals** dock that runs your project's build and test commands and shows their output. See [Terminals](./terminals.md).
+
 ### Full-page viewer
 
 The full-page viewer is at `/__devframes/` on the same server. The hub is built on [`@devframes/hub`](https://github.com/devframes/devframe), so other devframe tools can join the same rail.
@@ -184,6 +216,7 @@ The URL hash selects a tab. Open `/__devframes/pangular/#tab=signals` to land on
 | Tab        | Hash              |
 | ---------- | ----------------- |
 | Dashboard  | `#tab=dashboard`  |
+| Timeline   | `#tab=timeline`   |
 | Components | `#tab=components` |
 | Routes     | `#tab=routes`     |
 | Signals    | `#tab=signals`    |

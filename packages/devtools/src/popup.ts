@@ -21,6 +21,45 @@ interface PopupState {
   theme?: 'light' | 'dark';
   /** Passive mode: the launcher stays hidden until the shortcut opens the panel. */
   passive?: boolean;
+  /** The size in px the splitter left each docked side at; the default is 40% of the window. */
+  dockSize?: Partial<Record<DockSide, number>>;
+}
+
+type DockSide = 'bottom' | 'right';
+
+/** The smallest a docked panel gets, in px, so its toolbar and some content stay usable. */
+const DOCK_MIN: Record<DockSide, number> = { bottom: 120, right: 280 };
+/** Room a docked panel always leaves for the app, in px. */
+const DOCK_GAP = 48;
+/** How far an arrow key moves the splitter, and with Shift held. */
+const DOCK_STEP = 16;
+const DOCK_STEP_LARGE = 64;
+
+function windowSpan(side: DockSide): number {
+  return side === 'bottom' ? window.innerHeight : window.innerWidth;
+}
+
+/** The sizes a docked side can take in the current window. */
+function dockLimits(side: DockSide): { min: number; max: number } {
+  const max = Math.max(0, windowSpan(side) - DOCK_GAP);
+  return { min: Math.min(DOCK_MIN[side], max), max };
+}
+
+/** A docked size kept inside the window, the default when there is none. */
+function clampDockSize(side: DockSide, size: number | undefined): number {
+  const { min, max } = dockLimits(side);
+  const wanted = size ?? windowSpan(side) * 0.4;
+  return Math.round(Math.min(max, Math.max(min, wanted)));
+}
+
+function dockSizes(value: unknown): PopupState['dockSize'] | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const sizes: Partial<Record<DockSide, number>> = {};
+  for (const side of ['bottom', 'right'] as const) {
+    const size = (value as Record<string, unknown>)[side];
+    if (typeof size === 'number' && Number.isFinite(size) && size > 0) sizes[side] = size;
+  }
+  return Object.keys(sizes).length ? sizes : undefined;
 }
 
 const DEFAULT_STATE: PopupState = { x: 16, y: 16, width: 720, height: 480, docked: 'float' };
@@ -49,6 +88,7 @@ function loadState(): PopupState {
         : {}),
       ...(saved.theme === 'light' || saved.theme === 'dark' ? { theme: saved.theme } : {}),
       ...(saved.passive === true ? { passive: true } : {}),
+      ...(dockSizes(saved.dockSize) ? { dockSize: dockSizes(saved.dockSize) } : {}),
     };
   } catch {
     return { ...DEFAULT_STATE };
@@ -105,14 +145,36 @@ async function servesJson(url: string): Promise<boolean> {
   }
 }
 
-function panelUrl(base: string): string {
-  let pageId = '';
+/** The id this page claimed, or `''` when the overlay has not claimed one yet. */
+function currentPageId(): string {
   try {
-    pageId = sessionStorage.getItem('pangular-page-id') ?? '';
+    return sessionStorage.getItem('pangular-page-id') ?? '';
   } catch {
     // Storage can be blocked; the panel then shows the latest page.
+    return '';
   }
+}
+
+function panelUrl(base: string): string {
+  const pageId = currentPageId();
   return `${base}?baseURL=${encodeURIComponent(base)}&pageId=${encodeURIComponent(pageId)}`;
+}
+
+/**
+ * What the pop-out window loads. A hub's full panel opens alone with this
+ * page's id in its URL, so the window keeps following this tab. A panel URL
+ * carries the id already, and a `src` given to the popup is used as it is.
+ */
+function popoutUrl(src: string): string {
+  if (explicitSrc !== undefined) return src;
+  const url = new URL(src, location.href);
+  if (url.searchParams.has('pageId')) return url.href;
+  return panelUrl(new URL('pangular/', url).href);
+}
+
+/** The pop-out window's name, one per page, so opening it again reuses the window. */
+function popoutName(): string {
+  return `pangular-inspector-${currentPageId() || 'panel'}`;
 }
 
 /** The hub that serves a devtools frame, when the frame sits at `<hub>pangular/`. */
@@ -266,6 +328,14 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
     saveState(state);
   }
 
+  const popoutBtn = document.createElement('button');
+  popoutBtn.type = 'button';
+  popoutBtn.classList.add('popout-btn');
+  popoutBtn.textContent = '⧉';
+  popoutBtn.title = 'Open in its own window';
+  popoutBtn.setAttribute('aria-label', 'Open Pangular Inspector in its own window');
+  popoutBtn.addEventListener('click', () => void popOut());
+
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
   closeBtn.classList.add('close-btn');
@@ -275,7 +345,7 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
   closeBtn.addEventListener('click', togglePanel);
 
   toolbar.title = 'Drag to move. Double click to reset the position.';
-  toolbar.append(title, dockGroup, closeBtn);
+  toolbar.append(title, dockGroup, popoutBtn, closeBtn);
 
   // Iframe
   const iframe = document.createElement('iframe');
@@ -321,7 +391,24 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
   missingActions.append(retryBtn, setupLink);
   missing.append(missingTitle, missingHint, missingActions);
 
-  panel.append(toolbar, iframe, missing, missingStatus);
+  // The splitter sits on the docked edge. It is a focusable separator, so the
+  // size can be set with the keyboard as well as by dragging.
+  panel.id = 'pangular-panel';
+  const splitter = document.createElement('div');
+  splitter.classList.add('splitter');
+  splitter.setAttribute('role', 'separator');
+  splitter.setAttribute('aria-label', 'Resize the panel');
+  splitter.setAttribute('aria-controls', panel.id);
+  splitter.title = 'Drag or use the arrow keys to resize. Double click to reset the size.';
+  splitter.tabIndex = 0;
+  splitter.hidden = true;
+
+  // Says why the panel stayed in the page when the browser blocked the window.
+  const notice = document.createElement('p');
+  notice.classList.add('notice');
+  notice.setAttribute('role', 'status');
+
+  panel.append(splitter, toolbar, notice, iframe, missing, missingStatus);
 
   // Styles
   const style = document.createElement('style');
@@ -402,7 +489,7 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
       transform: scale(1.06);
     }
     /* The shadow root cannot inherit the page's focus styles. */
-    .dock-btn:focus-visible, .close-btn:focus-visible {
+    .dock-btn:focus-visible, .close-btn:focus-visible, .popout-btn:focus-visible {
       outline: 2px solid var(--_text-str);
       outline-offset: 2px;
     }
@@ -459,7 +546,7 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
       bottom: 0 !important;
       top: auto !important;
       width: 100% !important;
-      height: 40vh !important;
+      height: var(--_dock-size, 40vh) !important;
       border-radius: 10px 10px 0 0;
       resize: none;
     }
@@ -468,11 +555,43 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
       right: 0 !important;
       bottom: 0 !important;
       left: auto !important;
-      width: 40vw !important;
+      width: var(--_dock-size, 40vw) !important;
       height: 100% !important;
       border-radius: 10px 0 0 10px;
       resize: none;
     }
+    .splitter {
+      position: absolute;
+      z-index: 1;
+      background: transparent;
+      touch-action: none;
+      transition: background 150ms ease;
+    }
+    .splitter[hidden] { display: none; }
+    .dock-bottom .splitter { top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+    .dock-right .splitter { top: 0; bottom: 0; left: 0; width: 6px; cursor: ew-resize; }
+    .splitter:hover, .resizing .splitter { background: var(--_accent); }
+    .splitter:focus-visible {
+      background: var(--_accent);
+      outline: 2px solid var(--_text-str);
+      outline-offset: -2px;
+    }
+    /* The frame would take the pointer while it crosses it. */
+    .resizing .frame { pointer-events: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .splitter { transition: none; }
+    }
+    .notice {
+      margin: 0;
+      padding: 6px 12px;
+      font-family: system-ui, sans-serif;
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--_text);
+      background: var(--_surface);
+      border-bottom: 1px solid var(--_border);
+    }
+    .notice:empty { display: none; }
     .toolbar {
       cursor: grab;
       display: flex;
@@ -497,7 +616,7 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
       display: flex;
       gap: 2px;
     }
-    .dock-btn, .close-btn {
+    .dock-btn, .close-btn, .popout-btn {
       border: none;
       background: transparent;
       color: var(--_text-dim);
@@ -507,7 +626,7 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
       border-radius: 4px;
       line-height: 1;
     }
-    .dock-btn:hover, .close-btn:hover { background: var(--_hover-bg); color: var(--_hover-fg); }
+    .dock-btn:hover, .close-btn:hover, .popout-btn:hover { background: var(--_hover-bg); color: var(--_hover-fg); }
     .dock-btn.active { color: var(--_accent); }
     .close-btn { font-size: 13px; }
     .frame {
@@ -745,9 +864,178 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
       panel.style.width = '';
       panel.style.height = '';
     }
+    applySplitter();
+  }
+
+  /** Sizes a docked panel from the saved size, and gives the splitter its range. */
+  function applySplitter() {
+    const side = state.docked;
+    splitter.hidden = side === 'float';
+    if (side === 'float') {
+      panel.style.removeProperty('--_dock-size');
+      return;
+    }
+    const { min, max } = dockLimits(side);
+    const size = clampDockSize(side, state.dockSize?.[side]);
+    panel.style.setProperty('--_dock-size', `${size}px`);
+    splitter.setAttribute('aria-orientation', side === 'bottom' ? 'horizontal' : 'vertical');
+    splitter.setAttribute('aria-valuemin', String(min));
+    splitter.setAttribute('aria-valuemax', String(max));
+    splitter.setAttribute('aria-valuenow', String(size));
+    splitter.setAttribute(
+      'aria-valuetext',
+      `${size} pixels ${side === 'bottom' ? 'high' : 'wide'}`,
+    );
+  }
+
+  /** Sets the size of the docked side, inside the window; `undefined` goes back to the default. */
+  function setDockSize(size: number | undefined) {
+    const side = state.docked;
+    if (side === 'float') return;
+    const sizes = { ...state.dockSize };
+    if (size === undefined) delete sizes[side];
+    else sizes[side] = clampDockSize(side, size);
+    state.dockSize = Object.keys(sizes).length ? sizes : undefined;
+    applySplitter();
+  }
+
+  // Dragging the splitter. Pointer capture keeps the drag going when the
+  // pointer crosses the frame or leaves the window.
+  let resize: { id: number } | null = null;
+  splitter.addEventListener('pointerdown', (e) => {
+    if (state.docked === 'float' || resize) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    resize = { id: e.pointerId };
+    panel.classList.add('resizing');
+    try {
+      splitter.setPointerCapture(e.pointerId);
+    } catch {
+      // the pointer is already gone; the move events still reach the splitter
+    }
+    e.preventDefault();
+  });
+  splitter.addEventListener('pointermove', (e) => {
+    if (!resize || e.pointerId !== resize.id) return;
+    setDockSize(
+      state.docked === 'bottom' ? window.innerHeight - e.clientY : window.innerWidth - e.clientX,
+    );
+  });
+  const endResize = (e: PointerEvent) => {
+    if (!resize || e.pointerId !== resize.id) return;
+    resize = null;
+    panel.classList.remove('resizing');
+    saveState(state);
+  };
+  splitter.addEventListener('pointerup', endResize);
+  splitter.addEventListener('pointercancel', endResize);
+  splitter.addEventListener('lostpointercapture', endResize);
+
+  // The arrow keys along the splitter's axis move it, Shift moves it further,
+  // and Home and End go to the smallest and largest size.
+  splitter.addEventListener('keydown', (e) => {
+    const side = state.docked;
+    if (side === 'float') return;
+    const step = e.shiftKey ? DOCK_STEP_LARGE : DOCK_STEP;
+    const size = clampDockSize(side, state.dockSize?.[side]);
+    const { min, max } = dockLimits(side);
+    const grow = side === 'bottom' ? 'ArrowUp' : 'ArrowLeft';
+    const shrink = side === 'bottom' ? 'ArrowDown' : 'ArrowRight';
+    const next: Record<string, number> = {
+      [grow]: size + step,
+      [shrink]: size - step,
+      Home: min,
+      End: max,
+    };
+    if (!Object.hasOwn(next, e.key)) return;
+    e.preventDefault();
+    setDockSize(next[e.key]);
+    saveState(state);
+  });
+
+  splitter.addEventListener('dblclick', () => {
+    setDockSize(undefined);
+    saveState(state);
+  });
+
+  /** The window the panel was popped out into, while it is open. */
+  let outside: Window | null = null;
+  /** The origin of the panel in that window, which its messages must come from. */
+  let outsideOrigin = '';
+  let outsideWatch: ReturnType<typeof setInterval> | undefined;
+
+  /** Labels the launcher for what a click does: open the panel, or bring it back. */
+  function applyOutside() {
+    const label = outside
+      ? 'Bring Pangular Inspector back into the page'
+      : 'Toggle Pangular Inspector';
+    fab.setAttribute('aria-label', label);
+    fab.title = outside ? label : 'Pangular Inspector';
+    fab.classList.toggle('outside', !!outside);
+  }
+
+  /** Forgets the pop-out window, closing it unless it is already closed. */
+  function forgetOutside(close: boolean) {
+    clearInterval(outsideWatch);
+    outsideWatch = undefined;
+    const win = outside;
+    outside = null;
+    if (close && win && !win.closed) {
+      try {
+        win.close();
+      } catch {
+        // a window the page can no longer reach
+      }
+    }
+    applyOutside();
+  }
+
+  /**
+   * Opens the panel in its own browser window, still on this page's id, and
+   * closes it here. The launcher, the shortcut or the panel's **Back into the
+   * page** command bring it back.
+   */
+  async function popOut() {
+    notice.textContent = '';
+    // The frame's address is known once the panel loaded, which keeps the
+    // call inside the click, as a pop-up blocker wants.
+    const src = iframe.src && !iframe.hidden ? iframe.src : await resolveTarget();
+    if (src === null) {
+      notice.textContent = 'No devtools server found, so there is nothing to open.';
+      return;
+    }
+    const width = Math.min(1200, Math.max(480, Math.round(window.outerWidth * 0.6) || 960));
+    const height = Math.min(900, Math.max(360, Math.round(window.outerHeight * 0.8) || 720));
+    const url = popoutUrl(src);
+    let win: Window | null = null;
+    try {
+      win = window.open(url, popoutName(), `popup,width=${width},height=${height}`);
+    } catch {
+      win = null;
+    }
+    if (!win) {
+      notice.textContent =
+        'The browser blocked the new window. Allow pop-ups for this site and try again.';
+      return;
+    }
+    forgetOutside(false);
+    outside = win;
+    outsideOrigin = new URL(url, location.href).origin;
+    applyOutside();
+    // Closing the window by hand brings back the launcher's usual job.
+    outsideWatch = setInterval(() => {
+      if (outside?.closed) forgetOutside(false);
+    }, 1000);
+    if (isOpen) togglePanel();
+    try {
+      win.focus();
+    } catch {
+      // the browser decides which window has focus
+    }
   }
 
   function togglePanel() {
+    // Opening the panel here while it is popped out brings it back from the window.
+    if (!isOpen && outside) forgetOutside(true);
     isOpen = !isOpen;
     fab.classList.toggle('open', isOpen);
     fab.setAttribute('aria-expanded', String(isOpen));
@@ -990,7 +1278,11 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
       passive?: unknown;
     } | null;
     if (msg?.type === 'pangular:theme-change') applyPopupTheme(msg.theme);
-    else if (msg?.type === 'pangular:popup-dock') {
+    else if (msg?.type === 'pangular:popup-popout') void popOut();
+    else if (msg?.type === 'pangular:popup-dock-size' && state.docked !== 'float') {
+      setDockSize(undefined);
+      saveState(state);
+    } else if (msg?.type === 'pangular:popup-dock') {
       if (msg.mode === 'float' || msg.mode === 'bottom' || msg.mode === 'right') setDock(msg.mode);
     } else if (msg?.type === 'pangular:popup-close') {
       // The panel heard the shortcut inside a frame the popup can't listen to.
@@ -1002,6 +1294,36 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
     }
   };
   window.addEventListener('message', onThemeMessage);
+
+  /** The pop-out window a message came from, itself or through a frame inside it. */
+  const fromOutside = (e: MessageEvent): Window | null => {
+    if (!e.source) return null;
+    let w = e.source as Window;
+    try {
+      for (let depth = 0; depth < 10; depth++) {
+        if (outside && w === outside) return e.origin === outsideOrigin ? w : null;
+        // After a reload of this page the window is no longer known by
+        // reference, but it still has the name this page gave it. Its name
+        // can only be read on this page's origin.
+        if (!outside && w.name === popoutName()) return e.origin === location.origin ? w : null;
+        if (w === w.parent) return null;
+        w = w.parent;
+      }
+    } catch {
+      // a window on another origin, whose name can't be read
+    }
+    return null;
+  };
+  const onOutsideMessage = (e: MessageEvent) => {
+    const type = (e.data as { type?: unknown } | null)?.type;
+    if (type !== 'pangular:popup-return') return;
+    const win = fromOutside(e);
+    if (!win) return;
+    outside = win;
+    forgetOutside(true);
+    if (!isOpen) togglePanel();
+  };
+  window.addEventListener('message', onOutsideMessage);
 
   applyLauncher();
   applyPassive();
@@ -1028,6 +1350,8 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
     toggle: togglePanel,
     destroy: () => {
       window.removeEventListener('message', onThemeMessage);
+      window.removeEventListener('message', onOutsideMessage);
+      clearInterval(outsideWatch);
       window.removeEventListener('keydown', onHotkey, true);
       rehotkey = undefined;
       window.removeEventListener('resize', applyLauncher);

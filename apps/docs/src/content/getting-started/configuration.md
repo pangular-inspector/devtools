@@ -208,6 +208,16 @@ const devtools = initPangularHub({
 
 The overlay reads the option from the server when it connects, so the default works until then. With `false`, [passive mode](./settings.md#passive-mode) has no effect and the floating button always shows.
 
+### Terminals
+
+`terminals` is an option of the Express hub and the Vite plugin only, next to the access options. It is not part of `PangularConfig`, so `createPangular()` and the CLI config file don't take it.
+
+| Option      | Default | What it does                                                                                                                                                                                                |
+| ----------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `terminals` | `false` | `true` adds a **Terminals** dock to the hub that runs the project's build and test commands. It stays off in production, with `allowedOrigins: false` and with `allowLan`. See [Terminals](./terminals.md). |
+
+It is off by default because it starts processes on your machine. A value other than `true` or `false` prints a warning and keeps it off.
+
 ## Check the active configuration
 
 The server checks the options when it starts. An unknown key, a value of the wrong type or a limit outside its bounds prints one `[pangular]` warning in the terminal that lists each problem and the value used instead. An unknown key names the closest known key:

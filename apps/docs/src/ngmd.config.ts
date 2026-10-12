@@ -184,6 +184,7 @@ const config: NgmdConfig = {
         {label: 'Configuration', href: '/getting-started/configuration', status: 'new'},
         {label: 'Popup and hub', href: '/getting-started/popup-and-hub', status: 'new'},
         {label: 'Command palette', href: '/getting-started/command-palette', status: 'new'},
+        {label: 'Terminals', href: '/getting-started/terminals', status: 'new'},
         {label: 'Settings', href: '/getting-started/settings', status: 'new'},
         {label: 'Browser overlay', href: '/getting-started/overlay', status: 'updated'},
         {label: 'Chrome extension', href: '/getting-started/chrome-extension'},
@@ -195,6 +196,7 @@ const config: NgmdConfig = {
       label: 'Inspectors',
       items: [
         {label: 'Dashboard', href: '/inspectors/dashboard'},
+        {label: 'Timeline', href: '/inspectors/timeline', status: 'new'},
         {label: 'Components', href: '/inspectors/components'},
         {label: 'Injectors', href: '/inspectors/injectors', status: 'updated'},
         {label: 'Signals', href: '/inspectors/signals'},

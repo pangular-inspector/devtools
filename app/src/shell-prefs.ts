@@ -185,3 +185,43 @@ export function inPopup(win: Window = window): boolean {
   }
   return false;
 }
+
+/** The prefix of the window name the popup gives the panel it pops out (`popup.ts`). */
+const POPOUT_NAME = 'pangular-inspector-';
+
+/**
+ * The app page's window when the panel runs in the window the popup popped
+ * it out into, or `null` elsewhere. A hub dock inside that window counts too.
+ */
+export function popoutOpener(win: Window = window): Window | null {
+  try {
+    const top = win.top ?? win;
+    if (!top.name.startsWith(POPOUT_NAME)) return null;
+    return top.opener && top.opener !== top ? (top.opener as Window) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Asks the popup on the app's page to take the panel back from its own window. */
+export function returnFromPopout(win: Window = window): boolean {
+  const opener = popoutOpener(win);
+  if (!opener) return false;
+  let origin: string | undefined;
+  try {
+    origin = opener.location.origin;
+  } catch {
+    try {
+      origin = new URL(win.document.referrer).origin;
+    } catch {
+      origin = undefined;
+    }
+  }
+  if (!origin || origin === 'null') return false;
+  try {
+    opener.postMessage({ type: 'pangular:popup-return' }, origin);
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -312,6 +312,7 @@ export function hotkeyLabel(hotkey: string, mac: boolean): string {
  */
 export const PANEL_TABS = [
   { id: 'dashboard', label: 'Dashboard' },
+  { id: 'timeline', label: 'Timeline' },
   { id: 'analog', label: 'Analog', inspector: 'analog' },
   { id: 'components', label: 'Components', inspector: 'components' },
   { id: 'routes', label: 'Routes', inspector: 'router' },
@@ -386,7 +387,10 @@ export interface PanelCommand {
   group: PanelCommandGroup;
   /** Extra words the palette filter matches. */
   keywords?: string;
-  /** Only the popup has dock modes, so the hub leaves these out. */
+  /**
+   * Only the popup has dock modes and a pop-out window, so the hub leaves
+   * these out. `popout:return` shows in the pop-out window instead.
+   */
   popupOnly?: boolean;
 }
 
@@ -436,6 +440,27 @@ const PANEL_ACTIONS: (PanelCommand & { inspector?: PangularInspector })[] = [
     title: 'Popup: dock to the right',
     group: 'Popup',
     keywords: 'dock',
+    popupOnly: true,
+  },
+  {
+    id: 'dock:reset-size',
+    title: 'Popup: reset the docked size',
+    group: 'Popup',
+    keywords: 'splitter resize height width',
+    popupOnly: true,
+  },
+  {
+    id: 'popout',
+    title: 'Popup: open in its own window',
+    group: 'Popup',
+    keywords: 'pop out detach new window',
+    popupOnly: true,
+  },
+  {
+    id: 'popout:return',
+    title: 'Popup: back into the page',
+    group: 'Popup',
+    keywords: 'pop in attach dock window',
     popupOnly: true,
   },
 ];

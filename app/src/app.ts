@@ -31,6 +31,7 @@ import { NetworkInspector } from './pages/network-inspector';
 import { ComingSoon, type ComingSoonInfo } from './pages/coming-soon';
 import { CapacitorInspector } from './pages/capacitor-inspector';
 import { ErrorsInspector } from './pages/errors-inspector';
+import { Timeline } from './pages/timeline';
 import { capacitorPages } from './pages/capacitor-types';
 import { TabIcon } from './pages/tab-icon';
 import { styleHubRail } from './hub-rail-style';
@@ -67,6 +68,8 @@ import {
   arrangeTabs,
   inPopup,
   isMacPlatform,
+  popoutOpener,
+  returnFromPopout,
   storePassive,
   storeTabLayout,
   storedPassive,
@@ -208,6 +211,7 @@ function readView(): View | null {
     NetworkInspector,
     CapacitorInspector,
     ErrorsInspector,
+    Timeline,
     ComingSoon,
     TabIcon,
     Settings,
@@ -498,6 +502,9 @@ function readView(): View | null {
           @switch (tab()) {
             @case ('dashboard') {
               <app-dashboard [rpc]="rpc()" (navigate)="switchTab($event)" />
+            }
+            @case ('timeline') {
+              <app-timeline [rpc]="rpc()" (open)="openLink($event)" />
             }
             @case ('components') {
               <app-component-tree
@@ -1383,6 +1390,8 @@ export class App implements OnInit, OnDestroy {
     return hotkey === false ? false : hotkeyLabel(hotkey, isMacPlatform());
   });
   private readonly popup = inPopup();
+  /** Whether the panel runs in the window the popup popped it out into. */
+  private readonly poppedOut = !!popoutOpener();
   /** The tab to go back to when Settings closes. */
   private tabBeforeSettings: Tab | null = null;
   /** A command for the Components tab, handed over once it shows. */
@@ -1396,6 +1405,7 @@ export class App implements OnInit, OnDestroy {
     const components = available.has('components') && !!this.rpc();
     return panelCommands(this.config()).filter((command) => {
       if (command.id.startsWith('tab:')) return available.has(command.id.slice(4));
+      if (command.id === 'popout:return') return this.poppedOut;
       if (command.popupOnly) return this.popup;
       if (command.id === 'pick-component' || command.id.startsWith('cd-')) return components;
       return true;
@@ -1439,8 +1449,20 @@ export class App implements OnInit, OnDestroy {
       if (theme === 'system' || theme === 'light' || theme === 'dark') this.setTheme(theme);
       return;
     }
+    if (id === 'dock:reset-size') {
+      this.postToPopup({ type: 'pangular:popup-dock-size' });
+      return;
+    }
     if (id.startsWith('dock:')) {
       this.postToPopup({ type: 'pangular:popup-dock', mode: id.slice(5) });
+      return;
+    }
+    if (id === 'popout') {
+      this.postToPopup({ type: 'pangular:popup-popout' });
+      return;
+    }
+    if (id === 'popout:return') {
+      returnFromPopout();
       return;
     }
     const kinds: Record<string, ComponentCommand['kind']> = {

@@ -93,14 +93,15 @@ pangular({
 });
 ```
 
-| Option           | Default                          | What it does                                                             |
-| ---------------- | -------------------------------- | ------------------------------------------------------------------------ |
-| `base`           | `'/__devframes/'`                | Where the hub is mounted.                                                |
-| `apiPrefix`      | Analog's `apiPrefix`, or `'api'` | The prefix of your server routes, used to classify API calls.            |
-| `allowedOrigins` | none                             | Extra exact origins allowed to reach the devtools, for example a tunnel. |
-| `auth`           | on                               | Whether the devtools ask for the one-time code, and its pairing tokens.  |
-| `allowLan`       | `false`                          | Answer other machines, such as a phone on Wi-Fi, from listed origins.    |
-| `overlay`        | `true`                           | Add the overlay to the pages the dev server serves.                      |
+| Option           | Default                          | What it does                                                                       |
+| ---------------- | -------------------------------- | ---------------------------------------------------------------------------------- |
+| `base`           | `'/__devframes/'`                | Where the hub is mounted.                                                          |
+| `apiPrefix`      | Analog's `apiPrefix`, or `'api'` | The prefix of your server routes, used to classify API calls.                      |
+| `allowedOrigins` | none                             | Extra exact origins allowed to reach the devtools, for example a tunnel.           |
+| `auth`           | on                               | Whether the devtools ask for the one-time code, and its pairing tokens.            |
+| `allowLan`       | `false`                          | Answer other machines, such as a phone on Wi-Fi, from listed origins.              |
+| `overlay`        | `true`                           | Add the overlay to the pages the dev server serves.                                |
+| `terminals`      | `false`                          | Add a dock that runs the build and test commands. See [Terminals](./terminals.md). |
 
 The plugin also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](./configuration.md).
 

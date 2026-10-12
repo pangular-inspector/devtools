@@ -9,6 +9,7 @@ import type { WsOriginRegistry } from 'devframe/rpc/transports/ws-server';
 import { isAllowedOrigin } from 'devframe/utils/origin';
 import { createPangular } from './devframe.ts';
 import { withMessagesPanel } from './hub-messages-panel.ts';
+import { hubTerminals, terminalsEnabled, withTerminals } from './hub-terminals.ts';
 import {
   blockedOriginReporter,
   isAllowedHubRequest,
@@ -51,6 +52,13 @@ export type PangularHubOptions = Partial<Omit<InitHubOptions, 'devframes' | 'ui'
      * ignored. Off by default: only this machine.
      */
     allowLan?: boolean;
+    /**
+     * Add a terminals dock that runs the project's own build and test
+     * commands (its `build` and `test` scripts, or `ng build` and `ng test`).
+     * Off by default. Only on in development, with the origin check on and
+     * without `allowLan`.
+     */
+    terminals?: boolean;
   };
 
 function hubUiClientDir(): string | undefined {
@@ -170,12 +178,19 @@ export function startPangularHub(
   options: Omit<PangularHubOptions, 'enabled' | 'allowLan'> = {},
   gate?: HubOriginPolicy,
 ): PangularHub {
-  const { browserDistFolder, auth: authOption, ...hubOptions } = options;
+  const { browserDistFolder, auth: authOption, terminals: terminalsOn, ...hubOptions } = options;
   const { config, rest: picked } = pickPangularConfig(hubOptions);
   // Behind a gate, a shared `server` is attached through the gated `attach`
   // below, so its upgrades pass the same checks as `handleUpgrade`.
   const { server: sharedServer, ...hubRest } = picked;
-  const rest = withMessagesPanel(hubRest, normalizeHubBase(hubRest.base ?? PANGULAR_HUB_BASE));
+  const hubBase = normalizeHubBase(hubRest.base ?? PANGULAR_HUB_BASE);
+  const terminals = hubTerminals();
+  const rest = withTerminals(
+    withMessagesPanel(hubRest, hubBase),
+    hubBase,
+    terminalsOn === true,
+    terminals,
+  );
   const authTokens = isAuthTokens(authOption) ? authTokensFrom(authOption.tokens) : [];
   const auth = isAuthTokens(authOption) ? undefined : authOption;
   const hub = initHub({
@@ -201,6 +216,7 @@ export function startPangularHub(
     close: () => {
       if (hubs.get(hub.base) === own) hubs.delete(hub.base);
       detachShared?.();
+      terminals.dispose();
       // Stop the HTTP registry timers and SSR capture this hub installed, as Vite does.
       return (closing ??= hub.context
         .then(releaseServerState, () => undefined)
@@ -335,7 +351,7 @@ function disabledHub(base: string): PangularHub {
  * `Host`, and the origin check. Off in production unless `enabled` is `true`.
  */
 export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
-  const { enabled, allowLan, ...hubOptions } = options;
+  const { enabled, allowLan, terminals, ...hubOptions } = options;
   const base = normalizeHubBase(hubOptions.base ?? PANGULAR_HUB_BASE);
   if (!hubEnabled(enabled)) return disabledHub(base);
   const authOn = hubOptions.auth !== false;
@@ -345,9 +361,14 @@ export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
     );
   }
   // `allowedOrigins: false` turns the gate off; startPangularHub prints that warning.
+  const remote = allowLan === true && authOn;
   const policy =
     hubOptions.allowedOrigins === false
       ? undefined
-      : hubGatePolicy(hubAllowedOrigins(hubOptions.allowedOrigins), allowLan === true && authOn);
-  return startPangularHub(hubOptions, policy);
+      : hubGatePolicy(hubAllowedOrigins(hubOptions.allowedOrigins), remote);
+  const terminalsOn = terminalsEnabled(terminals, {
+    originCheckOff: hubOptions.allowedOrigins === false,
+    remote,
+  });
+  return startPangularHub({ ...hubOptions, terminals: terminalsOn }, policy);
 }

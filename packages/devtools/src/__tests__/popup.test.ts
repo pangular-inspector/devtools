@@ -282,7 +282,9 @@ describe.sequential('devtools popup', () => {
     expect(missing.querySelector('a')!.getAttribute('href')).toMatch(/^https:/);
     expect(missing.querySelector('h2')!.id).toBe(missing.getAttribute('aria-labelledby'));
     expect(missing.querySelector('a')!.textContent).toContain('opens in a new tab');
-    expect(shadow.querySelector('[role="status"]')!.textContent).toBe('No devtools server found');
+    expect(shadow.querySelector('.sr-only[role="status"]')!.textContent).toBe(
+      'No devtools server found',
+    );
     expect(frame().hidden).toBe(true);
     expect(frame().getAttribute('src')).toBeNull();
   });
@@ -410,7 +412,7 @@ describe.sequential('devtools popup', () => {
     expect(stored().docked).toBe('float');
   });
 
-  it('draws no resize grip on a docked panel, whose size is fixed', async () => {
+  it('draws no resize grip on a docked panel, which the splitter resizes', async () => {
     await loadPopup(true);
     const sheet = document
       .getElementById('pangular-popup-root')!
@@ -652,6 +654,210 @@ describe.sequential('devtools popup', () => {
         }),
       );
       expect(panel.classList.contains('open')).toBe(true);
+    });
+  });
+  describe('splitter', () => {
+    const splitter = () =>
+      document
+        .getElementById('pangular-popup-root')!
+        .shadowRoot!.querySelector('.splitter') as HTMLElement;
+    const key = (k: string, init: KeyboardEventInit = {}) =>
+      splitter().dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...init }));
+    const docked = async (mode: 'bottom' | 'right') => {
+      await loadPopup(true);
+      parts().fab.click();
+      parts().dock(mode).click();
+    };
+
+    it('is a focusable separator on the docked edge only', async () => {
+      await loadPopup(true);
+      parts().fab.click();
+      expect(splitter().hidden).toBe(true);
+      parts().dock('bottom').click();
+      const el = splitter();
+      expect(el.hidden).toBe(false);
+      expect(el.getAttribute('role')).toBe('separator');
+      expect(el.tabIndex).toBe(0);
+      expect(el.getAttribute('aria-label')).toBe('Resize the panel');
+      expect(el.getAttribute('aria-orientation')).toBe('horizontal');
+      expect(el.getAttribute('aria-controls')).toBe(parts().panel.id);
+      // jsdom's window is 1024 by 768: 40% of its height, inside 120 and 768 - 48.
+      expect(el.getAttribute('aria-valuenow')).toBe(String(Math.round(768 * 0.4)));
+      expect(el.getAttribute('aria-valuemin')).toBe('120');
+      expect(el.getAttribute('aria-valuemax')).toBe('720');
+      expect(el.getAttribute('aria-valuetext')).toBe('307 pixels high');
+      parts().dock('right').click();
+      expect(el.getAttribute('aria-orientation')).toBe('vertical');
+      expect(el.getAttribute('aria-valuemin')).toBe('280');
+      expect(el.getAttribute('aria-valuemax')).toBe('976');
+    });
+
+    it('resizes a bottom dock with Up, Down, Home and End, and remembers the size', async () => {
+      await docked('bottom');
+      key('ArrowUp');
+      expect(splitter().getAttribute('aria-valuenow')).toBe('323');
+      expect(parts().panel.style.getPropertyValue('--_dock-size')).toBe('323px');
+      key('ArrowDown', { shiftKey: true });
+      expect(splitter().getAttribute('aria-valuenow')).toBe('259');
+      // The other axis does nothing on a horizontal splitter.
+      key('ArrowLeft');
+      expect(splitter().getAttribute('aria-valuenow')).toBe('259');
+      key('Home');
+      expect(splitter().getAttribute('aria-valuenow')).toBe('120');
+      key('ArrowDown');
+      expect(splitter().getAttribute('aria-valuenow')).toBe('120');
+      key('End');
+      expect(splitter().getAttribute('aria-valuenow')).toBe('720');
+      expect(stored().dockSize).toEqual({ bottom: 720 });
+
+      await loadPopup(true);
+      parts().fab.click();
+      expect(splitter().getAttribute('aria-valuenow')).toBe('720');
+    });
+
+    it('keeps a size for each side, and Left grows a right dock', async () => {
+      await docked('right');
+      key('ArrowLeft');
+      expect(splitter().getAttribute('aria-valuenow')).toBe(String(Math.round(1024 * 0.4) + 16));
+      parts().dock('bottom').click();
+      key('ArrowUp');
+      expect(stored().dockSize).toEqual({ right: 426, bottom: 323 });
+    });
+
+    it('resizes by dragging and goes back to the default on a double click', async () => {
+      await docked('right');
+      const { panel } = parts();
+      splitter().dispatchEvent(pointer('pointerdown', 600, 300, 'mouse'));
+      expect(panel.classList.contains('resizing')).toBe(true);
+      splitter().dispatchEvent(pointer('pointermove', 500, 300, 'mouse'));
+      expect(splitter().getAttribute('aria-valuenow')).toBe('524');
+      // Dragging past the window edge stops at the largest size.
+      splitter().dispatchEvent(pointer('pointermove', -50, 300, 'mouse'));
+      expect(splitter().getAttribute('aria-valuenow')).toBe('976');
+      splitter().dispatchEvent(pointer('pointerup', -50, 300, 'mouse'));
+      expect(panel.classList.contains('resizing')).toBe(false);
+      expect(stored().dockSize).toEqual({ right: 976 });
+      splitter().dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      expect(stored().dockSize).toBeUndefined();
+      expect(splitter().getAttribute('aria-valuenow')).toBe('410');
+    });
+
+    it('keeps a saved size inside a smaller window', async () => {
+      localStorage.setItem(
+        'pangular-popup',
+        JSON.stringify({ docked: 'bottom', dockSize: { bottom: 5000, right: 'x' } }),
+      );
+      await loadPopup(true);
+      parts().fab.click();
+      expect(splitter().getAttribute('aria-valuenow')).toBe('720');
+      // A size that is not a number is dropped, so that side opens at the default.
+      parts().dock('right').click();
+      expect(splitter().getAttribute('aria-valuenow')).toBe('410');
+    });
+  });
+
+  describe('pop-out window', () => {
+    const notice = () =>
+      document.getElementById('pangular-popup-root')!.shadowRoot!.querySelector('.notice')!;
+    const popoutButton = () =>
+      document
+        .getElementById('pangular-popup-root')!
+        .shadowRoot!.querySelector('.popout-btn') as HTMLButtonElement;
+    const fakeWindow = () => {
+      const win = { closed: false, close: vi.fn(), focus: vi.fn(), name: '' };
+      win.close.mockImplementation(() => {
+        win.closed = true;
+      });
+      Object.defineProperty(win, 'parent', { get: () => win });
+      return win;
+    };
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      sessionStorage.clear();
+    });
+
+    it('opens the full panel in its own window on this page id, and closes it here', async () => {
+      sessionStorage.setItem('pangular-page-id', 'k3x9');
+      const win = fakeWindow();
+      const open = vi.spyOn(window, 'open').mockReturnValue(win as unknown as Window);
+      await loadPopup(true);
+      await openedSrc();
+      const { fab, panel } = parts();
+      expect(popoutButton().getAttribute('aria-label')).toBe(
+        'Open Pangular Inspector in its own window',
+      );
+      popoutButton().click();
+      await vi.waitFor(() => expect(open).toHaveBeenCalled());
+      const [url, name, features] = open.mock.calls[0];
+      const base = `${location.origin}/__devframes/pangular/`;
+      expect(url).toBe(`${base}?baseURL=${encodeURIComponent(base)}&pageId=k3x9`);
+      expect(name).toBe('pangular-inspector-k3x9');
+      expect(features).toMatch(/^popup,width=\d+,height=\d+$/);
+      expect(panel.classList.contains('open')).toBe(false);
+      expect(fab.getAttribute('aria-label')).toBe('Bring Pangular Inspector back into the page');
+
+      // The launcher is the way back: it closes the window and opens the panel here.
+      fab.click();
+      expect(win.close).toHaveBeenCalled();
+      expect(panel.classList.contains('open')).toBe(true);
+      expect(fab.getAttribute('aria-label')).toBe('Toggle Pangular Inspector');
+    });
+
+    it('says so and stays in the page when the browser blocks the window', async () => {
+      vi.spyOn(window, 'open').mockReturnValue(null);
+      await loadPopup(true);
+      await openedSrc();
+      popoutButton().click();
+      await vi.waitFor(() => expect(notice().textContent).toContain('blocked the new window'));
+      expect(notice().getAttribute('role')).toBe('status');
+      expect(parts().panel.classList.contains('open')).toBe(true);
+    });
+
+    it('takes the panel back when the window asks, and only that window', async () => {
+      const win = fakeWindow();
+      vi.spyOn(window, 'open').mockReturnValue(win as unknown as Window);
+      await loadPopup(true);
+      await openedSrc();
+      popoutButton().click();
+      const { panel } = parts();
+      await vi.waitFor(() => expect(panel.classList.contains('open')).toBe(false));
+      const send = (source: unknown, origin = location.origin) =>
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { type: 'pangular:popup-return' },
+            source: source as Window,
+            origin,
+          }),
+        );
+      send(window);
+      send(win, 'https://evil.test');
+      expect(panel.classList.contains('open')).toBe(false);
+      send(win);
+      expect(panel.classList.contains('open')).toBe(true);
+      expect(win.close).toHaveBeenCalled();
+    });
+
+    it('notices the window was closed by hand', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+      try {
+        const win = fakeWindow();
+        vi.spyOn(window, 'open').mockReturnValue(win as unknown as Window);
+        await loadPopup(true);
+        await openedSrc();
+        popoutButton().click();
+        const { fab } = parts();
+        await vi.waitFor(() =>
+          expect(fab.getAttribute('aria-label')).toBe(
+            'Bring Pangular Inspector back into the page',
+          ),
+        );
+        win.closed = true;
+        vi.advanceTimersByTime(1000);
+        expect(fab.getAttribute('aria-label')).toBe('Toggle Pangular Inspector');
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

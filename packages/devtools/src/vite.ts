@@ -22,6 +22,7 @@ import {
 } from './hub-gate.ts';
 import { pickPangularConfig, resolvePangularConfig, type PangularConfig } from './config.ts';
 import { overlayTags } from './vite-overlay.ts';
+import { terminalsEnabled } from './hub-terminals.ts';
 
 export type { PangularConfig } from './config.ts';
 
@@ -45,6 +46,12 @@ export interface PangularViteOptions extends PangularConfig {
    * `false` to load it yourself, for example with `initOverlay` options.
    */
   overlay?: boolean;
+  /**
+   * Add a terminals dock that runs the project's own build and test commands
+   * (its `build` and `test` scripts, or `ng build` and `ng test`). Off by
+   * default. Ignored with `allowLan`.
+   */
+  terminals?: boolean;
 }
 
 export {
@@ -146,6 +153,9 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
         ...(httpServer ? {} : { ws: { sidecar: true } }),
         auth: isAuthTokens(options.auth) ? options.auth : hubAuthFor(options.auth),
         allowedOrigins: hubOriginRegistryFor(policy),
+        terminals: terminalsEnabled(options.terminals, { remote: policy.lan }, (message) =>
+          logger?.warn(message),
+        ),
       });
       httpServer?.on('upgrade', hubUpgradeListener(base, policy, devtools.handleUpgrade, blocked));
       server.middlewares.use(devtools.nodeMiddleware);

@@ -21,6 +21,12 @@ import { Component, input } from '@angular/core';
           <rect x="14" y="12" width="7" height="9" rx="1.5" />
           <rect x="3" y="16" width="7" height="5" rx="1.5" />
         }
+        @case ('timeline') {
+          <path d="M3 12h18" />
+          <circle cx="7" cy="12" r="2" />
+          <circle cx="14" cy="12" r="2" />
+          <path d="M18 7v10" />
+        }
         @case ('components') {
           <path d="M12 2 3 7l9 5 9-5-9-5Z" />
           <path d="m3 12 9 5 9-5" />

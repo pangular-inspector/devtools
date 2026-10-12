@@ -32,6 +32,9 @@ Use <kbd>Cmd</kbd> on macOS and <kbd>Ctrl</kbd> elsewhere. The palette button in
 | **Clear change detection recording**                                          | Opens **Components** and clears the recorded cycles.                                                 |
 | **Theme: follow the system**, **Theme: light**, **Theme: dark**               | Sets the panel theme, like the [Settings](./settings.md#theme) page.                                 |
 | **Popup: float**, **Popup: dock to the bottom**, **Popup: dock to the right** | Changes the [dock mode](./popup-and-hub.md#dock-modes). Only in the popup's own palette.             |
+| **Popup: reset the docked size**                                              | Puts a [resized](./popup-and-hub.md#resize-a-docked-panel) bottom or right dock back to 40%.         |
+| **Popup: open in its own window**                                             | Opens the panel in [its own window](./popup-and-hub.md#open-in-its-own-window) and closes it here.   |
+| **Popup: back into the page**                                                 | Closes that window and opens the panel on the page again. Only in the window's palette.              |
 
 The **Components** commands need the Components inspector on and a page connected. Without a live page the tab shows why, and the command does nothing.
 
@@ -52,7 +55,9 @@ The palette is a modal dialog. The filter box is a combobox that controls the li
 
 In the hub, the Pangular commands are in the hub's command palette, in the **Pangular Inspector** category. **Pangular: open a tab** groups the tab commands. A **Go to** or **Components** command first opens the **All tools** dock, so the panel is on screen.
 
-The server registers the commands through Devframe's command registry when the hub starts, and each one asks the open panels to run it. A panel in a background browser tab ignores it. If you have the hub open in two windows, both run the command. The dock mode commands stay out of the hub's palette, because the hub has its own.
+The server registers the commands through Devframe's command registry when the hub starts, and each one asks the open panels to run it. A panel in a background browser tab ignores it. If you have the hub open in two windows, both run the command. The **Popup** commands stay out of the hub's palette, because the hub has its own dock modes.
+
+With the [terminals dock](./terminals.md) on, the hub's palette also has **Pangular: run &lt;command&gt;** and **Pangular: stop &lt;command&gt;** for the build and test commands, such as **Pangular: run pnpm run build**. The server runs these itself, so they work without a panel open. They are not in the panel's own palette.
 
 ## Where to next
 

@@ -170,6 +170,15 @@ The panel and the overlay can ask the server to open a source file in your edito
 
 The request names a file and a line, never a command. The editor comes from the server's environment. Agent tools can't open files.
 
+### Terminals
+
+The [terminals dock](./getting-started/terminals.md) is off unless you pass `terminals: true`. When it is on, it starts processes on your machine, so the hub adds it only in development, with the origin check on and without `allowLan`. Its calls go through the same gate and one-time code as every other call.
+
+- It runs the `build` and `test` commands the hub found in the project when it started, and nothing else. A request names one of them, never a command line.
+- A request with a command, arguments, a working directory, environment variables or an interactive mode is refused, and so is a request for a shell.
+- The output is read-only and masked like other text before it reaches the dock.
+- Agent tools can't start, stop or read the commands.
+
 ### Page ownership
 
 Each tab, Angular Native app or Capacitor app that reports to the server has a page id. The first connection that reports a page owns it. A report or a `forget` for that page id from any other connection is ignored, so one client can't overwrite or remove the data of another tab. The answer to a request sent to a page, such as a navigation, a form action, an NgRx dispatch or a component pick, is taken only from the connection that owns that page.

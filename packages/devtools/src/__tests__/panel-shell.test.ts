@@ -115,8 +115,12 @@ describe('panel commands', () => {
         'dock:float',
         'dock:bottom',
         'dock:right',
+        'dock:reset-size',
+        'popout',
+        'popout:return',
       ]),
     );
+    expect(ids).toContain('tab:timeline');
     const off = panelCommands(resolvePangularConfig({ inspectors: { components: false } }));
     expect(off.map((command) => command.id)).not.toContain('tab:components');
     expect(off.map((command) => command.id)).not.toContain('pick-component');
@@ -133,6 +137,8 @@ describe('panel commands', () => {
     );
     expect(ids).toContain('pangular:pick-component');
     expect(ids).not.toContain('pangular:dock:float');
+    expect(ids).not.toContain('pangular:popout');
+    expect(ids).not.toContain('pangular:popout:return');
     const inputs = register.mock.calls.map(([input]) => input);
     const tabs = inputs.find((input) => input.id === 'pangular:tabs');
     expect(tabs.children.map((child: { id: string }) => child.id)).toContain(
