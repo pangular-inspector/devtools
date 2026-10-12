@@ -18,7 +18,7 @@ The Components tab lists each rendered component instance as a tree. It walks ea
 Each row shows the class name and the host tag. Routed components get a chip with their route path. A **+N** chip means N directives sit on the same host. In a page rendered on the server, each component row also shows its [hydration](#hydration) status.
 
 - Filter by class, tag or directive name, or with the [search syntax](#search-syntax).
-- The toolbar counts the instances on the page, and the directive hosts while they are shown. While you filter, it shows how many instances match, like **2 of 40**. Ancestors kept to show where a match sits don't count.
+- The toolbar counts the instances on the page, and the directive hosts while they are shown. While you filter, it shows how many rows match, like **2 of 40**. With directive hosts shown, both numbers count instances and directive hosts, so screen readers hear **2 of 40 rows match.** instead of **2 of 40 instances match.** Ancestors kept to show where a match sits don't count.
 - **Hover or focus** a row to highlight its host element in the page.
 - **Click** a row, or press Enter or Space, to select it. Click it again to clear the selection.
 - **Expand all** opens every row and **Collapse all** closes them down to the top level. Both are off while you filter, because the filter already opens every row that leads to a match.
@@ -125,7 +125,7 @@ On a live browser page, each input, property and writable signal of the selected
 | A decorator input or a plain field                              | Assigns the value, then runs change detection with `ng.applyChanges`.            |
 | A signal input, `computed()`, `asReadonly()` signal or resource | No **Edit**. The row says why, for example that a parent binding sets the input. |
 
-Inside an opened object or array, each text, number, boolean or `null` value has its own **Edit**, which writes that path, such as `user.name` or `items.0.title`. **Edit** on an object or array itself reads the whole value from the page first, up to 5 levels and 100 entries per level. A larger value says **Too large to edit as a whole. Open it to edit the values inside.**
+Inside an opened object or array, each text, number, boolean or `null` value has its own **Edit**, which writes that path, such as `user.name` or `items.0.title`. **Edit** on an object or array itself reads the whole value from the page first, up to 5 levels and 100 entries per level. A value that is larger, or holds text cut at 300 characters, a redacted value, a `Map`, `Set` or class instance, or a marker such as `[Truncated]`, says **Too large to edit as a whole. Open it to edit the values inside.**
 
 A row also has no **Edit** when its value is not JSON (a class instance, `Map` or `Date`), when it is redacted, or when the panel shows it shortened. Values inside a `Map` or `Set` are read-only, and so are values inside a class instance that a signal holds. A parent binding sets a bound input again the next time its own value changes, so the edit lasts until then. Directive inputs are read-only.
 

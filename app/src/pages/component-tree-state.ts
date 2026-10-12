@@ -83,16 +83,24 @@ export function countText(
   return `${shown} ${total === 1 && !truncated ? 'instance' : 'instances'}${hosts}`;
 }
 
+/**
+ * The live message for a filter result. `total` counts component instances;
+ * with directive host rows shown, the result counts rows, since it holds both.
+ */
 export function filterAnnouncement(
   total: number,
   matches: number,
   query: string,
   truncated = false,
+  directiveHosts = 0,
 ): string {
   if (!query.trim()) return '';
   if (!matches) return 'No components match.';
-  const shown = truncated ? `${total}+` : `${total}`;
-  return `${matches} of ${shown} ${total === 1 && !truncated ? 'instance' : 'instances'} match.`;
+  const rows = total + directiveHosts;
+  const shown = truncated ? `${rows}+` : `${rows}`;
+  const one = !truncated && rows === 1;
+  const noun = directiveHosts ? (one ? 'row' : 'rows') : one ? 'instance' : 'instances';
+  return `${matches} of ${shown} ${noun} match.`;
 }
 
 export function truncationNotice(truncatedBy?: { components?: number; depth?: number }): string {

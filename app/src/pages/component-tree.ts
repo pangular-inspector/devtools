@@ -409,7 +409,9 @@ function storedDirectiveHosts(): boolean {
               </p>
               @if (ownerOf(host.id); as owner) {
                 <div class="actions owner-action">
-                  <button type="button" (click)="reveal(owner.id)">Show {{ owner.name }}</button>
+                  <button type="button" (click)="reveal(owner.id, true)">
+                    Show {{ owner.name }}
+                  </button>
                 </div>
               }
             </div>
@@ -2142,10 +2144,11 @@ export class ComponentTree {
     const { matches } = this.filtered();
     this.announcement.set(
       filterAnnouncement(
-        (this.page()?.count ?? 0) + this.shownDirectiveHosts(),
+        this.page()?.count ?? 0,
         matches,
         value,
         !!this.page()?.truncated,
+        this.shownDirectiveHosts(),
       ),
     );
   }
@@ -2272,7 +2275,8 @@ export class ComponentTree {
     if (this.index().map.has(id)) this.reveal(id);
   }
 
-  reveal(id: string) {
+  /** Opens the tree to a node and selects it; `focus` also moves keyboard focus to its row. */
+  reveal(id: string, focus = false) {
     const { parents } = this.index();
     this.collapsed.update((set) => {
       const next = new Set(set);
@@ -2281,11 +2285,13 @@ export class ComponentTree {
     });
     if (!this.rows().some((row) => row.node.id === id)) this.setFilter('');
     if (this.selectedId() !== id) this.select(id);
+    if (focus) this.focusId.set(id);
     afterNextRender(
-      () =>
-        document
-          .querySelector(`.row[data-id="${CSS.escape(id)}"]`)
-          ?.scrollIntoView({ block: 'nearest' }),
+      () => {
+        const row = document.querySelector<HTMLElement>(`.row[data-id="${CSS.escape(id)}"]`);
+        row?.scrollIntoView({ block: 'nearest' });
+        if (focus) row?.focus();
+      },
       { injector: this.injector },
     );
   }

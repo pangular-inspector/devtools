@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, ElementRef, afterRenderEffect, computed, inject, input } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { PropValue, type EditableProp } from './component-prop-value';
 import {
@@ -53,6 +53,22 @@ function leafText(value: unknown): string {
 }
 
 /**
+ * Whether a value the page read for a whole edit holds all of it: no level
+ * left collapsed or cut (`$collapsed`, `$more`), no Map, Set or class marker
+ * (`$type`), and only leaves a nested edit could write too, so clipped text,
+ * redacted values and markers such as `[Truncated]` are not written back.
+ */
+function wholeValue(value: unknown): boolean {
+  if (Array.isArray(value)) return value.every(wholeValue);
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    if (['$collapsed', '$more', '$type'].some((key) => Object.hasOwn(obj, key))) return false;
+    return Object.values(obj).every(wholeValue);
+  }
+  return editableLeaf(value);
+}
+
+/**
  * One input or property value of the selected component. Text, numbers and
  * other leaves show as before; an object, array, Map or Set shows its first
  * level behind a toggle, and each nested level is read from the page when it
@@ -70,7 +86,7 @@ function leafText(value: unknown): string {
           class="toggle"
           [attr.aria-expanded]="rootOpen()"
           [attr.aria-controls]="rootOpen() ? listId : null"
-          [attr.aria-label]="(rootOpen() ? 'Collapse ' : 'Expand ') + prop().name"
+          [attr.aria-label]="prop().name + ': ' + summaryOf(c)"
           (click)="toggleRoot()"
         >
           <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true">
@@ -275,6 +291,28 @@ export class ValueTree {
 
   protected readonly listId = `value-tree-${++nextId}`;
 
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /** Rows listed when "Show more" was pressed, until the next entries render. */
+  private pendingMore: Set<string> | null = null;
+
+  constructor() {
+    // "Show more" goes away once the last entries are listed; keep focus in the list.
+    afterRenderEffect(() => {
+      const rows = this.rows();
+      const before = this.pendingMore;
+      if (!before) return;
+      const added = rows.findIndex(
+        (row) => (row.kind === 'leaf' || row.kind === 'node') && !before.has(row.id),
+      );
+      if (added < 0) return;
+      this.pendingMore = null;
+      const active = document.activeElement;
+      if (active && active !== document.body && active.isConnected) return;
+      this.focusNear(added);
+    });
+  }
+
   private readonly rootPath = computed(() => [this.prop().prop]);
 
   /** The first level: the one the detail carries, or a longer one the panel loaded. */
@@ -405,8 +443,7 @@ export class ValueTree {
   protected readonly readWhole = async () => {
     const answer = await this.store().read(this.rootPath(), EDIT_READ.depth, EDIT_READ.limit);
     if (!answer.ok) return { error: answer.error ?? 'The page did not read it.' };
-    const text = JSON.stringify(answer.value);
-    if (/"\$collapsed"|"\$more"|"\[redacted\]"/.test(text)) {
+    if (!wholeValue(answer.value)) {
       return { error: 'Too large to edit as a whole. Open it to edit the values inside.' };
     }
     return { value: answer.value };
@@ -417,15 +454,35 @@ export class ValueTree {
   }
 
   protected toggleRoot() {
+    this.pendingMore = null;
     this.store().toggle(this.rootPath(), this.directive(), false);
   }
 
   protected toggle(row: Row) {
+    this.pendingMore = null;
     this.store().toggle(row.path, this.directive(), !!row.container?.collapsed);
   }
 
   protected more(row: Row) {
+    this.pendingMore = new Set(this.rows().map((r) => r.id));
     this.store().more(row.path, this.directive(), row.listed ?? 0);
+  }
+
+  /**
+   * Focuses the first control in the entry at `index` or after it (a toggle,
+   * an Edit button, the next "Show more"), else the closest one before it,
+   * else the root toggle.
+   */
+  private focusNear(index: number) {
+    const root = this.host.nativeElement;
+    const entries = Array.from(root.querySelectorAll<HTMLElement>(`#${this.listId} > li`));
+    const control = (entry: HTMLElement | undefined) =>
+      entry?.querySelector<HTMLElement>('button:not([disabled]), input, textarea, [tabindex="0"]');
+    const target =
+      entries.slice(index).map(control).find(Boolean) ??
+      entries.slice(0, index).reverse().map(control).find(Boolean) ??
+      root.querySelector<HTMLElement>('.root > .toggle');
+    target?.focus();
   }
 
   protected step(row: Row): number {

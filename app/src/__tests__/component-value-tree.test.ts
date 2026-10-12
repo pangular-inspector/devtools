@@ -186,12 +186,13 @@ describe('ComponentTree value expansion', () => {
         : [],
     );
     const fixture = await open(call);
-    const toggle = button(fixture, 'Expand user');
+    // The name holds the visible summary; aria-expanded carries the state.
+    const toggle = button(fixture, 'user: Object (2 keys)');
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(toggle.textContent).toContain('Object (2 keys)');
     toggle.click();
     await settle(fixture);
-    expect(button(fixture, 'Collapse user').getAttribute('aria-expanded')).toBe('true');
+    expect(button(fixture, 'user: Object (2 keys)').getAttribute('aria-expanded')).toBe('true');
     expect(valueCalls(call)).toHaveLength(0);
     expect(el(fixture).textContent).toContain('"Ada"');
 
@@ -220,7 +221,7 @@ describe('ComponentTree value expansion', () => {
         : [],
     );
     const fixture = await open(call);
-    button(fixture, 'Expand items').click();
+    button(fixture, 'items: Array (45 items)').click();
     await settle(fixture);
     const more = button(fixture, /^Show 15 more \(15 not listed\)$/);
     more.click();
@@ -233,6 +234,47 @@ describe('ComponentTree value expansion', () => {
     expect(el(fixture).querySelectorAll('app-value-tree li').length).toBeGreaterThanOrEqual(45);
   });
 
+  it('keeps keyboard focus in the list when the last Show more goes away', async () => {
+    const call = vi.fn<Call>(async (name) =>
+      name === 'request-component-value'
+        ? { ok: true, value: Array.from({ length: 45 }, (_, i) => i) }
+        : [],
+    );
+    const fixture = await open(call);
+    button(fixture, 'items: Array (45 items)').click();
+    await settle(fixture);
+    const more = button(fixture, /^Show 15 more/);
+    more.focus();
+    more.click();
+    await settle(fixture);
+    expect(hasButton(fixture, /^Show \d+ more/)).toBe(false);
+    // Focus moves to a control among the entries instead of falling to the page.
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.closest('ul')?.getAttribute('aria-label')).toBe('items entries');
+  });
+
+  it('moves focus to the first new entry that has a control', async () => {
+    const call = vi.fn<Call>(async (name) =>
+      name === 'request-component-value'
+        ? {
+            ok: true,
+            value: [
+              ...Array.from({ length: 30 }, (_, i) => i),
+              ...Array.from({ length: 15 }, () => ({ $collapsed: 'Object', size: 1 })),
+            ],
+          }
+        : [],
+    );
+    const fixture = await open(call);
+    button(fixture, 'items: Array (45 items)').click();
+    await settle(fixture);
+    const more = button(fixture, /^Show 15 more/);
+    more.focus();
+    more.click();
+    await settle(fixture);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('30: Object (1 key)');
+  });
+
   it('shows the levels the page pushed, and says why a level could not be read', async () => {
     const call = vi.fn<Call>(async (name) =>
       name === 'request-component-value'
@@ -240,12 +282,12 @@ describe('ComponentTree value expansion', () => {
         : [],
     );
     const fixture = await open(call, { [pathKey(['user'])]: { name: 'Grace', extra: true } });
-    button(fixture, 'Expand user').click();
+    button(fixture, /^user: Object/).click();
     await settle(fixture);
     expect(el(fixture).textContent).toContain('"Grace"');
     expect(el(fixture).textContent).not.toContain('"Ada"');
     // The pushed level has no profile any more, so open a fresh tree on another value.
-    button(fixture, 'Expand items').click();
+    button(fixture, 'items: Array (45 items)').click();
     await settle(fixture);
     expect(hasButton(fixture, /^Show 15 more/)).toBe(true);
     button(fixture, /^Show 15 more/).click();
@@ -259,7 +301,7 @@ describe('ComponentTree value expansion', () => {
       name === 'request-component-edit' ? { ok: true } : [],
     );
     const fixture = await open(call);
-    button(fixture, 'Expand user').click();
+    button(fixture, /^user: Object/).click();
     await settle(fixture);
     button(fixture, 'Edit user.name').click();
     await settle(fixture);
@@ -283,7 +325,7 @@ describe('ComponentTree value expansion', () => {
     );
     const fixture = await open(call);
     // `count` is a number, so it shows as before, with no toggle.
-    expect(hasButton(fixture, 'Expand count')).toBe(false);
+    expect(hasButton(fixture, /^count: /)).toBe(false);
     expect(hasButton(fixture, 'Edit count')).toBe(true);
     const page = fixture.componentInstance.page()!;
     const small = {
@@ -305,6 +347,37 @@ describe('ComponentTree value expansion', () => {
     });
     const field = el(fixture).querySelector<HTMLInputElement>('app-value-tree input')!;
     expect(field.value).toBe('{"name":"Ada","tags":["a"]}');
+  });
+
+  it.each([
+    ['text the page clipped', { name: 'Ada', bio: `${'x'.repeat(300)}…` }],
+    ['a budget marker', { name: 'Ada', tags: ['a', '[Truncated]'] }],
+    ['a redacted value', { name: 'Ada', token: '[redacted]' }],
+    ['a level left collapsed', { name: 'Ada', tags: { $collapsed: 'Array', size: 1 } }],
+    ['a Map', { name: 'Ada', seen: { $type: 'Map', size: 1, entries: [['a', 1]] } }],
+  ])('refuses a whole edit when the value read has %s', async (_, value) => {
+    const call = vi.fn<Call>(async (name) =>
+      name === 'request-component-value' ? { ok: true, value } : [],
+    );
+    const fixture = await open(call);
+    const page = fixture.componentInstance.page()!;
+    const small = {
+      name: 'small',
+      prop: 'small',
+      value: { name: 'Ada', tags: { $collapsed: 'Array', size: 1 } },
+      edit: 'property' as const,
+      editInside: 'property' as const,
+    };
+    fixture.componentInstance.pages.set({
+      p1: { ...page, detail: { ...page.detail!, properties: [small] } },
+    });
+    await settle(fixture);
+    button(fixture, 'Edit small').click();
+    await settle(fixture);
+    expect(el(fixture).querySelector('app-value-tree input')).toBeNull();
+    expect(el(fixture).textContent).toContain(
+      'Too large to edit as a whole. Open it to edit the values inside.',
+    );
   });
 
   it('filters values by name and by loaded nested keys, with a count and a no-match state', async () => {
@@ -329,7 +402,7 @@ describe('ComponentTree value expansion', () => {
     type(filter, 'NAME');
     await settle(fixture);
     expect(names()).toEqual(['user']);
-    expect(button(fixture, 'Collapse user').getAttribute('aria-expanded')).toBe('true');
+    expect(button(fixture, 'user: Object (2 keys)').getAttribute('aria-expanded')).toBe('true');
     expect(el(fixture).textContent).toContain('"Ada"');
     expect(hasButton(fixture, /^profile: /)).toBe(false);
 

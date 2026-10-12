@@ -5,6 +5,7 @@ import { ComponentTree } from '../pages/component-tree';
 import {
   countText,
   directiveHostLabel,
+  filterAnnouncement,
   filterTree,
   withoutDirectiveHosts,
   type TreeNode,
@@ -136,6 +137,9 @@ describe('tree search and directive hosts (state)', () => {
     ).toBe('[Highlight]');
     expect(countText(4, 0, false, false, 2)).toBe('4 instances · 2 directive hosts');
     expect(countText(4, 1, true, false, 2)).toBe('1 of 6');
+    // With directive hosts shown, the filter result counts rows, not instances.
+    expect(filterAnnouncement(4, 1, 'tip', false, 2)).toBe('1 of 6 rows match.');
+    expect(filterAnnouncement(4, 1, 'tip')).toBe('1 of 4 instances match.');
   });
 });
 
@@ -195,6 +199,7 @@ describe('component tree hydration and directive hosts', () => {
     await settle();
     expect(rowIds(el)).toEqual(['c1', 'c4', 'c5']);
     expect(el.querySelector('.count')!.textContent!.trim()).toBe('1 of 6');
+    expect(fixture.componentInstance.announcement()).toBe('1 of 6 rows match.');
   });
 
   it('selects a directive host locally and offers its owning component', async () => {
@@ -208,9 +213,14 @@ describe('component tree hydration and directive hosts', () => {
     expect(detail.textContent).toContain('MatTooltip');
     const owner = detail.querySelector<HTMLButtonElement>('.owner-action button')!;
     expect(owner.textContent!.trim()).toBe('Show TripMap');
+    owner.focus();
     owner.click();
     await settle();
     expect(el.querySelector('.row.selected')!.getAttribute('data-id')).toBe('c4');
+    // The button goes away with the host's detail, so focus moves to the owner's row.
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.getAttribute('data-id')).toBe('c4');
+    expect(document.activeElement?.getAttribute('tabindex')).toBe('0');
   });
 
   it('reaches directive host rows with the arrow keys', async () => {
