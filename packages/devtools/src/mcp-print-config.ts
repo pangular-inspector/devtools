@@ -5,7 +5,14 @@ import { PANGULAR_MCP_TOKEN_ENV, mcpTokenFile } from './mcp-token.ts';
 
 /** The package name `npx` runs for the stdio server. */
 const PACKAGE = '@pangular-inspector/devtools';
+/** The stdio server's name in the client config. */
 const SERVER_NAME = 'pangular';
+/**
+ * The HTTP server's name. It differs from the stdio one: Claude Code prefers a
+ * local entry over a project one of the same name, so a shared name would hide
+ * the HTTP server whenever both are added.
+ */
+const HTTP_SERVER_NAME = 'pangular-live';
 const DEFAULT_HOST = 'localhost';
 const DEFAULT_PORT = 9999;
 
@@ -18,6 +25,8 @@ export interface McpPrintConfigOptions {
   /** Host and port of the server that runs the app. Default: the standalone CLI on localhost:9999. */
   host?: string;
   port?: number | string;
+  /** Whether the server is behind TLS, so the endpoint is `https://`. */
+  https?: boolean;
   /**
    * The hub base, such as `/__devframes/`. Without it, the endpoint is the
    * standalone CLI's `/__mcp`, which asks for no token.
@@ -42,9 +51,25 @@ function clientHost(host: string): string {
   return bare.includes(':') ? `[${bare}]` : bare;
 }
 
+/** Whether `host` (as `clientHost` returns it) names this machine. */
+export function isLoopbackHost(host: string): boolean {
+  const bare = host.replace(/^\[|\]$/g, '').toLowerCase();
+  return (
+    bare === 'localhost' ||
+    bare.endsWith('.localhost') ||
+    /^127(\.\d{1,3}){3}$/.test(bare) ||
+    bare === '::1' ||
+    bare === '0:0:0:0:0:0:0:1' ||
+    /^::ffff:127(\.\d{1,3}){3}$/.test(bare)
+  );
+}
+
 /** The HTTP endpoint, its `Origin` and whether it asks for the bearer token. */
-export function mcpEndpoint(options: Pick<McpPrintConfigOptions, 'host' | 'port' | 'base'>) {
-  const origin = `http://${clientHost(options.host ?? DEFAULT_HOST)}:${options.port ?? DEFAULT_PORT}`;
+export function mcpEndpoint(
+  options: Pick<McpPrintConfigOptions, 'host' | 'port' | 'base' | 'https'>,
+) {
+  const scheme = options.https ? 'https' : 'http';
+  const origin = `${scheme}://${clientHost(options.host ?? DEFAULT_HOST)}:${options.port ?? DEFAULT_PORT}`;
   const hub = options.base !== undefined && normalizeBase(options.base) !== '/';
   const base = hub ? normalizeBase(options.base as string) : '/';
   return { url: `${origin}${base}__mcp`, origin, token: hub };
@@ -65,6 +90,8 @@ export function mcpPrintConfig(options: McpPrintConfigOptions): string {
     ...(options.readOnly ? ['--read-only'] : []),
   ];
   const { url, origin, token } = mcpEndpoint(options);
+  const clearText =
+    token && !options.https && !isLoopbackHost(clientHost(options.host ?? DEFAULT_HOST));
   const bearer = (variable: string) => `Bearer ${variable}`;
   const headers = (variable: string) => ({
     ...(token ? { Authorization: bearer(variable) } : {}),
@@ -93,14 +120,23 @@ export function mcpPrintConfig(options: McpPrintConfigOptions): string {
     '',
     `== HTTP: live pages, at ${url} ==`,
     '',
+    ...(clearText
+      ? [
+          `Warning: ${origin} is not a loopback address and the URL is http, so the MCP token travels in clear text on the network.`,
+          'Serve the hub over TLS and pass --https, or keep it to a network you trust.',
+          '',
+        ]
+      : []),
     'Start the server that runs your app and open the app in a browser first.',
     '',
     'Claude Code (writes .mcp.json in the project folder):',
-    `  claude mcp add --transport http --scope project ${SERVER_NAME} ${url} ${claudeHeaders.join(' ')}`,
+    `  claude mcp add --transport http --scope project ${HTTP_SERVER_NAME} ${url} ${claudeHeaders.join(' ')}`,
     '',
     'Cursor (.cursor/mcp.json):',
     json({
-      mcpServers: { [SERVER_NAME]: { url, headers: headers(`\${env:${PANGULAR_MCP_TOKEN_ENV}}`) } },
+      mcpServers: {
+        [HTTP_SERVER_NAME]: { url, headers: headers(`\${env:${PANGULAR_MCP_TOKEN_ENV}}`) },
+      },
     }),
     '',
     'VS Code (.vscode/mcp.json):',
@@ -118,7 +154,7 @@ export function mcpPrintConfig(options: McpPrintConfigOptions): string {
           }
         : {}),
       servers: {
-        [SERVER_NAME]: { type: 'http', url, headers: headers('${input:pangular-token}') },
+        [HTTP_SERVER_NAME]: { type: 'http', url, headers: headers('${input:pangular-token}') },
       },
     }),
     '',

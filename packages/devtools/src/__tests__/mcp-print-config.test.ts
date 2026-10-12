@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPangularCli } from '../cli.ts';
-import { mcpEndpoint, mcpPrintConfig, shellQuote } from '../mcp-print-config.ts';
+import { isLoopbackHost, mcpEndpoint, mcpPrintConfig, shellQuote } from '../mcp-print-config.ts';
 import { fixtureDir } from '../rpc/__tests__/fixture-dir.ts';
 
 const SECRET = 'do-not-print-this-token-0123456789';
@@ -64,17 +64,81 @@ describe('mcpPrintConfig', () => {
     });
 
     expect(http).toContain(
-      "claude mcp add --transport http --scope project pangular http://localhost:9999/__mcp --header 'Origin: http://localhost:9999'\n",
+      "claude mcp add --transport http --scope project pangular-live http://localhost:9999/__mcp --header 'Origin: http://localhost:9999'\n",
     );
     expect(block(http, 'Cursor')).toEqual({
       mcpServers: {
-        pangular: {
+        'pangular-live': {
           url: 'http://localhost:9999/__mcp',
           headers: { Origin: 'http://localhost:9999' },
         },
       },
     });
     expect(http).not.toContain('Authorization');
+    expect(text).not.toContain('Warning');
+  });
+
+  it('names the HTTP server apart from the stdio one, so Claude Code loads both', () => {
+    const { stdio, http } = sections(mcpPrintConfig({ root: '/work/app', env: {} }));
+    expect(stdio).toContain('claude mcp add pangular -- ');
+    expect(http).toContain('claude mcp add --transport http --scope project pangular-live ');
+    expect(Object.keys(block(http, 'VS Code')['servers'] as object)).toEqual(['pangular-live']);
+    expect(Object.keys(block(stdio, 'VS Code')['servers'] as object)).toEqual(['pangular']);
+  });
+
+  it('prints no clear-text warning for a hub on a loopback host', () => {
+    for (const host of ['localhost', '127.0.0.1', '::1', '0.0.0.0']) {
+      const text = mcpPrintConfig({ root: '/work/app', host, port: 4000, base: '/__devframes/' });
+      expect(text).toContain('Authorization');
+      expect(text).not.toContain('Warning');
+    }
+  });
+
+  it('warns that the token travels in clear text for a hub on a LAN address over http', () => {
+    const text = mcpPrintConfig({
+      root: '/work/app',
+      host: '192.168.1.20',
+      port: 4000,
+      base: '/__devframes/',
+      env: {},
+    });
+    const { http } = sections(text);
+    expect(http).toContain(
+      'Warning: http://192.168.1.20:4000 is not a loopback address and the URL is http, so the MCP token travels in clear text on the network.',
+    );
+    expect(http.indexOf('Warning')).toBeLessThan(http.indexOf('claude mcp add'));
+    // The standalone CLI asks for no token, so there is nothing to leak.
+    expect(mcpPrintConfig({ root: '/work/app', host: '192.168.1.20', env: {} })).not.toContain(
+      'Warning',
+    );
+  });
+
+  it('prints an https endpoint with --https, and no warning', () => {
+    const text = mcpPrintConfig({
+      root: '/work/app',
+      host: 'dev.example.test',
+      port: 8443,
+      base: '/__devframes/',
+      https: true,
+      env: {},
+    });
+    const { http } = sections(text);
+    expect(http).toContain(
+      '== HTTP: live pages, at https://dev.example.test:8443/__devframes/__mcp ==',
+    );
+    expect(http).toContain("--header 'Origin: https://dev.example.test:8443'");
+    expect(block(http, 'Cursor')).toEqual({
+      mcpServers: {
+        'pangular-live': {
+          url: 'https://dev.example.test:8443/__devframes/__mcp',
+          headers: {
+            Authorization: 'Bearer ${env:PANGULAR_MCP_TOKEN}',
+            Origin: 'https://dev.example.test:8443',
+          },
+        },
+      },
+    });
+    expect(text).not.toContain('Warning');
   });
 
   it('adds the token header for a hub and names the token file, never the token', () => {
@@ -92,7 +156,7 @@ describe('mcpPrintConfig', () => {
     );
     expect(block(http, 'Cursor')).toEqual({
       mcpServers: {
-        pangular: {
+        'pangular-live': {
           url: 'http://localhost:4000/__devframes/__mcp',
           headers: {
             Authorization: 'Bearer ${env:PANGULAR_MCP_TOKEN}',
@@ -103,13 +167,26 @@ describe('mcpPrintConfig', () => {
     });
     const vscode = block(http, 'VS Code') as {
       inputs: { id: string; password: boolean }[];
-      servers: { pangular: { headers: Record<string, string> } };
+      servers: { 'pangular-live': { headers: Record<string, string> } };
     };
     expect(vscode.inputs).toEqual([
       expect.objectContaining({ id: 'pangular-token', password: true }),
     ]);
-    expect(vscode.servers.pangular.headers['Authorization']).toBe('Bearer ${input:pangular-token}');
+    expect(vscode.servers['pangular-live'].headers['Authorization']).toBe(
+      'Bearer ${input:pangular-token}',
+    );
     expect(text).toContain(`export PANGULAR_MCP_TOKEN="$(cat '${tokenFile}')"`);
+  });
+});
+
+describe('isLoopbackHost', () => {
+  it('knows the names and addresses of this machine', () => {
+    for (const host of ['localhost', 'app.localhost', '127.0.0.1', '127.1.2.3', '[::1]', '::1']) {
+      expect(isLoopbackHost(host)).toBe(true);
+    }
+    for (const host of ['192.168.1.20', 'dev.example.test', '[fe80::1]', '10.0.0.2']) {
+      expect(isLoopbackHost(host)).toBe(false);
+    }
   });
 });
 
@@ -152,6 +229,31 @@ describe('pangular mcp --print-config', () => {
     expect(text).toContain(`--root ${root} --config ${join(root, 'pangular.config.json')}`);
     expect(text).toContain('== HTTP: live pages, at http://127.0.0.1:5173/__devframes/__mcp ==');
     expect(text).toContain("--header 'Authorization: Bearer ${PANGULAR_MCP_TOKEN}'");
+    expect(text).not.toContain('Warning');
+  });
+
+  it('takes --https for a server behind TLS', async () => {
+    const lines: string[] = [];
+    await createPangularCli({ env: {}, log: (line) => lines.push(line) }).parse([
+      'node',
+      'pangular',
+      'mcp',
+      '--print-config',
+      '--root',
+      fixtureDir('pangular-print-config-https-'),
+      '--host',
+      '192.168.1.20',
+      '--port',
+      '4000',
+      '--base',
+      '/__devframes/',
+      '--https',
+    ]);
+    const text = lines.join('\n');
+    expect(text).toContain(
+      '== HTTP: live pages, at https://192.168.1.20:4000/__devframes/__mcp ==',
+    );
+    expect(text).not.toContain('Warning');
   });
 
   it('fails on a project folder that does not exist', async () => {

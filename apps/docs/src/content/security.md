@@ -142,7 +142,7 @@ The HTTP MCP endpoint answers only requests that carry a loopback `Origin` heade
 
 While the one-time code is on, the endpoint also asks for a bearer token. That is the default for the Express hub and the Vite plugin. The hub writes a generated token to `~/.pangular-inspector/mcp-token`, a file only you can read (mode `0600`), and prints the path, not the token. It keeps that token across restarts. Set `PANGULAR_MCP_TOKEN` to choose the token yourself, or `PANGULAR_MCP_TOKEN_FILE` to use another file. Requests without the right `Authorization: Bearer <token>` header get `401`. The stdio server needs no token. See [Send a token](./agents/mcp-server.md#send-a-token).
 
-The Express hub answers MCP requests from other addresses only with `allowLan: true`, and then only those that send the right token and a loopback `Origin`. Any client can set that header, so treat the token like a password.
+The Express hub answers MCP requests from other addresses only with `allowLan: true`, and then only those that send the right token and a loopback `Origin`. Any client can set that header, so treat the token like a password. Over plain `http`, the token crosses the network in clear text: serve the hub over TLS for other machines, or keep it to a network you trust. `pangular mcp --print-config` warns about this for a non-loopback `--host` and takes `--https` for a server behind TLS.
 
 ### Chrome extension
 

@@ -193,8 +193,9 @@ npx @pangular-inspector/devtools mcp --print-config --port 4000 --base /__devfra
 | `--host <host>`  | Host of the server that runs your app, for the HTTP config. The default is `localhost`.                                      |
 | `--port <port>`  | Port of that server. The default is 9999, the standalone CLI.                                                                |
 | `--base <path>`  | The hub base, such as `/__devframes/` for the Express hub and the Vite plugin. With it, the HTTP config sends the MCP token. |
+| `--https`        | The server is behind TLS, so the HTTP config uses `https://`.                                                                |
 
-`--root`, `--config` and `--read-only` go into the printed stdio command, with absolute paths.
+`--root`, `--config` and `--read-only` go into the printed stdio command, with absolute paths. The stdio server is named `pangular` and the HTTP server `pangular-live`, so a client can hold both. With `--base` and a `--host` that is not a loopback address, the output warns that the token travels in clear text over `http`; pass `--https` when the server is behind TLS.
 
 ### Source scan only
 

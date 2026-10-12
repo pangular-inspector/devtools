@@ -230,6 +230,7 @@ interface PrintConfigFlags {
   host?: string;
   port?: number | string;
   base?: string;
+  https?: boolean;
 }
 
 function addPrintConfigOptions(command: Command) {
@@ -237,6 +238,7 @@ function addPrintConfigOptions(command: Command) {
   command.option('--host <host>', 'With --print-config: host of the server that runs the app');
   command.option('--port <port>', 'With --print-config: port of that server (default: 9999)');
   command.option('--base <path>', 'With --print-config: the hub base, such as /__devframes/');
+  command.option('--https', 'With --print-config: the server is behind TLS, so use an https URL');
 }
 
 /** The `--print-config` text, with the project folder and config file as absolute paths. */
@@ -249,6 +251,7 @@ function printConfig(flags: PangularCliFlags & PrintConfigFlags, env: Env): stri
     host: flags.host,
     port: flags.port,
     base: flags.base,
+    https: flags.https === true,
     env,
   });
 }
