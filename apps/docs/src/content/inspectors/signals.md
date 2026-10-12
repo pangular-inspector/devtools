@@ -85,6 +85,8 @@ The line above the list counts the changes, for example **3 changes recorded, ne
 
 Without a live graph, the tab lists `signal()`, `computed()`, `linkedSignal()`, `effect()`, `toSignal()` and resource declarations found in your files. It also lists signal inputs, models and queries. Each card shows the file and line, and the component when the scan finds one.
 
+If the devtools server does not answer, the tab says **Couldn't load signals** with a **Retry** button instead of an empty list.
+
 ## Where the data comes from
 
 <ngmd-card-grid columns="2">

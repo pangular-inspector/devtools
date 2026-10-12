@@ -64,6 +64,8 @@ Without a live tree, the tab lists DI found in your source files, in four groups
 | **inject() Calls**             | `inject(T)` calls and constructor parameters of decorated classes, typed or with `@Inject(T)`.                |
 | **Component Providers**        | Any `providers` or `viewProviders` array, in components, routes, app config or NgModules.                     |
 
+If the devtools server does not answer, the tab says **Couldn't load DI data** with a **Retry** button instead of an empty list. If only the live tree fails, the source list stays and a **Couldn't load the live injector tree** message with **Retry** sits above it.
+
 ## Where the data comes from
 
 <ngmd-card-grid columns="2">

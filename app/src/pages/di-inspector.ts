@@ -112,6 +112,19 @@ function isTree(value: unknown): value is InjectorNode[] {
   imports: [NgTemplateOutlet, Select],
   template: `
     <p class="sr-only" role="status">{{ announcement() }}</p>
+    <ng-template #loadError let-compact="compact">
+      <div class="state load-error" [class.compact]="compact" role="alert">
+        <p class="state-title">
+          {{ compact ? "Couldn't load the live injector tree" : "Couldn't load DI data" }}
+        </p>
+        <p class="state-hint">
+          The devtools server did not answer. Check that it is still running, then retry.
+        </p>
+        <button type="button" [attr.aria-disabled]="retrying() || null" (click)="retry()">
+          {{ retrying() ? 'Retrying…' : 'Retry' }}
+        </button>
+      </div>
+    </ng-template>
     <ng-template #pagePicker>
       @if (pageOptions().length > 1) {
         <div class="page-picker">
@@ -485,6 +498,8 @@ function isTree(value: unknown): value is InjectorNode[] {
         <span class="spinner" aria-hidden="true"></span>
         <p class="state-title">Loading dependency injection data…</p>
       </div>
+    } @else if (loadFailed() && sourceProviders().length === 0) {
+      <ng-container [ngTemplateOutlet]="loadError" [ngTemplateOutletContext]="{ compact: false }" />
     } @else if (sourceProviders().length === 0) {
       @if (pageOptions().length > 1) {
         <div class="toolbar">
@@ -523,6 +538,12 @@ function isTree(value: unknown): value is InjectorNode[] {
         </span>
       </div>
 
+      @if (loadFailed()) {
+        <ng-container
+          [ngTemplateOutlet]="loadError"
+          [ngTemplateOutletContext]="{ compact: true }"
+        />
+      }
       <p class="notice">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="9" />
@@ -1228,6 +1249,11 @@ function isTree(value: unknown): value is InjectorNode[] {
       color: var(--text);
       cursor: pointer;
     }
+    .load-error.compact {
+      margin: 0 0 16px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
     .state-title + .state-hint + button {
       margin-top: 8px;
     }
@@ -1434,6 +1460,12 @@ export class DiInspector {
 
   readonly sourceProviders = signal<SourceProvider[]>([]);
   readonly loaded = signal(false);
+  /** The live injector tree or the source scan could not be read from the server. */
+  private readonly treeFailed = signal(false);
+  private readonly sourceFailed = signal(false);
+  readonly loadFailed = computed(() => this.treeFailed() || this.sourceFailed());
+  readonly retrying = signal(false);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly view = signal<TreeView>('element');
   readonly query = signal('');
   private readonly queryInput = viewChild<ElementRef<HTMLInputElement>>('queryInput');
@@ -1652,6 +1684,27 @@ export class DiInspector {
     });
   }
 
+  /** Loads the injector tree and the source scan again. The alert stays until they answer, so
+   * focus stays on Retry when it fails again and moves to the toolbar when it works. */
+  async retry() {
+    const client = this.rpc();
+    if (!client || this.retrying()) return;
+    this.retrying.set(true);
+    try {
+      await Promise.all([this.loadInjectorTree(client), this.loadSourceProviders(client)]);
+    } finally {
+      this.retrying.set(false);
+    }
+    if (this.destroyRef.destroyed || this.loadFailed()) return;
+    afterNextRender(
+      () =>
+        this.host.nativeElement
+          .querySelector<HTMLElement>('.toolbar input, .toolbar button')
+          ?.focus(),
+      { injector: this.injector },
+    );
+  }
+
   /** Clears the search from a no-match message and keeps focus on the search box. */
   clearQuery() {
     this.query.set('');
@@ -1849,9 +1902,11 @@ export class DiInspector {
     try {
       state = await my.rpc.sharedState('injector-tree');
     } catch {
+      if (load === this.treeLoad) this.treeFailed.set(true);
       return;
     }
     if (this.destroyRef.destroyed || this.rpc() !== client || load !== this.treeLoad) return;
+    this.treeFailed.set(false);
     const apply = (value: unknown) => {
       const next = value && typeof value === 'object' ? (value as InjectorTreeState) : null;
       this.notePageGone(next?.pages);
@@ -1867,8 +1922,10 @@ export class DiInspector {
     const my = client.scope('pangular');
     try {
       this.sourceProviders.set((await my.rpc.call('get-providers')) as SourceProvider[]);
+      this.sourceFailed.set(false);
     } catch {
       this.sourceProviders.set([]);
+      this.sourceFailed.set(true);
     } finally {
       this.loaded.set(true);
     }

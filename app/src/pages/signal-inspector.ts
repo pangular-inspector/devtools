@@ -270,7 +270,22 @@ const KIND_COLORS: Record<string, string> = {
       </div>
     }
 
-    @if (!graph() && sourceLoaded() && sourceSignals().length === 0) {
+    @if (!graph() && sourceLoaded() && loadFailed()) {
+      <div class="empty" [class.compact]="sourceSignals().length > 0" role="alert">
+        <p class="empty-title">Couldn't load signals</p>
+        <p class="hint">
+          The devtools server did not answer. Check that it is still running, then retry.
+        </p>
+        <button
+          type="button"
+          class="reset"
+          [attr.aria-disabled]="retrying() || null"
+          (click)="retry()"
+        >
+          {{ retrying() ? 'Retrying…' : 'Retry' }}
+        </button>
+      </div>
+    } @else if (!graph() && sourceLoaded() && sourceSignals().length === 0) {
       <div class="empty">
         <p class="empty-title">No signals found.</p>
         <p class="hint">
@@ -1308,6 +1323,11 @@ export class SignalInspector {
   readonly showInternals = signal(false);
   sourceSignals = signal<SourceSignal[]>([]);
   sourceLoaded = signal(false);
+  /** The source scan or the live graph state could not be read from the server. */
+  private readonly sourceFailed = signal(false);
+  private readonly graphFailed = signal(false);
+  readonly loadFailed = computed(() => this.sourceFailed() || this.graphFailed());
+  readonly retrying = signal(false);
   filter = signal('');
   readonly resources = computed(() => this.graph()?.resources ?? []);
   private readonly internalIds = computed(
@@ -1492,6 +1512,7 @@ export class SignalInspector {
     try {
       const state = await my.rpc.sharedState('signal-graph');
       if (this.destroyRef.destroyed) return;
+      this.graphFailed.set(false);
       const apply = (value: unknown) => {
         const next = value as {
           graph?: SignalGraph | null;
@@ -1506,6 +1527,7 @@ export class SignalInspector {
       this.cleanups.push(state.on('updated', apply));
     } catch {
       this.graphState.set({ graph: null, pages: {} });
+      this.graphFailed.set(true);
     }
     try {
       const tree = await my.rpc.sharedState('component-tree');
@@ -1577,11 +1599,27 @@ export class SignalInspector {
     try {
       const result = (await my.rpc.call('get-signals')) as SourceSignal[];
       this.sourceSignals.set(result);
+      this.sourceFailed.set(false);
     } catch {
-      // RPC not available
+      this.sourceFailed.set(true);
     } finally {
       this.sourceLoaded.set(true);
     }
+  }
+
+  /** Loads the graph and the source scan again. The alert stays until they answer, so focus
+   * stays on Retry when it fails again and moves to the filter box when it works. */
+  async retry() {
+    const client = this.rpc();
+    if (!client || this.retrying()) return;
+    this.retrying.set(true);
+    try {
+      await Promise.all([this.loadSignalGraph(client), this.loadSourceSignals(client)]);
+    } finally {
+      this.retrying.set(false);
+    }
+    if (this.destroyRef.destroyed || this.loadFailed()) return;
+    afterNextRender(() => this.filterInput()?.nativeElement.focus(), { injector: this.injector });
   }
 
   /** Clears the filters from a no-match state and keeps focus on the filter box. */
