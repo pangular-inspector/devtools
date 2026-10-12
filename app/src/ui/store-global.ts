@@ -16,7 +16,8 @@ interface StoreResult {
 
 /**
  * "Store as global": asks the page that owns `pageId` to store the target as
- * `temp1`, `temp2`… in its console, then says which name it used.
+ * `temp1`, `temp2`… in its console, then says which name it used. With
+ * `canLog`, "Log to console" asks the page to print the value there instead.
  */
 @Component({
   selector: 'app-store-global',
@@ -33,6 +34,19 @@ interface StoreResult {
           <span class="sr-only">: {{ label() }}</span>
         }
       </button>
+      @if (canLog()) {
+        <button
+          type="button"
+          class="store log"
+          [disabled]="busy() || !rpc() || !pageId()"
+          (click)="store('log')"
+        >
+          Log to console
+          @if (label()) {
+            <span class="sr-only">: {{ label() }}</span>
+          }
+        </button>
+      }
       <span class="status" role="status">{{ message() }}</span>
     }
   `,
@@ -64,26 +78,35 @@ export class StoreGlobal {
   readonly target = input.required<ConsoleTarget>();
   /** Names the target for screen readers when several buttons share a view. */
   readonly label = input<string>('');
+  /** Also offers "Log to console". */
+  readonly canLog = input(false);
 
   /** A saved report has no page to store anything in. */
   protected readonly staticReport = computed(() => isStaticReport(this.rpc()));
   protected readonly busy = signal(false);
   protected readonly message = signal('');
 
-  async store() {
+  async store(mode: 'store' | 'log' = 'store') {
     const client = this.rpc();
     const pageId = this.pageId();
     if (!client || !pageId) return;
     this.busy.set(true);
     this.message.set('');
     try {
-      const result = (await client
-        .scope('pangular')
-        .rpc.call('request-console-global', { pageId, target: this.target() })) as StoreResult;
-      this.message.set(
-        result?.message ||
-          (result?.ok && result.name ? `Stored as ${result.name}.` : 'Not stored.'),
-      );
+      const result = (await client.scope('pangular').rpc.call('request-console-global', {
+        pageId,
+        target: this.target(),
+        ...(mode === 'log' ? { mode } : {}),
+      })) as StoreResult;
+      const fallback =
+        mode === 'log'
+          ? result?.ok
+            ? 'Logged in the page console.'
+            : 'Not logged.'
+          : result?.ok && result.name
+            ? `Stored as ${result.name}.`
+            : 'Not stored.';
+      this.message.set(result?.message || fallback);
     } catch {
       this.message.set('Could not reach the page.');
     } finally {

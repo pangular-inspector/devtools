@@ -42,6 +42,8 @@ export interface SignalGraphNode {
   value?: unknown;
   /** Changes seen since the page first reported the node, including ones whose value went unseen. */
   changes?: number;
+  /** Created by Angular's own code rather than the app (see `signal-framework.ts`). */
+  framework?: true;
 }
 
 export interface SignalGraphEdge {
@@ -58,6 +60,14 @@ export interface SignalChange {
   source: 'write' | 'sample' | 'initial';
   /** Changes between this sample and the previous entry whose values weren't seen. */
   missed?: number;
+  /** First app frames of the code that wrote it, when write stacks are on (`write` entries only). */
+  stack?: string[];
+}
+
+/** What the page watches: node ids it logs to the console, and whether it records write stacks. */
+export interface SignalWatchReport {
+  ids: string[];
+  stacks: boolean;
 }
 
 export interface SignalGraphComponent {
@@ -115,6 +125,8 @@ export interface SignalGraph {
   pageId?: string;
   /** Recent value changes, keyed by node or resource id, oldest first. */
   history?: Record<string, SignalChange[]>;
+  /** Set when the page watches a signal or records write stacks. */
+  watch?: SignalWatchReport;
 }
 
 export interface LiveComponentNode {
@@ -231,9 +243,16 @@ export interface InjectorInfo {
   name: string;
   providerCount: number;
   component?: string;
+  /**
+   * The component's id in the component tree (`elementId` of the host), set on
+   * element injectors whose host is a component. Links the two views.
+   */
+  componentId?: string;
   directives?: string[];
   selector?: string;
   path?: string[];
+  /** Set by the server: one of Angular's own injectors (see `framework-tokens.ts`). */
+  framework?: boolean;
 }
 
 export interface ProviderInfo {
@@ -242,6 +261,8 @@ export interface ProviderInfo {
   isViewProvider: boolean;
   multi?: boolean;
   importPath?: string[];
+  /** Set by the server: the token comes from an installed `@angular/*` package. */
+  framework?: boolean;
 }
 
 export interface DependencyInfo {

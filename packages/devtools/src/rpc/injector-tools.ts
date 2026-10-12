@@ -146,7 +146,8 @@ function environmentParents(
 function matchesSelector(node: InjectorTreeNode, selector: string): boolean {
   const { injector } = node;
   if (injector.type !== 'element') return false;
-  if (injector.id === selector || injector.selector === selector) return true;
+  if (injector.id === selector || injector.componentId === selector) return true;
+  if (injector.selector === selector) return true;
   const want = selector.replace(/^<|>$/g, '').toLowerCase();
   return (
     injector.name.toLowerCase() === want ||
@@ -187,7 +188,7 @@ export function inspectProvidersText(
   if (!selector && !token) {
     const zone = zoneModeText(page.zone, pageId);
     return wholeTreeText(
-      `This is the injector tree for the whole page \`${pageId}\`. Element injectors list what each component and directive injected and which injector supplied it (\`providedBy\` is an injector id). Environment injectors run from the platform down to the root and any route injectors; their \`dependencies\` list what the services they already created inject (\`from\` is the service). To look at one component or one token, ${NARROW}.${zone ? ` ${zone}` : ''}${notes}`,
+      `This is the injector tree for the whole page \`${pageId}\`. Element injectors list what each component and directive injected and which injector supplied it (\`providedBy\` is an injector id), and \`componentId\` is the component's id in the component tree. \`framework: true\` marks Angular's own injectors and providers. Environment injectors run from the platform down to the root and any route injectors; their \`dependencies\` list what the services they already created inject (\`from\` is the service). To look at one component or one token, ${NARROW}.${zone ? ` ${zone}` : ''}${notes}`,
       roots,
       environment,
     );

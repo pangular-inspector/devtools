@@ -32,6 +32,7 @@ import {
 } from './component-tree-state';
 import { CdRecording, type CdPage } from './cd-recording';
 import type { ComponentFocus } from '../types/component-focus.types';
+import type { InjectorFocus } from '../types/injector-focus.types';
 import { SourceLink } from '../ui/source-link';
 import { actionAllowed } from '../devtools-config';
 import { PropValue } from './component-prop-value';
@@ -341,6 +342,14 @@ function bare(name: string): string {
                     }
                   </div>
                 }
+              }
+              @if (canShowInjector() && !staticReport()) {
+                <div class="actions">
+                  <button type="button" (click)="openInjector(sel)">
+                    Show in Injectors
+                    <span class="sr-only">: {{ sel.name }}</span>
+                  </button>
+                </div>
               }
               @if (!staticReport() && !native()) {
                 <app-store-global
@@ -1427,6 +1436,9 @@ export class ComponentTree {
   readonly focus = input<ComponentFocus | null>(null);
   readonly showForm = output<string>();
   readonly focusHandled = output<void>();
+  /** Whether the Injectors tab is on, so "Show in Injectors" can open it. */
+  readonly canShowInjector = input(false);
+  readonly showInjector = output<InjectorFocus>();
 
   readonly filter = signal('');
   readonly loading = signal(false);
@@ -1736,6 +1748,12 @@ export class ComponentTree {
         ? ''
         : 'Could not reveal it. The component must be rendered in the tab these DevTools inspect.',
     );
+  }
+
+  /** Opens the Injectors tab on this component's element injector. */
+  openInjector(node: LiveNode) {
+    const pageId = this.page()?.pageId;
+    this.showInjector.emit(pageId ? { componentId: node.id, pageId } : { componentId: node.id });
   }
 
   async openSource(node: LiveNode) {

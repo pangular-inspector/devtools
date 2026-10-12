@@ -11,12 +11,16 @@ export type InspectSignalsArgs = {
   node?: string;
   /** False drops the `history` arrays. Defaults to true. */
   history?: boolean;
+  /** False drops the nodes Angular itself created (`framework: true`). Defaults to true. */
+  framework?: boolean;
 };
 
 type Graph = SignalGraph & {
   pageId?: string;
   /** Signals, computeds and linkedSignals in the whole graph without a `debugName`. */
   unnamedSignals?: number;
+  /** Nodes left out by `framework: false`. */
+  frameworkNodesLeftOut?: number;
 };
 
 const NAMED_KINDS = new Set(['signal', 'computed', 'linkedSignal']);
@@ -104,10 +108,15 @@ export function signalGraphText(
   budget = SIGNAL_TOOL_MAX,
 ): string {
   let view: Graph = graph;
+  if (args.framework === false) {
+    const keep = graph.nodes.flatMap((n, i) => (n.framework ? [] : [i]));
+    const left = graph.nodes.length - keep.length;
+    if (left) view = { ...pick(graph, keep), frameworkNodesLeftOut: left };
+  }
   if (args.node) {
-    const narrowed = neighbourhood(graph, args.node);
+    const narrowed = neighbourhood(view, args.node);
     if (!narrowed)
-      return `No signal node \`${args.node}\`.${knownNodes(graph.nodes)}`.slice(0, budget);
+      return `No signal node \`${args.node}\`.${knownNodes(view.nodes)}`.slice(0, budget);
     view = narrowed;
   }
   if (args.history === false) {

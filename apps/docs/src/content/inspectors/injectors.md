@@ -35,7 +35,29 @@ If the chosen page closes, the tab moves to the page that reported last and anno
 - Search for a token, component, directive or injector. When a token matches, **Provided by** chips list the injectors that provide it. Click one to jump there. The row shows up to 12 chips, then **+N more**. Once typing pauses, a screen reader announces how many injectors provide the token, or that nothing matches.
 - **Components only** hides elements without a component. It keeps an element when it is an ancestor of one that stays. It is on by default, in the Elements view only.
 - **With providers** hides injectors that provide nothing.
+- **Hide framework** hides the injectors and providers that come from Angular, and shows how many it hides, for example **1 injector and 68 providers hidden**. The panel remembers the choice. See [Framework injectors](#framework-injectors).
 - Hover or focus an element injector to highlight its element in the page.
+
+### Framework injectors
+
+The devtools server reads the `fesm2022` bundles of every installed `@angular/*` package once (except the compiler and the CLI packages), and collects the class names and `InjectionToken` descriptions they declare. A provider whose token has one of these names is a framework provider, and shows an **Angular** chip.
+
+**Hide framework** hides these injectors:
+
+| Injector                                | Hidden when                                                                                            |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Platform                                | Always. Angular creates it for every app.                                                              |
+| Root                                    | Never. It holds your `providedIn: 'root'` services and app config providers.                           |
+| Any other environment injector          | Every provider in it is a framework provider, such as a route that only adds `provideHttpClient()`.    |
+| An element injector without a component | Every directive on the element and every provider in it comes from Angular, such as `<router-outlet>`. |
+
+The children of a hidden injector move up to its place in the tree. In the injectors that stay, framework providers are hidden too, and **Provides** says how many with a **Show them** button that turns the filter off. Opening a hidden injector, from a lookup path step or a **Provided by** chip, turns the filter off for that visit without changing the saved choice.
+
+The match is by name, so an app class with the same name as an Angular class, such as `Location`, counts as a framework provider. Element injectors with a component are never hidden.
+
+### Links to the Components tab
+
+Select an element injector that belongs to a component, and **Show in Components** opens the [Components tab](./components.md) with that instance selected. From the Components tab, **Show in Injectors** comes back to the element injector. Both buttons match the instance by the id the component tree gives it, so they work on the page each tab shows, and they appear when the other inspector is on. If the injector is no longer on the page, a screen reader announces it.
 
 ### Lookup path
 
@@ -64,7 +86,9 @@ Storing never creates a provider:
 | An environment injector | The injector already created the value. Otherwise the button says **… has not been created yet**. |
 | An element injector     | A component or directive on the page injected it from that element, so Angular created it.        |
 
-A class instance is stored as the live object. A `useValue` object or array is stored as a copy, with secret-looking keys, JWTs and `Bearer` values replaced by `[redacted]`. A provider whose token name looks secret, such as `API_KEY`, or whose value is a credential string, is not stored. See [what the devtools redact](../security.md).
+**Log to console** next to it prints the value in the page console instead, as `[pangular] TOKEN: value`, and says **Logged TOKEN in the page console.** It follows the same rules as **Store as global**. The value never reaches the panel.
+
+A class instance is stored as the live object. A `useValue` object or array is stored as a copy, with secret-looking keys, JWTs and `Bearer` values replaced by `[redacted]`. A provider whose token name looks secret, such as `API_KEY`, or whose value is a credential string, is not stored or logged. See [what the devtools redact](../security.md).
 
 ### Source mode
 
@@ -138,11 +162,11 @@ If the selected injector leaves the page because its component or directive was 
 
 ## Agent tools
 
-| Tool or resource             | Kind     | What it does                                                                                                                                                                                                                                     |
-| ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pangular:get-providers`     | tool     | DI providers from source: `@Injectable` services, `inject()` calls, constructor parameters and `providers` arrays.                                                                                                                               |
-| `pangular:inspect-providers` | tool     | The injector tree a page reported, with what components and created services inject. `selector` narrows it to matching element or environment injectors (`Root`, `Platform`, `Route: admin`), `token` to where a token is provided and injected. |
-| `pangular:injector-tree`     | resource | The live tree last reported by a page.                                                                                                                                                                                                           |
+| Tool or resource             | Kind     | What it does                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pangular:get-providers`     | tool     | DI providers from source: `@Injectable` services, `inject()` calls, constructor parameters and `providers` arrays.                                                                                                                                                                                                                                                             |
+| `pangular:inspect-providers` | tool     | The injector tree a page reported, with what components and created services inject. `selector` narrows it to matching element or environment injectors (`Root`, `Platform`, `Route: admin`) or a component instance id, `token` to where a token is provided and injected. `componentId` and `framework` mark the owning component and Angular's own injectors and providers. |
+| `pangular:injector-tree`     | resource | The live tree last reported by a page.                                                                                                                                                                                                                                                                                                                                         |
 
 See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 

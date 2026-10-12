@@ -3,6 +3,7 @@ import { elementById, elementId } from './element-id.ts';
 import { domTree, hostBySelector, type HostTree } from './host-tree.ts';
 import { className, injectorRef } from './injector-tree.ts';
 import { serializeNamed } from './serialize.ts';
+import { frameworkNodes, type OwnSignal } from './signal-framework.ts';
 import { cleanValue, groupResources, rawNodeOf, type RawNode } from './signal-resources.ts';
 import type {
   SignalGraph,
@@ -178,6 +179,36 @@ function linkedValue(
   return cleanValue([...nodes][0]);
 }
 
+/** The signal fields of the component instance, read without calling them. */
+function ownSignals<H extends object>(ng: SignalDebugNg<H>, instance: object): OwnSignal[] {
+  const own: OwnSignal[] = [];
+  for (const key of read(() => Object.keys(instance), [] as string[])) {
+    const value = read(() => (instance as Record<string, unknown>)[key], undefined);
+    if (typeof value !== 'function') continue;
+    if (!read(() => ng.isSignal?.(value) ?? true, false)) continue;
+    const node = rawNodeOf(value);
+    if (node)
+      own.push({ label: node.debugName || undefined, kind: node.kind, epoch: node.version });
+  }
+  return own;
+}
+
+/** Flags the nodes Angular's own code created; see `frameworkNodes` for the rule. */
+function markFramework<H extends object>(
+  nodes: SignalGraphNode[],
+  edges: SignalGraphEdge[],
+  resourceIds: Set<string>,
+  instance: object | null,
+  ng: SignalDebugNg<H>,
+) {
+  let found = frameworkNodes(nodes, edges, [], resourceIds);
+  // Reading the instance's fields costs a pass over its keys, so only when it can matter.
+  if (found.size && instance) {
+    found = frameworkNodes(nodes, edges, ownSignals(ng, instance), resourceIds);
+  }
+  for (const i of found) nodes[i]!.framework = true;
+}
+
 type RawGraph = NonNullable<ReturnType<NonNullable<SignalDebugNg['ɵgetSignalGraph']>>>;
 
 function buildGraph<H extends object>(
@@ -220,6 +251,7 @@ function buildGraph<H extends object>(
   const resources = groupResources(nodes, edges, instance ? [instance] : [], (label, value) =>
     graphValue(label, value),
   );
+  markFramework(nodes, edges, new Set(resources.flatMap((r) => r.nodeIds)), instance, ng);
   const graph: Pick<SignalGraph, 'nodes' | 'edges' | 'resources' | 'nodeCount'> = { nodes, edges };
   if (resources.length) graph.resources = resources;
   if (raw.nodes.length > kept.length) graph.nodeCount = raw.nodes.length;
@@ -393,5 +425,6 @@ export function graphKey(graph: SignalGraph): string {
   const owner =
     graph.component?.id ?? graph.injector?.id ?? (graph.unsupported ? 'unsupported' : '');
   const envs = (graph.environments ?? []).map((e) => e.id).join(',');
-  return `${owner}|${graph.source ?? ''}|${nodes}|${edges}|${envs}`;
+  const watch = graph.watch ? `${graph.watch.stacks ? 's' : ''}:${graph.watch.ids.join(',')}` : '';
+  return `${owner}|${graph.source ?? ''}|${nodes}|${edges}|${envs}|${watch}`;
 }

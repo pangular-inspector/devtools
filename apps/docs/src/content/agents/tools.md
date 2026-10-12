@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Sixty-five tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Sixty-six tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -49,14 +49,14 @@ The URL comes from the HTTP or router report. A page that sends neither (no rout
 
 Every tool has one of three safety tiers. The server sends the tier to your client as the tool's read-only and destructive hints.
 
-| Tier          | What the tool can do                                                                                              | Tools                                                                                                                                                                              |
-| ------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                        | Every other tool, and every resource                                                                                                                                               |
-| `action`      | Changes the running page, the server's fault rules or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `record-pipes` and `change-detection` |
-| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                                                           |
+| Tier          | What the tool can do                                                                                              | Tools                                                                                                                                                                                              |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                        | Every other tool, and every resource                                                                                                                                                               |
+| `action`      | Changes the running page, the server's fault rules or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes` and `change-detection` |
+| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                                                                           |
 
 <ngmd-alert severity="important">
-  The twelve <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
+  The thirteen <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
 When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
@@ -204,21 +204,25 @@ A parent binding sets a bound input again the next time its own value changes. O
 
 The signal graph the page reported: nodes (`signal`, `computed`, `linkedSignal`, `effect`), dependency edges, the component or injector they belong to, and recent value history per node. Reads: page.
 
-| Argument   | Required | Value                                                                                                                                                        |
-| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `selector` | yes      | Host tag, class name or instance id of the component, like `app-root`. Or `root`, or a route path like `/admin` or `Route: admin`.                           |
-| `node`     | no       | A node id or label. The answer holds only that node, or every node with that label, with its direct producers and consumers and their resources and history. |
-| `history`  | no       | `false` leaves out the value history. Defaults to `true`.                                                                                                    |
+| Argument    | Required | Value                                                                                                                                                        |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `selector`  | yes      | Host tag, class name or instance id of the component, like `app-root`. Or `root`, or a route path like `/admin` or `Route: admin`.                           |
+| `node`      | no       | A node id or label. The answer holds only that node, or every node with that label, with its direct producers and consumers and their resources and history. |
+| `history`   | no       | `false` leaves out the value history. Defaults to `true`.                                                                                                    |
+| `framework` | no       | `false` leaves out the nodes Angular itself created (`framework: true`). Defaults to `true`.                                                                 |
 
 The answer also holds:
 
-| Field            | Value                                                                                                                         |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `resources`      | One entry per `resource()`, `httpResource()` or `rxResource()`: `status`, `isLoading`, `params`, `value`, `error`, `nodeIds`. |
-| `environments`   | The root and route injectors the page can report, with `id` and `name`.                                                       |
-| `changes`        | On a node or resource, every change since the page first saw it. The history keeps the last 50.                               |
-| `nodeCount`      | Set when Angular reported more than the 400 nodes the page keeps.                                                             |
-| `unnamedSignals` | Set when signals, computeds or linkedSignals in the graph have no `debugName`. Their history holds sampled values only.       |
+| Field            | Value                                                                                                                                    |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `resources`      | One entry per `resource()`, `httpResource()` or `rxResource()`: `status`, `isLoading`, `params`, `value`, `error`, `nodeIds`.            |
+| `environments`   | The root and route injectors the page can report, with `id` and `name`.                                                                  |
+| `changes`        | On a node or resource, every change since the page first saw it. The history keeps the last 50.                                          |
+| `nodeCount`      | Set when Angular reported more than the 400 nodes the page keeps.                                                                        |
+| `unnamedSignals` | Set when signals, computeds or linkedSignals in the graph have no `debugName`. Their history holds sampled values only.                  |
+| `framework`      | `true` on a node that Angular's router, forms or HTTP code created. See [Framework signals](../inspectors/signals.md#framework-signals). |
+| `watch`          | The node ids the page watches (`ids`) and whether write stacks are on (`stacks`). Set only while one of them is on.                      |
+| `stack`          | On a `write` history entry while write stacks are on: the first 3 app frames of the code that set the signal.                            |
 
 The answer is cut at 20,000 characters. A graph that is too long first keeps fewer history entries per node, then keeps the first nodes that fit. A note under the JSON says how many history entries and nodes it left out. Pass `node` or `history: false` to see the rest.
 
@@ -228,17 +232,33 @@ With `root` or a route path, the tool asks the page for the effects of that inje
   The page reports one graph: the component picked on the Signals page or with <code>highlight</code>, otherwise the deepest component in the primary router outlet. Call <code>highlight</code> first to switch the graph to another component. Only signals a template or an effect has read appear.
 </ngmd-callout>
 
+### watch-signal <ngmd-badge variant="alpha">Action</ngmd-badge>
+
+Watches a signal on the page, and turns write stacks on or off, the same switches as **Watch** and **Record write stacks** on the Signals page. Acts on: page.
+
+| Argument | Required | Value                                                                                    |
+| -------- | -------- | ---------------------------------------------------------------------------------------- |
+| `node`   | no       | A node id or label from `inspect-signals`. A label watches every node with it, up to 20. |
+| `watch`  | no       | `false` stops watching `node`. Defaults to `true`.                                       |
+| `stacks` | no       | `true` records write stacks on the page, `false` stops.                                  |
+
+Pass `node`, `stacks` or both. A watched signal logs each change to the page console and shows under **Watched** on the Signals page. With write stacks on, each `write` entry in the `inspect-signals` history carries `stack`: the first 3 app frames of the code that set the signal, without Angular, packages, zone.js and the overlay. Taking a stack slows every signal write, so turn it off when you are done. Both reset when the page reloads.
+
+Watching changes what the page records, so `watch-signal` is an `action` tool and `agent.readOnly` drops it. No action covers signals, so `actions` leaves it in place. `agent.tools.signals: false` hides it.
+
 ### inspect-providers
 
 The injectors a page reported. Element injectors list what each component injected and which injector supplied it. Environment injectors run from the platform down to the root and route injectors, and list what the services they already created inject. Reads: page.
 
-| Argument   | Required | Value                                                                                                                                                                            |
-| ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `selector` | no       | A tag name, a component or directive class name, an environment injector name like `Root`, `Platform` or `Route: admin`, or an injector id. Returns only the matching injectors. |
-| `token`    | no       | A token name, like `HttpClient`. Returns the injectors that provide it and the components or services that inject it.                                                            |
-| `pageId`   | no       | Same as `page`.                                                                                                                                                                  |
+| Argument   | Required | Value                                                                                                                                                                                                                |
+| ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `selector` | no       | A tag name, a component or directive class name, an environment injector name like `Root`, `Platform` or `Route: admin`, an injector id, or a component instance id like `c12`. Returns only the matching injectors. |
+| `token`    | no       | A token name, like `HttpClient`. Returns the injectors that provide it and the components or services that inject it.                                                                                                |
+| `pageId`   | no       | Same as `page`.                                                                                                                                                                                                      |
 
 A `selector` that names an element injector returns it with its lookup path resolved to names and provided tokens. One that names an environment injector, in any case, returns that injector's providers, what the services it already created inject, and its parent injectors. When nothing matches, the answer lists the tags and environment injector names on the page to retry with.
+
+An element injector that belongs to a component carries `componentId`, the instance id that `inspect-component`, `list-components` and the `component-tree` resource use. `framework: true` marks the injectors and providers that come from the installed `@angular/*` packages; see [Framework injectors](../inspectors/injectors.md#framework-injectors).
 
 Without `selector` or `token`, the answer is the whole tree and says which change detection mode the page runs. The answer stays within 20,000 characters and its JSON always parses. A larger tree shows element injectors as an outline (id, name, type, component, and provider and dependency counts), and when that is still too long it leaves out the deepest injectors and says how many. The environment injectors are always there, as an outline when they are large, and without their deepest injectors when even that outline is too long. A `selector` or `token` answer that is too long keeps whole entries and says how many it shows. `selector` and `token` take at most 500 characters each. When the page reported only part of its injector tree (it keeps at most 2000 element injectors and 2500 in all, and leaves out injectors nested more than 1000 levels deep), the answer says so.
 

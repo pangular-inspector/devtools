@@ -261,6 +261,7 @@ describe('agent tool and RPC registration', () => {
         'set-component-property',
         'set-http-rule',
         'set-signal',
+        'watch-signal',
       ].sort(),
     );
     expect(tools).toContain('inspect-forms');
@@ -365,6 +366,7 @@ describe('agent tool and RPC registration', () => {
         'set-component-property',
         'set-http-rule',
         'set-signal',
+        'watch-signal',
       ].sort(),
     );
     expect(forms.tools).toEqual(expect.arrayContaining(['inspect-forms', 'form-history']));

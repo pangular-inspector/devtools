@@ -1,5 +1,6 @@
 import type { PangularInspector, ResolvedPangularConfig } from '../config.ts';
 import {
+  isConsoleMode,
   isConsoleTarget,
   type ConsoleGlobalResult,
   type ConsoleTarget,
@@ -48,7 +49,8 @@ export function consoleTargetBlocked(
 /**
  * Panel -> `request-console-global` -> `console-global` on the one page that
  * owns `pageId` -> `console-global-result`. The page stores the value as
- * `tempN` and answers with the name; nothing else comes back.
+ * `tempN` and answers with the name, or with `mode: 'log'` prints it in its
+ * console; nothing else comes back.
  */
 export function registerConsoleGlobals(deps: ConsoleGlobalsDeps) {
   const pending = new Map<string, { pageId: string; settle: (result: unknown) => void }>();
@@ -69,15 +71,19 @@ export function registerConsoleGlobals(deps: ConsoleGlobalsDeps) {
     name: 'request-console-global',
     type: 'action',
     jsonSerializable: true,
-    handler: (message: { pageId?: unknown; target?: unknown } | null) =>
+    handler: (message: { pageId?: unknown; target?: unknown; mode?: unknown } | null) =>
       new Promise<ConsoleGlobalResult>((resolve) => {
         const pageId = message?.pageId;
         const target = message?.target;
+        const mode = message?.mode ?? 'store';
+        if (!isConsoleMode(mode)) {
+          return resolve({ ok: false, message: 'Pick store or log.' });
+        }
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) {
-          return resolve({ ok: false, message: 'Pick the page to store the value in.' });
+          return resolve({ ok: false, message: `Pick the page to ${mode} the value in.` });
         }
         if (!isConsoleTarget(target)) {
-          return resolve({ ok: false, message: 'Nothing to store.' });
+          return resolve({ ok: false, message: `Nothing to ${mode}.` });
         }
         const blocked = consoleTargetBlocked(target, deps.config);
         if (blocked) return resolve({ ok: false, message: blocked });
@@ -108,7 +114,7 @@ export function registerConsoleGlobals(deps: ConsoleGlobalsDeps) {
         });
         deps.broadcast({
           method: 'console-global',
-          args: [{ requestId, pageId, target }],
+          args: [{ requestId, pageId, target, ...(mode === 'log' ? { mode } : {}) }],
           optional: true,
         });
       }),

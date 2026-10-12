@@ -53,6 +53,8 @@ The buttons only work for the tab that DevTools inspects. They don't appear in t
 
 When a form exists in the same source file, a **Show … in Forms** button opens it in the [Forms tab](./forms.md).
 
+**Show in Injectors** opens the [Injectors tab](./injectors.md#links-to-the-components-tab) with the element injector of the selected instance selected and scrolled into view. The button appears when the Injectors inspector is on.
+
 **Store as global** stores the selected instance in the page console as `temp1`, then `temp2` and so on, and shows the name it used, for example **Stored as temp1.** See [Console handles](#console-handles).
 
 ### Facts

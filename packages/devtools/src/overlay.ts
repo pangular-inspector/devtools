@@ -41,6 +41,7 @@ import {
 } from './router-actions.ts';
 import { createSignalHistory, installSignalWriteHook } from './signal-history.ts';
 import { registerSignalPeek } from './signal-peek.ts';
+import { createSignalWatch, registerSignalWatch } from './signal-watch.ts';
 export { installSignalWriteHook } from './signal-history.ts';
 import { collectComponentTree, componentHostOf } from './component-tree.ts';
 import { startComponentPick } from './component-pick.ts';
@@ -316,10 +317,12 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     }
   }
 
+  const signalWatch = createSignalWatch();
   const signalHistory = createSignalHistory(
     (value, name) => serializeNamed(name, value, { budget: 1000 }),
     Date.now,
     (value, name) => graphValue(name, value),
+    { stacks: signalWatch.stacks, onChange: signalWatch.onChange },
   );
   const restoreSignalHook = on.signals ? await installSignalWriteHook(signalHistory.onWrite) : null;
   if (!own(restoreSignalHook ?? (() => {}))) return;
@@ -332,7 +335,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   let historyFor = '';
 
   async function pushSignalGraph(force = false) {
-    const graph = collectSignalGraph(getNg(), signalTarget);
+    const graph = signalWatch.attach(collectSignalGraph(getNg(), signalTarget));
     if (!graph) return;
     const key = graphKey(graph);
     if (!force && key === lastSignalKey) {
@@ -729,6 +732,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       signalTarget = next;
       void pushSignalGraph(true).catch(() => {});
     },
+  });
+  registerSignalWatch(my.rpc, pageId, signalWatch, () => {
+    void pushSignalGraph(true).catch(() => {});
   });
   registerSignalPeek(
     my.rpc,

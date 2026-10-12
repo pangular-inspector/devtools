@@ -1,3 +1,4 @@
+import { appFrames, captureStack } from './signal-stack.ts';
 import type { SignalChange, SignalGraphNode } from './types.ts';
 
 export const MAX_CHANGES = 50;
@@ -14,12 +15,24 @@ export interface RawSignalNode {
 }
 
 interface Track {
+  id: string;
   ref: WeakRef<RawSignalNode>;
   label: string;
   kind: string;
   changes: SignalChange[];
   /** Writes since the last flush, serialized off Angular's set path. */
-  pending: { epoch: number; value: unknown; at: number }[];
+  pending: { epoch: number; value: unknown; at: number; stack?: string }[];
+}
+
+export interface SignalHistoryOptions {
+  /** Whether to record the stack of each write. Checked on every write, so keep it cheap. */
+  stacks?: () => boolean;
+  /**
+   * Called with each exact write once it is serialized, and each sampled change
+   * as it is collected. `id` is the graph node id, unknown until a snapshot
+   * matched the written signal to a node.
+   */
+  onChange?: (id: string | undefined, label: string, change: SignalChange) => void;
 }
 
 function append(list: SignalChange[], change: SignalChange) {
@@ -31,8 +44,11 @@ export function createSignalHistory(
   serialize: (value: unknown, name?: string) => unknown,
   now = Date.now,
   snapshot = serialize,
+  options: SignalHistoryOptions = {},
 ) {
   const tracks = new Map<string, Track>();
+  /** The graph node each bound track belongs to: `bound` read backwards. */
+  const nodeOfTrack = new Map<string, string>();
   const trackIds = new WeakMap<RawSignalNode, string>();
   const bound = new Map<string, string>();
   const history = new Map<string, SignalChange[]>();
@@ -46,31 +62,50 @@ export function createSignalHistory(
   function flush() {
     flushQueued = false;
     for (const track of dirty) {
-      for (const write of track.pending) {
+      for (const { stack, ...write } of track.pending) {
+        let change: SignalChange;
         try {
-          append(track.changes, {
-            ...write,
-            value: serialize(write.value, track.label),
-            source: 'write',
-          });
+          change = { ...write, value: serialize(write.value, track.label), source: 'write' };
         } catch {
           continue;
         }
+        const frames = stack ? appFrames(stack) : [];
+        if (frames.length) change.stack = frames;
+        append(track.changes, change);
+        notify(nodeOfTrack.get(track.id), track.label, change);
       }
       track.pending = [];
     }
     dirty.clear();
   }
 
+  function notify(id: string | undefined, label: string, change: SignalChange) {
+    if (!options.onChange) return;
+    try {
+      options.onChange(id, label, change);
+    } catch {
+      // A listener never breaks history.
+    }
+  }
+
+  function unbind(nodeId: string) {
+    const trackId = bound.get(nodeId);
+    if (trackId !== undefined && nodeOfTrack.get(trackId) === nodeId) nodeOfTrack.delete(trackId);
+    bound.delete(nodeId);
+  }
+
   function evictTrack() {
     for (const [id, track] of tracks) {
       if (!track.ref.deref()) {
         tracks.delete(id);
+        nodeOfTrack.delete(id);
         return;
       }
     }
     // Writes move a track to the end, so the first one is the least recently written.
-    tracks.delete(tracks.keys().next().value!);
+    const oldest = tracks.keys().next().value!;
+    tracks.delete(oldest);
+    nodeOfTrack.delete(oldest);
   }
 
   function onWrite(node: RawSignalNode) {
@@ -84,6 +119,7 @@ export function createSignalHistory(
     } else {
       const newId = `w${++trackSeq}`;
       track = {
+        id: newId,
         ref: new WeakRef(node),
         label: node.debugName,
         kind: node.kind ?? 'signal',
@@ -96,7 +132,14 @@ export function createSignalHistory(
     }
     // Keep the raw value and serialize it in a microtask: hot signals don't pay for it inside
     // Angular's set path, and a burst of writes serializes only the entries the list keeps.
-    track.pending.push({ epoch: node.version ?? 0, value: node.value, at: now() });
+    // Taking a stack is the costly part, so it happens only while stacks are on.
+    const stack = options.stacks?.() ? captureStack() : undefined;
+    track.pending.push({
+      epoch: node.version ?? 0,
+      value: node.value,
+      at: now(),
+      ...(stack ? { stack } : {}),
+    });
     if (track.pending.length > MAX_CHANGES) track.pending.shift();
     dirty.add(track);
     if (!flushQueued) {
@@ -116,7 +159,7 @@ export function createSignalHistory(
       const track = tracks.get(boundId);
       const raw = track?.ref.deref();
       if (track && raw?.version === node.epoch && sameValue(raw, node)) return track;
-      bound.delete(node.id);
+      unbind(node.id);
       taken.delete(boundId);
     }
     if (!node.label) return undefined;
@@ -125,6 +168,7 @@ export function createSignalHistory(
       const raw = track.ref.deref();
       if (!raw) {
         tracks.delete(id);
+        nodeOfTrack.delete(id);
         continue;
       }
       if (
@@ -140,6 +184,7 @@ export function createSignalHistory(
     // Two live signals with the same name and version are ambiguous; retry next snapshot.
     if (matches.length !== 1) return undefined;
     bound.set(node.id, matches[0]);
+    nodeOfTrack.set(matches[0], node.id);
     taken.add(matches[0]);
     return tracks.get(matches[0]);
   }
@@ -163,13 +208,15 @@ export function createSignalHistory(
       if (node.epoch > lastEpoch) {
         const missed = lastEpoch >= 0 ? node.epoch - lastEpoch - 1 : 0;
         if (lastEpoch >= 0) total += 1 + missed;
-        append(list, {
+        const change: SignalChange = {
           epoch: node.epoch,
           value: node.value,
           at: now(),
           source: lastEpoch < 0 ? 'initial' : 'sample',
           ...(missed > 0 ? { missed } : {}),
-        });
+        };
+        append(list, change);
+        if (change.source === 'sample') notify(node.id, node.label ?? node.id, change);
       }
       history.delete(node.id);
       history.set(node.id, list);
@@ -180,7 +227,7 @@ export function createSignalHistory(
       if (history.size <= MAX_NODES) break;
       history.delete(id);
       totals.delete(id);
-      bound.delete(id);
+      unbind(id);
     }
     return out;
   }

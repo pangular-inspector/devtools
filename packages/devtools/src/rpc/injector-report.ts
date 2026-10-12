@@ -28,6 +28,7 @@ const InjectorSchema = v.object({
   name: text,
   providerCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
   component: v.optional(text),
+  componentId: v.optional(text),
   directives: v.optional(texts(100)),
   selector: v.optional(clipped(MAX_SELECTOR)),
   path: v.optional(texts(200)),

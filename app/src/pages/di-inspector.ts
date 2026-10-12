@@ -9,7 +9,9 @@ import {
   inject,
   input,
   linkedSignal,
+  output,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
@@ -20,6 +22,9 @@ import { Select, type SelectOption } from '../ui/select';
 import { zoneLabel } from './dashboard';
 import { SourceLink } from '../ui/source-link';
 import { StoreGlobal } from '../ui/store-global';
+import type { ComponentFocus } from '../types/component-focus.types';
+import type { InjectorFocus } from '../types/injector-focus.types';
+import { storeFlag, storedFlag } from '../view-prefs';
 
 interface ProviderInfo {
   token: string;
@@ -27,6 +32,7 @@ interface ProviderInfo {
   isViewProvider: boolean;
   multi?: boolean;
   importPath?: string[];
+  framework?: boolean;
 }
 
 interface DependencyInfo {
@@ -43,9 +49,11 @@ interface InjectorNode {
     name: string;
     providerCount: number;
     component?: string;
+    componentId?: string;
     directives?: string[];
     selector?: string;
     path?: string[];
+    framework?: boolean;
   };
   providers: ProviderInfo[];
   children: InjectorNode[];
@@ -83,6 +91,7 @@ interface InjectorTreeState extends InjectorPage {
 }
 
 const NULL_ID = 'inj-null';
+const HIDE_FRAMEWORK_PREF = 'injectors.hideFramework';
 const MAX_PROVIDED_BY = 12;
 /** How long typing must pause before the search result is announced. */
 const SEARCH_ANNOUNCE_MS = 600;
@@ -201,6 +210,17 @@ function isTree(value: unknown): value is InjectorNode[] {
           />
           With providers
         </label>
+        <label class="checkbox">
+          <input
+            type="checkbox"
+            [checked]="hideFramework()"
+            (change)="setHideFramework(!hideFramework())"
+          />
+          Hide framework
+        </label>
+        @if (hideFramework()) {
+          <span class="total framework-hidden">{{ frameworkHiddenText() }}</span>
+        }
         @if (zone(); as zone) {
           <span class="total">Change detection: {{ zone }}</span>
         }
@@ -247,7 +267,9 @@ function isTree(value: unknown): value is InjectorNode[] {
           <div class="state">
             <p class="state-title">No injectors to show</p>
             <p class="state-hint">
-              @if (onlyProviding()) {
+              @if (hideFramework() && frameworkHiddenCount().injectors > 0) {
+                Turn off “Hide framework” to see Angular's own injectors.
+              } @else if (onlyProviding()) {
                 None of them provide anything themselves.
               } @else if (componentsOnly() && view() === 'element') {
                 Turn off “Components only” to see directives.
@@ -317,16 +339,13 @@ function isTree(value: unknown): value is InjectorNode[] {
                     {{ row.node.dependencies!.length }}
                   </span>
                 }
-                @if (row.node.injector.providerCount > 0) {
-                  <span
-                    class="count provides"
-                    [attr.title]="row.node.injector.providerCount + ' provided'"
-                  >
+                @if (providerCount(row.node); as provided) {
+                  <span class="count provides" [attr.title]="provided + ' provided'">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M21 8 12 3 3 8v8l9 5 9-5z" />
                     </svg>
                     <span class="sr-only">provides</span>
-                    {{ row.node.injector.providerCount }}
+                    {{ provided }}
                   </span>
                 }
               </span>
@@ -361,6 +380,12 @@ function isTree(value: unknown): value is InjectorNode[] {
                     <li [class.is-component]="name === sel.injector.component">{{ name }}</li>
                   }
                 </ul>
+              }
+              @if (canShowComponent() && sel.injector.componentId; as componentId) {
+                <button type="button" class="show-component" (click)="openComponent(componentId)">
+                  Show in Components
+                  <span class="sr-only">: {{ sel.injector.component }}</span>
+                </button>
               }
             </header>
 
@@ -459,43 +484,57 @@ function isTree(value: unknown): value is InjectorNode[] {
 
             <div class="block">
               <h3>
-                Provides <span class="pill">{{ sel.providers.length }}</span>
+                Provides <span class="pill">{{ providerCount(sel) }}</span>
               </h3>
-              @if (sel.providers.length) {
+              @if (hiddenProviders(sel); as hidden) {
+                <p class="hint framework-note">
+                  {{ hidden }} framework {{ hidden === 1 ? 'provider' : 'providers' }} hidden.
+                  <button type="button" class="link" (click)="setHideFramework(false)">
+                    Show them
+                  </button>
+                </p>
+              }
+              @if (providerCount(sel)) {
                 <ul class="providers">
                   @for (p of sel.providers; track p.token + $index; let index = $index) {
-                    <li class="provider" [class.hit]="matches(p.token)">
-                      <div class="dep-main">
-                        <span class="token mono">{{ p.token }}</span>
-                        <span class="flag kind-flag">{{
-                          p.type === 'unknown' ? 'provider' : 'use' + capital(p.type)
-                        }}</span>
-                        @if (p.isViewProvider) {
-                          <span class="flag">viewProviders</span>
+                    @if (!isHidden(p)) {
+                      <li class="provider" [class.hit]="matches(p.token)">
+                        <div class="dep-main">
+                          <span class="token mono">{{ p.token }}</span>
+                          <span class="flag kind-flag">{{
+                            p.type === 'unknown' ? 'provider' : 'use' + capital(p.type)
+                          }}</span>
+                          @if (p.isViewProvider) {
+                            <span class="flag">viewProviders</span>
+                          }
+                          @if (p.multi) {
+                            <span class="flag">multi</span>
+                          }
+                          @if (p.framework) {
+                            <span class="flag">Angular</span>
+                          }
+                        </div>
+                        @if (p.importPath?.length) {
+                          <div class="dep-meta">via {{ p.importPath!.join(' › ') }}</div>
                         }
-                        @if (p.multi) {
-                          <span class="flag">multi</span>
-                        }
-                      </div>
-                      @if (p.importPath?.length) {
-                        <div class="dep-meta">via {{ p.importPath!.join(' › ') }}</div>
-                      }
-                      <app-store-global
-                        class="provider-global"
-                        [rpc]="rpc()"
-                        [pageId]="shownPageId()"
-                        [target]="{
-                          kind: 'provider',
-                          injectorId: sel.injector.id,
-                          token: p.token,
-                          index: index,
-                        }"
-                        [label]="p.token"
-                      />
-                    </li>
+                        <app-store-global
+                          class="provider-global"
+                          [rpc]="rpc()"
+                          [pageId]="shownPageId()"
+                          [target]="{
+                            kind: 'provider',
+                            injectorId: sel.injector.id,
+                            token: p.token,
+                            index: index,
+                          }"
+                          [label]="p.token"
+                          [canLog]="true"
+                        />
+                      </li>
+                    }
                   }
                 </ul>
-              } @else {
+              } @else if (!hiddenProviders(sel)) {
                 <p class="empty-line">
                   @if (sel.injector.type === 'element') {
                     No providers or viewProviders on this element.
@@ -1156,6 +1195,33 @@ function isTree(value: unknown): value is InjectorNode[] {
     .provider-global {
       margin-top: 6px;
     }
+    .show-component {
+      display: inline-flex;
+      align-items: center;
+      height: var(--control-h);
+      padding: 0 14px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition:
+        background-color 150ms var(--ease),
+        border-color 150ms var(--ease);
+    }
+    .show-component:hover {
+      background: var(--surface-3);
+      border-color: var(--accent-line);
+    }
+    .show-component:focus-visible {
+      @include m.focus-ring;
+    }
+    .framework-note {
+      margin: 0 0 10px;
+      color: var(--text-2);
+    }
     .dep-main {
       display: flex;
       flex-wrap: wrap;
@@ -1392,6 +1458,12 @@ function isTree(value: unknown): value is InjectorNode[] {
 })
 export class DiInspector {
   rpc = input<DevframeRpcClient | null>(null);
+  /** An element injector to select, named by its component's id (from the Components tab). */
+  readonly focus = input<InjectorFocus | null>(null);
+  /** Whether the Components tab is on, so "Show in Components" can open it. */
+  readonly canShowComponent = input(false);
+  readonly focusHandled = output<void>();
+  readonly showComponent = output<ComponentFocus>();
   private readonly injector = inject(Injector);
 
   readonly nullId = NULL_ID;
@@ -1489,6 +1561,8 @@ export class DiInspector {
   private readonly queryInput = viewChild<ElementRef<HTMLInputElement>>('queryInput');
   readonly onlyProviding = signal(false);
   readonly componentsOnly = signal(true);
+  /** Hides Angular's own injectors and providers (marked `framework` by the server). */
+  readonly hideFramework = signal(storedFlag(HIDE_FRAMEWORK_PREF) ?? false);
   readonly collapsed = this.perPage<ReadonlySet<string>>(() => new Set());
   readonly selectedId = this.perPage<string | null>(() => null);
   readonly focusId = this.perPage<string | null>(() => null);
@@ -1508,18 +1582,52 @@ export class DiInspector {
     };
     walk(this.roots(), null);
     walk(this.environment(), null);
-    return { map, parents };
+    const byComponent = new Map<string, string>();
+    for (const node of map.values()) {
+      const componentId = node.injector.componentId;
+      if (componentId && node.injector.type === 'element')
+        byComponent.set(componentId, node.injector.id);
+    }
+    return { map, parents, byComponent };
   });
 
-  readonly elementCount = computed(() => this.count(this.roots()));
-  readonly environmentCount = computed(() => this.count(this.environment()));
+  /** The element and environment trees without framework injectors, while they are hidden. */
+  private readonly shownRoots = computed(() => this.withoutFramework(this.roots()));
+  private readonly shownEnvironment = computed(() => this.withoutFramework(this.environment()));
+
+  readonly elementCount = computed(() => this.count(this.shownRoots()));
+  readonly environmentCount = computed(() => this.count(this.shownEnvironment()));
+
+  /** What "Hide framework" hides in the current view: injectors, and providers on the rest. */
+  readonly frameworkHiddenCount = computed(() => {
+    const all = this.view() === 'element' ? this.roots() : this.environment();
+    let injectors = 0;
+    let providers = 0;
+    const walk = (nodes: InjectorNode[]) => {
+      for (const node of nodes) {
+        if (node.injector.framework) injectors++;
+        else providers += node.providers.filter((p) => p.framework).length;
+        walk(node.children);
+      }
+    };
+    walk(all);
+    return { injectors, providers };
+  });
+  readonly frameworkHiddenText = computed(() => {
+    const { injectors, providers } = this.frameworkHiddenCount();
+    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+    if (!injectors && !providers) return 'Nothing hidden';
+    if (!providers) return `${plural(injectors, 'injector')} hidden`;
+    if (!injectors) return `${plural(providers, 'provider')} hidden`;
+    return `${plural(injectors, 'injector')} and ${plural(providers, 'provider')} hidden`;
+  });
 
   private readonly visible = computed(() => {
-    let nodes = this.view() === 'element' ? this.roots() : this.environment();
+    let nodes = this.view() === 'element' ? this.shownRoots() : this.shownEnvironment();
     if (this.view() === 'element' && this.componentsOnly()) {
       nodes = this.prune(nodes, (n) => !!n.injector.component);
     }
-    if (this.onlyProviding()) nodes = this.prune(nodes, (n) => n.providers.length > 0);
+    if (this.onlyProviding()) nodes = this.prune(nodes, (n) => this.providerCount(n) > 0);
     const q = this.normalizedQuery();
     if (q) nodes = this.prune(nodes, (n) => this.nodeMatches(n, q));
     return nodes;
@@ -1580,7 +1688,7 @@ export class DiInspector {
         id,
         label: node ? labelOf(node) : id === NULL_ID ? 'Null injector' : 'Not listed',
         kind: node ? kindOf(node) : 'null',
-        providers: node?.providers.length ?? 0,
+        providers: node ? this.providerCount(node) : 0,
       };
     });
   });
@@ -1591,7 +1699,10 @@ export class DiInspector {
     if (!q) return [];
     const hits: { id: string; label: string; kind: string; tokens: string }[] = [];
     for (const node of this.index().map.values()) {
-      const tokens = node.providers.filter((p) => p.token.toLowerCase().includes(q));
+      if (this.isHiddenInjector(node)) continue;
+      const tokens = node.providers.filter(
+        (p) => !this.isHidden(p) && p.token.toLowerCase().includes(q),
+      );
       if (!tokens.length) continue;
       hits.push({
         id: node.injector.id,
@@ -1696,10 +1807,66 @@ export class DiInspector {
         })
         .catch(() => {});
     });
+    // A focus from the Components tab names the page it came from, which may not be the one shown.
+    effect(() => {
+      const focus = this.focus();
+      if (!focus) return;
+      const pages = this.treePages();
+      const shown = this.shownPageId();
+      if (focus.pageId && shown !== focus.pageId && pages[focus.pageId]) {
+        untracked(() => this.selectPage(focus.pageId!));
+        return;
+      }
+      if (!this.treeState() && !this.treeFailed()) return;
+      untracked(() => {
+        const onPage = !focus.pageId || shown === focus.pageId;
+        const id = onPage ? this.index().byComponent.get(focus.componentId) : undefined;
+        const node = id ? this.index().map.get(id) : undefined;
+        if (id && node) {
+          this.reveal(id);
+          this.announcement.set(`Showing the injector of ${labelOf(node)}.`);
+        } else {
+          this.announcement.set("That component's injector is not on this page.");
+        }
+        this.focusHandled.emit();
+      });
+    });
     this.destroyRef.onDestroy(() => {
       this.stopTree?.();
       this.highlight(null);
     });
+  }
+
+  /** Turns "Hide framework" on or off and remembers the choice for the next visit. */
+  setHideFramework(hide: boolean) {
+    this.hideFramework.set(hide);
+    storeFlag(HIDE_FRAMEWORK_PREF, hide);
+  }
+
+  /** Opens the Components tab on the component that owns this element injector. */
+  openComponent(componentId: string) {
+    const pageId = this.shownPageId();
+    this.showComponent.emit(pageId ? { id: componentId, pageId } : { id: componentId });
+  }
+
+  /** Whether a provider is left out of the lists while framework providers are hidden. */
+  isHidden(provider: ProviderInfo): boolean {
+    return this.hideFramework() && provider.framework === true;
+  }
+
+  private isHiddenInjector(node: InjectorNode): boolean {
+    return this.hideFramework() && node.injector.framework === true;
+  }
+
+  /** How many providers the node shows. */
+  providerCount(node: InjectorNode): number {
+    if (!this.hideFramework()) return node.injector.providerCount;
+    const hidden = node.providers.filter((p) => p.framework).length;
+    return Math.max(0, node.injector.providerCount - hidden);
+  }
+
+  hiddenProviders(node: InjectorNode): number {
+    return this.hideFramework() ? node.providers.filter((p) => p.framework).length : 0;
   }
 
   /** Loads the injector tree and the source scan again. The alert stays until they answer, so
@@ -1837,9 +2004,13 @@ export class DiInspector {
       }
       return next;
     });
-    if (this.onlyProviding() && node.providers.length === 0) this.onlyProviding.set(false);
+    if (this.onlyProviding() && this.providerCount(node) === 0) this.onlyProviding.set(false);
     if (node.injector.type === 'element' && !node.injector.component)
       this.componentsOnly.set(false);
+    // Shows the target for now; the saved choice stays as it was.
+    if (this.isHiddenInjector(node)) this.hideFramework.set(false);
+    const q = this.normalizedQuery();
+    if (q && !this.nodeMatches(node, q)) this.query.set('');
     this.select(id);
     afterNextRender(() => this.focusRow(id, false), { injector: this.injector });
   }
@@ -1884,8 +2055,15 @@ export class DiInspector {
         if (row.hasChildren && row.expanded && !this.normalizedQuery())
           this.toggle(row.node.injector.id);
         else {
-          const parent = this.index().parents.get(row.node.injector.id);
-          next = rows.findIndex((r) => r.node.injector.id === parent);
+          // The nearest shown ancestor, since hidden framework injectors have no row.
+          const { parents } = this.index();
+          let parent = parents.get(row.node.injector.id);
+          next = -1;
+          while (parent && next < 0) {
+            const id = parent;
+            next = rows.findIndex((r) => r.node.injector.id === id);
+            parent = parents.get(parent);
+          }
         }
         break;
       case 'Enter':
@@ -1966,6 +2144,18 @@ export class DiInspector {
       node.providers.some((p) => p.token.toLowerCase().includes(q)) ||
       !!node.dependencies?.some((d) => d.token.toLowerCase().includes(q))
     );
+  }
+
+  /** Leaves framework injectors out while they are hidden, moving their children up a level. */
+  private withoutFramework(nodes: InjectorNode[]): InjectorNode[] {
+    if (!this.hideFramework()) return nodes;
+    const lift = (list: InjectorNode[]): InjectorNode[] =>
+      list.flatMap((node) =>
+        node.injector.framework
+          ? lift(node.children)
+          : [{ ...node, children: lift(node.children) }],
+      );
+    return lift(nodes);
   }
 
   private prune(nodes: InjectorNode[], keep: (node: InjectorNode) => boolean): InjectorNode[] {

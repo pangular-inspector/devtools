@@ -12,6 +12,13 @@ export type ConsoleTarget =
   | { kind: 'provider'; injectorId: string; token: string; index: number }
   | { kind: 'ngrx'; storeId: string };
 
+/** `store` keeps the value as `tempN`; `log` prints it in the page's console instead. */
+export type ConsoleMode = 'store' | 'log';
+
+export function isConsoleMode(value: unknown): value is ConsoleMode {
+  return value === 'store' || value === 'log';
+}
+
 export interface ConsoleGlobalResult {
   ok: boolean;
   /** The global the value went to, such as `temp1`. */
@@ -121,12 +128,16 @@ export function redactedCopy(value: unknown): { value: unknown; masked: boolean 
 }
 
 /** Why a provider must not be stored at all, or `null` when it may be. */
-export function providerRefusal(token: string, value: unknown): string | null {
+export function providerRefusal(
+  token: string,
+  value: unknown,
+  mode: ConsoleMode = 'store',
+): string | null {
   if (isSecretName(token)) {
-    return `${token} looks like a secret, so the devtools mask it and did not store it.`;
+    return `${token} looks like a secret, so the devtools mask it and did not ${mode} it.`;
   }
   if (typeof value === 'string' && redactText(value) !== value) {
-    return `${token} holds a credential or token, so the devtools mask it and did not store it.`;
+    return `${token} holds a credential or token, so the devtools mask it and did not ${mode} it.`;
   }
   return null;
 }
@@ -207,6 +218,8 @@ export interface ConsoleGlobalsOptions {
   ngrxState?: (storeId: string) => { value: unknown } | null;
   /** Where the globals go; the page's `window` by default. */
   win?: object;
+  /** Prints a logged value; `console.log` by default. */
+  log?: (...args: unknown[]) => void;
 }
 
 const KIND_INSPECTOR = { component: 'components', provider: 'injectors', ngrx: 'ngrx' } as const;
@@ -224,8 +237,9 @@ function isPlainData(value: unknown): boolean {
  * Wires the console globals into the overlay: `selectComponent(id)` sets
  * `$ng0` for a component the panel selected on this page, and the
  * `console-global` event stores a component, provider or NgRx state as
- * `tempN` for the page that owns the request. Only the variable name and a
- * message go back to the server.
+ * `tempN` for the page that owns the request, or with `mode: 'log'` prints it
+ * in the page console. Both follow the same redaction rules, and only the
+ * variable name and a message go back to the server, never the value.
  */
 export function attachConsoleGlobals(my: RpcScope, pageId: string, options: ConsoleGlobalsOptions) {
   const handles = createConsoleHandles(options.win ?? globalThis);
@@ -239,9 +253,11 @@ export function attachConsoleGlobals(my: RpcScope, pageId: string, options: Cons
     }
   };
   const fail = (message: string): ConsoleGlobalResult => ({ ok: false, message });
+  const log = options.log ?? ((...args: unknown[]) => console.log(...args));
 
-  const store = (target: unknown): ConsoleGlobalResult => {
-    if (!isConsoleTarget(target)) return fail('Nothing to store.');
+  const store = (target: unknown, mode: ConsoleMode): ConsoleGlobalResult => {
+    if (!isConsoleTarget(target))
+      return fail(mode === 'log' ? 'Nothing to log.' : 'Nothing to store.');
     const inspector = KIND_INSPECTOR[target.kind];
     if (!options.inspectors[inspector]) {
       return fail(`The ${inspector} inspector is turned off in the devtools config.`);
@@ -249,27 +265,50 @@ export function attachConsoleGlobals(my: RpcScope, pageId: string, options: Cons
     if (target.kind === 'component') {
       const instance = componentAt(target.id);
       if (!instance) return fail('That component is no longer on the page.');
-      const name = handles.store(instance);
-      return { ok: true, name, message: `Stored as ${name}.` };
+      return keep(instance, mode, 'Component');
     }
     if (target.kind === 'provider') {
-      const found = providerValue(options.getNg(), target.injectorId, target.token, target.index);
+      const found = providerValue(
+        options.getNg(),
+        target.injectorId,
+        target.token,
+        target.index,
+        mode,
+      );
       if ('error' in found) return fail(found.error);
-      const refused = providerRefusal(target.token, found.value);
+      const refused = providerRefusal(target.token, found.value, mode);
       if (refused) return fail(refused);
-      if (!isPlainData(found.value)) {
-        const name = handles.store(found.value);
-        return { ok: true, name, message: `Stored as ${name}.` };
-      }
-      return storeCopy(found.value);
+      if (!isPlainData(found.value)) return keep(found.value, mode, target.token);
+      return keepCopy(found.value, mode, target.token);
     }
     const state = options.ngrxState?.(target.storeId);
     if (!state) return fail('That store is no longer on the page.');
-    return storeCopy(state.value);
+    return keepCopy(state.value, mode, 'NgRx state');
   };
 
-  const storeCopy = (value: unknown): ConsoleGlobalResult => {
+  /** Stores `value` as `tempN`, or prints it in the page console under `label`. */
+  const keep = (value: unknown, mode: ConsoleMode, label: string): ConsoleGlobalResult => {
+    if (mode === 'log') {
+      log(`[pangular] ${label}:`, value);
+      return { ok: true, message: `Logged ${label} in the page console.` };
+    }
+    const name = handles.store(value);
+    return { ok: true, name, message: `Stored as ${name}.` };
+  };
+
+  const keepCopy = (value: unknown, mode: ConsoleMode, label: string): ConsoleGlobalResult => {
     const copy = redactedCopy(value);
+    const masked = copy.masked ? { masked: true as const } : {};
+    if (mode === 'log') {
+      log(`[pangular] ${label}:`, copy.value);
+      return {
+        ok: true,
+        ...masked,
+        message: copy.masked
+          ? `Logged a copy of ${label} in the page console, with secret fields masked.`
+          : `Logged ${label} in the page console.`,
+      };
+    }
     const name = handles.store(copy.value);
     return copy.masked
       ? {
@@ -285,12 +324,14 @@ export function attachConsoleGlobals(my: RpcScope, pageId: string, options: Cons
     name: 'console-global',
     type: 'event',
     jsonSerializable: true,
-    handler: (message: { requestId?: unknown; pageId?: unknown; target?: unknown } | null) => {
+    handler: (
+      message: { requestId?: unknown; pageId?: unknown; target?: unknown; mode?: unknown } | null,
+    ) => {
       // Only the page that owns the request answers it; a request for every page is ignored.
       if (!message || typeof message.requestId !== 'string' || message.pageId !== pageId) return;
       let result: ConsoleGlobalResult;
       try {
-        result = store(message.target);
+        result = store(message.target, message.mode === 'log' ? 'log' : 'store');
       } catch (error) {
         result = fail(String((error as Error)?.message ?? error));
       }

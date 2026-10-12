@@ -1,6 +1,6 @@
 ---
 title: Signals
-description: The live signal graph of one component or injector, with resources and a value history per signal.
+description: The live signal graph of one component or injector, drawn with its producer and consumer chains, with resources, watched signals and a value history per signal.
 ---
 
 <ngmd-hero title="Signals" gradient>
@@ -31,6 +31,27 @@ The **Graph of** picker at the top selects whose graph you see. It appears when 
 
 A line under the picker names the component, its host path, and why it was chosen: **picked**, **rendered by the router** or **first component with signals**. For an injector, it names the injector.
 
+### Graph
+
+The **Graph** section draws the signals, computeds, effects and templates of the graph as linked boxes. Producers sit on the left and the nodes that read them on the right, one column further than their furthest producer.
+
+Select a node to highlight its chain. The selected node has an accent fill, its producers (upstream, every node it reads directly or not) have an accent border and solid links, and its consumers (downstream) have a dashed border and dashed links. Other nodes and links fade. The line under the graph names the selected node and its producer and consumer counts, and **Show details** opens its card in the list below.
+
+The graph is one Tab stop. Use the arrow keys to move between nodes: up and down inside a column, left to a producer and right to a consumer. **Home** and **End** go to the first and last node, and **Enter** or **Space** selects. Each node's label names its kind, name and link counts, and the list below has the same nodes as cards.
+
+**Hide graph** collapses the drawing and keeps the list. The kind chips and the name filter apply to the list only.
+
+### Framework signals
+
+Angular's router, forms and HTTP code create signals of their own in a development build, such as `reactiveHref` behind a `routerLink`. They often end up in a component's graph. The tab hides them by default, and **Show framework signals** brings them back, with a count of how many it hides. A shown framework node carries a **framework** tag in the list.
+
+A node counts as framework code when it is not a template, not a signal field of the component, and either:
+
+- its debug name is one that `@angular/router`, `@angular/forms` or `@angular/common/http` gives its own signals, and it is a `computed`, `linkedSignal` or `effect`, or a `signal` that only framework nodes read; or
+- it has no debug name, it is not an effect, and only framework nodes read it.
+
+A writable signal with a name such as `status` that your template, an effect or one of your computeds reads stays visible. A `computed` of a service with a framework name, such as `valid`, is hidden; show framework signals to see it. Internal signals of a resource are folded into its card instead, see [Resources](#resources).
+
 ### Node cards
 
 Filter by name, or by kind with the chips. Typing `res` or more of the word `resource` lists every resource. If you pick another component or injector and its graph has no node of the chosen kind, the filter goes back to **All**. If the chosen kind runs out of nodes in the same graph, its chip stays pressed with a count of 0. Each card shows:
@@ -39,6 +60,7 @@ Filter by name, or by kind with the chips. Typing `res` or more of the word `res
 - The current value.
 - The epoch, and the number of dependencies and consumers.
 - A **N changes** badge once the value has changed. It counts every change since the overlay first saw the node, including values that went unseen.
+- A **watching** tag when the page watches the signal.
 
 ### Node details
 
@@ -47,6 +69,8 @@ Expand a card to see:
 - **Dependencies (producers)**: the nodes it reads.
 - **Consumers**: the nodes and effects that read it.
 - **Value history**: recent values, newest first, each with a time and a source tag.
+
+A `signal`, `computed` or `linkedSignal` card also has a **Watch** button. See [Watched signals](#watched-signals).
 
 When a signal or linkedSignal has no exact **set** entries, the card says why: the signal has no name, or every change was sampled because another live signal shares its name and value.
 
@@ -77,9 +101,23 @@ Status, params, value and error come from the resource's own state when the comp
 | **sampled** | The overlay saw a changed value when it read the page. |
 | **initial** | The first value the overlay saw.                       |
 
+While write stacks are on, a **set** entry also lists the code that wrote it. See [Write stacks](#write-stacks).
+
 When values change faster than the overlay reads the page, an entry says how many earlier values were not captured. Only `signal`, `computed` and `linkedSignal` nodes, and resource statuses, have a history.
 
 The line above the list counts the changes, for example **3 changes recorded, newest first.** The list keeps the last 50 entries. Past that, the line says **showing the last 50**, and the count keeps growing.
+
+### Watched signals
+
+Click **Watch** on a card to watch that signal. The page then logs each of its changes to the browser console, as `[pangular] Signal count set to 3`, and the **Watched** section above the list shows it with its value, its change count and a **Stop watching** button. **Recent changes** lists the last 20 changes of every watched signal in the graph, newest first.
+
+The page keeps watching a signal when you pick another component, and keeps logging its writes to the console. **Watched** then says how many watched signals are not in the graph shown. A page watches up to 20 signals; watching another stops the oldest. Watches reset when the page reloads.
+
+### Write stacks
+
+**Record write stacks** is one switch for the page. While it is on, every exact write of a named signal records the stack of the code that set it, and the entry keeps the first 3 frames of your app's code. Frames from Angular, `node_modules`, prebundled dependencies, zone.js and the overlay are skipped. A frame reads as `Counter.increment (src/app/counter.ts:12:5)`, or as a compiled template listener such as `Counter_Template_button_click_0_listener` when a template event wrote the signal.
+
+The frames show under **Written from** in the value history, in **Recent changes** and in the console log of a watched signal. Taking a stack slows every signal write, so the switch starts off, and the page takes no stack while it is off. Sampled entries have no stack, because the overlay did not see the write. Frames point at the code your browser runs, so a bundled build shows bundle file names and positions.
 
 ### Source mode
 
@@ -154,6 +192,23 @@ Entries are sampled instead of exact in these cases:
   </ngmd-step>
 </ngmd-workflow>
 
+### Find the code that writes a signal
+
+<ngmd-workflow>
+  <ngmd-step title="Turn on write stacks">
+    Click <strong>Record write stacks</strong> above the graph.
+  </ngmd-step>
+  <ngmd-step title="Watch the signal">
+    Open its card and click <strong>Watch</strong>.
+  </ngmd-step>
+  <ngmd-step title="Use the app">
+    Each write lists the three app frames that set it under <strong>Recent changes</strong>, and in the page console.
+  </ngmd-step>
+  <ngmd-step title="Turn it off">
+    Click <strong>Record write stacks</strong> again when you are done.
+  </ngmd-step>
+</ngmd-workflow>
+
 ### Switch the graph from an agent
 
 The `pangular:highlight` tool also switches the graph to the component it highlights. The picker does not show that choice. Calling `pangular:inspect-signals` with `root` or a route path reads that injector's graph once and does not change what the Signals page shows.
@@ -175,6 +230,7 @@ The `pangular:highlight` tool also switches the graph to the component it highli
 | -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `pangular:get-signals`     | tool     | Signal declarations from source, with signal inputs, models and queries.                                                           |
 | `pangular:inspect-signals` | tool     | The graph the page reported, with edges, resources and history. Takes a host tag, class name, instance id, `root` or a route path. |
+| `pangular:watch-signal`    | tool     | Watches a signal and turns write stacks on or off on a page.                                                                       |
 | `pangular:highlight`       | tool     | Highlights a component and makes it the target of the graph.                                                                       |
 | `pangular:signal-graph`    | resource | The live graph per page.                                                                                                           |
 
@@ -188,7 +244,7 @@ Signals join the graph when a template or an effect reads them. If a signal is m
 
 ### Graph and history caps
 
-The graph shows up to 400 nodes. When Angular reports more, a notice says **Showing 400 of N signals**, and the edges to the rest are left out. The history keeps 50 entries per signal, and the **N changes** count keeps counting past that.
+The graph shows up to 400 nodes. When Angular reports more, a notice says **Showing 400 of N signals**, and the edges to the rest are left out. The drawing holds up to 120 nodes. Past that, it draws the selected node and as much of its chain as fits, or the first 120 nodes when none is selected, and says **Drawing N of M signals**. The history keeps 50 entries per signal, and the **N changes** count keeps counting past that.
 
 ### Injector graphs hold effects only
 

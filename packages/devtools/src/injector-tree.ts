@@ -5,6 +5,7 @@ import type {
   InjectorTreeReport,
   ProviderInfo,
 } from './types.ts';
+import { elementId } from './element-id.ts';
 import { domTree, type HostTree } from './host-tree.ts';
 import { zoneModeOf } from './zone-mode.ts';
 
@@ -388,7 +389,11 @@ function readElement<H extends object>(
       .map((entry) => injectorRef(ng, entry, tree)?.id ?? null)
       .filter((id): id is string => !!id),
   };
-  if (typeof componentCtor === 'function') info.component = className(componentCtor);
+  if (typeof componentCtor === 'function') {
+    info.component = className(componentCtor);
+    // The component tree's id for the same host, so the panel can link the two views.
+    info.componentId = elementId(el);
+  }
   const entry: ElementEntry = {
     info,
     providers,
@@ -503,7 +508,7 @@ export function collectInjectorTree<H extends object = Element>(
 
 /**
  * The live value of one provider the injector tree listed, for "Store as
- * global". `index` is the provider's place in the injector's `providers`, and
+ * global" and "Log to console" (`mode` words the errors). `index` is the provider's place in the injector's `providers`, and
  * `token` must still match there. Nothing is created: an environment injector
  * gives only a value it already holds, and an element injector only a token
  * that some component or directive on the page injected (Angular creates
@@ -514,7 +519,10 @@ export function providerValue<H extends object = Element>(
   injectorId: string,
   token: string,
   index: number,
+  mode: 'store' | 'log' = 'store',
 ): { value: unknown } | { error: string } {
+  const doing = mode === 'log' ? 'logging' : 'storing';
+  const verb = mode === 'log' ? 'Log' : 'Store';
   const key = byId.get(injectorId)?.deref();
   if (!ng || !key) return { error: 'This injector is no longer on the page.' };
   const element = elementEntries.has(key);
@@ -541,14 +549,14 @@ export function providerValue<H extends object = Element>(
     const own = ownRecords(injector).find(([candidate]) => candidate === record.token)?.[1];
     if (!own || !isCreated(own)) {
       return {
-        error: `${token} has not been created yet, and storing it would create it. Store it once the app uses it.`,
+        error: `${token} has not been created yet, and ${doing} it would create it. ${verb} it once the app uses it.`,
       };
     }
     return { value: own.value };
   }
   if (!injectedPairs.has(`${injectorId}|${token}`)) {
     return {
-      error: `Nothing on the page has injected ${token} from this element yet, so Angular may not have created it, and storing it would create it.`,
+      error: `Nothing on the page has injected ${token} from this element yet, so Angular may not have created it, and ${doing} it would create it.`,
     };
   }
   try {

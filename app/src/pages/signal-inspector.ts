@@ -20,6 +20,8 @@ import { hostPageId } from '../page-id';
 import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
 import { SourceLink } from '../ui/source-link';
+import type { GraphLink } from './signal-graph-layout';
+import { SignalGraphView } from './signal-graph-view';
 
 interface SignalNode {
   id: string;
@@ -28,6 +30,8 @@ interface SignalNode {
   epoch: number;
   value?: unknown;
   changes?: number;
+  /** Created by Angular's own code, hidden unless the user shows framework signals. */
+  framework?: boolean;
 }
 
 interface SignalEdge {
@@ -41,6 +45,8 @@ interface SignalChange {
   at: number;
   source: 'write' | 'sample' | 'initial';
   missed?: number;
+  /** First app frames of the code that set it, while write stacks are on. */
+  stack?: string[];
 }
 
 interface SignalResource {
@@ -77,6 +83,7 @@ interface SignalGraph {
   source?: 'selected' | 'routed' | 'root';
   pageId?: string;
   history?: Record<string, SignalChange[]>;
+  watch?: { ids: string[]; stacks: boolean };
 }
 
 interface LiveNode {
@@ -98,6 +105,10 @@ function graphPagesOf(state: {
 }
 const ENV = 'env:';
 const MAX_HISTORY = 50;
+/** Kinds with a value, so the page can watch them. */
+const WATCHABLE = new Set(['signal', 'computed', 'linkedSignal']);
+/** Changes of watched signals the panel lists. */
+const WATCH_LOG = 20;
 
 const SOURCE_NOTES: Record<NonNullable<SignalGraph['source']>, string> = {
   selected: 'picked',
@@ -152,7 +163,7 @@ const KIND_COLORS: Record<string, string> = {
 
 @Component({
   selector: 'app-signal-inspector',
-  imports: [DatePipe, JsonPipe, NgTemplateOutlet, RovingList, Select, SourceLink],
+  imports: [DatePipe, JsonPipe, NgTemplateOutlet, RovingList, Select, SignalGraphView, SourceLink],
   template: `
     <div class="toolbar">
       <input
@@ -348,11 +359,161 @@ const KIND_COLORS: Record<string, string> = {
                 }
               </span>
               <pre>{{ change.value | json }}</pre>
+              @if (change.stack?.length) {
+                <ol class="stack" aria-label="Written from">
+                  @for (frame of change.stack; track $index) {
+                    <li>{{ frame }}</li>
+                  }
+                </ol>
+              }
             </li>
           }
         </ol>
       }
     </ng-template>
+
+    @if (graph() && (visibleNodes().length || frameworkCount())) {
+      <section class="graph-section" aria-labelledby="signal-graph-heading">
+        <div class="section-head">
+          <h2 id="signal-graph-heading" class="list-heading">Graph</h2>
+          <div class="section-actions">
+            @if (frameworkCount(); as hidden) {
+              <button
+                type="button"
+                class="toggle"
+                [attr.aria-pressed]="showFramework()"
+                (click)="showFramework.set(!showFramework())"
+              >
+                Show framework signals
+                <span class="count">{{ hidden }} {{ showFramework() ? 'shown' : 'hidden' }}</span>
+              </button>
+            }
+            <button
+              type="button"
+              class="toggle"
+              [attr.aria-pressed]="stacksOn()"
+              (click)="toggleStacks()"
+            >
+              Record write stacks
+            </button>
+            <button
+              type="button"
+              class="toggle"
+              aria-controls="signal-graph-body"
+              [attr.aria-expanded]="showGraph()"
+              (click)="showGraph.set(!showGraph())"
+            >
+              {{ showGraph() ? 'Hide graph' : 'Show graph' }}
+            </button>
+          </div>
+        </div>
+        @if (stacksOn()) {
+          <p class="hint graph-hint">
+            Write stacks are on for this page. Each set of a named signal keeps the first 3 app
+            frames of the code that wrote it, shown in its value history. Taking a stack slows every
+            write, so turn it off when you are done.
+          </p>
+        }
+        @if (showGraph()) {
+          <div id="signal-graph-body">
+            @if (graphNodes().length) {
+              <app-signal-graph-view
+                [nodes]="graphNodes()"
+                [links]="graphLinks()"
+                [selectedId]="selectedId()"
+                [watched]="watchedIds()"
+                [kindColor]="kindColorOf"
+                (selected)="selectFromGraph($event)"
+              />
+            } @else {
+              <p class="hint graph-hint">
+                Every signal in this graph was created by Angular. Show framework signals to see
+                them.
+              </p>
+            }
+            @if (selectedNode(); as node) {
+              <p class="graph-selection">
+                <span>Selected</span>
+                <span class="rel-label">{{ node.label ?? '(unnamed)' }}</span>
+                <span class="sep" aria-hidden="true">·</span>
+                <span>{{ plural(getDependencies(node).length, 'producer') }}</span>
+                <span class="sep" aria-hidden="true">·</span>
+                <span>{{ plural(getConsumers(node).length, 'consumer') }}</span>
+                <button type="button" class="link-button" (click)="jumpTo(node)">
+                  Show details
+                </button>
+              </p>
+            }
+          </div>
+        }
+      </section>
+    }
+
+    @if (watchedNodes().length || watchedElsewhere()) {
+      <section class="watched" aria-labelledby="signal-watched-heading">
+        <h2 id="signal-watched-heading" class="list-heading">Watched</h2>
+        @if (watchedElsewhere(); as other) {
+          <p class="hint">
+            {{ other }} watched {{ other === 1 ? 'signal is' : 'signals are' }} not in this graph.
+            Their changes still log to the page console.
+          </p>
+        }
+        <ul class="watched-list">
+          @for (node of watchedNodes(); track node.id) {
+            <li>
+              <span class="rel-label">{{ node.label ?? '(unnamed)' }}</span>
+              @if (node.value !== undefined) {
+                <span class="watched-value">{{ node.value | json }}</span>
+              }
+              @if (changeCount(node.id); as count) {
+                <span class="changed-badge"
+                  >{{ count }} {{ count === 1 ? 'change' : 'changes' }}</span
+                >
+              }
+              <button
+                type="button"
+                class="link-button"
+                [attr.aria-label]="'Stop watching ' + (node.label ?? 'the unnamed signal')"
+                (click)="toggleWatch(node)"
+              >
+                Stop watching
+              </button>
+            </li>
+          }
+        </ul>
+        @if (watchLog().length) {
+          <h3 class="sub-heading" id="signal-watch-log-heading">Recent changes</h3>
+          <div
+            class="watch-log scroll-box"
+            role="log"
+            tabindex="0"
+            aria-labelledby="signal-watch-log-heading"
+          >
+            <ol class="history">
+              @for (entry of watchLog(); track entry.id + ':' + entry.change.epoch) {
+                <li>
+                  <span class="history-meta">
+                    <time>{{ entry.change.at | date: 'HH:mm:ss.SSS' }}</time>
+                    <span class="rel-label">{{ entry.label }}</span>
+                    <span class="source-tag" [class]="'source-' + entry.change.source">{{
+                      sourceLabel(entry.change.source)
+                    }}</span>
+                  </span>
+                  <pre>{{ entry.change.value | json }}</pre>
+                  @if (entry.change.stack?.length) {
+                    <ol class="stack" aria-label="Written from">
+                      @for (frame of entry.change.stack; track $index) {
+                        <li>{{ frame }}</li>
+                      }
+                    </ol>
+                  }
+                </li>
+              }
+            </ol>
+          </div>
+        }
+      </section>
+    }
 
     <p class="jump-note" role="status">{{ jumpNote() }}</p>
 
@@ -498,6 +659,12 @@ const KIND_COLORS: Record<string, string> = {
                   node.kind
                 }}</span>
                 <span class="node-label">{{ node.label ?? '(unnamed)' }}</span>
+                @if (watchedIds().has(node.id)) {
+                  <span class="watching-badge">watching</span>
+                }
+                @if (node.framework) {
+                  <span class="framework-badge">framework</span>
+                }
                 @if (changeCount(node.id); as count) {
                   <span class="changed-badge"
                     >{{ count }} {{ count === 1 ? 'change' : 'changes' }}</span
@@ -579,6 +746,20 @@ const KIND_COLORS: Record<string, string> = {
                       </li>
                     }
                   </ul>
+                }
+                @if (isWatchable(selectedNode()!)) {
+                  <button
+                    type="button"
+                    class="reset watch-toggle"
+                    [attr.aria-pressed]="watchedIds().has(selectedNode()!.id)"
+                    (click)="toggleWatch(selectedNode()!)"
+                  >
+                    Watch
+                  </button>
+                  <p class="hint">
+                    A watched signal is listed under Watched and logs each change to the page
+                    console.
+                  </p>
                 }
                 @if (writeHint(); as hint) {
                   <p class="hint">{{ hint }}</p>
@@ -1226,6 +1407,173 @@ const KIND_COLORS: Record<string, string> = {
     .missed {
       color: var(--warn);
     }
+    .graph-section,
+    .watched {
+      margin-bottom: 16px;
+    }
+    .section-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px 12px;
+      margin: 16px 0 8px;
+    }
+    .section-head .list-heading {
+      margin: 0;
+    }
+    .section-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: var(--control-h);
+      padding: 0 12px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text);
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition:
+        background-color 0.15s var(--ease),
+        border-color 0.15s var(--ease);
+    }
+    .toggle:hover {
+      background: var(--surface-3);
+    }
+    .toggle[aria-pressed='true'] {
+      border-color: var(--accent-line);
+      background: var(--accent-soft);
+      color: var(--text-strong);
+    }
+    .toggle:focus-visible {
+      @include m.focus-ring;
+    }
+    .toggle .count {
+      padding: 0 6px;
+      border-radius: 99px;
+      background: var(--surface-3);
+      color: var(--text-2);
+      font-size: 11px;
+      line-height: 16px;
+      font-variant-numeric: tabular-nums;
+    }
+    .graph-hint {
+      margin: 0 0 8px;
+      max-width: none;
+    }
+    .graph-selection {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 8px;
+      margin: 8px 0 0;
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .link-button {
+      min-height: 28px;
+      padding: 0 8px;
+      border: 0;
+      border-radius: 6px;
+      background: none;
+      color: var(--accent-text);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+    }
+    .link-button:hover {
+      background: var(--surface-2);
+    }
+    .link-button:focus-visible {
+      @include m.focus-ring;
+    }
+    .watched-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 0 0 8px;
+      padding: 0;
+      list-style: none;
+    }
+    .watched-list li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 8px;
+      min-width: 0;
+      padding: 6px 10px;
+      background: var(--surface);
+      border: 1px solid var(--accent-line);
+      border-radius: var(--radius-sm);
+    }
+    .watched-value {
+      @include m.truncate;
+      flex: 1 1 120px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .sub-heading {
+      @include m.label;
+      margin: 12px 0 8px;
+    }
+    .watch-log {
+      max-height: 320px;
+      overflow: auto;
+      border-radius: var(--radius-sm);
+    }
+    .watch-log .history {
+      max-height: none;
+      overflow: visible;
+    }
+    .stack {
+      margin: 6px 0 0;
+      padding: 0 0 0 18px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--text-2);
+      overflow-wrap: anywhere;
+    }
+    .history li .stack li {
+      padding: 0;
+      border: 0;
+    }
+    .watching-badge,
+    .framework-badge {
+      flex: none;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 16px;
+      padding: 0 8px;
+      border: 1px solid;
+      border-radius: 99px;
+    }
+    .watching-badge {
+      @include m.tint(accent);
+    }
+    .framework-badge {
+      color: var(--text-2);
+      border-color: var(--border-strong);
+    }
+    .watch-toggle {
+      margin: 16px 0 8px;
+    }
+    .watch-toggle[aria-pressed='true'] {
+      border-color: var(--accent-line);
+      background: var(--accent-soft);
+      color: var(--text-strong);
+    }
     @media (max-width: 480px) {
       .toolbar {
         padding: 8px;
@@ -1334,9 +1682,57 @@ export class SignalInspector {
   private readonly internalIds = computed(
     () => new Set(this.resources().flatMap((r) => r.nodeIds)),
   );
+  /** Shows the nodes Angular itself created, which are hidden by default. */
+  readonly showFramework = signal(false);
+  readonly frameworkCount = computed(() => {
+    const internal = this.internalIds();
+    return (this.graph()?.nodes ?? []).filter((n) => n.framework && !internal.has(n.id)).length;
+  });
   readonly visibleNodes = computed(() => {
     const internal = this.internalIds();
-    return (this.graph()?.nodes ?? []).filter((n) => !internal.has(n.id));
+    const framework = this.showFramework();
+    return (this.graph()?.nodes ?? []).filter(
+      (n) => !internal.has(n.id) && (framework || !n.framework),
+    );
+  });
+  readonly showGraph = signal(true);
+  /** Links between the nodes the page shows, by node id. */
+  readonly graphLinks = computed<GraphLink[]>(() => {
+    const g = this.graph();
+    if (!g) return [];
+    const shown = new Set(this.visibleNodes().map((n) => n.id));
+    const links: GraphLink[] = [];
+    for (const edge of g.edges) {
+      const producer = g.nodes[edge.producer]?.id;
+      const consumer = g.nodes[edge.consumer]?.id;
+      if (producer && consumer && shown.has(producer) && shown.has(consumer)) {
+        links.push({ producer, consumer });
+      }
+    }
+    return links;
+  });
+  readonly graphNodes = computed(() =>
+    [...this.visibleNodes()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })),
+  );
+  readonly kindColorOf = (kind: string) => this.kindColor(kind);
+
+  readonly watchedIds = computed(() => new Set(this.graph()?.watch?.ids ?? []));
+  readonly stacksOn = computed(() => !!this.graph()?.watch?.stacks);
+  readonly watchedNodes = computed(() => {
+    const ids = this.watchedIds();
+    return (this.graph()?.nodes ?? []).filter((n) => ids.has(n.id));
+  });
+  /** Watched ids the page reports that are not in the graph shown now. */
+  readonly watchedElsewhere = computed(() => this.watchedIds().size - this.watchedNodes().length);
+  /** The newest changes of every watched signal in this graph, newest first. */
+  readonly watchLog = computed(() => {
+    const history = this.graph()?.history ?? {};
+    const entries = this.watchedNodes().flatMap((node) =>
+      (history[node.id] ?? [])
+        .filter((change) => change.source !== 'initial')
+        .map((change) => ({ id: node.id, label: node.label ?? node.id, change })),
+    );
+    return entries.sort((a, b) => b.change.at - a.change.at).slice(0, WATCH_LOG);
   });
   readonly hasAnySignals = computed(() => this.visibleNodes().length + this.resources().length > 0);
   kindCounts = computed(() => {
@@ -1649,6 +2045,49 @@ export class SignalInspector {
   select(id: string) {
     this.selectedId.set(this.selectedId() === id ? null : id);
     this.showInternals.set(false);
+  }
+
+  /** Selects a node from the drawn graph; its detail opens in the list below. */
+  selectFromGraph(id: string) {
+    this.selectedId.set(id);
+    this.showInternals.set(false);
+  }
+
+  plural(count: number, word: string): string {
+    return `${count} ${word}${count === 1 ? '' : 's'}`;
+  }
+
+  isWatchable(node: SignalNode): boolean {
+    return WATCHABLE.has(node.kind);
+  }
+
+  /** Asks the page to watch or stop watching a signal; the page's next report shows it. */
+  toggleWatch(node: SignalNode) {
+    const watch = !this.watchedIds().has(node.id);
+    const label = node.label ?? 'the unnamed signal';
+    this.sendWatch({ id: node.id, watch });
+    this.announcement.set(
+      watch
+        ? `Watching ${label}. Its changes also log to the page console.`
+        : `Stopped watching ${label}.`,
+    );
+  }
+
+  /** Turns write stacks on or off for the page that reported the graph. */
+  toggleStacks() {
+    const stacks = !this.stacksOn();
+    this.sendWatch({ stacks });
+    this.announcement.set(stacks ? 'Recording write stacks.' : 'Stopped recording write stacks.');
+  }
+
+  private sendWatch(request: { id?: string; watch?: boolean; stacks?: boolean }) {
+    const client = this.rpc();
+    const pageId = this.graph()?.pageId ?? this.targetPageId() ?? undefined;
+    if (!client) return;
+    void client
+      .scope('pangular')
+      .rpc.call('set-signal-watch', { ...request, pageId })
+      .catch(() => {});
   }
 
   jumpTo(node: SignalNode) {

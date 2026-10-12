@@ -25,6 +25,7 @@ import { FormsInspector } from './pages/forms-inspector';
 import { PipesInspector } from './pages/pipes-inspector';
 import type { Tab, Tabs } from './types/tab.types';
 import type { ComponentFocus } from './types/component-focus.types';
+import type { InjectorFocus } from './types/injector-focus.types';
 import { AnalogInspector } from './pages/analog-inspector';
 import { NetworkInspector } from './pages/network-inspector';
 import { ComingSoon, type ComingSoonInfo } from './pages/coming-soon';
@@ -435,8 +436,10 @@ function readView(): View | null {
               <app-component-tree
                 [rpc]="rpc()"
                 [focus]="componentFocus()"
+                [canShowInjector]="config().inspectors.injectors"
                 (focusHandled)="componentFocus.set(null)"
                 (showForm)="showForm($event)"
+                (showInjector)="showInjector($event)"
               />
             }
             @case ('routes') {
@@ -446,7 +449,13 @@ function readView(): View | null {
               <app-signal-inspector [rpc]="rpc()" />
             }
             @case ('injectors') {
-              <app-di-inspector [rpc]="rpc()" />
+              <app-di-inspector
+                [rpc]="rpc()"
+                [focus]="injectorFocus()"
+                [canShowComponent]="config().inspectors.components"
+                (focusHandled)="injectorFocus.set(null)"
+                (showComponent)="showComponent($event)"
+              />
             }
             @case ('store') {
               <app-store-inspector [rpc]="rpc()" />
@@ -1253,6 +1262,18 @@ export class App implements OnInit, OnDestroy {
   showForm(formId: string) {
     this.formFocus.set({ id: formId });
     this.switchTab('forms');
+  }
+
+  // Belongs to the Injectors tab that received it, like `componentFocus`.
+  readonly injectorFocus = linkedSignal<Tab, InjectorFocus | null>({
+    source: this.tab,
+    computation: () => null,
+  });
+
+  showInjector(focus: InjectorFocus) {
+    if (!this.config().inspectors.injectors) return;
+    this.switchTab('injectors');
+    this.injectorFocus.set(focus);
   }
 
   showComponent(focus: ComponentFocus) {

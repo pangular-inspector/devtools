@@ -61,6 +61,34 @@ describe('Store as global on the server', () => {
     expect(sent.some((b) => b.method.endsWith('console-global'))).toBe(false);
   });
 
+  it('forwards a log request to the page and answers without a global name', async () => {
+    const { call, sent } = await boot();
+    const answer = call('request-console-global', { pageId: 'p1', target, mode: 'log' });
+    const request = await vi.waitFor(
+      () => sent.find((b) => b.method.endsWith('console-global'))!.args[0],
+    );
+    expect(request).toMatchObject({ pageId: 'p1', target, mode: 'log' });
+    await call('console-global-result', {
+      requestId: request['requestId'],
+      pageId: 'p1',
+      // A name that is not a tempN never reaches the panel.
+      result: { ok: true, name: '$secret', message: 'Logged Component in the page console.' },
+    });
+    expect(await answer).toEqual({ ok: true, message: 'Logged Component in the page console.' });
+  });
+
+  it('refuses an unknown mode before asking any page', async () => {
+    const { call, sent } = await boot();
+    expect(
+      await call('request-console-global', { pageId: 'p1', target, mode: 'eval' }),
+    ).toMatchObject({ ok: false });
+    expect(await call('request-console-global', { target, mode: 'log' })).toMatchObject({
+      ok: false,
+      message: 'Pick the page to log the value in.',
+    });
+    expect(sent.some((b) => b.method.endsWith('console-global'))).toBe(false);
+  });
+
   it('marks a panel selection for one page so that page sets $ng0', async () => {
     const { call, sent } = await boot();
     await call('select-component', { pageId: 'p1', id: 'c2', console: true });

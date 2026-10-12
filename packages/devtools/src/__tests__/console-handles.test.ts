@@ -108,6 +108,7 @@ describe('redaction of stored values', () => {
     expect(providerRefusal('API_KEY', 'x')).toMatch(/looks like a secret/);
     expect(providerRefusal('GREETING', `Bearer ${JWT}`)).toMatch(/credential/);
     expect(providerRefusal('TripService', {})).toBeNull();
+    expect(providerRefusal('API_KEY', 'x', 'log')).toMatch(/did not log it/);
   });
 
   it('accepts only well-formed targets', () => {
@@ -143,14 +144,16 @@ describe('attachConsoleGlobals', () => {
       },
     };
     const win: Record<string, unknown> = {};
+    const logged: unknown[][] = [];
     const globals = attachConsoleGlobals(my, 'p1', {
       getNg: () => ({ getComponent: (el: Element) => (el === card ? instance : null) }),
       inspectors,
       ngrxState: (id) => (id === 'store' ? { value: { trips: [], token: 'abc' } } : null),
       win,
+      log: (...args) => logged.push(args),
     });
     const send = (message: unknown) => handlers.get('console-global')!(message);
-    return { card, instance, win, globals, results, send };
+    return { card, instance, win, globals, results, send, logged };
   }
 
   it('sets $ng0 for a component selected on this page', () => {
@@ -201,6 +204,47 @@ describe('attachConsoleGlobals', () => {
     expect(results.map((r) => r.result.ok)).toEqual([false, false]);
     expect(results[0].result.message).toMatch(/ngrx inspector is turned off/);
     expect(Object.keys(win)).toEqual([]);
+  });
+
+  it('logs a component in the page console without storing a global', () => {
+    const { card, instance, win, results, send, logged } = setup();
+    send({
+      requestId: 'g1',
+      pageId: 'p1',
+      target: { kind: 'component', id: elementId(card) },
+      mode: 'log',
+    });
+    expect(results[0]!.result).toEqual({
+      ok: true,
+      message: 'Logged Component in the page console.',
+    });
+    expect(logged).toEqual([['[pangular] Component:', instance]]);
+    expect(Object.keys(win)).toEqual([]);
+  });
+
+  it('logs a masked copy of NgRx state, never the secret fields', () => {
+    const { results, send, logged } = setup();
+    send({
+      requestId: 'g1',
+      pageId: 'p1',
+      target: { kind: 'ngrx', storeId: 'store' },
+      mode: 'log',
+    });
+    expect(results[0]!.result).toMatchObject({ ok: true, masked: true });
+    expect(results[0]!.result.message).toMatch(/with secret fields masked/);
+    expect(logged[0]![1]).toEqual({ trips: [], token: REDACTED });
+  });
+
+  it('says a provider it cannot find was not logged, in the words of a log', () => {
+    const { results, send, logged } = setup();
+    send({
+      requestId: 'g1',
+      pageId: 'p1',
+      target: { kind: 'provider', injectorId: 'inj-404', token: 'TripService', index: 0 },
+      mode: 'log',
+    });
+    expect(results[0]!.result).toMatchObject({ ok: false, message: /no longer on the page/ });
+    expect(logged).toEqual([]);
   });
 
   it('refuses a provider the injector tree never listed', () => {

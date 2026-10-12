@@ -20,6 +20,7 @@ import { forBlocksText } from './rpc/for-blocks-tools.ts';
 import { registerConsoleGlobals } from './rpc/console-globals.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
+import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
 import { createPageOwners } from './rpc/page-owners.ts';
@@ -30,6 +31,12 @@ import { servedAnalogRoot } from './rpc/analog-scan.ts';
 import { getSignals } from './rpc/get-signals.ts';
 import { SIGNAL_TOOL_MAX, signalGraphText, type InspectSignalsArgs } from './rpc/signal-tools.ts';
 import { createSignalPeeks } from './rpc/signal-peeks.ts';
+import {
+  signalWatchRequest,
+  watchSignalRequests,
+  watchSignalText,
+  type WatchSignalArgs,
+} from './rpc/signal-watch-tools.ts';
 import { injectorMatches, isEnvironmentRequest, signalOwner } from './signal-graph.ts';
 import { getProviders } from './rpc/get-providers.ts';
 import { getNgrxStore, scanNgrxStore } from './rpc/get-ngrx-store.ts';
@@ -427,6 +434,20 @@ const pangular = defineDevframe({
       },
     });
     const injectorPages = new Map<string, InjectorPage>();
+    // Token names from the installed @angular/* packages mark framework providers and injectors.
+    const withFramework = (page: InjectorPage, names: ReadonlySet<string>): InjectorPage => ({
+      ...page,
+      roots: markFramework(page.roots, names),
+      environment: markFramework(page.environment, names),
+    });
+    const frameworkNames = createFrameworkNames(
+      () => [ctx.cwd, ctx.workspaceRoot],
+      (names) => {
+        if (!injectorPages.size) return;
+        for (const [id, page] of injectorPages) injectorPages.set(id, withFramework(page, names));
+        applyInjectorPages();
+      },
+    );
     const latestInjectorPage = () =>
       [...injectorPages.values()].sort((a, b) => b.reportedAt - a.reportedAt)[0];
     const applyInjectorPages = () =>
@@ -1806,6 +1827,52 @@ const pangular = defineDevframe({
       },
     });
 
+    // Shared by the panel's Watch and Record write stacks buttons and the watch-signal agent tool.
+    const sendSignalWatch = (message: unknown) => {
+      const request = signalWatchRequest(message, signalPages);
+      if (!request) return { pages: 0 };
+      void my.rpc.broadcast({ method: 'signal-watch', args: [request], optional: true });
+      return { pages: signalPages.has(request.pageId) ? 1 : 0, pageId: request.pageId };
+    };
+
+    register({
+      name: 'set-signal-watch',
+      type: 'action',
+      jsonSerializable: true,
+      handler: sendSignalWatch,
+    });
+
+    agent.registerTool({
+      id: 'pangular:watch-signal',
+      description:
+        'Watch a signal on the running page, and turn write stacks on or off, the same switches as Watch and Record write stacks on the Signals page. A watched signal logs each change to the page console and shows under Watched on the Signals page; pangular:inspect-signals lists the watched ids in `watch`. With write stacks on, every exact (`write`) history entry of a named signal carries `stack`: the first 3 app frames of the code that set it, skipping Angular, packages, zone.js and the overlay. Taking a stack slows each write, so stacks are off until asked for. `node` is a node id or label on the graph the page last reported (pangular:inspect-signals); `watch: false` stops watching it. Both reset when the page reloads. `page` picks the tab and defaults to the most recent.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          node: {
+            type: 'string',
+            description:
+              'Node id or label from pangular:inspect-signals. A label watches every node with it.',
+          },
+          watch: {
+            type: 'boolean',
+            description: 'False stops watching `node`. Defaults to true.',
+          },
+          stacks: {
+            type: 'boolean',
+            description: 'True records write stacks on the page, false stops.',
+          },
+          page: PAGE_ARGUMENT,
+        },
+      },
+      handler: async (args: WatchSignalArgs) => {
+        const asked = watchSignalRequests(args ?? {}, signalPages, pageArgument(args));
+        if ('markdown' in asked) return asked;
+        for (const request of asked.requests) sendSignalWatch({ ...request, pageId: asked.pageId });
+        return { markdown: watchSignalText(args ?? {}, asked.pageId, asked.labels) };
+      },
+    });
+
     register({
       name: 'push-signal-graph',
       type: 'action',
@@ -1889,14 +1956,16 @@ const pangular = defineDevframe({
         if (!owners.write(pageId)) return;
         const zone = ZONE_MODES.find((mode) => mode === report?.zone);
         const tree = sanitizeInjectorTree(report?.roots, report?.environment);
-        injectorPages.set(pageId, {
+        const names = frameworkNames.current();
+        const page: InjectorPage = {
           pageId,
           roots: tree.roots,
           environment: tree.environment,
           ...(report?.truncated === true || tree.truncated ? { truncated: true } : {}),
           ...(zone ? { zone } : {}),
           reportedAt: Date.now(),
-        });
+        };
+        injectorPages.set(pageId, withFramework(page, names ?? new Set()));
         cdSeen(pageId);
         applyInjectorPages();
       },
@@ -2243,7 +2312,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-component',
       description:
-        'Get the live detail of one component instance: inputs, outputs with whether a parent listens, other own properties (signals and resources unwrapped), DOM listeners, host directives, change detection, encapsulation, host path, injected services and the source file and line of the class when a dev build has them. Pass an instance id from the pangular:component-tree resource, a class name or a host tag. This selects the instance on its page (the panel follows) and waits for the page to report it. A class name or tag that matches several instances answers for the first and lists the ids of all of them. Each input and property of the component carries `edit` (`property` for pangular:set-component-property, `signal` for pangular:set-signal) when it can be written, or `locked` with the reason it cannot. Secret-looking values are redacted. Past 20,000 characters, values longer than 1,000 characters show only their start, then each list keeps fewer entries, with a note saying what was left out; the `detail` of the pangular:component-tree resource has it all.',
+        'Get the live detail of one component instance: inputs, outputs with whether a parent listens, other own properties (signals and resources unwrapped), DOM listeners, host directives, change detection, encapsulation, host path, injected services and the source file and line of the class when a dev build has them. Pass an instance id from the pangular:component-tree resource, a class name or a host tag. This selects the instance on its page (the panel follows) and waits for the page to report it. A class name or tag that matches several instances answers for the first and lists the ids of all of them. Each input and property of the component carries `edit` (`property` for pangular:set-component-property, `signal` for pangular:set-signal) when it can be written, or `locked` with the reason it cannot. Secret-looking values are redacted. For the element injector of the instance (its providers and lookup path), pass the instance id as `selector` to pangular:inspect-providers. Past 20,000 characters, values longer than 1,000 characters show only their start, then each list keeps fewer entries, with a note saying what was left out; the `detail` of the pangular:component-tree resource has it all.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -2509,7 +2578,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-signals',
       description:
-        "Get the signal graph the running page last reported: signal nodes (signal, computed, linkedSignal, effect), their dependency edges, `component` (instance id, class name, host tag and host path) or `injector` (an environment injector), `resources` (each resource(), httpResource() or rxResource() folded into one entry with status, isLoading, params, value, error and the ids of its internal nodes), `environments` (root and route injectors the page can report), and `history` (recent value changes per node id and status changes per resource id; `write` entries are exact, `sample` entries come from polling and `missed` counts values that went unseen). `changes` on a node or resource counts every change since the page first saw it, past the 50 kept entries. `nodeCount` is set when Angular reported more nodes than the 400 kept. `unnamedSignals` counts the signals, computeds and linkedSignals without a `debugName`; their history is sampled only, so suggest naming them. Only signals a template or an effect has read appear. The page reports one graph: the component picked on the Signals page (or via pangular:highlight), otherwise the component the primary router outlet renders deepest, otherwise the first component with a graph. Pass `root` for effects in root services, or a route path (`/admin` or `Route: admin`) for effects in that route's providers; the page reads that injector's graph once, without changing what the Signals page shows. A component selector that does not match the reported graph returns what is available instead; call pangular:highlight with it first to switch the graph to it. Pass `node` (a node id or label) to get only that node with its direct producers and consumers, and `history: false` to leave out value history. The answer is cut at 20,000 characters, first by keeping fewer history entries per node, then fewer nodes, with a note saying what was left out.",
+        "Get the signal graph the running page last reported: signal nodes (signal, computed, linkedSignal, effect), their dependency edges, `component` (instance id, class name, host tag and host path) or `injector` (an environment injector), `resources` (each resource(), httpResource() or rxResource() folded into one entry with status, isLoading, params, value, error and the ids of its internal nodes), `environments` (root and route injectors the page can report), and `history` (recent value changes per node id and status changes per resource id; `write` entries are exact, `sample` entries come from polling and `missed` counts values that went unseen). `changes` on a node or resource counts every change since the page first saw it, past the 50 kept entries. `nodeCount` is set when Angular reported more nodes than the 400 kept. `unnamedSignals` counts the signals, computeds and linkedSignals without a `debugName`; their history is sampled only, so suggest naming them. Only signals a template or an effect has read appear. The page reports one graph: the component picked on the Signals page (or via pangular:highlight), otherwise the component the primary router outlet renders deepest, otherwise the first component with a graph. Pass `root` for effects in root services, or a route path (`/admin` or `Route: admin`) for effects in that route's providers; the page reads that injector's graph once, without changing what the Signals page shows. A component selector that does not match the reported graph returns what is available instead; call pangular:highlight with it first to switch the graph to it. Nodes Angular's own router, forms or HTTP code created carry `framework: true` (a computed or effect with a debug name Angular uses, or a signal or unnamed node only such nodes read, never a field of the component); pass `framework: false` to leave them out. `watch` lists the node ids the page watches and whether write stacks are on (see pangular:watch-signal); with stacks on, `write` history entries carry `stack`, the first 3 app frames of the code that set the signal. Pass `node` (a node id or label) to get only that node with its direct producers and consumers, and `history: false` to leave out value history. The answer is cut at 20,000 characters, first by keeping fewer history entries per node, then fewer nodes, with a note saying what was left out.",
       inputSchema: {
         type: 'object',
         properties: {
@@ -2526,6 +2595,11 @@ const pangular = defineDevframe({
           history: {
             type: 'boolean',
             description: 'False leaves out the value history of every node. Defaults to true.',
+          },
+          framework: {
+            type: 'boolean',
+            description:
+              'False leaves out the nodes Angular itself created (`framework: true`). Defaults to true.',
           },
           page: PAGE_ARGUMENT,
         },
@@ -2581,7 +2655,7 @@ const pangular = defineDevframe({
             markdown: `The page runs an Angular version whose signal graph has no node ids, so there is no live graph. The live signal graph needs Angular 20.1 or later. The get-signals source scan still works.`,
           };
         }
-        const view = { node: args.node, history: args.history };
+        const view = { node: args.node, history: args.history, framework: args.framework };
         // Signal values come from the page, so the graph sits behind the notice, inside the cap.
         const budget = SIGNAL_TOOL_MAX - UNTRUSTED.length - 2;
         if (!matches(graph)) {
@@ -2607,14 +2681,14 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-providers',
       description:
-        'Get the DI injectors a running page reported. With no arguments, returns the whole tree (element and environment injectors with their providers, and what the services each environment injector already created inject). Past 20,000 characters, element injectors become an outline (names, types, provider and dependency counts), then the deepest are left out with a count; the environment injectors always stay (outlined when large, deepest left out when still too long) and the JSON always parses. `selector` returns only the matching injectors: element injectors with what they inject and their lookup path resolved to names and provided tokens, or environment injectors (Root, Platform, Route: admin) with their providers, what their created services inject, and their parent injectors. When nothing matches, the answer lists the tags and environment injector names on the page. `token` returns which injectors provide that token and which components or services inject it. Each open tab reports its own tree; `page` picks one and defaults to the most recent. Says so when the page reported only part of a large tree.',
+        'Get the DI injectors a running page reported. With no arguments, returns the whole tree (element and environment injectors with their providers, and what the services each environment injector already created inject). Past 20,000 characters, element injectors become an outline (names, types, provider and dependency counts), then the deepest are left out with a count; the environment injectors always stay (outlined when large, deepest left out when still too long) and the JSON always parses. `selector` returns only the matching injectors: element injectors with what they inject and their lookup path resolved to names and provided tokens, or environment injectors (Root, Platform, Route: admin) with their providers, what their created services inject, and their parent injectors. When nothing matches, the answer lists the tags and environment injector names on the page. `token` returns which injectors provide that token and which components or services inject it. On element injectors, `componentId` is the instance id of the component that the pangular:component-tree resource, pangular:list-components and pangular:inspect-component use, and `framework: true` marks the injectors and providers that come from the @angular packages. Each open tab reports its own tree; `page` picks one and defaults to the most recent. Says so when the page reported only part of a large tree.',
       inputSchema: {
         type: 'object',
         properties: {
           selector: {
             type: 'string',
             description:
-              'Optional. A tag name (app-card), a component or directive class name (CardComponent), an environment injector name (Root, Platform, Route: admin; case-insensitive), or an injector id. Returns only the matching injectors. At most 500 characters.',
+              'Optional. A tag name (app-card), a component or directive class name (CardComponent), an environment injector name (Root, Platform, Route: admin; case-insensitive), an injector id, or a component id from the component tree (c12). Returns only the matching injectors. At most 500 characters.',
           },
           token: {
             type: 'string',
