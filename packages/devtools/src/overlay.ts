@@ -47,6 +47,7 @@ import { startComponentPick } from './component-pick.ts';
 import { registerComponentEdit } from './component-edit-overlay.ts';
 import { installSourceHelpers } from './component-source.ts';
 import { createDeferTracker } from './defer-blocks.ts';
+import { controlFlowReader, createForTracker } from './for-blocks.ts';
 import { elementById, elementId } from './element-id.ts';
 import {
   collectSignalGraph,
@@ -281,17 +282,20 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
 
   let componentTarget: string | null = null;
   const deferTracker = createDeferTracker();
+  const forTracker = createForTracker();
   let lastTreeJson = '';
   let treeSentAt = 0;
   async function pushTree(force = false) {
     const ng = getNg();
-    const deferBlocks = deferTracker.collect(ng);
+    const blocksOf = controlFlowReader(ng);
+    const deferBlocks = deferTracker.collect(ng, document, blocksOf);
     const tree = {
       ...collectComponentTree(ng, { selectedId: componentTarget }),
       url: redactUrl(location.href),
       title: redactMessage(document.title),
       ...(deferBlocks ? { deferBlocks } : {}),
       ...(deferTracker.truncated ? { deferTruncated: true } : {}),
+      ...forTracker.collect(ng, document, blocksOf),
     };
     const json = JSON.stringify(tree);
     if (!force && json === lastTreeJson) {

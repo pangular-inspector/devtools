@@ -121,14 +121,22 @@ export function createDeferTracker(now: () => number = Date.now) {
       return truncated;
     },
     /** Every defer block on the page, or `undefined` when Angular exposes no util for them. */
-    collect(ng: DeferDebugNg | undefined, doc: Document = document): DeferBlockInfo[] | undefined {
+    collect(
+      ng: DeferDebugNg | undefined,
+      doc: Document = document,
+      blocksOf?: (root: Element) => unknown[],
+    ): DeferBlockInfo[] | undefined {
       truncated = false;
       const util = ng?.ɵgetControlFlowBlocks ?? ng?.ɵgetDeferBlocks;
       if (!ng || typeof util !== 'function') return undefined;
       const hosts = new Set<object>();
       const out: DeferBlockInfo[] = [];
       for (const root of angularRoots(doc)) {
-        const blocks = read(() => util.call(ng, root) ?? [], [] as unknown[]);
+        // `blocksOf` shares one `ɵgetControlFlowBlocks` walk with the `@for` tracker.
+        const blocks = read(
+          () => (blocksOf && ng.ɵgetControlFlowBlocks ? blocksOf(root) : util.call(ng, root)) ?? [],
+          [] as unknown[],
+        );
         const valid = Array.isArray(blocks) ? blocks.filter(isDeferBlock) : [];
         const order: object[] = [];
         let position = 0;

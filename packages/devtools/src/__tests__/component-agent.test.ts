@@ -227,6 +227,40 @@ describe('defer-blocks tool', () => {
   });
 });
 
+describe('for-blocks tool', () => {
+  it('lists the @for blocks each page reported and narrows to one page', async () => {
+    const { push, call } = await boot();
+    await push('push-component-tree', {
+      pageId: 'p1',
+      roots,
+      count: 3,
+      detail: null,
+      forBlocks: [
+        {
+          id: 'f1',
+          owner: { id: 'c2', name: 'Card', tag: 'app-card' },
+          count: 0,
+          track: 'item',
+          hasEmptyBlock: true,
+          showingEmpty: true,
+          rootIds: [],
+        },
+      ],
+    });
+    await push('push-component-tree', { pageId: 'p2', roots, count: 3, detail: null });
+    const all = await call('for-blocks', {});
+    expect(all).toContain('Page `p1`: 1 `@for` block.');
+    expect(all).toContain(
+      '| `f1` | Card (`c2`) | 0 | the item itself | showing | showing @empty |',
+    );
+    expect(all).toMatch(/Page `p2`: this page's Angular has no `ng\.ɵgetControlFlowBlocks`/);
+    expect(await call('for-blocks', { page: 'p2' })).not.toContain('`p1`');
+    expect(await call('for-blocks', { page: 'gone' })).toMatch(
+      /No page `gone` is reporting a component tree\./,
+    );
+  });
+});
+
 describe('component pick', () => {
   it('refuses to pick when no page is connected', async () => {
     const { push } = await boot();

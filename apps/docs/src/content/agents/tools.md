@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Sixty-four tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Sixty-five tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -35,7 +35,7 @@ Each tool reads from one of three places. The stdio server registers only the to
 
 ### The page argument
 
-Most page tools take an optional `page` argument to pick a browser tab. It defaults to the most recent one. `dispatch-ngrx-action`, `set-component-property` and `set-signal` refuse to guess when more than one tab could take the action. `form-action` and `fill-form` take the tab from the form id instead (the part after `@`, as in `Checkout.form@ab12`). `highlight` and `inspect-component` search every tab without it, newest first, and `defer-blocks` lists every tab. `inspect-providers`, `highlight`, `inspect-component` and `defer-blocks` also accept `pageId`. The tables below leave `page` out.
+Most page tools take an optional `page` argument to pick a browser tab. It defaults to the most recent one. `dispatch-ngrx-action`, `set-component-property` and `set-signal` refuse to guess when more than one tab could take the action. `form-action` and `fill-form` take the tab from the form id instead (the part after `@`, as in `Checkout.form@ab12`). `highlight` and `inspect-component` search every tab without it, newest first, and `defer-blocks` and `for-blocks` list every tab. `inspect-providers`, `highlight`, `inspect-component`, `defer-blocks` and `for-blocks` also accept `pageId`. The tables below leave `page` out.
 
 If `page` names a tab that doesn't report that data, the tool answers `No page <id> is reporting ...` and lists the tabs that do, newest first. It never falls back to another tab. Without `page`, a class name or tag resolves on the most recent tab that has it, and `highlight` names the other tabs where it also matches.
 
@@ -135,6 +135,26 @@ The `@defer` blocks of each page: the component that holds each one, its state, 
 Without a development build, the page has no util to read defer blocks, and the answer says so.
 
 Each page lists at most 50 blocks in the table and 50 under **Needs attention**, with a note on how many more are not shown. The whole answer stops at 20,000 characters. If several tabs report, pass `page` to read one. The **Defer blocks** list on the [Components](../inspectors/components.md#defer-blocks) page has every block the page reported. A page reports its first 500 blocks. When it has more, the answer says so.
+
+### for-blocks
+
+The `@for` blocks of each page: the component that holds each one, its item count, what its `track` expression tracks by and whether it has an `@empty` block and shows it. A block with no items and no `@empty` block gets a note that it renders nothing. Reads: page.
+
+| Argument | Required | Value           |
+| -------- | -------- | --------------- |
+| `pageId` | no       | Same as `page`. |
+
+Angular reports the `track` expression as one of three kinds, not as its source text:
+
+| Tracks by       | Template                                      |
+| --------------- | --------------------------------------------- |
+| `$index`        | `track $index`                                |
+| the item itself | `track item`, where `item` is the loop item   |
+| an expression   | Any other expression, such as `track trip.id` |
+
+The page reads the blocks with `ng.ɵgetControlFlowBlocks`, which Angular 22.0 added for development builds. On an older Angular or a production build, the answer says the page cannot list them. The page sends the item count only, never the items.
+
+Each page lists at most 50 blocks, with a note on how many more are not shown, and says when the page has more than the 500 blocks it reports. The whole answer stops at 20,000 characters. If several tabs report, pass `page` to read one. The **&#64;for blocks** list on the [Components](../inspectors/components.md#for-blocks) page has every block.
 
 ### change-detection <ngmd-badge variant="alpha">Action</ngmd-badge>
 

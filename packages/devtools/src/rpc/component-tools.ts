@@ -1,4 +1,5 @@
 import { MAX_DEFER_BLOCKS } from '../defer-blocks.ts';
+import { MAX_FOR_BLOCKS } from '../for-blocks.ts';
 import type { ComponentPage, DeferBlockInfo, LiveComponentNode } from '../types.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import { untrusted } from './forms-tools.ts';
@@ -44,6 +45,12 @@ export function toComponentPage(report: Omit<ComponentPage, 'reportedAt'>, now =
     page.deferBlocks = report.deferBlocks.slice(0, MAX_DEFER_BLOCKS);
     if (report.deferTruncated === true || report.deferBlocks.length > MAX_DEFER_BLOCKS) {
       page.deferTruncated = true;
+    }
+  }
+  if (Array.isArray(report.forBlocks)) {
+    page.forBlocks = report.forBlocks.slice(0, MAX_FOR_BLOCKS);
+    if (report.forBlocksTruncated || report.forBlocks.length > MAX_FOR_BLOCKS) {
+      page.forBlocksTruncated = true;
     }
   }
   if (report.platform === 'angular-native' || report.platform === 'nativescript') {

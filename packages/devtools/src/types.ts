@@ -180,6 +180,24 @@ export interface DeferBlockInfo {
   hydratedAt?: number;
 }
 
+export interface ForBlockInfo {
+  id: string;
+  /** The component whose template holds the block. */
+  owner?: { id: string; name: string; tag: string };
+  /** Items in the collection the block renders. */
+  count: number;
+  /**
+   * What Angular reports for the `track` expression: `$index`, `item` (tracks
+   * the item itself), `function` (any other expression), or `null` when unknown.
+   */
+  track: '$index' | 'item' | 'function' | null;
+  hasEmptyBlock: boolean;
+  /** The `@empty` block shows: there are no items and the block has one. */
+  showingEmpty: boolean;
+  /** Element ids of the first rendered root elements, for highlighting. */
+  rootIds: string[];
+}
+
 export type PagePlatform = 'browser' | 'angular-native' | 'nativescript';
 
 export interface ComponentTreeReport {
@@ -198,7 +216,9 @@ export interface ComponentTreeReport {
   /** True when the page has more defer blocks than the 500 in `deferBlocks`. */
   deferTruncated?: boolean;
   /** Missing when the page's Angular has no `ɵgetControlFlowBlocks` (before 22.0). */
+  forBlocks?: ForBlockInfo[];
   /** The page has more `@for` blocks than it lists. */
+  forBlocksTruncated?: boolean;
 }
 
 export interface ComponentPage extends ComponentTreeReport {

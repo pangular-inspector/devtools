@@ -16,6 +16,7 @@ import {
   type CapacitorPage,
   type CapacitorState,
 } from './rpc/capacitor-tools.ts';
+import { forBlocksText } from './rpc/for-blocks-tools.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
@@ -2310,6 +2311,33 @@ const pangular = defineDevframe({
         return (
           unknownComponentPage(page) ?? {
             markdown: deferBlocksText(
+              byRecency(componentPages.values()).filter((entry) => !page || entry.pageId === page),
+            ),
+          }
+        );
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:for-blocks',
+      description:
+        "List the `@for` blocks the running page renders, read live through Angular's debug API (`ng.ɵgetControlFlowBlocks`, Angular 22.0 and later, development builds): the owning component, the item count, what the `track` expression tracks by (`$index`, the item itself, or an expression) and whether the block has an `@empty` block and shows it. Flags blocks with no items and no `@empty` block. Each open tab reports its own list; `page` picks one. Lists at most 50 blocks per page, says how many more are not shown, and cuts the answer at 20,000 characters. Says so when the page's Angular is older than 22.0 or a production build.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: {
+            type: 'string',
+            description:
+              'Page id, when more than one tab reports (see pangular:list-pages). Lists every page without it.',
+          },
+          pageId: { type: 'string', description: 'Same as `page`.' },
+        },
+      },
+      handler: async (args: { page?: string; pageId?: string }) => {
+        const page = pageArgument(args, 'pageId');
+        return (
+          unknownComponentPage(page) ?? {
+            markdown: forBlocksText(
               byRecency(componentPages.values()).filter((entry) => !page || entry.pageId === page),
             ),
           }

@@ -35,6 +35,7 @@ import type { ComponentFocus } from '../types/component-focus.types';
 import { SourceLink } from '../ui/source-link';
 import { actionAllowed } from '../devtools-config';
 import { PropValue } from './component-prop-value';
+import { ForBlocksSection, type ForBlock } from './for-blocks-section';
 
 interface SourceComponent {
   selector: string;
@@ -107,6 +108,8 @@ interface Page {
   deferBlocks?: DeferBlock[];
   /** The page has more defer blocks than the ones in `deferBlocks`. */
   deferTruncated?: boolean;
+  forBlocks?: ForBlock[];
+  forBlocksTruncated?: boolean;
   roots: LiveNode[];
   count: number;
   truncated?: boolean;
@@ -150,7 +153,7 @@ function bare(name: string): string {
 
 @Component({
   selector: 'app-component-tree',
-  imports: [JsonPipe, Select, CdRecording, SourceLink, PropValue],
+  imports: [JsonPipe, Select, CdRecording, SourceLink, PropValue, ForBlocksSection],
   host: { '(keydown.escape)': 'cancelPick()' },
   template: `
     @if (live()) {
@@ -568,6 +571,13 @@ function bare(name: string): string {
           </ul>
         </section>
       }
+      <app-for-blocks
+        [blocks]="page()?.forBlocks"
+        [truncated]="page()?.forBlocksTruncated === true"
+        [supported]="page()?.deferBlocks && !page()?.forBlocks ? false : null"
+        (showOwner)="showForOwner($event)"
+        (highlight)="highlight($event)"
+      />
       @if (!staticReport() && !native()) {
         <app-cd-recording [page]="cdPage()" [pageId]="page()!.pageId" [rpc]="rpc()" />
       }
@@ -1959,6 +1969,10 @@ export class ComponentTree {
   }
 
   showOwner(block: DeferBlock) {
+    if (block.owner && this.index().map.has(block.owner.id)) this.reveal(block.owner.id);
+  }
+
+  showForOwner(block: ForBlock) {
     if (block.owner && this.index().map.has(block.owner.id)) this.reveal(block.owner.id);
   }
 

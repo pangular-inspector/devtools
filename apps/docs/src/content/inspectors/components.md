@@ -1,6 +1,6 @@
 ---
 title: Components
-description: Every component instance on the page, with live inputs, properties, outputs, injected services and defer blocks.
+description: Every component instance on the page, with live inputs, properties, outputs, injected services, defer blocks and @for blocks.
 ---
 
 <ngmd-hero title="Components" gradient>
@@ -99,6 +99,20 @@ Hover or focus a row to highlight the block in the page. Click it to select the 
 
 The list holds the first 500 blocks of a page. When the page has more, the count reads **500+**.
 
+### For blocks
+
+When the page renders `@for` blocks, an **&#64;for blocks** list follows the defer blocks. Each row shows the component whose template holds the block, its item count, whether it has an `@empty` block (**&#64;empty showing** when it shows) and what its `track` expression tracks by:
+
+| Label              | Template                                      |
+| ------------------ | --------------------------------------------- |
+| `track $index`     | `track $index`                                |
+| `track item`       | `track item`, where `item` is the loop item   |
+| `track expression` | Any other expression, such as `track trip.id` |
+
+A block with no items and no `@empty` block is marked **renders nothing**. Hover or focus a row to highlight the block in the page. Click it to select the component that holds it. The page lists up to 500 blocks, and the count reads **500+** past that.
+
+The list needs Angular 22.0 or later in a development build. On an older Angular, the section says that the page does not report `@for` blocks.
+
 ### Change detection
 
 Below the tree and the defer blocks, the **Change detection** section records change detection cycles with Angular's profiler. Click **Record**, use the app, then click **Stop recording**. **Clear** empties the recording. Each new recording starts empty, but a start sent while the page records, such as an agent's `record: "start"`, keeps the cycles recorded so far.
@@ -134,16 +148,16 @@ A notice at the top says why you see the source list: no page is connected, or t
 
 The live tree reads `window.ng`, which only development builds expose. It uses these functions:
 
-| Function                                                                   | Used for                                                            |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `ng.getComponent`, `ng.getDirectives`                                      | Finding instances and the directives on each host.                  |
-| `ng.getDirectiveMetadata`                                                  | Inputs, outputs, change detection and encapsulation.                |
-| `ɵcmp.debugInfo` on the component class                                    | The source file and line in the detail header.                      |
-| `ng.isSignal`                                                              | Unwrapping signal inputs.                                           |
-| `ng.getListeners`                                                          | Output listeners and DOM listeners.                                 |
-| `ng.applyChanges`                                                          | Refreshing the view after an edit to an input or a plain field.     |
-| `ng.getInjector`, `ɵgetDependenciesFromInjectable`, `ɵgetInjectorMetadata` | The **Injected** block, and the services **Properties** leaves out. |
-| `ng.ɵgetControlFlowBlocks`, or `ng.ɵgetDeferBlocks` before Angular 22      | The **Defer blocks** list.                                          |
+| Function                                                                   | Used for                                                                     |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `ng.getComponent`, `ng.getDirectives`                                      | Finding instances and the directives on each host.                           |
+| `ng.getDirectiveMetadata`                                                  | Inputs, outputs, change detection and encapsulation.                         |
+| `ɵcmp.debugInfo` on the component class                                    | The source file and line in the detail header.                               |
+| `ng.isSignal`                                                              | Unwrapping signal inputs.                                                    |
+| `ng.getListeners`                                                          | Output listeners and DOM listeners.                                          |
+| `ng.applyChanges`                                                          | Refreshing the view after an edit to an input or a plain field.              |
+| `ng.getInjector`, `ɵgetDependenciesFromInjectable`, `ɵgetInjectorMetadata` | The **Injected** block, and the services **Properties** leaves out.          |
+| `ng.ɵgetControlFlowBlocks`, or `ng.ɵgetDeferBlocks` before Angular 22      | The **Defer blocks** list, and from Angular 22 the **&#64;for blocks** list. |
 
 ### Refresh rate
 
@@ -249,6 +263,7 @@ Press Escape in the filter box to clear it. When the filter matches nothing, **C
 | `pangular:inspect-component`      | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services.                                                           |
 | `pangular:list-components`        | tool     | Returns the live tree of one page as an indented outline with routed and directive markers. Takes a `filter` and a `depth`.                                                           |
 | `pangular:defer-blocks`           | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                  |
+| `pangular:for-blocks`             | tool     | Lists the `@for` blocks of each page with their item count, track kind and `@empty` block.                                                                                            |
 | `pangular:change-detection`       | tool     | Starts, stops or clears a change detection recording, and returns the slowest and most often checked components and the latest cycles.                                                |
 | `pangular:set-component-property` | tool     | Writes an input or property of one instance and runs change detection. An action.                                                                                                     |
 | `pangular:set-signal`             | tool     | Sets a writable signal that one instance holds as a property. An action.                                                                                                              |
