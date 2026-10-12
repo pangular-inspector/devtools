@@ -39,6 +39,7 @@ import { redactMessage } from './forms-privacy.ts';
 import { fieldPath, probeEveryTime } from './forms-read.ts';
 import { watchWebMcp } from './forms-webmcp.ts';
 import { FORMLESS_FORM_ACTIONS } from './config.ts';
+import { tapConsole } from './console-tap.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -655,17 +656,14 @@ export function attachForms(
   for (const type of USER_EVENTS) document.addEventListener(type, onUserEvent, true);
   addEventListener('unhandledrejection', onRejection);
 
-  const originalError = console.error;
-  const patchedError = function (this: unknown, ...args: unknown[]) {
-    const setup = read(() => setupErrorOf(args), null);
+  const stopConsole = tapConsole(['error'], (_level, args) => {
+    const setup = read(() => setupErrorOf(args as unknown[]), null);
     if (setup && !setupErrors.includes(setup)) {
       setupErrors.push(setup);
       if (setupErrors.length > MAX_SETUP_ERRORS) setupErrors.shift();
       schedulePush();
     }
-    return originalError.apply(this, args as []);
-  };
-  console.error = patchedError;
+  });
 
   my.rpc.register({
     name: 'highlight-form-field',
@@ -756,7 +754,7 @@ export function attachForms(
       clearTimeout(userTimer);
       for (const type of USER_EVENTS) document.removeEventListener(type, onUserEvent, true);
       removeEventListener('unhandledrejection', onRejection);
-      if (console.error === patchedError) console.error = originalError;
+      stopConsole();
       for (const { stop } of watched.values()) stop();
       watched.clear();
       for (const root of [...signalRoots.keys()]) unwrapSignalRoot(root);

@@ -46,6 +46,7 @@ import {
 } from './ssr-registry.ts';
 import { matchingOverrides } from './ssr-overrides.ts';
 import { watchSsrNavigations } from './ssr-navigation.ts';
+import { tapConsole } from './console-tap.ts';
 
 export * from './http-rules.ts';
 export { decodePayload, type PayloadEntry, type PayloadSummary } from './http-payload.ts';
@@ -347,22 +348,16 @@ function captureHydrationWarnings() {
   const registry = httpRegistry();
   if (registry.warnings) return;
   const warnings: string[] = (registry.warnings = []);
-  for (const level of ['warn', 'error'] as const) {
-    const original = console[level];
-    console[level] = (...args: unknown[]) => {
-      try {
-        const text = args.map(textOf).join(' ');
-        if (isHydrationMessage(text)) {
-          const warning = redactMessage(text.slice(0, 5000)).slice(0, 1000);
-          if (!warnings.includes(warning)) {
-            warnings.push(warning);
-            if (warnings.length > MAX_WARNINGS) warnings.shift();
-          }
-        }
-      } catch {}
-      original.apply(console, args);
-    };
-  }
+  // Kept for the page's life, like the registry it fills.
+  tapConsole(['warn', 'error'], (_level, args) => {
+    const text = args.map(textOf).join(' ');
+    if (!isHydrationMessage(text)) return;
+    const warning = redactMessage(text.slice(0, 5000)).slice(0, 1000);
+    if (!warnings.includes(warning)) {
+      warnings.push(warning);
+      if (warnings.length > MAX_WARNINGS) warnings.shift();
+    }
+  });
 }
 
 /** `provideHttpClient(withPangular())` registers the DevTools interceptor. */

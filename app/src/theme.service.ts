@@ -1,10 +1,17 @@
 import { DestroyRef, Service, effect, inject, signal } from '@angular/core';
+import { storeThemePreference, storedThemePreference, type ThemePreference } from './shell-prefs';
 
 export type Theme = 'dark' | 'light';
 
 @Service()
 export class ThemeService {
   readonly current = signal<Theme>('dark');
+  /** What the viewer picked in Settings. `system` follows the hub, the extension or the system. */
+  readonly preference = signal<ThemePreference>(storedThemePreference());
+  /** The theme the hub, the extension, a `data-theme` attribute or the system asks for. */
+  private source: Theme = 'dark';
+  /** Whether the source set `data-theme`, which the system preference never does. */
+  private sourceAttr = false;
 
   constructor() {
     const destroyRef = inject(DestroyRef);
@@ -13,19 +20,21 @@ export class ThemeService {
     let pinned = attr === 'light' || attr === 'dark';
 
     if (attr === 'light' || attr === 'dark') {
-      this.current.set(attr);
+      this.fromSource(attr, true);
     } else if (colorRoot) {
       pinned = true;
-      this.apply(hubTheme(colorRoot));
+      this.fromSource(hubTheme(colorRoot), true);
     } else {
       const query = prefersLight();
       if (query) {
-        this.current.set(query.matches ? 'light' : 'dark');
+        this.fromSource(query.matches ? 'light' : 'dark', false);
         const onChange = (e: MediaQueryListEvent) => {
-          if (!pinned) this.current.set(e.matches ? 'light' : 'dark');
+          if (!pinned) this.fromSource(e.matches ? 'light' : 'dark', false);
         };
         query.addEventListener('change', onChange);
         destroyRef.onDestroy(() => query.removeEventListener('change', onChange));
+      } else {
+        this.resolve();
       }
     }
 
@@ -50,13 +59,13 @@ export class ThemeService {
       const msg = e.data as { type?: unknown; theme?: unknown } | null;
       if (msg?.type !== 'pangular:theme-change') return;
       pinned = true;
-      this.apply(msg.theme === 'dark' ? 'dark' : 'light');
+      this.fromSource(msg.theme === 'dark' ? 'dark' : 'light', true);
     };
     window.addEventListener('message', onMessage);
 
     let observer: MutationObserver | undefined;
     if (colorRoot) {
-      observer = new MutationObserver(() => this.apply(hubTheme(colorRoot)));
+      observer = new MutationObserver(() => this.fromSource(hubTheme(colorRoot), true));
       observer.observe(colorRoot, { attributes: true, attributeFilter: ['class'] });
     }
 
@@ -67,9 +76,28 @@ export class ThemeService {
     });
   }
 
-  private apply(theme: Theme) {
+  /** Picks light, dark or the source's theme, and keeps the choice for the next visit. */
+  setPreference(preference: ThemePreference) {
+    this.preference.set(preference);
+    storeThemePreference(preference);
+    this.resolve();
+  }
+
+  private fromSource(theme: Theme, attr: boolean) {
+    this.source = theme;
+    this.sourceAttr = attr;
+    this.resolve();
+  }
+
+  private resolve() {
+    const preference = this.preference();
+    const theme = preference === 'system' ? this.source : preference;
     this.current.set(theme);
-    document.documentElement.dataset['theme'] = theme;
+    const root = document.documentElement;
+    // The system preference reaches the styles through the media query, so
+    // `data-theme` is only set when something picked a theme.
+    if (preference !== 'system' || this.sourceAttr) root.dataset['theme'] = theme;
+    else delete root.dataset['theme'];
   }
 }
 

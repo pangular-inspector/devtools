@@ -551,4 +551,107 @@ describe.sequential('devtools popup', () => {
       expect(stored().theme).toBeUndefined();
     });
   });
+  describe('shortcut and passive mode', () => {
+    const press = (target: EventTarget = document.body, init: KeyboardEventInit = {}) =>
+      target.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'p',
+          code: 'KeyP',
+          altKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+          ...init,
+        }),
+      );
+    const panelWindow = { postMessage: () => {} } as unknown as Window;
+    Object.defineProperty(panelWindow, 'parent', { value: window });
+    const send = (data: unknown) =>
+      window.dispatchEvent(
+        new MessageEvent('message', { data, source: panelWindow, origin: location.origin }),
+      );
+
+    it('opens and closes the panel with Alt+Shift+P, and gives focus back', async () => {
+      await loadPopup();
+      const { panel } = parts();
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      input.focus();
+      press(input);
+      expect(panel.classList.contains('open')).toBe(true);
+      press(input, { altKey: false });
+      expect(panel.classList.contains('open')).toBe(true);
+      press();
+      expect(panel.classList.contains('open')).toBe(false);
+    });
+
+    it('follows a shortcut from the config, and none when it is off', async () => {
+      const popup = await loadPopup();
+      const { panel } = parts();
+      popup.setPopupHotkey('Mod+Shift+K');
+      press();
+      expect(panel.classList.contains('open')).toBe(false);
+      press(document.body, { key: 'k', code: 'KeyK', altKey: false, ctrlKey: true });
+      expect(panel.classList.contains('open')).toBe(true);
+      popup.setPopupHotkey(false);
+      press(document.body, { key: 'k', code: 'KeyK', altKey: false, ctrlKey: true });
+      expect(panel.classList.contains('open')).toBe(true);
+      popup.setPopupHotkey('Alt+Shift+P');
+    });
+
+    it('hides the launcher in passive mode until the shortcut opens the panel', async () => {
+      localStorage.setItem('pangular-popup', JSON.stringify({ passive: true }));
+      const popup = await loadPopup();
+      const { fab } = parts();
+      expect(fab.classList.contains('passive')).toBe(true);
+      press();
+      expect(fab.classList.contains('passive')).toBe(false);
+      press();
+      expect(fab.classList.contains('passive')).toBe(true);
+      // Without a shortcut nothing could open it, so the launcher shows.
+      popup.setPopupHotkey(false);
+      expect(fab.classList.contains('passive')).toBe(false);
+      popup.setPopupHotkey('Alt+Shift+P');
+    });
+
+    it('takes passive mode and the dock mode from the panel', async () => {
+      await loadPopup(true);
+      await openedSrc();
+      Object.defineProperty(frame(), 'contentWindow', { get: () => panelWindow });
+      const { fab, panel, dock } = parts();
+      send({ type: 'pangular:popup-dock', mode: 'right' });
+      expect(panel.classList.contains('dock-right')).toBe(true);
+      expect(dock('right').getAttribute('aria-pressed')).toBe('true');
+      expect(dock('float').getAttribute('aria-pressed')).toBe('false');
+      send({ type: 'pangular:popup-passive', passive: true });
+      expect(stored().passive).toBe(true);
+      // The panel is open, so the launcher stays until it closes.
+      expect(fab.classList.contains('passive')).toBe(false);
+      fab.click();
+      expect(fab.classList.contains('passive')).toBe(true);
+      send({ type: 'pangular:popup-passive', passive: false });
+      expect(fab.classList.contains('passive')).toBe(false);
+      expect(stored().passive).toBeUndefined();
+    });
+
+    it('closes when the panel heard the shortcut', async () => {
+      await loadPopup(true);
+      await openedSrc();
+      Object.defineProperty(frame(), 'contentWindow', { get: () => panelWindow });
+      const { panel } = parts();
+      expect(panel.classList.contains('open')).toBe(true);
+      send({ type: 'pangular:popup-close' });
+      expect(panel.classList.contains('open')).toBe(false);
+      // Only the panel's own frame may ask.
+      parts().fab.click();
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'pangular:popup-close' },
+          source: window,
+          origin: location.origin,
+        }),
+      );
+      expect(panel.classList.contains('open')).toBe(true);
+    });
+  });
 });

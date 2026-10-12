@@ -1,5 +1,6 @@
 export { registerNgrxSignals } from './ngrx-register.ts';
 import { DEVTOOLS_BASES, POPUP_ROOT_ID, SETUP_URL, insideDevtoolsPanel } from './panel-frame.ts';
+import { DEFAULT_POPUP_HOTKEY, matchesHotkey, normalizeHotkey } from './config.ts';
 // In-page floating devtools popup. Renders an iframe pointing at the devtools SPA.
 
 let popupRoot: HTMLElement | null = null;
@@ -18,6 +19,8 @@ interface PopupState {
   /** Where the launcher was left, so it can sit anywhere, not just a corner. */
   launcher?: { x: number; y: number };
   theme?: 'light' | 'dark';
+  /** Passive mode: the launcher stays hidden until the shortcut opens the panel. */
+  passive?: boolean;
 }
 
 const DEFAULT_STATE: PopupState = { x: 16, y: 16, width: 720, height: 480, docked: 'float' };
@@ -45,6 +48,7 @@ function loadState(): PopupState {
         ? { launcher: { x: point.x, y: point.y } }
         : {}),
       ...(saved.theme === 'light' || saved.theme === 'dark' ? { theme: saved.theme } : {}),
+      ...(saved.passive === true ? { passive: true } : {}),
     };
   } catch {
     return { ...DEFAULT_STATE };
@@ -66,6 +70,31 @@ let explicitSrc: string | undefined;
 /** What the panel loads: a hub or panel URL, or `null` when no server answered. */
 let target: Promise<string | null> | undefined;
 let retarget: (() => void) | undefined;
+
+/** The shortcut that toggles the panel, or `false` when it is off. */
+let hotkey: string | false = DEFAULT_POPUP_HOTKEY;
+/** Applies a new shortcut to a popup that is already on the page. */
+let rehotkey: (() => void) | undefined;
+
+/**
+ * Sets the keyboard shortcut that opens and closes the panel, as
+ * `popup.hotkey` takes it. An invalid one keeps the default; `false` turns
+ * it off, which also shows a launcher that passive mode hid. The overlay
+ * calls it with the server's config.
+ */
+export function setPopupHotkey(value: string | false) {
+  hotkey = value === false ? false : (normalizeHotkey(value) ?? DEFAULT_POPUP_HOTKEY);
+  rehotkey?.();
+}
+
+function isMac(): boolean {
+  try {
+    const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+    return /mac|iphone|ipad|ipod/i.test(nav.userAgentData?.platform ?? nav.platform ?? '');
+  } catch {
+    return false;
+  }
+}
 
 async function servesJson(url: string): Promise<boolean> {
   try {
@@ -158,7 +187,8 @@ export async function hideDevtools(): Promise<void> {
  * loads; without it the panel looks for the hub, then for the devtools alone.
  * A later call returns the same handle and applies a new `src`.
  */
-export function createDevtoolsPopup(options: { src?: string } = {}) {
+export function createDevtoolsPopup(options: { src?: string; hotkey?: string | false } = {}) {
+  if (options.hotkey !== undefined) setPopupHotkey(options.hotkey);
   if (options.src !== undefined && options.src !== explicitSrc) {
     explicitSrc = options.src;
     changeTarget();
@@ -220,18 +250,20 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
     btn.setAttribute('aria-pressed', String(state.docked === mode));
     btn.classList.add('dock-btn');
     if (state.docked === mode) btn.classList.add('active');
-    btn.addEventListener('click', () => {
-      state.docked = mode;
-      applyDock();
-      dockGroup.querySelectorAll('.dock-btn').forEach((b) => {
-        b.classList.remove('active');
-        b.setAttribute('aria-pressed', 'false');
-      });
-      btn.classList.add('active');
-      btn.setAttribute('aria-pressed', 'true');
-      saveState(state);
-    });
+    btn.dataset['mode'] = mode;
+    btn.addEventListener('click', () => setDock(mode));
     dockGroup.appendChild(btn);
+  }
+
+  function setDock(mode: PopupState['docked']) {
+    state.docked = mode;
+    applyDock();
+    dockGroup.querySelectorAll<HTMLElement>('.dock-btn').forEach((b) => {
+      const active = b.dataset['mode'] === mode;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', String(active));
+    });
+    saveState(state);
   }
 
   const closeBtn = document.createElement('button');
@@ -360,6 +392,7 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
       transition: transform 0.15s, filter 0.15s;
     }
     .fab:hover { filter: brightness(1.1); transform: scale(1.08); }
+    .fab.passive { display: none; }
     .fab.open { --_fab-bg: var(--_fab-open); }
     .fab .ko { stroke: var(--_fab-bg); }
     .fab .ko-fill { fill: var(--_fab-bg); }
@@ -635,6 +668,32 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
   };
   popupRoot.addEventListener('keydown', onEscape);
 
+  /** What had focus when the shortcut opened the panel. */
+  let returnFocus: HTMLElement | null = null;
+
+  /** Hides the launcher in passive mode while the panel is closed, if a shortcut can open it. */
+  function applyPassive() {
+    fab.classList.toggle('passive', !!state.passive && hotkey !== false && !isOpen);
+  }
+
+  const onHotkey = (event: Event) => {
+    const key = event as KeyboardEvent;
+    if (hotkey === false || key.repeat || !matchesHotkey(key, hotkey, isMac())) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isOpen) {
+      const active = document.activeElement;
+      returnFocus = active instanceof HTMLElement && active !== document.body ? active : null;
+      togglePanel();
+      focusWhenReady();
+    } else {
+      togglePanel();
+    }
+  };
+  // Capture, so the app's own key handlers do not see the shortcut.
+  window.addEventListener('keydown', onHotkey, true);
+  rehotkey = applyPassive;
+
   // A key pressed inside the frame is delivered to the frame's own document
   // and never reaches the host, so Escape would not close the panel while the
   // devtools have focus. The frame is same origin, so it can be listened to.
@@ -650,6 +709,7 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
         hookedDocs.add(doc);
         doc.addEventListener('keydown', noteSearchField, true);
         doc.addEventListener('keydown', onEscape);
+        doc.addEventListener('keydown', onHotkey, true);
         doc.querySelectorAll('iframe').forEach(hookFrame);
         new MutationObserver((records) => {
           for (const record of records) {
@@ -693,10 +753,19 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
     fab.setAttribute('aria-expanded', String(isOpen));
     panel.classList.toggle('open', isOpen);
     applyDock();
+    applyPassive();
     // Closing hides the panel, so focus would fall to the body. Only take it
-    // back when it was inside the popup: the host page may own it.
-    if (!isOpen && popupRoot?.contains(document.activeElement)) fab.focus();
-    if (!isOpen) pendingFocus = false;
+    // back when it was inside the popup: the host page may own it. The
+    // shortcut gives it back to what had it before the panel opened.
+    if (!isOpen && popupRoot?.contains(document.activeElement)) {
+      const back = returnFocus;
+      if (back?.isConnected) back.focus();
+      else if (!fab.classList.contains('passive')) fab.focus();
+    }
+    if (!isOpen) {
+      pendingFocus = false;
+      returnFocus = null;
+    }
     if (isOpen && !loaded) load();
   }
 
@@ -914,13 +983,28 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
   };
   const onThemeMessage = (e: MessageEvent) => {
     if (!fromPanel(e)) return;
-    const msg = e.data as { type?: unknown; theme?: unknown } | null;
-    if (msg?.type !== 'pangular:theme-change') return;
-    applyPopupTheme(msg.theme);
+    const msg = e.data as {
+      type?: unknown;
+      theme?: unknown;
+      mode?: unknown;
+      passive?: unknown;
+    } | null;
+    if (msg?.type === 'pangular:theme-change') applyPopupTheme(msg.theme);
+    else if (msg?.type === 'pangular:popup-dock') {
+      if (msg.mode === 'float' || msg.mode === 'bottom' || msg.mode === 'right') setDock(msg.mode);
+    } else if (msg?.type === 'pangular:popup-close') {
+      // The panel heard the shortcut inside a frame the popup can't listen to.
+      if (isOpen) togglePanel();
+    } else if (msg?.type === 'pangular:popup-passive' && typeof msg.passive === 'boolean') {
+      state.passive = msg.passive || undefined;
+      saveState(state);
+      applyPassive();
+    }
   };
   window.addEventListener('message', onThemeMessage);
 
   applyLauncher();
+  applyPassive();
   // Keep it reachable when the window changes size.
   window.addEventListener('resize', applyLauncher);
   window.addEventListener('resize', applyDock);
@@ -944,6 +1028,8 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
     toggle: togglePanel,
     destroy: () => {
       window.removeEventListener('message', onThemeMessage);
+      window.removeEventListener('keydown', onHotkey, true);
+      rehotkey = undefined;
       window.removeEventListener('resize', applyLauncher);
       window.removeEventListener('resize', applyDock);
       document.removeEventListener('toggle', onTopLayerOpen, true);

@@ -99,7 +99,8 @@ type PangularInspector =
   | 'pipes'
   | 'http'
   | 'analog'
-  | 'capacitor';
+  | 'capacitor'
+  | 'errors';
 
 type PangularAction = 'forms' | 'router' | 'ngrx' | 'http' | 'analog' | 'components';
 
@@ -117,6 +118,7 @@ interface PangularConfig {
     cdCycles?: number;
     capacitorCalls?: number;
   };
+  popup?: {hotkey?: string | false};
 }
 ```
 
@@ -179,6 +181,33 @@ When a timeline reaches its limit, the oldest entries are dropped. The timeline 
 
 On Angular 20 and later, the page reports about 250 ms after Angular runs change detection, plus a heartbeat every 4 seconds. `refreshMs` doesn't change that. The page polls every `refreshMs` instead when it can't follow change detection, such as until the app bootstraps. The Analog inspector also reads the page every `refreshMs`. At any value, the page sends its data at least every 8 seconds, even when nothing changed, so the server never drops a page that is still open.
 
+### Popup
+
+| Option         | Default       | What it does                                                                                                                    |
+| -------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `popup.hotkey` | `Alt+Shift+P` | The shortcut that opens and closes the [popup](./popup-and-hub.md#keyboard-and-mouse) on your app's page. `false` turns it off. |
+
+Write the shortcut as modifiers and one key joined with `+`, such as `Mod+Shift+K` or `Ctrl+Alt+D`:
+
+| Part      | Values                                                                                                          |
+| --------- | --------------------------------------------------------------------------------------------------------------- |
+| Modifiers | `Mod` (<kbd>Cmd</kbd> on macOS, <kbd>Ctrl</kbd> elsewhere), `Ctrl`, `Meta` or `Cmd`, `Alt` or `Option`, `Shift` |
+| Key       | One letter, one digit, or `F1` to `F12`                                                                         |
+
+It needs at least one modifier other than `Shift`, so typing in your app never sets it off. Letters and digits match by key position, so an <kbd>Option</kbd> combination that types another character on macOS still works. A value that is not a shortcut prints a warning and keeps `Alt+Shift+P`.
+
+```ts {6}
+// src/server.ts
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
+
+const devtools = initPangularHub({
+  ws: false,
+  popup: {hotkey: 'Mod+Shift+K'},
+});
+```
+
+The overlay reads the option from the server when it connects, so the default works until then. With `false`, [passive mode](./settings.md#passive-mode) has no effect and the floating button always shows.
+
 ## Check the active configuration
 
 The server checks the options when it starts. An unknown key, a value of the wrong type or a limit outside its bounds prints one `[pangular]` warning in the terminal that lists each problem and the value used instead. An unknown key names the closest known key:
@@ -202,6 +231,7 @@ The [Dashboard](../inspectors/dashboard.md#configuration-block) has a **Configur
 | **Extra secret names**    | `redaction.secretNames`.                       |
 | **Unmasked names**        | `redaction.unmask`.                            |
 | **Limits**                | Limits that differ from the defaults.          |
+| **Popup shortcut**        | `popup.hotkey`, or **Off** when it is `false`. |
 
 ## Where to next
 

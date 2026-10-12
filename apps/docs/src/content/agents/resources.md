@@ -94,6 +94,7 @@ This table covers the data that has no resource of its own.
 | `pangular:http-payloads`    | The TransferState payload of each page, by page id                    |
 | `pangular:change-detection` | Change detection recordings, by page id                               |
 | `pangular:pipe-usage`       | Live pipe instances and recorded calls                                |
+| `pangular:errors`           | Error groups and console calls, by page id                            |
 | `pangular:analog`           | Analog page data and the server call log                              |
 | `pangular:routes`           | Declared but not filled. Use `get-routes` or `list-routes` instead.   |
 

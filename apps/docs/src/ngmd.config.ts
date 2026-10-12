@@ -183,6 +183,8 @@ const config: NgmdConfig = {
         {label: 'Standalone CLI', href: '/getting-started/cli'},
         {label: 'Configuration', href: '/getting-started/configuration', status: 'new'},
         {label: 'Popup and hub', href: '/getting-started/popup-and-hub', status: 'new'},
+        {label: 'Command palette', href: '/getting-started/command-palette', status: 'new'},
+        {label: 'Settings', href: '/getting-started/settings', status: 'new'},
         {label: 'Browser overlay', href: '/getting-started/overlay', status: 'updated'},
         {label: 'Chrome extension', href: '/getting-started/chrome-extension'},
         {label: 'Angular Native', href: '/getting-started/angular-native', status: 'new'},
@@ -203,6 +205,7 @@ const config: NgmdConfig = {
         {label: 'SSR & HTTP', href: '/inspectors/ssr-http', status: 'new'},
         {label: 'Analog', href: '/inspectors/analog', status: 'new'},
         {label: 'Capacitor', href: '/inspectors/capacitor', status: 'new'},
+        {label: 'Errors', href: '/inspectors/errors', status: 'new'},
       ],
     },
     {

@@ -9,7 +9,9 @@ export type Tab =
   | 'forms'
   | 'network'
   | 'analog'
-  | 'capacitor';
+  | 'capacitor'
+  | 'settings'
+  | 'errors';
 
 export type Tabs = {
   id: Tab;

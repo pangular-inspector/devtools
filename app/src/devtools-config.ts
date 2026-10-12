@@ -30,6 +30,7 @@ const TAB_INSPECTOR: Partial<Record<Tab, PangularInspector>> = {
   network: 'http',
   analog: 'analog',
   capacitor: 'capacitor',
+  errors: 'errors',
 };
 
 /** The `inspectors` key that turns a tab on or off, if any. */

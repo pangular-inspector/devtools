@@ -90,6 +90,8 @@ The button and the panel sit in the browser top layer, like a `<dialog>`, a popo
 | Action                    | How                                                                                                                                                                                 |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Open the panel            | Click the button, or focus it and press <kbd>Enter</kbd> or <kbd>Space</kbd>; from the keyboard, focus moves into the panel                                                         |
+| Open or close the panel   | Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> anywhere on the page, or the shortcut in [`popup.hotkey`](./configuration.md#popup). Closing gives focus back to where it was    |
+| Run a command             | <kbd>Cmd</kbd>+<kbd>K</kbd> or <kbd>Ctrl</kbd>+<kbd>K</kbd> in the panel opens the [command palette](./command-palette.md)                                                          |
 | Move between tabs         | Arrow keys, <kbd>Home</kbd> and <kbd>End</kbd> in the tab bar, then <kbd>Enter</kbd> to open a tab                                                                                  |
 | Move through a long list  | <kbd>↑</kbd>, <kbd>↓</kbd>, <kbd>Home</kbd> and <kbd>End</kbd> in the SSR & HTTP timeline, the Store changes and events, and the Signals list. Each list is one <kbd>Tab</kbd> stop |
 | Close the panel           | <kbd>Escape</kbd>, outside a search box with text                                                                                                                                   |
@@ -103,11 +105,15 @@ In a search box that has text, <kbd>Escape</kbd> clears the box and leaves the p
 
 ### Saved layout
 
-The panel saves its position, size and dock mode in `localStorage` under `pangular-popup`, so it keeps its layout across reloads. Clear that key to reset it.
+The panel saves its position, size, dock mode and [passive mode](./settings.md#passive-mode) in `localStorage` under `pangular-popup`, so it keeps its layout across reloads. Clear that key to reset it.
+
+### Passive mode
+
+In passive mode the floating button stays hidden until you press the popup shortcut. Turn it on in [Settings](./settings.md#passive-mode).
 
 ### Theme
 
-The panel follows the color scheme of the hub, which follows your system unless you pick light or dark in the hub. Without the hub, the panel follows your system. The popup frame around the panel switches with it and saves the last theme with the layout. It takes the theme only from the panel's own frame, so other frames on your page cannot change it.
+The panel follows the color scheme of the hub, which follows your system unless you pick light or dark in the hub. Without the hub, the panel follows your system. To keep the panel light or dark whatever the hub does, pick it in [Settings](./settings.md#theme). The popup frame around the panel switches with it and saves the last theme with the layout. It takes the theme only from the panel's own frame, so other frames on your page cannot change it.
 
 ## The hub
 
@@ -188,6 +194,19 @@ The URL hash selects a tab. Open `/__devframes/pangular/#tab=signals` to land on
 | SSR & HTTP | `#tab=network`    |
 | Analog     | `#tab=analog`     |
 | Capacitor  | `#tab=capacitor`  |
+| Settings   | `#tab=settings`   |
+
+### Link to an item
+
+A link can also select an item on its tab, on one page: `#tab=<tab>&id=<id>&page=<pageId>`. Open `/__devframes/pangular/#tab=components&id=12&page=k3x9` to land on Components with that component instance selected.
+
+| Tab        | `id` selects                                               |
+| ---------- | ---------------------------------------------------------- |
+| Components | A component instance, by its id in the component tree      |
+| Injectors  | The element injector of a component, by the component's id |
+| Forms      | A form, by its id                                          |
+
+On other tabs, `id` is ignored and the link opens the tab. `page` is the page id from `list-pages`. Without it, the tab looks on the page it shows. If the item is not on the page, the tab says so. The [`open-in-panel`](../agents/tools.md#open-in-panel) agent tool builds these links and switches the panels that are open to them.
 
 ### Last tab
 

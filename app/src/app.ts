@@ -30,11 +30,12 @@ import { AnalogInspector } from './pages/analog-inspector';
 import { NetworkInspector } from './pages/network-inspector';
 import { ComingSoon, type ComingSoonInfo } from './pages/coming-soon';
 import { CapacitorInspector } from './pages/capacitor-inspector';
+import { ErrorsInspector } from './pages/errors-inspector';
 import { capacitorPages } from './pages/capacitor-types';
 import { TabIcon } from './pages/tab-icon';
 import { styleHubRail } from './hub-rail-style';
-import { ThemeService } from './theme.service';
-import { followHubDocks, inHub, selectHubDock } from './hub-dock-sync';
+import { ThemeService, themeTargets } from './theme.service';
+import { followHubDocks, inHub, openHubPalette, selectHubDock } from './hub-dock-sync';
 import { fullPanelHref, isPlainClick } from './full-panel';
 import { INSPECTORS_DOCS_URL, panelConfig, tabEnabled, tabInspector } from './devtools-config';
 import { hostPageId, scopeToPage } from './page-id';
@@ -47,9 +48,32 @@ import { viewAccent } from './view-accents';
 import {
   HUB_ALL_TOOLS,
   HUB_VIEWS,
+  PANEL_LINK_ITEMS,
+  PANEL_TABS,
+  hotkeyLabel,
   hubDockId,
+  matchesHotkey,
+  panelCommands,
+  panelLinkHash,
+  parsePanelLink,
   type HubView,
+  type PanelLink,
 } from '@pangular-inspector/devtools/config';
+import { Settings } from './pages/settings';
+import { CommandPalette } from './ui/command-palette';
+import type { PaletteCommand } from './palette-filter';
+import type { ComponentCommand } from './types/component-command.types';
+import {
+  arrangeTabs,
+  inPopup,
+  isMacPlatform,
+  storePassive,
+  storeTabLayout,
+  storedPassive,
+  storedTabLayout,
+  type TabLayout,
+  type ThemePreference,
+} from './shell-prefs';
 
 type View = HubView;
 
@@ -169,6 +193,7 @@ function readView(): View | null {
     '[style.--accent]': 'viewAccent()?.accent ?? null',
     '[style.--accent-text]': 'viewAccent()?.text ?? null',
     '(window:message)': 'inspectFromPanel($event)',
+    '(document:keydown)': 'onGlobalKey($event)',
   },
   imports: [
     Dashboard,
@@ -182,8 +207,11 @@ function readView(): View | null {
     AnalogInspector,
     NetworkInspector,
     CapacitorInspector,
+    ErrorsInspector,
     ComingSoon,
     TabIcon,
+    Settings,
+    CommandPalette,
   ],
   template: `
     <header>
@@ -392,6 +420,33 @@ function readView(): View | null {
           Open full panel
         </a>
       }
+      <span class="shell-actions">
+        <button
+          type="button"
+          class="shell-btn"
+          aria-haspopup="dialog"
+          [attr.aria-label]="'Command palette (' + paletteShortcut + ')'"
+          [attr.title]="'Command palette (' + paletteShortcut + ')'"
+          (click)="openPalette()"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"
+            />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="shell-btn"
+          aria-label="Settings"
+          title="Settings"
+          [class.active]="tab() === 'settings'"
+          [attr.aria-pressed]="tab() === 'settings'"
+          (click)="toggleSettings()"
+        >
+          <app-tab-icon name="settings" />
+        </button>
+      </span>
       <span
         class="status"
         [class.connected]="connected()"
@@ -404,7 +459,19 @@ function readView(): View | null {
     </header>
     <main #main tabindex="-1" [attr.aria-label]="mainLabel()">
       <p class="background-note" role="status">{{ backgroundNote() }}</p>
-      @if (connectionFailed()) {
+      @if (tab() === 'settings') {
+        <app-settings
+          [tabs]="settingsTabs()"
+          [layout]="tabLayout()"
+          (layoutChange)="setTabLayout($event)"
+          [theme]="themePreference()"
+          (themeChange)="setTheme($event)"
+          [passive]="passive()"
+          (passiveChange)="setPassive($event)"
+          [hotkey]="popupHotkey()"
+          [paletteShortcut]="paletteShortcut"
+        />
+      } @else if (connectionFailed()) {
         <div class="connection-error" role="alert">
           <p>
             Can't reach the devtools server. Check that the dev server is running. The panel keeps
@@ -436,8 +503,10 @@ function readView(): View | null {
               <app-component-tree
                 [rpc]="rpc()"
                 [focus]="componentFocus()"
+                [command]="componentCommand()"
                 [canShowInjector]="config().inspectors.injectors"
                 (focusHandled)="componentFocus.set(null)"
+                (commandHandled)="componentCommand.set(null)"
                 (showForm)="showForm($event)"
                 (showInjector)="showInjector($event)"
               />
@@ -479,10 +548,22 @@ function readView(): View | null {
             @case ('capacitor') {
               <app-capacitor-inspector [rpc]="rpc()" />
             }
+            @case ('errors') {
+              <app-errors-inspector
+                [rpc]="rpc()"
+                [canShowComponent]="config().inspectors.components"
+                (showComponent)="showComponent($event)"
+              />
+            }
           }
         }
       }
     </main>
+    <app-command-palette
+      [commands]="paletteCommands()"
+      [(open)]="paletteOpen"
+      (picked)="runCommand($event)"
+    />
   `,
   styles: `
     @use 'mixins' as m;
@@ -718,7 +799,50 @@ function readView(): View | null {
         @include m.focus-ring(2px);
       }
     }
-    .full-panel + .status {
+    .shell-actions {
+      display: inline-flex;
+      flex-shrink: 0;
+      gap: 4px;
+      margin-left: auto;
+    }
+    .full-panel + .shell-actions {
+      margin-left: 0;
+    }
+    .shell-btn {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text-2);
+      cursor: pointer;
+      transition:
+        background-color 0.16s var(--ease),
+        color 0.16s var(--ease);
+      svg {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      &:hover {
+        background: var(--surface-2);
+        color: var(--text-strong);
+      }
+      &.active {
+        border-color: var(--accent-line);
+        background: var(--accent-soft);
+        color: var(--text-strong);
+      }
+      &:focus-visible {
+        @include m.focus-ring(2px);
+      }
+    }
+    .shell-actions + .status {
       margin-left: 0;
     }
     .dot {
@@ -883,27 +1007,17 @@ function readView(): View | null {
 })
 export class App implements OnInit, OnDestroy {
   readonly analog = signal(false);
-  private readonly allTabs: Tabs[] = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'analog', label: 'Analog' },
-    { id: 'components', label: 'Components' },
-    { id: 'routes', label: 'Routes' },
-    { id: 'signals', label: 'Signals' },
-    { id: 'injectors', label: 'Injectors' },
-    { id: 'store', label: 'Store' },
-    { id: 'forms', label: 'Forms' },
-    { id: 'pipes', label: 'Pipes' },
-    { id: 'network', label: 'SSR & HTTP' },
-    { id: 'capacitor', label: 'Capacitor' },
-  ];
+  private readonly allTabs: Tabs[] = PANEL_TABS.map(({ id, label }) => ({ id, label }));
   readonly view = signal<View | null>(readView());
   readonly viewAccent = computed(() => viewAccent(this.view(), this.themeService.current()));
   readonly title = computed(() => {
     const view = this.view();
     return view ? VIEW_TITLE[view] : 'Pangular Inspector';
   });
-  protected readonly mainLabel = computed(
-    () => this.availableTabs().find((t) => t.id === this.tab())?.label ?? this.title(),
+  protected readonly mainLabel = computed(() =>
+    this.tab() === 'settings'
+      ? 'Settings'
+      : (this.availableTabs().find((t) => t.id === this.tab())?.label ?? this.title()),
   );
   readonly analogKnown = signal(false);
   /** Whether a Capacitor app reports, so the Capacitor tab has something to show. */
@@ -954,12 +1068,16 @@ export class App implements OnInit, OnDestroy {
         !(view === 'angular' && TAB_VIEW[t.id]),
     );
   });
+  /** How the viewer arranged the tab bar in Settings. */
+  readonly tabLayout = signal<TabLayout>(storedTabLayout());
   readonly tabs = computed(() => {
-    const tabs = this.availableTabs();
-    if (this.rpc()) return tabs;
     const tab = this.tab();
+    const tabs = arrangeTabs(this.availableTabs(), this.tabLayout(), tab);
+    if (this.rpc()) return tabs;
     return tabs.filter((t) => t.id === 'dashboard' || t.id === tab);
   });
+  /** The tabs Settings arranges: every tab this panel can show, in the default order. */
+  protected readonly settingsTabs = computed(() => this.availableTabs());
 
   /** The one tab button in the Tab order; the arrow keys reach the others. */
   protected readonly rovingTab = computed(() => {
@@ -1095,13 +1213,14 @@ export class App implements OnInit, OnDestroy {
       if (dock === ALL_TOOLS) this.showFullPanel();
       else this.showView(dock);
     });
-    const restored = initialTab(
-      location.hash,
-      storedTab(this.tabScope()),
-      this.availableTabs().map((t) => t.id),
-    );
-    if (restored) this.tab.set(restored);
-    else if (
+    const restored = initialTab(location.hash, storedTab(this.tabScope()), [
+      ...this.availableTabs().map((t) => t.id),
+      'settings' as const,
+    ]);
+    if (restored) {
+      this.tab.set(restored);
+      this.restoreLinkItem();
+    } else if (
       !this.view() &&
       initialTab(location.hash, storedTab(this.tabScope()), ['capacitor']) === 'capacitor'
     ) {
@@ -1142,6 +1261,7 @@ export class App implements OnInit, OnDestroy {
         this.refocusOnConnect = false;
         this.rpc.set(client);
         this.connected.set(true);
+        this.listenForServer(client);
         void this.watchVisibility(client);
         void this.watchAngularNative(client);
         void this.watchCapacitor(client);
@@ -1250,6 +1370,199 @@ export class App implements OnInit, OnDestroy {
     this.showFullPanel(tab);
     this.focusCurrentTab();
     void selectHubDock(ALL_TOOLS);
+  }
+
+  // Command palette, settings and deep links.
+  readonly paletteOpen = signal(false);
+  protected readonly paletteShortcut = isMacPlatform() ? '⌘K' : 'Ctrl+K';
+  readonly themePreference = computed(() => this.themeService.preference());
+  readonly passive = signal(storedPassive());
+  /** The popup shortcut from the config, as the platform writes it. */
+  readonly popupHotkey = computed(() => {
+    const hotkey = this.config().popup.hotkey;
+    return hotkey === false ? false : hotkeyLabel(hotkey, isMacPlatform());
+  });
+  private readonly popup = inPopup();
+  /** The tab to go back to when Settings closes. */
+  private tabBeforeSettings: Tab | null = null;
+  /** A command for the Components tab, handed over once it shows. */
+  readonly componentCommand = linkedSignal<Tab, ComponentCommand | null>({
+    source: this.tab,
+    computation: () => null,
+  });
+
+  readonly paletteCommands = computed<PaletteCommand[]>(() => {
+    const available = new Set<string>(this.availableTabs().map((t) => t.id));
+    const components = available.has('components') && !!this.rpc();
+    return panelCommands(this.config()).filter((command) => {
+      if (command.id.startsWith('tab:')) return available.has(command.id.slice(4));
+      if (command.popupOnly) return this.popup;
+      if (command.id === 'pick-component' || command.id.startsWith('cd-')) return components;
+      return true;
+    });
+  });
+
+  /** Cmd+K on macOS, Ctrl+K elsewhere, opens the palette from anywhere in the panel. */
+  onGlobalKey(event: KeyboardEvent) {
+    if (event.defaultPrevented) return;
+    const mac = isMacPlatform();
+    const hotkey = this.config().popup.hotkey;
+    if (this.popup && hotkey && !event.repeat && matchesHotkey(event, hotkey, mac)) {
+      // The popup can't hear keys inside a hub dock, so the panel asks it to close.
+      event.preventDefault();
+      this.postToPopup({ type: 'pangular:popup-close' });
+      return;
+    }
+    const mod = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+    if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'k') return;
+    if (event.repeat) return;
+    event.preventDefault();
+    if (this.paletteOpen()) return;
+    this.openPalette();
+  }
+
+  /** The hub's palette lists the same commands; outside the hub the panel has its own. */
+  openPalette() {
+    if (inHub() && openHubPalette()) return;
+    this.paletteOpen.set(true);
+  }
+
+  /** Runs a palette command, from this panel's palette or the hub's. */
+  runCommand(id: string) {
+    if (id.startsWith('tab:')) {
+      const tab = id.slice(4) as Tab;
+      if (this.availableTabs().some((t) => t.id === tab)) this.switchTab(tab);
+      return;
+    }
+    if (id.startsWith('theme:')) {
+      const theme = id.slice(6);
+      if (theme === 'system' || theme === 'light' || theme === 'dark') this.setTheme(theme);
+      return;
+    }
+    if (id.startsWith('dock:')) {
+      this.postToPopup({ type: 'pangular:popup-dock', mode: id.slice(5) });
+      return;
+    }
+    const kinds: Record<string, ComponentCommand['kind']> = {
+      'pick-component': 'pick',
+      'cd-record-start': 'cd-start',
+      'cd-record-stop': 'cd-stop',
+      'cd-clear': 'cd-clear',
+    };
+    if (id === 'settings') {
+      if (this.tab() !== 'settings') this.toggleSettings();
+    } else if (kinds[id] && this.availableTabs().some((t) => t.id === 'components')) {
+      // Switch first: the command belongs to the tab, so the switch would clear it.
+      if (this.tab() !== 'components') this.switchTab('components');
+      this.componentCommand.set({ kind: kinds[id] });
+    }
+  }
+
+  toggleSettings() {
+    if (this.tab() === 'settings') {
+      const back = this.tabBeforeSettings;
+      const available = this.availableTabs().map((t) => t.id);
+      this.switchTab(back && available.includes(back) ? back : (available[0] ?? 'dashboard'));
+      return;
+    }
+    this.tabBeforeSettings = this.tab();
+    this.switchTab('settings');
+  }
+
+  setTabLayout(layout: TabLayout) {
+    this.tabLayout.set(layout);
+    storeTabLayout(layout);
+  }
+
+  setTheme(theme: ThemePreference) {
+    this.themeService.setPreference(theme);
+  }
+
+  setPassive(passive: boolean) {
+    this.passive.set(passive);
+    storePassive(passive);
+    this.postToPopup({ type: 'pangular:popup-passive', passive });
+  }
+
+  /** Sends a message to the popup on the app's page, which checks it came from its panel. */
+  private postToPopup(message: Record<string, unknown>) {
+    for (const { win, origin } of themeTargets()) {
+      try {
+        win.postMessage(message, origin);
+      } catch {
+        // a window that went away
+      }
+    }
+  }
+
+  /**
+   * Opens a deep link: its tab, and the item it names on the tabs that can
+   * select one (`PANEL_LINK_ITEMS`). Returns whether the tab exists here.
+   */
+  openLink(link: PanelLink): boolean {
+    const tab = link.tab as Tab;
+    if (!this.availableTabs().some((t) => t.id === tab)) return false;
+    if (this.tab() !== tab) this.switchTab(tab);
+    if (link.id && Object.hasOwn(PANEL_LINK_ITEMS, tab)) {
+      const pageId = link.page;
+      if (tab === 'components') this.componentFocus.set({ id: link.id, pageId });
+      else if (tab === 'injectors') this.injectorFocus.set({ componentId: link.id, pageId });
+      else if (tab === 'forms') this.formFocus.set({ id: link.id });
+    }
+    history.replaceState(history.state, '', panelLinkHash(link));
+    return true;
+  }
+
+  /** Listens for the commands and links the server sends to every open panel. */
+  private listenForServer(client: DevframeRpcClient) {
+    const rpc = client.scope('pangular').rpc as unknown as {
+      register: (definition: {
+        name: string;
+        type: 'event';
+        jsonSerializable: boolean;
+        handler: (message: unknown) => void;
+      }) => void;
+    };
+    // Only a panel someone can see acts, so a tab in the background stays put.
+    const visible = () => typeof document === 'undefined' || document.visibilityState !== 'hidden';
+    try {
+      rpc.register({
+        name: 'panel-command',
+        type: 'event',
+        jsonSerializable: true,
+        handler: (message) => {
+          const command = (message as { command?: unknown } | null)?.command;
+          if (typeof command === 'string' && visible()) this.runCommand(command);
+        },
+      });
+      rpc.register({
+        name: 'open-in-panel',
+        type: 'event',
+        jsonSerializable: true,
+        handler: (message) => {
+          const link = message as Partial<PanelLink> | null;
+          if (!visible() || typeof link?.tab !== 'string') return;
+          this.openLink({
+            tab: link.tab,
+            ...(typeof link.id === 'string' ? { id: link.id } : {}),
+            ...(typeof link.page === 'string' ? { page: link.page } : {}),
+          });
+        },
+      });
+    } catch {
+      // a client that cannot take server events; the palette still works locally
+    }
+  }
+
+  /** The item a deep link on load names, applied once its tab is open. */
+  private restoreLinkItem() {
+    const link = parsePanelLink(location.hash);
+    if (!link?.id || link.tab !== this.tab()) return;
+    const tab = link.tab as Tab;
+    if (tab === 'components') this.componentFocus.set({ id: link.id, pageId: link.page });
+    else if (tab === 'injectors') {
+      this.injectorFocus.set({ componentId: link.id, pageId: link.page });
+    } else if (tab === 'forms') this.formFocus.set({ id: link.id });
   }
 
   formFocus = signal<{ id: string } | null>(null);

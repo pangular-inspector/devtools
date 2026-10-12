@@ -7,6 +7,7 @@ import { attachForms } from './forms-collector.ts';
 import { attachPipes } from './pipes-collector.ts';
 import { attachHttp } from './http-overlay.ts';
 import { attachCapacitor } from './capacitor-overlay.ts';
+import { attachErrors } from './errors-collector.ts';
 import { allowClientRules, httpRegistry } from './http-rules.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
 import { collectInjectorTree } from './injector-tree.ts';
@@ -271,6 +272,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   }
   const my = rpc.scope('pangular');
   const devtoolsConfig = configFromConnection(rpc.connectionMeta);
+  void overlayPopup()
+    ?.then((m) => m.setPopupHotkey(devtoolsConfig.popup.hotkey))
+    .catch(() => {});
   const on = devtoolsConfig.inspectors;
   const limits = devtoolsConfig.limits;
   allowClientRules(on.http && devtoolsConfig.actions.http);
@@ -447,6 +451,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs)
     : null;
   const ngrx = on.ngrx ? attachNgrx(my, pageId, getNg, limits.changeLog) : null;
+  const errors = on.errors ? attachErrors(my, pageId, getNg, { tickMs }) : null;
   const consoleGlobals = attachConsoleGlobals(my, pageId, {
     getNg,
     inspectors: on,
@@ -636,6 +641,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     on.router && (() => void pushRouter()),
     http && (() => void http.push().catch(() => {})),
     cd && (() => void cd.push().catch(() => {})),
+    errors && (() => void errors.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
   const pushAll = () => collectors.forEach((run) => run());
   pushAll();
@@ -847,12 +853,14 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     capacitor?.leave();
     forget('analog', 'forget-analog-page');
     ngrx?.leave();
+    errors?.leave();
   };
   addEventListener('pagehide', leave);
   const resendConfig = () => {
     sentGeneration = -1;
     pipes?.resume();
     capacitor?.resume();
+    errors?.resume();
     left = false;
     onVisibility();
   };
@@ -870,6 +878,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     pipes?.stop();
     capacitor?.stop();
     ngrx?.stop();
+    errors?.stop();
     cd?.stop();
     hydrationOverlay?.stop();
     stopAnalog();

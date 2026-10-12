@@ -3,6 +3,7 @@ import { hasStateScript, scanHydration } from './http-hydration.ts';
 import { isRedactedKey, redactMessage } from './forms-privacy.ts';
 import { createHydrationScanner } from './http-overlay.ts';
 import { httpRegistry } from './http-rules.ts';
+import { tapConsole } from './console-tap.ts';
 import {
   findRouters,
   redactText,
@@ -286,15 +287,7 @@ export function attachAnalog(
       if (hydrationErrors.length > MAX_ERRORS) hydrationErrors.shift();
     }
   };
-  const patches = (['error', 'warn'] as const).map((level) => {
-    const original = console[level];
-    const patched = function (this: unknown, ...args: unknown[]) {
-      record(args);
-      return original.apply(this, args as []);
-    };
-    console[level] = patched;
-    return { level, original, patched };
-  });
+  const stopConsole = tapConsole(['error', 'warn'], (_level, args) => record([...args]));
 
   const push = () => {
     const report = read(() => collectAnalog(getNg(), pageId, hydrationErrors, scanner), null);
@@ -334,8 +327,6 @@ export function attachAnalog(
   return () => {
     clearInterval(interval);
     subscription?.unsubscribe();
-    for (const { level, original, patched } of patches) {
-      if (console[level] === patched) console[level] = original;
-    }
+    stopConsole();
   };
 }

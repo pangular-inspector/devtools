@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Sixty-seven tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Seventy-one tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -44,6 +44,18 @@ If `page` names a tab that doesn't report that data, the tool answers `No page <
 Lists the tabs, [Angular Native](../getting-started/angular-native.md) apps, [NativeScript](../getting-started/nativescript.md) apps and [Capacitor](../guides/capacitor.md) apps that report to the server, newest first: page id, URL, title, platform (`browser`, `Angular Native`, `NativeScript`, or `Capacitor (android)` and `Capacitor (ios)` for an app in a native WebView), seconds since the last report, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
 
 The URL comes from the HTTP or router report. A page that sends neither (no router, and no [HTTP setup](../getting-started/express.md)) still shows the URL its component tree reports, which also stands in when the other reports are more than 15 seconds older. A tab in the background stops reporting until it is shown again, so its last report is marked `(background)`: an old time there means the data is the last known state, not that the page is gone.
+
+### open-in-panel
+
+Gives the user a link that opens the panel on one tab with one item selected, and switches the panels that are open to it. Reads: page. Use it to point the user at what you found.
+
+| Argument | Required | What it is                                                                                                                                                                     |
+| -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tab`    | Yes      | The tab: `dashboard`, `components`, `routes`, `signals`, `injectors`, `store`, `forms`, `pipes`, `network` (SSR & HTTP), `analog` or `capacitor`. Only tabs that are on count. |
+| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, a form id on `forms`. Other tabs ignore it.         |
+| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                               |
+
+The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#tab=components&id=12&page=k3x9`, when the hub serves the panel and a page has reported its address. Otherwise it is the hash to add to the panel's address. Each panel that is open and not in a background tab opens the link at once. The tool is `read`: it changes what the panel shows, not the app. See [Deep links](../getting-started/popup-and-hub.md#deep-links).
 
 ### Action tools
 
@@ -534,6 +546,18 @@ These tools read what a Capacitor app reported: its platform, its plugins and th
 | `list-capacitor-plugins` | The platform, the server URL, whether CapacitorHttp and native logging are on, the WebView user agent, and each plugin: available, imported, installed natively, its native methods, and a hint when they disagree.                                                                        | none                                  |
 
 `plugin` keeps calls to one plugin, ignoring case. `failed` keeps calls that failed. `slowMs` keeps calls that took at least that many milliseconds, counting a pending call's time so far. `limit` defaults to 30 (at most 200). Without `page`, both tools answer for the most recent page with a native bridge, so a desktop tab of the same app doesn't hide the device, and they name the other pages that report. A long answer is cut at about 20,000 characters with a note on how to narrow it, and a plugin lists its first 20 methods. Native calls are logged on iOS and Android. Calls a web implementation answers are logged only when the app loads `@pangular-inspector/devtools/capacitor-hook` before `@capacitor/core`, and the answer says so when it doesn't. Arguments, results and errors are masked with the server's redaction too.
+
+## Errors
+
+These tools read what a page captured: errors from Angular's `ErrorHandler`, uncaught errors, unhandled promise rejections and console calls. See [Errors](../inspectors/errors.md). Reads: page.
+
+| Tool            | What it answers                                                                                                                                                                                                                                 | Arguments                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `list-errors`   | Error groups, most recent first: id, count, when last seen, the Angular error code linked to its reference page, the message, the owning component with its instance id, and the source (`handler`, `window` or `promise`).                     | `code`, `limit`            |
+| `explain-error` | One error by `id`: message, count, sources, the owning component, the stack of the first occurrence, and for an Angular code its reference page and a short known cause. With `code` instead, the reference entry and the errors that carry it. | `id`, `code`               |
+| `list-console`  | Console calls, newest first: when, level, the text of the arguments and the Angular code it mentions. Calls repeated in a row show once with a count.                                                                                           | `level`, `search`, `limit` |
+
+`code` accepts `NG0100`, `ng100` or `NG01203`. `explain-error` says so when Angular's error reference has no page for a code, and gives no known cause then. Pass the owner's instance id to `inspect-component` for its inputs and state. `list-errors` takes `limit` up to 100 (default 30), and `list-console` up to 200 (default 50). Messages, stacks and console text are masked like other live values.
 
 ## Analog
 

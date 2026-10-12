@@ -36,6 +36,7 @@ import {
 import { HydrationSection, type HydrationReport } from './hydration-section';
 import { CdRecording, type CdPage } from './cd-recording';
 import type { ComponentFocus } from '../types/component-focus.types';
+import type { ComponentCommand } from '../types/component-command.types';
 import type { InjectorFocus } from '../types/injector-focus.types';
 import { SourceLink } from '../ui/source-link';
 import { actionAllowed } from '../devtools-config';
@@ -1641,6 +1642,9 @@ export class ComponentTree {
   readonly focus = input<ComponentFocus | null>(null);
   readonly showForm = output<string>();
   readonly focusHandled = output<void>();
+  /** A palette command to run once the tree shows a live page. */
+  readonly command = input<ComponentCommand | null>(null);
+  readonly commandHandled = output<void>();
   /** Whether the Injectors tab is on, so "Show in Injectors" can open it. */
   readonly canShowInjector = input(false);
   readonly showInjector = output<InjectorFocus>();
@@ -1675,6 +1679,9 @@ export class ComponentTree {
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
+  private readonly cdRecording = viewChild(CdRecording);
+  /** Whether the server sent the component tree state yet, so an empty one means no page. */
+  private readonly pagesKnown = signal(false);
   private readonly cleanups: (() => void)[] = [];
   private selection = { pageId: null as string | null, detailId: null as string | null };
 
@@ -1963,6 +1970,38 @@ export class ComponentTree {
         this.focusHandled.emit();
       });
     });
+    effect(() => {
+      const command = this.command();
+      if (!command) return;
+      if (!this.live()) {
+        // The tab already explains that no live page is connected.
+        if (this.pagesKnown()) untracked(() => this.commandHandled.emit());
+        return;
+      }
+      if (command.kind === 'pick') {
+        untracked(() => {
+          if (this.native()) this.say('Picking needs a page in a browser.');
+          else if (!this.picking()) void this.pick();
+          this.commandHandled.emit();
+        });
+        return;
+      }
+      const recording = this.cdRecording();
+      if (!recording) {
+        if (this.native() || this.staticReport()) {
+          untracked(() => {
+            this.say('This page cannot record change detection.');
+            this.commandHandled.emit();
+          });
+        }
+        return;
+      }
+      untracked(() => {
+        if (command.kind === 'cd-clear') void recording.clear();
+        else if ((command.kind === 'cd-start') !== recording.recording()) void recording.toggle();
+        this.commandHandled.emit();
+      });
+    });
     this.destroyRef.onDestroy(() => {
       this.highlight(null);
       for (const cleanup of this.cleanups.splice(0)) cleanup();
@@ -1978,11 +2017,14 @@ export class ComponentTree {
       const applyTree = (value: unknown) => {
         const pages = (value as { pages?: Record<string, Page> } | null)?.pages;
         this.applyPages(pages && typeof pages === 'object' ? pages : {});
+        // A state the client hasn't loaded from the server yet says nothing.
+        if (value !== undefined) this.pagesKnown.set(true);
       };
       applyTree(tree.value());
       this.cleanups.push(tree.on('updated', applyTree));
     } catch {
       this.applyPages({});
+      this.pagesKnown.set(true);
     }
     try {
       const cd = await my.rpc.sharedState('change-detection');

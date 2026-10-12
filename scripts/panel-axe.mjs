@@ -183,6 +183,59 @@ const CAPACITOR_SEED = {
   },
 };
 
+// The Errors tab with a page that hit errors and logged to the console.
+const errorGroup = (id, extra = {}) => ({
+  id,
+  message: 'Error: No seats left on trip 42',
+  name: 'Error',
+  count: 3,
+  firstAt: now - 60_000,
+  lastAt: now - 5_000,
+  sources: ['handler'],
+  stack: 'Error: No seats left on trip 42\n    at _TripCard.book (main.js:10:5)',
+  owner: { id: 'c1-7', name: 'TripCard' },
+  ...extra,
+});
+const ERRORS_SEED = {
+  pages: {
+    tab1: {
+      pageId: 'tab1',
+      url: '/trips',
+      title: 'Trips',
+      reportedAt: now,
+      handler: 'wrapped',
+      errors: {
+        e1: errorGroup('e1'),
+        e2: errorGroup('e2', {
+          message: 'Error: NG0100: ExpressionChangedAfterItHasBeenCheckedError',
+          code: 'NG0100',
+          docUrl: 'https://angular.dev/errors/NG0100',
+          count: 1,
+          sources: ['window'],
+          owner: undefined,
+        }),
+        e3: errorGroup('e3', { message: 'NG0303: unknown property', code: 'NG0303', count: 1 }),
+      },
+      console: {
+        1: { id: 1, level: 'log', text: 'Loaded trips', at: now - 9_000, count: 4 },
+        2: { id: 2, level: 'info', text: 'Signed in', at: now - 8_000, count: 1 },
+        3: {
+          id: 3,
+          level: 'warn',
+          text: 'NG0913: image too big',
+          at: now - 7_000,
+          count: 1,
+          code: 'NG0913',
+          docUrl: 'https://angular.dev/errors/NG0913',
+        },
+        4: { id: 4, level: 'error', text: 'Failed to save', at: now - 6_000, count: 1 },
+        5: { id: 5, level: 'debug', text: 'cache hit', at: now - 5_000, count: 1 },
+      },
+      dropped: { errors: 0, console: 0 },
+    },
+  },
+};
+
 /** The dump's record format (@ungap/structured-clone JSON), for plain JSON values. */
 function encodeRecord(value) {
   const out = [];
@@ -205,19 +258,22 @@ function encodeRecord(value) {
   return JSON.stringify(out);
 }
 
-/** Serves the seeded Capacitor pages in place of the report's empty state. */
-async function seedCapacitor(context) {
+const SEEDS = { 'pangular:capacitor': CAPACITOR_SEED, 'pangular:errors': ERRORS_SEED };
+
+/** Serves the seeded Capacitor and Errors pages in place of the report's empty state. */
+async function seedPages(context) {
   await context.route(
     '**/__rpc-dump/devframe~rpc~server-state~get.record.*.json',
     async (route) => {
       const response = await route.fetch();
       const body = await response.text();
-      if (!body.includes('"pangular:capacitor"')) return route.fulfill({ response });
+      const key = Object.keys(SEEDS).find((name) => body.includes(`"${name}"`));
+      if (!key) return route.fulfill({ response });
       return route.fulfill({
         response,
         body: encodeRecord({
-          inputs: ['pangular:capacitor'],
-          output: JSON.parse(JSON.stringify(CAPACITOR_SEED)),
+          inputs: [key],
+          output: JSON.parse(JSON.stringify(SEEDS[key])),
         }),
       });
     },
@@ -286,7 +342,7 @@ try {
       reducedMotion: 'reduce',
       viewport: { width: 1280, height: 800 },
     });
-    await seedCapacitor(seeded);
+    await seedPages(seeded);
     const capacitor = await seeded.newPage();
     capacitor.on('pageerror', (error) =>
       failures.push(`${colorScheme} Capacitor: page error ${error.message}`),
@@ -311,6 +367,22 @@ try {
       await check(capacitor, `${colorScheme} view=capacitor on a web page`);
     } catch (error) {
       failures.push(`${colorScheme} Capacitor: the seeded app did not show (${error.message})`);
+    }
+    const errors = await seeded.newPage();
+    errors.on('pageerror', (error) =>
+      failures.push(`${colorScheme} Errors: page error ${error.message}`),
+    );
+    await errors.goto(`${base}#tab=errors`);
+    await errors.locator('.status.connected').waitFor();
+    try {
+      await errors.locator('ol.errors > li').first().waitFor({ timeout: 15_000 });
+      await errors.locator('ol.errors details summary').first().click();
+      await check(errors, `${colorScheme} Errors with errors reported`);
+      await errors.getByRole('button', { name: /^Console/ }).click();
+      await errors.locator('ol.console > li').first().waitFor();
+      await check(errors, `${colorScheme} Errors on the console log`);
+    } catch (error) {
+      failures.push(`${colorScheme} Errors: the seeded page did not show (${error.message})`);
     }
     await seeded.close();
   }

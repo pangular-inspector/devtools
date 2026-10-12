@@ -7,6 +7,7 @@ interface DockState {
 }
 
 interface HubClientContext {
+  commands?: { openPalette?: (scopeId?: string | null) => void };
   docks: {
     selectedId: string | null;
     getStateById: (id: string) => DockState | undefined;
@@ -61,6 +62,21 @@ export async function selectHubDock(view: string): Promise<boolean> {
   if (!ctx) return false;
   try {
     return await ctx.docks.switchEntry(hubDockId(view));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Opens the hub's command palette, which lists the panel's commands through
+ * `ctx.commands`. `false` outside the hub or when the hub has no palette.
+ */
+export function openHubPalette(): boolean {
+  const open = hubContext()?.commands?.openPalette;
+  if (typeof open !== 'function') return false;
+  try {
+    open();
+    return true;
   } catch {
     return false;
   }

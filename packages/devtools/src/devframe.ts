@@ -24,6 +24,7 @@ import {
   hydrationText,
 } from './rpc/hydration-tools.ts';
 import { registerConsoleGlobals } from './rpc/console-globals.ts';
+import { registerErrors } from './rpc/errors-register.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
@@ -218,6 +219,12 @@ import {
 import { LIVE_RESOURCE_NOTE, liveResourceText } from './rpc/resource-text.ts';
 import { trackHubDocks } from './hub-dock-status.ts';
 import { createHubFeed } from './hub-messages.ts';
+import { PANEL_COMMAND_EVENT, registerHubCommands } from './hub-commands.ts';
+import {
+  OPEN_IN_PANEL_DESCRIPTION,
+  OPEN_IN_PANEL_EVENT,
+  openInPanel,
+} from './rpc/open-in-panel.ts';
 import { clip } from './text.ts';
 import { setRedaction } from './forms-privacy.ts';
 import {
@@ -228,6 +235,7 @@ import {
   actionBlockedMessage,
   agentAllowed,
   agentSafety,
+  enabledPanelTabs,
   isPageAgentEntry,
   pangularConfigWarning,
   resolvePangularConfig,
@@ -645,6 +653,18 @@ const pangular = defineDevframe({
         if (capacitorPages.delete(pageId)) applyCapacitor();
       },
     });
+
+    const errorsInspector = on.errors
+      ? await registerErrors({
+          my,
+          rpcHost: ctx.rpc,
+          register,
+          agent,
+          owns,
+          mayForget,
+          ttl: liveTtl,
+        })
+      : null;
 
     const routerPages = new Map<string, RouterPage>();
     const routerState = await my.rpc.sharedState('router', {
@@ -1074,6 +1094,7 @@ const pangular = defineDevframe({
       if (nextPipes) applyPipes(nextPipes);
       if (expireNgrxPages(ngrxPages, Date.now(), liveTtl)) applyNgrx();
       if (expireCapacitorPages(capacitorPages, Date.now(), liveTtl)) applyCapacitor();
+      errorsInspector?.expire();
     }, 5000);
     expiry.unref?.();
     registry.owner = ctx;
@@ -3654,12 +3675,71 @@ const pangular = defineDevframe({
             pipes: withUrl(pipePages.values()),
             http: withUrl(httpPages.values()),
             capacitor: withUrl(capacitorPages.values()),
+            errors: withUrl(errorsInspector?.pages() ?? []),
             analog: withUrl(on.analog ? analogPages() : []),
           },
           visibility.list(),
         );
         return { markdown: listPagesText(pages) };
       },
+    });
+
+    // The hub frame the panel is served from, for full links into it.
+    const panelBase = (ctx as { frames?: { id: string; base?: string }[] }).frames?.find(
+      (frame) => frame.id === 'pangular',
+    )?.base;
+    agent.registerTool({
+      id: 'pangular:open-in-panel',
+      description: OPEN_IN_PANEL_DESCRIPTION,
+      inputSchema: {
+        type: 'object',
+        required: ['tab'],
+        properties: {
+          tab: {
+            type: 'string',
+            enum: enabledPanelTabs(config).map((tab) => tab.id),
+            description: 'The panel tab to open.',
+          },
+          id: {
+            type: 'string',
+            description:
+              'The item to select: a component id on components and injectors, a form id on forms.',
+          },
+          page: PAGE_ARGUMENT,
+        },
+      },
+      handler: async (args: { tab?: unknown; id?: unknown; page?: unknown }) => {
+        const details = livePageDetails();
+        const page = typeof args?.page === 'string' ? args.page : undefined;
+        const newest = byRecency(componentPages.values())[0]?.pageId;
+        const pageUrl =
+          (page ? details.get(page)?.url : undefined) ??
+          (newest ? details.get(newest)?.url : undefined) ??
+          [...details.values()].find((detail) => detail.url)?.url;
+        const result = openInPanel(args, {
+          config,
+          panelBase,
+          pageUrl,
+          pages: [...details.keys()],
+        });
+        if (result.link) {
+          void my.rpc.broadcast({
+            method: OPEN_IN_PANEL_EVENT,
+            args: [result.link],
+            optional: true,
+          });
+        }
+        return { markdown: result.markdown };
+      },
+    });
+
+    // The panel's commands in the hub's palette; the panels run them.
+    registerHubCommands(ctx, config, (message) => {
+      void my.rpc.broadcast({
+        method: PANEL_COMMAND_EVENT,
+        args: [message],
+        optional: true,
+      });
     });
 
     if (on.analog) {

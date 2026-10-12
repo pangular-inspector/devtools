@@ -9,6 +9,7 @@ export const PANGULAR_INSPECTORS = [
   'http',
   'analog',
   'capacitor',
+  'errors',
 ] as const;
 
 export type PangularInspector = (typeof PANGULAR_INSPECTORS)[number];
@@ -192,6 +193,14 @@ export interface PangularConfig {
     /** Capacitor plugin calls kept per page and on the server. Default 200. */
     capacitorCalls?: number;
   };
+  popup?: {
+    /**
+     * The keyboard shortcut that opens and closes the floating panel on the
+     * page, such as `Alt+Shift+P` (the default) or `Mod+Shift+I`. `Mod` is
+     * Cmd on macOS and Ctrl elsewhere. `false` turns the shortcut off.
+     */
+    hotkey?: string | false;
+  };
 }
 
 export interface ResolvedPangularConfig {
@@ -200,9 +209,250 @@ export interface ResolvedPangularConfig {
   actions: Record<PangularAction, boolean>;
   redaction: { secretNames: string[]; unmask: string[] };
   limits: Record<PangularLimit, number>;
+  popup: { hotkey: string | false };
 }
 
 export const PANGULAR_CONFIG_KEY = 'pangular';
+
+/** The popup shortcut when `popup.hotkey` is left out. */
+export const DEFAULT_POPUP_HOTKEY = 'Alt+Shift+P';
+
+const HOTKEY_MODIFIERS: Record<string, 'Mod' | 'Ctrl' | 'Meta' | 'Alt' | 'Shift'> = {
+  mod: 'Mod',
+  ctrl: 'Ctrl',
+  control: 'Ctrl',
+  meta: 'Meta',
+  cmd: 'Meta',
+  command: 'Meta',
+  alt: 'Alt',
+  option: 'Alt',
+  opt: 'Alt',
+  shift: 'Shift',
+};
+
+const MODIFIER_ORDER = ['Mod', 'Ctrl', 'Meta', 'Alt', 'Shift'] as const;
+
+/**
+ * A shortcut like `alt+shift+p` in its canonical spelling, `Alt+Shift+P`, or
+ * `undefined` when it is not one: it needs one letter, digit or F1 to F12 key
+ * and at least one modifier other than Shift, so typing never triggers it.
+ */
+export function normalizeHotkey(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length > 40) return undefined;
+  const parts = value.split('+').map((part) => part.trim());
+  if (parts.some((part) => !part)) return undefined;
+  const modifiers = new Set<string>();
+  let key: string | undefined;
+  for (const part of parts) {
+    const modifier = HOTKEY_MODIFIERS[part.toLowerCase()];
+    if (modifier) {
+      if (modifiers.has(modifier)) return undefined;
+      modifiers.add(modifier);
+      continue;
+    }
+    if (key !== undefined) return undefined;
+    if (/^[a-z0-9]$/i.test(part)) key = part.toUpperCase();
+    else if (/^f([1-9]|1[0-2])$/i.test(part)) key = part.toUpperCase();
+    else return undefined;
+  }
+  if (!key || ![...modifiers].some((modifier) => modifier !== 'Shift')) return undefined;
+  if (modifiers.has('Mod') && (modifiers.has('Ctrl') || modifiers.has('Meta'))) return undefined;
+  return [...MODIFIER_ORDER.filter((modifier) => modifiers.has(modifier)), key].join('+');
+}
+
+/** The key fields of a `KeyboardEvent` that a shortcut reads. */
+export interface HotkeyEvent {
+  key: string;
+  code?: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+}
+
+/**
+ * Whether a key press is `hotkey` (a `normalizeHotkey` result). Letters and
+ * digits match by key position, so Alt and Option combinations that type
+ * another character still match. `mac` decides what `Mod` means.
+ */
+export function matchesHotkey(event: HotkeyEvent, hotkey: string, mac: boolean): boolean {
+  const parts = hotkey.split('+');
+  const key = parts.pop()!;
+  const wants = new Set(parts);
+  const ctrl = wants.has('Ctrl') || (wants.has('Mod') && !mac);
+  const meta = wants.has('Meta') || (wants.has('Mod') && mac);
+  if (event.ctrlKey !== ctrl || event.metaKey !== meta) return false;
+  if (event.altKey !== wants.has('Alt') || event.shiftKey !== wants.has('Shift')) return false;
+  if (/^F\d+$/.test(key)) return event.key.toUpperCase() === key;
+  const code = /^\d$/.test(key) ? `Digit${key}` : `Key${key}`;
+  if (event.code) return event.code === code;
+  return event.key.toUpperCase() === key;
+}
+
+/** A shortcut as the platform writes it: `⌥⇧P` on macOS, `Alt+Shift+P` elsewhere. */
+export function hotkeyLabel(hotkey: string, mac: boolean): string {
+  if (!mac) return hotkey.replace(/^Mod\b/, 'Ctrl');
+  const symbols: Record<string, string> = {
+    Mod: '⌘',
+    Meta: '⌘',
+    Ctrl: '⌃',
+    Alt: '⌥',
+    Shift: '⇧',
+  };
+  return hotkey
+    .split('+')
+    .map((part) => symbols[part] ?? part)
+    .join('');
+}
+
+/**
+ * The panel's tabs in their default order, with the inspector that turns
+ * each one on. The panel builds its tab bar from it, and the hub's command
+ * palette and the `open-in-panel` agent tool read it too.
+ */
+export const PANEL_TABS = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'analog', label: 'Analog', inspector: 'analog' },
+  { id: 'components', label: 'Components', inspector: 'components' },
+  { id: 'routes', label: 'Routes', inspector: 'router' },
+  { id: 'signals', label: 'Signals', inspector: 'signals' },
+  { id: 'injectors', label: 'Injectors', inspector: 'injectors' },
+  { id: 'store', label: 'Store', inspector: 'ngrx' },
+  { id: 'forms', label: 'Forms', inspector: 'forms' },
+  { id: 'pipes', label: 'Pipes', inspector: 'pipes' },
+  { id: 'network', label: 'SSR & HTTP', inspector: 'http' },
+  { id: 'errors', label: 'Errors', inspector: 'errors' },
+  { id: 'capacitor', label: 'Capacitor', inspector: 'capacitor' },
+] as const satisfies readonly { id: string; label: string; inspector?: PangularInspector }[];
+
+export type PanelTab = (typeof PANEL_TABS)[number]['id'];
+
+/** The panel tabs whose inspector is on under `config`. */
+export function enabledPanelTabs(config: ResolvedPangularConfig): (typeof PANEL_TABS)[number][] {
+  return PANEL_TABS.filter((tab) => !('inspector' in tab) || config.inspectors[tab.inspector]);
+}
+
+/**
+ * The tabs where a deep link's `id` selects an item, and what it names
+ * there. On other tabs the link opens the tab only.
+ */
+export const PANEL_LINK_ITEMS: Partial<Record<PanelTab, string>> = {
+  components: 'a component instance, by its id in the component tree',
+  injectors: "a component's element injector, by the component's id",
+  forms: 'a form, by its id',
+};
+
+/** Where a deep link into the panel points: a tab, and an item on one page. */
+export interface PanelLink {
+  tab: string;
+  /** The item to select, as `PANEL_LINK_ITEMS` describes. */
+  id?: string;
+  /** The page the item belongs to (a `pageId`). */
+  page?: string;
+}
+
+const MAX_LINK_PART = 200;
+
+/** The hash of a deep link, such as `#tab=components&id=12&page=k3x9`. */
+export function panelLinkHash(link: PanelLink): string {
+  const params = new URLSearchParams({ tab: link.tab });
+  if (link.id) params.set('id', link.id);
+  if (link.page) params.set('page', link.page);
+  return `#${params.toString()}`;
+}
+
+/** Reads a deep link from a URL hash; `null` without a `tab`. Over-long parts are dropped. */
+export function parsePanelLink(hash: string): PanelLink | null {
+  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  const part = (name: string) => {
+    const value = params.get(name)?.trim();
+    return value && value.length <= MAX_LINK_PART ? value : undefined;
+  };
+  const tab = part('tab');
+  if (!tab) return null;
+  const id = part('id');
+  const page = part('page');
+  return { tab, ...(id ? { id } : {}), ...(page ? { page } : {}) };
+}
+
+/** Where a panel command shows in a palette. */
+export type PanelCommandGroup = 'Go to' | 'Actions' | 'Theme' | 'Popup';
+
+/** A command the panel runs, from its own palette or the hub's. */
+export interface PanelCommand {
+  /** Without the `pangular:` prefix the hub adds, such as `tab:signals`. */
+  id: string;
+  title: string;
+  group: PanelCommandGroup;
+  /** Extra words the palette filter matches. */
+  keywords?: string;
+  /** Only the popup has dock modes, so the hub leaves these out. */
+  popupOnly?: boolean;
+}
+
+const PANEL_ACTIONS: (PanelCommand & { inspector?: PangularInspector })[] = [
+  { id: 'settings', title: 'Open settings', group: 'Go to', keywords: 'preferences tabs' },
+  {
+    id: 'pick-component',
+    title: 'Pick component on page',
+    group: 'Actions',
+    keywords: 'select inspect element',
+    inspector: 'components',
+  },
+  {
+    id: 'cd-record-start',
+    title: 'Start recording change detection',
+    group: 'Actions',
+    keywords: 'profiler cycles',
+    inspector: 'components',
+  },
+  {
+    id: 'cd-record-stop',
+    title: 'Stop recording change detection',
+    group: 'Actions',
+    keywords: 'profiler cycles',
+    inspector: 'components',
+  },
+  {
+    id: 'cd-clear',
+    title: 'Clear change detection recording',
+    group: 'Actions',
+    keywords: 'reset recordings cycles',
+    inspector: 'components',
+  },
+  { id: 'theme:system', title: 'Theme: follow the system', group: 'Theme', keywords: 'auto' },
+  { id: 'theme:light', title: 'Theme: light', group: 'Theme' },
+  { id: 'theme:dark', title: 'Theme: dark', group: 'Theme' },
+  { id: 'dock:float', title: 'Popup: float', group: 'Popup', keywords: 'dock', popupOnly: true },
+  {
+    id: 'dock:bottom',
+    title: 'Popup: dock to the bottom',
+    group: 'Popup',
+    keywords: 'dock',
+    popupOnly: true,
+  },
+  {
+    id: 'dock:right',
+    title: 'Popup: dock to the right',
+    group: 'Popup',
+    keywords: 'dock',
+    popupOnly: true,
+  },
+];
+
+/** Every panel command under `config`: one per enabled tab, then the actions. */
+export function panelCommands(config: ResolvedPangularConfig): PanelCommand[] {
+  const tabs: PanelCommand[] = enabledPanelTabs(config).map((tab) => ({
+    id: `tab:${tab.id}`,
+    title: `Go to ${tab.label}`,
+    group: 'Go to',
+    keywords: 'tab open',
+  }));
+  const actions = PANEL_ACTIONS.filter(
+    (command) => !command.inspector || config.inspectors[command.inspector],
+  ).map(({ inspector: _inspector, ...command }) => command);
+  return [...tabs, ...actions];
+}
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -270,7 +520,13 @@ export function resolvePangularConfig(config?: unknown): ResolvedPangularConfig 
         limit(limits[key], key),
       ]),
     ) as Record<PangularLimit, number>,
+    popup: { hotkey: popupHotkey(record(input['popup'])['hotkey']) },
   };
+}
+
+function popupHotkey(value: unknown): string | false {
+  if (value === false) return false;
+  return normalizeHotkey(value) ?? DEFAULT_POPUP_HOTKEY;
 }
 
 function distance(a: string, b: string): number {
@@ -301,7 +557,7 @@ function describe(value: unknown): string {
   return typeof value === 'string' ? `the string ${JSON.stringify(value)}` : `a ${typeof value}`;
 }
 
-const CONFIG_KEYS = ['inspectors', 'agent', 'actions', 'redaction', 'limits'] as const;
+const CONFIG_KEYS = ['inspectors', 'agent', 'actions', 'redaction', 'limits', 'popup'] as const;
 
 /**
  * Lists what `resolvePangularConfig()` ignores or changes in `config`:
@@ -391,6 +647,15 @@ export function pangularConfigProblems(config: unknown): string[] {
       );
     }
   }
+  const popup = object('popup', input['popup'], ['hotkey']);
+  const hotkey = popup['hotkey'];
+  if (hotkey !== undefined && hotkey !== false && normalizeHotkey(hotkey) === undefined) {
+    problems.push(
+      typeof hotkey === 'string'
+        ? `\`popup.hotkey\` is ${describe(hotkey)}, which is not a shortcut like \`Alt+Shift+P\`: one letter, digit or F1 to F12 key with Mod, Ctrl, Meta or Alt. It was ignored, so it is ${DEFAULT_POPUP_HOTKEY}.`
+        : `\`popup.hotkey\` should be a shortcut string or false, got ${describe(hotkey)}. It was ignored, so it is ${DEFAULT_POPUP_HOTKEY}.`,
+    );
+  }
   return problems;
 }
 
@@ -413,8 +678,8 @@ export function configFromConnection(
 export function pickPangularConfig<T extends PangularConfig>(
   options: T,
 ): { config: PangularConfig; rest: Omit<T, keyof PangularConfig> } {
-  const { inspectors, agent, actions, redaction, limits, ...rest } = options;
-  return { config: { inspectors, agent, actions, redaction, limits }, rest };
+  const { inspectors, agent, actions, redaction, limits, popup, ...rest } = options;
+  return { config: { inspectors, agent, actions, redaction, limits, popup }, rest };
 }
 
 /** Form actions that work without a `formId`: they act on the page, not on one form. */
@@ -531,6 +796,8 @@ export const SHARED_RPC: readonly string[] = [
   'claim-page',
   'report-page-visibility',
   'list-pages',
+  // Opens any tab, so it stays with every inspector off; it lists only the tabs that are on.
+  'open-in-panel',
   'open-in-editor',
   'hub-dock-seen',
   // Store as global spans the components, injectors and NgRx inspectors; the
@@ -611,6 +878,8 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'clear-http-calls': 'http',
   'push-capacitor': 'capacitor',
   'forget-capacitor-page': 'capacitor',
+  'push-errors': 'errors',
+  'forget-errors-page': 'errors',
   'push-analog': 'analog',
   'forget-analog-page': 'analog',
   'analog-clear-calls': 'analog',
@@ -681,6 +950,9 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'clear-recordings': 'http',
   'list-capacitor-calls': 'capacitor',
   'list-capacitor-plugins': 'capacitor',
+  'list-errors': 'errors',
+  'explain-error': 'errors',
+  'list-console': 'errors',
 };
 
 /**
@@ -703,6 +975,7 @@ export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
   'http-payloads': 'http',
   capacitor: 'capacitor',
   analog: 'analog',
+  errors: 'errors',
 };
 
 /** Shared-state keys that belong to no inspector, without the `pangular:` prefix. */
@@ -723,10 +996,12 @@ export function sharedStateExposed(key: string, config: ResolvedPangularConfig):
 
 /**
  * Agent tools and resources that answer only while a page reports to the
- * server, or that call the app's dev server. The stdio MCP server has neither.
+ * server, that call the app's dev server, or that point into the panel the
+ * server serves. The stdio MCP server has none of these.
  */
 export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'list-pages',
+  'open-in-panel',
   'clear-recordings',
   'component-tree',
   'highlight',
@@ -781,6 +1056,9 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'remove-http-rule',
   'list-capacitor-calls',
   'list-capacitor-plugins',
+  'list-errors',
+  'explain-error',
+  'list-console',
 ];
 
 export function isPageAgentEntry(id: string): boolean {
@@ -837,6 +1115,7 @@ const INSPECTOR_LABEL: Record<PangularInspector, string> = {
   http: 'HTTP',
   analog: 'Analog',
   capacitor: 'Capacitor',
+  errors: 'Errors',
 };
 
 const ACTION_LABEL: Record<PangularAction, string> = {
@@ -890,6 +1169,9 @@ export function summarizePangularConfig(
       .filter((key) => config.limits[key] !== PANGULAR_LIMITS[key].default)
       .map((key) => LIMIT_LABEL[key](config.limits[key])),
   );
+  if (config.popup.hotkey !== DEFAULT_POPUP_HOTKEY) {
+    add('Popup shortcut', [config.popup.hotkey === false ? 'Off' : config.popup.hotkey]);
+  }
   return items;
 }
 
