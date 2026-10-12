@@ -213,8 +213,9 @@ function isTree(value: unknown): value is InjectorNode[] {
           </svg>
           <span>
             <strong>The page reported only part of its injector tree.</strong>
-            It stops at 2000 element injectors, 2500 in all, so a lookup path or a provider can
-            point to one that is not listed.
+            It keeps at most 2000 element injectors and 2500 in all, and leaves out injectors nested
+            more than 1000 levels deep, so a lookup path or a provider can point to one that is not
+            listed.
           </span>
         </p>
       }

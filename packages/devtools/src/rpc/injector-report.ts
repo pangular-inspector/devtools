@@ -7,7 +7,8 @@ export const MAX_REPORTED_INJECTORS = MAX_INJECTOR_NODES + 500;
 const MAX_TEXT = 500;
 const MAX_SELECTOR = 4000;
 const MAX_PROVIDERS = 1000;
-const MAX_DEPTH = 1000;
+/** How deep an injector can sit before the server leaves it out. */
+export const MAX_INJECTOR_DEPTH = 1000;
 
 const clipped = (max: number) =>
   v.pipe(
@@ -70,7 +71,8 @@ function valid<T>(
  * providers and dependencies are dropped, long strings are clipped, and the
  * tree is cut with `truncated` set: element injectors at `MAX_INJECTOR_NODES`,
  * then environment injectors at what is left of `MAX_REPORTED_INJECTORS`, so
- * environment injectors never push element injectors out.
+ * environment injectors never push element injectors out. Injectors nested
+ * deeper than `MAX_INJECTOR_DEPTH` are left out too.
  */
 export function sanitizeInjectorTree(
   roots: unknown,
@@ -81,7 +83,7 @@ export function sanitizeInjectorTree(
   const nodes = (list: unknown, depth: number): InjectorTreeNode[] => {
     const out: InjectorTreeNode[] = [];
     if (!Array.isArray(list)) return out;
-    if (depth > MAX_DEPTH) {
+    if (depth > MAX_INJECTOR_DEPTH) {
       if (list.length) truncated = true;
       return out;
     }

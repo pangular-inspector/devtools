@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_INJECTOR_NODES } from '../../injector-tree.ts';
-import { MAX_REPORTED_INJECTORS, sanitizeInjectorTree } from '../injector-report.ts';
+import {
+  MAX_INJECTOR_DEPTH,
+  MAX_REPORTED_INJECTORS,
+  sanitizeInjectorTree,
+} from '../injector-report.ts';
 
 const node = (name: string, extra: Record<string, unknown> = {}) => ({
   injector: { id: `inj-${name}`, type: 'element', name, providerCount: 0 },
@@ -98,5 +102,23 @@ describe('sanitizeInjectorTree', () => {
       many(MAX_REPORTED_INJECTORS - MAX_INJECTOR_NODES, 'e'),
     );
     expect(full.truncated).toBe(false);
+  });
+
+  it('leaves out injectors nested past the depth cap and says so', () => {
+    const chain = (levels: number) => {
+      let tree = node('leaf');
+      for (let i = levels - 1; i > 0; i--) tree = node(`n${i}`, { children: [tree] });
+      return tree;
+    };
+    const depthOf = (list: { children: unknown[] }[]): number =>
+      list.length ? 1 + depthOf(list[0]!.children as { children: unknown[] }[]) : 0;
+
+    const fits = sanitizeInjectorTree([chain(MAX_INJECTOR_DEPTH + 1)], []);
+    expect(depthOf(fits.roots)).toBe(MAX_INJECTOR_DEPTH + 1);
+    expect(fits.truncated).toBe(false);
+
+    const deep = sanitizeInjectorTree([chain(MAX_INJECTOR_DEPTH + 3)], []);
+    expect(depthOf(deep.roots)).toBe(MAX_INJECTOR_DEPTH + 1);
+    expect(deep.truncated).toBe(true);
   });
 });
