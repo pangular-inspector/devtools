@@ -333,6 +333,38 @@ describe('Pangular Inspector hub MCP route', () => {
     expect((await own('own-secret')).status).toBe(200);
   });
 
+  it('sends each tool tier to MCP clients as read-only and destructive hints', async () => {
+    type Listed = {
+      name: string;
+      annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
+    };
+    const list = async (options: PangularHubOptions) => {
+      const response = await (await bootMcp({ auth: false, ...options }))();
+      const text = await response.text();
+      const json = text.startsWith('{') ? text : /^data: (.*)$/m.exec(text)?.[1];
+      const tools = (JSON.parse(json ?? '{}') as { result?: { tools?: Listed[] } }).result?.tools;
+      return new Map((tools ?? []).map((tool) => [tool.name, tool.annotations ?? {}]));
+    };
+    const tools = await list({});
+    expect(tools.get('pangular_highlight')).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+    });
+    expect(tools.get('pangular_navigate')).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+    });
+    expect(tools.get('pangular_clear-recordings')).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+    });
+    const readOnly = await list({ agent: { readOnly: true } });
+    expect(readOnly.size).toBeGreaterThan(0);
+    expect([...readOnly.values()].every((hints) => hints.readOnlyHint === true)).toBe(true);
+    expect(readOnly.has('pangular_clear-recordings')).toBe(false);
+    expect(readOnly.get('pangular_change-detection')).toMatchObject({ readOnlyHint: true });
+  });
+
   it('keeps an explicit mcp setting', async () => {
     const mcp = await bootMcp({ auth: true, mcp: { authorization: 'own-secret' } });
     expect((await mcp()).status).toBe(401);

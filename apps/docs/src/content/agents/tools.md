@@ -47,13 +47,21 @@ The URL comes from the HTTP or router report. A page that sends neither (no rout
 
 ### Action tools
 
+Every tool has one of three safety tiers. The server sends the tier to your client as the tool's read-only and destructive hints.
+
+| Tier          | What the tool can do                                                                                              | Tools                                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                        | Every other tool, and every resource                                                                                                       |
+| `action`      | Changes the running page, the server's fault rules or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `record-pipes` and `change-detection` |
+| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                   |
+
 <ngmd-alert severity="important">
-  <code>highlight</code>, <code>navigate</code>, <code>dispatch-ngrx-action</code>, <code>form-action</code>, <code>fill-form</code>, <code>set-http-rule</code>, <code>remove-http-rule</code>, <code>analog-call-api</code> and <code>clear-recordings</code> act on the app. Every other tool is marked read-only for your client.
+  The ten <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
 ### Turn tools off
 
-The server decides which tools exist. Set `agent.readOnly` to drop the nine action tools. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `actions.router` is the exception: `navigate` stays and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
+The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record` argument, so it reads a recording the panel started. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ## Source scan
 
@@ -71,7 +79,7 @@ These seven tools take no arguments. They all read your source.
 
 ## Components, signals and DI
 
-### highlight <ngmd-badge variant="alpha">Action</ngmd-badge>
+### highlight
 
 Highlights a component in the page, scrolls it into view, selects it and makes it the target of `inspect-signals`. The `component-tree` resource then carries its live `detail`, and the Components tab selects it too. Reads: page.
 
@@ -126,7 +134,7 @@ Without a development build, the page has no util to read defer blocks, and the 
 
 Each page lists at most 50 blocks in the table and 50 under **Needs attention**, with a note on how many more are not shown. The whole answer stops at 20,000 characters. If several tabs report, pass `page` to read one. The **Defer blocks** list on the [Components](../inspectors/components.md#defer-blocks) page has every block.
 
-### change-detection
+### change-detection <ngmd-badge variant="alpha">Action</ngmd-badge>
 
 Change detection cycles recorded with Angular's profiler: the slowest components by self time, the most often checked components, and the latest cycles with their duration, component checks, sync passes and the output that ran before each one. Reads: page. Needs Angular 20 or later.
 
@@ -135,7 +143,7 @@ Change detection cycles recorded with Angular's profiler: the slowest components
 | `record` | no       | `start` starts a fresh recording on a page that is not recording and leaves a running one as it is, `stop` stops it and keeps the cycles, `clear` empties it. Leave out to read. |
 | `limit`  | no       | Rows per list. Default 10, at most 50.                                                                                                                                           |
 
-Without `page`, it reads the page that is recording, and `record` goes to every connected page. A `page` that names no connected tab gets the list of connected tabs. A connected tab that has not recorded yet gets a hint to start a recording there. The answer starts with the change detection mode of the page it reports on: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many.
+Without `page`, it reads the page that is recording, and `record` goes to every connected page. A `page` that names no connected tab gets the list of connected tabs. A connected tab that has not recorded yet gets a hint to start a recording there. The answer starts with the change detection mode of the page it reports on: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. With `agent.readOnly`, the tool has no `record` argument and is marked read-only, so start the recording from the panel. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many.
 
 ### inspect-signals
 
@@ -248,7 +256,7 @@ Use `explain-navigation` for "why was I redirected". Pass `perf: true` for "why 
 
 The page's result comes back as a JSON block cut at 15,000 characters. A cut result ends with a note saying so.
 
-`action` is required. Only same-origin URLs that start with `/` are accepted. With `actions.router` set to `false`, `navigate`, `abort`, `replay` and `probe` answer **Navigating and clearing navigations is turned off in the devtools config (actions.router).** `instrument` and `resolve-lazy` still work. `agent.readOnly` drops the whole tool.
+`action` is required. Only same-origin URLs that start with `/` are accepted. With `actions.router` set to `false`, `navigate`, `abort`, `replay` and `probe` answer **Navigating and clearing navigations is turned off in the devtools config (actions.router).** `instrument` and `resolve-lazy` still work. `navigate` is an `action` tool, so `agent.readOnly` drops the whole tool.
 
 `waitFor` sets when `navigate` answers:
 
@@ -371,7 +379,7 @@ The **Live** line tells these cases apart:
 | Pipe in use, recording off          | Instance count and components, plus a hint to start recording.     |
 | Pipe in use, recording on, no calls | Instance count and components, and that no calls are recorded yet. |
 
-### Record pipe calls
+### Record pipe calls <ngmd-badge variant="alpha">Action</ngmd-badge>
 
 `record-pipes` starts or stops call recording on a page, the same switch as **Record calls** in the panel. Reads: page.
 
@@ -380,7 +388,7 @@ The **Live** line tells these cases apart:
 | `action` | yes      | `start` or `stop`.                                                                             |
 | `page`   | no       | The tab to record on. Defaults to the most recent page for `start`, and every page for `stop`. |
 
-`start` records on the tab `page` names, or on the most recent tab. Other tabs stay unpatched. `stop` stops that tab, or every tab without `page`. Each recording starts from zero, and the calls recorded so far stay after a stop. Call `record-pipes` with `action: "start"`, use the app, then call `explain-pipe`. Recording is instrumentation, like the `record` argument of `change-detection`, so `agent.readOnly` and `actions` leave the tool in place. `agent.tools.pipes: false` hides it.
+`start` records on the tab `page` names, or on the most recent tab. Other tabs stay unpatched. `stop` stops that tab, or every tab without `page`. Each recording starts from zero, and the calls recorded so far stay after a stop. Call `record-pipes` with `action: "start"`, use the app, then call `explain-pipe`. Recording patches the page, so `record-pipes` is an `action` tool and `agent.readOnly` drops it. No action covers pipes, so `actions` leaves it in place. `agent.tools.pipes: false` hides it.
 
 ## SSR & HTTP
 
@@ -410,7 +418,7 @@ These tools read and change the rules of [Fault injection](../inspectors/ssr-htt
 
 With [`actions.http`](../getting-started/configuration.md#actions) set to `false`, `set-http-rule` and `remove-http-rule` are dropped, and `list-http-rules` says that no rule applies.
 
-### Clear recordings <ngmd-badge variant="alpha">Action</ngmd-badge>
+### Clear recordings <ngmd-badge variant="alpha">Destructive</ngmd-badge>
 
 Resets recorded data between reproduction runs: recorded HTTP calls, router navigations, and Analog server calls. Reads: page.
 
@@ -461,7 +469,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 | `analog-render-modes`   | For each page: server rendered, prerendered, cached, redirected or client only, the route rule or config that decides it, and what the last request actually did. | none      |
 | `analog-prerender-plan` | `prerender.routes` and `routeRules` with `prerender: true`, compared with the page files and the build output.                                                    | none      |
 
-### Call a server route <ngmd-badge variant="alpha">Action</ngmd-badge>
+### Call a server route <ngmd-badge variant="alpha">Destructive</ngmd-badge>
 
 `analog-call-api` sends a request to a route on the running dev server, like `GET /api/v1/hello`, and returns the status, time and body. `path` is a path on the dev server that starts with a single `/`, not a full URL. `POST`, `PUT`, `PATCH` and `DELETE` need `confirm: true`. Secret keys, tokens and `Bearer` values in the body are masked. Reads: Vite plugin.
 

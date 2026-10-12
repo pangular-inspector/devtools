@@ -149,7 +149,7 @@ export interface PangularConfig {
   /** Turn an inspector off: no tab or dock, no page collector, no RPC and no agent tools. */
   inspectors?: Partial<Record<PangularInspector, boolean>>;
   agent?: {
-    /** Drop every agent tool that acts on the page or the server. */
+    /** Drop every agent tool that is not a `read` tool (see `AgentSafety`). */
     readOnly?: boolean;
     /** Hide one inspector's agent tools and resources while keeping its tab. */
     tools?: Partial<Record<PangularInspector, boolean>>;
@@ -438,14 +438,63 @@ export const FORM_WRITE_ACTIONS: readonly string[] = [
 /** Router actions that start, stop, repeat or probe a navigation. */
 export const ROUTER_WRITE_ACTIONS: readonly string[] = ['navigate', 'abort', 'replay', 'probe'];
 
-/** Agent tools that perform an action's writes; blocking the action drops them. */
+/**
+ * Agent tools that perform an action's writes; blocking the action drops them,
+ * except the tools in `ACTION_TOOL_FREE_MODES`.
+ */
 export const ACTION_TOOLS: Record<PangularAction, readonly string[]> = {
   forms: ['form-action', 'fill-form'],
-  router: ['clear-recordings'],
+  router: ['navigate', 'clear-recordings'],
   ngrx: ['dispatch-ngrx-action'],
   http: ['set-http-rule', 'remove-http-rule', 'clear-recordings'],
   analog: ['analog-call-api', 'clear-recordings'],
 };
+
+/**
+ * Action tools with modes that work while their action is blocked. Blocking
+ * the action keeps the tool, and its handler refuses the other modes.
+ */
+export const ACTION_TOOL_FREE_MODES: Record<string, readonly string[]> = {
+  navigate: ['instrument', 'resolve-lazy'],
+};
+
+/**
+ * How much an agent tool can change, sent to MCP clients as the tool's
+ * `readOnlyHint` and `destructiveHint`.
+ * - `read`: only reads the app, the page or the source.
+ * - `action`: changes the running page, the server's mock rules or what the
+ *   page records, in a way the next action or a reload undoes.
+ * - `destructive`: can lose data: it erases recordings, or sends writes to
+ *   the app's own API routes.
+ */
+export type AgentSafety = 'read' | 'action' | 'destructive';
+
+/** The tier of every agent tool that is not `read`, without the `pangular:` prefix. */
+export const AGENT_SAFETY: Record<string, Exclude<AgentSafety, 'read'>> = {
+  'form-action': 'action',
+  'fill-form': 'action',
+  navigate: 'action',
+  'dispatch-ngrx-action': 'action',
+  'set-http-rule': 'action',
+  'remove-http-rule': 'action',
+  'record-pipes': 'action',
+  'change-detection': 'action',
+  'clear-recordings': 'destructive',
+  'analog-call-api': 'destructive',
+};
+
+/**
+ * Tools that `agent.readOnly` keeps as `read` tools, with the arguments that
+ * act refused: `change-detection` still answers, but without `record`.
+ */
+export const READ_ONLY_VARIANTS: readonly string[] = ['change-detection'];
+
+/** The tier an agent tool or resource is registered with under `config`. Resources are `read`. */
+export function agentSafety(id: string, config: ResolvedPangularConfig): AgentSafety {
+  const name = agentName(id);
+  if (config.agent.readOnly && READ_ONLY_VARIANTS.includes(name)) return 'read';
+  return AGENT_SAFETY[name] ?? 'read';
+}
 
 export function actionBlockedMessage(action: PangularAction): string {
   const what = {
@@ -669,13 +718,12 @@ export function rpcAllowed(name: string, config: ResolvedPangularConfig): boolea
   return !inspector || config.inspectors[inspector];
 }
 
-export function agentAllowed(
-  entry: { id: string; safety?: string },
-  config: ResolvedPangularConfig,
-): boolean {
-  if (config.agent.readOnly && entry.safety === 'action') return false;
+export function agentAllowed(entry: { id: string }, config: ResolvedPangularConfig): boolean {
+  if (config.agent.readOnly && agentSafety(entry.id, config) !== 'read') return false;
   const name = agentName(entry.id);
-  const matchingActions = PANGULAR_ACTIONS.filter((key) => ACTION_TOOLS[key].includes(name));
+  const matchingActions = ACTION_TOOL_FREE_MODES[name]
+    ? []
+    : PANGULAR_ACTIONS.filter((key) => ACTION_TOOLS[key].includes(name));
   if (matchingActions.length > 0 && matchingActions.every((key) => !config.actions[key])) {
     return false;
   }

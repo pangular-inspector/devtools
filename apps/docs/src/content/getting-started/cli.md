@@ -23,11 +23,11 @@ The package installs a `pangular` binary. Run it from the root of your Angular w
 
 ### Flags for every command
 
-| Flag              | What it does                                                                                                                                                      |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--root <dir>`    | The project folder to scan. The default is `PANGULAR_ROOT`, then the working directory.                                                                           |
-| `--config <file>` | A JSON file with the [devtools options](./configuration.md). The default is `PANGULAR_CONFIG`, then `pangular.config.json` in the project folder, if it exists.   |
-| `--read-only`     | Sets `agent.readOnly`: drops the agent tools that act on the page or the server. See [Inspectors and agent tools](./configuration.md#inspectors-and-agent-tools). |
+| Flag              | What it does                                                                                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--root <dir>`    | The project folder to scan. The default is `PANGULAR_ROOT`, then the working directory.                                                                         |
+| `--config <file>` | A JSON file with the [devtools options](./configuration.md). The default is `PANGULAR_CONFIG`, then `pangular.config.json` in the project folder, if it exists. |
+| `--read-only`     | Sets `agent.readOnly`: keeps only the agent tools that read. See [Inspectors and agent tools](./configuration.md#inspectors-and-agent-tools).                   |
 
 If the project folder has no `angular.json` and no `package.json` that depends on `@angular/core`, the CLI prints a warning on stderr, because the scans find nothing there.
 

@@ -122,11 +122,11 @@ interface PangularConfig {
 
 ### Inspectors and agent tools
 
-| Option               | Default | What it does                                                                                                                                                                                                                   |
-| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `inspectors.<name>`  | `true`  | `false` removes the inspector: no tab or dock, no page collector, no RPC functions, and no agent tools or resources. Its actions are blocked too.                                                                              |
-| `agent.readOnly`     | `false` | `true` drops every agent tool that acts on the page or the server: `highlight`, `form-action`, `fill-form`, `navigate`, `dispatch-ngrx-action`, `set-http-rule`, `remove-http-rule`, `analog-call-api` and `clear-recordings`. |
-| `agent.tools.<name>` | `true`  | `false` hides one inspector's agent tools and resources. The tab stays.                                                                                                                                                        |
+| Option               | Default | What it does                                                                                                                                                                                                                                                                                                                    |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inspectors.<name>`  | `true`  | `false` removes the inspector: no tab or dock, no page collector, no RPC functions, and no agent tools or resources. Its actions are blocked too.                                                                                                                                                                               |
+| `agent.readOnly`     | `false` | `true` keeps only the agent tools in the `read` [safety tier](../agents/tools.md#action-tools). It drops `form-action`, `fill-form`, `navigate`, `dispatch-ngrx-action`, `set-http-rule`, `remove-http-rule`, `record-pipes`, `analog-call-api` and `clear-recordings`. `change-detection` stays without its `record` argument. |
+| `agent.tools.<name>` | `true`  | `false` hides one inspector's agent tools and resources. The tab stays.                                                                                                                                                                                                                                                         |
 
 `agent.tools` has the same keys as `inspectors`. An inspector that is off has no agent tools, whatever `agent.tools` says.
 

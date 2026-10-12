@@ -32,7 +32,7 @@ The words this project uses for its own concepts (overlay, collector, hub, devfr
 
 - After any change in `app`, run `pnpm extension:build` and commit `extension/ui`. CI fails when the committed bundle is stale.
 - Commit messages and pull request titles use `type(scope): summary` with the scopes in `docs/contributing/commit-message-guidelines.md`. Pull requests are squash merged.
-- A new agent tool or RPC must be listed in `packages/devtools/src/config.ts` (`AGENT_INSPECTOR`, `RPC_INSPECTOR`, and `ACTION_TOOLS` for anything that writes), or turning its inspector off won't hide it.
+- A new agent tool or RPC must be listed in `packages/devtools/src/config.ts` (`AGENT_INSPECTOR`, `RPC_INSPECTOR`, and `ACTION_TOOLS` for anything that writes), or turning its inspector off won't hide it. A tool that is not read-only also needs its tier in `AGENT_SAFETY`, or it is registered as `read` and `agent.readOnly` keeps it.
 - Values sent to the panel or to agents go through `serialize` or the redaction helpers, so `redaction.secretNames`, JWTs and bearer tokens are masked everywhere.
 - Data from the page carries a `pageId` and expires, so one tab never overwrites another.
 - Docs links are relative `.md` links, which the build checks. `*Angular` style words are keyword links on purpose.

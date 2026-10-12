@@ -1,10 +1,14 @@
 import { createHostContext } from 'devframe/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  ACTION_TOOLS,
+  ACTION_TOOL_FREE_MODES,
   AGENT_INSPECTOR,
+  AGENT_SAFETY,
   PANGULAR_INSPECTORS,
   RPC_INSPECTOR,
   agentAllowed,
+  agentSafety,
   pangularConfigProblems,
   pickPangularConfig,
   resolvePangularConfig,
@@ -36,7 +40,9 @@ async function boot(config?: PangularConfig) {
     ctx,
     rpc,
     tools: manifest.tools.map((tool) => strip(tool.id)),
-    actionTools: manifest.tools.filter((t) => t.safety === 'action').map((t) => strip(t.id)),
+    actionTools: manifest.tools.filter((t) => t.safety !== 'read').map((t) => strip(t.id)),
+    safety: Object.fromEntries(manifest.tools.map((t) => [strip(t.id), t.safety])),
+    describe: (name: string) => manifest.tools.find((t) => strip(t.id) === name),
     resources: manifest.resources.map((resource) => strip(resource.id)),
     invoke: (name: string, payload: unknown) =>
       ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never)),
@@ -228,12 +234,13 @@ describe('agent tool and RPC registration', () => {
     expect(actionTools.sort()).toEqual(
       [
         'analog-call-api',
+        'change-detection',
         'clear-recordings',
         'dispatch-ngrx-action',
         'fill-form',
         'form-action',
-        'highlight',
         'navigate',
+        'record-pipes',
         'remove-http-rule',
         'set-http-rule',
       ].sort(),
@@ -241,10 +248,81 @@ describe('agent tool and RPC registration', () => {
     expect(tools).toContain('inspect-forms');
   });
 
-  it('drops every action tool in read-only mode', async () => {
-    const { tools, actionTools } = await boot({ agent: { readOnly: true } });
+  it('registers each tool with its tier from AGENT_SAFETY', async () => {
+    const { safety } = await boot();
+    expect(
+      Object.fromEntries(Object.entries(safety).filter(([, tier]) => tier !== 'read')),
+    ).toEqual(AGENT_SAFETY);
+    expect(safety['highlight']).toBe('read');
+    expect(safety['clear-recordings']).toBe('destructive');
+    expect(safety['analog-call-api']).toBe('destructive');
+    expect(safety['navigate']).toBe('action');
+    expect(safety['record-pipes']).toBe('action');
+    expect(safety['change-detection']).toBe('action');
+  });
+
+  it('keeps only read tools in read-only mode', async () => {
+    const { tools, actionTools, safety, resources } = await boot({ agent: { readOnly: true } });
     expect(actionTools).toEqual([]);
-    expect(tools).toEqual(expect.arrayContaining(['inspect-forms', 'list-routes', 'analog-lint']));
+    expect(Object.values(safety).every((tier) => tier === 'read')).toBe(true);
+    for (const dropped of [
+      'navigate',
+      'record-pipes',
+      'clear-recordings',
+      'analog-call-api',
+      'form-action',
+    ]) {
+      expect(tools).not.toContain(dropped);
+    }
+    expect(tools).toEqual(
+      expect.arrayContaining(['inspect-forms', 'list-routes', 'analog-lint', 'highlight']),
+    );
+    expect(resources).toEqual(expect.arrayContaining(['component-tree', 'router', 'forms']));
+  });
+
+  it('keeps change-detection as a read tool without record in read-only mode', async () => {
+    const full = await boot();
+    const fullSchema = full.describe('change-detection')?.inputSchema as {
+      properties: Record<string, unknown>;
+    };
+    expect(Object.keys(fullSchema.properties)).toContain('record');
+
+    const readOnly = await boot({ agent: { readOnly: true } });
+    const tool = readOnly.describe('change-detection');
+    expect(tool?.safety).toBe('read');
+    const schema = tool?.inputSchema as { properties: Record<string, unknown> };
+    expect(Object.keys(schema.properties)).not.toContain('record');
+    const answer = (await readOnly.ctx.agent.invoke('pangular:change-detection', {
+      record: 'start',
+    })) as { markdown: string };
+    expect(answer.markdown).toContain('agent.readOnly');
+  });
+
+  it('keeps navigate for its free modes when actions.router is off', async () => {
+    expect(ACTION_TOOLS.router).toContain('navigate');
+    expect(ACTION_TOOL_FREE_MODES['navigate']).toEqual(['instrument', 'resolve-lazy']);
+    const blocked = resolvePangularConfig({ actions: { router: false } });
+    expect(agentAllowed({ id: 'pangular:navigate' }, blocked)).toBe(true);
+    expect(
+      agentAllowed({ id: 'pangular:navigate' }, resolvePangularConfig({ actions: false })),
+    ).toBe(true);
+    expect(
+      agentAllowed(
+        { id: 'pangular:navigate' },
+        resolvePangularConfig({ agent: { readOnly: true } }),
+      ),
+    ).toBe(false);
+  });
+
+  it('gives resources and unlisted tools the read tier', () => {
+    const readOnly = resolvePangularConfig({ agent: { readOnly: true } });
+    expect(agentSafety('pangular:forms', readOnly)).toBe('read');
+    expect(agentSafety('pangular:highlight', readOnly)).toBe('read');
+    expect(agentSafety('pangular:change-detection', readOnly)).toBe('read');
+    expect(agentSafety('pangular:change-detection', resolvePangularConfig())).toBe('action');
+    expect(agentSafety('pangular:clear-recordings', resolvePangularConfig())).toBe('destructive');
+    expect(agentAllowed({ id: 'pangular:forms' }, readOnly)).toBe(true);
+    expect(agentAllowed({ id: 'pangular:clear-recordings' }, readOnly)).toBe(false);
   });
 
   it('drops the agent tools of a blocked action and keeps the rest', async () => {
@@ -252,10 +330,11 @@ describe('agent tool and RPC registration', () => {
     expect(forms.actionTools.sort()).toEqual(
       [
         'analog-call-api',
+        'change-detection',
         'clear-recordings',
         'dispatch-ngrx-action',
-        'highlight',
         'navigate',
+        'record-pipes',
         'remove-http-rule',
         'set-http-rule',
       ].sort(),
@@ -292,11 +371,14 @@ describe('agent tool and RPC registration', () => {
   it('keeps record-pipes with its inspector, not behind a write action', async () => {
     const pipeTools = ['explain-pipe', 'record-pipes'];
     expect((await boot()).tools).toEqual(expect.arrayContaining(pipeTools));
-    // Recording is instrumentation, like change detection recording, so
-    // blocking actions or read-only mode leaves it in place.
-    const blocked = await boot({ actions: false, agent: { readOnly: true } });
+    // Recording patches the page, so it is an action tool: read-only mode
+    // drops it, but blocking actions leaves it, as no action covers pipes.
+    const blocked = await boot({ actions: false });
     expect(blocked.tools).toEqual(expect.arrayContaining(pipeTools));
-    expect(blocked.actionTools).not.toContain('record-pipes');
+    expect(blocked.safety['record-pipes']).toBe('action');
+    const readOnly = await boot({ agent: { readOnly: true } });
+    expect(readOnly.tools).toContain('explain-pipe');
+    expect(readOnly.tools).not.toContain('record-pipes');
     const hidden = await boot({ agent: { tools: { pipes: false } } });
     expect(hidden.tools.filter((id) => pipeTools.includes(id))).toEqual([]);
     expect(hidden.rpc).toContain('request-instrument-pipes');

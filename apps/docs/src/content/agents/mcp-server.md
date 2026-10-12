@@ -215,21 +215,22 @@ The server registers tools with a colon, as `pangular:get-routes`. MCP clients s
 
 ### Read and action tools
 
-The server marks read-only tools as read-only for your client. Nine tools act on the app, so the server does not mark them:
+Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Ten tools act on the app, so the server does not mark them read-only:
 
-| Tool                   | Reference                                                          |
-| ---------------------- | ------------------------------------------------------------------ |
-| `highlight`            | [Components, signals and DI](./tools.md#components-signals-and-di) |
-| `navigate`             | [Act on the router](./tools.md#act-on-the-router)                  |
-| `dispatch-ngrx-action` | [Dispatch an action](./tools.md#dispatch-an-action)                |
-| `form-action`          | [Act on a form](./tools.md#act-on-a-form)                          |
-| `fill-form`            | [Act on a form](./tools.md#act-on-a-form)                          |
-| `set-http-rule`        | [Fault rules](./tools.md#fault-rules)                              |
-| `remove-http-rule`     | [Fault rules](./tools.md#fault-rules)                              |
-| `analog-call-api`      | [Call a server route](./tools.md#call-a-server-route)              |
-| `clear-recordings`     | [Clear recordings](./tools.md#clear-recordings)                    |
+| Tool                   | Tier          | Reference                                             |
+| ---------------------- | ------------- | ----------------------------------------------------- |
+| `navigate`             | `action`      | [Act on the router](./tools.md#act-on-the-router)     |
+| `dispatch-ngrx-action` | `action`      | [Dispatch an action](./tools.md#dispatch-an-action)   |
+| `form-action`          | `action`      | [Act on a form](./tools.md#act-on-a-form)             |
+| `fill-form`            | `action`      | [Act on a form](./tools.md#act-on-a-form)             |
+| `set-http-rule`        | `action`      | [Fault rules](./tools.md#fault-rules)                 |
+| `remove-http-rule`     | `action`      | [Fault rules](./tools.md#fault-rules)                 |
+| `record-pipes`         | `action`      | [Record pipe calls](./tools.md#record-pipe-calls)     |
+| `change-detection`     | `action`      | [change-detection](./tools.md#change-detection)       |
+| `clear-recordings`     | `destructive` | [Clear recordings](./tools.md#clear-recordings)       |
+| `analog-call-api`      | `destructive` | [Call a server route](./tools.md#call-a-server-route) |
 
-Your client can ask you before it runs them. To drop them from the server, set `agent.readOnly`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
+Your client can ask you before it runs them. To drop them from the server, set `agent.readOnly`, which keeps only the `read` tools. `change-detection` stays without its `record` argument, as a `read` tool. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ### Pages and tabs
 
