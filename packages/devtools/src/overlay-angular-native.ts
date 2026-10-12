@@ -26,7 +26,7 @@ import {
 } from './signal-graph.ts';
 import { createSignalHistory, installSignalWriteHook } from './signal-history.ts';
 import { registerSignalPeek } from './signal-peek.ts';
-import { newPageId } from './page-id.ts';
+import { claimPageOnServer, newPageId, newPageKey } from './page-id.ts';
 
 export type { AngularNativeNode } from './overlay-angular-native-views.ts';
 
@@ -72,6 +72,8 @@ export function initAngularNativeOverlay(options: AngularNativeOverlayOptions): 
   const root = options.root;
   const getRoot = typeof root === 'function' ? root : () => root;
   const pageId = newPageId();
+  // In memory, like the page id: a new connection shows it to get the page back.
+  const pageKey = newPageKey();
   let disposed = false;
   let session: (() => void) | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;
@@ -87,7 +89,7 @@ export function initAngularNativeOverlay(options: AngularNativeOverlayOptions): 
     }, retryMs);
   };
   const start = () => {
-    connect(baseURL, pageId, getRoot, options.intervalMs, again).then(
+    connect(baseURL, pageId, pageKey, getRoot, options.intervalMs, again).then(
       (dispose) => {
         if (disposed) {
           dispose();
@@ -123,6 +125,7 @@ export function initAngularNativeOverlay(options: AngularNativeOverlayOptions): 
 async function connect(
   baseURL: string,
   pageId: string,
+  pageKey: string,
   getRoot: () => AngularNativeNode | null | undefined,
   intervalMs: number | undefined,
   onDisconnected: () => void,
@@ -147,7 +150,7 @@ async function connect(
   try {
     const trusted = await rpc.ensureTrusted(TRUST_TIMEOUT_MS).catch(() => false);
     if (!trusted) throw new UntrustedError();
-    const stop = await startSession(rpc, pageId, getRoot, intervalMs);
+    const stop = await startSession(rpc, pageId, pageKey, getRoot, intervalMs);
     return () => {
       closing = true;
       stop();
@@ -168,10 +171,13 @@ async function fetchConnectionMeta(baseURL: string): Promise<ConnectionMeta> {
 async function startSession(
   rpc: Rpc,
   pageId: string,
+  pageKey: string,
   getRoot: () => AngularNativeNode | null | undefined,
   intervalMs: number | undefined,
 ): Promise<() => void> {
   const my = rpc.scope('pangular');
+  // Before any report, so the server hands this connection the page at once.
+  await claimPageOnServer(my.rpc, pageId, pageKey);
   const config = configFromConnection(rpc.connectionMeta);
   const on = config.inspectors;
   const tickMs = intervalMs ?? config.limits.refreshMs;

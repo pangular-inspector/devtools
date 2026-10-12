@@ -15,6 +15,8 @@ export interface PageSessions {
   /** Remembers which connection the page in the current RPC call came from. */
   bind(pageId: string): void;
   unbind(pageId: string): void;
+  /** The id of the connection the current RPC call came from, if any. */
+  session(): number | undefined;
 }
 
 /** Calls `onGone` with every page whose connection just closed. If the host
@@ -40,17 +42,25 @@ export function trackPageSessions(
     };
   }
 
+  const session = () => {
+    try {
+      const id = h.getCurrentRpcSession?.()?.meta?.id;
+      return typeof id === 'number' ? id : undefined;
+    } catch {
+      // called outside an RPC request (e.g. in-process)
+      return undefined;
+    }
+  };
+
   return {
     bind(pageId) {
-      try {
-        const id = h.getCurrentRpcSession?.()?.meta?.id;
-        if (typeof id === 'number') sessionOf.set(pageId, id);
-      } catch {
-        // called outside an RPC request (e.g. in-process): expiry covers it
-      }
+      const id = session();
+      // Outside an RPC request (e.g. in-process), expiry covers it.
+      if (id !== undefined) sessionOf.set(pageId, id);
     },
     unbind(pageId) {
       sessionOf.delete(pageId);
     },
+    session,
   };
 }

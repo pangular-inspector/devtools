@@ -38,6 +38,7 @@ import {
   type AnalogState,
   UNTRUSTED,
 } from './analog-tools.ts';
+import type { PageOwners } from './page-owners.ts';
 import { fixedTtl, PAGE_TTL_MS, type PageTtl } from './page-ttl.ts';
 
 type AnyRecord = Record<string, any>;
@@ -143,7 +144,7 @@ export function stopAnalog(owner?: unknown) {
 export async function registerAnalog(
   my: Scoped,
   ctx: AgentHost,
-  options: { blockCalls?: string; owner?: unknown; ttl?: PageTtl } = {},
+  options: { blockCalls?: string; owner?: unknown; ttl?: PageTtl; owners?: PageOwners } = {},
 ) {
   disposeAnalog?.();
   const ttl = options.ttl ?? fixedTtl(PAGE_TTL_MS);
@@ -218,6 +219,7 @@ export async function registerAnalog(
     jsonSerializable: true,
     handler: (report: unknown) => {
       if (!isAnalogReport(report)) return;
+      if (options.owners && !options.owners.write(report.pageId)) return;
       seenAt.set(report.pageId, Date.now());
       apply(
         mergeAnalogReport(current(), resolveAnalogReport(project(), redactAnalogReport(report))),
@@ -229,7 +231,9 @@ export async function registerAnalog(
     type: 'action',
     jsonSerializable: true,
     handler: (pageId: unknown) => {
-      if (typeof pageId === 'string') dropPages([pageId]);
+      if (typeof pageId !== 'string') return;
+      if (options.owners && !options.owners.forget(pageId)) return;
+      dropPages([pageId]);
     },
   });
   my.rpc.register({

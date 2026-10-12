@@ -5,6 +5,7 @@ interface Client {
 }
 
 const clients: Client[] = [];
+const calls: { name: string; args: unknown[] }[] = [];
 const restoreHook = vi.fn();
 let hookGate: Promise<void> = Promise.resolve();
 let hookInstalls = 0;
@@ -23,7 +24,15 @@ vi.mock('devframe/client', () => ({
       ensureTrusted: async () => true,
       connectionMeta,
       close: vi.fn(),
-      scope: () => ({ rpc: { call: vi.fn(async () => undefined), register: vi.fn() } }),
+      scope: () => ({
+        rpc: {
+          call: vi.fn(async (name: string, ...args: unknown[]) => {
+            calls.push({ name, args });
+            return undefined;
+          }),
+          register: vi.fn(),
+        },
+      }),
     };
   }),
 }));
@@ -50,6 +59,7 @@ describe('NativeScript overlay sessions', () => {
     vi.useFakeTimers();
     vi.stubGlobal('WebSocket', class {});
     clients.length = 0;
+    calls.length = 0;
     restoreHook.mockClear();
     hookInstalls = 0;
     hookGate = Promise.resolve();
@@ -95,5 +105,20 @@ describe('NativeScript overlay sessions', () => {
     dispose();
     expect(restoreHook).toHaveBeenCalledTimes(2);
     expect(hookInstalls).toBe(2);
+  });
+
+  it('shows the same in-memory page key on every new connection', async () => {
+    const { initNativeScriptOverlay } = await import('../overlay-nativescript.ts');
+    const dispose = initNativeScriptOverlay({ baseURL: 'http://localhost:9999/', retryMs: 100 });
+    await flush();
+    clients[0].options.wsOptions.onDisconnected();
+    await vi.advanceTimersByTimeAsync(100);
+    await flush();
+    dispose();
+
+    const claims = calls.filter((call) => call.name === 'claim-page').map((call) => call.args[0]);
+    expect(claims).toHaveLength(2);
+    expect(claims[0]).toEqual(claims[1]);
+    expect((claims[0] as { key: string }).key).toMatch(/^[0-9a-f]{32}$/);
   });
 });

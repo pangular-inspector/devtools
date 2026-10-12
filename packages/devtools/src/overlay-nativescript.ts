@@ -36,7 +36,7 @@ import {
   type NativeScriptDebugNg,
   type NativeView,
 } from './overlay-nativescript-views.ts';
-import { newPageId } from './page-id.ts';
+import { claimPageOnServer, newPageId, newPageKey } from './page-id.ts';
 
 type DebugNg = SignalDebugNg<NativeView> & ComponentDebugNg<NativeView> & NativeScriptDebugNg;
 
@@ -86,6 +86,8 @@ export function initNativeScriptOverlay(options: NativeScriptOverlayOptions = {}
   // The page id outlives the sessions, so the panel keeps the app selected
   // and no ghost page is left behind when the socket reconnects.
   const pageId = newPageId();
+  // In memory, like the page id: a new connection shows it to get the page back.
+  const pageKey = newPageKey();
   const retryMs = options.retryMs ?? 5000;
   let disposed = false;
   let session: (() => void) | undefined;
@@ -102,7 +104,7 @@ export function initNativeScriptOverlay(options: NativeScriptOverlayOptions = {}
     }, retryMs);
   };
   const start = () => {
-    connect(baseURL, pageId, options.intervalMs, again).then(
+    connect(baseURL, pageId, pageKey, options.intervalMs, again).then(
       (dispose) => {
         if (disposed) {
           dispose();
@@ -138,6 +140,7 @@ export function initNativeScriptOverlay(options: NativeScriptOverlayOptions = {}
 async function connect(
   baseURL: string,
   pageId: string,
+  pageKey: string,
   intervalMs: number | undefined,
   onDisconnected: () => void,
 ) {
@@ -161,7 +164,7 @@ async function connect(
   try {
     const trusted = await rpc.ensureTrusted(TRUST_TIMEOUT_MS).catch(() => false);
     if (!trusted) throw new UntrustedError();
-    const stop = await startSession(rpc, pageId, intervalMs);
+    const stop = await startSession(rpc, pageId, pageKey, intervalMs);
     if (dead) {
       closing = true;
       stop(false);
@@ -183,9 +186,12 @@ async function connect(
 async function startSession(
   rpc: Rpc,
   pageId: string,
+  pageKey: string,
   intervalMs: number | undefined,
 ): Promise<(forget: boolean) => void> {
   const my = rpc.scope('pangular');
+  // Before any report, so the server hands this connection the page at once.
+  await claimPageOnServer(my.rpc, pageId, pageKey);
   const config = configFromConnection(rpc.connectionMeta);
   const tickMs = intervalMs ?? config.limits.refreshMs;
   setRedaction(config.redaction);

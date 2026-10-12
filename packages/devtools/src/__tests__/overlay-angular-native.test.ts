@@ -405,6 +405,13 @@ describe('initAngularNativeOverlay', () => {
     const pageOf = (calls: unknown[][]) =>
       (calls.find(([name]) => name === 'push-component-tree')?.[1] as { pageId: string }).pageId;
     expect(pageOf(second.calls)).toBe(pageOf(first.calls));
+    // Each connection first shows the page key it keeps in memory, the same one.
+    const claimOf = (calls: unknown[][]) => {
+      expect(calls[0]?.[0]).toBe('claim-page');
+      return calls[0]?.[1] as { pageId: string; key: string };
+    };
+    expect(claimOf(second.calls)).toEqual(claimOf(first.calls));
+    expect(claimOf(first.calls).pageId).toBe(pageOf(first.calls));
     expect(typeof g['location']).toBe('undefined');
 
     dispose();

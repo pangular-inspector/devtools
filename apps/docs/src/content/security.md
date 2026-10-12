@@ -156,6 +156,20 @@ Every installed extension can send requests to a loopback host, with its own `ch
 
 If you build the extension with another `key`, add its origin to `allowedOrigins`. Each entry names one extension. The ID is on the extension card in `chrome://extensions`. See [Server origin](./getting-started/chrome-extension.md#server-origin).
 
+### Page ownership
+
+Each tab, Angular Native app or Capacitor app that reports to the server has a page id. The first connection that reports a page owns it. A report or a `forget` for that page id from any other connection is ignored, so one client can't overwrite or remove the data of another tab.
+
+A page reconnects with the same page id after a reload. To take its page back, the overlay mints a random secret together with the page id and sends it before its first report. In a browser, the overlay keeps both in `sessionStorage` for the life of the tab. A duplicated tab gets a fresh pair. Angular Native and NativeScript apps keep both in memory. Another connection takes over a page id in one of these cases:
+
+| Case                                     | When it takes over                                                                       |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------- |
+| It sends the page's secret               | At once, even while the old connection is still open.                                    |
+| The old connection closed                | On its next report.                                                                      |
+| The old connection sent nothing for 15 s | On its next report. A tab in the background stays owned while it says it is still there. |
+
+Agent tools and the panel don't report pages, so these rules don't apply to them. A write that leaves out `page`, such as [`dispatch-ngrx-action`](./agents/tools.md#dispatch-an-action), is refused while more than one page could take it. The answer lists those pages, so you can call it again with one.
+
 ## What is redacted
 
 Live values leave the page. They are sent to the devtools server, shown in the panel and returned to agents. Redacted values are replaced with `[redacted]`.

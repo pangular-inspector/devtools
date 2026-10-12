@@ -15,18 +15,33 @@ export const PAGE_ARGUMENT = {
     'Page id, when more than one tab reports (see pangular:list-pages). Defaults to the most recent.',
 } as const;
 
-/** The answer to a `page` argument that names no page reporting this data. */
-export function unknownPageText(pageId: string, pages: readonly ReportingPage[], what: string) {
-  const known = [...pages].sort((a, b) => (b.reportedAt ?? 0) - (a.reportedAt ?? 0));
-  const list = known
+/** Page ids, with their URLs when known, newest first. */
+function pageList(pages: readonly ReportingPage[]) {
+  return [...pages]
+    .sort((a, b) => (b.reportedAt ?? 0) - (a.reportedAt ?? 0))
     .map((page) => (page.url ? `${code(page.pageId)} (${code(page.url)})` : code(page.pageId)))
     .join(', ');
-  const others = known.length
-    ? `Pages that report ${what}: ${list}. Pass one of these ids as \`page\`, or leave \`page\` out for the most recent.`
+}
+
+/**
+ * The answer to a write without `page` while more than one page could take
+ * it. A write changes the app, so it is not sent to a page the caller did not
+ * choose.
+ */
+export function choosePageText(pages: readonly ReportingPage[], what: string) {
+  const text = `${pages.length} pages report ${what}: ${pageList(pages)}. This changes the app, so pass one of these ids as \`page\` to pick the page it runs on.`;
+  // Page URLs come from the page, so they sit behind the notice.
+  return pages.some((page) => page.url) ? untrusted(text) : text;
+}
+
+/** The answer to a `page` argument that names no page reporting this data. */
+export function unknownPageText(pageId: string, pages: readonly ReportingPage[], what: string) {
+  const others = pages.length
+    ? `Pages that report ${what}: ${pageList(pages)}. Pass one of these ids as \`page\`, or leave \`page\` out for the most recent.`
     : `No page reports ${what} right now.`;
   const text = `No page ${code(pageId)} is reporting ${what}. ${others}`;
   // Page URLs come from the page, so they sit behind the notice.
-  return known.some((page) => page.url) ? untrusted(text) : text;
+  return pages.some((page) => page.url) ? untrusted(text) : text;
 }
 
 /** The value of `page`, or of an older alias such as `pageId`. */

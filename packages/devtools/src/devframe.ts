@@ -20,6 +20,7 @@ import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
+import { createPageOwners } from './rpc/page-owners.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
 import { getBuildMeta } from './rpc/build-meta.ts';
 import { getSignals } from './rpc/get-signals.ts';
@@ -183,6 +184,7 @@ import {
   byRecency,
   listPagesText,
   pageArgument,
+  choosePageText,
   pageDetails,
   summarizePages,
   unknownPageText,
@@ -291,6 +293,25 @@ const pangular = defineDevframe({
       visibilityState.mutate((draft) => {
         draft.hidden = visibility.list();
       });
+    // One connection owns each page id, so one tab (or a stray client) can't
+    // overwrite or forget the pages another one reports.
+    const owners = createPageOwners(ctx.rpc, liveTtl);
+    const owns = (pageId: unknown): pageId is string =>
+      typeof pageId === 'string' && owners.write(pageId);
+    const mayForget = (pageId: unknown): pageId is string =>
+      typeof pageId === 'string' && owners.forget(pageId);
+
+    register({
+      name: 'claim-page',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; key?: unknown } | null) => {
+        const pageId = message?.pageId;
+        if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return { ok: false };
+        return { ok: owners.claim(pageId, message?.key) };
+      },
+    });
+
     register({
       name: 'report-page-visibility',
       type: 'action',
@@ -298,6 +319,7 @@ const pangular = defineDevframe({
       handler: (report: { pageId?: unknown; hidden?: unknown } | null) => {
         const pageId = report?.pageId;
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return;
+        if (!owners.write(pageId)) return;
         if (visibility.set(pageId, report?.hidden === true)) applyVisibility();
       },
     });
@@ -428,7 +450,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (report: unknown) => {
-        if (!isPageReport(report)) return;
+        if (!isPageReport(report) || !owns(report.pageId)) return;
         applyForms(
           mergePageReport(
             formPages,
@@ -471,7 +493,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (report: unknown) => {
-        if (!isPipePageReport(report)) return;
+        if (!isPipePageReport(report) || !owns(report.pageId)) return;
         pipeSessions.bind(report.pageId);
         applyPipes(mergePipePageReport(pipePages, report, Date.now(), liveTtl));
       },
@@ -482,8 +504,9 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: string) => {
-        if (typeof pageId === 'string') pipeSessions.unbind(pageId);
-        if (typeof pageId === 'string' && pipePages.delete(pageId)) {
+        if (!mayForget(pageId)) return;
+        pipeSessions.unbind(pageId);
+        if (pipePages.delete(pageId)) {
           applyPipes(currentPipes(pipePages));
         }
       },
@@ -538,7 +561,7 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: (message: unknown) => {
         const report = toCapacitorReport(message);
-        if (!report) return { known: true };
+        if (!report || !owns(report.pageId)) return { known: true };
         capacitorSessions.bind(report.pageId);
         const answer = mergeCapacitorReport(capacitorPages, report, limits.capacitorCalls);
         if (answer.known) {
@@ -553,7 +576,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: string) => {
-        if (typeof pageId !== 'string') return;
+        if (!mayForget(pageId)) return;
         capacitorSessions.unbind(pageId);
         if (capacitorPages.delete(pageId)) applyCapacitor();
       },
@@ -575,6 +598,7 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: (report: unknown) => {
         if (!isRouterReport(report, limits.navigations)) return { hasConfig: false };
+        if (!owns(report.pageId)) return { hasConfig: true };
         try {
           applyRouter(
             mergeRouterReport(routerPages, report, Date.now(), visibility.ttl(ROUTER_PAGE_TTL_MS)),
@@ -592,7 +616,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        if (!touchRouterPage(routerPages, pageId)) return { known: false };
+        if (!owns(pageId) || !touchRouterPage(routerPages, pageId)) return { known: false };
         const reportedAt = routerPages.get(pageId as string)!.reportedAt;
         routerState.mutate((draft) => {
           const page = draft.pages.find((p) => p.pageId === pageId);
@@ -715,7 +739,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: string) => {
-        if (typeof pageId === 'string' && routerPages.delete(pageId)) {
+        if (mayForget(pageId) && routerPages.delete(pageId)) {
           applyRouter(currentRouter(routerPages));
         }
       },
@@ -814,7 +838,7 @@ const pangular = defineDevframe({
       handler: (report: unknown) => {
         const page = report as (Partial<HttpReport> & { payload?: unknown }) | null;
         if (!page || typeof page.pageId !== 'string' || typeof page.url !== 'string') return;
-        if (page.pageId.length >= 50) return;
+        if (page.pageId.length >= 50 || !owns(page.pageId)) return;
         const known = httpPages.get(page.pageId);
         const url = redactUrl(page.url);
         const hasPayload = page.payload !== undefined;
@@ -860,7 +884,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        const page = typeof pageId === 'string' ? httpPages.get(pageId) : undefined;
+        const page = owns(pageId) ? httpPages.get(pageId) : undefined;
         if (!page) return { known: false };
         httpPages.set(page.pageId, { ...page, reportedAt: Date.now() });
         return { known: true };
@@ -872,7 +896,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        if (typeof pageId === 'string' && httpPages.has(pageId)) forgetHttpPages([pageId]);
+        if (mayForget(pageId) && httpPages.has(pageId)) forgetHttpPages([pageId]);
       },
     });
 
@@ -943,6 +967,7 @@ const pangular = defineDevframe({
 
     const expiry = setInterval(() => {
       if (visibility.expire()) applyVisibility();
+      owners.expire();
       const staleHttp = [...httpPages].filter(([id, p]) => Date.now() - p.reportedAt > liveTtl(id));
       if (staleHttp.length) forgetHttpPages(staleHttp.map(([id]) => id));
       const stale = [...signalPages].filter(([id, p]) => Date.now() - p.reportedAt > liveTtl(id));
@@ -1280,7 +1305,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: string) => {
-        if (typeof pageId === 'string' && formPages.delete(pageId)) {
+        if (mayForget(pageId) && formPages.delete(pageId)) {
           applyForms(currentForms(formPages, limits.formTimeline));
         }
       },
@@ -1477,7 +1502,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (report: unknown) => {
-        if (!isComponentReport(report)) return;
+        if (!isComponentReport(report) || !owns(report.pageId)) return;
         componentPages.set(report.pageId, toComponentPage(report));
         cdSeen(report.pageId);
         applyComponentPages();
@@ -1508,7 +1533,7 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: (report: unknown) => {
         const page = toCdPage(report, limits.cdCycles);
-        if (!page) return;
+        if (!page || !owns(page.pageId)) return;
         cdPages.set(page.pageId, page);
         cdSeen(page.pageId);
         applyCd();
@@ -1520,7 +1545,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        const page = typeof pageId === 'string' ? cdPages.get(pageId) : undefined;
+        const page = owns(pageId) ? cdPages.get(pageId) : undefined;
         if (!page) return { known: false };
         cdPages.set(page.pageId, { ...page, reportedAt: Date.now() });
         cdSeen(page.pageId);
@@ -1533,7 +1558,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        if (typeof pageId === 'string' && cdPages.delete(pageId)) applyCd();
+        if (mayForget(pageId) && cdPages.delete(pageId)) applyCd();
       },
     });
 
@@ -1551,7 +1576,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        const page = typeof pageId === 'string' ? componentPages.get(pageId) : undefined;
+        const page = owns(pageId) ? componentPages.get(pageId) : undefined;
         if (!page) return { known: false };
         componentPages.set(page.pageId, { ...page, reportedAt: Date.now() });
         cdSeen(page.pageId);
@@ -1564,7 +1589,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        if (typeof pageId === 'string' && componentPages.delete(pageId)) applyComponentPages();
+        if (mayForget(pageId) && componentPages.delete(pageId)) applyComponentPages();
       },
     });
 
@@ -1681,6 +1706,7 @@ const pangular = defineDevframe({
       handler: (incoming: PageGraph & { historyDelta?: Record<string, SignalChange[]> }) => {
         const pageId = incoming?.pageId;
         const known = typeof pageId === 'string' && pageId.length < 50;
+        if (known && !owners.write(pageId)) return { delta: true };
         const prev = known ? signalPages.get(pageId)?.graph : undefined;
         let graph: PageGraph = incoming;
         let delta = true;
@@ -1712,7 +1738,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        const page = typeof pageId === 'string' ? signalPages.get(pageId) : undefined;
+        const page = owns(pageId) ? signalPages.get(pageId) : undefined;
         if (!page) return { known: false };
         signalPages.set(pageId as string, { ...page, reportedAt: Date.now() });
         return { known: true };
@@ -1731,7 +1757,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        if (typeof pageId === 'string' && signalPages.has(pageId)) forgetSignalPages([pageId]);
+        if (mayForget(pageId) && signalPages.has(pageId)) forgetSignalPages([pageId]);
       },
     });
 
@@ -1750,6 +1776,7 @@ const pangular = defineDevframe({
       ) => {
         const pageId = report?.pageId;
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return;
+        if (!owners.write(pageId)) return;
         const zone = ZONE_MODES.find((mode) => mode === report?.zone);
         const tree = sanitizeInjectorTree(report?.roots, report?.environment);
         injectorPages.set(pageId, {
@@ -1770,7 +1797,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        const page = typeof pageId === 'string' ? injectorPages.get(pageId) : undefined;
+        const page = owns(pageId) ? injectorPages.get(pageId) : undefined;
         if (!page) return { known: false };
         injectorPages.set(page.pageId, { ...page, reportedAt: Date.now() });
         cdSeen(page.pageId);
@@ -1783,7 +1810,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        if (typeof pageId === 'string' && injectorPages.delete(pageId)) applyInjectorPages();
+        if (mayForget(pageId) && injectorPages.delete(pageId)) applyInjectorPages();
       },
     });
 
@@ -1792,7 +1819,7 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (report: unknown) => {
-        if (!isNgrxReport(report)) return { seq: 0 };
+        if (!isNgrxReport(report) || !owns(report.pageId)) return { seq: 0 };
         const seq = mergeNgrxReport(ngrxPages, report, ngrxNames(), Date.now(), limits.changeLog);
         applyNgrx();
         return { seq };
@@ -1804,9 +1831,29 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        if (typeof pageId === 'string' && ngrxPages.delete(pageId)) applyNgrx();
+        if (mayForget(pageId) && ngrxPages.delete(pageId)) applyNgrx();
       },
     });
+
+    // The URL and title of each page, from its router, HTTP or component report.
+    const livePageDetails = () =>
+      pageDetails({
+        router: [...routerPages.values()].map((page) => ({
+          pageId: page.pageId,
+          reportedAt: page.reportedAt,
+          url: page.snapshot?.url,
+        })),
+        http: httpPages.values(),
+        components: componentPages.values(),
+      });
+    const withPageUrls = <T extends { pageId: string; reportedAt: number }>(pages: T[]) => {
+      const details = livePageDetails();
+      return pages.map((page) => ({
+        pageId: page.pageId,
+        reportedAt: page.reportedAt,
+        url: details.get(page.pageId)?.url,
+      }));
+    };
 
     const pendingNgrx = new Map<string, (result: unknown) => void>();
     let ngrxSeq = 0;
@@ -1824,7 +1871,16 @@ const pangular = defineDevframe({
     const requestNgrxAction = (page: unknown, request: unknown) =>
       new Promise<NgrxRequestResult>((resolve) => {
         if (!config.actions.ngrx) return resolve({ error: actionBlockedMessage('ngrx') });
-        const pageId = typeof page === 'string' ? page : ngrxStateOf(ngrxPages).pages[0]?.pageId;
+        const pages = ngrxStateOf(ngrxPages).pages;
+        // Without a page, the request would reach every tab, or one the caller did not choose.
+        if (typeof page !== 'string' && pages.length !== 1) {
+          return resolve({
+            error: pages.length
+              ? choosePageText(withPageUrls(pages), 'NgRx state')
+              : 'No page reports NgRx state. Open the app in a browser, or pass the page id.',
+          });
+        }
+        const pageId = typeof page === 'string' ? page : pages[0].pageId;
         const requestId = `n${++ngrxSeq}`;
         const timer = setTimeout(() => {
           pendingNgrx.delete(requestId);
@@ -2628,7 +2684,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:dispatch-ngrx-action',
       description:
-        'Dispatches an action to the @ngrx/store Store of the running app (development only) and returns the resulting action log entry: the action, its origin and the state diff it caused. Pass `type` (for example "[Cart] Add Item") and an optional JSON object `payload` whose keys become the action props, or `seq` to dispatch an action from the log again. get-ngrx-store lists the action types found in source. While a restore keeps Store DevTools on a past state, the action is logged but does not change the state. Needs the NgRx write action (actions.ngrx).',
+        'Dispatches an action to the @ngrx/store Store of the running app (development only) and returns the resulting action log entry: the action, its origin and the state diff it caused. Pass `type` (for example "[Cart] Add Item") and an optional JSON object `payload` whose keys become the action props, or `seq` to dispatch an action from the log again. get-ngrx-store lists the action types found in source. Without `page` it uses the one page with a Store; with several, it dispatches nothing and lists them, so call it again with `page`. While a restore keeps Store DevTools on a past state, the action is logged but does not change the state. Needs the NgRx write action (actions.ngrx).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -2655,7 +2711,12 @@ const pangular = defineDevframe({
         if (page && !ngrxPages.has(page)) {
           return { markdown: unknownPageText(page, pages, 'NgRx state') };
         }
-        const target = page ? ngrxPages.get(page) : pages.find((p) => p.classic);
+        const stores = pages.filter((p) => p.classic);
+        // A dispatch changes the app, so it never picks one of several tabs on its own.
+        if (!page && stores.length > 1) {
+          return { markdown: choosePageText(withPageUrls(stores), 'an @ngrx/store Store') };
+        }
+        const target = page ? ngrxPages.get(page) : stores[0];
         if (!target?.classic) {
           return {
             markdown: page
@@ -3129,15 +3190,7 @@ const pangular = defineDevframe({
         'List the browser tabs, Angular Native apps and Capacitor apps that report live data to this server, newest first: page id, URL, title, platform (`browser`, `Angular Native`, or `Capacitor (android)` / `Capacitor (ios)` for an app in a native WebView), seconds since the last report (marked `background` for a tab in the background, which stops reporting until shown again) and which inspectors report. The URL comes from the HTTP or router report, or from the component tree when those have none. Pass a page id as `page` to the live tools to pick a page; without it they use the most recent page.',
       inputSchema: { type: 'object', properties: {} },
       handler: async () => {
-        const details = pageDetails({
-          router: [...routerPages.values()].map((page) => ({
-            pageId: page.pageId,
-            reportedAt: page.reportedAt,
-            url: page.snapshot?.url,
-          })),
-          http: httpPages.values(),
-          components: componentPages.values(),
-        });
+        const details = livePageDetails();
         const platforms = new Map<string, string>();
         for (const page of componentPages.values()) {
           if (page.platform) platforms.set(page.pageId, page.platform);
@@ -3178,6 +3231,7 @@ const pangular = defineDevframe({
         blockCalls: config.actions.analog ? undefined : actionBlockedMessage('analog'),
         owner: ctx,
         ttl: liveTtl,
+        owners,
       });
     }
     trackHubDocks(ctx, 'pangular', config, {

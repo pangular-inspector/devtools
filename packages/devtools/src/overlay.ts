@@ -68,7 +68,7 @@ import { attachChangeDetection } from './cd-overlay.ts';
 import { createScanBackoff } from './router-attach.ts';
 import { DEVTOOLS_BASES, SETUP_URL } from './panel-frame.ts';
 import { clearHighlight, showHighlight } from './page-highlight.ts';
-import { newPageId } from './page-id.ts';
+import { claimPageOnServer, newPageId, newPageKey } from './page-id.ts';
 
 declare global {
   interface Window {
@@ -78,32 +78,42 @@ declare global {
 }
 
 const PAGE_ID_KEY = 'pangular-page-id';
+/** The secret minted with the page id, kept next to it. */
+const PAGE_SECRET_KEY = 'pangular-page-key';
 const ROUTER_HEARTBEAT_MS = 5000;
 /** A tab in the background still says it is there, at the pace browsers allow it. */
 const HIDDEN_HEARTBEAT_MS = 60_000;
 
-function storedPageId(): string | null {
+function stored(name: string): string | null {
   try {
-    return sessionStorage.getItem(PAGE_ID_KEY);
+    return sessionStorage.getItem(name);
   } catch {
     return null;
   }
 }
 
-function storePageId(id: string) {
+function storePageId(id: string, key: string) {
   try {
     sessionStorage.setItem(PAGE_ID_KEY, id);
+    sessionStorage.setItem(PAGE_SECRET_KEY, key);
   } catch {
     return;
   }
 }
 
-async function claimPageId(): Promise<{ id: string; release: () => void }> {
+/**
+ * The page id, kept for the tab's life in `sessionStorage`, and the secret
+ * minted with it. A duplicated tab copies both, so it gets a fresh pair.
+ */
+async function claimPageId(): Promise<{ id: string; key: string; release: () => void }> {
   const fresh = newPageId();
-  let id = storedPageId() ?? fresh;
+  const storedId = stored(PAGE_ID_KEY);
+  const storedKey = stored(PAGE_SECRET_KEY);
+  let id = storedId ?? fresh;
+  let key = storedId && storedKey ? storedKey : newPageKey();
   if (typeof BroadcastChannel === 'undefined') {
-    storePageId(id);
-    return { id, release: () => {} };
+    storePageId(id, key);
+    return { id, key, release: () => {} };
   }
   const channel = new BroadcastChannel('pangular-page-ids');
   let onTaken = () => {};
@@ -120,9 +130,12 @@ async function claimPageId(): Promise<{ id: string; release: () => void }> {
     channel.postMessage({ claim: id });
   });
   onTaken = () => {};
-  if (taken) id = fresh;
-  storePageId(id);
-  return { id, release: () => channel.close() };
+  if (taken) {
+    id = fresh;
+    key = newPageKey();
+  }
+  storePageId(id, key);
+  return { id, key, release: () => channel.close() };
 }
 
 type DevframeConnectionMeta = NonNullable<
@@ -376,8 +389,12 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     }
   }
 
-  const { id: pageId, release: releasePageId } = await claimPageId();
+  const { id: pageId, key: pageKey, release: releasePageId } = await claimPageId();
   if (!own(releasePageId)) return;
+  // Before any report, so a reloaded tab gets its page id back at once.
+  await claimPageOnServer(my.rpc, pageId, pageKey);
+  // The overlay may have been stopped while the claim was on its way.
+  if (!own(() => {})) return;
   window.__pangularPageId = pageId;
   own(() => {
     if (window.__pangularPageId === pageId) delete window.__pangularPageId;

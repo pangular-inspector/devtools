@@ -68,6 +68,8 @@ describe('pipe pages and their connections', () => {
     host.getCurrentRpcSession = () => ({ meta: { id: 1 } });
     await invoke('push-pipes', page('tab-1'));
     host.getCurrentRpcSession = () => ({ meta: { id: 2 } });
+    const key = 'k'.repeat(32);
+    await invoke('claim-page', { pageId: 'tab-2', key });
     await invoke('push-pipes', page('tab-2'));
     expect(await explain('tab-1')).toContain('3 instance(s)');
 
@@ -75,9 +77,10 @@ describe('pipe pages and their connections', () => {
     expect(await explain('tab-1')).toMatch(/^No page `tab-1` is reporting pipe usage/);
     expect(await explain('tab-2')).toContain('3 instance(s)');
 
-    // A reconnect re-binds the page to its new connection, so the old
-    // connection closing afterwards must not drop it.
+    // A reconnect shows the page's key and re-binds the page to its new
+    // connection, so the old connection closing afterwards must not drop it.
     host.getCurrentRpcSession = () => ({ meta: { id: 3 } });
+    await invoke('claim-page', { pageId: 'tab-2', key });
     await invoke('push-pipes', page('tab-2'));
     host._emitSessionDisconnected({ id: 2 });
     expect(await explain('tab-2')).toContain('3 instance(s)');

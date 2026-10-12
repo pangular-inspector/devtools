@@ -170,6 +170,52 @@ describe('dispatch-ngrx-action tool', () => {
     ).toEqual([]);
   });
 
+  it('refuses a dispatch without page while more than one tab has a Store, and names them', async () => {
+    const { ctx, push, call } = await boot();
+    const broadcast = vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async () => {}) as never);
+    await push('push-ngrx-state', page('p1', true));
+    await push('push-ngrx-state', page('p2', true));
+    await push('push-ngrx-state', page('p3', false));
+    const text = await call('dispatch-ngrx-action', { type: '[A] B' });
+    expect(text).toMatch(/^2 pages report an @ngrx\/store Store: /);
+    expect(text).toContain('`p1`');
+    expect(text).toContain('`p2`');
+    expect(text).not.toContain('`p3`');
+    expect(text).toContain('pass one of these ids as `page`');
+    expect(
+      broadcast.mock.calls.filter(([o]) =>
+        (o as unknown as Broadcast).method.endsWith('ngrx-action'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('refuses a request without pageId over RPC unless exactly one tab reports NgRx', async () => {
+    const { ctx, push } = await boot();
+    const sent: Broadcast[] = [];
+    vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: Broadcast) => {
+      if (!options.method.endsWith('ngrx-action')) return;
+      sent.push(options);
+      const { requestId } = options.args[0];
+      setTimeout(() => void push('ngrx-action-result', { requestId, result: { ok: true } }), 5);
+    }) as never);
+    const dispatch = { request: { type: 'dispatch', action: '[A] B' } };
+
+    // No page reports NgRx: the request would otherwise reach every tab.
+    expect(await push('request-ngrx-action', dispatch)).toEqual({
+      error: expect.stringContaining('No page reports NgRx state'),
+    });
+    await push('push-ngrx-state', page('p1', true));
+    expect(await push('request-ngrx-action', dispatch)).toEqual({ ok: true });
+    expect(sent.map((options) => options.args[0].pageId)).toEqual(['p1']);
+
+    await push('push-ngrx-state', page('p2', true));
+    expect(await push('request-ngrx-action', dispatch)).toEqual({
+      error: expect.stringMatching(/^2 pages report NgRx state: .*`p1`/),
+    });
+    expect(await push('request-ngrx-action', { ...dispatch, pageId: 'p2' })).toEqual({ ok: true });
+    expect(sent.map((options) => options.args[0].pageId)).toEqual(['p1', 'p2']);
+  });
+
   it('is left out when the ngrx write action is off, and the RPC refuses dispatches', async () => {
     const { ctx, push } = await boot({ actions: { ngrx: false } });
     const tools = ctx.agent.list().tools.map((tool) => tool.id);

@@ -35,7 +35,7 @@ Each tool reads from one of three places. The stdio server registers only the to
 
 ### The page argument
 
-Most page tools take an optional `page` argument to pick a browser tab. It defaults to the most recent one. `form-action` and `fill-form` take the tab from the form id instead (the part after `@`, as in `Checkout.form@ab12`). `highlight` and `inspect-component` search every tab without it, newest first, and `defer-blocks` lists every tab. `inspect-providers`, `highlight`, `inspect-component` and `defer-blocks` also accept `pageId`. The tables below leave `page` out.
+Most page tools take an optional `page` argument to pick a browser tab. It defaults to the most recent one. `dispatch-ngrx-action` refuses to guess when more than one tab could take the action. `form-action` and `fill-form` take the tab from the form id instead (the part after `@`, as in `Checkout.form@ab12`). `highlight` and `inspect-component` search every tab without it, newest first, and `defer-blocks` lists every tab. `inspect-providers`, `highlight`, `inspect-component` and `defer-blocks` also accept `pageId`. The tables below leave `page` out.
 
 If `page` names a tab that doesn't report that data, the tool answers `No page <id> is reporting ...` and lists the tabs that do, newest first. It never falls back to another tab. Without `page`, a class name or tag resolves on the most recent tab that has it, and `highlight` names the other tabs where it also matches.
 
@@ -279,7 +279,7 @@ If a `canMatch` guard or the navigation error handler redirects a `probe`, the p
 | `payload` | The action props as a JSON object, like `{"id": 7}`. It cannot have a `type` key.             |
 | `seq`     | The number of an action in the log, to dispatch that action again. Use it instead of `type`.  |
 
-Without `page`, the tool picks the most recent page that has an `@ngrx/store` Store. While a restore holds Store DevTools on a past state, the action is logged but does not change the state, and the answer says so. Set [`actions.ngrx`](../getting-started/configuration.md#actions) to `false` to drop the tool. Read the live state and log with the [`ngrx-store` resource](./resources.md#ngrx-store).
+Without `page`, the tool uses the one page that has an `@ngrx/store` Store. If more than one page has a Store, it dispatches nothing and lists those pages with their URLs, so you can call it again with `page`. While a restore holds Store DevTools on a past state, the action is logged but does not change the state, and the answer says so. Set [`actions.ngrx`](../getting-started/configuration.md#actions) to `false` to drop the tool. Read the live state and log with the [`ngrx-store` resource](./resources.md#ngrx-store).
 
 ## Forms
 

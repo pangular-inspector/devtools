@@ -20,7 +20,7 @@ import { initPangularHub } from '../hub.ts';
 import { makeProject } from './analog-fixture.ts';
 import { isSecretKey, setRedaction } from '../forms-privacy.ts';
 
-const SHARED_RPC = ['build-meta', 'report-page-visibility', 'list-pages'];
+const SHARED_RPC = ['build-meta', 'claim-page', 'report-page-visibility', 'list-pages'];
 
 async function boot(config?: PangularConfig) {
   const host = {
