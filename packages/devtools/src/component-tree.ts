@@ -398,10 +398,23 @@ export function collectComponentTree<H extends object = Element>(
   const summary = hydration?.finish(typeof document === 'undefined' ? undefined : document);
   if (summary) report.hydration = summary;
 
-  const connected = (host: object) => tree.isHost(host) && tree.connected(host);
-  pruneElementIds(connected);
-  const selected = options.selectedId ? elementById<H>(options.selectedId, connected) : null;
-  if (selected) report.detail = componentDetail(ng, selected, options.tree);
-  if (selected && report.detail) options.withDetail?.(report.detail, selected);
+  pruneElementIds((host: object) => tree.isHost(host) && tree.connected(host));
+  report.detail = selectedComponentDetail(ng, options);
   return report;
+}
+
+/**
+ * The detail of the instance `options.selectedId` names, or null. A tree
+ * reused while the page's elements stay the same still gets a fresh detail.
+ */
+export function selectedComponentDetail<H extends object = Element>(
+  ng: ComponentDebugNg<H>,
+  options: CollectOptions<H>,
+): ComponentDetail | null {
+  const tree = options.tree ?? documentTree<H>();
+  const connected = (host: object) => tree.isHost(host) && tree.connected(host);
+  const selected = options.selectedId ? elementById<H>(options.selectedId, connected) : null;
+  const detail = selected ? componentDetail(ng, selected, options.tree) : null;
+  if (selected && detail) options.withDetail?.(detail, selected);
+  return detail;
 }

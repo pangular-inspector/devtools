@@ -236,6 +236,61 @@ const ERRORS_SEED = {
   },
 };
 
+// Long lists, so axe checks the panel's windowed rows: a 2,000 instance
+// component tree and 2,000 HTTP calls.
+const LONG = 2000;
+const COMPONENTS_SEED = {
+  nodes: [],
+  selectedId: null,
+  highlightedId: null,
+  pages: {
+    big: {
+      pageId: 'big',
+      url: '/trips',
+      title: 'Trips',
+      reportedAt: now,
+      count: LONG,
+      detail: null,
+      roots: [
+        {
+          id: 'app',
+          name: 'App',
+          tag: 'app-root',
+          children: Array.from({ length: LONG - 1 }, (_, i) => ({
+            id: `c${i}`,
+            name: 'TripCard',
+            tag: 'app-trip-card',
+            children: [],
+          })),
+        },
+      ],
+    },
+  },
+};
+const HTTP_SEED = {
+  serverCalls: [],
+  pages: [
+    {
+      pageId: 'big',
+      url: '/trips',
+      title: 'Trips',
+      hydration: null,
+      reportedAt: now,
+      calls: Array.from({ length: LONG }, (_, i) => ({
+        id: `h${i}`,
+        url: `/api/trips/${i}`,
+        method: 'GET',
+        status: i % 50 ? 200 : 500,
+        durationMs: 12,
+        side: 'client',
+        cacheHit: false,
+        faulted: false,
+        at: now - LONG + i,
+      })),
+    },
+  ],
+};
+
 /** The dump's record format (@ungap/structured-clone JSON), for plain JSON values. */
 function encodeRecord(value) {
   const out = [];
@@ -258,7 +313,12 @@ function encodeRecord(value) {
   return JSON.stringify(out);
 }
 
-const SEEDS = { 'pangular:capacitor': CAPACITOR_SEED, 'pangular:errors': ERRORS_SEED };
+const SEEDS = {
+  'pangular:capacitor': CAPACITOR_SEED,
+  'pangular:errors': ERRORS_SEED,
+  'pangular:component-tree': COMPONENTS_SEED,
+  'pangular:http': HTTP_SEED,
+};
 
 /** Serves the seeded Capacitor and Errors pages in place of the report's empty state. */
 async function seedPages(context) {
@@ -383,6 +443,29 @@ try {
       await check(errors, `${colorScheme} Errors on the console log`);
     } catch (error) {
       failures.push(`${colorScheme} Errors: the seeded page did not show (${error.message})`);
+    }
+    const long = await seeded.newPage();
+    long.on('pageerror', (error) =>
+      failures.push(`${colorScheme} long lists: page error ${error.message}`),
+    );
+    try {
+      await long.goto(`${base}#tab=components`);
+      await long.locator('.status.connected').waitFor();
+      await long.locator('.tree.windowed [role="treeitem"]').first().waitFor({ timeout: 15_000 });
+      const rows = await long.locator('.tree [role="treeitem"]').count();
+      if (rows >= LONG) failures.push(`${colorScheme} components: ${rows} rows rendered`);
+      await check(long, `${colorScheme} Components with ${LONG} instances`);
+      await long.locator('.tree [role="treeitem"][tabindex="0"]').focus();
+      await long.keyboard.press('End');
+      await long.locator('.tree [role="treeitem"][data-id="c1998"]:focus').waitFor();
+      await check(long, `${colorScheme} Components at the last instance`);
+      const network = await seeded.newPage();
+      await network.goto(`${base}#tab=network`);
+      await network.locator('.status.connected').waitFor();
+      await network.locator('tbody tr[data-vindex]').first().waitFor({ timeout: 15_000 });
+      await check(network, `${colorScheme} Network with ${LONG} calls`);
+    } catch (error) {
+      failures.push(`${colorScheme} long lists: did not show (${error.message})`);
     }
     await seeded.close();
   }

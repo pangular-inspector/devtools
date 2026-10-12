@@ -20,6 +20,7 @@ import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-co
 import { LimitNote } from '../ui/limit-note';
 import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
+import { VirtualWindow } from '../ui/virtual-window';
 import {
   changeCountText,
   moreChangesText,
@@ -377,12 +378,23 @@ const CLASSIC_KINDS = new Set([
                 />
                 <div class="log-layout">
                   <ul
+                    #logList
                     class="log-list"
                     appRovingList="button.log-item"
+                    [rovingWindow]="logWindow"
+                    [style.padding-top.px]="logWindow.enabled() ? 2 + logWindow.padTop() : null"
+                    [style.padding-bottom.px]="
+                      logWindow.enabled() ? 2 + logWindow.padBottom() : null
+                    "
                     [attr.aria-label]="current.classic ? 'Actions' : 'Changes'"
                   >
-                    @for (entry of storeLog(); track entry.seq) {
-                      <li>
+                    @for (shown of shownLog(); track shown.entry.seq) {
+                      @let entry = shown.entry;
+                      <li
+                        [attr.data-vindex]="shown.index"
+                        [attr.aria-setsize]="logWindow.enabled() ? storeLog().length : null"
+                        [attr.aria-posinset]="logWindow.enabled() ? shown.index + 1 : null"
+                      >
                         <button
                           type="button"
                           class="log-item"
@@ -512,9 +524,22 @@ const CLASSIC_KINDS = new Set([
         <p class="intro">
           Events dispatched through &#64;ngrx/signals/events, across every store on this page.
         </p>
-        <ul class="events-list" appRovingList="button.event-item" aria-label="Dispatched events">
-          @for (evt of pageEvents(); track evt.seq) {
-            <li>
+        <ul
+          #eventsList
+          class="events-list"
+          appRovingList="button.event-item"
+          aria-label="Dispatched events"
+          [rovingWindow]="eventWindow"
+          [style.padding-top.px]="eventWindow.enabled() ? 6 + eventWindow.padTop() : null"
+          [style.padding-bottom.px]="eventWindow.enabled() ? 6 + eventWindow.padBottom() : null"
+        >
+          @for (shown of shownEvents(); track shown.entry.seq) {
+            @let evt = shown.entry;
+            <li
+              [attr.data-vindex]="shown.index"
+              [attr.aria-setsize]="eventWindow.enabled() ? pageEvents().length : null"
+              [attr.aria-posinset]="eventWindow.enabled() ? shown.index + 1 : null"
+            >
               <button
                 type="button"
                 class="event-item"
@@ -1850,6 +1875,20 @@ export class StoreInspector {
       .reverse();
   });
 
+  /** Long logs render only the entries near view in their scroll box. */
+  readonly logWindow = new VirtualWindow({
+    count: computed(() => this.storeLog().length),
+    estimate: 56,
+  });
+  readonly shownLog = computed(() => slice(this.storeLog(), this.logWindow));
+  readonly eventWindow = new VirtualWindow({
+    count: computed(() => this.pageEvents().length),
+    estimate: 36,
+  });
+  readonly shownEvents = computed(() => slice(this.pageEvents(), this.eventWindow));
+  private readonly logList = viewChild<ElementRef<HTMLElement>>('logList');
+  private readonly eventsList = viewChild<ElementRef<HTMLElement>>('eventsList');
+
   readonly changeEntry = computed<NgrxLogEntry | null>(() => {
     const seq = this.selectedChangeSeq();
     if (seq === null) return null;
@@ -1910,6 +1949,14 @@ export class StoreInspector {
   });
 
   constructor() {
+    effect(() => {
+      const log = this.logList()?.nativeElement;
+      if (log) this.logWindow.attach(log);
+    });
+    effect(() => {
+      const events = this.eventsList()?.nativeElement;
+      if (events) this.eventWindow.attach(events);
+    });
     effect(() => {
       const client = this.rpc();
       if (client) void this.load(client);
@@ -2169,4 +2216,10 @@ export class StoreInspector {
       parts.push(`last ${this.formatDuration(method.lastDurationMs)}`);
     return parts.length ? ` · ${parts.join(' · ')}` : '';
   }
+}
+
+/** The entries of `list` the window renders, with their index in the whole list. */
+function slice<T>(list: T[], window: VirtualWindow) {
+  const { start, end } = window.range();
+  return list.slice(start, end).map((entry, i) => ({ entry, index: start + i }));
 }

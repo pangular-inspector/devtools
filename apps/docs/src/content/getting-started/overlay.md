@@ -75,7 +75,7 @@ It also adds the [floating button](./popup-and-hub.md). With the hub mounted, th
 
 On Angular 20 and later, the overlay reads the page about 250 ms after Angular runs change detection. It also reads it every 4 seconds as a heartbeat. Until the app bootstraps, it reads the page every 3 seconds instead. Change that interval with [`limits.refreshMs`](./configuration.md#limits).
 
-Each read skips data that did not change. Router events are sent as they happen.
+Each read skips data that did not change. Router events are sent as they happen. The component tree, injectors, change detection and forms go out at most once a second, as changes after a first full report, and only while a panel or an agent watches. See [Performance](./configuration.md#performance).
 
 ### One id per tab
 

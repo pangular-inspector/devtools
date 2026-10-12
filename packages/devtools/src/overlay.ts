@@ -44,7 +44,11 @@ import { createSignalHistory, installSignalWriteHook } from './signal-history.ts
 import { registerSignalPeek } from './signal-peek.ts';
 import { createSignalWatch, registerSignalWatch } from './signal-watch.ts';
 export { installSignalWriteHook } from './signal-history.ts';
-import { collectComponentTree, componentHostOf } from './component-tree.ts';
+import {
+  collectComponentTree,
+  componentHostOf,
+  selectedComponentDetail,
+} from './component-tree.ts';
 import { startComponentPick } from './component-pick.ts';
 import { registerComponentEdit } from './component-edit-overlay.ts';
 import { registerComponentValues } from './component-values-overlay.ts';
@@ -77,6 +81,11 @@ import { DEVTOOLS_BASES, SETUP_URL } from './panel-frame.ts';
 import { overlayStarts } from './overlay-start.ts';
 import { clearHighlight, showHighlight } from './page-highlight.ts';
 import { claimPageOnServer, newPageId, newPageKey } from './page-id.ts';
+import { createDeltaChannel } from './delta-channel.ts';
+import { COMPONENT_TREE_SHAPE, INJECTOR_TREE_SHAPE } from './push-delta.ts';
+import { createDomDirty } from './dom-dirty.ts';
+import { domTree } from './host-tree.ts';
+import { LEASED_PUSH_MS, createPageLease, throttle } from './page-lease.ts';
 
 declare global {
   interface Window {
@@ -294,19 +303,32 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   let attachValues: ReturnType<typeof registerComponentValues> | undefined;
   const deferTracker = createDeferTracker();
   const forTracker = createForTracker();
-  let lastTreeJson = '';
-  let treeSentAt = 0;
-  async function pushTree(force = false) {
+  // The component tree is made of elements, so it is walked again only when
+  // elements came or went (or every few seconds); the selected detail is always fresh.
+  const dirty = createDomDirty();
+  if (!own(dirty.stop)) return;
+  const readComponents = dirty.cached(
+    () =>
+      collectComponentTree(getNg(), {
+        tree: dirty.watch(domTree()),
+        directiveHosts: true,
+        hydration: true,
+      }),
+    // A page still hydrating changes without adding elements.
+    (tree) => tree.roots.length > 0 && !tree.hydration?.counts.dehydratedBlocks,
+  );
+  function collectTree(force = false) {
     const ng = getNg();
     const blocksOf = controlFlowReader(ng);
     const deferBlocks = deferTracker.collect(ng, document, blocksOf);
-    const components = collectComponentTree(ng, {
-      selectedId: componentTarget,
-      directiveHosts: true,
-      hydration: true,
-      withDetail: attachValues,
-    });
-    const tree = {
+    const structure = readComponents(force);
+    const components = {
+      ...structure,
+      detail: ng?.getComponent
+        ? selectedComponentDetail(ng, { selectedId: componentTarget, withDetail: attachValues })
+        : null,
+    };
+    return {
       ...components,
       ...hydrationOverlay?.report(components, deferBlocks),
       url: redactUrl(location.href),
@@ -315,20 +337,11 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       ...(deferTracker.truncated ? { deferTruncated: true } : {}),
       ...forTracker.collect(ng, document, blocksOf),
     };
-    const json = JSON.stringify(tree);
-    if (!force && json === lastTreeJson) {
-      if (!keepaliveDue(treeSentAt, tickMs())) return;
-      treeSentAt = Date.now();
-      if (await pingKnows('ping-component-tree')) return;
-    }
-    lastTreeJson = json;
-    treeSentAt = Date.now();
-    try {
-      await my.rpc.call('push-component-tree', { ...tree, pageId });
-    } catch (error) {
-      lastTreeJson = '';
-      throw error;
-    }
+  }
+  async function pushTree(force = false) {
+    // An idle page only says it is there (`page-lease.ts`).
+    if (!force && !lease.active) return treeChannel.keepalive(() => collectTree(true));
+    await treeChannel.send(collectTree(force), force);
   }
 
   const signalWatch = createSignalWatch();
@@ -395,24 +408,13 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     historyDelta = answer?.delta === true;
   }
 
-  let lastInjectorJson = '';
-  let injectorSentAt = 0;
-  async function pushInjectorTree() {
-    const tree = collectInjectorTree(getNg());
-    const json = JSON.stringify(tree);
-    if (json === lastInjectorJson) {
-      if (!keepaliveDue(injectorSentAt, tickMs())) return;
-      injectorSentAt = Date.now();
-      if (await pingKnows('ping-injector-tree')) return;
+  // Not cached on DOM changes: environment injectors list the services they
+  // created, which grows without any element being added.
+  async function pushInjectorTree(force = false) {
+    if (!force && !lease.active) {
+      return injectorChannel.keepalive(() => ({ ...collectInjectorTree(getNg()) }));
     }
-    lastInjectorJson = json;
-    injectorSentAt = Date.now();
-    try {
-      await my.rpc.call('push-injector-tree', { ...tree, pageId });
-    } catch (error) {
-      lastInjectorJson = '';
-      throw error;
-    }
+    await injectorChannel.send({ ...collectInjectorTree(getNg()) }, force);
   }
 
   const { id: pageId, key: pageKey, release: releasePageId } = await claimPageId();
@@ -425,6 +427,30 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   own(() => {
     if (window.__pangularPageId === pageId) delete window.__pangularPageId;
   });
+  const channel = (push: string, ping: string, shape: typeof COMPONENT_TREE_SHAPE) =>
+    createDeltaChannel({
+      call: (name, ...args) => my.rpc.call(name, ...args),
+      pageId,
+      push,
+      ping,
+      shape,
+      tickMs,
+    });
+  const treeChannel = channel('push-component-tree', 'ping-component-tree', COMPONENT_TREE_SHAPE);
+  const injectorChannel = channel('push-injector-tree', 'ping-injector-tree', INJECTOR_TREE_SHAPE);
+  // Wakes up with a push of every leased report when a panel or an agent looks again.
+  const lease = createPageLease(my, pageId, {
+    wake: () =>
+      Promise.allSettled([
+        on.components && pushTree(true),
+        on.injectors && pushInjectorTree(true),
+        on.components && cd?.push(false, true),
+        forms?.push(true),
+      ]),
+  });
+  own(lease.stop);
+  // The first reports go out in full either way, so an idle page is still listed.
+  void lease.refresh();
   const stopAnalog = on.analog ? attachAnalog(my, pageId, getNg, limits.refreshMs) : () => {};
   const forms = on.forms
     ? attachForms(
@@ -433,6 +459,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
         getNg,
         { show: showHighlight, clear: clearHighlight },
         limits.formTimeline,
+        { active: () => lease.active },
       )
     : null;
   const pipes = on.pipes ? attachPipes(my, pageId, getNg) : null;
@@ -448,7 +475,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     ? attachHydrationOverlay(my, pageId, () => void pushTree(true).catch(() => {}))
     : null;
   const cd = on.components
-    ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs)
+    ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs, () => lease.active)
     : null;
   const ngrx = on.ngrx ? attachNgrx(my, pageId, getNg, limits.changeLog) : null;
   const errors = on.errors ? attachErrors(my, pageId, getNg, { tickMs }) : null;
@@ -631,16 +658,22 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     routerPushTimer = setTimeout(() => void pushRouter(), 50);
   }
 
+  // The leased reports go out at most once a second; forced pushes don't wait.
+  const paced = (fn: () => void) => {
+    const run = throttle(fn, LEASED_PUSH_MS);
+    own(run.cancel);
+    return run;
+  };
   const collectors = [
-    on.components && (() => void pushTree().catch(() => {})),
+    on.components && paced(() => void pushTree().catch(() => {})),
     on.signals && (() => void pushSignalGraph().catch(() => {})),
-    on.injectors && (() => void pushInjectorTree().catch(() => {})),
+    on.injectors && paced(() => void pushInjectorTree().catch(() => {})),
     ngrx && (() => void ngrx.push()),
-    forms?.push,
+    forms && paced(() => forms.push()),
     pipes?.push,
     on.router && (() => void pushRouter()),
     http && (() => void http.push().catch(() => {})),
-    cd && (() => void cd.push().catch(() => {})),
+    cd && paced(() => void cd.push().catch(() => {})),
     errors && (() => void errors.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
   const pushAll = () => collectors.forEach((run) => run());
@@ -842,12 +875,13 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     forget('forms', 'forget-forms-page');
     forget('router', 'forget-router-page');
     forget('pipes', 'forget-pipes-page');
+    treeChannel.resync();
     forget('components', 'forget-component-page');
     lastSignalKey = '';
     historyDelta = false;
     forget('signals', 'forget-signal-page');
     cd?.leave();
-    lastInjectorJson = '';
+    injectorChannel.resync();
     forget('injectors', 'forget-injector-page');
     http?.leave();
     capacitor?.leave();
@@ -861,6 +895,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     pipes?.resume();
     capacitor?.resume();
     errors?.resume();
+    void lease.refresh();
     left = false;
     onVisibility();
   };

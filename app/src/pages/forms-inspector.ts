@@ -646,6 +646,11 @@ function countFields(node: FormFieldNode): number {
       padding: 0;
       list-style: none;
     }
+    .form-list > li {
+      /* A page with many forms skips layout and paint for the entries out of view. */
+      content-visibility: auto;
+      contain-intrinsic-size: auto 52px;
+    }
     .form-item {
       width: 100%;
       display: grid;
@@ -678,8 +683,9 @@ function countFields(node: FormFieldNode): number {
       color: var(--text-strong);
     }
     .form-item:focus-visible {
+      /* Inside the entry: its paint containment would clip a ring drawn outside. */
       outline: 2px solid var(--accent);
-      outline-offset: 2px;
+      outline-offset: -2px;
     }
     .form-item .dot {
       grid-area: dot;

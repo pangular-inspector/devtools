@@ -1,4 +1,6 @@
-import { addProfilerListener, keepaliveDue } from './change-detection.ts';
+import { addProfilerListener } from './change-detection.ts';
+import { createDeltaChannel } from './delta-channel.ts';
+import { CHANGE_DETECTION_SHAPE } from './push-delta.ts';
 import { toCdOptionsRequest } from './cd-data.ts';
 import { createCdLive } from './cd-live.ts';
 import { createCdRecorder, type CdReport } from './cd-recorder.ts';
@@ -29,14 +31,24 @@ export function attachChangeDetection(
   getNg: () => unknown,
   maxCycles: number,
   tickMs: () => number = () => 0,
+  /** Whether a panel or an agent watches (`page-lease.ts`); an idle page only keeps itself alive. */
+  active: () => boolean = () => true,
 ) {
   const recorder = createCdRecorder({ maxCycles });
   const live = createCdLive({ getNg });
   const hostIds = new WeakMap<object, string>();
   let removeListener: (() => void) | null = null;
   let supported = true;
-  let lastJson = '';
-  let sentAt = 0;
+  // True once a report went out, so a stopped recording keeps being reported.
+  let reported = false;
+  const channel = createDeltaChannel({
+    call: (name, ...args) => my.rpc.call(name, ...args),
+    pageId,
+    push: 'push-change-detection',
+    ping: 'ping-change-detection',
+    shape: CHANGE_DETECTION_SHAPE,
+    tickMs,
+  });
 
   const hostId = (instance: object) => {
     const known = hostIds.get(instance);
@@ -68,9 +80,7 @@ export function attachChangeDetection(
     removeListener = null;
   };
 
-  const push = async (force = false) => {
-    // After leave() a stopped recording with cycles is still worth sending again.
-    if (!force && !recorder.recording && !recorder.hasCycles && !lastJson) return;
+  const collect = (): Record<string, unknown> => {
     const options = live.report();
     const report: CdReport = {
       pageId,
@@ -78,17 +88,19 @@ export function attachChangeDetection(
       ...recorder.snapshot(hostId),
       ...(options ? { options } : {}),
     };
-    const json = JSON.stringify(report);
-    if (!force && json === lastJson) {
-      if (!keepaliveDue(sentAt, tickMs())) return;
-      sentAt = Date.now();
-      const answer = (await my.rpc.call('ping-change-detection', pageId)) as
-        { known?: boolean } | undefined;
-      if (answer?.known !== false) return;
+    return { ...report };
+  };
+
+  /** `wake`: sends what there is to send even on an idle page, as a panel or an agent just looked. */
+  const push = async (force = false, wake = false) => {
+    // After leave() a stopped recording with cycles is still worth sending again.
+    if (!force && !recorder.recording && !recorder.hasCycles && !reported) return;
+    if (!force && !wake && !active()) {
+      if (reported) await channel.keepalive(collect);
+      return;
     }
-    lastJson = json;
-    sentAt = Date.now();
-    await my.rpc.call('push-change-detection', report);
+    reported = true;
+    await channel.send(collect(), force);
   };
 
   my.rpc.register({
@@ -120,7 +132,8 @@ export function attachChangeDetection(
       return recorder.recording;
     },
     leave: () => {
-      lastJson = '';
+      reported = false;
+      channel.resync();
       void my.rpc.call('forget-change-detection-page', pageId).catch(() => {});
     },
     stop: () => {

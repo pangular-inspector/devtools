@@ -45,6 +45,7 @@ import { ValueStore } from './component-value-store';
 import { nestedMatches } from './component-value-state';
 import { StoreGlobal } from '../ui/store-global';
 import { ForBlocksSection, type ForBlock } from './for-blocks-section';
+import { VirtualWindow } from '../ui/virtual-window';
 
 interface SourceComponent {
   selector: string;
@@ -164,7 +165,13 @@ interface Row {
   depth: number;
   hasChildren: boolean;
   expanded: boolean;
+  /** Position among its siblings, from 1, and how many siblings there are, for screen readers. */
+  posinset: number;
+  setsize: number;
 }
+
+/** Height of a tree row, fixed while the tree renders only the rows in view. */
+const TREE_ROW_PX = 32;
 
 function bare(name: string): string {
   return name.replace(/^_(?=[A-Z])/, '');
@@ -310,21 +317,35 @@ function storedDirectiveHosts(): boolean {
               <button type="button" (click)="clearFilter()">Clear filter</button>
             </div>
           }
+          @if (rowWindow.enabled()) {
+            <p class="window-note">
+              {{ rows().length }} rows. Rows render as you scroll, so the browser's find only sees
+              the ones near view; the filter above searches them all.
+            </p>
+          }
           <div
+            #treeEl
             class="tree"
             role="tree"
             aria-label="Component instances"
+            [class.windowed]="rowWindow.enabled()"
+            [style.padding-top.px]="rowWindow.enabled() ? 6 + rowWindow.padTop() : null"
+            [style.padding-bottom.px]="rowWindow.enabled() ? 6 + rowWindow.padBottom() : null"
             [hidden]="!rows().length"
             (keydown)="onTreeKey($event)"
           >
-            @for (row of rows(); track row.node.id) {
+            @for (shown of shownRows(); track shown.row.node.id) {
+              @let row = shown.row;
               <div
                 class="row"
                 role="treeitem"
                 [attr.aria-level]="row.depth + 1"
+                [attr.aria-setsize]="row.setsize"
+                [attr.aria-posinset]="row.posinset"
                 [attr.aria-expanded]="row.hasChildren ? row.expanded : null"
                 [attr.aria-selected]="selectedId() === row.node.id"
-                [attr.tabindex]="rovingId() === row.node.id ? 0 : -1"
+                [attr.tabindex]="tabStop() === row.node.id ? 0 : -1"
+                [attr.data-vindex]="shown.index"
                 [attr.data-id]="row.node.id"
                 [class.selected]="selectedId() === row.node.id"
                 [class.dir-host]="row.node.kind === 'directive'"
@@ -1148,6 +1169,15 @@ function storedDirectiveHosts(): boolean {
       border-radius: var(--radius);
       @include m.enter;
     }
+    .window-note {
+      margin: 0 0 6px;
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .tree.windowed .row {
+      height: 32px;
+      overflow: hidden;
+    }
     .row {
       position: relative;
       display: flex;
@@ -1782,15 +1812,42 @@ export class ComponentTree {
     const collapsed = this.collapsed();
     const searching = !!this.query();
     const walk = (nodes: LiveNode[], depth: number) => {
-      for (const node of nodes) {
+      nodes.forEach((node, i) => {
         const expanded = searching || !collapsed.has(node.id);
-        rows.push({ node, depth, hasChildren: node.children.length > 0, expanded });
+        rows.push({
+          node,
+          depth,
+          hasChildren: node.children.length > 0,
+          expanded,
+          posinset: i + 1,
+          setsize: nodes.length,
+        });
         if (expanded) walk(node.children, depth + 1);
-      }
+      });
     };
     walk(this.filtered().nodes, 0);
     return rows;
   });
+
+  /** A long tree renders only the rows near the visible part of the page. */
+  readonly rowWindow = new VirtualWindow({
+    count: computed(() => this.rows().length),
+    estimate: TREE_ROW_PX,
+    fixed: true,
+  });
+  readonly shownRows = computed(() => {
+    const { start, end } = this.rowWindow.range();
+    return this.rows()
+      .slice(start, end)
+      .map((row, i) => ({ row, index: start + i }));
+  });
+  /** The row Tab lands on: the roving one, or the first rendered row when it is out of view. */
+  readonly tabStop = computed(() => {
+    const id = this.rovingId();
+    const shown = this.shownRows();
+    return shown.some(({ row }) => row.node.id === id) ? id : (shown[0]?.row.node.id ?? null);
+  });
+  private readonly treeEl = viewChild<ElementRef<HTMLElement>>('treeEl');
 
   readonly selectedNode = computed(() => {
     const id = this.selectedId();
@@ -1932,6 +1989,10 @@ export class ComponentTree {
   });
 
   constructor() {
+    effect(() => {
+      const tree = this.treeEl()?.nativeElement;
+      if (tree) this.rowWindow.attach(tree);
+    });
     effect(() => {
       const detail = this.detail();
       const target = {
@@ -2328,6 +2389,9 @@ export class ComponentTree {
     if (!this.rows().some((row) => row.node.id === id)) this.setFilter('');
     if (this.selectedId() !== id) this.select(id);
     if (focus) this.focusId.set(id);
+    // In a long tree the row may be outside the rendered window.
+    const index = this.rows().findIndex((row) => row.node.id === id);
+    if (index >= 0) this.rowWindow.reveal(index);
     afterNextRender(
       () => {
         const row = document.querySelector<HTMLElement>(`.row[data-id="${CSS.escape(id)}"]`);
@@ -2475,11 +2539,14 @@ export class ComponentTree {
     if (next >= 0) {
       const id = rows[next].node.id;
       this.focusId.set(id);
-      queueMicrotask(() => {
+      const focus = () => {
         const el = document.querySelector<HTMLElement>(`.row[data-id="${CSS.escape(id)}"]`);
         el?.focus();
         el?.scrollIntoView({ block: 'nearest' });
-      });
+      };
+      // A row outside the rendered window is brought in first.
+      if (this.rowWindow.rendered(next)) queueMicrotask(focus);
+      else this.rowWindow.reveal(next, focus);
     }
   }
 }

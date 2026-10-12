@@ -40,6 +40,8 @@ import { fieldPath, probeEveryTime } from './forms-read.ts';
 import { watchWebMcp } from './forms-webmcp.ts';
 import { FORMLESS_FORM_ACTIONS } from './config.ts';
 import { tapConsole } from './console-tap.ts';
+import { createDeltaChannel } from './delta-channel.ts';
+import { FORMS_SHAPE } from './push-delta.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -112,8 +114,18 @@ function afterPaint(fn: () => void) {
 }
 
 export interface FormsCollector {
-  push(): void;
+  /** Reads the forms and sends what changed; `wake` sends even when the page is idle. */
+  push(wake?: boolean): Promise<void>;
   stop(): void;
+}
+
+export interface FormsOptions {
+  /**
+   * Whether a panel or an agent watches (`page-lease.ts`). An idle page still
+   * reads its forms, so the timeline misses nothing, but only keeps itself
+   * alive on the server.
+   */
+  active?: () => boolean;
 }
 
 export function attachForms(
@@ -122,7 +134,15 @@ export function attachForms(
   getNg: () => any,
   highlight: { show(el: HTMLElement): void; clear(): void },
   maxEvents = MAX_FORM_EVENTS,
+  options: FormsOptions = {},
 ): FormsCollector {
+  const channel = createDeltaChannel({
+    call: (name, ...args) => my.rpc.call(name, ...args),
+    pageId,
+    push: 'push-forms',
+    shape: FORMS_SHAPE,
+    keepaliveMs: HEARTBEAT_MS,
+  });
   const assignIds = createFormIds(pageId);
   let ids = new WeakMap<object, string>();
   const idOf = (root: object) => ids.get(root) ?? `form@${pageId}`;
@@ -160,8 +180,6 @@ export function attachForms(
   };
   let lastForms: CollectedForm[] = [];
   let lastRoots = new Map<string, object>();
-  let lastPayload = '';
-  let lastPushAt = 0;
   const formEvents: FormEvent[] = [];
   let droppedEvents = 0;
   const watched = new Map<object, { formId: string; stop: () => void }>();
@@ -389,7 +407,7 @@ export function attachForms(
     for (const child of node.children ?? []) stampPending(formId, child, now);
   }
 
-  async function pushForms() {
+  async function pushForms(wake = false) {
     try {
       const ng = getNg();
       if (!ng?.getDirectives) return;
@@ -462,11 +480,8 @@ export function attachForms(
         instrumented: !!instrumentation,
         ...(droppedEvents ? { dropped: droppedEvents } : {}),
       };
-      const payload = JSON.stringify(report);
-      if (payload === lastPayload && now - lastPushAt < HEARTBEAT_MS) return;
-      lastPayload = payload;
-      lastPushAt = now;
-      await my.rpc.call('push-forms', report);
+      if (!wake && options.active && !options.active()) await channel.keepalive(() => report);
+      else await channel.send(report);
     } catch {
       return;
     }
@@ -745,7 +760,7 @@ export function attachForms(
   });
 
   return {
-    push: () => void pushForms(),
+    push: (wake = false) => pushForms(wake),
     stop() {
       observer?.disconnect();
       webMcp.stop();

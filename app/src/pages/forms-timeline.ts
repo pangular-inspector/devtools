@@ -363,6 +363,9 @@ const EVENT_TYPES = [
       border-radius: 6px;
       color: var(--text);
       transition: background-color 150ms var(--ease);
+      /* A long timeline skips layout and paint for the events out of view. */
+      content-visibility: auto;
+      contain-intrinsic-size: auto 52px;
     }
     .events li:hover {
       background: var(--surface-3);

@@ -155,6 +155,7 @@ describe('resolvePangularConfig', () => {
       changeLog: 200,
       cdCycles: 200,
       capacitorCalls: 200,
+      idleAfterMs: 60_000,
     });
     expect(
       resolvePangularConfig({
@@ -166,6 +167,7 @@ describe('resolvePangularConfig', () => {
           changeLog: '500',
           cdCycles: 5,
           capacitorCalls: 5000,
+          idleAfterMs: -1,
         },
       }).limits,
     ).toEqual({
@@ -176,6 +178,7 @@ describe('resolvePangularConfig', () => {
       changeLog: 200,
       cdCycles: 10,
       capacitorCalls: 2000,
+      idleAfterMs: 0,
     });
     expect(resolvePangularConfig({ limits: { refreshMs: 60_000 } }).limits.refreshMs).toBe(8000);
   });

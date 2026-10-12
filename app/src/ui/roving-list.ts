@@ -1,4 +1,5 @@
 import { DestroyRef, Directive, ElementRef, afterNextRender, inject, input } from '@angular/core';
+import type { VirtualWindow } from './virtual-window';
 
 const KEYS = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
 
@@ -23,6 +24,12 @@ const SELECTED =
 export class RovingList {
   /** The CSS selector of the list's focusable items, such as `button.row`. */
   readonly appRovingList = input('');
+  /**
+   * The window of a list that renders only the rows near view. Home and End
+   * then go to the first and last row of the whole list, rendering it first.
+   * Rows carry `data-vindex`.
+   */
+  readonly rovingWindow = input<VirtualWindow | null>(null);
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private current: HTMLElement | null = null;
@@ -100,6 +107,21 @@ export class RovingList {
     const items = this.items();
     const at = items.indexOf(target);
     if (at < 0) return;
+    const window = this.rovingWindow();
+    if (window?.enabled() && (event.key === 'Home' || event.key === 'End')) {
+      event.preventDefault();
+      const index = event.key === 'Home' ? 0 : window.count - 1;
+      const focus = () => {
+        const row = this.host.querySelector(`[data-vindex="${index}"]`);
+        const item = row?.matches(this.appRovingList())
+          ? row
+          : row?.querySelector(this.appRovingList());
+        (item as HTMLElement | null | undefined)?.focus();
+      };
+      if (window.rendered(index)) focus();
+      else window.reveal(index, focus);
+      return;
+    }
     const moves: Record<string, number> = {
       ArrowDown: Math.min(at + 1, items.length - 1),
       ArrowUp: Math.max(at - 1, 0),

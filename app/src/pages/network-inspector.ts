@@ -11,6 +11,7 @@ import {
   linkedSignal,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
@@ -27,6 +28,7 @@ import { prettyJson } from '../format';
 import { LimitNote } from '../ui/limit-note';
 import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
+import { VirtualWindow } from '../ui/virtual-window';
 
 type HttpSide = 'client' | 'server';
 
@@ -586,10 +588,16 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           <span class="sr-only" role="status">{{ filterStatus() }}</span>
         </div>
         @if (visibleCalls().length) {
+          @if (callWindow.enabled()) {
+            <p class="muted small window-note">
+              Rows render as you scroll, so the browser's find only sees the ones near view; the
+              search field searches them all.
+            </p>
+          }
           <div class="table-wrap">
-            <table>
+            <table [attr.aria-rowcount]="visibleCalls().length + 1">
               <thead>
-                <tr>
+                <tr aria-rowindex="1">
                   <th scope="col">Side</th>
                   <th scope="col">Method</th>
                   <th scope="col">URL</th>
@@ -599,9 +607,17 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                   <th scope="col">Notes</th>
                 </tr>
               </thead>
-              <tbody appRovingList="button[data-call-id]">
-                @for (entry of visibleCalls(); track entry.side + entry.id) {
+              <tbody #callsBody appRovingList="button[data-call-id]" [rovingWindow]="callWindow">
+                @if (callWindow.padTop()) {
+                  <tr class="spacer" aria-hidden="true">
+                    <td colspan="7" [style.height.px]="callWindow.padTop()"></td>
+                  </tr>
+                }
+                @for (shown of shownCalls(); track shown.entry.side + shown.entry.id) {
+                  @let entry = shown.entry;
                   <tr
+                    [attr.aria-rowindex]="shown.index + 2"
+                    [attr.data-vindex]="shown.index"
                     [class.selected]="selectedCall()?.id === entry.id"
                     (click)="openCall(entry.id)"
                   >
@@ -656,6 +672,11 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                         }
                       </div>
                     </td>
+                  </tr>
+                }
+                @if (callWindow.padBottom()) {
+                  <tr class="spacer" aria-hidden="true">
+                    <td colspan="7" [style.height.px]="callWindow.padBottom()"></td>
                   </tr>
                 }
               </tbody>
@@ -1625,6 +1646,13 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     tbody tr {
       cursor: pointer;
     }
+    tbody tr.spacer td {
+      padding: 0;
+      border: 0;
+    }
+    .window-note {
+      margin: 0 0 6px;
+    }
     tbody td {
       transition: background-color 0.15s var(--ease);
     }
@@ -2185,6 +2213,19 @@ export class NetworkInspector {
     { value: 'client', label: 'Client' },
   ];
 
+  /** A long call list renders only the rows near view in its scroll box. */
+  readonly callWindow = new VirtualWindow({
+    count: computed(() => this.visibleCalls().length),
+    estimate: 37,
+  });
+  readonly shownCalls = computed(() => {
+    const { start, end } = this.callWindow.range();
+    return this.visibleCalls()
+      .slice(start, end)
+      .map((entry, i) => ({ entry, index: start + i }));
+  });
+  private readonly callsBody = viewChild<ElementRef<HTMLElement>>('callsBody');
+
   readonly visibleCalls = computed(() => {
     const query = this.callQuery().trim().toLowerCase();
     const side = this.sideFilter() ?? 'all';
@@ -2309,6 +2350,10 @@ export class NetworkInspector {
   });
 
   constructor() {
+    effect(() => {
+      const body = this.callsBody()?.nativeElement;
+      if (body) this.callWindow.attach(body);
+    });
     effect(() => {
       const client = this.rpc();
       if (client) this.load(client);

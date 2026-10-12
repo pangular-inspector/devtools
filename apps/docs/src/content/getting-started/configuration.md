@@ -117,6 +117,7 @@ interface PangularConfig {
     changeLog?: number;
     cdCycles?: number;
     capacitorCalls?: number;
+    idleAfterMs?: number;
   };
   popup?: {hotkey?: string | false};
 }
@@ -167,19 +168,31 @@ Forms, the router, component inputs, signals, NgRx, pipes, Analog previews, SSR 
 
 Values outside the bounds are clamped to the nearest one.
 
-| Option                  | Default | Bounds      | What it sets                                                                          |
-| ----------------------- | ------- | ----------- | ------------------------------------------------------------------------------------- |
-| `limits.refreshMs`      | `3000`  | 500 to 8000 | Fallback poll interval, in ms, used before the app bootstraps.                        |
-| `limits.navigations`    | `50`    | 5 to 500    | Navigations kept per page.                                                            |
-| `limits.formTimeline`   | `200`   | 10 to 2000  | Form timeline events kept.                                                            |
-| `limits.httpCalls`      | `200`   | 10 to 2000  | HTTP calls kept per page and on the server.                                           |
-| `limits.changeLog`      | `200`   | 10 to 2000  | NgRx change log entries kept per page.                                                |
-| `limits.cdCycles`       | `200`   | 10 to 2000  | Change detection cycles kept per page while recording.                                |
-| `limits.capacitorCalls` | `200`   | 10 to 2000  | [Capacitor](../inspectors/capacitor.md) plugin calls kept per page and on the server. |
+| Option                  | Default | Bounds      | What it sets                                                                                           |
+| ----------------------- | ------- | ----------- | ------------------------------------------------------------------------------------------------------ |
+| `limits.refreshMs`      | `3000`  | 500 to 8000 | Fallback poll interval, in ms, used before the app bootstraps.                                         |
+| `limits.navigations`    | `50`    | 5 to 500    | Navigations kept per page.                                                                             |
+| `limits.formTimeline`   | `200`   | 10 to 2000  | Form timeline events kept.                                                                             |
+| `limits.httpCalls`      | `200`   | 10 to 2000  | HTTP calls kept per page and on the server.                                                            |
+| `limits.changeLog`      | `200`   | 10 to 2000  | NgRx change log entries kept per page.                                                                 |
+| `limits.cdCycles`       | `200`   | 10 to 2000  | Change detection cycles kept per page while recording.                                                 |
+| `limits.capacitorCalls` | `200`   | 10 to 2000  | [Capacitor](../inspectors/capacitor.md) plugin calls kept per page and on the server.                  |
+| `limits.idleAfterMs`    | `60000` | 0 to 600000 | How long pages keep sending after an agent's last call while no panel is open. `0` keeps them sending. |
 
 When a timeline reaches its limit, the oldest entries are dropped. The timeline then shows a note above the list, such as "Showing the latest 200 HTTP calls. 12 older entries were dropped." with the limit to raise. This applies to the **SSR & HTTP** timeline, the router navigation timeline, the forms timeline, the NgRx change log, the change detection recording and the Capacitor plugin calls. The `explain-navigation`, `form-history` and `change-detection` agent tools add the same note, and the `pangular:ngrx-store` resource reports a `dropped` count per page.
 
 On Angular 20 and later, the page reports about 250 ms after Angular runs change detection, plus a heartbeat every 4 seconds. `refreshMs` doesn't change that. The page polls every `refreshMs` instead when it can't follow change detection, such as until the app bootstraps. The Analog inspector also reads the page every `refreshMs`. At any value, the page sends its data at least every 8 seconds, even when nothing changed, so the server never drops a page that is still open.
+
+### Performance
+
+The component tree, injectors, change detection recording and forms cost the most to read and send on a large app, so the page keeps them cheap:
+
+- After one full report, the page sends only what changed. If the server lost track (a restart, a lost message), it asks for the whole report again.
+- The page sends each of them at most once a second.
+- The component tree is read again only when elements were added or removed, or every 4 seconds.
+- The page sends them only while someone watches: a panel is open (the popup, the hub or the Chrome extension), or an agent called a tool in the last `limits.idleAfterMs`. An idle page only says it is still open. The forms timeline keeps recording meanwhile. When a panel opens or an agent calls a tool, the page sends everything again, and the agent's call waits up to 1.5 seconds for it.
+
+In the panel, the component tree, the HTTP call table, and the NgRx change log and events render only the rows near view when they have more than 300. Rows out of view are not in the page, so the browser's find doesn't see them. Use the tab's search field to search every row.
 
 ### Popup
 

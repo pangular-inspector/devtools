@@ -248,6 +248,14 @@ export * from './config.ts';
 
 import { registerAuthTokens } from './auth-tokens.ts';
 import pkg from '../package.json' with { type: 'json' };
+import { INTEREST_TICK_MS, createPageInterest, leased } from './rpc/page-interest.ts';
+import { createReportDeltas, deltaPush } from './rpc/report-deltas.ts';
+import {
+  CHANGE_DETECTION_SHAPE,
+  COMPONENT_TREE_SHAPE,
+  FORMS_SHAPE,
+  INJECTOR_TREE_SHAPE,
+} from './push-delta.ts';
 
 type CapacitorToolArgs = {
   page?: string;
@@ -304,10 +312,17 @@ const pangular = defineDevframe({
       registerTool: (tool: Parameters<typeof ctx.agent.registerTool>[0]) => {
         // The tier comes from AGENT_SAFETY, so the config is the one place that sets it.
         if (agentExposed(tool))
-          ctx.agent.registerTool(feed.wrapTool({ ...tool, safety: agentSafety(tool.id, config) }));
+          ctx.agent.registerTool(
+            feed.wrapTool({
+              ...tool,
+              safety: agentSafety(tool.id, config),
+              handler: leased(() => interest, tool.handler),
+            }),
+          );
       },
       registerResource: (resource: Parameters<typeof ctx.agent.registerResource>[0]) => {
-        if (agentExposed(resource)) ctx.agent.registerResource(resource);
+        if (agentExposed(resource))
+          ctx.agent.registerResource({ ...resource, read: leased(() => interest, resource.read) });
       },
     };
 
@@ -353,6 +368,25 @@ const pangular = defineDevframe({
     const answersFor = (target: string | undefined, pageId: unknown) =>
       (target === undefined || pageId === target) && owns(pageId);
 
+    // Pages push their heavy reports only while a panel or an agent watches.
+    const interest = createPageInterest({
+      rpcHost: ctx.rpc,
+      leaseMs: limits.idleAfterMs,
+      hidden: (pageId) => visibility.has(pageId),
+      broadcast: (message) =>
+        void my.rpc
+          .broadcast({ method: 'page-interest-changed', args: [message], optional: true })
+          ?.catch?.(() => {}),
+    });
+    register({
+      name: 'page-interest',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: unknown) => interest.handle(message),
+    });
+    const interestTick = setInterval(() => interest.tick(), INTEREST_TICK_MS);
+    interestTick.unref?.();
+
     register({
       name: 'claim-page',
       type: 'action',
@@ -385,6 +419,11 @@ const pangular = defineDevframe({
       },
     });
     const componentPages = new Map<string, ComponentPage>();
+    // What each page's next delta builds on (`push-delta.ts`).
+    const componentDeltas = createReportDeltas(COMPONENT_TREE_SHAPE);
+    const injectorDeltas = createReportDeltas(INJECTOR_TREE_SHAPE);
+    const cdDeltas = createReportDeltas(CHANGE_DETECTION_SHAPE);
+    const formDeltas = createReportDeltas(FORMS_SHAPE);
     const applyComponentPages = () =>
       componentTree.mutate((draft) => {
         draft.pages = Object.fromEntries(componentPages);
@@ -520,8 +559,8 @@ const pangular = defineDevframe({
       name: 'push-forms',
       type: 'action',
       jsonSerializable: true,
-      handler: (report: unknown) => {
-        if (!isPageReport(report) || !owns(report.pageId)) return;
+      handler: deltaPush(formDeltas, owns, (report) => {
+        if (!isPageReport(report) || !owns(report.pageId)) return false;
         applyForms(
           mergePageReport(
             formPages,
@@ -532,7 +571,8 @@ const pangular = defineDevframe({
           ),
         );
         feed.ngErrors(report.pageId, 'forms', report.setupErrors ?? []);
-      },
+        return true;
+      }),
     });
 
     const pipePages = new Map<string, PipePageReport & { reportedAt: number }>();
@@ -1095,11 +1135,17 @@ const pangular = defineDevframe({
       if (expireNgrxPages(ngrxPages, Date.now(), liveTtl)) applyNgrx();
       if (expireCapacitorPages(capacitorPages, Date.now(), liveTtl)) applyCapacitor();
       errorsInspector?.expire();
+      componentDeltas.prune((id) => componentPages.has(id));
+      injectorDeltas.prune((id) => injectorPages.has(id));
+      cdDeltas.prune((id) => cdPages.has(id));
+      formDeltas.prune((id) => formPages.has(id));
     }, 5000);
     expiry.unref?.();
     registry.owner = ctx;
     registry.dispose = () => {
       clearInterval(expiry);
+      clearInterval(interestTick);
+      interest.stop();
       clearTimeout(flushTimer);
       registry.record = undefined;
       ssr.record = undefined;
@@ -1399,9 +1445,9 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: string) => {
-        if (mayForget(pageId) && formPages.delete(pageId)) {
-          applyForms(currentForms(formPages, limits.formTimeline));
-        }
+        if (!mayForget(pageId)) return;
+        formDeltas.forget(pageId);
+        if (formPages.delete(pageId)) applyForms(currentForms(formPages, limits.formTimeline));
       },
     });
 
@@ -1602,13 +1648,14 @@ const pangular = defineDevframe({
       name: 'push-component-tree',
       type: 'action',
       jsonSerializable: true,
-      handler: (report: unknown) => {
-        if (!isComponentReport(report) || !owns(report.pageId)) return;
+      handler: deltaPush(componentDeltas, owns, (report) => {
+        if (!isComponentReport(report) || !owns(report.pageId)) return false;
         componentPages.set(report.pageId, toComponentPage(report));
         cdSeen(report.pageId);
         applyComponentPages();
         for (const check of [...componentWaiters]) check();
-      },
+        return true;
+      }),
     });
 
     const cdState = await my.rpc.sharedState('change-detection', {
@@ -1642,13 +1689,14 @@ const pangular = defineDevframe({
       name: 'push-change-detection',
       type: 'action',
       jsonSerializable: true,
-      handler: (report: unknown) => {
+      handler: deltaPush(cdDeltas, owns, (report) => {
         const page = toCdPage(report, limits.cdCycles);
-        if (!page || !owns(page.pageId)) return;
+        if (!page || !owns(page.pageId)) return false;
         cdPages.set(page.pageId, page);
         cdSeen(page.pageId);
         applyCd();
-      },
+        return true;
+      }),
     });
 
     register({
@@ -1669,7 +1717,9 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        if (mayForget(pageId) && cdPages.delete(pageId)) applyCd();
+        if (!mayForget(pageId)) return;
+        cdDeltas.forget(pageId);
+        if (cdPages.delete(pageId)) applyCd();
       },
     });
 
@@ -1709,7 +1759,9 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        if (mayForget(pageId) && componentPages.delete(pageId)) applyComponentPages();
+        if (!mayForget(pageId)) return;
+        componentDeltas.forget(pageId);
+        if (componentPages.delete(pageId)) applyComponentPages();
       },
     });
 
@@ -2010,18 +2062,17 @@ const pangular = defineDevframe({
       name: 'push-injector-tree',
       type: 'action',
       jsonSerializable: true,
-      handler: (
-        report: {
+      handler: deltaPush(injectorDeltas, owns, (raw) => {
+        const report = raw as {
           pageId?: unknown;
           roots?: unknown;
           environment?: unknown;
           truncated?: unknown;
           zone?: unknown;
-        } | null,
-      ) => {
+        } | null;
         const pageId = report?.pageId;
-        if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return;
-        if (!owners.write(pageId)) return;
+        if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return false;
+        if (!owners.write(pageId)) return false;
         const zone = ZONE_MODES.find((mode) => mode === report?.zone);
         const tree = sanitizeInjectorTree(report?.roots, report?.environment);
         const names = frameworkNames.current();
@@ -2036,7 +2087,8 @@ const pangular = defineDevframe({
         injectorPages.set(pageId, withFramework(page, names ?? new Set()));
         cdSeen(pageId);
         applyInjectorPages();
-      },
+        return true;
+      }),
     });
 
     register({
@@ -2057,7 +2109,9 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (pageId: unknown) => {
-        if (mayForget(pageId) && injectorPages.delete(pageId)) applyInjectorPages();
+        if (!mayForget(pageId)) return;
+        injectorDeltas.forget(pageId);
+        if (injectorPages.delete(pageId)) applyInjectorPages();
       },
     });
 

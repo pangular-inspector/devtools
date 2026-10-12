@@ -103,7 +103,8 @@ describe('overlay collectors', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
       vi.setSystemTime(Date.now() + 9000);
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      // The component and injector pushes run at most once a second.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
     } finally {
       vi.useRealTimers();
     }

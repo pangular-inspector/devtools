@@ -57,6 +57,7 @@ export const PANGULAR_LIMITS = {
   changeLog: { default: 200, min: 10, max: 2000 },
   cdCycles: { default: 200, min: 10, max: 2000 },
   capacitorCalls: { default: 200, min: 10, max: 2000 },
+  idleAfterMs: { default: 60_000, min: 0, max: 600_000 },
 } as const;
 
 export type PangularLimit = keyof typeof PANGULAR_LIMITS;
@@ -192,6 +193,14 @@ export interface PangularConfig {
     cdCycles?: number;
     /** Capacitor plugin calls kept per page and on the server. Default 200. */
     capacitorCalls?: number;
+    /**
+     * How long, in ms, pages keep sending the component tree, injectors,
+     * change detection and forms after an agent's last call when no panel is
+     * open. Idle pages only say they are still there, and send everything
+     * again when a panel opens or an agent asks. `0` keeps them sending all
+     * the time. Default 60000, up to 600000.
+     */
+    idleAfterMs?: number;
   };
   popup?: {
     /**
@@ -820,6 +829,8 @@ export const SHARED_RPC: readonly string[] = [
   'build-meta',
   'claim-page',
   'report-page-visibility',
+  // The activity lease: pages ask whether a panel or an agent watches.
+  'page-interest',
   'list-pages',
   // Opens any tab, so it stays with every inspector off; it lists only the tabs that are on.
   'open-in-panel',
@@ -1160,6 +1171,8 @@ const LIMIT_LABEL: Record<PangularLimit, (value: number) => string> = {
   changeLog: (value) => `${value} NgRx changes`,
   cdCycles: (value) => `${value} change detection cycles`,
   capacitorCalls: (value) => `${value} Capacitor plugin calls`,
+  idleAfterMs: (value) =>
+    value ? `idle ${value / 1000} s after the last agent call` : 'never idle',
 };
 
 /** The options that differ from the defaults, as label and value pairs. Empty when nothing is changed. */
