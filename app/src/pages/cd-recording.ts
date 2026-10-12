@@ -5,6 +5,7 @@ import { panelConfig } from '../devtools-config';
 import { time } from '../format';
 import { rpcCall as call } from '../rpc';
 import { LimitNote } from '../ui/limit-note';
+import { CdTiming } from './cd-timing';
 
 export type { CdCheck, CdComponentStat, CdCycle } from '@pangular-inspector/devtools/config';
 /** One page's recording, as the page reports it. */
@@ -16,7 +17,7 @@ const SHOWN_CYCLES = 30;
 /** Record and Stop for change detection, with the slowest components and the latest cycles. */
 @Component({
   selector: 'app-cd-recording',
-  imports: [LimitNote],
+  imports: [LimitNote, CdTiming],
   template: `
     <section class="cd" aria-labelledby="cd-heading">
       <div class="cd-head">
@@ -90,6 +91,12 @@ const SHOWN_CYCLES = 30;
                       >after <span class="mono">{{ cycle.trigger }}</span></span
                     >
                   }
+                  @if (cycle.hookMs) {
+                    <span class="timing">hooks {{ ms(cycle.hookMs) }}</span>
+                  }
+                  @if (cycle.afterRenderMs) {
+                    <span class="timing">afterRender {{ ms(cycle.afterRenderMs) }}</span>
+                  }
                   @if (cycle.components[0]; as top) {
                     <span class="top">
                       slowest <span class="mono">{{ top.name }}</span> {{ ms(top.ms) }}
@@ -100,6 +107,7 @@ const SHOWN_CYCLES = 30;
             </ol>
           </div>
         </div>
+        <app-cd-timing [page]="page()" />
       } @else if (recording()) {
         <p class="empty">Use the app. Cycles show up here as Angular runs change detection.</p>
       }
@@ -228,6 +236,7 @@ const SHOWN_CYCLES = 30;
     }
     .when,
     .trigger,
+    .timing,
     .top {
       color: var(--text-2);
     }

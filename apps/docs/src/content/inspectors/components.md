@@ -120,8 +120,13 @@ The list needs Angular 22.0 or later in a development build. On an older Angular
 Below the tree and the defer blocks, the **Change detection** section records change detection cycles with Angular's profiler. Click **Record**, use the app, then click **Stop recording**. **Clear** empties the recording. Each new recording starts empty, but a start sent while the page records, such as an agent's `record: "start"`, keeps the cycles recorded so far.
 
 - **Slowest components**: each component class with its check count, its self time (its own template and hooks, children excluded) and its slowest single check.
-- **Latest cycles**, newest first: the start time, the duration, how many components Angular checked, how many sync passes it ran, the output listener that ran just before the cycle (an output that ended more than 50 ms before the cycle is not counted), and the slowest component in it.
+- **Latest cycles**, newest first: the start time, the duration, how many components Angular checked, how many sync passes it ran, the output listener that ran just before the cycle (an output that ended more than 50 ms before the cycle is not counted), the time in lifecycle hooks and in `afterRender` callbacks, and the slowest component in it.
+- **Lifecycle hooks**: time per class and hook (`ngOnChanges`, `ngOnInit`, `ngDoCheck`, `ngAfterContentChecked`, `ngAfterViewChecked` and the others Angular calls), with call count and slowest call. A hook's time is also part of the self time of the component whose view runs it.
+- **Output listeners**: time per class and listener, without the time of outputs the listener emitted, with call count and slowest call.
+- A line with how often Angular ran the `afterEveryRender` and `afterNextRender` callbacks, and how long they took.
 - Tree rows show how many times each instance was checked while recording.
+
+**Lifecycle hooks** and **Output listeners** show their 10 slowest rows. A recording keeps the 100 slowest of each among the first 1000 it times, and a note says how many it left out.
 
 **Slowest components** shows the 100 component classes with the most self time among the first 1000 classes a recording checks. A class first checked after those 1000 has no totals, so it isn't ranked. Tree rows count checks for up to 2000 instances. When a recording checks more classes or instances, a note in the section says how many were left out.
 
@@ -284,7 +289,7 @@ Press Escape in the filter box to clear it. When the filter matches nothing, **C
 | `pangular:list-components`        | tool     | Returns the live tree of one page as an indented outline with routed and directive markers. Takes a `filter` and a `depth`.                                                           |
 | `pangular:defer-blocks`           | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                  |
 | `pangular:for-blocks`             | tool     | Lists the `@for` blocks of each page with their item count, track kind and `@empty` block.                                                                                            |
-| `pangular:change-detection`       | tool     | Starts, stops or clears a change detection recording, and returns the slowest and most often checked components and the latest cycles.                                                |
+| `pangular:change-detection`       | tool     | Starts, stops or clears a change detection recording, and returns the slowest and most often checked components, hook, output and afterRender time, and the latest cycles.            |
 | `pangular:set-component-property` | tool     | Writes an input or property of one instance and runs change detection. An action.                                                                                                     |
 | `pangular:set-signal`             | tool     | Sets a writable signal that one instance holds as a property. An action.                                                                                                              |
 | `pangular:component-tree`         | resource | The live tree per page, with the detail of the selected instance and the defer blocks.                                                                                                |

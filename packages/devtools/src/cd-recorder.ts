@@ -1,13 +1,37 @@
-import type { CdCheck, CdComponentStat, CdCycle, CdRecording, CdReport } from './config.ts';
+import {
+  CD_SPAN_KIND,
+  MAX_RAW_SPANS,
+  createSpanNames,
+  createTimingTable,
+  hookName,
+  keepLongest,
+  listenerName,
+  type RawSpan,
+} from './cd-timing.ts';
+import type {
+  CdAfterRenderStat,
+  CdCheck,
+  CdComponentStat,
+  CdCycle,
+  CdRecording,
+  CdReport,
+} from './config.ts';
 import { className } from './injector-tree.ts';
 
-/** Angular's `ProfilerEvent` values that the recorder reads. */
+/**
+ * Angular's `ProfilerEvent` values that the recorder reads, checked against
+ * the enum in `@angular/core/fesm2022/_debug_node-chunk.mjs` (Angular 22).
+ */
 export const PROFILER_EVENT = {
+  LifecycleHookStart: 4,
+  LifecycleHookEnd: 5,
   OutputStart: 6,
   OutputEnd: 7,
   ChangeDetectionStart: 12,
   ChangeDetectionEnd: 13,
   ChangeDetectionSyncStart: 14,
+  AfterRenderHooksStart: 16,
+  AfterRenderHooksEnd: 17,
   ComponentStart: 18,
   ComponentEnd: 19,
 } as const;
@@ -20,6 +44,8 @@ const MAX_TRACKED_CLASSES = MAX_COMPONENTS * 10;
 /** Component instances the recorder counts checks for. */
 export const MAX_HOSTS = 2000;
 const MAX_NESTED = 10;
+/** Open hooks or outputs past this depth are dropped, in case an end event never comes. */
+const MAX_OPEN = 50;
 /**
  * How long after an output listener ends a tick can still be credited to it.
  * Zone.js ticks right after the listener and the zoneless scheduler within a
@@ -39,11 +65,29 @@ interface RawCycle {
   passes: number;
   trigger?: string;
   checks: Map<Ctor, { checks: number; ms: number }>;
+  hookMs: number;
+  afterRenderMs: number;
+  outputMs: number;
+  spans: RawSpan[];
+  droppedSpans: number;
 }
 
 interface Frame {
   start: number;
   children: number;
+}
+
+interface HookFrame {
+  start: number;
+  instance: unknown;
+  hook: unknown;
+}
+
+interface OutputFrame {
+  start: number;
+  children: number;
+  owner: unknown;
+  listener: unknown;
 }
 
 function nameOf(instance: unknown): string {
@@ -56,14 +100,15 @@ function triggerText(
 ): string | undefined {
   if (!trigger) return undefined;
   const owner = nameOf(trigger.owner);
-  const listener =
-    typeof trigger.listener === 'function' ? (trigger.listener as { name?: string }).name : '';
-  return listener && !/^(wrapListener|anonymous|bound )/.test(listener)
-    ? `${owner} (${listener})`
-    : owner;
+  const listener = listenerName(trigger.listener);
+  return listener ? `${owner} (${listener})` : owner;
 }
 
 const round = (ms: number) => Math.round(ms * 100) / 100;
+const ctorOf = (instance: unknown): Ctor | null => {
+  const ctor = (instance as { constructor?: unknown } | null)?.constructor;
+  return typeof ctor === 'function' ? ctor : null;
+};
 
 /**
  * Records change detection cycles from Angular's profiler. `onEvent` keeps
@@ -88,6 +133,16 @@ export function createCdRecorder(options: {
   // that Angular starts and ends before throwing. They resume when it ends.
   let outer: { cycle: RawCycle; stack: Frame[] }[] = [];
   let lastOutput: { owner: unknown; listener: unknown; endedAt?: number } | undefined;
+  // Lifecycle hooks, outputs and afterRender callbacks, timed with their own stacks.
+  let hookStack: HookFrame[] = [];
+  let outputStack: OutputFrame[] = [];
+  let afterRenderStart: number | null = null;
+  // The last output listener that ran outside a cycle, with its time, for the next cycle.
+  let lastTopOutput: { start: number; ms: number; label: string } | undefined;
+  let perfStart = 0;
+  const hookTable = createTimingTable();
+  const outputTable = createTimingTable();
+  let afterRender: CdAfterRenderStat = { runs: 0, ms: 0, maxMs: 0 };
   let totals = new Map<Ctor, CdComponentStat & { lastCycle: number }>();
   let perInstance = new WeakMap<object, number>();
   let instances: WeakRef<object>[] = [];
@@ -99,33 +154,134 @@ export function createCdRecorder(options: {
   let untrackedHosts = new WeakMap<object, number>();
   let untrackedHostCount = 0;
 
+  const addSpan = (span: Omit<RawSpan, 'start'> & { at: number }) => {
+    if (!current) return;
+    if (current.spans.length >= MAX_RAW_SPANS) {
+      current.droppedSpans++;
+      return;
+    }
+    const { at, ...rest } = span;
+    current.spans.push({ ...rest, start: at - current.start });
+  };
+
   const onEvent = (event: number, instance?: unknown, hook?: unknown) => {
     if (!recording) return;
     switch (event) {
       case PROFILER_EVENT.OutputStart:
         if (!current) lastOutput = { owner: instance, listener: hook };
+        outputStack.push({ start: now(), children: 0, owner: instance, listener: hook });
+        if (outputStack.length > MAX_OPEN) outputStack.shift();
         return;
-      case PROFILER_EVENT.OutputEnd:
-        if (!current && lastOutput) lastOutput.endedAt = now();
+      case PROFILER_EVENT.OutputEnd: {
+        const end = now();
+        if (!current && lastOutput) lastOutput.endedAt = end;
+        const frame = outputStack.pop();
+        if (!frame) return;
+        const total = end - frame.start;
+        const parent = outputStack.at(-1);
+        if (parent) parent.children += total;
+        const ctor = ctorOf(frame.owner);
+        if (ctor)
+          outputTable.add(ctor, listenerName(frame.listener), Math.max(0, total - frame.children));
+        const label = triggerText({ owner: frame.owner, listener: frame.listener }) ?? '?';
+        if (current) {
+          addSpan({
+            ctor: null,
+            label,
+            at: frame.start,
+            ms: total,
+            depth: stack.length + hookStack.length,
+            kind: CD_SPAN_KIND.output,
+          });
+        } else if (!parent) {
+          lastTopOutput = { start: frame.start, ms: total, label };
+        }
         return;
+      }
+      case PROFILER_EVENT.LifecycleHookStart:
+        hookStack.push({ start: now(), instance, hook });
+        if (hookStack.length > MAX_OPEN) hookStack.shift();
+        return;
+      case PROFILER_EVENT.LifecycleHookEnd: {
+        const frame = hookStack.pop();
+        if (!frame) return;
+        const ms = now() - frame.start;
+        const ctor = ctorOf(frame.instance);
+        if (!ctor) return;
+        const name = hookName(frame.instance, frame.hook);
+        hookTable.add(ctor, name, ms);
+        if (!current) return;
+        // Nested hooks are already in the time of the hook that runs them.
+        if (!hookStack.length) current.hookMs += ms;
+        addSpan({
+          ctor,
+          label: name,
+          at: frame.start,
+          ms,
+          depth: stack.length + hookStack.length,
+          kind: CD_SPAN_KIND.hook,
+        });
+        return;
+      }
+      case PROFILER_EVENT.AfterRenderHooksStart:
+        if (current) afterRenderStart = now();
+        return;
+      case PROFILER_EVENT.AfterRenderHooksEnd: {
+        if (!current || afterRenderStart === null) return;
+        const ms = now() - afterRenderStart;
+        current.afterRenderMs += ms;
+        afterRender.runs++;
+        afterRender.ms += ms;
+        afterRender.maxMs = Math.max(afterRender.maxMs, ms);
+        addSpan({
+          ctor: null,
+          label: 'afterRender',
+          at: afterRenderStart,
+          ms,
+          depth: stack.length,
+          kind: CD_SPAN_KIND.afterRender,
+        });
+        afterRenderStart = null;
+        return;
+      }
       case PROFILER_EVENT.ChangeDetectionStart: {
         const start = now();
-        if (lastOutput?.endedAt !== undefined && start - lastOutput.endedAt > OUTPUT_TRIGGER_MS)
+        if (lastOutput?.endedAt !== undefined && start - lastOutput.endedAt > OUTPUT_TRIGGER_MS) {
           lastOutput = undefined;
+          lastTopOutput = undefined;
+        }
         if (current) {
           outer.push({ cycle: current, stack });
           if (outer.length > MAX_NESTED) outer.shift();
         }
+        const trigger = triggerText(lastOutput);
+        const output = trigger ? lastTopOutput : undefined;
         current = {
           id: ++seq,
           at: clock(),
           start,
           ms: 0,
           passes: 0,
-          trigger: triggerText(lastOutput),
+          trigger,
           checks: new Map(),
+          hookMs: 0,
+          afterRenderMs: 0,
+          outputMs: output?.ms ?? 0,
+          spans: [],
+          droppedSpans: 0,
         };
+        if (output) {
+          addSpan({
+            ctor: null,
+            label: output.label,
+            at: output.start,
+            ms: output.ms,
+            depth: 0,
+            kind: CD_SPAN_KIND.output,
+          });
+        }
         lastOutput = undefined;
+        lastTopOutput = undefined;
         stack = [];
         return;
       }
@@ -143,6 +299,14 @@ export function createCdRecorder(options: {
         const parent = stack.at(-1);
         if (parent) parent.children += total;
         const ctor = (instance as { constructor: Ctor }).constructor;
+        addSpan({
+          ctor,
+          label: '',
+          at: frame.start,
+          ms: total,
+          depth: stack.length,
+          kind: CD_SPAN_KIND.component,
+        });
         const check = current.checks.get(ctor);
         if (check) {
           check.checks++;
@@ -198,6 +362,9 @@ export function createCdRecorder(options: {
       case PROFILER_EVENT.ChangeDetectionEnd: {
         if (!current) return;
         current.ms = now() - current.start;
+        const { kept, dropped: droppedSpans } = keepLongest(current.spans, current.droppedSpans);
+        current.spans = kept;
+        current.droppedSpans = droppedSpans;
         cycles.push(current);
         if (cycles.length > options.maxCycles) {
           dropped += cycles.length - options.maxCycles;
@@ -219,6 +386,14 @@ export function createCdRecorder(options: {
     stack = [];
     outer = [];
     lastOutput = undefined;
+    hookStack = [];
+    outputStack = [];
+    afterRenderStart = null;
+    lastTopOutput = undefined;
+    hookTable.reset();
+    outputTable.reset();
+    afterRender = { runs: 0, ms: 0, maxMs: 0 };
+    perfStart = now();
     totals = new Map();
     perInstance = new WeakMap();
     instances = [];
@@ -251,6 +426,10 @@ export function createCdRecorder(options: {
       stack = [];
       outer = [];
       lastOutput = undefined;
+      hookStack = [];
+      outputStack = [];
+      afterRenderStart = null;
+      lastTopOutput = undefined;
     },
     clear() {
       reset();
@@ -265,6 +444,10 @@ export function createCdRecorder(options: {
         if (id) hosts[id] = (hosts[id] ?? 0) + (perInstance.get(instance!) ?? 0);
       }
       const droppedClasses = untrackedClassCount + Math.max(0, totals.size - MAX_COMPONENTS);
+      const spanNames = createSpanNames();
+      const hooks = hookTable.list(round);
+      const outputs = outputTable.list(round);
+      const droppedTimings = hooks.dropped + outputs.dropped;
       return {
         recording,
         startedAt,
@@ -286,6 +469,12 @@ export function createCdRecorder(options: {
             ...(cycle.trigger ? { trigger: cycle.trigger } : {}),
             checks: checks.reduce((sum, check) => sum + check.checks, 0),
             components: checks.sort((a, b) => b.ms - a.ms).slice(0, TOP_PER_CYCLE),
+            t: Math.round(Math.max(0, cycle.start - perfStart) * 1000) / 1000,
+            ...(cycle.hookMs ? { hookMs: round(cycle.hookMs) } : {}),
+            ...(cycle.afterRenderMs ? { afterRenderMs: round(cycle.afterRenderMs) } : {}),
+            ...(cycle.outputMs ? { outputMs: round(cycle.outputMs) } : {}),
+            ...(cycle.spans.length ? { spans: cycle.spans.map(spanNames.tuple) } : {}),
+            ...(cycle.droppedSpans ? { droppedSpans: cycle.droppedSpans } : {}),
           };
         }),
         components: [...totals]
@@ -297,6 +486,28 @@ export function createCdRecorder(options: {
           }))
           .sort((a, b) => b.ms - a.ms || b.checks - a.checks)
           .slice(0, MAX_COMPONENTS),
+        ...(hooks.rows.length
+          ? { hooks: hooks.rows.map(({ key, ...row }) => ({ ...row, hook: key })) }
+          : {}),
+        ...(outputs.rows.length
+          ? {
+              outputs: outputs.rows.map(({ key, ...row }) => ({
+                ...row,
+                ...(key ? { listener: key } : {}),
+              })),
+            }
+          : {}),
+        ...(droppedTimings ? { droppedTimings } : {}),
+        ...(afterRender.runs
+          ? {
+              afterRender: {
+                runs: afterRender.runs,
+                ms: round(afterRender.ms),
+                maxMs: round(afterRender.maxMs),
+              },
+            }
+          : {}),
+        ...(spanNames.names.length ? { spanNames: spanNames.names } : {}),
       };
     },
   };

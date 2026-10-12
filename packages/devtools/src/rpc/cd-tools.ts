@@ -1,5 +1,6 @@
 import type { CdReport } from '../cd-overlay.ts';
-import type { CdCheck, CdComponentStat, CdCycle } from '../cd-recorder.ts';
+import { sanitizeCdRecording } from '../cd-data.ts';
+import type { CdComponentStat, CdCycle } from '../cd-recorder.ts';
 import { droppedNote } from '../timeline-limits.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
@@ -13,93 +14,22 @@ export interface CdState {
   pages: Record<string, CdPage>;
 }
 
-const MAX_NAME = 200;
-const MAX_TRIGGER = 300;
-const MAX_TOP = 10;
 const MAX_COMPONENTS = 100;
 const MAX_HOSTS = 2000;
-const MAX_CYCLES = 2000;
 export const CD_PAGE_TTL = PAGE_TTL_MS;
-
-type AnyRecord = Record<string, unknown>;
-
-const isRecord = (value: unknown): value is AnyRecord =>
-  !!value && typeof value === 'object' && !Array.isArray(value);
-const num = (value: unknown) =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
-const text = (value: unknown, max: number) =>
-  typeof value === 'string' ? value.slice(0, max) : '';
-
-function check(value: unknown): CdCheck | null {
-  if (!isRecord(value)) return null;
-  const name = text(value['name'], MAX_NAME);
-  return name ? { name, checks: num(value['checks']), ms: num(value['ms']) } : null;
-}
-
-function cycle(value: unknown): CdCycle | null {
-  if (!isRecord(value) || typeof value['id'] !== 'number') return null;
-  const components = Array.isArray(value['components'])
-    ? value['components']
-        .slice(0, MAX_TOP)
-        .map(check)
-        .filter((c): c is CdCheck => !!c)
-    : [];
-  const trigger = text(value['trigger'], MAX_TRIGGER);
-  return {
-    id: num(value['id']),
-    at: num(value['at']),
-    ms: num(value['ms']),
-    passes: num(value['passes']),
-    ...(trigger ? { trigger } : {}),
-    checks: num(value['checks']),
-    components,
-  };
-}
-
-function stat(value: unknown): CdComponentStat | null {
-  const base = check(value);
-  if (!base || !isRecord(value)) return null;
-  return { ...base, maxMs: num(value['maxMs']), cycles: num(value['cycles']) };
-}
 
 /** Validates a `push-change-detection` report; null when it is not one. */
 export function toCdPage(value: unknown, maxCycles: number, now = Date.now()): CdPage | null {
-  if (!isRecord(value)) return null;
-  const pageId = value['pageId'];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const report = value as Record<string, unknown>;
+  const pageId = report['pageId'];
   if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return null;
-  const cycles = Array.isArray(value['cycles'])
-    ? value['cycles']
-        .slice(-Math.min(maxCycles, MAX_CYCLES))
-        .map(cycle)
-        .filter((c): c is CdCycle => !!c)
-    : [];
-  const hosts: Record<string, number> = {};
-  let extraHosts = 0;
-  if (isRecord(value['hosts'])) {
-    const entries = Object.entries(value['hosts']);
-    extraHosts = Math.max(0, entries.length - MAX_HOSTS);
-    for (const [id, count] of entries.slice(0, MAX_HOSTS)) {
-      if (id.length < 50 && num(count)) hosts[id] = num(count);
-    }
-  }
-  const components = Array.isArray(value['components']) ? value['components'] : [];
-  const droppedClasses =
-    Math.floor(num(value['droppedClasses'])) + Math.max(0, components.length - MAX_COMPONENTS);
-  const droppedHosts = Math.floor(num(value['droppedHosts'])) + extraHosts;
+  const recording = sanitizeCdRecording(report, maxCycles);
+  if (!recording) return null;
   return {
     pageId,
-    supported: value['supported'] !== false,
-    recording: value['recording'] === true,
-    startedAt: typeof value['startedAt'] === 'number' ? value['startedAt'] : null,
-    dropped: num(value['dropped']),
-    cycles,
-    components: components
-      .slice(0, MAX_COMPONENTS)
-      .map(stat)
-      .filter((c): c is CdComponentStat => !!c),
-    ...(droppedClasses ? { droppedClasses } : {}),
-    hosts,
-    ...(droppedHosts ? { droppedHosts } : {}),
+    supported: report['supported'] !== false,
+    ...recording,
     reportedAt: now,
   };
 }
@@ -175,6 +105,52 @@ export function cdCapsNote(page: Pick<CdPage, 'droppedClasses' | 'droppedHosts'>
 
 const ms = (value: number) => `${Math.round(value * 100) / 100}ms`;
 
+/**
+ * The lifecycle hook, output listener and afterRender sections of the
+ * `change-detection` answer, empty for a recording without them.
+ */
+export function cdTimingText(
+  page: Pick<CdPage, 'hooks' | 'outputs' | 'afterRender' | 'droppedTimings'>,
+  limit: number,
+): string {
+  const parts: string[] = [];
+  if (page.hooks?.length) {
+    parts.push(
+      `**Lifecycle hooks**, by time (also part of the self time of the component whose view runs them)\n${page.hooks
+        .slice(0, limit)
+        .map(
+          (h) =>
+            `- ${code(`${h.name}.${h.hook}`)}: ${h.calls} call(s), ${ms(h.ms)} (slowest ${ms(h.maxMs)})`,
+        )
+        .join('\n')}`,
+    );
+  }
+  if (page.outputs?.length) {
+    parts.push(
+      `**Output listeners**, by time\n${page.outputs
+        .slice(0, limit)
+        .map(
+          (o) =>
+            `- ${code(o.listener ? `${o.name} (${o.listener})` : o.name)}: ${o.calls} call(s), ${ms(o.ms)} (slowest ${ms(o.maxMs)})`,
+        )
+        .join('\n')}`,
+    );
+  }
+  if (page.afterRender?.runs) {
+    const a = page.afterRender;
+    parts.push(
+      `**afterRender**: ${a.runs} run(s) of the afterRender and afterNextRender callbacks, ${ms(a.ms)} in total (slowest ${ms(a.maxMs)})`,
+    );
+  }
+  const dropped = page.droppedTimings ?? 0;
+  if (dropped > 0) {
+    parts.push(
+      `_${dropped} more hook or output ${dropped === 1 ? 'row is' : 'rows are'} left out: a recording lists at most 100 of each, by time._`,
+    );
+  }
+  return parts.length ? `\n\n${parts.join('\n\n')}` : '';
+}
+
 /** Markdown for the `change-detection` agent tool. */
 export function changeDetectionText(
   state: CdState,
@@ -203,7 +179,7 @@ export function changeDetectionText(
   const line = (c: CdComponentStat) =>
     `- ${code(c.name)}: ${c.checks} check(s) in ${c.cycles} cycle(s), ${ms(c.ms)} in its own template and hooks (slowest ${ms(c.maxMs)})`;
   const cycleLine = (c: CdCycle) =>
-    `- #${c.id}: ${ms(c.ms)}, ${c.checks} component check(s), ${c.passes} pass(es)${c.trigger ? `, after output in ${code(c.trigger)}` : ''}${
+    `- #${c.id}: ${ms(c.ms)}, ${c.checks} component check(s), ${c.passes} pass(es)${c.trigger ? `, after output in ${code(c.trigger)}${c.outputMs ? ` (${ms(c.outputMs)})` : ''}` : ''}${c.hookMs ? `, hooks ${ms(c.hookMs)}` : ''}${c.afterRenderMs ? `, afterRender ${ms(c.afterRenderMs)}` : ''}${
       c.components.length
         ? `; slowest ${c.components
             .slice(0, 3)
@@ -211,5 +187,5 @@ export function changeDetectionText(
             .join(', ')}`
         : ''
     }`;
-  return `${UNTRUSTED}\n\n${status} Page ${code(page.pageId)}: ${page.cycles.length} cycle(s) kept, ${ms(totalMs)} in total. Times are self times from Angular's profiler in a development build, so they are higher than in production.\n\n**Slowest components**\n${slowest.map(line).join('\n')}\n\n**Most often checked**\n${busiest.map(line).join('\n')}\n\n**Latest cycles**, newest first\n${recent.map(cycleLine).join('\n')}${droppedNote(page.dropped, 'cycles', 'cdCycles')}${cdCapsNote(page)}`;
+  return `${UNTRUSTED}\n\n${status} Page ${code(page.pageId)}: ${page.cycles.length} cycle(s) kept, ${ms(totalMs)} in total. Times are self times from Angular's profiler in a development build, so they are higher than in production.\n\n**Slowest components**\n${slowest.map(line).join('\n')}\n\n**Most often checked**\n${busiest.map(line).join('\n')}${cdTimingText(page, limit)}\n\n**Latest cycles**, newest first\n${recent.map(cycleLine).join('\n')}${droppedNote(page.dropped, 'cycles', 'cdCycles')}${cdCapsNote(page)}`;
 }

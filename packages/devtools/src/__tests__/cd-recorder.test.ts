@@ -57,8 +57,15 @@ describe('change detection recorder', () => {
           { name: 'Cart', checks: 2, ms: 5 },
           { name: 'Shell', checks: 1, ms: 2 },
         ],
+        t: 0,
+        spans: [
+          [0, 0, 5, 0, 'c'],
+          [1, 1, 3, 1, 'c'],
+          [1, 5, 2, 0, 'c'],
+        ],
       },
     ]);
+    expect(snap.spanNames).toEqual(['Shell', 'Cart']);
     expect(snap.components[0]).toEqual({ name: 'Cart', checks: 2, ms: 5, maxMs: 3, cycles: 1 });
     expect(snap.hosts).toEqual({ c1: 2 });
   });

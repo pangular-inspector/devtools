@@ -158,7 +158,7 @@ Each page lists at most 50 blocks, with a note on how many more are not shown, a
 
 ### change-detection <ngmd-badge variant="alpha">Action</ngmd-badge>
 
-Change detection cycles recorded with Angular's profiler: the slowest components by self time, the most often checked components, and the latest cycles with their duration, component checks, sync passes and the output that ran before each one. Reads: page. Needs Angular 20 or later.
+Change detection cycles recorded with Angular's profiler: the slowest components by self time, the most often checked components, lifecycle hook time per class and hook, output listener time, `afterRender` callback time, and the latest cycles with their duration, component checks, sync passes, hook and afterRender time and the output that ran before each one. Reads: page. Needs Angular 20 or later.
 
 | Argument | Required | Value                                                                                                                                                                            |
 | -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

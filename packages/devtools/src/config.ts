@@ -883,6 +883,8 @@ export function summarizePangularConfig(
 
 // Change detection recording types. They live here, in an entry without
 // imports, so the panel shares them with the page instead of keeping copies.
+// The sanitizer and the export formats both use are in `cd-data.ts`, the
+// package's `cd-data` entry.
 
 export interface CdCheck {
   name: string;
@@ -901,6 +903,60 @@ export interface CdCycle {
   trigger?: string;
   checks: number;
   components: CdCheck[];
+  /** Start in ms from the start of the recording, from the high-resolution clock. */
+  t?: number;
+  /** Time in lifecycle hooks (`ngOnInit`, `ngDoCheck`, `ngAfterViewChecked`…) during the cycle. */
+  hookMs?: number;
+  /** Time in `afterRender` and `afterNextRender` callbacks during the cycle. */
+  afterRenderMs?: number;
+  /** Time in the output listener credited as `trigger`, nested outputs included. */
+  outputMs?: number;
+  /** The longest timed spans of the cycle, in start order, at most 40. */
+  spans?: CdSpan[];
+  /** Spans left out of `spans` past the cap. */
+  droppedSpans?: number;
+}
+
+/** What a {@link CdSpan} measures. */
+export type CdSpanKind = 'c' | 'h' | 'r' | 'o';
+
+/**
+ * One timed span of a cycle: an index into `CdRecording.spanNames`, the start
+ * in ms from the start of the cycle (negative for the output that ran before
+ * it), the duration in ms (children included), the nesting depth and the kind
+ * (`CD_SPAN_KIND`: component check, lifecycle hook, afterRender or output).
+ */
+export type CdSpan = [name: number, start: number, ms: number, depth: number, kind: CdSpanKind];
+
+/** Lifecycle hook time per class and hook, over the whole recording. */
+export interface CdHookStat {
+  /** The component or directive class that runs the hook. */
+  name: string;
+  /** `ngOnChanges`, `ngOnInit`, `ngDoCheck`, `ngAfterContentInit`… as Angular calls it. */
+  hook: string;
+  calls: number;
+  ms: number;
+  maxMs: number;
+}
+
+/** Output listener time per class and listener, over the whole recording. */
+export interface CdOutputStat {
+  /** The class whose template or host binding declares the listener. */
+  name: string;
+  /** The listener's function name, when it has a meaningful one. */
+  listener?: string;
+  calls: number;
+  /** Time in the listener itself, outputs it emitted excluded. */
+  ms: number;
+  maxMs: number;
+}
+
+/** `afterRender` and `afterNextRender` callbacks, over the whole recording. */
+export interface CdAfterRenderStat {
+  /** How many times Angular ran the callbacks. */
+  runs: number;
+  ms: number;
+  maxMs: number;
 }
 
 export interface CdComponentStat {
@@ -927,6 +983,15 @@ export interface CdRecording {
   droppedHosts?: number;
   /** Checks per component host, keyed by the component tree's element id. */
   hosts: Record<string, number>;
+  /** Lifecycle hooks by time, at most 100. */
+  hooks?: CdHookStat[];
+  /** Output listeners by time, at most 100. */
+  outputs?: CdOutputStat[];
+  /** Hook and output rows checked past the lists' caps, left out of them. */
+  droppedTimings?: number;
+  afterRender?: CdAfterRenderStat;
+  /** Names the cycles' `spans` point to. */
+  spanNames?: string[];
 }
 
 /** What a page pushes: its recording, with the page id and whether it can record. */

@@ -2,6 +2,7 @@
 import '@angular/compiler';
 import {
   Component,
+  afterEveryRender,
   provideZonelessChangeDetection,
   signal,
   type ApplicationRef,
@@ -27,6 +28,33 @@ Component({
 
 class TripShell {}
 Component({ selector: 'app-root', imports: [TripCart], template: '<app-trip-cart />' })(TripShell);
+
+// Plain inputs: JIT without the CLI transform cannot see signal inputs.
+class HookBadge {
+  count = 0;
+  ngOnChanges() {}
+  ngOnInit() {}
+  ngDoCheck() {}
+  ngAfterViewChecked() {}
+}
+Component({ selector: 'app-hook-badge', inputs: ['count'], template: 'n={{ count }}' })(HookBadge);
+
+class HookShell {
+  readonly count = signal(0);
+  rendered = 0;
+  constructor() {
+    afterEveryRender(() => this.rendered++);
+  }
+  bump() {
+    this.count.update((n) => n + 1);
+  }
+}
+Component({
+  selector: 'app-root',
+  imports: [HookBadge],
+  template:
+    '<button type="button" (click)="bump()">Bump</button><app-hook-badge [count]="count()" />',
+})(HookShell);
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const ngOf = () => (globalThis as { ng?: unknown }).ng;
@@ -142,5 +170,56 @@ describe('change detection recorder with a real app', () => {
     expect(document.body.textContent).toContain('2 items');
     await cd.push(true);
     expect(reports.at(-1)!.cycles.length).toBe(cycles);
+  });
+
+  it('times real lifecycle hooks, outputs and afterRender callbacks', async () => {
+    document.body.innerHTML = '<app-root></app-root>';
+    app = await bootstrapApplication(HookShell, {
+      providers: [provideZonelessChangeDetection()],
+    });
+    app.tick();
+    const events: number[] = [];
+    const removeSpy = addProfilerListener(ngOf(), (event) => events.push(event));
+    const { my, handlers, reports } = fakeRpc();
+    const cd = attachChangeDetection(my, 'pg2', ngOf, 50);
+    cleanup = () => {
+      removeSpy?.();
+      cd.stop();
+    };
+    handlers.get('change-detection-record')!({ pageId: 'pg2', on: true });
+    await wait(0);
+    if (!angularAtLeast('20.0')) {
+      expect(reports.at(-1)).toMatchObject({ supported: false });
+      return;
+    }
+
+    document.querySelector('button')!.click();
+    await wait(40);
+    expect(document.body.textContent).toContain('n=1');
+    for (const event of [
+      E.LifecycleHookStart,
+      E.LifecycleHookEnd,
+      E.AfterRenderHooksStart,
+      E.AfterRenderHooksEnd,
+    ])
+      expect(events).toContain(event);
+
+    await cd.push();
+    const report = reports.at(-1)!;
+    const hooks = (report.hooks ?? []).filter((h) => h.name === 'HookBadge').map((h) => h.hook);
+    // ngOnInit ran before recording started; the click runs the check hooks and ngOnChanges.
+    expect(hooks).toEqual(
+      expect.arrayContaining(['ngOnChanges', 'ngDoCheck', 'ngAfterViewChecked']),
+    );
+    expect(report.outputs).toEqual([expect.objectContaining({ name: 'HookShell', calls: 1 })]);
+    expect(report.afterRender?.runs).toBeGreaterThan(0);
+    const cycle = report.cycles.find((each) => each.trigger?.startsWith('HookShell'))!;
+    expect(cycle).toBeDefined();
+    const names = report.spanNames ?? [];
+    const kinds = (cycle.spans ?? []).map(([name, , , , kind]) => `${kind}:${names[name]}`);
+    expect(kinds).toEqual(
+      expect.arrayContaining(['c:HookBadge', 'h:HookBadge.ngDoCheck', 'r:afterRender']),
+    );
+    expect(kinds.some((kind) => kind.startsWith('o:HookShell'))).toBe(true);
   });
 });
