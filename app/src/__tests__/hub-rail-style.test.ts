@@ -67,6 +67,43 @@ describe('styleHubRail', () => {
     expect(css).toMatch(/\[style\*="239, 68, 68"\] \{\s*background-color: #dc2626 !important;/);
   });
 
+  it('keeps group sidebar badges at full opacity and colours them from the dock title', () => {
+    const dock = makeDock();
+    const base = document.createElement('style');
+    // hub-ui's own rules for the classes the group sidebar uses.
+    base.textContent =
+      '.op60 { opacity: 0.6; } .bg-gray-6 { background-color: rgb(75, 85, 99); } .text-white { color: rgb(255, 255, 255); }';
+    const sidebar = document.createElement('div');
+    sidebar.className = 'devframes-group-sidebar';
+    const button = (label: string) =>
+      `<button aria-label="${label}" class="relative op60"><svg></svg><div class="absolute bg-gray-6 text-white">1</div></button>`;
+    sidebar.innerHTML = [
+      button('Angular (1 new, with errors)'),
+      button('NgRx (2 new, with warnings)'),
+      button('Analog (3 new)'),
+      button('Show more'),
+    ].join('');
+    dock.shadowRoot!.append(base, sidebar);
+    styleHubRail(document, 'light');
+
+    const buttons = [...sidebar.querySelectorAll('button')];
+    const style = (el: Element) => getComputedStyle(el);
+    expect(buttons.map((b) => style(b).opacity)).toEqual(['1', '1', '1', '1']);
+    expect(buttons.map((b) => style(b.querySelector('svg')!).opacity)).toEqual([
+      '0.6',
+      '0.6',
+      '0.6',
+      '0.6',
+    ]);
+    expect(buttons.map((b) => style(b.querySelector('.absolute')!).backgroundColor)).toEqual([
+      'rgb(220, 38, 38)',
+      'rgb(220, 38, 38)',
+      'rgb(37, 99, 235)',
+      'rgb(75, 85, 99)',
+    ]);
+    expect(style(buttons[0].querySelector('.absolute')!).color).toBe('rgb(255, 255, 255)');
+  });
+
   it('retries when the shadow host is not yet in the DOM', () => {
     vi.useFakeTimers();
     styleHubRail(document, 'dark');

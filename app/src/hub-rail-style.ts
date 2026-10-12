@@ -37,6 +37,43 @@ function activeDockStyle(theme: 'dark' | 'light'): string {
     background-color: #dc2626 !important;
     color: #ffffff !important;
   }
+  /* The group sidebar (the tools of the open group) fades a whole inactive
+     button with op60, badge included, and draws every badge bg-gray-6
+     whatever its variant. Fade the icon only: white on bg-gray-6 (#4b5563)
+     is 7.6:1. The sidebar drops the variant, so the colour comes from the
+     title Pangular gives a dock with a badge, "Angular (2 new, with errors)",
+     which hub-ui puts in aria-label: blue-600 for new items, red-600 with
+     errors or warnings, as on the rail. Other badges stay grey. */
+  .devframes-group-sidebar button.op60 {
+    opacity: 1;
+  }
+  .devframes-group-sidebar button > * {
+    transition: opacity 0.2s, filter 0.2s;
+  }
+  .devframes-group-sidebar button.op60 > :not(.absolute) {
+    opacity: 0.6;
+  }
+  .devframes-group-sidebar button.op60:hover > :not(.absolute),
+  .devframes-group-sidebar button.op60:focus-visible > :not(.absolute) {
+    opacity: 1;
+  }
+  .devframes-group-sidebar .absolute.bg-gray-6 {
+    background-color: #4b5563;
+    color: #ffffff;
+  }
+  .devframes-group-sidebar button[aria-label$=" new)"] > .absolute {
+    background-color: #2563eb;
+  }
+  .devframes-group-sidebar button[aria-label$=" new, with errors)"] > .absolute {
+    background-color: #dc2626;
+  }
+  .devframes-group-sidebar button[aria-label$=" new, with warnings)"] > .absolute {
+    background-color: #dc2626;
+  }
+  .devframes-group-sidebar button:focus-visible {
+    outline: 2px solid ${accent};
+    outline-offset: 2px;
+  }
   .devframes-dock-entry button:focus-visible {
     outline: 2px solid ${accent};
     outline-offset: 2px;
@@ -52,7 +89,8 @@ function activeDockStyle(theme: 'dark' | 'light'): string {
   }
   @media (prefers-reduced-motion: reduce) {
     .devframes-dock-entry button,
-    .devframes-dock-entry button > * {
+    .devframes-dock-entry button > *,
+    .devframes-group-sidebar button > * {
       transition: none;
     }
   }
