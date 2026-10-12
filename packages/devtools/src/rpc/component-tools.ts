@@ -1,3 +1,4 @@
+import { MAX_DEFER_BLOCKS } from '../defer-blocks.ts';
 import type { ComponentPage, DeferBlockInfo, LiveComponentNode } from '../types.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import { untrusted } from './forms-tools.ts';
@@ -39,7 +40,12 @@ export function toComponentPage(report: Omit<ComponentPage, 'reportedAt'>, now =
   }
   if (typeof report.url === 'string') page.url = redactUrl(report.url.slice(0, 2000));
   if (typeof report.title === 'string') page.title = redactMessage(report.title.slice(0, 200));
-  if (Array.isArray(report.deferBlocks)) page.deferBlocks = report.deferBlocks.slice(0, 500);
+  if (Array.isArray(report.deferBlocks)) {
+    page.deferBlocks = report.deferBlocks.slice(0, MAX_DEFER_BLOCKS);
+    if (report.deferTruncated === true || report.deferBlocks.length > MAX_DEFER_BLOCKS) {
+      page.deferTruncated = true;
+    }
+  }
   if (report.platform === 'angular-native' || report.platform === 'nativescript') {
     page.platform = report.platform;
   }
@@ -189,8 +195,11 @@ export function deferBlocksText(pages: ComponentPage[], now = Date.now()): strin
     const more = (hidden: number, what: string) =>
       hidden > 0 ? ['', `${hidden} more ${what} not shown.${narrow}`] : [];
     const hiddenRows = rows.length - DEFER_ROWS;
+    const count = page.deferTruncated
+      ? `more than ${MAX_DEFER_BLOCKS} defer blocks. Only the first ${MAX_DEFER_BLOCKS} are collected, so blocks past them are not listed or counted here.`
+      : `${page.deferBlocks.length} defer ${page.deferBlocks.length === 1 ? 'block' : 'blocks'}.`;
     return [
-      `${title}: ${page.deferBlocks.length} defer ${page.deferBlocks.length === 1 ? 'block' : 'blocks'}.`,
+      `${title}: ${count}`,
       '',
       '| Block | Owner | State | Hydration | Triggers | Notes |',
       '| --- | --- | --- | --- | --- | --- |',

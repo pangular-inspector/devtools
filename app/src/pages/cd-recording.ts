@@ -45,6 +45,9 @@ const SHOWN_CYCLES = 30;
         what="cycles"
         limit="cdCycles"
       />
+      @for (note of capNotes(); track note) {
+        <p class="note">{{ note }}</p>
+      }
       @if (slowest().length) {
         <div class="cd-grid">
           <div>
@@ -253,6 +256,23 @@ export class CdRecording {
     [...(this.page()?.components ?? [])].sort((a, b) => b.ms - a.ms).slice(0, SHOWN),
   );
   readonly latest = computed(() => this.cycles().slice(-SHOWN_CYCLES).reverse());
+  /** Says when the recording checked more classes or instances than it keeps. */
+  readonly capNotes = computed(() => {
+    const classes = this.page()?.droppedClasses ?? 0;
+    const hosts = this.page()?.droppedHosts ?? 0;
+    const notes: string[] = [];
+    if (classes > 0) {
+      notes.push(
+        `${classes} more component ${classes === 1 ? 'class was' : 'classes were'} checked than a recording keeps, so ${classes === 1 ? 'it is' : 'they are'} left out of these totals.`,
+      );
+    }
+    if (hosts > 0) {
+      notes.push(
+        `${hosts} component ${hosts === 1 ? 'instance was' : 'instances were'} checked past the 2000 a recording counts, so ${hosts === 1 ? 'its tree row shows' : 'their tree rows show'} no check count.`,
+      );
+    }
+    return notes;
+  });
   readonly status = computed(() => {
     if (this.message()) return this.message();
     const count = this.cycles().length;

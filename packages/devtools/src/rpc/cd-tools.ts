@@ -74,11 +74,18 @@ export function toCdPage(value: unknown, maxCycles: number, now = Date.now()): C
         .filter((c): c is CdCycle => !!c)
     : [];
   const hosts: Record<string, number> = {};
+  let extraHosts = 0;
   if (isRecord(value['hosts'])) {
-    for (const [id, count] of Object.entries(value['hosts']).slice(0, MAX_HOSTS)) {
+    const entries = Object.entries(value['hosts']);
+    extraHosts = Math.max(0, entries.length - MAX_HOSTS);
+    for (const [id, count] of entries.slice(0, MAX_HOSTS)) {
       if (id.length < 50 && num(count)) hosts[id] = num(count);
     }
   }
+  const components = Array.isArray(value['components']) ? value['components'] : [];
+  const droppedClasses =
+    Math.floor(num(value['droppedClasses'])) + Math.max(0, components.length - MAX_COMPONENTS);
+  const droppedHosts = Math.floor(num(value['droppedHosts'])) + extraHosts;
   return {
     pageId,
     supported: value['supported'] !== false,
@@ -86,13 +93,13 @@ export function toCdPage(value: unknown, maxCycles: number, now = Date.now()): C
     startedAt: typeof value['startedAt'] === 'number' ? value['startedAt'] : null,
     dropped: num(value['dropped']),
     cycles,
-    components: Array.isArray(value['components'])
-      ? value['components']
-          .slice(0, MAX_COMPONENTS)
-          .map(stat)
-          .filter((c): c is CdComponentStat => !!c)
-      : [],
+    components: components
+      .slice(0, MAX_COMPONENTS)
+      .map(stat)
+      .filter((c): c is CdComponentStat => !!c),
+    ...(droppedClasses ? { droppedClasses } : {}),
     hosts,
+    ...(droppedHosts ? { droppedHosts } : {}),
     reportedAt: now,
   };
 }
@@ -145,6 +152,27 @@ export function pickCdPage(state: CdState, pageId?: string): CdPage | undefined 
   return pages.find((p) => p.recording) ?? pages.sort((a, b) => b.reportedAt - a.reportedAt)[0];
 }
 
+/**
+ * Agent tool note for the component classes and instances a recording checked
+ * past its fixed caps, so the totals do not read as complete.
+ */
+export function cdCapsNote(page: Pick<CdPage, 'droppedClasses' | 'droppedHosts'>): string {
+  const notes: string[] = [];
+  const classes = page.droppedClasses ?? 0;
+  const hosts = page.droppedHosts ?? 0;
+  if (classes > 0) {
+    notes.push(
+      `${classes} more component ${classes === 1 ? 'class was' : 'classes were'} checked but ${classes === 1 ? 'is' : 'are'} not listed: a recording lists at most ${MAX_COMPONENTS} classes, by self time.`,
+    );
+  }
+  if (hosts > 0) {
+    notes.push(
+      `${hosts} component ${hosts === 1 ? 'instance was' : 'instances were'} checked past the ${MAX_HOSTS} instances a recording counts, so ${hosts === 1 ? 'it has' : 'they have'} no check count in the component tree.`,
+    );
+  }
+  return notes.length ? `\n\n_${notes.join(' ')}_` : '';
+}
+
 const ms = (value: number) => `${Math.round(value * 100) / 100}ms`;
 
 /** Markdown for the `change-detection` agent tool. */
@@ -183,5 +211,5 @@ export function changeDetectionText(
             .join(', ')}`
         : ''
     }`;
-  return `${UNTRUSTED}\n\n${status} Page ${code(page.pageId)}: ${page.cycles.length} cycle(s) kept, ${ms(totalMs)} in total. Times are self times from Angular's profiler in a development build, so they are higher than in production.\n\n**Slowest components**\n${slowest.map(line).join('\n')}\n\n**Most often checked**\n${busiest.map(line).join('\n')}\n\n**Latest cycles**, newest first\n${recent.map(cycleLine).join('\n')}${droppedNote(page.dropped, 'cycles', 'cdCycles')}`;
+  return `${UNTRUSTED}\n\n${status} Page ${code(page.pageId)}: ${page.cycles.length} cycle(s) kept, ${ms(totalMs)} in total. Times are self times from Angular's profiler in a development build, so they are higher than in production.\n\n**Slowest components**\n${slowest.map(line).join('\n')}\n\n**Most often checked**\n${busiest.map(line).join('\n')}\n\n**Latest cycles**, newest first\n${recent.map(cycleLine).join('\n')}${droppedNote(page.dropped, 'cycles', 'cdCycles')}${cdCapsNote(page)}`;
 }

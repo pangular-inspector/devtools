@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDeferTracker, type DeferDebugNg } from '../defer-blocks.ts';
+import { MAX_DEFER_BLOCKS, createDeferTracker, type DeferDebugNg } from '../defer-blocks.ts';
 import { elementById } from '../element-id.ts';
 import { DEFER_ROWS, deferBlocksText, toComponentPage } from '../rpc/component-tools.ts';
 import { MAX_TOOL_CHARS } from '../rpc/router-tools.ts';
@@ -48,6 +48,31 @@ describe('createDeferTracker', () => {
     const ng: DeferDebugNg = { getComponent: (el) => instances.get(el) ?? null };
     expect(createDeferTracker().collect(ng)).toBeUndefined();
     expect(createDeferTracker().collect(undefined)).toBeUndefined();
+  });
+
+  it('stops at MAX_DEFER_BLOCKS and says so until a collection fits again', () => {
+    const { root, instances } = page();
+    let count = MAX_DEFER_BLOCKS + 1;
+    const ng: DeferDebugNg = {
+      getComponent: (el) => instances.get(el) ?? null,
+      ɵgetControlFlowBlocks: (node) =>
+        node === root
+          ? Array.from({ length: count }, () => {
+              const anchor = document.createComment('container');
+              root.appendChild(anchor);
+              return block({ hostNode: anchor });
+            })
+          : [],
+    };
+    const tracker = createDeferTracker(() => 1000);
+    expect(tracker.truncated).toBe(false);
+    expect(tracker.collect(ng)).toHaveLength(MAX_DEFER_BLOCKS);
+    expect(tracker.truncated).toBe(true);
+    count = MAX_DEFER_BLOCKS;
+    expect(tracker.collect(ng)).toHaveLength(MAX_DEFER_BLOCKS);
+    expect(tracker.truncated).toBe(false);
+    expect(tracker.collect(undefined)).toBeUndefined();
+    expect(tracker.truncated).toBe(false);
   });
 
   it('reads defer blocks with their owner, state, triggers and root elements', () => {
@@ -291,6 +316,27 @@ describe('deferBlocksText', () => {
 
     const two = deferBlocksText([report(blocks), { ...report(blocks), pageId: 'p2' }], 30_000);
     expect(two).toContain('7 more blocks not shown. Pass `page` to read one tab. The Defer blocks');
+  });
+
+  it('keeps the truncated flag on the server and says the list stops at the cap', () => {
+    const blocks = Array.from({ length: 3 }, (_, n) => info({ id: `d${n}` }));
+    const page = toComponentPage({ ...report(blocks), deferTruncated: true });
+    expect(page.deferTruncated).toBe(true);
+    const text = deferBlocksText([page], 30_000);
+    expect(text).toContain(
+      `more than ${MAX_DEFER_BLOCKS} defer blocks. Only the first ${MAX_DEFER_BLOCKS} are collected`,
+    );
+    expect(text).not.toContain('3 defer blocks');
+
+    const plain = toComponentPage({ ...report(blocks), deferTruncated: 'yes' as never });
+    expect(plain).not.toHaveProperty('deferTruncated');
+    expect(deferBlocksText([plain], 30_000)).toContain('3 defer blocks.');
+
+    // A page that sends more than the cap is cut and flagged on the server.
+    const many = Array.from({ length: MAX_DEFER_BLOCKS + 2 }, (_, n) => info({ id: `d${n}` }));
+    const cut = toComponentPage(report(many));
+    expect(cut.deferBlocks).toHaveLength(MAX_DEFER_BLOCKS);
+    expect(cut.deferTruncated).toBe(true);
   });
 
   it('cuts the whole answer at the shared tool size and says how to narrow it', () => {

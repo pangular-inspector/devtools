@@ -158,6 +158,10 @@ It runs only while recording. It reads the template source, so it needs an unmin
 
 `signal-read-in-pure-pipe` can't tell a signal on an injected service from a method with no arguments, so it reports those calls at info level.
 
+### Highlighting keeps 10 hosts per component
+
+A component chip keeps up to 10 host elements per page to highlight. When a component has more instances, `pangular:pipe-usage` carries their number in `targetTotal`.
+
 ### Recording ends on reload
 
 Recording is off by default. Reload the page and it is off again.

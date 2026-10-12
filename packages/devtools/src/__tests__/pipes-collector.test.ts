@@ -96,6 +96,15 @@ Component({
   template: `<p>{{ value() | explode }}</p>`,
 })(Explodes);
 
+class Receipts {
+  rows = Array.from({ length: 12 }, (_, i) => i);
+}
+Component({
+  selector: 'app-receipts',
+  imports: [Receipt],
+  template: `@for (row of rows; track row) {<app-receipt />}`,
+})(Receipts);
+
 function harness(pageId = 'pg', tree?: HostTree<Element>) {
   const calls: { name: string; args: unknown[] }[] = [];
   const handlers = new Map<string, (...args: any[]) => unknown>();
@@ -162,6 +171,21 @@ describe('pipes collector', () => {
       { name: 'Receipt', count: 2, targets: [{ pageId: 'pg', id: expect.any(String) }] },
     ]);
     expect(currency.call).toBeUndefined();
+  });
+
+  it('lists the first ten host elements of a component and counts them all', async () => {
+    await mount(Receipts);
+    const h = harness();
+    h.collector.push();
+    await Promise.resolve();
+    const currency = h
+      .reports()
+      .at(-1)!
+      .pipes.find((p) => p.name === 'currency')!;
+    const [receipt] = currency.components;
+    expect(receipt).toMatchObject({ name: 'Receipt', count: 24, targetTotal: 12 });
+    expect(receipt!.targets).toHaveLength(10);
+    expect(new Set(receipt!.targets!.map((t) => t.id)).size).toBe(10);
   });
 
   it('tracks call count, last input/output and caller once instrumented', async () => {

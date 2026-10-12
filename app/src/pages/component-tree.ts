@@ -101,6 +101,8 @@ interface Page {
   title?: string;
   platform?: string;
   deferBlocks?: DeferBlock[];
+  /** The page has more defer blocks than the ones in `deferBlocks`. */
+  deferTruncated?: boolean;
   roots: LiveNode[];
   count: number;
   truncated?: boolean;
@@ -516,7 +518,8 @@ function bare(name: string): string {
       @if (deferBlocks().length) {
         <section class="defer" aria-labelledby="ct-defer-title">
           <h2 id="ct-defer-title" class="defer-title">
-            Defer blocks <span class="pill">{{ deferBlocks().length }}</span>
+            Defer blocks
+            <span class="pill">{{ deferCount() }}</span>
           </h2>
           <ul class="defer-list">
             @for (block of deferBlocks(); track block.id) {
@@ -1469,6 +1472,10 @@ export class ComponentTree {
   private readonly filtered = computed(() => filterTree(this.page()?.roots ?? [], this.query()));
 
   readonly deferBlocks = computed(() => this.page()?.deferBlocks ?? []);
+  /** The block count, with a `+` when the page has more blocks than it reported. */
+  readonly deferCount = computed(
+    () => `${this.deferBlocks().length}${this.page()?.deferTruncated ? '+' : ''}`,
+  );
 
   readonly countLabel = computed(() =>
     countText(

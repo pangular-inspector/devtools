@@ -460,6 +460,8 @@ export function attachPipes<H extends object = Element>(
     const out: PipeUsageInfo[] = [];
     for (const [name, group] of byName) {
       const byComponent = new Map<string, PipeComponentUsage>();
+      // Every host id per component, to count the targets past MAX_TARGETS.
+      const targetIds = new Map<PipeComponentUsage, Set<string>>();
       for (const usage of group) {
         const label = componentName(usage.component);
         let entry = byComponent.get(label);
@@ -469,10 +471,21 @@ export function attachPipes<H extends object = Element>(
         }
         entry.count++;
         const target = targetOf(usage.component);
-        if (target && !entry.targets?.some((t) => t.id === target.id)) {
-          entry.targets ??= [];
-          if (entry.targets.length < MAX_TARGETS) entry.targets.push(target);
+        if (target) {
+          let ids = targetIds.get(entry);
+          if (!ids) {
+            ids = new Set();
+            targetIds.set(entry, ids);
+          }
+          if (!ids.has(target.id)) {
+            ids.add(target.id);
+            entry.targets ??= [];
+            if (entry.targets.length < MAX_TARGETS) entry.targets.push(target);
+          }
         }
+      }
+      for (const [entry, ids] of targetIds) {
+        if (ids.size > (entry.targets?.length ?? 0)) entry.targetTotal = ids.size;
       }
       const components = Array.from(byComponent.values());
 

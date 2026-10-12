@@ -856,6 +856,13 @@ export interface CdRecording {
   /** Older cycles removed at `limits.cdCycles`. */
   dropped: number;
   components: CdComponentStat[];
+  /**
+   * Component classes checked but left out of `components`: past the 100
+   * listed by self time, or past the 1000 the recorder keeps totals for.
+   */
+  droppedClasses?: number;
+  /** Component instances checked past the 2000 that `hosts` counts. */
+  droppedHosts?: number;
   /** Checks per component host, keyed by the component tree's element id. */
   hosts: Record<string, number>;
 }

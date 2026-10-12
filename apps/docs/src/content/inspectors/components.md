@@ -83,6 +83,8 @@ When the page renders `@defer` blocks, a **Defer blocks** list follows the tree.
 
 Hover or focus a row to highlight the block in the page. Click it to select the component that holds it. The list is hidden when the page renders no defer blocks, or when its Angular version has no util to read them.
 
+The list holds the first 500 blocks of a page. When the page has more, the count reads **500+**.
+
 ### Change detection
 
 Below the tree and the defer blocks, the **Change detection** section records change detection cycles with Angular's profiler. Click **Record**, use the app, then click **Stop recording**. **Clear** empties the recording. Each new recording starts empty, but a start sent while the page records, such as an agent's `record: "start"`, keeps the cycles recorded so far.
@@ -90,6 +92,8 @@ Below the tree and the defer blocks, the **Change detection** section records ch
 - **Slowest components**: each component class with its check count, its self time (its own template and hooks, children excluded) and its slowest single check.
 - **Latest cycles**, newest first: the start time, the duration, how many components Angular checked, how many sync passes it ran, the output listener that ran just before the cycle (an output that ended more than 50 ms before the cycle is not counted), and the slowest component in it.
 - Tree rows show how many times each instance was checked while recording.
+
+**Slowest components** draws on the 100 component classes with the most self time, and tree rows count checks for up to 2000 instances. When a recording checks more classes or instances, a note in the section says how many were left out.
 
 Recording is off by default. While it is off, the page registers no profiler for it. The page keeps the last 200 cycles, set with [`limits.cdCycles`](../getting-started/configuration.md#limits). Recording needs Angular 20 or later. On older versions, the section says so. Times come from a development build, so they are higher than in production.
 

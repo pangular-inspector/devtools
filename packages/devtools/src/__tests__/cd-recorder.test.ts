@@ -79,6 +79,46 @@ describe('change detection recorder', () => {
     expect(recorder.snapshot(() => null)).toMatchObject({ cycles: [], dropped: 0 });
   });
 
+  it('counts the component classes and instances it checked past its caps', () => {
+    const recorder = createCdRecorder({ maxCycles: 10 });
+    recorder.start();
+    const classes = Array.from({ length: 1005 }, () => class {});
+    const check = (instance: object) => {
+      recorder.onEvent(E.ComponentStart);
+      recorder.onEvent(E.ComponentEnd, instance);
+    };
+    recorder.onEvent(E.ChangeDetectionStart);
+    // 2005 instances of 1005 classes, and the last class checked twice.
+    const instances = [...classes, ...classes.slice(0, 1000)].map((Ctor) => new Ctor());
+    for (const instance of instances) check(instance);
+    check(instances[1004]!);
+    recorder.onEvent(E.ChangeDetectionEnd);
+
+    const snap = recorder.snapshot(() => null);
+    expect(snap.components).toHaveLength(100);
+    // 900 kept classes past the 100 listed, and 5 classes never kept.
+    expect(snap.droppedClasses).toBe(905);
+    // The last 5 instances, each counted once.
+    expect(snap.droppedHosts).toBe(5);
+
+    recorder.clear();
+    const empty = recorder.snapshot(() => null);
+    expect(empty.droppedClasses).toBeUndefined();
+    expect(empty.droppedHosts).toBeUndefined();
+  });
+
+  it('reports no dropped classes or hosts below its caps', () => {
+    const recorder = createCdRecorder({ maxCycles: 10 });
+    recorder.start();
+    recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.ComponentEnd, new Cart());
+    recorder.onEvent(E.ChangeDetectionEnd);
+    const snap = recorder.snapshot(() => null);
+    expect(snap).not.toHaveProperty('droppedClasses');
+    expect(snap).not.toHaveProperty('droppedHosts');
+  });
+
   it('does not record outputs that run inside a cycle as its trigger', () => {
     const recorder = createCdRecorder({ maxCycles: 10 });
     recorder.start();
@@ -339,6 +379,42 @@ describe('change detection agent text', () => {
       'Angular 20',
     );
     expect(toCdPage({ pageId: 5 }, 10)).toBeNull();
+  });
+
+  it('keeps the dropped class and host counts and notes them', () => {
+    const base = {
+      pageId: 'p1',
+      recording: false,
+      startedAt: 1,
+      dropped: 0,
+      cycles: [{ id: 1, at: 1, ms: 1, passes: 1, checks: 1, components: [] }],
+      components: [{ name: 'Cart', checks: 2, ms: 9, maxMs: 5, cycles: 2 }],
+      hosts: {},
+    };
+    const page = toCdPage({ ...base, droppedClasses: 905, droppedHosts: 1 }, 200)!;
+    expect(page).toMatchObject({ droppedClasses: 905, droppedHosts: 1 });
+    const text = changeDetectionText({ pages: { p1: page } });
+    expect(text).toContain('905 more component classes were checked but are not listed');
+    expect(text).toContain('1 component instance was checked past the 2000 instances');
+
+    const plain = toCdPage({ ...base, droppedClasses: -3, droppedHosts: 'x' }, 200)!;
+    expect(plain).not.toHaveProperty('droppedClasses');
+    expect(plain).not.toHaveProperty('droppedHosts');
+    expect(changeDetectionText({ pages: { p1: plain } })).not.toContain('not listed');
+
+    // A page that sends more than the server keeps has the rest counted too.
+    const components = Array.from({ length: 103 }, (_, i) => ({
+      name: `C${i}`,
+      checks: 1,
+      ms: 1,
+      maxMs: 1,
+      cycles: 1,
+    }));
+    const hosts = Object.fromEntries(Array.from({ length: 2002 }, (_, i) => [`h${i}`, 1]));
+    const big = toCdPage({ ...base, components, hosts, droppedClasses: 2 }, 200)!;
+    expect(big.components).toHaveLength(100);
+    expect(big.droppedClasses).toBe(5);
+    expect(big.droppedHosts).toBe(2);
   });
 
   it('falls back to the default limit when `limit` is not a number', () => {

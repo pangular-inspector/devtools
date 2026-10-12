@@ -290,6 +290,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       url: redactUrl(location.href),
       title: redactMessage(document.title),
       ...(deferBlocks ? { deferBlocks } : {}),
+      ...(deferTracker.truncated ? { deferTruncated: true } : {}),
     };
     const json = JSON.stringify(tree);
     if (!force && json === lastTreeJson) {

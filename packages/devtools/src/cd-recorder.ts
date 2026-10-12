@@ -13,8 +13,12 @@ export const PROFILER_EVENT = {
 } as const;
 
 const TOP_PER_CYCLE = 10;
-const MAX_COMPONENTS = 100;
-const MAX_HOSTS = 2000;
+/** Component classes a snapshot lists, by self time. */
+export const MAX_COMPONENTS = 100;
+/** Component classes the recorder keeps totals for. */
+const MAX_TRACKED_CLASSES = MAX_COMPONENTS * 10;
+/** Component instances the recorder counts checks for. */
+export const MAX_HOSTS = 2000;
 const MAX_NESTED = 10;
 /**
  * How long after an output listener ends a tick can still be credited to it.
@@ -88,6 +92,11 @@ export function createCdRecorder(options: {
   let perInstance = new WeakMap<object, number>();
   let instances: WeakRef<object>[] = [];
   let prunedCycle = 0;
+  // Classes and instances checked past the caps, each counted once.
+  let untrackedClasses = new WeakSet<Ctor>();
+  let untrackedClassCount = 0;
+  let untrackedHosts = new WeakSet<object>();
+  let untrackedHostCount = 0;
 
   const onEvent = (event: number, instance?: unknown, hook?: unknown) => {
     if (!recording) return;
@@ -149,7 +158,7 @@ export function createCdRecorder(options: {
             stat.cycles++;
             stat.lastCycle = current.id;
           }
-        } else if (totals.size < MAX_COMPONENTS * 10) {
+        } else if (totals.size < MAX_TRACKED_CLASSES) {
           totals.set(ctor, {
             name: '',
             checks: 1,
@@ -158,6 +167,9 @@ export function createCdRecorder(options: {
             cycles: 1,
             lastCycle: current.id,
           });
+        } else if (!untrackedClasses.has(ctor)) {
+          untrackedClasses.add(ctor);
+          untrackedClassCount++;
         }
         const seen = perInstance.get(instance);
         if (seen !== undefined) {
@@ -171,6 +183,10 @@ export function createCdRecorder(options: {
         if (instances.length < MAX_HOSTS) {
           instances.push(new WeakRef(instance));
           perInstance.set(instance, 1);
+          if (untrackedHosts.delete(instance)) untrackedHostCount--;
+        } else if (!untrackedHosts.has(instance)) {
+          untrackedHosts.add(instance);
+          untrackedHostCount++;
         }
         return;
       }
@@ -202,6 +218,10 @@ export function createCdRecorder(options: {
     perInstance = new WeakMap();
     instances = [];
     prunedCycle = 0;
+    untrackedClasses = new WeakSet();
+    untrackedClassCount = 0;
+    untrackedHosts = new WeakSet();
+    untrackedHostCount = 0;
   };
 
   return {
@@ -239,10 +259,13 @@ export function createCdRecorder(options: {
         const id = instance && hostId(instance);
         if (id) hosts[id] = (hosts[id] ?? 0) + (perInstance.get(instance!) ?? 0);
       }
+      const droppedClasses = untrackedClassCount + Math.max(0, totals.size - MAX_COMPONENTS);
       return {
         recording,
         startedAt,
         dropped,
+        ...(droppedClasses ? { droppedClasses } : {}),
+        ...(untrackedHostCount ? { droppedHosts: untrackedHostCount } : {}),
         hosts,
         cycles: cycles.map((cycle) => {
           const checks = [...cycle.checks].map(([ctor, check]) => ({

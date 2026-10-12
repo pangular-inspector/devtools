@@ -21,7 +21,8 @@ interface RawDeferBlock {
   rootNodes?: unknown;
 }
 
-const MAX_BLOCKS = 500;
+/** The most defer blocks one collection reports. */
+export const MAX_DEFER_BLOCKS = 500;
 const MAX_ROOT_IDS = 5;
 const DEFER_TYPE = 0;
 const HYDRATION = new Set(['not-configured', 'dehydrated', 'hydrated']);
@@ -70,6 +71,7 @@ export function createDeferTracker(now: () => number = Date.now) {
   const byPosition = new WeakMap<Element, object[]>();
   const lastHosts = new WeakMap<Element, object[]>();
   let nextId = 0;
+  let truncated = false;
 
   const positionKey = (root: Element, index: number) => {
     let keys = byPosition.get(root);
@@ -114,8 +116,13 @@ export function createDeferTracker(now: () => number = Date.now) {
   };
 
   return {
+    /** True when the last `collect` stopped at {@link MAX_DEFER_BLOCKS} with blocks left. */
+    get truncated() {
+      return truncated;
+    },
     /** Every defer block on the page, or `undefined` when Angular exposes no util for them. */
     collect(ng: DeferDebugNg | undefined, doc: Document = document): DeferBlockInfo[] | undefined {
+      truncated = false;
       const util = ng?.ɵgetControlFlowBlocks ?? ng?.ɵgetDeferBlocks;
       if (!ng || typeof util !== 'function') return undefined;
       const hosts = new Set<object>();
@@ -126,7 +133,10 @@ export function createDeferTracker(now: () => number = Date.now) {
         const order: object[] = [];
         let position = 0;
         for (const [index, raw] of valid.entries()) {
-          if (out.length >= MAX_BLOCKS) return out;
+          if (out.length >= MAX_DEFER_BLOCKS) {
+            truncated = true;
+            return out;
+          }
           const roots: unknown[] = Array.isArray(raw.rootNodes) ? raw.rootNodes : [];
           const hostNode = raw.hostNode instanceof Node ? raw.hostNode : anchorOf(roots);
           if (hostNode && !(raw.hostNode instanceof Node)) {

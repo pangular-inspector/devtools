@@ -86,4 +86,38 @@ describe('defer blocks', () => {
     await fixture.whenStable();
     expect(row.textContent).toContain('Unknown component');
   });
+
+  it('shows a + on the count when the page has more blocks than it reported', async () => {
+    const block = (id: string) => ({
+      id,
+      state: 'complete',
+      hydration: 'not-configured',
+      triggers: [],
+      rootIds: [],
+    });
+    const page = (deferTruncated?: boolean) => ({
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+      reportedAt: 1000,
+      deferBlocks: [block('d1'), block('d2')],
+      ...(deferTruncated ? { deferTruncated } : {}),
+    });
+    const pill = async (value: unknown) => {
+      const fixture = TestBed.createComponent(ComponentTree);
+      fixture.componentRef.setInput('rpc', client({ p1: value }));
+      for (let i = 0; i < 3; i++) {
+        await new Promise((resolve) => setTimeout(resolve));
+        await fixture.whenStable();
+      }
+      const text = (fixture.nativeElement as HTMLElement)
+        .querySelector('#ct-defer-title .pill')!
+        .textContent!.trim();
+      fixture.destroy();
+      return text;
+    };
+    expect(await pill(page())).toBe('2');
+    expect(await pill(page(true))).toBe('2+');
+  });
 });

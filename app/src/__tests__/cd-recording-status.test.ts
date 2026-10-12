@@ -110,4 +110,19 @@ describe('CdRecording status', () => {
     expect(live()).toBe('Could not reach the page.');
     expect(live()).not.toContain('Cleared');
   });
+
+  it('notes the classes and instances a recording checked past its caps', async () => {
+    expect(host().querySelectorAll('.note')).toHaveLength(0);
+    fixture.componentRef.setInput('page', {
+      ...page(false, 1),
+      droppedClasses: 905,
+      droppedHosts: 1,
+    });
+    await fixture.whenStable();
+    const notes = [...host().querySelectorAll('.note')].map((n) => n.textContent!.trim());
+    expect(notes).toEqual([
+      '905 more component classes were checked than a recording keeps, so they are left out of these totals.',
+      '1 component instance was checked past the 2000 a recording counts, so its tree row shows no check count.',
+    ]);
+  });
 });

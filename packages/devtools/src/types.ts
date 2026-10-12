@@ -191,6 +191,8 @@ export interface ComponentTreeReport {
   detail: ComponentDetail | null;
   /** Missing when the page's Angular exposes no defer block util. */
   deferBlocks?: DeferBlockInfo[];
+  /** True when the page has more defer blocks than the 500 in `deferBlocks`. */
+  deferTruncated?: boolean;
 }
 
 export interface ComponentPage extends ComponentTreeReport {

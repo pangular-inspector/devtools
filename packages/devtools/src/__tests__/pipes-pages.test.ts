@@ -123,6 +123,52 @@ describe('pipe page targets', () => {
     expect(state.pipes[0].components[0].targets).toEqual([{ pageId: 'tab-1', id: 'c1' }]);
   });
 
+  it('keeps and adds up targetTotal across pages, and counts targets the server cuts', () => {
+    const pages = new Map();
+    const targets = (pageId: string, n: number) =>
+      Array.from({ length: n }, (_, i) => ({ pageId, id: `c${i}` }));
+    const withTargets = (pageId: string, usage: Record<string, unknown>): PipePageReport => ({
+      ...page(pageId),
+      pipes: [
+        { ...page(pageId).pipes[0], components: [{ name: 'Row', count: 30, ...usage } as never] },
+      ],
+    });
+    const one = mergePipePageReport(
+      pages,
+      withTargets('tab-1', { targets: targets('tab-1', 10), targetTotal: 25 }),
+      0,
+    );
+    expect(one.pipes[0].components[0]).toMatchObject({ targetTotal: 25 });
+    const two = mergePipePageReport(
+      pages,
+      withTargets('tab-2', { targets: targets('tab-2', 3) }),
+      0,
+    );
+    const row = two.pipes[0].components[0]!;
+    expect(row.targets).toHaveLength(10);
+    expect(row.targetTotal).toBe(28);
+
+    // A page that sends more targets than the server keeps.
+    const cut = mergePipePageReport(
+      new Map(),
+      withTargets('tab-3', { targets: targets('tab-3', 14) }),
+      0,
+    ).pipes[0].components[0]!;
+    expect(cut.targets).toHaveLength(10);
+    expect(cut.targetTotal).toBe(14);
+
+    // No total when every target is listed, even if the page sent a stale one.
+    const whole = mergePipePageReport(
+      new Map(),
+      withTargets('tab-4', { targets: targets('tab-4', 2), targetTotal: 1 }),
+      0,
+    ).pipes[0].components[0]!;
+    expect(whole).not.toHaveProperty('targetTotal');
+
+    const report = withTargets('tab-5', { targets: targets('tab-5', 1), targetTotal: 'x' });
+    expect(isPipePageReport(report)).toBe(false);
+  });
+
   it('rejects a report whose targets are malformed', () => {
     const report = page('tab-1');
     expect(isPipePageReport(report)).toBe(true);

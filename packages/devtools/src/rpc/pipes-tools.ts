@@ -20,6 +20,8 @@ export interface PipeComponentUsage {
   name: string;
   count: number;
   targets?: PipeTarget[];
+  /** How many host elements the component has, present when `targets` was cut short. */
+  targetTotal?: number;
 }
 
 /** Time spent in `transform` and the calls that threw, shared by a pipe's
@@ -138,8 +140,21 @@ function isPipeComponentUsage(value: unknown): value is PipeComponentUsage {
     typeof usage.name === 'string' &&
     typeof usage.count === 'number' &&
     (usage.targets === undefined ||
-      (Array.isArray(usage.targets) && usage.targets.every(isPipeTarget)))
+      (Array.isArray(usage.targets) && usage.targets.every(isPipeTarget))) &&
+    (usage.targetTotal === undefined ||
+      (typeof usage.targetTotal === 'number' && Number.isFinite(usage.targetTotal)))
   );
+}
+
+/** How many hosts a component usage has: `targetTotal`, or its listed targets. */
+function targetCount(usage: PipeComponentUsage): number {
+  return Math.max(usage.targetTotal ?? 0, usage.targets?.length ?? 0);
+}
+
+/** `usage` with `targetTotal` set only when it is more than the targets it lists. */
+function withTargetTotal(usage: PipeComponentUsage, total: number): PipeComponentUsage {
+  const { targetTotal: _old, ...rest } = usage;
+  return total > (usage.targets?.length ?? 0) ? { ...rest, targetTotal: total } : rest;
 }
 
 const optional = (value: unknown, type: 'string' | 'number' | 'boolean') =>
@@ -264,11 +279,16 @@ export function clampPipePageReport(report: PipePageReport): PipePageReport {
       ...pipe,
       name: clampText(pipe.name) as string,
       className: clampText(pipe.className) as string,
-      components: pipe.components.slice(0, MAX_REPORT_COMPONENTS).map((c) => ({
-        ...c,
-        name: clampText(c.name) as string,
-        ...(c.targets ? { targets: c.targets.slice(0, MAX_MERGED_TARGETS) } : {}),
-      })),
+      components: pipe.components.slice(0, MAX_REPORT_COMPONENTS).map((c) =>
+        withTargetTotal(
+          {
+            ...c,
+            name: clampText(c.name) as string,
+            ...(c.targets ? { targets: c.targets.slice(0, MAX_MERGED_TARGETS) } : {}),
+          },
+          targetCount(c),
+        ),
+      ),
       call: pipe.call && {
         ...clampCall(pipe.call),
         ...(pipe.call.instances
@@ -322,6 +342,8 @@ function aggregatePipes(all: (PipePageReport & { reportedAt: number })[]): PipeU
           continue;
         }
         match.count += component.count;
+        // Targets carry their page id, so two pages never share one: the totals add up.
+        const total = targetCount(match) + targetCount(component);
         if (component.targets?.length) {
           const merged = [...(match.targets ?? [])];
           for (const target of component.targets) {
@@ -331,6 +353,8 @@ function aggregatePipes(all: (PipePageReport & { reportedAt: number })[]): PipeU
           }
           match.targets = merged;
         }
+        const index = existing.components.indexOf(match);
+        existing.components[index] = withTargetTotal(match, total);
       }
       if (pipe.call) {
         if (!existing.call) {
