@@ -304,7 +304,9 @@ export function createCdRecorder(options: {
           label: '',
           at: frame.start,
           ms: total,
-          depth: stack.length,
+          // A component checked inside a running hook (a RouterOutlet's
+          // ngOnInit, say) nests under that hook, as hook spans do.
+          depth: stack.length + hookStack.length,
           kind: CD_SPAN_KIND.component,
         });
         const check = current.checks.get(ctor);

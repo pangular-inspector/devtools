@@ -96,6 +96,36 @@ describe('lifecycle hook timing', () => {
     expect(result.components[0]).toMatchObject({ name: 'Shell', ms: 4.5 });
   });
 
+  it('nests a component checked inside a running hook under that hook', () => {
+    const { clock, recorder, snap } = recorderAt();
+    const shell = new Shell();
+    const row = new Row();
+    const outlet = new Row();
+    recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ComponentStart);
+    clock.advance(0.5);
+    recorder.onEvent(E.LifecycleHookStart, outlet, Row.prototype.ngOnInit);
+    clock.advance(1);
+    recorder.onEvent(E.ComponentStart);
+    clock.advance(2);
+    recorder.onEvent(E.ComponentEnd, row);
+    recorder.onEvent(E.LifecycleHookEnd, outlet, Row.prototype.ngOnInit);
+    recorder.onEvent(E.ComponentEnd, shell);
+    recorder.onEvent(E.ChangeDetectionEnd);
+    const result = snap();
+    const names = result.spanNames!;
+    const depths = result.cycles[0]!.spans!.map(([name, , , depth, kind]) => [
+      names[name],
+      depth,
+      kind,
+    ]);
+    expect(depths).toEqual([
+      ['Shell', 0, 'c'],
+      ['Row.ngOnInit', 1, 'h'],
+      ['Row', 2, 'c'],
+    ]);
+  });
+
   it('counts a hook run by another hook once in the cycle total', () => {
     const { clock, recorder, snap } = recorderAt();
     const row = new Row();
