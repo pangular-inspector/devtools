@@ -75,6 +75,32 @@ describe('createDeferTracker', () => {
     expect(tracker.truncated).toBe(false);
   });
 
+  it('does not mark a list cut when the block past the cap repeats a host', () => {
+    const { root, instances } = page();
+    const anchors = Array.from({ length: MAX_DEFER_BLOCKS }, () => {
+      const anchor = document.createComment('container');
+      root.appendChild(anchor);
+      return anchor;
+    });
+    let extra: Comment | null = null;
+    const ng: DeferDebugNg = {
+      getComponent: (el) => instances.get(el) ?? null,
+      ɵgetControlFlowBlocks: (node) =>
+        node === root
+          ? [...anchors, ...(extra ? [extra] : []), anchors[0]].map((anchor) =>
+              block({ hostNode: anchor }),
+            )
+          : [],
+    };
+    const tracker = createDeferTracker(() => 1000);
+    expect(tracker.collect(ng)).toHaveLength(MAX_DEFER_BLOCKS);
+    expect(tracker.truncated).toBe(false);
+    extra = document.createComment('container');
+    root.appendChild(extra);
+    expect(tracker.collect(ng)).toHaveLength(MAX_DEFER_BLOCKS);
+    expect(tracker.truncated).toBe(true);
+  });
+
   it('reads defer blocks with their owner, state, triggers and root elements', () => {
     const { root, reviews, anchor, lazy, instances } = page();
     const section = reviews.querySelector('section')!;

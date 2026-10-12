@@ -92,10 +92,11 @@ export function createCdRecorder(options: {
   let perInstance = new WeakMap<object, number>();
   let instances: WeakRef<object>[] = [];
   let prunedCycle = 0;
-  // Classes and instances checked past the caps, each counted once.
+  // Classes and instances checked past the caps, each counted once. An
+  // untracked instance keeps its checks so they carry over if a slot frees up.
   let untrackedClasses = new WeakSet<Ctor>();
   let untrackedClassCount = 0;
-  let untrackedHosts = new WeakSet<object>();
+  let untrackedHosts = new WeakMap<object, number>();
   let untrackedHostCount = 0;
 
   const onEvent = (event: number, instance?: unknown, hook?: unknown) => {
@@ -180,13 +181,17 @@ export function createCdRecorder(options: {
           prunedCycle = current.id;
           instances = instances.filter((ref) => ref.deref());
         }
+        const earlier = untrackedHosts.get(instance);
         if (instances.length < MAX_HOSTS) {
           instances.push(new WeakRef(instance));
-          perInstance.set(instance, 1);
-          if (untrackedHosts.delete(instance)) untrackedHostCount--;
-        } else if (!untrackedHosts.has(instance)) {
-          untrackedHosts.add(instance);
-          untrackedHostCount++;
+          perInstance.set(instance, (earlier ?? 0) + 1);
+          if (earlier !== undefined) {
+            untrackedHosts.delete(instance);
+            untrackedHostCount--;
+          }
+        } else {
+          untrackedHosts.set(instance, (earlier ?? 0) + 1);
+          if (earlier === undefined) untrackedHostCount++;
         }
         return;
       }
@@ -220,7 +225,7 @@ export function createCdRecorder(options: {
     prunedCycle = 0;
     untrackedClasses = new WeakSet();
     untrackedClassCount = 0;
-    untrackedHosts = new WeakSet();
+    untrackedHosts = new WeakMap();
     untrackedHostCount = 0;
   };
 

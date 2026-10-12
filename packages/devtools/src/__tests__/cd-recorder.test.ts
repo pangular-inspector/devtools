@@ -107,6 +107,49 @@ describe('change detection recorder', () => {
     expect(empty.droppedHosts).toBeUndefined();
   });
 
+  it("carries an untracked instance's checks over when a slot frees up", () => {
+    // A WeakRef the test can clear, standing in for garbage collection.
+    const collected = new WeakSet<object>();
+    class TestRef<T extends object> {
+      constructor(private target: T) {}
+      deref() {
+        return collected.has(this.target) ? undefined : this.target;
+      }
+    }
+    vi.stubGlobal('WeakRef', TestRef);
+    try {
+      const recorder = createCdRecorder({ maxCycles: 10 });
+      recorder.start();
+      const check = (instance: object) => {
+        recorder.onEvent(E.ComponentStart);
+        recorder.onEvent(E.ComponentEnd, instance);
+      };
+      const kept = Array.from({ length: 2000 }, () => new Cart());
+      const late = new Price();
+      const other = new Price();
+      recorder.onEvent(E.ChangeDetectionStart);
+      for (const instance of kept) check(instance);
+      check(late);
+      check(other);
+      recorder.onEvent(E.ChangeDetectionEnd);
+      recorder.onEvent(E.ChangeDetectionStart);
+      check(late);
+      recorder.onEvent(E.ChangeDetectionEnd);
+      expect(recorder.snapshot(() => null).droppedHosts).toBe(2);
+
+      collected.add(kept[0]!);
+      recorder.onEvent(E.ChangeDetectionStart);
+      check(late);
+      recorder.onEvent(E.ChangeDetectionEnd);
+      const snap = recorder.snapshot((instance) => (instance === late ? 'late' : null));
+      // Two checks while untracked, one after it got a slot.
+      expect(snap.hosts).toEqual({ late: 3 });
+      expect(snap.droppedHosts).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('reports no dropped classes or hosts below its caps', () => {
     const recorder = createCdRecorder({ maxCycles: 10 });
     recorder.start();

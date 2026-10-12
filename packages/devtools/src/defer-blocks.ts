@@ -133,10 +133,6 @@ export function createDeferTracker(now: () => number = Date.now) {
         const order: object[] = [];
         let position = 0;
         for (const [index, raw] of valid.entries()) {
-          if (out.length >= MAX_DEFER_BLOCKS) {
-            truncated = true;
-            return out;
-          }
           const roots: unknown[] = Array.isArray(raw.rootNodes) ? raw.rootNodes : [];
           const hostNode = raw.hostNode instanceof Node ? raw.hostNode : anchorOf(roots);
           if (hostNode && !(raw.hostNode instanceof Node)) {
@@ -145,6 +141,11 @@ export function createDeferTracker(now: () => number = Date.now) {
           const host = hostNode ?? positionKey(root, position++);
           order.push(host);
           if (hosts.has(host)) continue;
+          // Only a new block past the cap means some were left out.
+          if (out.length >= MAX_DEFER_BLOCKS) {
+            truncated = true;
+            return out;
+          }
           hosts.add(host);
           const hydration = HYDRATION.has(raw.incrementalHydrationState as string)
             ? (raw.incrementalHydrationState as DeferBlockInfo['hydration'])
