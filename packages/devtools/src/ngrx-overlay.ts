@@ -122,6 +122,7 @@ export function attachNgrx<H extends object = Element>(
 
   return {
     push,
+    rawState: (storeId: string) => collector.rawState(storeId),
     leave: () => void my.rpc.call('forget-ngrx-page', pageId).catch(() => {}),
     stop: () => {
       clearTimeout(timer);

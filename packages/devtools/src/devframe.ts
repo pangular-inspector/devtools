@@ -17,6 +17,7 @@ import {
   type CapacitorState,
 } from './rpc/capacitor-tools.ts';
 import { forBlocksText } from './rpc/for-blocks-tools.ts';
+import { registerConsoleGlobals } from './rpc/console-globals.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
@@ -361,13 +362,18 @@ const pangular = defineDevframe({
         draft.nodes = latestComponentPage(componentPages.values())?.roots ?? [];
       });
     const componentWaiters = new Set<() => void>();
-    const selectComponentOnPage = (pageId: string | undefined, id: string | null) => {
+    // `console` marks a selection made in the panel, which sets `$ng0` on that page.
+    const selectComponentOnPage = (
+      pageId: string | undefined,
+      id: string | null,
+      console = false,
+    ) => {
       componentTree.mutate((draft) => {
         draft.selectedId = id;
       });
       void my.rpc.broadcast({
         method: 'inspect-component-in-page',
-        args: [{ pageId, id }],
+        args: [{ pageId, id, ...(console && pageId ? { console: true } : {}) }],
         optional: true,
       });
     };
@@ -1636,7 +1642,7 @@ const pangular = defineDevframe({
       name: 'select-component',
       type: 'action',
       jsonSerializable: true,
-      handler: (target: string | { pageId?: unknown; id?: unknown } | null) => {
+      handler: (target: string | { pageId?: unknown; id?: unknown; console?: unknown } | null) => {
         if (typeof target === 'string') {
           void my.rpc.broadcast({
             method: 'select-signal-component',
@@ -1647,7 +1653,7 @@ const pangular = defineDevframe({
         }
         const id = typeof target?.id === 'string' ? target.id.slice(0, 50) : null;
         const pageId = typeof target?.pageId === 'string' ? target.pageId : undefined;
-        selectComponentOnPage(pageId, id);
+        selectComponentOnPage(pageId, id, target?.console === true);
       },
     });
 
@@ -1673,6 +1679,13 @@ const pangular = defineDevframe({
         componentEdits.request(message?.pageId, message?.request),
     });
     for (const tool of componentEdits.tools) agent.registerTool(tool);
+
+    registerConsoleGlobals({
+      config,
+      register,
+      broadcast: (message) => void my.rpc.broadcast(message),
+      answersFor,
+    });
 
     const pendingPicks = new Map<
       string,

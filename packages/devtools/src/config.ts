@@ -530,6 +530,10 @@ export const SHARED_RPC: readonly string[] = [
   'list-pages',
   'open-in-editor',
   'hub-dock-seen',
+  // Store as global spans the components, injectors and NgRx inspectors; the
+  // handler checks that the inspector of each request is on.
+  'request-console-global',
+  'console-global-result',
 ];
 
 /**

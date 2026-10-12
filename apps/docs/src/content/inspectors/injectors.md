@@ -53,6 +53,19 @@ For environment injectors, **Injected by its services** lists what the services 
 
 **Provides** lists each provider with its kind: `useClass`, `useValue`, `useFactory` or `useExisting`. A bare class shows as `useClass`. Chips mark **viewProviders** and **multi** providers. Providers that come from imported modules show the import path, as `via A › B`.
 
+### Store a provider as a global
+
+Each live provider row has a **Store as global** button. It stores the provider's value in the page console as `temp1`, then the first free `tempN`, and shows the name it used, for example **Stored as temp1.** Only the tab you are looking at gets the global, and the overlay never overwrites a `tempN` the page set itself. See [Console handles](./components.md#console-handles).
+
+Storing never creates a provider:
+
+| Provider in             | Stored when                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------- |
+| An environment injector | The injector already created the value. Otherwise the button says **… has not been created yet**. |
+| An element injector     | A component or directive on the page injected it from that element, so Angular created it.        |
+
+A class instance is stored as the live object. A `useValue` object or array is stored as a copy, with secret-looking keys, JWTs and `Bearer` values replaced by `[redacted]`. A provider whose token name looks secret, such as `API_KEY`, or whose value is a credential string, is not stored. See [what the devtools redact](../security.md).
+
 ### Source mode
 
 Without a live tree, the tab lists DI found in your source files, in four groups:

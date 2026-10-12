@@ -35,6 +35,7 @@ import {
   type NgrxStoreEntry,
 } from './store-types';
 import { SourceLink } from '../ui/source-link';
+import { StoreGlobal } from '../ui/store-global';
 
 const KIND_COLORS: Record<string, string> = {
   action: '#f59e0b',
@@ -95,7 +96,7 @@ const CLASSIC_KINDS = new Set([
 
 @Component({
   selector: 'app-store-inspector',
-  imports: [LimitNote, RovingList, Select, NgTemplateOutlet, SourceLink],
+  imports: [LimitNote, RovingList, Select, NgTemplateOutlet, SourceLink, StoreGlobal],
   template: `
     <div class="toolbar">
       <input
@@ -255,14 +256,22 @@ const CLASSIC_KINDS = new Set([
                 <section class="fact" aria-labelledby="ngrx-state-heading">
                   <div class="fact-head">
                     <h4 id="ngrx-state-heading">State</h4>
-                    <button
-                      type="button"
-                      class="btn copy"
-                      aria-label="Copy state"
-                      (click)="copyState()"
-                    >
-                      Copy
-                    </button>
+                    <div class="state-actions">
+                      <app-store-global
+                        [rpc]="rpc()"
+                        [pageId]="page()?.pageId"
+                        [target]="{ kind: 'ngrx', storeId: current.id }"
+                        [label]="current.label + ' state'"
+                      />
+                      <button
+                        type="button"
+                        class="btn copy"
+                        aria-label="Copy state"
+                        (click)="copyState()"
+                      >
+                        Copy
+                      </button>
+                    </div>
                   </div>
                   <pre #stateTree class="tree" tabindex="0" aria-labelledby="ngrx-state-heading">{{
                     stateText()
@@ -942,6 +951,14 @@ const CLASSIC_KINDS = new Set([
     }
     .fact-head {
       margin-bottom: 10px;
+    }
+    .state-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
     }
     .fact-head h4 {
       margin: 0;

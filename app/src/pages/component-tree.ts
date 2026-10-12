@@ -35,6 +35,7 @@ import type { ComponentFocus } from '../types/component-focus.types';
 import { SourceLink } from '../ui/source-link';
 import { actionAllowed } from '../devtools-config';
 import { PropValue } from './component-prop-value';
+import { StoreGlobal } from '../ui/store-global';
 import { ForBlocksSection, type ForBlock } from './for-blocks-section';
 
 interface SourceComponent {
@@ -153,7 +154,7 @@ function bare(name: string): string {
 
 @Component({
   selector: 'app-component-tree',
-  imports: [JsonPipe, Select, CdRecording, SourceLink, PropValue, ForBlocksSection],
+  imports: [JsonPipe, Select, CdRecording, SourceLink, PropValue, StoreGlobal, ForBlocksSection],
   host: { '(keydown.escape)': 'cancelPick()' },
   template: `
     @if (live()) {
@@ -340,6 +341,15 @@ function bare(name: string): string {
                     }
                   </div>
                 }
+              }
+              @if (!staticReport() && !native()) {
+                <app-store-global
+                  class="console-global"
+                  [rpc]="rpc()"
+                  [pageId]="page()?.pageId"
+                  [target]="{ kind: 'component', id: sel.id }"
+                  [label]="sel.name"
+                />
               }
             </header>
 
@@ -1869,7 +1879,7 @@ export class ComponentTree {
     if (!client) return;
     void client
       .scope('pangular')
-      .rpc.call('select-component', { pageId: this.page()?.pageId, id })
+      .rpc.call('select-component', { pageId: this.page()?.pageId, id, console: true })
       .catch(() => {});
   }
 

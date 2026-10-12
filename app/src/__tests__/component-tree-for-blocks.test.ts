@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import type { DevframeRpcClient } from 'devframe/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ComponentTree } from '../pages/component-tree';
+import { StoreGlobal } from '../ui/store-global';
 
 interface Call {
   name: string;
@@ -12,6 +13,9 @@ function client(pages: Record<string, unknown>, calls: Call[] = []): DevframeRpc
   const rpc = {
     call: (name: string, payload: Record<string, unknown>) => {
       calls.push({ name, payload });
+      if (name === 'request-console-global') {
+        return Promise.resolve({ ok: true, name: 'temp1', message: 'Stored as temp1.' });
+      }
       return Promise.resolve([]);
     },
     callEvent: () => Promise.resolve(),
@@ -94,5 +98,58 @@ describe('@for blocks section', () => {
   it('shows nothing when the page has no @for block', async () => {
     const { el } = await render({ ...basePage, deferBlocks: [], forBlocks: [] });
     expect(el.textContent).not.toContain('@for blocks');
+  });
+});
+
+describe('console handles in the component view', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('asks the page to set $ng0 when a component is selected', async () => {
+    const calls: Call[] = [];
+    const { el, fixture } = await render(basePage, calls);
+    el.querySelector<HTMLElement>('.row[data-id="c1"]')!.click();
+    await fixture.whenStable();
+    expect(calls.find((c) => c.name === 'select-component')?.payload).toEqual({
+      pageId: 'p1',
+      id: 'c1',
+      console: true,
+    });
+  });
+});
+
+describe('Store as global button', () => {
+  it('stores the target on its page and says which name it used', async () => {
+    const calls: Call[] = [];
+    const fixture = TestBed.createComponent(StoreGlobal);
+    fixture.componentRef.setInput('rpc', client({}, calls));
+    fixture.componentRef.setInput('pageId', 'p1');
+    fixture.componentRef.setInput('target', { kind: 'ngrx', storeId: 'store' });
+    fixture.componentRef.setInput('label', 'Store state');
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    const button = el.querySelector('button')!;
+    expect(button.textContent?.replace(/\s+/g, ' ').trim()).toBe('Store as global : Store state');
+    button.click();
+    await new Promise((resolve) => setTimeout(resolve));
+    await fixture.whenStable();
+    expect(calls).toEqual([
+      {
+        name: 'request-console-global',
+        payload: { pageId: 'p1', target: { kind: 'ngrx', storeId: 'store' } },
+      },
+    ]);
+    expect(el.querySelector('[role="status"]')!.textContent).toBe('Stored as temp1.');
+  });
+
+  it('is hidden in a saved report, which has no page', async () => {
+    const fixture = TestBed.createComponent(StoreGlobal);
+    fixture.componentRef.setInput('rpc', {
+      connectionMeta: { backend: 'static' },
+    } as unknown as DevframeRpcClient);
+    fixture.componentRef.setInput('target', { kind: 'component', id: 'c1' });
+    await fixture.whenStable();
+    expect((fixture.nativeElement as HTMLElement).querySelector('button')).toBeNull();
   });
 });

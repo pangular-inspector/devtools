@@ -35,6 +35,10 @@ Select a store to see:
 - **State**, **Computed** and **Methods**, with a call count per method. **Copy** next to **State** copies the state as shown in the panel, with secrets already redacted. The copy is the panel's formatted text, not strict JSON. The tab tags `signalMethod` and `rxMethod` members. Once a method has been called, its chip also shows the average and last call duration, in milliseconds.
 - **Entities**, for a `signalStore` that calls `withEntities()`. One group per collection, with the entity count and the ids as chips. A group past 30 ids shows the first 30 and a count of the rest.
 
+### Store the state as a global
+
+**Store as global** next to **State** stores a copy of the selected store's state in the page console as `temp1`, then the first free `tempN`, and shows the name it used. For the classic Store, the copy is the whole state. For a signal store, it holds the state fields. Secret-looking keys, JWTs and `Bearer` values are replaced by `[redacted]` in the copy, and the button then says **Stored a copy as temp1, with secret fields masked.** Changing the copy doesn't change the store. Only the tab you are looking at gets the global. See [Console handles](./components.md#console-handles).
+
 ### Change log
 
 Signal stores get a **Change log**. The classic Store gets an **Action log**. Each entry shows its number, its type, the number of changes and the time. A method-call entry also shows how long the call itself took, and an entry whose change came from a dispatched event carries a tag with the event's type. An action also shows a badge for where it came from:

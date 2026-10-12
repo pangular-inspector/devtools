@@ -19,6 +19,7 @@ import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
 import { zoneLabel } from './dashboard';
 import { SourceLink } from '../ui/source-link';
+import { StoreGlobal } from '../ui/store-global';
 
 interface ProviderInfo {
   token: string;
@@ -110,7 +111,7 @@ function isTree(value: unknown): value is InjectorNode[] {
 
 @Component({
   selector: 'app-di-inspector',
-  imports: [NgTemplateOutlet, Select, SourceLink],
+  imports: [NgTemplateOutlet, Select, SourceLink, StoreGlobal],
   template: `
     <p class="sr-only" role="status">{{ announcement() }}</p>
     <ng-template #loadError let-compact="compact">
@@ -462,7 +463,7 @@ function isTree(value: unknown): value is InjectorNode[] {
               </h3>
               @if (sel.providers.length) {
                 <ul class="providers">
-                  @for (p of sel.providers; track p.token + $index) {
+                  @for (p of sel.providers; track p.token + $index; let index = $index) {
                     <li class="provider" [class.hit]="matches(p.token)">
                       <div class="dep-main">
                         <span class="token mono">{{ p.token }}</span>
@@ -479,6 +480,18 @@ function isTree(value: unknown): value is InjectorNode[] {
                       @if (p.importPath?.length) {
                         <div class="dep-meta">via {{ p.importPath!.join(' › ') }}</div>
                       }
+                      <app-store-global
+                        class="provider-global"
+                        [rpc]="rpc()"
+                        [pageId]="shownPageId()"
+                        [target]="{
+                          kind: 'provider',
+                          injectorId: sel.injector.id,
+                          token: p.token,
+                          index: index,
+                        }"
+                        [label]="p.token"
+                      />
                     </li>
                   }
                 </ul>
@@ -1139,6 +1152,9 @@ function isTree(value: unknown): value is InjectorNode[] {
     .provider.hit {
       border-color: var(--accent-line);
       box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .provider-global {
+      margin-top: 6px;
     }
     .dep-main {
       display: flex;

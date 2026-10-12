@@ -36,16 +36,26 @@ export interface DebugNg<H extends object = Element> {
 }
 
 const ids = new WeakMap<object, string>();
+const byId = new Map<string, WeakRef<object>>();
 let nextId = 0;
+let sweepAt = 1024;
 
 function idFor(key: object): string {
   let id = ids.get(key);
   if (!id) {
     id = `inj-${++nextId}`;
     ids.set(key, id);
+    if (byId.size >= sweepAt) {
+      for (const [known, ref] of byId) if (!ref.deref()) byId.delete(known);
+      sweepAt = Math.max(1024, byId.size * 2);
+    }
+    byId.set(id, new WeakRef(key));
   }
   return id;
 }
+
+/** `injectorId|token` pairs some component or directive injected, from the last collection. */
+let injectedPairs = new Set<string>();
 
 export function className(
   ctor: { readonly name?: string } | (abstract new (...args: never[]) => unknown),
@@ -461,6 +471,18 @@ export function collectInjectorTree<H extends object = Element>(
     }
   }
 
+  const pairs = new Set<string>();
+  const notePairs = (nodes: InjectorTreeNode[]) => {
+    for (const node of nodes) {
+      for (const dep of node.dependencies ?? []) {
+        if (dep.providedBy) pairs.add(`${dep.providedBy}|${dep.token}`);
+      }
+      notePairs(node.children);
+    }
+  };
+  notePairs(roots);
+  injectedPairs = pairs;
+
   const environment: InjectorTreeNode[] = [];
   for (const env of envs.values()) {
     const parent = env.parent ? envs.get(env.parent) : undefined;
@@ -477,4 +499,64 @@ export function collectInjectorTree<H extends object = Element>(
   const zone = root ? zoneModeOf(root) : null;
   if (zone) report.zone = zone;
   return report;
+}
+
+/**
+ * The live value of one provider the injector tree listed, for "Store as
+ * global". `index` is the provider's place in the injector's `providers`, and
+ * `token` must still match there. Nothing is created: an environment injector
+ * gives only a value it already holds, and an element injector only a token
+ * that some component or directive on the page injected (Angular creates
+ * element providers on first use).
+ */
+export function providerValue<H extends object = Element>(
+  ng: DebugNg<H> | undefined,
+  injectorId: string,
+  token: string,
+  index: number,
+): { value: unknown } | { error: string } {
+  const key = byId.get(injectorId)?.deref();
+  if (!ng || !key) return { error: 'This injector is no longer on the page.' };
+  const element = elementEntries.has(key);
+  let injector: unknown = key;
+  if (element) {
+    try {
+      injector = ng.getInjector?.(key as H);
+    } catch {
+      injector = null;
+    }
+  }
+  if (!injector) return { error: 'This injector is no longer on the page.' };
+  let list: ProviderRecord[] = [];
+  try {
+    list = ng.ɵgetInjectorProviders?.(injector) ?? [];
+  } catch {
+    list = [];
+  }
+  const record = list.filter((entry) => !isBuiltInElementToken(entry))[index];
+  if (!record || tokenName(record.token) !== token) {
+    return { error: `${token} is no longer provided there. Refresh and try again.` };
+  }
+  if (!element) {
+    const own = ownRecords(injector).find(([candidate]) => candidate === record.token)?.[1];
+    if (!own || !isCreated(own)) {
+      return {
+        error: `${token} has not been created yet, and storing it would create it. Store it once the app uses it.`,
+      };
+    }
+    return { value: own.value };
+  }
+  if (!injectedPairs.has(`${injectorId}|${token}`)) {
+    return {
+      error: `Nothing on the page has injected ${token} from this element yet, so Angular may not have created it, and storing it would create it.`,
+    };
+  }
+  try {
+    const value = (
+      injector as { get(token: unknown, notFound: unknown, options: object): unknown }
+    ).get(record.token, null, { self: true, optional: true });
+    return value === null ? { error: `${token} has no value here.` } : { value };
+  } catch (error) {
+    return { error: `Reading ${token} failed: ${String((error as Error)?.message ?? error)}` };
+  }
 }

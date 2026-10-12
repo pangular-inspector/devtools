@@ -255,6 +255,11 @@ export interface NgrxCollector {
   /** Entries that became unrestorable after update number `after`, and the last update number. */
   unrestorableSince(after: number): { updates: NgrxUnrestorableUpdate[]; last: number };
   run(request: NgrxRequest): NgrxRequestResult;
+  /**
+   * The live state of one store, unserialized: `store` is the classic Store,
+   * any other id a signal store's state fields. `null` when the store is gone.
+   */
+  rawState(storeId: string): { value: unknown } | null;
   stop(): void;
 }
 
@@ -1381,6 +1386,13 @@ export function createNgrxCollector<H extends object = Element>(
       last: lostSeq,
     }),
     run,
+    rawState: (storeId) => {
+      if (storeId === 'store') return classic ? { value: classicState(classic.store) } : null;
+      for (const t of tracked.values()) {
+        if (t.id === storeId) return { value: { ...snapshot(t) } };
+      }
+      return null;
+    },
     stop: () => {
       classic?.stop();
       dispatcherUndo?.();

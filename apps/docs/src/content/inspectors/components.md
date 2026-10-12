@@ -53,6 +53,8 @@ The buttons only work for the tab that DevTools inspects. They don't appear in t
 
 When a form exists in the same source file, a **Show … in Forms** button opens it in the [Forms tab](./forms.md).
 
+**Store as global** stores the selected instance in the page console as `temp1`, then `temp2` and so on, and shows the name it used, for example **Stored as temp1.** See [Console handles](#console-handles).
+
 ### Facts
 
 - **Change detection**: `OnPush` or `Eager`.
@@ -245,6 +247,24 @@ To go the other way, select a component and click **Reveal in Elements** in its 
     Open the Injectors tab to see where Angular searched.
   </ngmd-step>
 </ngmd-workflow>
+
+### Console handles
+
+When you select a component in the panel, the page sets `$ng0` in its console to that instance. The previous selections move to `$ng1` through `$ng4`, newest first, so the last five stay at hand. Selecting the same instance again keeps the order, and an earlier one moves back to `$ng0`. **Pick component on page** sets `$ng0` too. Selections made by an agent tool don't.
+
+**Store as global** in the detail header, in the provider rows of the [Injectors tab](./injectors.md#store-a-provider-as-a-global) and next to the state on the [NgRx tab](./ngrx-store.md#store-the-state-as-a-global) stores a value as `temp1`, then the first free `tempN`.
+
+| Rule                    | Detail                                                                                                                                                                                                    |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One page                | Only the tab that owns the selection writes the globals. Other tabs of the app don't change.                                                                                                              |
+| Page globals stay       | The overlay never overwrites a `$ngN` or `tempN` the page set itself. It skips that name.                                                                                                                 |
+| Nothing leaves the page | The value stays in the page. Only the variable name comes back to the panel.                                                                                                                              |
+| Cleanup                 | When the overlay stops, it removes the globals it still owns.                                                                                                                                             |
+| Components inspector    | `$ng0` and **Store as global** for a component need the Components inspector on. They don't change the app, so the [`actions`](../getting-started/configuration.md#actions) option doesn't turn them off. |
+
+`$ng0` and a stored component hold the live instance, the same object `ng.getComponent($0)` returns in the console. Read a signal input with `$ng0.title()`.
+
+The console handles need the browser overlay. The Angular Native and NativeScript overlays don't set them.
 
 ### Keyboard
 
