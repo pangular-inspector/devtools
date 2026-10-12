@@ -654,6 +654,44 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
 };
 
 /**
+ * The inspector behind each shared-state key, without the `pangular:` prefix.
+ * MCP clients read shared state through `devframe_state_read` and the
+ * `devframe://state/<key>` resources, so `agent.tools.<inspector>: false`
+ * hides the key there too. The panel still gets it.
+ */
+export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
+  'component-tree': 'components',
+  'change-detection': 'components',
+  'signal-graph': 'signals',
+  'injector-tree': 'injectors',
+  'ngrx-store': 'ngrx',
+  forms: 'forms',
+  router: 'router',
+  routes: 'router',
+  'pipe-usage': 'pipes',
+  http: 'http',
+  'http-payloads': 'http',
+  capacitor: 'capacitor',
+  analog: 'analog',
+};
+
+/** Shared-state keys that belong to no inspector, without the `pangular:` prefix. */
+export const SHARED_STATE_KEYS: readonly string[] = ['page-visibility'];
+
+/**
+ * Whether MCP clients may read a shared-state key. A `pangular:` key in
+ * neither list stays hidden, so a new key needs an entry before agents see it.
+ * Keys of the hub and of other devframes are left to them.
+ */
+export function sharedStateExposed(key: string, config: ResolvedPangularConfig): boolean {
+  if (!key.startsWith('pangular:')) return true;
+  const name = agentName(key);
+  if (SHARED_STATE_KEYS.includes(name)) return true;
+  const inspector = SHARED_STATE_INSPECTOR[name];
+  return inspector !== undefined && config.agent.tools[inspector];
+}
+
+/**
  * Agent tools and resources that answer only while a page reports to the
  * server, or that call the app's dev server. The stdio MCP server has neither.
  */
