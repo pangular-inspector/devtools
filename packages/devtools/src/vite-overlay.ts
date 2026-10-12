@@ -16,7 +16,7 @@ export const OVERLAY_TAG_ATTRIBUTE = 'data-pangular-overlay';
  * its polyfills. On a custom hub `base` it points the overlay there.
  */
 export function overlayTags(html: string, hubBase: string): HtmlTagDescriptor[] {
-  if (html.includes(OVERLAY_TAG_ATTRIBUTE) || html.includes(OVERLAY_ENTRY)) return [];
+  if (loadsOverlay(html)) return [];
   const children =
     hubBase === PANGULAR_HUB_BASE
       ? `import ${JSON.stringify(OVERLAY_ENTRY)};`
@@ -29,4 +29,25 @@ export function overlayTags(html: string, hubBase: string): HtmlTagDescriptor[] 
       injectTo: 'body',
     },
   ];
+}
+
+const HTML_COMMENT = /<!--[\s\S]*?(?:-->|$)/g;
+const SCRIPT = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+const MARKER = new RegExp(`(?:^|\\s)${OVERLAY_TAG_ATTRIBUTE}(?=[\\s=/]|$)`, 'i');
+const MODULE_TYPE = /(?:^|\s)type\s*=\s*(["']?)module\1(?=[\s/]|$)/i;
+const SRC = /(?:^|\s)src\s*=\s*(["']?)([^"'\s>]*)\1/i;
+
+/**
+ * Whether a real `<script>` in `html` already starts the overlay: one carrying
+ * {@link OVERLAY_TAG_ATTRIBUTE}, or a module script that imports or loads
+ * {@link OVERLAY_ENTRY}. Text in HTML comments does not count.
+ */
+function loadsOverlay(html: string): boolean {
+  const scripts = html.replace(HTML_COMMENT, '').matchAll(SCRIPT);
+  for (const [, attrs = '', body = ''] of scripts) {
+    if (MARKER.test(attrs)) return true;
+    if (!MODULE_TYPE.test(attrs)) continue;
+    if (body.includes(OVERLAY_ENTRY) || SRC.exec(attrs)?.[2]?.includes(OVERLAY_ENTRY)) return true;
+  }
+  return false;
 }

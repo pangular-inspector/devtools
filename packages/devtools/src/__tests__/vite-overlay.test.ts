@@ -61,6 +61,20 @@ describe('overlayTags', () => {
     expect(overlayTags('<script type="module" data-pangular-overlay>x</script>', '/x/')).toEqual(
       [],
     );
+    expect(
+      overlayTags(`<script type="module" src="/@id/${OVERLAY_ENTRY}"></script>`, '/__devframes/'),
+    ).toEqual([]);
+  });
+
+  it('still injects when the entry or the marker only appears outside a module script', () => {
+    const pages = [
+      `<!-- the overlay comes from ${OVERLAY_ENTRY} --><body></body>`,
+      '<!-- <script type="module" data-pangular-overlay></script> --><body></body>',
+      `<p>Import ${OVERLAY_ENTRY} to start it. Mark it with data-pangular-overlay.</p>`,
+      `<script type="text/plain">import '${OVERLAY_ENTRY}';</script>`,
+      `<script>// ${OVERLAY_ENTRY}</script>`,
+    ];
+    for (const html of pages) expect(overlayTags(html, '/__devframes/')).toHaveLength(1);
   });
 });
 
