@@ -706,11 +706,15 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
   let frameReady = false;
   /** Set when a keyboard opened the panel before its content was there to focus. */
   let pendingFocus = false;
+  /** Whether a lookup is running, so what the panel shows may be about to change. */
+  let lookingUp = false;
   function load() {
     loaded = true;
+    lookingUp = true;
     const run = ++loads;
     void resolveTarget().then((src) => {
       if (run !== loads) return;
+      lookingUp = false;
       iframe.hidden = src === null;
       missing.hidden = src !== null;
       missingStatus.textContent = src === null ? 'No devtools server found' : '';
@@ -728,7 +732,7 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
   });
 
   function focusWhenReady() {
-    if (loaded && (frameReady || !missing.hidden)) focusPanel();
+    if (loaded && !lookingUp && (frameReady || !missing.hidden)) focusPanel();
     else pendingFocus = true;
   }
 
@@ -745,7 +749,8 @@ export function createDevtoolsPopup(options: { src?: string } = {}) {
       const main = iframe.contentDocument?.querySelector<HTMLElement>('main');
       if (main) {
         main.focus();
-        return;
+        // A `<main>` that can't take focus, as on a page passed as `src`, leaves it on the frame.
+        if (main.ownerDocument.activeElement === main) return;
       }
     } catch {
       // a cross origin frame: focus the frame itself

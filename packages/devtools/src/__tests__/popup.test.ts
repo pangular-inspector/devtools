@@ -135,6 +135,45 @@ describe.sequential('devtools popup', () => {
     expect(shadow.activeElement).toBe(frame());
   });
 
+  it('waits for a new lookup before moving focus after one found nothing', async () => {
+    let up = false;
+    await loadPopup(() => (up ? json() : spaFallback()));
+    const { fab } = parts();
+    const shadow = document.getElementById('pangular-popup-root')!.shadowRoot!;
+    const missing = shadow.querySelector<HTMLElement>('.missing')!;
+    fab.click();
+    await vi.waitFor(() => expect(missing.hidden).toBe(false));
+    fab.click();
+
+    up = true;
+    fab.focus();
+    fab.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+    await vi.waitFor(() => expect(missing.hidden).toBe(true));
+    frame().dispatchEvent(new Event('load'));
+    expect(shadow.activeElement).toBe(frame());
+  });
+
+  it('focuses the frame when its main element cannot take focus', async () => {
+    await loadPopup(true);
+    const doc = await frameDocument();
+    const main = doc.createElement('main');
+    doc.body.appendChild(main);
+    const { fab } = parts();
+    const shadow = document.getElementById('pangular-popup-root')!.shadowRoot!;
+    const reopen = () => {
+      fab.click();
+      fab.focus();
+      fab.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+    };
+
+    reopen();
+    expect(shadow.activeElement).toBe(frame());
+
+    main.tabIndex = -1;
+    reopen();
+    expect(doc.activeElement).toBe(main);
+  });
+
   it('leaves focus alone when a pointer opens the panel', async () => {
     await loadPopup(true);
     const { fab } = parts();
