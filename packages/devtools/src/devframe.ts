@@ -179,6 +179,7 @@ import {
   type CdPage,
   type CdState,
 } from './rpc/cd-tools.ts';
+import { cdExportText } from './rpc/cd-export-tools.ts';
 import type { HttpPage, HttpPayloadState, HttpReport, HttpState } from './types.ts';
 
 import { analogPages, nameServerFns, registerAnalog } from './rpc/analog-register.ts';
@@ -2366,7 +2367,7 @@ const pangular = defineDevframe({
         cdRecordAllowed
           ? 'Recording is off until the panel or this tool starts it; pass `record: "start"`, use the app, then call again without `record`. `stop` keeps the recording, `clear` empties it.'
           : 'Recording is off until the panel starts it. The agent is read-only, so this tool cannot start, stop or clear a recording.'
-      } The answer starts with the change detection mode the page runs: zoneless, zone.js, or zoneless with zone.js still loaded.`,
+      } The answer starts with the change detection mode the page runs: zoneless, zone.js, or zoneless with zone.js still loaded. Times include lifecycle hooks per class and hook, output listeners and afterRender callbacks. Pass \`export: "json"\` for the recording as the file the panel imports, or \`export: "trace"\` for a Trace Event Format file that Perfetto (ui.perfetto.dev) and chrome://tracing open; exporting only reads, and a file over 100,000 characters is not returned, only its counts.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -2375,9 +2376,20 @@ const pangular = defineDevframe({
             : {}),
           page: { type: 'string', description: 'Page id; defaults to the page that is recording.' },
           limit: { type: 'number', description: 'Rows per list (default 10, max 50).' },
+          export: {
+            type: 'string',
+            enum: ['json', 'trace'],
+            description:
+              'Return the recording as JSON instead of a summary: `json` for the panel file, `trace` for Perfetto.',
+          },
         },
       },
-      handler: async (args: { record?: string; page?: string; limit?: number }) => {
+      handler: async (args: {
+        record?: string;
+        page?: string;
+        limit?: number;
+        export?: string;
+      }) => {
         const unknown =
           args?.page &&
           cdUnknownPageText(
@@ -2388,6 +2400,20 @@ const pangular = defineDevframe({
             ),
           );
         if (unknown) return { markdown: unknown };
+        if (args?.export !== undefined) {
+          if (args.export !== 'json' && args.export !== 'trace') {
+            return { markdown: '`export` must be `json` or `trace`.' };
+          }
+          if (args.record !== undefined) {
+            return { markdown: 'Pass either `record` or `export`, not both.' };
+          }
+          return {
+            markdown: cdExportText(cdState.value() as CdState, {
+              page: args.page,
+              export: args.export,
+            }),
+          };
+        }
         if (args?.record !== undefined && !cdRecordAllowed) {
           return {
             markdown:

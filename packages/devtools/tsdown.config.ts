@@ -7,6 +7,7 @@ export default defineConfig({
   entry: {
     devframe: 'src/devframe.ts',
     config: 'src/config.ts',
+    'cd-data': 'src/cd-data.ts',
     popup: 'src/popup.ts',
     overlay: 'src/overlay-auto.ts',
     'overlay-manual': 'src/overlay.ts',

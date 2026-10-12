@@ -132,6 +132,18 @@ Below the tree and the defer blocks, the **Change detection** section records ch
 
 Recording is off by default. While it is off, the page registers no profiler for it. The page keeps the last 200 cycles, set with [`limits.cdCycles`](../getting-started/configuration.md#limits). Recording needs Angular 20 or later. On older versions, the section says so. Times come from a development build, so they are higher than in production.
 
+#### Export and import a recording
+
+| Button                      | What it does                                                                                                                                                                                                                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Export JSON**             | Saves the recording on screen as `change-detection-<page>.json`. Instance check counts are left out, since their ids only mean something in the page that recorded them.                                                          |
+| **Export trace (Perfetto)** | Saves it in the Trace Event Format as `change-detection-<page>.trace.json`. Open it in [Perfetto](https://ui.perfetto.dev) or `chrome://tracing`.                                                                                 |
+| **Import**                  | Loads a recording file, from this panel or from the `change-detection` agent tool, and shows it marked **Imported recording** with its file name. **Record** and **Clear** are hidden until you click **Back to live recording**. |
+
+An import goes through the same checks as a report from the page: unknown fields are dropped, text is cut to length and lists are capped, so a hand-edited file shows only recording data. Files over 20 MB, or with no cycles, are refused with a message that says why.
+
+The trace has one complete event per cycle on a **Change detection** thread, with the component checks, lifecycle hooks and `afterRender` callbacks nested inside it, and the output listener that started each cycle on an **Outputs** thread. Times are in microseconds from the start of the recording. Each cycle keeps its 40 longest timed spans, so a large app's trace shows the slowest checks of each cycle, not all of them.
+
 ### Source mode
 
 Without live data, the tab lists the `@Component` and `@Directive` classes in your source. Expand a row to see its class, file, standalone flag, change detection, inputs and outputs. Click **Refresh** to scan again.
@@ -289,7 +301,7 @@ Press Escape in the filter box to clear it. When the filter matches nothing, **C
 | `pangular:list-components`        | tool     | Returns the live tree of one page as an indented outline with routed and directive markers. Takes a `filter` and a `depth`.                                                           |
 | `pangular:defer-blocks`           | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                  |
 | `pangular:for-blocks`             | tool     | Lists the `@for` blocks of each page with their item count, track kind and `@empty` block.                                                                                            |
-| `pangular:change-detection`       | tool     | Starts, stops or clears a change detection recording, and returns the slowest and most often checked components, hook, output and afterRender time, and the latest cycles.            |
+| `pangular:change-detection`       | tool     | Starts, stops or clears a change detection recording, and returns the slowest and most often checked components, hook, output and afterRender time, the latest cycles, or an export.  |
 | `pangular:set-component-property` | tool     | Writes an input or property of one instance and runs change detection. An action.                                                                                                     |
 | `pangular:set-signal`             | tool     | Sets a writable signal that one instance holds as a property. An action.                                                                                                              |
 | `pangular:component-tree`         | resource | The live tree per page, with the detail of the selected instance and the defer blocks.                                                                                                |

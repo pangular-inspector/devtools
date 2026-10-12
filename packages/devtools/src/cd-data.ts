@@ -192,3 +192,216 @@ export function sanitizeCdRecording(value: unknown, maxCycles: number): CdRecord
     ...(used ? { spanNames } : {}),
   };
 }
+
+/** The `format` of a recording file, so an import can tell it apart from other JSON. */
+export const CD_EXPORT_FORMAT = 'pangular-inspector/change-detection';
+
+export interface CdExportFile {
+  format: typeof CD_EXPORT_FORMAT;
+  version: 1;
+  /** When the file was written, in ms since the epoch. */
+  exportedAt: number;
+  pageId: string;
+  recording: CdRecording;
+}
+
+/**
+ * A recording as a JSON file, with only the recording's own fields. Host
+ * counts are left out: their element ids only mean something in the page
+ * that recorded them.
+ */
+export function cdExportFile(
+  recording: CdRecording,
+  pageId: string,
+  exportedAt = Date.now(),
+): CdExportFile {
+  const clean = sanitizeCdRecording(recording, MAX_CYCLES) ?? recording;
+  return {
+    format: CD_EXPORT_FORMAT,
+    version: 1,
+    exportedAt,
+    pageId,
+    recording: { ...clean, recording: false, hosts: {} },
+  };
+}
+
+/** Files larger than this are not read. */
+export const MAX_CD_IMPORT_BYTES = 20_000_000;
+
+/**
+ * Reads a recording file: an export from the panel or the agent tool, or a
+ * bare recording. Everything in it goes through {@link sanitizeCdRecording}.
+ */
+export function parseCdImport(
+  json: string,
+  maxCycles: number,
+):
+  | { ok: true; pageId: string; exportedAt?: number; recording: CdRecording }
+  | { ok: false; error: string } {
+  if (json.length > MAX_CD_IMPORT_BYTES) {
+    return { ok: false, error: 'The file is larger than 20 MB.' };
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(json);
+  } catch {
+    return { ok: false, error: 'The file is not valid JSON.' };
+  }
+  if (!isRecord(value)) return { ok: false, error: 'The file is not a recording.' };
+  if (value['format'] !== undefined && value['format'] !== CD_EXPORT_FORMAT) {
+    return { ok: false, error: 'The file is not a change detection recording.' };
+  }
+  const source = isRecord(value['recording']) ? value['recording'] : value;
+  if (!Array.isArray(source['cycles'])) {
+    return { ok: false, error: 'The file has no change detection cycles.' };
+  }
+  const recording = sanitizeCdRecording(source, maxCycles);
+  if (!recording) return { ok: false, error: 'The file is not a recording.' };
+  const pageId = text(value['pageId'] ?? source['pageId'], MAX_PAGE_ID - 1) || 'imported';
+  const exportedAt = optional(value['exportedAt']);
+  return {
+    ok: true,
+    pageId,
+    ...(exportedAt ? { exportedAt } : {}),
+    recording: { ...recording, recording: false },
+  };
+}
+
+/** One event of the Trace Event Format that Perfetto and `chrome://tracing` read. */
+export interface CdTraceEvent {
+  name: string;
+  /** `X` is a complete event with `dur`, `M` a metadata event that names a process or thread. */
+  ph: 'X' | 'M';
+  pid: number;
+  tid: number;
+  /** Microseconds. */
+  ts?: number;
+  /** Microseconds. */
+  dur?: number;
+  cat?: string;
+  args?: Record<string, unknown>;
+}
+
+export interface CdTraceFile {
+  traceEvents: CdTraceEvent[];
+  displayTimeUnit: 'ms';
+  otherData: Record<string, string | number>;
+}
+
+const PID = 1;
+const CD_TID = 1;
+const OUTPUT_TID = 2;
+const CATEGORY: Record<CdSpanKind, string> = {
+  c: 'component',
+  h: 'lifecycle-hook',
+  r: 'after-render',
+  o: 'output',
+};
+
+const us = (ms: number) => Math.round(ms * 1_000_000) / 1000;
+
+/**
+ * A recording in the Trace Event Format, for Perfetto (ui.perfetto.dev) or
+ * `chrome://tracing`: one complete (`X`) event per cycle, one per kept span
+ * (component check, lifecycle hook, afterRender) nested inside it, and the
+ * output listeners that started cycles on a thread of their own. Times are in
+ * microseconds from the first cycle.
+ */
+export function cdTraceFile(recording: CdRecording, pageId: string): CdTraceFile {
+  const names = recording.spanNames ?? [];
+  const firstAt = recording.cycles[0]?.at ?? 0;
+  const base = recording.startedAt ?? firstAt;
+  const events: CdTraceEvent[] = [];
+  let spans = 0;
+  let droppedSpans = 0;
+  for (const cycle of recording.cycles) {
+    // `t` comes from the high-resolution clock; files without it fall back to the wall clock.
+    const start = cycle.t ?? Math.max(0, cycle.at - base);
+    const end = start + cycle.ms;
+    events.push({
+      name: `Change detection #${cycle.id}`,
+      cat: 'change-detection',
+      ph: 'X',
+      pid: PID,
+      tid: CD_TID,
+      ts: us(start),
+      dur: us(cycle.ms),
+      args: {
+        checks: cycle.checks,
+        passes: cycle.passes,
+        ...(cycle.trigger ? { trigger: cycle.trigger } : {}),
+        ...(cycle.hookMs ? { hookMs: cycle.hookMs } : {}),
+        ...(cycle.afterRenderMs ? { afterRenderMs: cycle.afterRenderMs } : {}),
+        ...(cycle.outputMs ? { outputMs: cycle.outputMs } : {}),
+        slowest: cycle.components.map((c) => `${c.name} ${c.checks}x ${c.ms}ms`),
+      },
+    });
+    droppedSpans += cycle.droppedSpans ?? 0;
+    // Clamp each span into the one that contains it, so rounding never breaks the nesting.
+    const open: { end: number }[] = [{ end }];
+    const sorted = [...(cycle.spans ?? [])].sort((a, b) => a[1] - b[1] || b[2] - a[2]);
+    for (const [name, offset, ms, depth, kind] of sorted) {
+      spans++;
+      const label = names[name] ?? '?';
+      if (kind === CD_SPAN_KIND.output) {
+        const ts = start + offset;
+        events.push({
+          name: label,
+          cat: CATEGORY[kind],
+          ph: 'X',
+          pid: PID,
+          tid: OUTPUT_TID,
+          ts: us(ts),
+          dur: us(Math.max(0, Math.min(ms, start - ts))),
+          args: { cycle: cycle.id },
+        });
+        continue;
+      }
+      const ts = Math.max(start, start + offset);
+      while (open.length > 1 && open.at(-1)!.end <= ts) open.pop();
+      const parentEnd = open.at(-1)!.end;
+      const spanEnd = Math.min(ts + ms, parentEnd);
+      if (spanEnd < ts) continue;
+      open.push({ end: spanEnd });
+      events.push({
+        name: label,
+        cat: CATEGORY[kind],
+        ph: 'X',
+        pid: PID,
+        tid: CD_TID,
+        ts: us(ts),
+        dur: us(spanEnd - ts),
+        args: { cycle: cycle.id, depth },
+      });
+    }
+  }
+  // Outputs run before the first cycle, so shift everything to start at zero.
+  const min = Math.min(0, ...events.map((e) => e.ts ?? 0));
+  if (min < 0) for (const event of events) event.ts = us((event.ts! - min) / 1000);
+  events.sort((a, b) => a.ts! - b.ts! || b.dur! - a.dur!);
+  const meta = (tid: number, name: string, value: string): CdTraceEvent => ({
+    name,
+    ph: 'M',
+    pid: PID,
+    tid,
+    args: { name: value },
+  });
+  return {
+    traceEvents: [
+      meta(0, 'process_name', `Angular change detection (page ${pageId})`),
+      meta(CD_TID, 'thread_name', 'Change detection'),
+      meta(OUTPUT_TID, 'thread_name', 'Outputs'),
+      ...events,
+    ],
+    displayTimeUnit: 'ms',
+    otherData: {
+      source: 'Pangular Inspector change detection recording',
+      pageId,
+      cycles: recording.cycles.length,
+      droppedCycles: recording.dropped,
+      spans,
+      droppedSpans,
+      ...(recording.startedAt ? { startedAt: new Date(recording.startedAt).toISOString() } : {}),
+    },
+  };
+}

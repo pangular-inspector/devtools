@@ -6,6 +6,7 @@ import { time } from '../format';
 import { rpcCall as call } from '../rpc';
 import { LimitNote } from '../ui/limit-note';
 import { CdTiming } from './cd-timing';
+import { CdTransfer, type CdImported } from './cd-transfer';
 
 export type { CdCheck, CdComponentStat, CdCycle } from '@pangular-inspector/devtools/config';
 /** One page's recording, as the page reports it. */
@@ -17,21 +18,35 @@ const SHOWN_CYCLES = 30;
 /** Record and Stop for change detection, with the slowest components and the latest cycles. */
 @Component({
   selector: 'app-cd-recording',
-  imports: [LimitNote, CdTiming],
+  imports: [LimitNote, CdTiming, CdTransfer],
   template: `
     <section class="cd" aria-labelledby="cd-heading">
       <div class="cd-head">
         <h2 id="cd-heading">Change detection</h2>
-        <button type="button" [class.on]="recording()" [disabled]="!pageId()" (click)="toggle()">
-          <span class="dot" aria-hidden="true"></span>
-          {{ recording() ? 'Stop recording' : 'Record' }}
-        </button>
-        @if (cycles().length) {
-          <button type="button" (click)="clear()">Clear</button>
+        @if (!imported()) {
+          <button type="button" [class.on]="recording()" [disabled]="!pageId()" (click)="toggle()">
+            <span class="dot" aria-hidden="true"></span>
+            {{ recording() ? 'Stop recording' : 'Record' }}
+          </button>
+          @if (cycles().length) {
+            <button type="button" (click)="clear()">Clear</button>
+          }
         }
+        <app-cd-transfer
+          [page]="page()"
+          [maxCycles]="maxCycles()"
+          (imported)="showImport($event)"
+        />
         <p class="status">{{ status() }}</p>
         <p class="sr-only" role="status">{{ announcement() }}</p>
       </div>
+      @if (imported(); as file) {
+        <p class="imported">
+          <span class="badge">Imported recording</span>
+          <span class="mono">{{ file.fileName }}</span>
+          <button type="button" (click)="closeImport()">Back to live recording</button>
+        </p>
+      }
       <p class="hint">
         Records each change detection cycle with Angular's profiler: how long it took, how many
         components it checked and the output that ran before it. Tree rows show how often each
@@ -240,6 +255,22 @@ const SHOWN_CYCLES = 30;
     .top {
       color: var(--text-2);
     }
+    .imported {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin: 8px 0;
+      color: var(--text-2);
+    }
+    .badge {
+      @include m.tint(accent);
+      padding: 2px 8px;
+      border: 1px solid;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+    }
     .trigger .mono,
     .top .mono {
       overflow-wrap: anywhere;
@@ -247,9 +278,15 @@ const SHOWN_CYCLES = 30;
   `,
 })
 export class CdRecording {
-  readonly page = input<CdPage | null>(null);
+  /** The page's own recording. */
+  readonly livePage = input<CdPage | null>(null, { alias: 'page' });
   readonly pageId = input<string | null>(null);
   readonly rpc = input<DevframeRpcClient | null>(null);
+
+  /** A recording loaded from a file; while set, the section shows it instead of the page's. */
+  protected readonly imported = signal<CdImported | null>(null);
+  /** The recording on screen: an imported one, else the page's. */
+  readonly page = computed(() => this.imported()?.page ?? this.livePage());
 
   protected readonly message = signal('');
   /**
@@ -285,6 +322,7 @@ export class CdRecording {
   readonly status = computed(() => {
     if (this.message()) return this.message();
     const count = this.cycles().length;
+    if (this.imported()) return `${count} ${count === 1 ? 'cycle' : 'cycles'} imported.`;
     if (this.recording()) return `Recording. ${count} ${count === 1 ? 'cycle' : 'cycles'} so far.`;
     return count ? `${count} ${count === 1 ? 'cycle' : 'cycles'} recorded.` : '';
   });
@@ -306,6 +344,20 @@ export class CdRecording {
     } else {
       await this.send({ on: true }, 'Starting…', () => 'Recording started.');
     }
+  }
+
+  showImport(file: CdImported) {
+    this.message.set('');
+    this.imported.set(file);
+    const count = file.page.cycles.length;
+    this.announce(
+      `Imported ${file.fileName}: ${count} ${count === 1 ? 'cycle' : 'cycles'}. Showing the imported recording.`,
+    );
+  }
+
+  closeImport() {
+    this.imported.set(null);
+    this.announce('Showing the live recording.');
   }
 
   async clear() {
