@@ -15,6 +15,7 @@ import {
   type CliAccessFlags,
 } from './cli-access.ts';
 import pangular, { createPangular } from './devframe.ts';
+import { mcpPrintConfig } from './mcp-print-config.ts';
 import type { PangularConfig } from './config.ts';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -224,6 +225,34 @@ export function startupLines(
   return lines;
 }
 
+interface PrintConfigFlags {
+  printConfig?: boolean;
+  host?: string;
+  port?: number | string;
+  base?: string;
+}
+
+function addPrintConfigOptions(command: Command) {
+  command.option('--print-config', 'Print MCP client config for this project and exit');
+  command.option('--host <host>', 'With --print-config: host of the server that runs the app');
+  command.option('--port <port>', 'With --print-config: port of that server (default: 9999)');
+  command.option('--base <path>', 'With --print-config: the hub base, such as /__devframes/');
+}
+
+/** The `--print-config` text, with the project folder and config file as absolute paths. */
+function printConfig(flags: PangularCliFlags & PrintConfigFlags, env: Env): string {
+  const named = flags.config ?? env['PANGULAR_CONFIG'];
+  return mcpPrintConfig({
+    root: resolveCliRoot(flags, env),
+    ...(named ? { config: resolve(named) } : {}),
+    readOnly: flags.readOnly,
+    host: flags.host,
+    port: flags.port,
+    base: flags.base,
+    env,
+  });
+}
+
 export interface PangularCliOptions {
   env?: Env;
   log?: (message: string) => void;
@@ -334,7 +363,12 @@ export function createPangularCli(options: PangularCliOptions = {}) {
       const command = cli.commands.find((entry) => entry.name === name);
       const run = command?.commandAction;
       if (!command || !run) continue;
-      command.action(async (flags: PangularCliFlags) => {
+      if (name === 'mcp') addPrintConfigOptions(command);
+      command.action(async (flags: PangularCliFlags & PrintConfigFlags) => {
+        if (name === 'mcp' && flags.printConfig) {
+          log(printConfig(flags, env).trimEnd());
+          return;
+        }
         prepare(name, flags);
         await run(flags);
       });

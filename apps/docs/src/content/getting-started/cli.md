@@ -179,6 +179,23 @@ npx @pangular-inspector/devtools mcp
 
 Your agent client runs this command for you. [MCP server](../agents/mcp-server.md) covers client setup.
 
+### Print the client config
+
+`mcp --print-config` prints the config for Claude Code, Cursor and VS Code, then exits without starting a server. It covers the stdio server for the project folder and the HTTP endpoint of a running server. It never prints the MCP token. See [Print the config](../agents/mcp-server.md#print-the-config).
+
+```bash
+npx @pangular-inspector/devtools mcp --print-config --port 4000 --base /__devframes/
+```
+
+| Flag             | What it does                                                                                                                 |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `--print-config` | Print the client config and exit.                                                                                            |
+| `--host <host>`  | Host of the server that runs your app, for the HTTP config. The default is `localhost`.                                      |
+| `--port <port>`  | Port of that server. The default is 9999, the standalone CLI.                                                                |
+| `--base <path>`  | The hub base, such as `/__devframes/` for the Express hub and the Vite plugin. With it, the HTTP config sends the MCP token. |
+
+`--root`, `--config` and `--read-only` go into the printed stdio command, with absolute paths.
+
 ### Source scan only
 
 The stdio server has no page connected, so it registers only the tools that read your source files. The tools that need a page, such as `highlight`, `navigate`, `form-action` and the forms and router tools, are left out. For live data, point your agent at the HTTP endpoint of a running app instead. On a hub it lives at `/__devframes/__mcp`.

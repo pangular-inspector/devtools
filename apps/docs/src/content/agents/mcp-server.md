@@ -29,6 +29,23 @@ There are two ways to connect. Pick one based on the data your agent needs.
 | stdio (`pangular mcp`)      | No. Source scan tools only.          | A command in your MCP client config. |
 | HTTP (`/__devframes/__mcp`) | Yes, with the app open in a browser. | A URL on your app's dev server.      |
 
+## Print the config
+
+Run `pangular mcp --print-config` in your project folder. It prints the config for both transports, for Claude Code (a `claude mcp add` command), Cursor and VS Code, and exits.
+
+```bash
+npx @pangular-inspector/devtools mcp --print-config --port 4000 --base /__devframes/
+```
+
+| Flag            | Effect on the output                                                                                        |
+| --------------- | ----------------------------------------------------------------------------------------------------------- |
+| `--root <dir>`  | The project folder in the stdio config, as an absolute path. The default is the working directory.          |
+| `--host <host>` | Host in the HTTP URL and the `Origin` header. The default is `localhost`.                                   |
+| `--port <port>` | Port in the HTTP URL. The default is 9999, the [standalone CLI](../getting-started/cli.md).                 |
+| `--base <path>` | The hub base, such as `/__devframes/`. The URL becomes `<base>__mcp` and the config sends the bearer token. |
+
+`--config` and `--read-only` are added to the stdio command. The output never holds the token. It reads the token from `PANGULAR_MCP_TOKEN` (VS Code asks for it) and prints the `export` line that sets it from the [token file](#send-a-token). Without `--base`, the HTTP config targets the standalone CLI, which asks for no token.
+
 ## Connect over stdio
 
 The package ships a `pangular` binary. Its `mcp` command starts an MCP server on stdin and stdout.
