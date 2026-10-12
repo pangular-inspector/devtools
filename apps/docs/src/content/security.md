@@ -150,6 +150,8 @@ The extension has host permissions for loopback hosts only: `localhost` and its 
 
 On any other host, the panel doesn't send a request until you click **Allow access**. Chrome then asks you to grant the extension that one host, on the scheme of the page and any port. The extension never asks for all hosts at once.
 
+The extension has no content scripts. It runs nothing in the pages you browse, and reads a page only through DevTools, while DevTools inspects it.
+
 Granting the extension a host doesn't change what the devtools server accepts. The server still applies the checks on this page.
 
 Every installed extension can send requests to a loopback host, with its own `chrome-extension://<id>` origin. So the Vite plugin and the Express hub accept one extension by default: `chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk`. The `key` in the extension manifest fixes that ID, so the unpacked extension and the store build share it. Every other extension origin is refused.

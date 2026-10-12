@@ -32,16 +32,16 @@
   </ul>
 
   <h2>What the Extension Accesses</h2>
-  <p>The Extension accesses the following information from pages where its content scripts run and from the page you are actively inspecting via Chrome DevTools:</p>
+  <p>The Extension accesses the following information only from the page you are actively inspecting via Chrome DevTools, and only while DevTools is open:</p>
   <ul>
-    <li><strong>Angular framework detection</strong> — on every page, checks for the <code>ng-version</code> HTML attribute and the <code>window.ng</code> global to determine if the page uses Angular</li>
+    <li><strong>Angular framework detection</strong> — when DevTools opens on a page, checks for the <code>ng-version</code> HTML attribute and the <code>window.ng</code> global to determine if the page uses Angular</li>
     <li><strong>Angular debug APIs</strong> — reads component trees, signal graphs, dependency injection hierarchies, and route configurations using Angular's built-in debug utilities (available only in development builds)</li>
     <li><strong>Devtools server communication</strong> — communicates with the devframe server of the app you are inspecting, for live inspection data. By default this server runs on the developer's own machine (<code>localhost</code>, <code>*.localhost</code>, <code>127.0.0.1</code> or <code>[::1]</code>)</li>
   </ul>
   <p>By default, all data stays within your browser and your own machine. If you grant access to another host from the DevTools panel, such as a server on your local network or a tunnel, the Extension exchanges inspection data with the devtools server on that host, so that data leaves your device. It goes only to the host you granted (and, for a tunnel, through the tunnel service you chose). It is never sent to the Extension's authors or to any service the Extension picks on its own.</p>
 
   <h2>Host Permissions</h2>
-  <p>The Extension requests host permissions for loopback hosts only (<code>localhost</code>, <code>*.localhost</code>, <code>127.0.0.1</code> and <code>[::1]</code>), to reach the devframe server on the developer's own machine. It can reach any other host only after the developer grants that host from the DevTools panel. Chrome keeps a granted host until the developer removes it from the Extension's site access settings. The <code>detect-angular.js</code> content script runs on every page, including when DevTools is closed. It reads only the <code>ng-version</code> attribute and whether <code>window.ng</code> exists, to detect Angular. It does not modify page content.</p>
+  <p>The Extension requests host permissions for loopback hosts only (<code>localhost</code>, <code>*.localhost</code>, <code>127.0.0.1</code> and <code>[::1]</code>), to reach the devframe server on the developer's own machine. It can reach any other host only after the developer grants that host from the DevTools panel. Chrome keeps a granted host until the developer removes it from the Extension's site access settings. The Extension has no content scripts and runs nothing in pages while DevTools is closed. To detect Angular it reads only the <code>ng-version</code> attribute and whether <code>window.ng</code> exists, in the page DevTools inspects. It does not modify page content.</p>
 
   <h2>Data Storage</h2>
   <p>The Extension does not persist any data between sessions. All inspection data exists only in memory while the DevTools panel is open and is discarded when the panel is closed.</p>

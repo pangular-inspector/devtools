@@ -6,25 +6,10 @@ const source = readFileSync(new URL('../../../../extension/devtools.js', import.
 
 type Listener = (...args: unknown[]) => void;
 
-async function open({ worker, page }: { worker: boolean | undefined; page: () => unknown }) {
+function open({ page }: { page: () => unknown }) {
   const panels: string[] = [];
-  const messageListeners: Listener[] = [];
   const navigationListeners: Listener[] = [];
   const chrome = {
-    runtime: {
-      lastError: undefined as unknown,
-      sendMessage: (_message: unknown, reply: (response: unknown) => void) =>
-        queueMicrotask(() => {
-          if (worker === undefined) {
-            chrome.runtime.lastError = { message: 'Receiving end does not exist.' };
-            reply(undefined);
-            chrome.runtime.lastError = undefined;
-          } else {
-            reply({ isAngular: worker });
-          }
-        }),
-      onMessage: { addListener: (listener: Listener) => messageListeners.push(listener) },
-    },
     devtools: {
       inspectedWindow: {
         tabId: 7,
@@ -36,11 +21,8 @@ async function open({ worker, page }: { worker: boolean | undefined; page: () =>
     },
   };
   runInNewContext(source, { chrome, setTimeout, clearTimeout });
-  await Promise.resolve();
   return {
     panels,
-    detected: (tabId: number) =>
-      messageListeners.forEach((l) => l({ type: 'angular-detected', tabId })),
     navigated: () => navigationListeners.forEach((l) => l('http://localhost/')),
   };
 }
@@ -48,28 +30,40 @@ async function open({ worker, page }: { worker: boolean | undefined; page: () =>
 describe('extension devtools page', () => {
   afterEach(() => vi.useRealTimers());
 
-  it('creates the panel when the worker knows the tab', async () => {
-    const page = vi.fn(() => false);
-    const { panels } = await open({ worker: true, page });
+  it('asks the inspected page directly and creates the panel on an Angular page', () => {
+    const page = vi.fn(() => true);
+    const { panels } = open({ page });
     expect(panels).toEqual(['Pangular Inspector']);
-    expect(page).not.toHaveBeenCalled();
+    expect(page).toHaveBeenCalledTimes(1);
   });
 
-  it('asks the page when the worker restarted and forgot the tab', async () => {
-    const { panels } = await open({ worker: false, page: () => true });
-    expect(panels).toEqual(['Pangular Inspector']);
+  it('does not rely on a background worker or content script', () => {
+    expect(source).not.toMatch(/chrome\.runtime/);
   });
 
-  it('asks the page when no worker answers', async () => {
-    const { panels } = await open({ worker: undefined, page: () => true });
-    expect(panels).toEqual(['Pangular Inspector']);
+  it('treats an eval error as no Angular', () => {
+    vi.useFakeTimers();
+    const panels: string[] = [];
+    const chrome = {
+      devtools: {
+        inspectedWindow: {
+          eval: (_e: string, callback: (result: unknown, error?: unknown) => void) =>
+            callback(true, { isException: true }),
+        },
+        network: { onNavigated: { addListener: () => undefined } },
+        panels: { create: (title: string) => panels.push(title) },
+      },
+    };
+    runInNewContext(source, { chrome, setTimeout, clearTimeout });
+    vi.advanceTimersByTime(10_000);
+    expect(panels).toEqual([]);
   });
 
-  it('keeps asking while a lazy app bootstraps, then stops', async () => {
+  it('keeps asking while a lazy app bootstraps, then stops', () => {
     vi.useFakeTimers();
     let angular = false;
     const page = vi.fn(() => angular);
-    const { panels } = await open({ worker: false, page });
+    const { panels } = open({ page });
     vi.advanceTimersByTime(1000);
     expect(panels).toEqual([]);
     angular = true;
@@ -80,22 +74,24 @@ describe('extension devtools page', () => {
     expect(page).toHaveBeenCalledTimes(checks);
   });
 
-  it('gives up on a page without Angular', async () => {
+  it('gives up on a page without Angular', () => {
     vi.useFakeTimers();
     const page = vi.fn(() => false);
-    const { panels } = await open({ worker: false, page });
+    const { panels } = open({ page });
     vi.advanceTimersByTime(60_000);
     expect(panels).toEqual([]);
     expect(page).toHaveBeenCalledTimes(10);
   });
 
-  it('checks again after a navigation and creates the panel once', async () => {
+  it('checks again after a navigation and creates the panel once', () => {
+    vi.useFakeTimers();
     let angular = false;
-    const { panels, navigated, detected } = await open({ worker: false, page: () => angular });
+    const { panels, navigated } = open({ page: () => angular });
+    vi.advanceTimersByTime(60_000);
+    expect(panels).toEqual([]);
     angular = true;
     navigated();
-    detected(7);
-    detected(8);
+    navigated();
     expect(panels).toEqual(['Pangular Inspector']);
   });
 });

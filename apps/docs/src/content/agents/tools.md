@@ -473,9 +473,11 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 `analog-call-api` sends a request to a route on the running dev server, like `GET /api/v1/hello`, and returns the status, time and body. `path` is a path on the dev server that starts with a single `/`, not a full URL. `POST`, `PUT`, `PATCH` and `DELETE` need `confirm: true`. Secret keys, tokens and `Bearer` values in the body are masked. Reads: Vite plugin.
 
+`path` must be an API route (under the API prefix, or any route in `src/server/routes`), an `/_analog` URL or a page of the app. The tool refuses Vite internals such as `/@fs/` and `/@id/`, Vite query flags such as `?raw`, `?url` and `?import`, `.` and `..` segments, and any path that names a file or folder in the project, so it can't read your source or files outside the app.
+
 | Argument  | Required | Value                                                         |
 | --------- | -------- | ------------------------------------------------------------- |
-| `path`    | yes      | The route path.                                               |
+| `path`    | yes      | An API route, an `/_analog` URL or a page path.               |
 | `method`  | no       | `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` or `OPTIONS`. |
 | `body`    | no       | A JSON body.                                                  |
 | `confirm` | no       | Required for methods other than `GET`, `HEAD` and `OPTIONS`.  |

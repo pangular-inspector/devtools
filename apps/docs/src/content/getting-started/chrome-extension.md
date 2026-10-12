@@ -66,7 +66,7 @@ pnpm extension:build
 
 ### Angular detection
 
-A content script checks each page for Angular: an `ng-version` attribute or a `window.ng` global. It checks once, then retries for a few seconds for apps that bootstrap late. When DevTools opens, the extension also runs the same check in the inspected page, and again after each navigation. The extension creates the panel only on Angular pages.
+When DevTools opens, the extension checks the inspected page for Angular: an `ng-version` attribute or a `window.ng` global. It retries for about five seconds for apps that bootstrap late, and checks again after each navigation. The extension creates the panel only on Angular pages. It runs nothing in pages while DevTools is closed.
 
 ### Finding the server
 
@@ -164,9 +164,9 @@ const devtools = initPangularHub({
 
 In the Vite plugin, an extension entry does not turn the one-time code on. If the server refuses a build with another ID, the panel names its own origin in the message. See [Access and redaction](../security.md#chrome-extension).
 
-### Content scripts
+### Pages you don't inspect
 
-The content scripts are wider. Two of them run on every page. They check for an `ng-version` attribute or `window.ng`, and pass the Angular version to the extension. They don't read or change anything else.
+The extension has no content scripts, so it runs nothing in the pages you browse. It reads a page only through DevTools, in the tab DevTools inspects, and only while DevTools is open. Chrome gives DevTools extensions that access without a host permission.
 
 ## FAQ
 

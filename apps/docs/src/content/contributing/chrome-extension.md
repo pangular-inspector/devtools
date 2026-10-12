@@ -16,11 +16,8 @@ The Chrome extension lives in `extension/`. It detects Angular pages, creates th
 ```text
 extension/
   manifest.json          # Manifest V3, loopback host permissions, optional access to other hosts
-  background.js          # Tracks which tabs run Angular
-  content-script.js      # Relays the detection result to the background worker
-  detect-angular.js      # Runs in the page, looks for ng-version or window.ng
   devtools.html
-  devtools.js            # Creates the panel on Angular pages
+  devtools.js            # Checks the inspected page for Angular, creates the panel
   panel.html             # The panel page and its status view
   panel-actions.js       # Answers the UI's reveal and open-source requests
   panel-bridge.js        # Asks for host access, finds the dev server, connects the UI to it
@@ -35,7 +32,6 @@ extension/
 | `permissions`               | Empty.                                                                                                       |
 | `host_permissions`          | `*.localhost`, `127.0.0.1` and `[::1]`, over HTTP and HTTPS. `*.localhost` also matches `localhost`.         |
 | `optional_host_permissions` | `http://*/*` and `https://*/*`. The panel requests one host at a time, only when you click **Allow access**. |
-| `content_scripts`           | `content-script.js` and `detect-angular.js`, on every page.                                                  |
 | `minimum_chrome_version`    | `111`.                                                                                                       |
 | `key`                       | The public key that fixes the extension ID to `dcogniffeelebaolkkfbopmjcblhblfk`.                            |
 
@@ -104,6 +100,10 @@ The key goes into the zip as `key.pem`, and the script stops if it doesn't match
 </ngmd-alert>
 
 ## How the panel connects
+
+### Angular detection
+
+The extension has no content scripts and no background worker. `devtools.js` runs only while DevTools is open, and checks the inspected page with `chrome.devtools.inspectedWindow.eval()`, which needs no host permission. It checks for an `ng-version` attribute or a `window.ng` global up to 10 times, 500 milliseconds apart, and again after each navigation. It creates the panel the first time a check passes.
 
 ### Host access
 

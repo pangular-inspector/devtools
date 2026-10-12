@@ -194,7 +194,7 @@ The tab reads every `routeRules` entry in `vite.config`. A rule like `/blog/**` 
 
 ### `analog-call-api` changes real data
 
-It sends a real request to your dev server. Methods other than GET, HEAD and OPTIONS need `confirm: true`. It works only through the Vite plugin.
+It sends a real request to your dev server. Methods other than GET, HEAD and OPTIONS need `confirm: true`. It works only through the Vite plugin. It only reaches API routes, `/_analog` URLs and pages, and refuses Vite file requests such as `/@fs/` or `?raw`. See [Call a server route](../agents/tools.md#call-a-server-route).
 
 ### Redaction
 
