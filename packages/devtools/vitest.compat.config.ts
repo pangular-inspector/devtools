@@ -8,7 +8,9 @@ const angular = Number(require('@angular/core/package.json').version.split('.')[
 const pageSide = [
   'analog-scan',
   'cd-recorder',
+  'cd-recorder-real',
   'change-detection',
+  'change-detection-real',
   'component-tree',
   'defer-blocks',
   'defer-blocks-real',
@@ -23,6 +25,7 @@ const pageSide = [
   'ngrx-collector',
   'pipes-collector',
   'pipes-runtime',
+  'private-api-canary',
   'router-actions-wait',
   'router-angular20',
   'router-audit',
