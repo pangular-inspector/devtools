@@ -334,7 +334,7 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
   popoutBtn.textContent = '⧉';
   popoutBtn.title = 'Open in its own window';
   popoutBtn.setAttribute('aria-label', 'Open Pangular Inspector in its own window');
-  popoutBtn.addEventListener('click', () => void popOut());
+  popoutBtn.addEventListener('click', () => void popOut(true));
 
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
@@ -994,22 +994,42 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
    * closes it here. The launcher, the shortcut or the panel's **Back into the
    * page** command bring it back.
    */
-  async function popOut() {
+  async function popOut(fromToolbar = false) {
     notice.textContent = '';
-    // The frame's address is known once the panel loaded, which keeps the
-    // call inside the click, as a pop-up blocker wants.
-    const src = iframe.src && !iframe.hidden ? iframe.src : await resolveTarget();
+    const known = iframe.src && !iframe.hidden ? iframe.src : undefined;
+    const width = Math.min(1200, Math.max(480, Math.round(window.outerWidth * 0.6) || 960));
+    const height = Math.min(900, Math.max(360, Math.round(window.outerHeight * 0.8) || 720));
+    const features = `popup,width=${width},height=${height}`;
+    const closeQuietly = (w: Window | null) => {
+      try {
+        if (w && !w.closed) w.close();
+      } catch {
+        // the window is already gone
+      }
+    };
+    let win: Window | null = null;
+    // A pop-up blocker only allows window.open inside the click, so a toolbar
+    // click that still has to look up the panel's address opens a blank window
+    // first and points it at the panel once the address is known.
+    if (fromToolbar && !known) {
+      try {
+        win = window.open('about:blank', popoutName(), features);
+      } catch {
+        win = null;
+      }
+    }
+    const src = known ?? (await resolveTarget());
     if (src === null) {
+      closeQuietly(win);
       notice.textContent = 'No devtools server found, so there is nothing to open.';
       return;
     }
-    const width = Math.min(1200, Math.max(480, Math.round(window.outerWidth * 0.6) || 960));
-    const height = Math.min(900, Math.max(360, Math.round(window.outerHeight * 0.8) || 720));
     const url = popoutUrl(src);
-    let win: Window | null = null;
     try {
-      win = window.open(url, popoutName(), `popup,width=${width},height=${height}`);
+      if (win) win.location.href = url;
+      else win = window.open(url, popoutName(), features);
     } catch {
+      closeQuietly(win);
       win = null;
     }
     if (!win) {

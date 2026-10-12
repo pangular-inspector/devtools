@@ -804,6 +804,32 @@ describe.sequential('devtools popup', () => {
       expect(fab.getAttribute('aria-label')).toBe('Toggle Pangular Inspector');
     });
 
+    it('reserves the window during the click when the panel has not loaded yet', async () => {
+      sessionStorage.setItem('pangular-page-id', 'k3x9');
+      const win = { ...fakeWindow(), location: { href: '' } };
+      const open = vi.spyOn(window, 'open').mockReturnValue(win as unknown as Window);
+      await loadPopup(true);
+      popoutButton().click();
+      // The blank window opens inside the click, before the address lookup.
+      expect(open).toHaveBeenCalledTimes(1);
+      expect(open.mock.calls[0][0]).toBe('about:blank');
+      expect(open.mock.calls[0][1]).toBe('pangular-inspector-k3x9');
+      const base = `${location.origin}/__devframes/pangular/`;
+      await vi.waitFor(() =>
+        expect(win.location.href).toBe(`${base}?baseURL=${encodeURIComponent(base)}&pageId=k3x9`),
+      );
+      expect(open).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes the reserved window when there is no devtools server', async () => {
+      const win = { ...fakeWindow(), location: { href: '' } };
+      vi.spyOn(window, 'open').mockReturnValue(win as unknown as Window);
+      await loadPopup(false);
+      popoutButton().click();
+      await vi.waitFor(() => expect(notice().textContent).toContain('No devtools server found'));
+      expect(win.close).toHaveBeenCalled();
+    });
+
     it('says so and stays in the page when the browser blocks the window', async () => {
       vi.spyOn(window, 'open').mockReturnValue(null);
       await loadPopup(true);
