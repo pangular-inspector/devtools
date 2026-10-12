@@ -120,7 +120,7 @@ With access granted, it looks for the devtools server under these paths, in this
 3. `/__devframe/`
 4. `/`
 
-Under each path it fetches `__devframe/__connection.json` and `__connection.json`, with no credentials, no cache, no redirects and a 1.5 second timeout. It sends every request at once, so a missing server costs one timeout rather than one per URL. The first URL in the order above whose response is OK and parses as JSON wins.
+Under each path it fetches `__devframe/__connection.json` and `__connection.json`, with no credentials, no cache, no redirects and a 1.5 second timeout. It sends the first URL alone. If that URL fails, or has no answer after 150 milliseconds, it sends the other requests at once, so a missing server costs one timeout rather than one per URL. The first URL in the order above whose response is OK and parses as JSON wins.
 
 It records the status of each request, or "no answer" when the request fails or times out. If none answers, the status view lists every URL it tried with its status and links to the setup section of the README. If any request got `401` or `403`, the status view says the server refused the request, shows up to 200 characters of the response text and links to the 403 notes on the Vite page instead. Both views have a **Try again** button that starts the search over.
 

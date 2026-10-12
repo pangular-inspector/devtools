@@ -79,7 +79,7 @@ The panel looks for the devtools server on the origin of the inspected page. It 
 | `/__devframe/`           | A bare devframe mount                 |
 | `/`                      | A devframe served at the root         |
 
-Under each path it asks for `__devframe/__connection.json` and `__connection.json`. It asks the first path alone for 150 milliseconds. If that answers, it sends nothing else. Otherwise it sends the other requests at once, connects the UI to the first path, in the order above, that answers with a connection file, and cancels the requests still running. Each request times out after 1.5 seconds.
+Under each path it asks for `__devframe/__connection.json` and `__connection.json`. It asks the first URL, `/__pangular/__devframe/__connection.json`, alone for up to 150 milliseconds. If that answers, it sends nothing else. Otherwise it sends the other requests at once, connects the UI to the first path, in the order above, that answers with a connection file, and cancels the requests still running. Each request times out after 1.5 seconds.
 
 If no path answers, the panel says "No devtools server answered" and lists every URL it tried, each with the HTTP status it got or "no answer". It links to the setup instructions.
 
