@@ -1685,22 +1685,26 @@ export class DiInspector {
   }
 
   /** Loads the injector tree and the source scan again. The alert stays until they answer, so
-   * focus stays on Retry when it fails again and moves to the toolbar when it works. */
+   * focus stays on Retry while it is shown and moves to the toolbar when the alert goes, which
+   * also happens when live injectors arrive but the source scan still fails. */
   async retry() {
     const client = this.rpc();
     if (!client || this.retrying()) return;
+    const trigger = document.activeElement;
     this.retrying.set(true);
     try {
       await Promise.all([this.loadInjectorTree(client), this.loadSourceProviders(client)]);
     } finally {
       this.retrying.set(false);
     }
-    if (this.destroyRef.destroyed || this.loadFailed()) return;
+    if (this.destroyRef.destroyed) return;
     afterNextRender(
-      () =>
+      () => {
+        if (trigger?.isConnected && document.activeElement !== document.body) return;
         this.host.nativeElement
           .querySelector<HTMLElement>('.toolbar input, .toolbar button')
-          ?.focus(),
+          ?.focus();
+      },
       { injector: this.injector },
     );
   }

@@ -14,9 +14,15 @@ const PROVIDERS = [
   },
 ];
 
+const ROOT = {
+  injector: { id: 'e1', type: 'element', name: 'app-cart', component: 'Cart', providerCount: 0 },
+  providers: [],
+  children: [],
+};
+
 /** A client whose server parts fail until they are switched on. */
 function client() {
-  const server = { tree: false, scan: false, scans: 0 };
+  const server = { tree: false, scan: false, scans: 0, roots: [] as unknown[] };
   const down = () => Promise.reject(new Error('offline'));
   const rpc = {
     call: (name: string) => {
@@ -27,7 +33,8 @@ function client() {
     callEvent: () => Promise.resolve(),
     sharedState: (name: string) => {
       if (name === 'injector-tree' && !server.tree) return down();
-      return Promise.resolve({ value: () => null, on: () => () => {} });
+      const value = name === 'injector-tree' ? { roots: server.roots, environment: [] } : null;
+      return Promise.resolve({ value: () => value, on: () => () => {} });
     },
   };
   const rpcClient = { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
@@ -101,5 +108,31 @@ describe('DI load error', () => {
     const host = fixture.nativeElement as HTMLElement;
     expect(host.textContent).toContain('CartService');
     expect(alertOf(host)?.textContent).toContain("Couldn't load the live injector tree");
+  });
+
+  it('shows the live injectors when only the source scan fails', async () => {
+    const { rpcClient, server } = client();
+    server.tree = true;
+    server.roots = [ROOT];
+    const fixture = await render(rpcClient);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.textContent).toContain('app-cart');
+    expect(host.textContent).not.toContain("Couldn't load DI data");
+  });
+
+  it('moves focus to the toolbar when live injectors arrive but the scan still fails', async () => {
+    const { rpcClient, server } = client();
+    const fixture = await render(rpcClient);
+    const host = fixture.nativeElement as HTMLElement;
+    server.tree = true;
+    server.roots = [ROOT];
+    const button = alertOf(host)!.querySelector('button')!;
+    button.focus();
+    button.click();
+    await settle(fixture);
+    expect(server.scans).toBe(2);
+    expect(alertOf(host)).toBeNull();
+    expect(host.textContent).toContain('app-cart');
+    expect(document.activeElement).toBe(host.querySelector('.toolbar input, .toolbar button'));
   });
 });

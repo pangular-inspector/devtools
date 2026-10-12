@@ -20,6 +20,44 @@ function client() {
   return { rpcClient, server };
 }
 
+const graph = (name: string) => ({
+  nodes: [],
+  edges: [],
+  pageId: 'A',
+  component: { id: name, name, tag: `app-${name.toLowerCase()}`, path: '' },
+});
+
+/** A client whose graph reads wait until the test settles them, one by one. */
+function pendingGraphClient() {
+  const reads: { resolve(value: unknown): void; reject(error: Error): void }[] = [];
+  const subscribed: string[] = [];
+  const rpc = {
+    call: () => Promise.reject(new Error('offline')),
+    callEvent: () => Promise.resolve(),
+    sharedState: (name: string) => {
+      if (name !== 'signal-graph')
+        return Promise.resolve({ value: () => null, on: () => () => {} });
+      return new Promise((resolve, reject) => {
+        reads.push({
+          resolve: (value) =>
+            resolve({
+              value: () => value,
+              on: () => {
+                subscribed.push(
+                  (value as { graph: { component: { name: string } } }).graph.component.name,
+                );
+                return () => {};
+              },
+            }),
+          reject,
+        });
+      });
+    },
+  };
+  const rpcClient = { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
+  return { rpcClient, reads, subscribed };
+}
+
 async function settle(fixture: { whenStable(): Promise<unknown> }) {
   for (let i = 0; i < 4; i++) {
     await new Promise((resolve) => setTimeout(resolve));
@@ -79,5 +117,57 @@ describe('Signals load error', () => {
     expect(host.querySelector('[role="alert"]')).toBeNull();
     expect(host.textContent).toContain('No signals found');
     expect(document.activeElement).toBe(host.querySelector('input[type="search"]'));
+  });
+
+  it('moves focus to the filter box when the graph comes back but the scan still fails', async () => {
+    const { rpcClient, server } = client();
+    const fixture = await render(rpcClient);
+    const host = fixture.nativeElement as HTMLElement;
+    const graphUp = { value: () => ({ graph: graph('Cart'), pages: {} }), on: () => () => {} };
+    const rpc = rpcClient.scope('pangular').rpc as unknown as { sharedState: unknown };
+    rpc.sharedState = (name: string) =>
+      Promise.resolve(
+        name === 'signal-graph' ? graphUp : { value: () => null, on: () => () => {} },
+      );
+    const button = retryButton(host)!;
+    button.focus();
+    button.click();
+    await settle(fixture);
+    expect(server.calls).toBe(2);
+    expect(retryButton(host)).toBeNull();
+    expect(document.activeElement).toBe(host.querySelector('input[type="search"]'));
+  });
+
+  it('ignores a graph read that a Retry replaced, whether it fails or answers late', async () => {
+    const { rpcClient, reads } = pendingGraphClient();
+    const fixture = await render(rpcClient);
+    const host = fixture.nativeElement as HTMLElement;
+    retryButton(host)!.click();
+    await settle(fixture);
+    expect(reads).toHaveLength(2);
+
+    reads[1]!.resolve({ graph: graph('Newer'), pages: {} });
+    await settle(fixture);
+    expect(host.textContent).toContain('Newer');
+
+    reads[0]!.reject(new Error('offline'));
+    await settle(fixture);
+    expect(host.textContent).toContain('Newer');
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('keeps the newer graph when an older read answers after it', async () => {
+    const { rpcClient, reads, subscribed } = pendingGraphClient();
+    const fixture = await render(rpcClient);
+    const host = fixture.nativeElement as HTMLElement;
+    retryButton(host)!.click();
+    await settle(fixture);
+    reads[1]!.resolve({ graph: graph('Newer'), pages: {} });
+    await settle(fixture);
+    reads[0]!.resolve({ graph: graph('Older'), pages: {} });
+    await settle(fixture);
+    expect(host.textContent).toContain('Newer');
+    expect(host.textContent).not.toContain('Older');
+    expect(subscribed).toEqual(['Newer']);
   });
 });

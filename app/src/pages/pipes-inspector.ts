@@ -232,7 +232,13 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
             <circle cx="12" cy="12" r="9" />
             <path d="M12 8v5M12 16h.01" />
           </svg>
-          <span>Couldn't scan the source. Only pipes seen on the page are listed.</span>
+          <span>
+            @if (pipes().length) {
+              Couldn't scan the source again. The list keeps the last scan.
+            } @else {
+              Couldn't scan the source. Only pipes seen on the page are listed.
+            }
+          </span>
           <button type="button" (click)="refresh()" [disabled]="loading()">Try again</button>
         </div>
       }
@@ -1419,7 +1425,7 @@ export class PipesInspector {
 
   sourceLabel(p: PipeInfo): string {
     if (p.builtin) return '@angular/common';
-    if (p.runtime) return 'A library, seen on the page only';
+    if (p.runtime) return 'Seen on the page only';
     return 'This project';
   }
 

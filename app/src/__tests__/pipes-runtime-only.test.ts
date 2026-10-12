@@ -24,11 +24,13 @@ const live = (name: string, className: string, extra: Record<string, unknown> = 
   ...extra,
 });
 
-function client(snapshot: unknown, { scanFails = false } = {}) {
+function client(snapshot: unknown, { scanFails = false, scansBeforeFailing = 0 } = {}) {
+  let scans = 0;
   const rpc = {
     call: (name: string) => {
       if (name === 'get-pipes') {
-        return scanFails ? Promise.reject(new Error('offline')) : Promise.resolve(SOURCE);
+        const fails = scanFails && scans++ >= scansBeforeFailing;
+        return fails ? Promise.reject(new Error('offline')) : Promise.resolve(SOURCE);
       }
       return Promise.resolve([]);
     },
@@ -100,7 +102,7 @@ describe('pipes seen only at runtime', () => {
     row.click();
     await fixture.whenStable();
     const detail = text(host.querySelector('#pipe-detail'));
-    expect(detail).toContain('A library, seen on the page only');
+    expect(detail).toContain('Seen on the page only');
     expect(detail).toContain('TranslatePipe');
     expect(detail).not.toContain('File');
     expect(detail).not.toContain('Standalone');
@@ -151,5 +153,22 @@ describe('pipes seen only at runtime', () => {
     const alert = host.querySelector('.notice.error[role="alert"]');
     expect(text(alert)).toContain("Couldn't scan the source");
     expect(alert?.querySelector('button')?.textContent?.trim()).toBe('Try again');
+    expect(text(alert)).toContain('Only pipes seen on the page are listed');
+  });
+
+  it('keeps the last scan listed and says so when a later scan fails', async () => {
+    const fixture = await render(
+      client(
+        { pipes: [live('translate', 'TranslatePipe')], async: [], instrumented: [] },
+        { scanFails: true, scansBeforeFailing: 1 },
+      ),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+    await fixture.componentInstance.refresh();
+    await fixture.whenStable();
+    expect(rowNames(host)).toEqual(['price', 'translate']);
+    const alert = host.querySelector('.notice.error[role="alert"]');
+    expect(text(alert)).toContain("Couldn't scan the source again. The list keeps the last scan.");
+    expect(text(alert)).not.toContain('Only pipes seen on the page');
   });
 });

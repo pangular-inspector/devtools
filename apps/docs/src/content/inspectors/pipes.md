@@ -29,11 +29,11 @@ The row also counts usages: **+N more** for a built-in pipe, and **N uses** for 
 
 Hover or focus a row to highlight the first component that uses it.
 
-A runtime-only pipe is listed while the page uses it, and leaves the list when the page stops using it. If the source scan fails while the page reports pipes, the list keeps the runtime-only pipes and says **Couldn't scan the source** with a **Try again** button.
+A runtime-only pipe is listed while the page uses it, and leaves the list when the page stops using it. If the source scan fails while the page reports pipes, the list keeps the runtime-only pipes and says **Couldn't scan the source** with a **Try again** button. If an earlier scan worked, the list also keeps the pipes that scan found and says so.
 
 ### Declaration
 
-Select a pipe to see its class, whether it comes from `@angular/common`, your project or a library, its file, and whether it is standalone and pure. A runtime-only pipe has no file, and the page does not say whether it is standalone, so those rows are left out. A pure pipe reruns only when an argument changes. An impure pipe reruns on every check.
+Select a pipe to see its class, whether it comes from `@angular/common` or your project or was only seen on the page, its file, and whether it is standalone and pure. A runtime-only pipe has no file, and the page does not say whether it is standalone, so those rows are left out. A pure pipe reruns only when an argument changes. An impure pipe reruns on every check.
 
 ### Used in templates
 
