@@ -1,26 +1,27 @@
 ---
 title: Pipes
-description: Custom and built-in pipes, where they are used, live instances, call recording and a pipe lint.
+description: Custom, built-in and library pipes, where they are used, live instances, call recording and a pipe lint.
 ---
 
 <ngmd-hero title="Pipes" gradient>
-  Your own pipes and the built-in ones in use. Where they live, which components use them on the page, what they last returned, and what to fix.
+  Your own pipes, the built-in ones in use and library pipes on the page. Where they live, which components use them on the page, what they last returned, and what to fix.
 </ngmd-hero>
 
 # Pipes
 
-The Pipes tab lists your `@Pipe` classes and the built-in pipes from `@angular/common` that your templates use. It shows the live instances on the page, and records calls when you ask it to.
+The Pipes tab lists your `@Pipe` classes, the built-in pipes from `@angular/common` that your templates use, and pipes from libraries that the page uses. It shows the live instances on the page, and records calls when you ask it to.
 
 ## What it shows
 
 ### Pipe list
 
-Search by pipe name, class or file. Narrow the list with **Show pipes**: **All pipes**, **Custom**, **Built-in**, **Impure** or **On the page**.
+Search by pipe name, class or file. Narrow the list with **Show pipes**: **All pipes**, **Custom**, **Built-in**, **Runtime only**, **Impure** or **On the page**.
 
 Each row shows the pipe name, its class, and chips:
 
 - **N live**: instances on the page.
 - **built-in**, and **NgModule** for pipes that are not standalone.
+- **runtime only** for a pipe the source scan did not find, such as `translate` or `ngrxPush` from a library. Its row says **No source location**.
 - **pure** or **impure**.
 - **stale?** when recording caught a possible stale value.
 
@@ -28,9 +29,11 @@ The row also counts usages: **+N more** for a built-in pipe, and **N uses** for 
 
 Hover or focus a row to highlight the first component that uses it.
 
+A runtime-only pipe is listed while the page uses it, and leaves the list when the page stops using it. If the source scan fails while the page reports pipes, the list keeps the runtime-only pipes and says **Couldn't scan the source** with a **Try again** button.
+
 ### Declaration
 
-Select a pipe to see its class, whether it comes from `@angular/common` or your project, its file, and whether it is standalone and pure. A pure pipe reruns only when an argument changes. An impure pipe reruns on every check.
+Select a pipe to see its class, whether it comes from `@angular/common`, your project or a library, its file, and whether it is standalone and pure. A runtime-only pipe has no file, and the page does not say whether it is standalone, so those rows are left out. A pure pipe reruns only when an argument changes. An impure pipe reruns on every check.
 
 ### Used in templates
 
@@ -59,7 +62,7 @@ A source that changes on three reports in a row, like `getData() | async` return
 | `signal-read-in-pure-pipe` | warning, info | A pure pipe whose `transform()` reads a `signal`, `input`, `computed`, `linkedSignal`, `toSignal` or `model` field of the pipe (warning). A call with no arguments on an injected service, like `this.rates.current()`, might be a signal read (info). |
 | `async-on-call`            | info          | A method call piped to `\| async`, like `getUsers() \| async`. If the method builds a new Observable each time, `AsyncPipe` resubscribes on every check. Signal, `input`, `computed` and `toSignal` fields of the component are skipped.               |
 
-If the pipe in a finding is in the pipe list, its name is a button. Click it to select that pipe and open its details. A search or **Show pipes** filter that hides the pipe is cleared first; filters that already show it stay. A pipe that is not in the list, like one from a library, stays plain text.
+If the pipe in a finding is in the pipe list, its name is a button. Click it to select that pipe and open its details. A search or **Show pipes** filter that hides the pipe is cleared first; filters that already show it stay. A pipe that is not in the list, like a library pipe the page does not use, stays plain text.
 
 ## Where the data comes from
 
@@ -68,7 +71,7 @@ If the pipe in a finding is in the pipe list, its name is a button. Click it to 
     <code>&#64;Pipe</code> classes with name, class, file, standalone and pure flags. Built-in pipes with every usage site.
   </ngmd-card>
   <ngmd-card icon="zap" title="Live page">
-    The overlay finds pipe instances in the rendered views. It is read-only until you record.
+    The overlay finds pipe instances in the rendered views, library pipes included. It is read-only until you record.
   </ngmd-card>
   <ngmd-card icon="search" title="Lint">
     The server checks your source for the four rules above.
@@ -77,7 +80,7 @@ If the pipe in a finding is in the pipe list, its name is a button. Click it to 
 
 ### Built-in pipes
 
-The built-in list covers the `@angular/common` pipes: `async`, `currency`, `date`, `number`, `i18nPlural`, `i18nSelect`, `json`, `keyvalue`, `lowercase`, `percent`, `slice`, `titlecase` and `uppercase`. Pipes from other packages are not listed as built-in.
+The built-in list covers the `@angular/common` pipes: `async`, `currency`, `date`, `number`, `i18nPlural`, `i18nSelect`, `json`, `keyvalue`, `lowercase`, `percent`, `slice`, `titlecase` and `uppercase`. Pipes from other packages are not listed as built-in. They show as **runtime only** while the page uses them.
 
 ### Live instances
 

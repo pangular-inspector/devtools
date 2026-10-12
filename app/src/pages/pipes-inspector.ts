@@ -30,6 +30,9 @@ interface PipeInfo {
   builtin?: boolean;
   usageCount?: number;
   usages?: UsageSite[];
+  /** Panel only: seen on the page but not found by the source scan, such as a pipe from a
+   * library. It has no source location, so `file` is empty and `line` is 0. */
+  runtime?: boolean;
 }
 
 interface PipeTarget {
@@ -120,12 +123,13 @@ interface PipesSnapshot {
 
 const RECORD_CONFIRM_MS = 5000;
 
-type PipeKind = 'all' | 'custom' | 'builtin' | 'impure' | 'live';
+type PipeKind = 'all' | 'custom' | 'builtin' | 'runtime' | 'impure' | 'live';
 
 const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
   { value: 'all', label: 'All pipes' },
   { value: 'custom', label: 'Custom' },
   { value: 'builtin', label: 'Built-in' },
+  { value: 'runtime', label: 'Runtime only' },
   { value: 'impure', label: 'Impure' },
   { value: 'live', label: 'On the page' },
 ];
@@ -135,9 +139,9 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
   imports: [Select],
   template: `
     <p class="intro">
-      Pipes declared in your source and the built-in pipes your templates use. Live data shows which
-      components use each pipe on the page; turn on recording to capture calls and the last input
-      and output.
+      Pipes declared in your source, the built-in pipes your templates use and library pipes seen on
+      the page. Live data shows which components use each pipe on the page; turn on recording to
+      capture calls and the last input and output.
     </p>
 
     <div class="toolbar">
@@ -159,7 +163,9 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
         />
       </div>
       <app-select ariaLabel="Show pipes" [options]="kindOptions" [(value)]="kind" />
-      <span class="total" aria-live="polite">{{ filtered().length }} of {{ pipes().length }}</span>
+      <span class="total" aria-live="polite"
+        >{{ filtered().length }} of {{ allPipes().length }}</span
+      >
       <div class="actions">
         <button type="button" (click)="refresh()" [disabled]="loading()">Refresh</button>
         <button
@@ -201,18 +207,18 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       </p>
     }
 
-    @if (loading() && pipes().length === 0) {
+    @if (loading() && allPipes().length === 0) {
       <div class="state" role="status">
         <span class="spinner" aria-hidden="true"></span>
         <p class="state-title">Scanning pipes…</p>
       </div>
-    } @else if (loadFailed() && pipes().length === 0) {
+    } @else if (loadFailed() && allPipes().length === 0) {
       <div class="state" role="alert">
         <p class="state-title">Couldn't load pipes</p>
         <p class="state-hint">The devtools server did not answer. Check that it is running.</p>
         <button type="button" (click)="refresh()">Try again</button>
       </div>
-    } @else if (pipes().length === 0) {
+    } @else if (allPipes().length === 0) {
       <div class="state">
         <p class="state-title">No pipes found</p>
         <p class="state-hint">
@@ -220,6 +226,16 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
         </p>
       </div>
     } @else {
+      @if (loadFailed()) {
+        <div class="notice error" role="alert">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8v5M12 16h.01" />
+          </svg>
+          <span>Couldn't scan the source. Only pipes seen on the page are listed.</span>
+          <button type="button" (click)="refresh()" [disabled]="loading()">Try again</button>
+        </div>
+      }
       <div class="layout">
         <div class="list-wrap">
           @if (filtered().length) {
@@ -254,6 +270,9 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                       @if (p.builtin) {
                         <span class="chip">built-in</span>
                       }
+                      @if (p.runtime) {
+                        <span class="chip">runtime only</span>
+                      }
                       @if (!p.isStandalone) {
                         <span class="chip">NgModule</span>
                       }
@@ -262,7 +281,11 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                       }}</span>
                     </span>
                     <span class="row-file mono">
-                      {{ p.file }}:{{ p.line }}
+                      @if (p.runtime) {
+                        <span class="no-source">No source location</span>
+                      } @else {
+                        {{ p.file }}:{{ p.line }}
+                      }
                       @if (p.builtin && (p.usageCount ?? 0) > 1) {
                         <span class="more">+{{ (p.usageCount ?? 1) - 1 }} more</span>
                       } @else if (!p.builtin && p.usageCount) {
@@ -300,6 +323,9 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
               @if (p.builtin) {
                 <span class="chip">built-in</span>
               }
+              @if (p.runtime) {
+                <span class="chip">runtime only</span>
+              }
             </header>
 
             <div class="block">
@@ -308,13 +334,15 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                 <dt>Class</dt>
                 <dd class="mono">{{ p.className }}</dd>
                 <dt>Source</dt>
-                <dd>{{ p.builtin ? '@angular/common' : 'This project' }}</dd>
-                @if (!p.builtin) {
+                <dd>{{ sourceLabel(p) }}</dd>
+                @if (!p.builtin && !p.runtime) {
                   <dt>File</dt>
                   <dd class="mono">{{ p.file }}:{{ p.line }}</dd>
                 }
-                <dt>Standalone</dt>
-                <dd>{{ p.isStandalone ? 'Yes' : 'No, declared in an NgModule' }}</dd>
+                @if (!p.runtime) {
+                  <dt>Standalone</dt>
+                  <dd>{{ p.isStandalone ? 'Yes' : 'No, declared in an NgModule' }}</dd>
+                }
                 <dt>Pure</dt>
                 <dd>
                   {{
@@ -734,6 +762,18 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       stroke-width: 2;
       stroke-linecap: round;
     }
+    .notice.error {
+      @include m.tint(danger);
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .notice.error svg {
+      margin-top: 0;
+      stroke: currentColor;
+    }
+    .notice.error span {
+      flex: 1 1 200px;
+    }
     .layout {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
@@ -816,6 +856,10 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       color: var(--text-3);
       font-size: 11px;
       overflow-wrap: anywhere;
+    }
+    .no-source {
+      font-family: var(--font-sans);
+      font-style: italic;
     }
     .more {
       margin-left: 6px;
@@ -1225,15 +1269,33 @@ export class PipesInspector {
 
   private readonly liveByName = computed(() => new Map(this.live().map((p) => [p.name, p])));
 
+  /** The source scan plus the pipes seen only on the page, such as library pipes. */
+  readonly allPipes = computed<PipeInfo[]>(() => {
+    const pipes = this.pipes();
+    const scanned = new Set(pipes.map((p) => p.name));
+    const runtime: PipeInfo[] = this.live()
+      .filter((p) => !scanned.has(p.name))
+      .map((p) => ({
+        name: p.name,
+        className: p.className,
+        file: '',
+        line: 0,
+        isStandalone: true,
+        isPure: p.isPure,
+        runtime: true,
+      }));
+    return runtime.length ? [...pipes, ...runtime] : pipes;
+  });
+
   filtered = computed(() => {
     const q = this.filter();
     const kind = this.kind() ?? 'all';
-    return this.pipes().filter((p) => this.fitsKind(p, kind) && this.fitsQuery(p, q));
+    return this.allPipes().filter((p) => this.fitsKind(p, kind) && this.fitsQuery(p, q));
   });
 
   private readonly pipesByName = computed(() => {
     const byName = new Map<string, PipeInfo[]>();
-    for (const p of this.pipes()) byName.set(p.name, [...(byName.get(p.name) ?? []), p]);
+    for (const p of this.allPipes()) byName.set(p.name, [...(byName.get(p.name) ?? []), p]);
     return byName;
   });
 
@@ -1266,7 +1328,7 @@ export class PipesInspector {
       this.pipes.set(pipes);
       const sel = this.selected();
       if (sel) {
-        const refreshed = pipes.find((p) => p.name === sel.name && p.file === sel.file);
+        const refreshed = this.allPipes().find((p) => p.name === sel.name && p.file === sel.file);
         this.selected.set(refreshed ?? null);
       }
     } catch {
@@ -1298,6 +1360,9 @@ export class PipesInspector {
         const own = pageId ? snapshot?.pages?.find((page) => page.pageId === pageId) : undefined;
         const source = own ?? snapshot;
         this.live.set(source?.pipes ?? []);
+        // A runtime-only pipe has nothing left to show once the page stops using it.
+        const sel = this.selected();
+        if (sel?.runtime && !this.liveByName().has(sel.name)) this.selected.set(null);
         this.async.set(source?.async ?? []);
         this.asyncTotal.set(source?.asyncTotal);
         const pages = snapshot?.instrumented ?? [];
@@ -1350,6 +1415,12 @@ export class PipesInspector {
     clearTimeout(this.pendingTimer);
     this.pendingRecord.set(null);
     if (message !== null) this.recordMessage.set(message);
+  }
+
+  sourceLabel(p: PipeInfo): string {
+    if (p.builtin) return '@angular/common';
+    if (p.runtime) return 'A library, seen on the page only';
+    return 'This project';
   }
 
   liveFor(name: string): LivePipeInfo | undefined {
@@ -1405,8 +1476,9 @@ export class PipesInspector {
   }
 
   private fitsKind(p: PipeInfo, kind: PipeKind): boolean {
-    if (kind === 'custom') return !p.builtin;
+    if (kind === 'custom') return !p.builtin && !p.runtime;
     if (kind === 'builtin') return !!p.builtin;
+    if (kind === 'runtime') return !!p.runtime;
     if (kind === 'impure') return !p.isPure;
     if (kind === 'live') return this.liveByName().has(p.name);
     return true;
