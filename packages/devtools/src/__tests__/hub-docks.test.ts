@@ -83,13 +83,13 @@ describe('hub docks', () => {
     const docks = registerHubDocks(hub, 'pangular', undefined, { capacitor: false });
     docks?.setBadge('pangular:capacitor', { text: '2', variant: 'danger' });
     expect(hub.docks.views.get('pangular:capacitor')).toMatchObject({
-      title: 'Capacitor: no app connected',
+      title: 'Capacitor: no app connected (2 new, with errors)',
       badge: '2',
       badgeVariant: 'danger',
     });
     docks?.setAvailable('capacitor', true);
     expect(hub.docks.views.get('pangular:capacitor')).toMatchObject({
-      title: 'Capacitor',
+      title: 'Capacitor (2 new, with errors)',
       badge: '2',
     });
     docks?.setBadge('pangular:capacitor', undefined);
@@ -99,6 +99,17 @@ describe('hub docks', () => {
     docks?.setBadge('pangular:capacitor', undefined);
     docks?.setBadge('pangular:unknown', { text: '1', variant: 'info' });
     expect(hub.docks.update.mock.calls.length).toBe(updates);
+  });
+
+  it('puts the badge count into the title that labels the dock button', () => {
+    const hub = fakeHub();
+    const docks = registerHubDocks(hub, 'pangular');
+    docks?.setBadge('pangular:ngrx', { text: '3', variant: 'info' });
+    expect(hub.docks.views.get('pangular:ngrx')?.title).toBe('NgRx (3 new)');
+    docks?.setBadge('pangular:group', { text: '99+', variant: 'danger' });
+    expect(hub.docks.views.get('pangular:group')?.title).toBe('Pangular (99+ new, with errors)');
+    docks?.setBadge('pangular:ngrx', undefined);
+    expect(hub.docks.views.get('pangular:ngrx')?.title).toBe('NgRx');
   });
 
   it('puts the All tools dock before the others, opening the panel without a view', () => {

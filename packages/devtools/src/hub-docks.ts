@@ -105,9 +105,14 @@ function withStatus(
   available: boolean,
 ): DevframeViewIframe {
   if (available || !isStatusView(view)) return entry;
-  // The title only: the hub fades a badge with its button, so a badge would
-  // fail the contrast check and cover the icon.
+  // The title only: a badge would cover the icon and read as a count.
   return { ...entry, title: UNAVAILABLE_TITLES[view] };
+}
+
+/** The dock title with its badge, as `Angular (2 new, with errors)`. */
+export function badgeTitle(title: string, badge: HubDockBadge): string {
+  const errors = badge.variant === 'danger' ? ', with errors' : '';
+  return `${title} (${badge.text} new${errors})`;
 }
 
 export function registerHubDocks(
@@ -161,7 +166,15 @@ export function registerHubDocks(
       view && entry.type === 'iframe' && isStatusView(view)
         ? withStatus(entry, view, available.get(view) ?? true)
         : entry;
-    return badge ? { ...shown, badge: badge.text, badgeVariant: badge.variant } : shown;
+    if (!badge) return shown;
+    // The hub labels the button with the title alone, so the count goes there
+    // too for screen readers.
+    return {
+      ...shown,
+      title: badgeTitle(shown.title, badge),
+      badge: badge.text,
+      badgeVariant: badge.variant,
+    };
   };
   DOCKS.forEach((dock, index) => {
     if (dock.inspector && !config.inspectors[dock.inspector]) return;

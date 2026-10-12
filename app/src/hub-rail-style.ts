@@ -5,16 +5,37 @@ function activeDockStyle(theme: 'dark' | 'light'): string {
   const accentGlow = theme === 'light' ? 'rgba(146, 64, 14, 0.50)' : 'rgba(245, 165, 36, 0.60)';
   return `
   .devframes-dock-entry button {
-    transition: opacity 0.2s, filter 0.2s, background-color 0.2s, transform 0.3s;
+    transition: background-color 0.2s, transform 0.3s;
   }
-  .devframes-dock-entry button:not(.scale-120) {
+  /* Dim the icon of an inactive dock, never its badge, so the count keeps
+     its contrast. hub-ui's own dim classes would fade the whole button. */
+  .devframes-dock-entry button.op50,
+  .devframes-dock-entry button.saturate-0 {
+    opacity: 1;
+    filter: none;
+  }
+  .devframes-dock-entry button > * {
+    transition: opacity 0.2s, filter 0.2s;
+  }
+  .devframes-dock-entry button:not(.scale-120) > :not(.absolute) {
     opacity: 0.45;
     filter: saturate(0);
   }
-  .devframes-dock-entry button:not(.scale-120):hover,
-  .devframes-dock-entry button:not(.scale-120):focus-visible {
+  .devframes-dock-entry button:not(.scale-120):hover > :not(.absolute),
+  .devframes-dock-entry button:not(.scale-120):focus-visible > :not(.absolute) {
     opacity: 1;
     filter: none;
+  }
+  /* hub-ui's badge palette (blue-500 and red-500 on a pale tint) is below
+     4.5:1, and it sets the colors inline, hence the attribute selectors and
+     !important. blue-600 and red-600 with white text pass. */
+  .devframes-dock-entry .absolute[style*="59, 130, 246"] {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+  }
+  .devframes-dock-entry .absolute[style*="239, 68, 68"] {
+    background-color: #dc2626 !important;
+    color: #ffffff !important;
   }
   .devframes-dock-entry button:focus-visible {
     outline: 2px solid ${accent};
@@ -30,7 +51,8 @@ function activeDockStyle(theme: 'dark' | 'light'): string {
     color-scheme: ${theme};
   }
   @media (prefers-reduced-motion: reduce) {
-    .devframes-dock-entry button {
+    .devframes-dock-entry button,
+    .devframes-dock-entry button > * {
       transition: none;
     }
   }

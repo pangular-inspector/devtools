@@ -55,6 +55,18 @@ describe('styleHubRail', () => {
     expect(styleTags[0].textContent).toContain('#ffffff');
   });
 
+  it('dims the icon of an inactive dock but not its badge, and darkens the badge palette', () => {
+    makeDock();
+    styleHubRail(document, 'dark');
+    const css = document
+      .querySelector('devframes-dock-standalone')!
+      .shadowRoot!.querySelector<HTMLStyleElement>('style[data-pangular]')!.textContent!;
+    expect(css).toContain('button:not(.scale-120) > :not(.absolute)');
+    expect(css).not.toMatch(/button:not\(\.scale-120\) \{/);
+    expect(css).toMatch(/\[style\*="59, 130, 246"\] \{\s*background-color: #2563eb !important;/);
+    expect(css).toMatch(/\[style\*="239, 68, 68"\] \{\s*background-color: #dc2626 !important;/);
+  });
+
   it('retries when the shadow host is not yet in the DOM', () => {
     vi.useFakeTimers();
     styleHubRail(document, 'dark');

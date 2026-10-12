@@ -70,7 +70,11 @@ export function sourceText(file: string, line?: number | null): string {
       >
         <ng-container [ngTemplateOutlet]="text" />
       </button>
-      <span class="message" role="status">{{ message() }}</span>
+      @if (message()) {
+        <!-- Only while there is something to say: an alert is announced when
+             it is added, and a page can hold many of these links. -->
+        <span class="message" role="alert">{{ message() }}</span>
+      }
     } @else {
       <span class="source-text" [title]="label()"><ng-container [ngTemplateOutlet]="text" /></span>
     }
@@ -103,10 +107,8 @@ export function sourceText(file: string, line?: number | null): string {
     .source-link:focus-visible {
       @include m.focus-ring;
     }
-    .message:not(:empty) {
-      margin-left: 6px;
-    }
     .message {
+      margin-left: 6px;
       color: var(--danger-text);
       font-family: var(--font-sans);
       font-size: 0.92em;

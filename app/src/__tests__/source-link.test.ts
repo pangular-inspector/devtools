@@ -39,6 +39,7 @@ describe('SourceLink', () => {
   it('shows plain text when no server is connected', async () => {
     const el = await render(null);
     expect(el.querySelector('button')).toBeNull();
+    expect(el.querySelector('[role="alert"], [role="status"]')).toBeNull();
     expect(el.querySelector('.plain')!.textContent!.trim()).toBe('src/app/app.ts:12');
     expect(el.querySelector('.custom')!.textContent!.trim()).toBe('pages/index.page.ts');
   });
@@ -59,7 +60,7 @@ describe('SourceLink', () => {
     await vi.waitFor(() =>
       expect(call).toHaveBeenCalledWith('open-in-editor', { file: 'src/app/app.ts', line: 12 }),
     );
-    expect(el.querySelector('.plain [role="status"]')!.textContent).toBe('');
+    expect(el.querySelector('[role="alert"], [role="status"]')).toBeNull();
   });
 
   it('keeps projected text, whose words are part of the accessible name', async () => {
@@ -83,7 +84,7 @@ describe('SourceLink', () => {
     expect(TestBed.inject(EditorOpener).available()).toBe(true);
     await vi.waitFor(() => {
       TestBed.tick();
-      expect(el.querySelector('.plain [role="status"]')!.textContent).toBe(
+      expect(el.querySelector('.plain [role="alert"]')!.textContent).toBe(
         'Not opened: src/app/app.ts is outside the project root.',
       );
     });
