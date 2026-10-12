@@ -42,7 +42,7 @@ export default defineConfig({
 
 ### The overlay loads itself
 
-The plugin adds a module script to every HTML page the dev server transforms, at the end of `<body>`. The script imports `@pangular-inspector/devtools/overlay`, which starts the overlay and the floating button. `vite build` skips the plugin, so the overlay stays out of your production bundle. See [Load the overlay yourself](#load-the-overlay-yourself) to turn it off.
+The plugin adds a module script to every HTML page the dev server transforms, at the end of `<body>`. The script imports `@pangular-inspector/devtools/overlay`, which adds the floating button, and starts the overlay with the hub's path (`/__devframes/pangular/` by default), so the overlay connects there without trying the other default paths first. `vite build` skips the plugin, so the overlay stays out of your production bundle. See [Load the overlay yourself](#load-the-overlay-yourself) to turn it off.
 
 ### Where to find it
 
@@ -64,7 +64,7 @@ The plugin applies to `vite serve` only. `vite build` is not affected, so nothin
 
 It adds the overlay to the HTML that Vite transforms, including the template an Analog SSR render starts from. It works under a Vite `base`. A page whose HTML already imports `@pangular-inspector/devtools/overlay` gets no second script.
 
-An app that still imports the overlay in `main.ts` gets one overlay, not two: Vite resolves both imports to the same module, which runs once.
+An app that still imports the overlay in `main.ts` gets one overlay, not two: Vite resolves both imports to the same module, and starting the overlay with the hub's path replaces any overlay that is already running.
 
 ### Mounts the hub
 

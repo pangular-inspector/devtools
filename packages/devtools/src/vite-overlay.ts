@@ -1,5 +1,4 @@
 import type { HtmlTagDescriptor } from 'vite';
-import { PANGULAR_HUB_BASE } from './hub.ts';
 
 /** The package entry that starts the overlay and the floating button on import. */
 export const OVERLAY_ENTRY = '@pangular-inspector/devtools/overlay';
@@ -13,14 +12,12 @@ export const OVERLAY_TAG_ATTRIBUTE = 'data-pangular-overlay';
  * entry the same way as an import in `main.ts`: both share one module, which
  * runs once, so an app that also imports the overlay itself still gets one.
  * It goes at the end of `<body>`, so it runs after the app's own entry and
- * its polyfills. On a custom hub `base` it points the overlay there.
+ * its polyfills. It passes the hub's `baseURL`, so the overlay connects there
+ * without looking for the server on the default paths first.
  */
 export function overlayTags(html: string, hubBase: string): HtmlTagDescriptor[] {
   if (loadsOverlay(html)) return [];
-  const children =
-    hubBase === PANGULAR_HUB_BASE
-      ? `import ${JSON.stringify(OVERLAY_ENTRY)};`
-      : `import { initOverlay } from ${JSON.stringify(OVERLAY_ENTRY)};\ninitOverlay({ baseURL: ${JSON.stringify(`${hubBase}pangular/`)} }).catch(console.error);`;
+  const children = `import { initOverlay } from ${JSON.stringify(OVERLAY_ENTRY)};\ninitOverlay({ baseURL: ${JSON.stringify(`${hubBase}pangular/`)} }).catch(console.error);`;
   return [
     {
       tag: 'script',
