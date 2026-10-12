@@ -192,6 +192,7 @@ The URL hash selects a tab. Open `/__devframes/pangular/#tab=signals` to land on
 | Forms      | `#tab=forms`      |
 | Pipes      | `#tab=pipes`      |
 | SSR & HTTP | `#tab=network`    |
+| Errors     | `#tab=errors`     |
 | Analog     | `#tab=analog`     |
 | Capacitor  | `#tab=capacitor`  |
 | Settings   | `#tab=settings`   |
