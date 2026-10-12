@@ -798,8 +798,10 @@ describe('agent tools', () => {
     }));
     await push('push-injector-tree', { pageId: 'p1', roots, environment: [] });
     const answer = await call('inspect-providers', '');
-    expect(answer.length).toBeLessThan(20_500);
-    expect(answer).toMatch(/truncated at 20000 characters; pass `selector` or `token`/);
+    expect(answer.length).toBeLessThanOrEqual(20_000);
+    expect(answer).toMatch(/shown as an outline.*pass `selector` or `token`/);
+    const kept = elementInjectors(answer).length;
+    expect(answer).toContain(`${400 - kept} of 400 element injectors are left out`);
   });
 
   it('keeps the truncated flag of a large page and says so', async () => {

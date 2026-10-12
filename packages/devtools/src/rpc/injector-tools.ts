@@ -2,6 +2,7 @@ import { MAX_INJECTOR_NODES, NULL_INJECTOR_ID } from '../injector-tree.ts';
 import type { InjectorPage, InjectorTreeNode } from '../types.ts';
 import { zoneModeText } from '../zone-mode.ts';
 import { untrusted } from './forms-tools.ts';
+import { countInjectors, largestFitting, outlineInjectors } from './injector-outline.ts';
 
 export const MAX_TOOL_CHARS = 20_000;
 
@@ -22,10 +23,70 @@ function flatten(nodes: InjectorTreeNode[], out: InjectorTreeNode[] = []): Injec
   return out;
 }
 
-function capped(text: string): string {
-  return text.length > MAX_TOOL_CHARS
-    ? `${text.slice(0, MAX_TOOL_CHARS)}… (truncated at ${MAX_TOOL_CHARS} characters; ${NARROW})`
-    : text;
+const fits = (text: string) => text.length <= MAX_TOOL_CHARS;
+
+/**
+ * The whole tree when it fits in {@link MAX_TOOL_CHARS}. Otherwise element
+ * injectors become an outline (names, kinds, provider and dependency counts),
+ * and when even that is too long whole subtrees drop from the bottom. The
+ * environment injectors always stay, in full when they take at most half the
+ * budget. The JSON is never cut, so it always parses.
+ */
+function wholeTreeText(
+  intro: string,
+  roots: InjectorTreeNode[],
+  environment: InjectorTreeNode[],
+): string {
+  const render = (note: string, elementJson: string, environmentJson: string) =>
+    untrusted(
+      `${intro}${note}\n\nElement injectors:\n\n${elementJson}\n\nEnvironment injectors:\n\n${environmentJson}`,
+    );
+  const environmentFull = JSON.stringify(environment);
+  const full = render('', JSON.stringify(roots), environmentFull);
+  if (fits(full)) return full;
+
+  const environmentJson =
+    environmentFull.length <= MAX_TOOL_CHARS / 2
+      ? environmentFull
+      : JSON.stringify(outlineInjectors(environment));
+  const environmentNote =
+    environmentJson === environmentFull
+      ? ''
+      : ' Environment injectors are outlined too; pass an environment injector name as `selector` to see its providers.';
+  const outlined = `\n\nThe whole tree is longer than ${MAX_TOOL_CHARS} characters, so element injectors are shown as an outline: \`providers\` and \`dependencies\` are counts. To see providers and lookup paths, ${NARROW}.${environmentNote}`;
+  const outline = render(outlined, JSON.stringify(outlineInjectors(roots)), environmentJson);
+  if (fits(outline)) return outline;
+
+  const total = countInjectors(roots);
+  const partial = (kept: number) => {
+    const dropped = total - kept;
+    return render(
+      `${outlined} ${dropped} of ${total} element injectors are left out, deepest first (\`moreChildren\` counts the children left out under an injector); ${NARROW}.`,
+      JSON.stringify(outlineInjectors(roots, kept)),
+      environmentJson,
+    );
+  };
+  return partial(largestFitting(total, (kept) => fits(partial(kept))));
+}
+
+/**
+ * Keeps the first items of every list, the same share of each, so `render`
+ * fits in {@link MAX_TOOL_CHARS}. Whole items drop; no JSON is cut.
+ */
+function fitLists<T extends unknown[][]>(lists: T, render: (lists: T) => string): string {
+  const full = render(lists);
+  if (fits(full)) return full;
+  const steps = 1000;
+  const take = (step: number) =>
+    lists.map((list) => list.slice(0, Math.ceil((list.length * step) / steps))) as T;
+  return render(take(largestFitting(steps, (step) => fits(render(take(step))))));
+}
+
+/** ` Showing 3 of 40; narrow ...` when a list lost items to the budget. */
+function shown(kept: unknown[], all: unknown[]): string {
+  return kept.length < all.length
+    ? ` Showing ${kept.length} of ${all.length} to stay within ${MAX_TOOL_CHARS} characters; ${NARROW} further.`
+    : '';
 }
 
 /** Lower case with runs of spaces collapsed, so `route:  Admin` finds `Route: admin`. */
@@ -95,10 +156,10 @@ export function inspectProvidersText(
 
   if (!selector && !token) {
     const zone = zoneModeText(page.zone, pageId);
-    return capped(
-      untrusted(
-        `This is the injector tree for the whole page \`${pageId}\`. Element injectors list what each component and directive injected and which injector supplied it (\`providedBy\` is an injector id). Environment injectors run from the platform down to the root and any route injectors; their \`dependencies\` list what the services they already created inject (\`from\` is the service). To look at one component or one token, ${NARROW}.${zone ? ` ${zone}` : ''}${notes}\n\nElement injectors:\n\n${JSON.stringify(roots)}\n\nEnvironment injectors:\n\n${JSON.stringify(environment)}`,
-      ),
+    return wholeTreeText(
+      `This is the injector tree for the whole page \`${pageId}\`. Element injectors list what each component and directive injected and which injector supplied it (\`providedBy\` is an injector id). Environment injectors run from the platform down to the root and any route injectors; their \`dependencies\` list what the services they already created inject (\`from\` is the service). To look at one component or one token, ${NARROW}.${zone ? ` ${zone}` : ''}${notes}`,
+      roots,
+      environment,
     );
   }
 
@@ -118,7 +179,6 @@ export function inspectProvidersText(
     );
   }
 
-  const sections: string[] = [];
   const namedDependencies = (node: InjectorTreeNode) =>
     (node.dependencies ?? []).map((dep) =>
       dep.providedBy ? { ...dep, providedByName: nameOf(dep.providedBy) } : dep,
@@ -130,84 +190,90 @@ export function inspectProvidersText(
       provides: byId.get(id)?.providers.map((provider) => provider.token) ?? [],
     }));
 
-  if (matchedElements.length) {
-    const detail = matchedElements.map((node) => {
-      const { path, ...injector } = node.injector;
-      return {
-        injector,
-        providers: node.providers,
-        dependencies: namedDependencies(node),
-        lookupPath: resolve(path ?? []),
-      };
-    });
-    sections.push(
-      `Element injectors on page \`${pageId}\` matching \`${selector}\` (${matchedElements.length}). \`lookupPath\` lists the injectors Angular asks, in order, with the tokens each one provides.\n\n${JSON.stringify(detail)}`,
-    );
-  }
-
-  if (matchedEnvironments.length) {
-    const parents = environmentParents(environment);
-    const detail = matchedEnvironments.map((node) => ({
-      injector: node.injector,
+  const elementDetail = matchedElements.map((node) => {
+    const { path, ...injector } = node.injector;
+    return {
+      injector,
       providers: node.providers,
       dependencies: namedDependencies(node),
-      parents: resolve(parents.get(node.injector.id) ?? []),
-    }));
-    sections.push(
-      `Environment injectors on page \`${pageId}\` matching \`${selector}\` (${matchedEnvironments.length}). \`dependencies\` lists what the services this injector already created inject (\`from\` is the service, \`providedBy\` the injector that supplied it). \`parents\` lists the environment injectors Angular asks next, nearest first, with the tokens each one provides.\n\n${JSON.stringify(detail)}`,
-    );
+      lookupPath: resolve(path ?? []),
+    };
+  });
+  const parents = matchedEnvironments.length ? environmentParents(environment) : new Map();
+  const environmentDetail = matchedEnvironments.map((node) => ({
+    injector: node.injector,
+    providers: node.providers,
+    dependencies: namedDependencies(node),
+    parents: resolve(parents.get(node.injector.id) ?? []),
+  }));
+
+  const want = token?.toLowerCase();
+  const providedBy = want
+    ? all.flatMap((node) =>
+        node.providers
+          .filter((provider) => provider.token.toLowerCase() === want)
+          .map((provider) => ({
+            id: node.injector.id,
+            name: node.injector.name,
+            type: node.injector.type,
+            provider,
+          })),
+      )
+    : [];
+  const injectedBy = want
+    ? (selector ? matched : all).flatMap((node) =>
+        (node.dependencies ?? [])
+          .filter((dep) => dep.token.toLowerCase() === want)
+          .map((dep) => ({
+            id: node.injector.id,
+            name: node.injector.name,
+            component: node.injector.component,
+            from: dep.from,
+            flags: dep.flags,
+            providedBy: dep.providedBy,
+            providedByName: dep.providedBy ? nameOf(dep.providedBy) : null,
+          })),
+      )
+    : [];
+  const where = selector ? ` among the injectors matching \`${selector}\`` : '';
+  let missingToken = '';
+  if (token && want && !providedBy.length && !injectedBy.length) {
+    const similar = [
+      ...new Set(
+        all.flatMap((node) => [
+          ...node.providers.map((provider) => provider.token),
+          ...(node.dependencies ?? []).map((dep) => dep.token),
+        ]),
+      ),
+    ]
+      .filter((name) => name.toLowerCase().includes(want))
+      .slice(0, 10);
+    missingToken = `No injector on page \`${pageId}\` provides \`${token}\` and nothing injects it${where}.${
+      similar.length ? ` Similar tokens: ${similar.map((name) => `\`${name}\``).join(', ')}.` : ''
+    }`;
   }
 
-  if (token) {
-    const want = token.toLowerCase();
-    const providedBy = all.flatMap((node) =>
-      node.providers
-        .filter((provider) => provider.token.toLowerCase() === want)
-        .map((provider) => ({
-          id: node.injector.id,
-          name: node.injector.name,
-          type: node.injector.type,
-          provider,
-        })),
-    );
-    const injectedBy = (selector ? matched : all).flatMap((node) =>
-      (node.dependencies ?? [])
-        .filter((dep) => dep.token.toLowerCase() === want)
-        .map((dep) => ({
-          id: node.injector.id,
-          name: node.injector.name,
-          component: node.injector.component,
-          from: dep.from,
-          flags: dep.flags,
-          providedBy: dep.providedBy,
-          providedByName: dep.providedBy ? nameOf(dep.providedBy) : null,
-        })),
-    );
-    const where = selector ? ` among the injectors matching \`${selector}\`` : '';
-    if (!providedBy.length && !injectedBy.length) {
-      const similar = [
-        ...new Set(
-          all.flatMap((node) => [
-            ...node.providers.map((provider) => provider.token),
-            ...(node.dependencies ?? []).map((dep) => dep.token),
-          ]),
-        ),
-      ]
-        .filter((name) => name.toLowerCase().includes(want))
-        .slice(0, 10);
-      sections.push(
-        `No injector on page \`${pageId}\` provides \`${token}\` and nothing injects it${where}.${
-          similar.length
-            ? ` Similar tokens: ${similar.map((name) => `\`${name}\``).join(', ')}.`
-            : ''
-        }`,
-      );
-    } else {
-      sections.push(
-        `Token \`${token}\` on page \`${pageId}\`. \`providedBy\` lists the injectors whose own providers include it; \`injectedBy\` lists what injects it${where} and which injector supplied it (\`providedBy\` null means none did).\n\n${JSON.stringify({ providedBy, injectedBy })}`,
-      );
-    }
-  }
-
-  return capped(untrusted(`${sections.join('\n\n')}${notes}`));
+  return fitLists(
+    [elementDetail, environmentDetail, providedBy, injectedBy],
+    ([elementShown, environmentShown, providedShown, injectedShown]) => {
+      const sections: string[] = [];
+      if (matchedElements.length) {
+        sections.push(
+          `Element injectors on page \`${pageId}\` matching \`${selector}\` (${matchedElements.length}). \`lookupPath\` lists the injectors Angular asks, in order, with the tokens each one provides.${shown(elementShown, elementDetail)}\n\n${JSON.stringify(elementShown)}`,
+        );
+      }
+      if (matchedEnvironments.length) {
+        sections.push(
+          `Environment injectors on page \`${pageId}\` matching \`${selector}\` (${matchedEnvironments.length}). \`dependencies\` lists what the services this injector already created inject (\`from\` is the service, \`providedBy\` the injector that supplied it). \`parents\` lists the environment injectors Angular asks next, nearest first, with the tokens each one provides.${shown(environmentShown, environmentDetail)}\n\n${JSON.stringify(environmentShown)}`,
+        );
+      }
+      if (missingToken) sections.push(missingToken);
+      else if (token) {
+        sections.push(
+          `Token \`${token}\` on page \`${pageId}\`. \`providedBy\` lists the injectors whose own providers include it; \`injectedBy\` lists what injects it${where} and which injector supplied it (\`providedBy\` null means none did).${shown(providedShown, providedBy)}${shown(injectedShown, injectedBy)}\n\n${JSON.stringify({ providedBy: providedShown, injectedBy: injectedShown })}`,
+        );
+      }
+      return untrusted(`${sections.join('\n\n')}${notes}`);
+    },
+  );
 }
