@@ -83,7 +83,9 @@ function quoted(names: string[]): string {
  * characters, then keeps fewer entries per list, and says what it left out.
  * Values arrive serialized and redacted by the page; this only shortens them.
  */
-export function inspectComponentText(detail: ComponentDetail, heading: string): string {
+export function inspectComponentText(withLevels: ComponentDetail, heading: string): string {
+  // The levels the panel opened; an agent reads its own with `path`.
+  const { expanded: _expanded, ...detail } = withLevels;
   const answer = (value: ComponentDetail, notes: string[]) =>
     `${heading}${notes.length ? `\n\n${notes.join(' ')}` : ''}\n\n${JSON.stringify(value, null, 2)}`;
   const full = answer(detail, []);

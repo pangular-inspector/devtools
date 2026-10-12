@@ -1,6 +1,11 @@
 import { MAX_DEFER_BLOCKS } from '../defer-blocks.ts';
 import { MAX_FOR_BLOCKS } from '../for-blocks.ts';
-import type { ComponentPage, DeferBlockInfo, LiveComponentNode } from '../types.ts';
+import type {
+  ComponentPage,
+  DeferBlockInfo,
+  HydrationReport,
+  LiveComponentNode,
+} from '../types.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import { untrusted } from './forms-tools.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
@@ -33,12 +38,18 @@ export function toComponentPage(report: Omit<ComponentPage, 'reportedAt'>, now =
     typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
   const components = cap(report.truncatedBy?.components);
   const depth = cap(report.truncatedBy?.depth);
-  if (report.truncated && (components || depth)) {
+  const directiveHosts = cap(report.truncatedBy?.directiveHosts);
+  if (report.truncated && (components || depth || directiveHosts)) {
     page.truncatedBy = {
       ...(components ? { components } : {}),
       ...(depth ? { depth } : {}),
+      ...(directiveHosts ? { directiveHosts } : {}),
     };
   }
+  const hosts = cap(report.directiveHostCount);
+  if (hosts) page.directiveHostCount = hosts;
+  const hydration = toHydrationReport(report.hydration);
+  if (hydration) page.hydration = hydration;
   if (typeof report.url === 'string') page.url = redactUrl(report.url.slice(0, 2000));
   if (typeof report.title === 'string') page.title = redactMessage(report.title.slice(0, 200));
   if (Array.isArray(report.deferBlocks)) {
@@ -59,6 +70,43 @@ export function toComponentPage(report: Omit<ComponentPage, 'reportedAt'>, now =
   return page;
 }
 
+const count = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+const text = (value: unknown, max: number) =>
+  typeof value === 'string' && value ? redactMessage(value.slice(0, max)) : undefined;
+
+/** A page's hydration report with only the fields and sizes the server keeps. */
+export function toHydrationReport(value: unknown): HydrationReport | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Partial<HydrationReport>;
+  const counts = (raw.counts ?? {}) as Partial<HydrationReport['counts']>;
+  const mismatches = Array.isArray(raw.mismatches) ? raw.mismatches.slice(0, 20) : [];
+  return {
+    hydrated: raw.hydrated === true,
+    counts: {
+      hydrated: count(counts.hydrated),
+      skipped: count(counts.skipped),
+      mismatched: count(counts.mismatched),
+      client: count(counts.client),
+      dehydratedBlocks: count(counts.dehydratedBlocks),
+    },
+    mismatches: mismatches
+      .filter((m) => m && typeof m.id === 'string')
+      .map((m) => {
+        const expected = text(m.expected, 600);
+        const actual = text(m.actual, 600);
+        return {
+          id: m.id.slice(0, 50),
+          name: String(m.name ?? '').slice(0, 200),
+          tag: String(m.tag ?? '').slice(0, 200),
+          ...(expected ? { expected } : {}),
+          ...(actual ? { actual } : {}),
+        };
+      }),
+    ...(raw.overlay === true ? { overlay: true } : {}),
+  };
+}
+
 export function truncationText(pages: Iterable<ComponentPage>): string {
   const notes: string[] = [];
   for (const page of pages) {
@@ -67,6 +115,7 @@ export function truncationText(pages: Iterable<ComponentPage>): string {
     const caps = [
       ...(by.components ? [`the first ${by.components} component instances`] : []),
       ...(by.depth ? [`${by.depth} levels of DOM nesting`] : []),
+      ...(by.directiveHosts ? [`the first ${by.directiveHosts} directive hosts`] : []),
     ];
     notes.push(
       `The tree of page \`${page.pageId}\` stops at ${caps.length ? caps.join(' and ') : 'its size limit'}, so instances past it are not listed or searchable.`,
@@ -103,10 +152,11 @@ export function findComponents(pages: Iterable<ComponentPage>, query: string) {
   const hits: { pageId: string; node: LiveComponentNode }[] = [];
   const visit = (pageId: string, nodes: LiveComponentNode[]) => {
     for (const node of nodes) {
+      // A directive host is found by its id only: a class name or tag names a component.
       if (
         node.id === query ||
-        node.name.toLowerCase() === needle ||
-        node.tag.toLowerCase() === needle
+        (node.kind !== 'directive' &&
+          (node.name.toLowerCase() === needle || node.tag.toLowerCase() === needle))
       ) {
         hits.push({ pageId, node });
       }
@@ -118,6 +168,15 @@ export function findComponents(pages: Iterable<ComponentPage>, query: string) {
 }
 
 export type ComponentHit = ReturnType<typeof findComponents>[number];
+
+/** The inspect-component answer for an element that hosts directives but no component. */
+export function directiveHostText(node: LiveComponentNode, pageId: string): string {
+  const names = (node.directives ?? [node.name]).map((name) => `\`${name}\``).join(', ');
+  const attributes = node.attributes?.length
+    ? ` (${node.attributes.map((name) => `\`[${name}]\``).join(', ')})`
+    : '';
+  return `\`${node.id}\` on page \`${pageId}\` is a \`<${node.tag}>\` that hosts ${names}${attributes} but no component, so it has no component detail. Pass the id to pangular:highlight to show it. The inputs of those directives belong to the template of the component that renders the element.`;
+}
 
 const LISTED_MATCHES = 20;
 

@@ -1,4 +1,3 @@
-import { JsonPipe } from '@angular/common';
 import {
   Component,
   DestroyRef,
@@ -24,18 +23,25 @@ import { isStaticReport } from '../rpc';
 import { Select, type SelectOption } from '../ui/select';
 import {
   countText,
+  directiveHostLabel,
   filterAnnouncement,
   truncationNotice,
   filterTree,
+  hydrationLabel,
   nearestRow,
   reconcileSelection,
+  withoutDirectiveHosts,
+  type HydrationStatus,
 } from './component-tree-state';
+import { HydrationSection, type HydrationReport } from './hydration-section';
 import { CdRecording, type CdPage } from './cd-recording';
 import type { ComponentFocus } from '../types/component-focus.types';
 import type { InjectorFocus } from '../types/injector-focus.types';
 import { SourceLink } from '../ui/source-link';
 import { actionAllowed } from '../devtools-config';
-import { PropValue } from './component-prop-value';
+import { ValueTree } from './component-value-tree';
+import { ValueStore } from './component-value-store';
+import { nestedMatches } from './component-value-state';
 import { StoreGlobal } from '../ui/store-global';
 import { ForBlocksSection, type ForBlock } from './for-blocks-section';
 
@@ -54,7 +60,11 @@ interface LiveNode {
   id: string;
   name: string;
   tag: string;
+  /** `directive` for an element that hosts directives but no component. */
+  kind?: 'directive';
   directives?: string[];
+  attributes?: string[];
+  hydration?: HydrationStatus;
   children: LiveNode[];
 }
 
@@ -66,6 +76,7 @@ interface Prop {
   kind?: 'signal' | 'resource';
   edit?: 'property' | 'signal';
   locked?: string;
+  editInside?: 'property' | 'signal';
 }
 
 interface Dependency {
@@ -90,6 +101,8 @@ interface Detail {
   listeners: string[];
   directives: { name: string; inputs: Prop[]; outputs: Prop[] }[];
   dependencies: Dependency[];
+  /** Nested value levels opened in the panel, read again on each push. */
+  expanded?: Record<string, unknown>;
 }
 
 interface DeferBlock {
@@ -114,8 +127,11 @@ interface Page {
   forBlocksTruncated?: boolean;
   roots: LiveNode[];
   count: number;
+  /** Elements in `roots` that host directives but no component. */
+  directiveHostCount?: number;
+  hydration?: HydrationReport;
   truncated?: boolean;
-  truncatedBy?: { components?: number; depth?: number };
+  truncatedBy?: { components?: number; depth?: number; directiveHosts?: number };
   detail: Detail | null;
   reportedAt: number;
 }
@@ -153,9 +169,28 @@ function bare(name: string): string {
   return name.replace(/^_(?=[A-Z])/, '');
 }
 
+const DIRECTIVE_HOSTS_KEY = 'pangular:components:directive-hosts';
+
+/** Whether this viewer last chose to show directive hosts; shown unless they hid them. */
+function storedDirectiveHosts(): boolean {
+  try {
+    return localStorage.getItem(DIRECTIVE_HOSTS_KEY) !== 'hidden';
+  } catch {
+    return true;
+  }
+}
+
 @Component({
   selector: 'app-component-tree',
-  imports: [JsonPipe, Select, CdRecording, SourceLink, PropValue, StoreGlobal, ForBlocksSection],
+  imports: [
+    Select,
+    CdRecording,
+    SourceLink,
+    ValueTree,
+    StoreGlobal,
+    ForBlocksSection,
+    HydrationSection,
+  ],
   host: { '(keydown.escape)': 'cancelPick()' },
   template: `
     @if (live()) {
@@ -174,14 +209,19 @@ function bare(name: string): string {
           <input
             #filterInput
             type="search"
-            placeholder="Filter by class, tag or directive…"
+            placeholder="Filter: text, <tag> or [directive]…"
             aria-label="Filter components by class, tag or directive"
+            aria-describedby="ct-filter-hint"
             autocomplete="off"
             spellcheck="false"
             [value]="filter()"
             (input)="setFilter($any($event.target).value)"
             (keydown.escape)="setFilter('')"
           />
+          <span id="ct-filter-hint" class="sr-only">
+            Type plain text, a tag such as &lt;button&gt;, or a directive such as [routerLink].
+            Combine them to narrow the tree.
+          </span>
         </div>
         @if (pageOptions().length > 1) {
           <span class="sr-only" id="ct-page-label">Page</span>
@@ -194,6 +234,20 @@ function bare(name: string): string {
           />
         }
         <span class="count">{{ countLabel() }}</span>
+        @if (page()!.directiveHostCount) {
+          <button
+            type="button"
+            class="tree-action"
+            [attr.aria-pressed]="showDirectiveHosts()"
+            (click)="toggleDirectiveHosts()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 4H5v16h3" />
+              <path d="M16 4h3v16h-3" />
+            </svg>
+            Directive hosts
+          </button>
+        }
         <button
           type="button"
           class="tree-action"
@@ -249,6 +303,9 @@ function bare(name: string): string {
               @if (page()!.truncated) {
                 <p class="state-hint">The filter only searches the components the tree lists.</p>
               }
+              @if (!showDirectiveHosts() && page()!.directiveHostCount) {
+                <p class="state-hint">Directive hosts are hidden, so they are not searched.</p>
+              }
               <button type="button" (click)="clearFilter()">Clear filter</button>
             </div>
           }
@@ -269,6 +326,7 @@ function bare(name: string): string {
                 [attr.tabindex]="rovingId() === row.node.id ? 0 : -1"
                 [attr.data-id]="row.node.id"
                 [class.selected]="selectedId() === row.node.id"
+                [class.dir-host]="row.node.kind === 'directive'"
                 [style.--depth]="row.depth"
                 (click)="select(row.node.id)"
                 (focus)="focusId.set(row.node.id); highlight(row.node.id)"
@@ -288,8 +346,21 @@ function bare(name: string): string {
                 } @else {
                   <span class="twisty-space" aria-hidden="true"></span>
                 }
-                <span class="name mono">{{ row.node.name }}</span>
-                <span class="tag mono">&lt;{{ row.node.tag }}&gt;</span>
+                @if (row.node.kind === 'directive') {
+                  <span class="tag host-tag mono">&lt;{{ row.node.tag }}&gt;</span>
+                  <span class="host-dirs mono" [attr.title]="row.node.directives?.join(', ')">{{
+                    hostLabel(row.node)
+                  }}</span>
+                  <span class="sr-only">directive host</span>
+                } @else {
+                  <span class="name mono">{{ row.node.name }}</span>
+                  <span class="tag mono">&lt;{{ row.node.tag }}&gt;</span>
+                }
+                @if (row.node.hydration; as status) {
+                  <span [class]="'hyd hyd-' + status"
+                    ><span class="sr-only">Hydration: </span>{{ hydrationText(status) }}</span
+                  >
+                }
                 @for (hit of routedById().get(row.node.id) ?? []; track hit.outlet + hit.route) {
                   <span class="routed">{{ hit.route || '/' }}</span>
                 }
@@ -301,7 +372,7 @@ function bare(name: string): string {
                     >
                   </span>
                 }
-                @if (row.node.directives?.length) {
+                @if (row.node.kind !== 'directive' && row.node.directives?.length) {
                   <span class="dirs" [attr.title]="row.node.directives!.join(', ')">
                     +{{ row.node.directives!.length }}
                     <span class="sr-only">
@@ -314,7 +385,36 @@ function bare(name: string): string {
           </div>
         </div>
 
-        @if (selectedNode(); as sel) {
+        @if (selectedHost(); as host) {
+          <section class="detail" aria-labelledby="ct-detail-title">
+            <header class="detail-head">
+              <span class="badge">directive host</span>
+              <h2 id="ct-detail-title" class="mono">&lt;{{ host.tag }}&gt;</h2>
+              <span class="mono muted">{{ hostLabel(host) }}</span>
+            </header>
+            <div class="block">
+              <h3>
+                Directives <span class="pill">{{ host.directives?.length ?? 0 }}</span>
+              </h3>
+              <ul class="chips">
+                @for (name of host.directives ?? []; track name + $index) {
+                  <li class="chip mono">{{ name }}</li>
+                }
+              </ul>
+            </div>
+            <div class="block">
+              <p class="empty-line">
+                This element hosts directives but no component. Their inputs are bound in the
+                template of the component that renders it.
+              </p>
+              @if (ownerOf(host.id); as owner) {
+                <div class="actions owner-action">
+                  <button type="button" (click)="reveal(owner.id)">Show {{ owner.name }}</button>
+                </div>
+              }
+            </div>
+          </section>
+        } @else if (selectedNode(); as sel) {
           <section class="detail" aria-labelledby="ct-detail-title">
             <header class="detail-head">
               <span class="badge">component</span>
@@ -376,127 +476,185 @@ function bare(name: string): string {
                 }
               </dl>
 
-              <div class="block">
-                <h3>
-                  Inputs <span class="pill">{{ d.inputs.length }}</span>
-                </h3>
-                @if (d.inputs.length) {
-                  <ul class="props">
-                    @for (p of d.inputs; track p.name) {
-                      <li class="prop">
-                        <span class="prop-name mono">
-                          {{ p.name }}
-                          @if (p.prop !== p.name) {
-                            <span class="muted">({{ p.prop }})</span>
-                          }
-                        </span>
-                        <app-prop-value
-                          [prop]="p"
-                          [componentId]="d.id"
-                          [pageId]="page()?.pageId ?? null"
-                          [rpc]="rpc()"
-                          [writes]="canEdit()"
-                        />
-                      </li>
-                    }
-                  </ul>
-                } @else {
-                  <p class="empty-line">No inputs.</p>
-                }
-              </div>
-
-              <div class="block">
-                <h3>
-                  Outputs <span class="pill">{{ d.outputs.length }}</span>
-                </h3>
-                @if (d.outputs.length) {
-                  <ul class="chips">
-                    @for (p of d.outputs; track p.name) {
-                      <li class="chip" [class.on]="p.listened">
-                        <span class="mono">{{ p.name }}</span>
-                        <span class="chip-note">{{ p.listened ? 'listened' : 'no listener' }}</span>
-                      </li>
-                    }
-                  </ul>
-                } @else {
-                  <p class="empty-line">No outputs.</p>
-                }
-              </div>
-
-              <div class="block">
-                <h3>
-                  Properties <span class="pill">{{ d.properties?.length ?? 0 }}</span>
-                </h3>
-                @if (d.properties?.length) {
-                  <ul class="props">
-                    @for (p of d.properties; track p.name) {
-                      <li class="prop">
-                        <span class="prop-name mono">
-                          {{ p.name }}
-                          @if (p.kind) {
-                            <span class="flag">{{ p.kind }}</span>
-                          }
-                        </span>
-                        <app-prop-value
-                          [prop]="p"
-                          [componentId]="d.id"
-                          [pageId]="page()?.pageId ?? null"
-                          [rpc]="rpc()"
-                          [writes]="canEdit()"
-                        />
-                      </li>
-                    }
-                  </ul>
-                } @else {
-                  <p class="empty-line">No other properties.</p>
-                }
-              </div>
-
-              @if (d.listeners.length) {
-                <div class="block">
-                  <h3>
-                    DOM listeners <span class="pill">{{ d.listeners.length }}</span>
-                  </h3>
-                  <ul class="chips">
-                    @for (name of d.listeners; track name) {
-                      <li class="chip mono">{{ name }}</li>
-                    }
-                  </ul>
+              <div class="prop-filter">
+                <div class="search">
+                  <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m20 20-3.5-3.5" />
+                  </svg>
+                  <input
+                    #propFilterInput
+                    type="search"
+                    placeholder="Filter values by name…"
+                    aria-label="Filter inputs, outputs and properties by name, including opened nested keys"
+                    autocomplete="off"
+                    spellcheck="false"
+                    [value]="propFilter()"
+                    (input)="propFilter.set($any($event.target).value)"
+                    (keydown.escape)="clearPropFilter($event)"
+                  />
                 </div>
-              }
+                @if (propQuery()) {
+                  <span class="count">{{ shownValues()?.count ?? 0 }} of {{ valueTotal() }}</span>
+                }
+                <p class="sr-only" role="status">{{ propFilterStatus() }}</p>
+              </div>
 
-              @for (dir of d.directives; track dir.name + $index) {
-                <div class="block">
-                  <h3>
-                    <span class="mono">{{ dir.name }}</span>
-                    <span class="flag">directive on host</span>
-                  </h3>
-                  @if (dir.inputs.length) {
-                    <ul class="props">
-                      @for (p of dir.inputs; track p.name) {
-                        <li class="prop">
-                          <span class="prop-name mono">{{ p.name }}</span>
-                          <pre>{{ p.value | json }}</pre>
-                        </li>
-                      }
-                    </ul>
-                  }
-                  @if (dir.outputs.length) {
+              @if (shownValues(); as v) {
+                @if (propQuery() && !v.count) {
+                  <div class="state compact">
+                    <p class="state-title">
+                      No inputs, outputs or properties match “{{ propFilter().trim() }}”
+                    </p>
+                    <p class="state-hint">
+                      The filter searches names, and the nested keys of values you opened.
+                    </p>
+                    <button type="button" (click)="clearPropFilter()">Clear filter</button>
+                  </div>
+                }
+
+                @if (!propQuery() || v.inputs.length) {
+                  <div class="block">
+                    <h3>
+                      Inputs <span class="pill">{{ v.inputs.length }}</span>
+                    </h3>
+                    @if (v.inputs.length) {
+                      <ul class="props">
+                        @for (p of v.inputs; track p.name) {
+                          <li class="prop">
+                            <span class="prop-name mono">
+                              {{ p.name }}
+                              @if (p.prop !== p.name) {
+                                <span class="muted">({{ p.prop }})</span>
+                              }
+                            </span>
+                            <app-value-tree
+                              [prop]="p"
+                              [store]="values"
+                              [query]="propFilter()"
+                              [componentId]="d.id"
+                              [pageId]="page()?.pageId ?? null"
+                              [rpc]="rpc()"
+                              [writes]="canEdit()"
+                            />
+                          </li>
+                        }
+                      </ul>
+                    } @else {
+                      <p class="empty-line">No inputs.</p>
+                    }
+                  </div>
+                }
+
+                @if (!propQuery() || v.outputs.length) {
+                  <div class="block">
+                    <h3>
+                      Outputs <span class="pill">{{ v.outputs.length }}</span>
+                    </h3>
+                    @if (v.outputs.length) {
+                      <ul class="chips">
+                        @for (p of v.outputs; track p.name) {
+                          <li class="chip" [class.on]="p.listened">
+                            <span class="mono">{{ p.name }}</span>
+                            <span class="chip-note">{{
+                              p.listened ? 'listened' : 'no listener'
+                            }}</span>
+                          </li>
+                        }
+                      </ul>
+                    } @else {
+                      <p class="empty-line">No outputs.</p>
+                    }
+                  </div>
+                }
+
+                @if (!propQuery() || v.properties.length) {
+                  <div class="block">
+                    <h3>
+                      Properties <span class="pill">{{ v.properties.length }}</span>
+                    </h3>
+                    @if (v.properties.length) {
+                      <ul class="props">
+                        @for (p of v.properties; track p.name) {
+                          <li class="prop">
+                            <span class="prop-name mono">
+                              {{ p.name }}
+                              @if (p.kind) {
+                                <span class="flag">{{ p.kind }}</span>
+                              }
+                            </span>
+                            <app-value-tree
+                              [prop]="p"
+                              [store]="values"
+                              [query]="propFilter()"
+                              [componentId]="d.id"
+                              [pageId]="page()?.pageId ?? null"
+                              [rpc]="rpc()"
+                              [writes]="canEdit()"
+                            />
+                          </li>
+                        }
+                      </ul>
+                    } @else {
+                      <p class="empty-line">No other properties.</p>
+                    }
+                  </div>
+                }
+
+                @if (!propQuery() && d.listeners.length) {
+                  <div class="block">
+                    <h3>
+                      DOM listeners <span class="pill">{{ d.listeners.length }}</span>
+                    </h3>
                     <ul class="chips">
-                      @for (p of dir.outputs; track p.name) {
-                        <li class="chip" [class.on]="p.listened">
-                          <span class="mono">{{ p.name }}</span>
-                          <span class="chip-note">{{
-                            p.listened ? 'listened' : 'no listener'
-                          }}</span>
-                        </li>
+                      @for (name of d.listeners; track name) {
+                        <li class="chip mono">{{ name }}</li>
                       }
                     </ul>
-                  }
-                  @if (!dir.inputs.length && !dir.outputs.length) {
-                    <p class="empty-line">No inputs or outputs.</p>
-                  }
-                </div>
+                  </div>
+                }
+
+                @for (dir of v.directives; track dir.name + dir.index) {
+                  <div class="block">
+                    <h3>
+                      <span class="mono">{{ dir.name }}</span>
+                      <span class="flag">directive on host</span>
+                    </h3>
+                    @if (dir.inputs.length) {
+                      <ul class="props">
+                        @for (p of dir.inputs; track p.name) {
+                          <li class="prop">
+                            <span class="prop-name mono">{{ p.name }}</span>
+                            <app-value-tree
+                              [prop]="p"
+                              [store]="values"
+                              [query]="propFilter()"
+                              [directive]="dir.index"
+                              [componentId]="d.id"
+                              [pageId]="page()?.pageId ?? null"
+                              [rpc]="rpc()"
+                            />
+                          </li>
+                        }
+                      </ul>
+                    }
+                    @if (dir.outputs.length) {
+                      <ul class="chips">
+                        @for (p of dir.outputs; track p.name) {
+                          <li class="chip" [class.on]="p.listened">
+                            <span class="mono">{{ p.name }}</span>
+                            <span class="chip-note">{{
+                              p.listened ? 'listened' : 'no listener'
+                            }}</span>
+                          </li>
+                        }
+                      </ul>
+                    }
+                    @if (!dir.inputs.length && !dir.outputs.length) {
+                      <p class="empty-line">No inputs or outputs.</p>
+                    }
+                  </div>
+                }
               }
 
               <div class="block">
@@ -589,6 +747,14 @@ function bare(name: string): string {
             }
           </ul>
         </section>
+      }
+      @if (!native()) {
+        <app-hydration-section
+          [report]="page()?.hydration"
+          (overlay)="setHydrationOverlay($event)"
+          (showNode)="revealNode($event)"
+          (highlight)="highlight($event)"
+        />
       }
       <app-for-blocks
         [blocks]="page()?.forBlocks"
@@ -1080,6 +1246,43 @@ function bare(name: string): string {
     .checks + .dirs {
       margin-left: 0;
     }
+    .row.dir-host .host-tag {
+      color: var(--text);
+    }
+    .host-dirs {
+      min-width: 0;
+      color: var(--text-2);
+      font-size: 12px;
+      font-style: italic;
+      @include m.truncate;
+    }
+    .row.dir-host .twisty-space,
+    .row.dir-host .twisty {
+      border-left: 1px dashed var(--border-strong);
+    }
+    .hyd {
+      flex: none;
+      padding: 0 7px;
+      border-radius: 99px;
+      background: var(--surface-3);
+      color: var(--text-2);
+      font-size: 11px;
+      line-height: 18px;
+    }
+    .hyd-skipped {
+      @include m.tint(warn);
+    }
+    .hyd-mismatched {
+      @include m.tint(danger);
+    }
+    .tree-action[aria-pressed='true'] {
+      background: var(--accent-soft);
+      border-color: var(--accent-line);
+      color: var(--text-strong);
+    }
+    .owner-action {
+      margin-top: 10px;
+    }
     .dirs {
       flex: none;
       margin-left: auto;
@@ -1461,6 +1664,8 @@ export class ComponentTree {
     computation: () => '',
   });
   readonly collapsed = signal<ReadonlySet<string>>(new Set());
+  /** Elements that host directives but no component show as rows; this viewer can hide them. */
+  readonly showDirectiveHosts = signal(storedDirectiveHosts());
   readonly openKey = signal<string | null>(null);
   private readonly routerPages = signal<{ pageId?: string; outlets?: OutletInfo[] }[]>([]);
   private readonly pageId = hostPageId();
@@ -1514,6 +1719,14 @@ export class ComponentTree {
   });
   readonly cdHosts = computed(() => this.cdPage()?.hosts ?? {});
 
+  /** The page's tree, without directive hosts when this viewer hid them. */
+  private readonly visibleRoots = computed(() => {
+    const roots = this.page()?.roots ?? [];
+    return this.showDirectiveHosts() || !this.page()?.directiveHostCount
+      ? roots
+      : withoutDirectiveHosts(roots);
+  });
+
   private readonly index = computed(() => {
     const map = new Map<string, LiveNode>();
     const parents = new Map<string, string>();
@@ -1524,13 +1737,18 @@ export class ComponentTree {
         walk(node.children, node.id);
       }
     };
-    walk(this.page()?.roots ?? [], null);
+    walk(this.visibleRoots(), null);
     return { map, parents };
   });
 
   private readonly query = computed(() => this.filter().trim().toLowerCase());
 
-  private readonly filtered = computed(() => filterTree(this.page()?.roots ?? [], this.query()));
+  private readonly filtered = computed(() => filterTree(this.visibleRoots(), this.query()));
+
+  /** Directive host rows in the tree as shown. */
+  private readonly shownDirectiveHosts = computed(() =>
+    this.showDirectiveHosts() ? (this.page()?.directiveHostCount ?? 0) : 0,
+  );
 
   readonly deferBlocks = computed(() => this.page()?.deferBlocks ?? []);
   /** The block count, with a `+` when the page has more blocks than it reported. */
@@ -1544,6 +1762,7 @@ export class ComponentTree {
       this.filtered().matches,
       !!this.query(),
       !!this.page()?.truncated,
+      this.shownDirectiveHosts(),
     ),
   );
 
@@ -1569,10 +1788,82 @@ export class ComponentTree {
     return id ? (this.index().map.get(id) ?? null) : null;
   });
 
+  /** The selected row when it is a directive host, which has no component detail. */
+  readonly selectedHost = computed(() => {
+    const node = this.selectedNode();
+    return node?.kind === 'directive' ? node : null;
+  });
+
   readonly detail = computed(() => {
     const detail = this.page()?.detail;
     return detail && detail.id === this.selectedId() ? detail : null;
   });
+
+  /** Opened value levels of the selected component. */
+  readonly values = new ValueStore();
+  /** The detail's filter over input, output and property names and opened nested keys. */
+  readonly propFilter = signal('');
+  readonly propQuery = computed(() => this.propFilter().trim().toLowerCase());
+  private readonly propFilterInput = viewChild<ElementRef<HTMLInputElement>>('propFilterInput');
+
+  /** Inputs, outputs, properties and directive inputs the filter keeps, and how many. */
+  readonly shownValues = computed(() => {
+    const d = this.detail();
+    if (!d) return null;
+    const query = this.propQuery();
+    const named = (p: Prop) =>
+      !query || p.name.toLowerCase().includes(query) || p.prop.toLowerCase().includes(query);
+    const kept = (p: Prop, directive?: number) =>
+      named(p) ||
+      nestedMatches([p.prop], p.value, (path) => this.values.level(path, directive), query, 1)
+        .length > 0;
+    const inputs = d.inputs.filter((p) => kept(p));
+    const outputs = d.outputs.filter(named);
+    const properties = (d.properties ?? []).filter((p) => kept(p));
+    const directives = d.directives
+      .map((dir, index) => ({
+        ...dir,
+        index,
+        inputs: dir.inputs.filter((p) => kept(p, index)),
+        outputs: dir.outputs.filter(named),
+      }))
+      .filter((dir) => !query || dir.inputs.length || dir.outputs.length);
+    const count =
+      inputs.length +
+      outputs.length +
+      properties.length +
+      directives.reduce((n, dir) => n + dir.inputs.length + dir.outputs.length, 0);
+    return { inputs, outputs, properties, directives, count };
+  });
+
+  readonly valueTotal = computed(() => {
+    const d = this.detail();
+    if (!d) return 0;
+    return (
+      d.inputs.length +
+      d.outputs.length +
+      (d.properties?.length ?? 0) +
+      d.directives.reduce((n, dir) => n + dir.inputs.length + dir.outputs.length, 0)
+    );
+  });
+
+  readonly propFilterStatus = computed(() => {
+    if (!this.propQuery()) return '';
+    const count = this.shownValues()?.count ?? 0;
+    return count
+      ? `${count} of ${this.valueTotal()} values match.`
+      : 'No inputs, outputs or properties match.';
+  });
+
+  /** Clears the detail filter and keeps focus in its field. */
+  clearPropFilter(event?: Event) {
+    if (event && this.propFilter()) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    this.propFilter.set('');
+    this.propFilterInput()?.nativeElement.focus();
+  }
 
   readonly rovingId = computed(() => {
     const rows = this.rows();
@@ -1632,6 +1923,15 @@ export class ComponentTree {
   });
 
   constructor() {
+    effect(() => {
+      const detail = this.detail();
+      const target = {
+        rpc: this.rpc(),
+        pageId: this.page()?.pageId ?? null,
+        componentId: detail?.id ?? null,
+      };
+      untracked(() => this.values.follow(target, detail?.expanded));
+    });
     effect(() => {
       const shown = this.page()?.pageId ?? null;
       untracked(() => {
@@ -1841,7 +2141,12 @@ export class ComponentTree {
     this.filter.set(value);
     const { matches } = this.filtered();
     this.announcement.set(
-      filterAnnouncement(this.page()?.count ?? 0, matches, value, !!this.page()?.truncated),
+      filterAnnouncement(
+        (this.page()?.count ?? 0) + this.shownDirectiveHosts(),
+        matches,
+        value,
+        !!this.page()?.truncated,
+      ),
     );
   }
 
@@ -1915,10 +2220,59 @@ export class ComponentTree {
     this.selectedId.set(next);
     this.destroyed.set(null);
     this.focusId.set(id);
+    // A directive host has no component detail for the page to send.
+    if (next && this.index().map.get(next)?.kind === 'directive') return;
     this.sendSelection(next);
   }
 
-  private reveal(id: string) {
+  hostLabel(node: LiveNode) {
+    return directiveHostLabel(node);
+  }
+
+  hydrationText(status: HydrationStatus) {
+    return hydrationLabel(status);
+  }
+
+  /** The nearest component above a row, such as the one whose template renders a directive host. */
+  ownerOf(id: string): LiveNode | null {
+    const { map, parents } = this.index();
+    for (let parent = parents.get(id); parent; parent = parents.get(parent)) {
+      const node = map.get(parent);
+      if (node && node.kind !== 'directive') return node;
+    }
+    return null;
+  }
+
+  toggleDirectiveHosts() {
+    const next = !this.showDirectiveHosts();
+    this.showDirectiveHosts.set(next);
+    try {
+      localStorage.setItem(DIRECTIVE_HOSTS_KEY, next ? 'shown' : 'hidden');
+    } catch {
+      // the choice lasts for this view only
+    }
+    const selected = this.selectedId();
+    if (!next && selected && !this.index().map.has(selected)) this.selectedId.set(null);
+    this.announce(next ? 'Directive hosts are shown.' : 'Directive hosts are hidden.');
+  }
+
+  setHydrationOverlay(on: boolean) {
+    const client = this.rpc();
+    const pageId = this.page()?.pageId;
+    if (!client || !pageId) return;
+    void client
+      .scope('pangular')
+      .rpc.call('request-hydration-overlay', { pageId, on })
+      .catch(() => {});
+    this.announce(on ? 'Outlining hydration on the page.' : 'Hydration outline removed.');
+  }
+
+  /** Shows a node that the hydration summary names, when it is in the tree. */
+  revealNode(id: string) {
+    if (this.index().map.has(id)) this.reveal(id);
+  }
+
+  reveal(id: string) {
     const { parents } = this.index();
     this.collapsed.update((set) => {
       const next = new Set(set);

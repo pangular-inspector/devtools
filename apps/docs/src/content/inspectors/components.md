@@ -15,14 +15,34 @@ The Components tab lists each rendered component instance as a tree. It walks ea
 
 ### The tree
 
-Each row shows the class name and the host tag. Routed components get a chip with their route path. A **+N** chip means N directives sit on the same host.
+Each row shows the class name and the host tag. Routed components get a chip with their route path. A **+N** chip means N directives sit on the same host. In a page rendered on the server, each component row also shows its [hydration](#hydration) status.
 
-- Filter by class, tag or directive name.
-- The toolbar counts the instances on the page. While you filter, it shows how many instances match, like **2 of 40**. Ancestors kept to show where a match sits don't count.
+- Filter by class, tag or directive name, or with the [search syntax](#search-syntax).
+- The toolbar counts the instances on the page, and the directive hosts while they are shown. While you filter, it shows how many instances match, like **2 of 40**. Ancestors kept to show where a match sits don't count.
 - **Hover or focus** a row to highlight its host element in the page.
 - **Click** a row, or press Enter or Space, to select it. Click it again to clear the selection.
 - **Expand all** opens every row and **Collapse all** closes them down to the top level. Both are off while you filter, because the filter already opens every row that leads to a match.
 - **Pick component on page** selects the component behind an element you click in the app. See [Pick a component on the page](#pick-a-component-on-the-page).
+
+### Directive hosts
+
+An element that hosts directives but no component is a row too, so you can see where directives such as `routerLink` or `ngModel` sit. The row shows the tag and the attributes from the directive selectors, as **&lt;a&gt; [routerLink]**, in a lighter style than component rows. When a selector has no attribute, the row shows the directive class names instead. Select the row to see its directives and a button that shows the component whose template renders it. A directive host has no inputs or properties of its own in the detail pane.
+
+**Directive hosts** in the toolbar hides or shows these rows. The panel remembers the choice in this browser. While they are hidden, their children move up to the nearest shown row, and the filter does not search them. The page lists up to 1000 directive hosts. Past that, the notice names the limit. Directives on an `<ng-container>` or `<ng-template>` are not listed, because the tree walks elements.
+
+### Search syntax
+
+The filter takes plain text, tags and directives, in any order. Every part must match.
+
+| You type                     | It matches                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| `card`                       | A class name, tag or directive that contains `card`.                        |
+| `<app-row>`                  | Hosts whose tag is `app-row`.                                               |
+| `[ngModel]`                  | Hosts with a directive whose selector attribute or class name is `ngModel`. |
+| `<button> [matTooltip]`      | Buttons with `MatTooltip` on them.                                          |
+| `<button> [matTooltip] save` | The same, when the class name, tag or a directive also contains `save`.     |
+
+A token you are still typing at the end, like `<but` or `[mat`, matches as the start of a tag or part of a directive name. Case does not matter. A class name that ends in `Directive` also matches without it, so `[formControl]` finds `FormControlDirective`. The [`list-components`](../agents/tools.md#list-components) tool takes the same syntax in `filter`.
 
 Screen readers hear the match count when the filter changes, and a short message after **Expand all** or **Collapse all**. Components that the app adds or removes are not announced.
 
@@ -68,7 +88,7 @@ A fact shows **Unknown** when Angular does not report it.
 
 ### Inputs, outputs and listeners
 
-- **Inputs** with their live values. Signal inputs are unwrapped. When a component input has an alias, the row shows both names.
+- **Inputs** with their live values. Signal inputs are unwrapped. When a component input has an alias, the row shows both names. Objects, arrays, `Map`s and `Set`s open level by level, as described in [Nested values](#nested-values).
 - **Outputs**, each marked **listened** or **no listener**.
 - **DOM listeners** on the host element. This block appears only when there are any.
 - One block per directive on the host, with its inputs and outputs.
@@ -76,6 +96,24 @@ A fact shows **Unknown** when Angular does not report it.
 ### Properties
 
 **Properties** lists the component's other own fields: plain fields, state objects, signals and resources. It leaves out inputs, outputs, methods and injected services. Signals show their current value and a **signal** flag. A field that holds a `resource()` or `httpResource()` shows its status, value and error, with a **resource** flag.
+
+### Nested values
+
+An input or property that holds an object, array, `Map` or `Set` shows a toggle with its type and size, such as **Object (3 keys)** or **Array (45 items)**. The page sends only the first level of each value. Open the toggle to see it.
+
+- Open a nested value to read its next level from the page. **Reading from the page…** shows while it loads.
+- A level lists its first 30 entries. **Show N more** lists the next ones, 100 at a time, up to 1000.
+- An open level follows the app: the page reads it again on every refresh while it stays open. Close it and the page stops reading it.
+- `Map` entries show their key, and `Set` values their position.
+- Text values show their first 300 characters.
+
+The page reads nested values through own data properties only, so a getter never runs and shows as `[Getter]`. An object that contains itself shows `[Circular]`. Keys with secret-looking names show `[redacted]` and cannot be opened. If the component left the page, the level says so; select the component again.
+
+### Filter values
+
+The field above **Inputs** filters the inputs, outputs, properties and directive inputs of the selected component by name. It also matches the keys of the nested levels already loaded, and opens the levels that lead to a match. It does not ask the page for levels you haven't opened.
+
+While you filter, the field counts the values that match, like **2 of 14**, and hides the blocks with no match. When nothing matches, **Clear filter** clears the field and moves focus back to it. Press Escape in the field to clear it. The filter stays when you select another component.
 
 ### Editing values
 
@@ -87,7 +125,9 @@ On a live browser page, each input, property and writable signal of the selected
 | A decorator input or a plain field                              | Assigns the value, then runs change detection with `ng.applyChanges`.            |
 | A signal input, `computed()`, `asReadonly()` signal or resource | No **Edit**. The row says why, for example that a parent binding sets the input. |
 
-A row also has no **Edit** when its value is not JSON (a class instance, `Map` or `Date`), when it is redacted, or when the panel shows it shortened. A parent binding sets a bound input again the next time its own value changes, so the edit lasts until then. Directive inputs are read-only.
+Inside an opened object or array, each text, number, boolean or `null` value has its own **Edit**, which writes that path, such as `user.name` or `items.0.title`. **Edit** on an object or array itself reads the whole value from the page first, up to 5 levels and 100 entries per level. A larger value says **Too large to edit as a whole. Open it to edit the values inside.**
+
+A row also has no **Edit** when its value is not JSON (a class instance, `Map` or `Date`), when it is redacted, or when the panel shows it shortened. Values inside a `Map` or `Set` are read-only, and so are values inside a class instance that a signal holds. A parent binding sets a bound input again the next time its own value changes, so the edit lasts until then. Directive inputs are read-only.
 
 Set [`actions.components`](../getting-started/configuration.md#actions) to `false` to turn editing off. Agents write the same values with [`set-component-property` and `set-signal`](../agents/tools.md#edit-a-component).
 
@@ -102,6 +142,21 @@ When the page renders `@defer` blocks, a **Defer blocks** list follows the tree.
 Hover or focus a row to highlight the block in the page. Click it to select the component that holds it. The list is hidden when the page renders no defer blocks, or when its Angular version has no util to read them.
 
 The list holds the first 500 blocks of a page. When the page has more, the count reads **500+**.
+
+### Hydration
+
+The **Hydration** section shows how Angular hydrated a page that was rendered on the server: how many components were hydrated, skipped, mismatched or created on the client, and how many `@defer` blocks are still dehydrated. Each component row in the tree carries a badge with the same status:
+
+| Badge        | Meaning                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------- |
+| **Hydrated** | Angular reused the server HTML.                                                                         |
+| **Skipped**  | The host has `ngSkipHydration`, so the component rendered again on the client.                          |
+| **Mismatch** | The DOM did not match the server HTML. The section lists each one with what Angular expected and found. |
+| **Client**   | The component was created on the client, after hydration or inside a skipped host.                      |
+
+Click a mismatch to select its component in the tree. **Outline on page** draws an outline on the page over each region: hydrated (solid), skipped (dashed), mismatched (double) and dehydrated `@defer` blocks (dotted), each with a label and a legend in the corner. Only the top of each hydrated region gets an outline, so nested components don't stack boxes. The outline is drawn in its own layer, ignores the pointer and changes nothing in the app. Click the button again to remove it.
+
+A page that was not rendered on the server shows that there is nothing to hydrate. A page with server HTML and no hydrated component says that client hydration is off. Hydration status comes from what Angular records in development builds, so a production build shows the same note. The [`hydration`](../agents/tools.md#hydration) tool returns the same data.
 
 ### For blocks
 
@@ -200,6 +255,8 @@ The live tree reads `window.ng`, which only development builds expose. It uses t
 | `ng.applyChanges`                                                          | Refreshing the view after an edit to an input or a plain field.              |
 | `ng.getInjector`, `ɵgetDependenciesFromInjectable`, `ɵgetInjectorMetadata` | The **Injected** block, and the services **Properties** leaves out.          |
 | `ng.ɵgetControlFlowBlocks`, or `ng.ɵgetDeferBlocks` before Angular 22      | The **Defer blocks** list, and from Angular 22 the **&#64;for blocks** list. |
+| `__ngDebugHydrationInfo__` on each host                                    | The hydration status Angular records in development builds.                  |
+| `ɵdir.selectors` on the directive class                                    | The attribute names a directive host row shows.                              |
 
 ### Refresh rate
 
@@ -211,7 +268,7 @@ On Angular 20 and later, the page reads the tree about 250 ms after Angular runs
 
 <ngmd-workflow>
   <ngmd-step title="Filter the tree">
-    Type part of the class, tag or directive name.
+    Type part of the class, tag or directive name, or a search such as <code>&lt;button&gt; [matTooltip]</code>.
   </ngmd-step>
   <ngmd-step title="Hover the rows">
     The page highlights each host element as you move over it.
@@ -320,10 +377,11 @@ Press Escape in the filter box to clear it. When the filter matches nothing, **C
 | --------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pangular:get-components`         | tool     | Lists components and directives from source, with selector, kind, inputs, outputs, change detection, file and line.                                                                                                  |
 | `pangular:highlight`              | tool     | Highlights a component in the page and selects it. Takes an instance id, class name, host tag or CSS selector. Also retargets the Signals graph. Lists every instance a name matches.                                |
-| `pangular:inspect-component`      | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services.                                                                                          |
-| `pangular:list-components`        | tool     | Returns the live tree of one page as an indented outline with routed and directive markers. Takes a `filter` and a `depth`.                                                                                          |
+| `pangular:inspect-component`      | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services. With `path`, reads one nested value instead, with `depth` and `limit`.                   |
+| `pangular:list-components`        | tool     | Returns the live tree of one page as an indented outline with routed, directive host and hydration markers. Takes a `filter` with the search syntax, a `depth` and `directiveHosts`.                                 |
 | `pangular:defer-blocks`           | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                                                 |
 | `pangular:for-blocks`             | tool     | Lists the `@for` blocks of each page with their item count, track kind and `@empty` block.                                                                                                                           |
+| `pangular:hydration`              | tool     | Returns the hydration status of each page rendered on the server, and turns the outline on the page on or off. An action when it turns the outline on or off.                                                        |
 | `pangular:change-detection`       | tool     | Starts, stops or clears a change detection recording, turns the live views on or off, and returns the slowest and most often checked components, hook, output and afterRender time, the latest cycles, or an export. |
 | `pangular:set-component-property` | tool     | Writes an input or property of one instance and runs change detection. An action.                                                                                                                                    |
 | `pangular:set-signal`             | tool     | Sets a writable signal that one instance holds as a property. An action.                                                                                                                                             |
@@ -337,9 +395,9 @@ See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
 Live data reads `window.ng`. Production builds remove it, so the tab falls back to the source list.
 
-### Values are shortened
+### Values load one level at a time
 
-Input and property values stop at 3 levels of nesting, 30 keys or items, and 300 characters. Past that, the devtools cut the value and mark it. Each block lists up to 60 inputs, outputs, properties or listeners.
+The page sends the first level of each input and property, with 30 keys or items and 300 characters of text. Open a nested value to load its next level, and **Show N more** to list more entries, up to 1000 per level. The page follows at most 40 open levels of one component; past that, the oldest one stops updating until you open it again. Each block lists up to 60 inputs, outputs, properties or listeners.
 
 ### No `@let` values
 

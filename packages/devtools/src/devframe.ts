@@ -17,6 +17,12 @@ import {
   type CapacitorState,
 } from './rpc/capacitor-tools.ts';
 import { forBlocksText } from './rpc/for-blocks-tools.ts';
+import {
+  HYDRATION_DESCRIPTION,
+  HYDRATION_OVERLAY_DESCRIPTION,
+  hydrationOverlayText,
+  hydrationText,
+} from './rpc/hydration-tools.ts';
 import { registerConsoleGlobals } from './rpc/console-globals.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
@@ -75,6 +81,7 @@ import type {
 import { ZONE_MODES, zoneModeText } from './zone-mode.ts';
 import {
   deferBlocksText,
+  directiveHostText,
   expireComponentPages,
   findComponents,
   isComponentReport,
@@ -86,6 +93,8 @@ import {
 import { LIST_COMPONENTS_DESCRIPTION, listComponentsText } from './rpc/component-outline.ts';
 import { inspectComponentText } from './rpc/component-detail-text.ts';
 import { createComponentEdits } from './rpc/component-edits.ts';
+import { createComponentValues, valueResultText } from './rpc/component-values.ts';
+import { parsePath } from './component-edit.ts';
 import {
   explainFormsText,
   formsResourceText,
@@ -1702,6 +1711,23 @@ const pangular = defineDevframe({
       },
     });
 
+    // Draws the hydration overlay on a page; it changes nothing in the app.
+    const requestHydrationOverlay = (message: { pageId?: unknown; on?: unknown } | null) => {
+      if (typeof message?.on !== 'boolean') return;
+      const pageId = typeof message.pageId === 'string' ? message.pageId.slice(0, 50) : undefined;
+      void my.rpc.broadcast({
+        method: 'hydration-overlay',
+        args: [{ pageId, on: message.on }],
+        optional: true,
+      });
+    };
+    register({
+      name: 'request-hydration-overlay',
+      type: 'action',
+      jsonSerializable: true,
+      handler: requestHydrationOverlay,
+    });
+
     // Writes to component inputs, properties and signals: panel and agent tools.
     const componentEdits = createComponentEdits({
       config,
@@ -1724,6 +1750,27 @@ const pangular = defineDevframe({
         componentEdits.request(message?.pageId, message?.request),
     });
     for (const tool of componentEdits.tools) agent.registerTool(tool);
+
+    // Nested levels of component values: the panel opens them, inspect-component reads them.
+    const componentValues = createComponentValues({
+      pages: () => componentPages.values(),
+      broadcast: (method, message) =>
+        void my.rpc.broadcast({ method, args: [message], optional: true }),
+      answersFor,
+    });
+    register({
+      name: 'component-value-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: componentValues.answer,
+    });
+    register({
+      name: 'request-component-value',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; request?: unknown } | null) =>
+        componentValues.request(message?.pageId, message?.request),
+    });
 
     registerConsoleGlobals({
       config,
@@ -2101,7 +2148,7 @@ const pangular = defineDevframe({
       id: 'pangular:component-tree',
       name: 'Angular Component Tree',
       description:
-        'Live component instances per connected page, as JSON: `pages[pageId].roots` is a tree with one node per rendered instance (`id` instance id, `name` class name, `tag` host tag, `directives` on the host), `platform` (`angular-native` for an Angular Native app, missing for a browser page), `count`, `truncated` and `truncatedBy` (`components` or `depth`, the cap that stopped collection, when the page has more instances than it lists), and `detail` (live input values, outputs, other properties, listeners, change detection, encapsulation, injected dependencies, and `source` with the project-relative `file` and 1-based `line` of the class when a dev build has the debug info of Angular) for the selected instance: the one picked in the panel, on the page, or through pangular:highlight or pangular:inspect-component. `detail.properties` lists the other own fields (signals and resources unwrapped). `nodes` repeats the roots of the most recent page. Empty when no page is connected. ' +
+        'Live component instances per connected page, as JSON: `pages[pageId].roots` is a tree with one node per rendered instance (`id` instance id, `name` class name, `tag` host tag, `directives` on the host, `attributes` the selector attribute names of those directives, `hydration` (`hydrated`, `skipped`, `mismatched` or `client`) in a page rendered on the server), plus one node per element that hosts directives but no component (`kind: "directive"`, `directives` all of them, `name` the first), `platform` (`angular-native` for an Angular Native app, missing for a browser page), `count` (component instances), `directiveHostCount`, `hydration` (counts by status, dehydrated `@defer` blocks, mismatches with what Angular expected and found, and whether the hydration overlay is on; missing when the page was not rendered on the server), `truncated` and `truncatedBy` (`components`, `depth` or `directiveHosts`, the cap that stopped collection, when the page has more than it lists), and `detail` (live input values, outputs, other properties, listeners, change detection, encapsulation, injected dependencies, and `source` with the project-relative `file` and 1-based `line` of the class when a dev build has the debug info of Angular) for the selected instance: the one picked in the panel, on the page, or through pangular:highlight or pangular:inspect-component. `detail.properties` lists the other own fields (signals and resources unwrapped). Each value shows its first level, with nested objects, arrays, Maps and Sets as `{"$collapsed": type, "size": n}`: read them with pangular:inspect-component and `path`. `nodes` repeats the roots of the most recent page. Empty when no page is connected. ' +
         LIVE_RESOURCE_NOTE,
       mimeType: 'application/json',
       read: () => ({
@@ -2312,7 +2359,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-component',
       description:
-        'Get the live detail of one component instance: inputs, outputs with whether a parent listens, other own properties (signals and resources unwrapped), DOM listeners, host directives, change detection, encapsulation, host path, injected services and the source file and line of the class when a dev build has them. Pass an instance id from the pangular:component-tree resource, a class name or a host tag. This selects the instance on its page (the panel follows) and waits for the page to report it. A class name or tag that matches several instances answers for the first and lists the ids of all of them. Each input and property of the component carries `edit` (`property` for pangular:set-component-property, `signal` for pangular:set-signal) when it can be written, or `locked` with the reason it cannot. Secret-looking values are redacted. For the element injector of the instance (its providers and lookup path), pass the instance id as `selector` to pangular:inspect-providers. Past 20,000 characters, values longer than 1,000 characters show only their start, then each list keeps fewer entries, with a note saying what was left out; the `detail` of the pangular:component-tree resource has it all.',
+        'Get the live detail of one component instance: inputs, outputs with whether a parent listens, other own properties (signals and resources unwrapped), DOM listeners, host directives, change detection, encapsulation, host path, injected services and the source file and line of the class when a dev build has them. Pass an instance id from the pangular:component-tree resource, a class name or a host tag. This selects the instance on its page (the panel follows) and waits for the page to report it. A class name or tag that matches several instances answers for the first and lists the ids of all of them. Each input and property of the component carries `edit` (`property` for pangular:set-component-property, `signal` for pangular:set-signal) when it can be written, or `locked` with the reason it cannot, and `editInside` when a path inside its object or array can be written (such as `user.name`). Secret-looking values are redacted. Each value shows its first level: a nested object, array, Map or Set reads `{"$collapsed": type, "size": n}`, and a list cut at 30 entries ends with a `$more` count. Pass `path` (such as `user.address` or `items[0]`) to read that value instead, with `depth` (1 to 5 levels below it) and `limit` (entries per level, up to 1000); this reads without changing the selection, through own data properties only, so getters never run, and a path through a redacted name is refused. For the element injector of the instance (its providers and lookup path), pass the instance id as `selector` to pangular:inspect-providers. Past 20,000 characters, values longer than 1,000 characters show only their start, then each list keeps fewer entries, with a note saying what was left out; the `detail` of the pangular:component-tree resource has it all.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -2320,13 +2367,40 @@ const pangular = defineDevframe({
             type: 'string',
             description: 'Instance id (e.g. c12), class name (e.g. ProductCard) or host tag.',
           },
+          path: {
+            type: 'string',
+            description:
+              'Read one value instead of the whole detail: an input or property name, then keys and indexes, such as `user.address` or `items[0]` (an index counts the entries of a Map or Set).',
+          },
+          depth: {
+            type: 'number',
+            description: 'With `path`: levels to read below it, 1 to 5. Defaults to 1.',
+          },
+          limit: {
+            type: 'number',
+            description: 'With `path`: most entries per object or list, 1 to 1000. Defaults to 30.',
+          },
           page: componentPageProperty,
           pageId: { type: 'string', description: 'Same as `page`.' },
         },
         required: ['selector'],
       },
-      handler: async (args: { selector: string; page?: string; pageId?: string }) => {
+      handler: async (args: {
+        selector: string;
+        path?: unknown;
+        depth?: unknown;
+        limit?: unknown;
+        page?: string;
+        pageId?: string;
+      }) => {
         const page = pageArgument(args, 'pageId');
+        const valuePath = args.path === undefined || args.path === '' ? null : parsePath(args.path);
+        if (args.path !== undefined && args.path !== '' && !valuePath) {
+          return {
+            markdown:
+              'Pass `path` as a property name, or a path such as `user.address` or `items[0]`.',
+          };
+        }
         const unknown = unknownComponentPage(page);
         if (unknown) return unknown;
         if (![...componentPages.values()].some((entry) => entry.roots.length)) {
@@ -2346,9 +2420,24 @@ const pangular = defineDevframe({
               .join(' '),
           };
         }
+        if (hit.node.kind === 'directive') {
+          return { markdown: untrusted(directiveHostText(hit.node, hit.pageId)) };
+        }
+        const others = otherMatchesText(hits, args.selector);
+        if (valuePath) {
+          const whole = (value: unknown) =>
+            typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : undefined;
+          const result = await componentValues.request(hit.pageId, {
+            id: hit.node.id,
+            path: valuePath,
+            depth: whole(args.depth),
+            limit: whole(args.limit),
+          });
+          const text = valueResultText(result, { ...hit.node, pageId: hit.pageId }, valuePath);
+          return { markdown: others ? `${text}\n\n${others}` : text };
+        }
         selectComponentOnPage(hit.pageId, hit.node.id);
         const detail = await waitForComponentDetail(hit.pageId, hit.node.id);
-        const others = otherMatchesText(hits, args.selector);
         if (!detail) {
           return {
             markdown: `Selected \`${hit.node.name}\` (instance \`${hit.node.id}\` on page \`${hit.pageId}\`), but the page did not report its detail within 3 seconds. The instance may have been destroyed, or the tab may be in the background. Try again, or read the pangular:component-tree resource later.${others ? `\n\n${others}` : ''}`,
@@ -2376,15 +2465,25 @@ const pangular = defineDevframe({
           filter: {
             type: 'string',
             description:
-              'Case-insensitive text to find in a class name, host tag or host directive. Matches keep their ancestors.',
+              'Search: plain text found in a class name, host tag or host directive (case-insensitive), `<tag>` for a host tag and `[dir]` for a directive, as in `<button> [matTooltip]`. Every part must match. Matches keep their ancestors.',
           },
           depth: {
             type: 'number',
             description: 'Most levels to list, 1 for the roots only. Unlimited without it.',
           },
+          directiveHosts: {
+            type: 'boolean',
+            description:
+              'False leaves out the elements that host directives but no component. Listed by default.',
+          },
         },
       },
-      handler: async (args: { page?: string; filter?: string; depth?: number }) => ({
+      handler: async (args: {
+        page?: string;
+        filter?: string;
+        depth?: number;
+        directiveHosts?: boolean;
+      }) => ({
         markdown: listComponentsText(
           componentPages.values(),
           (pageId) => routerPages.get(pageId)?.outlets,
@@ -2392,6 +2491,7 @@ const pangular = defineDevframe({
             page: pageArgument(args),
             filter: typeof args?.filter === 'string' ? args.filter : undefined,
             depth: typeof args?.depth === 'number' ? args.depth : undefined,
+            directiveHosts: args?.directiveHosts !== false,
           },
         ),
       }),
@@ -2448,6 +2548,60 @@ const pangular = defineDevframe({
             ),
           }
         );
+      },
+    });
+
+    // Read-only mode keeps this tool as a read tool, without `overlay`.
+    const hydrationOverlayAllowed = !config.agent.readOnly;
+    agent.registerTool({
+      id: 'pangular:hydration',
+      description: `${HYDRATION_DESCRIPTION}${
+        hydrationOverlayAllowed
+          ? HYDRATION_OVERLAY_DESCRIPTION
+          : ' The agent is read-only, so this tool cannot turn the hydration overlay on or off.'
+      }`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: {
+            type: 'string',
+            description:
+              'Page id, when more than one tab reports (see pangular:list-pages). Lists every page without it.',
+          },
+          pageId: { type: 'string', description: 'Same as `page`.' },
+          ...(hydrationOverlayAllowed
+            ? {
+                overlay: {
+                  type: 'boolean',
+                  description:
+                    'Outline hydrated, skipped, mismatched and dehydrated regions on the page (true), or remove the outline (false).',
+                },
+              }
+            : {}),
+        },
+      },
+      handler: async (args: { page?: string; pageId?: string; overlay?: boolean }) => {
+        const page = pageArgument(args, 'pageId');
+        const unknown = unknownComponentPage(page);
+        if (unknown) return unknown;
+        const pages = byRecency(componentPages.values()).filter(
+          (entry) => !page || entry.pageId === page,
+        );
+        if (args?.overlay === undefined) return { markdown: hydrationText(pages) };
+        if (!hydrationOverlayAllowed) {
+          return {
+            markdown:
+              'The agent is read-only in the devtools config (agent.readOnly), so it cannot turn the hydration overlay on or off. Use the Hydration section on the Components page of the panel, or call this tool without `overlay`.',
+          };
+        }
+        if (typeof args.overlay !== 'boolean') {
+          return { markdown: '`overlay` must be true or false.' };
+        }
+        const done = hydrationOverlayText(args.overlay, pages);
+        if (!args.overlay || pages.some((entry) => entry.hydration)) {
+          requestHydrationOverlay({ pageId: page, on: args.overlay });
+        }
+        return { markdown: `${done}\n\n${hydrationText(pages)}` };
       },
     });
 

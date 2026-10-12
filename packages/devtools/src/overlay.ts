@@ -46,8 +46,10 @@ export { installSignalWriteHook } from './signal-history.ts';
 import { collectComponentTree, componentHostOf } from './component-tree.ts';
 import { startComponentPick } from './component-pick.ts';
 import { registerComponentEdit } from './component-edit-overlay.ts';
+import { registerComponentValues } from './component-values-overlay.ts';
 import { installSourceHelpers } from './component-source.ts';
 import { createDeferTracker } from './defer-blocks.ts';
+import { attachHydrationOverlay } from './hydration-overlay.ts';
 import { controlFlowReader, createForTracker } from './for-blocks.ts';
 import { attachConsoleGlobals } from './console-handles.ts';
 import { elementById, elementId } from './element-id.ts';
@@ -285,6 +287,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   };
 
   let componentTarget: string | null = null;
+  let attachValues: ReturnType<typeof registerComponentValues> | undefined;
   const deferTracker = createDeferTracker();
   const forTracker = createForTracker();
   let lastTreeJson = '';
@@ -293,8 +296,15 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     const ng = getNg();
     const blocksOf = controlFlowReader(ng);
     const deferBlocks = deferTracker.collect(ng, document, blocksOf);
+    const components = collectComponentTree(ng, {
+      selectedId: componentTarget,
+      directiveHosts: true,
+      hydration: true,
+      withDetail: attachValues,
+    });
     const tree = {
-      ...collectComponentTree(ng, { selectedId: componentTarget }),
+      ...components,
+      ...hydrationOverlay?.report(components, deferBlocks),
       url: redactUrl(location.href),
       title: redactMessage(document.title),
       ...(deferBlocks ? { deferBlocks } : {}),
@@ -429,6 +439,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
         tickMs: limits.refreshMs,
         devtoolsUrl: metaUrl,
       })
+    : null;
+  const hydrationOverlay = on.components
+    ? attachHydrationOverlay(my, pageId, () => void pushTree(true).catch(() => {}))
     : null;
   const cd = on.components
     ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs)
@@ -789,6 +802,10 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       },
     });
     own(() => cancelComponentPick?.());
+    attachValues = registerComponentValues(my.rpc, pageId, {
+      getNg,
+      changed: () => void pushTree().catch(() => {}),
+    });
     registerComponentEdit(my.rpc, pageId, {
       getNg,
       allowed: devtoolsConfig.actions.components,
@@ -854,6 +871,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     capacitor?.stop();
     ngrx?.stop();
     cd?.stop();
+    hydrationOverlay?.stop();
     stopAnalog();
     for (const cleanup of routerCleanup) cleanup();
     routerCleanup = [];

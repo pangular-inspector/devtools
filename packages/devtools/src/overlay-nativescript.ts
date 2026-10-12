@@ -10,6 +10,7 @@ import { Application, isAndroid } from '@nativescript/core';
 import { connectDevframe } from 'devframe/client';
 import { keepaliveDue } from './change-detection.ts';
 import { collectComponentTree, type ComponentDebugNg } from './component-tree.ts';
+import { registerComponentValues } from './component-values-overlay.ts';
 import { configFromConnection } from './config.ts';
 import { elementById } from './element-id.ts';
 import { setRedaction } from './forms-privacy.ts';
@@ -206,13 +207,18 @@ async function startSession(
   };
 
   let componentTarget: string | null = null;
+  const attachValues = registerComponentValues(my.rpc, pageId, {
+    getNg: angularDebugApi,
+    tree,
+    changed: () => void pushTree().catch(() => {}),
+  });
   let lastTreeJson = '';
   let treeSentAt = 0;
   async function pushTree(force = false) {
     const ng = angularDebugApi();
     if (!ng) return;
     const report = {
-      ...collectComponentTree(ng, { tree, selectedId: componentTarget }),
+      ...collectComponentTree(ng, { tree, selectedId: componentTarget, withDetail: attachValues }),
       url: '/',
       title,
       platform: 'nativescript' as const,

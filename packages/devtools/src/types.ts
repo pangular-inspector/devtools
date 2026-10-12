@@ -129,12 +129,56 @@ export interface SignalGraph {
   watch?: SignalWatchReport;
 }
 
+/**
+ * How hydration treated a component host, from Angular's dev-mode hydration
+ * info: `hydrated` (server HTML reused), `skipped` (`ngSkipHydration`, so
+ * rendered again on the client), `mismatched` (the DOM did not match the
+ * server HTML), or `client` (no hydration info in a hydrated page: created on
+ * the client, or inside a skipped host).
+ */
+export type HydrationStatus = 'hydrated' | 'skipped' | 'mismatched' | 'client';
+
 export interface LiveComponentNode {
+  id: string;
+  /** The class name; on a directive host, the first directive's. */
+  name: string;
+  tag: string;
+  /** `directive` for an element that hosts directives but no component. */
+  kind?: 'directive';
+  /** The other directives on the host; on a directive host, all of them. */
+  directives?: string[];
+  /** Attribute names from the selectors of those directives, such as `routerLink`. */
+  attributes?: string[];
+  /** Set on component hosts in a page that was rendered on the server. */
+  hydration?: HydrationStatus;
+  children: LiveComponentNode[];
+}
+
+/** A component whose DOM did not match the server HTML. */
+export interface ComponentHydrationMismatch {
   id: string;
   name: string;
   tag: string;
-  directives?: string[];
-  children: LiveComponentNode[];
+  /** What Angular expected, as it describes it in its error. */
+  expected?: string;
+  /** What it found instead. */
+  actual?: string;
+}
+
+/** Hydration of a page that was rendered on the server. Missing on any other page. */
+export interface HydrationReport {
+  /**
+   * True when Angular hydrated at least one host. False when the page has
+   * server HTML but nothing was hydrated: client hydration is off, so the app
+   * rendered again on the client.
+   */
+  hydrated: boolean;
+  /** Component hosts by status, and `@defer` blocks still dehydrated. */
+  counts: Record<HydrationStatus, number> & { dehydratedBlocks: number };
+  /** At most 20 mismatched components. */
+  mismatches: ComponentHydrationMismatch[];
+  /** The hydration overlay is drawn on the page. */
+  overlay?: boolean;
 }
 
 export interface ComponentProp {
@@ -147,6 +191,11 @@ export interface ComponentProp {
   edit?: 'property' | 'signal';
   /** Why it cannot be edited, when it cannot. */
   locked?: string;
+  /**
+   * The write that edits values inside it (`user.name`, `items[0]`), set on
+   * an object or array whose root can be written.
+   */
+  editInside?: 'property' | 'signal';
 }
 
 export interface ComponentSource {
@@ -171,6 +220,11 @@ export interface ComponentDetail {
   listeners: string[];
   directives: { name: string; inputs: ComponentProp[]; outputs: ComponentProp[] }[];
   dependencies: DependencyInfo[];
+  /**
+   * Nested value levels the panel opened, keyed by `valuePathKey()`, read
+   * again on every push so they stay current. See `component-values.ts`.
+   */
+  expanded?: Record<string, unknown>;
 }
 
 export interface DeferBlockInfo {
@@ -220,8 +274,15 @@ export interface ComponentTreeReport {
   roots: LiveComponentNode[];
   count: number;
   truncated?: boolean;
-  /** The caps that stopped collection: `components` instances, or `depth` DOM levels. */
-  truncatedBy?: { components?: number; depth?: number };
+  /**
+   * The caps that stopped collection: `components` instances, `depth` DOM
+   * levels, or `directiveHosts` elements that host only directives.
+   */
+  truncatedBy?: { components?: number; depth?: number; directiveHosts?: number };
+  /** Elements in `roots` that host directives but no component; `count` leaves them out. */
+  directiveHostCount?: number;
+  /** Missing when the page was not rendered on the server. */
+  hydration?: HydrationReport;
   detail: ComponentDetail | null;
   /** Missing when the page's Angular exposes no defer block util. */
   deferBlocks?: DeferBlockInfo[];

@@ -293,6 +293,13 @@ export function createHubFeed(
     // change-detection only writes when it starts, stops or clears a recording,
     // or turns a live view on or off.
     if (name === 'change-detection' && !cdWrites(args)) return;
+    // hydration only acts when it turns the overlay on or off.
+    if (
+      name === 'hydration' &&
+      typeof (args as { overlay?: unknown } | null)?.overlay !== 'boolean'
+    ) {
+      return;
+    }
     if (changedNothing(result)) return;
     const page = pageOf(args);
     post(

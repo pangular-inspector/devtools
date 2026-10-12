@@ -460,6 +460,7 @@ describe('component properties', () => {
         prop: 'filters',
         value: { city: 'Rome', sessionToken: '[redacted]' },
         locked: LOCKED.redacted,
+        editInside: 'property',
       },
       { name: 'password', prop: 'password', value: '[redacted]', locked: LOCKED.redacted },
     ]);
@@ -481,14 +482,17 @@ describe('component properties', () => {
     ]);
   });
 
-  it('caps the number of properties and the size of each value', () => {
+  it('caps the number of properties and sends one level of each value', () => {
     const many: Record<string, unknown> = {};
     for (let i = 0; i < 80; i++) many[`field${i}`] = i;
     many['field0'] = { list: Array.from({ length: 100 }, (_, i) => i) };
+    many['field1'] = Array.from({ length: 50 }, (_, i) => i);
     const detail = detailFor(many);
     expect(detail.properties).toHaveLength(60);
-    const list = (detail.properties[0].value as { list: unknown[] }).list;
-    expect(list.length).toBeLessThanOrEqual(31);
+    expect(detail.properties[0].value).toEqual({ list: { $collapsed: 'Array', size: 100 } });
+    const list = detail.properties[1].value as unknown[];
+    expect(list).toHaveLength(31);
+    expect(list.at(-1)).toEqual({ $more: 20 });
   });
 });
 

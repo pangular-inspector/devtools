@@ -76,18 +76,21 @@ export function parseDraft(text: string): { value: unknown } | { error: string }
       </p>
     } @else {
       <div class="view">
-        <pre
-          #valueBox
-          [attr.tabindex]="scrollable() ? 0 : null"
-          [attr.role]="scrollable() ? 'region' : null"
-          [attr.aria-label]="scrollable() ? 'Value of ' + prop().name : null"
-          >{{ prop().value | json }}</pre>
+        @if (!bare()) {
+          <pre
+            #valueBox
+            [attr.tabindex]="scrollable() ? 0 : null"
+            [attr.role]="scrollable() ? 'region' : null"
+            [attr.aria-label]="scrollable() ? 'Value of ' + prop().name : null"
+            >{{ prop().value | json }}</pre>
+        }
         @if (editable()) {
           <button
             #editButton
             type="button"
             class="edit"
             [attr.aria-label]="'Edit ' + prop().name"
+            [disabled]="busy()"
             (click)="start()"
           >
             Edit
@@ -219,6 +222,13 @@ export class PropValue {
   readonly rpc = input<DevframeRpcClient | null>(null);
   /** Whether this panel may write: live page, server connected, `actions.components` on. */
   readonly writes = input(false);
+  /** Only the Edit button and the editor: the value itself shows elsewhere (an expandable tree). */
+  readonly bare = input(false);
+  /**
+   * Reads the whole value for the editor when the shown one is a single
+   * level; it answers the value or why it cannot be edited whole.
+   */
+  readonly readDraft = input<(() => Promise<{ value?: unknown; error?: string }>) | null>(null);
 
   protected readonly fieldId = `prop-edit-${++nextId}`;
   protected readonly hintId = `${this.fieldId}-hint`;
@@ -249,11 +259,22 @@ export class PropValue {
     });
   }
 
-  start() {
-    const value = this.prop().value;
-    this.draft.set(value === undefined ? '' : JSON.stringify(value));
+  async start() {
+    let value = this.prop().value;
     this.error.set('');
     this.done.set('');
+    const reader = this.readDraft();
+    if (reader) {
+      this.busy.set(true);
+      const read = await reader();
+      this.busy.set(false);
+      if (read.error !== undefined) {
+        this.error.set(read.error);
+        return;
+      }
+      value = read.value;
+    }
+    this.draft.set(value === undefined ? '' : JSON.stringify(value));
     this.editing.set(true);
     afterNextRender(
       () => {

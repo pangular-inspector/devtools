@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Sixty-six tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Sixty-seven tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -35,7 +35,7 @@ Each tool reads from one of three places. The stdio server registers only the to
 
 ### The page argument
 
-Most page tools take an optional `page` argument to pick a browser tab. It defaults to the most recent one. `dispatch-ngrx-action`, `set-component-property` and `set-signal` refuse to guess when more than one tab could take the action. `form-action` and `fill-form` take the tab from the form id instead (the part after `@`, as in `Checkout.form@ab12`). `highlight` and `inspect-component` search every tab without it, newest first, and `defer-blocks` and `for-blocks` list every tab. `inspect-providers`, `highlight`, `inspect-component`, `defer-blocks` and `for-blocks` also accept `pageId`. The tables below leave `page` out.
+Most page tools take an optional `page` argument to pick a browser tab. It defaults to the most recent one. `dispatch-ngrx-action`, `set-component-property` and `set-signal` refuse to guess when more than one tab could take the action. `form-action` and `fill-form` take the tab from the form id instead (the part after `@`, as in `Checkout.form@ab12`). `highlight` and `inspect-component` search every tab without it, newest first, and `defer-blocks`, `for-blocks` and `hydration` list every tab. `inspect-providers`, `highlight`, `inspect-component`, `defer-blocks`, `for-blocks` and `hydration` also accept `pageId`. The tables below leave `page` out.
 
 If `page` names a tab that doesn't report that data, the tool answers `No page <id> is reporting ...` and lists the tabs that do, newest first. It never falls back to another tab. Without `page`, a class name or tag resolves on the most recent tab that has it, and `highlight` names the other tabs where it also matches.
 
@@ -49,21 +49,21 @@ The URL comes from the HTTP or router report. A page that sends neither (no rout
 
 Every tool has one of three safety tiers. The server sends the tier to your client as the tool's read-only and destructive hints.
 
-| Tier          | What the tool can do                                                                                              | Tools                                                                                                                                                                                              |
-| ------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                        | Every other tool, and every resource                                                                                                                                                               |
-| `action`      | Changes the running page, the server's fault rules or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes` and `change-detection` |
-| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                                                                           |
+| Tier          | What the tool can do                                                                                              | Tools                                                                                                                                                                                                           |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                        | Every other tool, and every resource                                                                                                                                                                            |
+| `action`      | Changes the running page, the server's fault rules or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `change-detection` and `hydration` |
+| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                                                                                        |
 
 <ngmd-alert severity="important">
-  The thirteen <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
+  The fourteen <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
-When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
+When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, and `hydration` only when it turns the overlay on or off. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
 
 ### Turn tools off
 
-The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record`, `flash`, `track` and `angularProfiling` arguments, so it reads a recording the panel started. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
+The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record`, `flash`, `track` and `angularProfiling` arguments, so it reads a recording the panel started. `hydration` stays as a `read` tool without its `overlay` argument. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ## Source scan
 
@@ -99,20 +99,26 @@ The live detail of one component instance: inputs, outputs and whether a parent 
 | Argument   | Required | Value                                                                        |
 | ---------- | -------- | ---------------------------------------------------------------------------- |
 | `selector` | yes      | An instance id from the `component-tree` resource, a class name or host tag. |
+| `path`     | no       | One value to read instead of the whole detail, such as `user.address`.       |
+| `depth`    | no       | With `path`: levels to read below it, 1 to 5. Defaults to 1.                 |
+| `limit`    | no       | With `path`: most entries per object or list, 1 to 1000. Defaults to 30.     |
 | `pageId`   | no       | Same as `page`.                                                              |
 
-A class name or tag that matches several instances answers for the first and lists the ids of all of them. When nothing matches and the page's tree stopped at a [limit](../inspectors/components.md#selection), `inspect-component` and `highlight` say which one, since the instance can be past it. Secret-looking values are redacted.
+A class name or tag that matches several instances answers for the first and lists the ids of all of them. A class name or tag only finds components. The id of a directive host from `list-components` answers with the directives on that element, since it has no component detail. When nothing matches and the page's tree stopped at a [limit](../inspectors/components.md#selection), `inspect-component` and `highlight` say which one, since the instance can be past it. Secret-looking values are redacted.
+
+Each value in the detail shows its first level. A nested object, array, `Map` or `Set` reads `{"$collapsed": type, "size": n}`, and a list cut at 30 entries ends with a `$more` count. Pass `path` to read that value: an input or property name, then keys and indexes, as in `user.address` or `items[0]`. An index into a `Map` or `Set` counts its entries. With `path`, the tool reads the value without changing the selection. It reads own data properties only, so getters never run, and it refuses a path through a redacted name. Each input and property carries `editInside` when a path inside it can be written with `set-component-property` or `set-signal`.
 
 The answer stops at 20,000 characters. Past that, each value longer than 1,000 characters shows only the start of its JSON, then each list (inputs, outputs, properties, listeners, directives, injected services, and the inputs and outputs of each directive) keeps fewer entries. A note names the cut values and says how many entries are not shown. The `detail` of the `component-tree` resource has every value in full.
 
 ### list-components
 
-The live component tree of one page as an indented outline, one line per instance: class name, host tag and instance id, as in `ProductCard <app-card> c12`. Reads: page.
+The live component tree of one page as an indented outline, one line per instance: class name, host tag and instance id, as in `ProductCard <app-card> c12`. An element that hosts directives but no component gets a line too, as in `<a> [routerLink] c14 [directive host: RouterLink]`. Reads: page.
 
-| Argument | Required | Value                                                                                                                       |
-| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `filter` | no       | Text to find in a class name, host tag or host directive, ignoring case. The outline keeps the matches and their ancestors. |
-| `depth`  | no       | The most levels to list, `1` for the roots only. Unlimited by default.                                                      |
+| Argument         | Required | Value                                                                                                                                                                                                          |
+| ---------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `filter`         | no       | A search, as in the [Components](../inspectors/components.md#search-syntax) filter: plain text, `<tag>` and `[directive]`, such as `<button> [matTooltip]`. The outline keeps the matches and their ancestors. |
+| `depth`          | no       | The most levels to list, `1` for the roots only. Unlimited by default.                                                                                                                                         |
+| `directiveHosts` | no       | `false` leaves out the elements that host directives but no component. They are listed by default.                                                                                                             |
 
 Markers follow the id:
 
@@ -120,6 +126,8 @@ Markers follow the id:
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `[routed route /products]`            | A router outlet shows this instance. A named outlet adds `outlet <name>`. It needs the Router inspector on. |
 | `[directives: RouterLinkActive, ...]` | The other directives on the host.                                                                           |
+| `[directive host: RouterLink]`        | The element hosts these directives and no component.                                                        |
+| `[hydration: skipped]`                | In a page rendered on the server, the host was `skipped`, `mismatched` or created on the `client`.          |
 | `(+3 below)`                          | `depth` hides 3 instances under this one.                                                                   |
 
 Without `page`, it lists the most recent tab that has a component tree and names the other tabs that have one. The outline carries no input or property values. Pass an id to `inspect-component` for those, or to `highlight` to show the instance. The answer stops at 20,000 characters and says how to narrow it, and it says when the page's tree stopped at a [limit](../inspectors/components.md#selection).
@@ -155,6 +163,17 @@ Angular reports the `track` expression as one of three kinds, not as its source 
 The page reads the blocks with `ng.ɵgetControlFlowBlocks`, which Angular 22.0 added for development builds. On an older Angular or a production build, the answer says the page cannot list them. The page sends the item count only, never the items.
 
 Each page lists at most 50 blocks, with a note on how many more are not shown, and says when the page has more than the 500 blocks it reports. The whole answer stops at 20,000 characters. If several tabs report, pass `page` to read one. The **&#64;for blocks** list on the [Components](../inspectors/components.md#for-blocks) page has every block.
+
+### hydration <ngmd-badge variant="alpha">Action</ngmd-badge>
+
+Hydration of each page that was rendered on the server: how many component hosts were hydrated, skipped with `ngSkipHydration`, mismatched or created on the client, and how many `@defer` blocks are still dehydrated. It names the skipped and client-created hosts and the dehydrated blocks, at most 30 of each, and each mismatch with what Angular expected and what it found. Reads: page.
+
+| Argument  | Required | Value                                                                                                                       |
+| --------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `pageId`  | no       | Same as `page`.                                                                                                             |
+| `overlay` | no       | `true` outlines the regions on the page, with a label on each and a legend. `false` removes the outline. Leave out to read. |
+
+A page that was not rendered on the server gets an answer that says so. A page with server HTML but no hydrated host gets a note that client hydration is off or the build is a production build. The overlay draws in its own layer over the page, ignores the pointer and changes nothing in the app. It is the **Outline on page** button of the [Hydration](../inspectors/components.md#hydration) section. With `agent.readOnly`, the tool has no `overlay` argument and is marked read-only. The whole answer stops at 20,000 characters.
 
 ### change-detection <ngmd-badge variant="alpha">Action</ngmd-badge>
 

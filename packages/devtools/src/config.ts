@@ -488,6 +488,7 @@ export const AGENT_SAFETY: Record<string, Exclude<AgentSafety, 'read'>> = {
   'record-pipes': 'action',
   'watch-signal': 'action',
   'change-detection': 'action',
+  hydration: 'action',
   'clear-recordings': 'destructive',
   'analog-call-api': 'destructive',
   'set-component-property': 'action',
@@ -496,9 +497,10 @@ export const AGENT_SAFETY: Record<string, Exclude<AgentSafety, 'read'>> = {
 
 /**
  * Tools that `agent.readOnly` keeps as `read` tools, with the arguments that
- * act refused: `change-detection` still answers, but without `record`.
+ * act refused: `change-detection` still answers, but without `record`, and
+ * `hydration` without `overlay`.
  */
-export const READ_ONLY_VARIANTS: readonly string[] = ['change-detection'];
+export const READ_ONLY_VARIANTS: readonly string[] = ['change-detection', 'hydration'];
 
 /** The tier an agent tool or resource is registered with under `config`. Resources are `read`. */
 export function agentSafety(id: string, config: ResolvedPangularConfig): AgentSafety {
@@ -558,6 +560,9 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'request-page-highlight': 'components',
   'request-component-edit': 'components',
   'component-edit-result': 'components',
+  'request-hydration-overlay': 'components',
+  'request-component-value': 'components',
+  'component-value-result': 'components',
   'get-signals': 'signals',
   'push-signal-graph': 'signals',
   'ping-signal-graph': 'signals',
@@ -628,6 +633,7 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'list-components': 'components',
   'defer-blocks': 'components',
   'for-blocks': 'components',
+  hydration: 'components',
   'change-detection': 'components',
   'set-component-property': 'components',
   'set-signal': 'components',
@@ -728,6 +734,7 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'list-components',
   'defer-blocks',
   'for-blocks',
+  'hydration',
   'change-detection',
   'set-component-property',
   'set-signal',
@@ -1018,4 +1025,77 @@ export interface CdReport extends CdRecording {
   supported: boolean;
   /** The views the page has on; missing from pages that report none. */
   options?: CdOptions;
+}
+
+/**
+ * A component tree search, as the panel's filter and the list-components tool
+ * read it: `<tag>` tokens match a host tag, `[dir]` tokens match a directive
+ * on the host by selector attribute or class name, and the rest is plain text
+ * found in a class name, tag or directive. Every part must match. A token
+ * still being typed (`<but`, `[mat`) matches as a prefix or part of a name.
+ */
+export interface TreeQuery {
+  tags: { value: string; exact: boolean }[];
+  directives: { value: string; exact: boolean }[];
+  text: string;
+}
+
+/** The node fields a tree search reads. */
+export interface TreeQueryNode {
+  name: string;
+  tag: string;
+  directives?: string[];
+  attributes?: string[];
+}
+
+export function parseTreeQuery(query: string): TreeQuery {
+  const parsed: TreeQuery = { tags: [], directives: [], text: '' };
+  let rest = query.toLowerCase();
+  rest = rest.replace(/<\s*([^<>\s]+)\s*>/g, (_, tag: string) => {
+    parsed.tags.push({ value: tag, exact: true });
+    return ' ';
+  });
+  rest = rest.replace(/\[\s*([^[\]\s]+)\s*\]/g, (_, dir: string) => {
+    parsed.directives.push({ value: dir, exact: true });
+    return ' ';
+  });
+  // A token still being typed at the end of the query.
+  rest = rest.replace(/(^|\s)([<[])([^<>[\]\s]*)$/, (_, space: string, open: string, value) => {
+    if (value) (open === '<' ? parsed.tags : parsed.directives).push({ value, exact: false });
+    return space;
+  });
+  parsed.text = rest.replace(/\s+/g, ' ').trim();
+  return parsed;
+}
+
+export function isEmptyTreeQuery(query: TreeQuery): boolean {
+  return !query.tags.length && !query.directives.length && !query.text;
+}
+
+/** Whether a tree node matches every part of a parsed search. */
+export function matchesTreeQuery(node: TreeQueryNode, query: TreeQuery): boolean {
+  const tag = node.tag.toLowerCase();
+  const classes = (node.directives ?? []).map((name) => name.toLowerCase());
+  const attributes = (node.attributes ?? []).map((name) => name.toLowerCase());
+  const names = [
+    ...classes,
+    ...classes.map((name) => name.replace(/directive$/, '')),
+    ...attributes,
+  ];
+  for (const { value, exact } of query.tags) {
+    if (exact ? tag !== value : !tag.startsWith(value)) return false;
+  }
+  for (const { value, exact } of query.directives) {
+    if (!names.some((name) => (exact ? name === value : name.includes(value)))) return false;
+  }
+  if (query.text) {
+    const text = query.text;
+    const hit =
+      node.name.toLowerCase().includes(text) ||
+      tag.includes(text) ||
+      classes.some((name) => name.includes(text)) ||
+      attributes.some((name) => name.includes(text));
+    if (!hit) return false;
+  }
+  return true;
 }

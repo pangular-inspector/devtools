@@ -255,6 +255,7 @@ describe('agent tool and RPC registration', () => {
         'dispatch-ngrx-action',
         'fill-form',
         'form-action',
+        'hydration',
         'navigate',
         'record-pipes',
         'remove-http-rule',
@@ -278,6 +279,7 @@ describe('agent tool and RPC registration', () => {
     expect(safety['navigate']).toBe('action');
     expect(safety['record-pipes']).toBe('action');
     expect(safety['change-detection']).toBe('action');
+    expect(safety['hydration']).toBe('action');
   });
 
   it('keeps only read tools in read-only mode', async () => {
@@ -360,6 +362,7 @@ describe('agent tool and RPC registration', () => {
         'change-detection',
         'clear-recordings',
         'dispatch-ngrx-action',
+        'hydration',
         'navigate',
         'record-pipes',
         'remove-http-rule',

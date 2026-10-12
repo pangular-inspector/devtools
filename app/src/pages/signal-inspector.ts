@@ -90,6 +90,8 @@ interface LiveNode {
   id: string;
   name: string;
   tag: string;
+  /** `directive` for an element that hosts directives but no component. */
+  kind?: 'directive';
   children: LiveNode[];
 }
 
@@ -1856,7 +1858,8 @@ export class SignalInspector {
     const flat: LiveNode[] = [];
     const walk = (nodes: LiveNode[]) => {
       for (const node of nodes) {
-        flat.push(node);
+        // A directive host has no component signals to read.
+        if (node.kind !== 'directive') flat.push(node);
         walk(node.children);
       }
     };

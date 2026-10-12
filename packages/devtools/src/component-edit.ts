@@ -1,5 +1,5 @@
 import type { ComponentDebugNg } from './component-tree.ts';
-import { isSecretName, REDACTED, serialize, serializeNamed } from './serialize.ts';
+import { isSecretName, REDACTED, serialize, serializeNamed, VALUE_LEVEL } from './serialize.ts';
 import type { ComponentDetail, ComponentProp } from './types.ts';
 
 /**
@@ -43,6 +43,19 @@ const MAX_PATH = 20;
 const VALUE_LIMITS = { depth: 3, keys: 30, items: 30, text: 300 };
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
+/**
+ * How much of a value the panel reads to edit it as a whole (path `[prop]`
+ * through `request-component-value`). A value that does not fit is edited
+ * inside, one path at a time.
+ */
+export const EDIT_LEVEL = { depth: 5, limit: 100 } as const;
+const EDIT_LIMITS = {
+  ...VALUE_LEVEL,
+  depth: EDIT_LEVEL.depth,
+  keys: EDIT_LEVEL.limit,
+  items: EDIT_LEVEL.limit,
+};
+
 export const LOCKED = {
   redacted: 'Redacted, so it cannot be edited here.',
   signalInput: 'Signal input. Its parent binding sets it, so it has no set().',
@@ -51,6 +64,7 @@ export const LOCKED = {
   getter: 'Getter without a setter.',
   notJson: 'Only text, numbers, booleans, null, arrays and plain objects can be edited.',
   clipped: 'Too large to edit in the panel.',
+  nested: 'Too large to edit as a whole. Open it to edit the values inside.',
 } as const;
 
 function read<T>(fn: () => T, fallback: T): T {
@@ -169,7 +183,7 @@ export function editabilityOf<H extends object>(
   prop: string,
   names: string[],
   isInput: boolean,
-): Pick<ComponentProp, 'edit' | 'locked'> {
+): Pick<ComponentProp, 'edit' | 'locked' | 'editInside'> {
   if (names.some(isSecretName)) return { locked: LOCKED.redacted };
   const raw = read(() => (instance as Record<string, unknown>)[prop], undefined);
   if (isResource(ng, raw)) return { locked: LOCKED.resource };
@@ -185,14 +199,29 @@ export function editabilityOf<H extends object>(
     const accessor = accessorOf(instance, prop);
     if (accessor && !accessor.set) return { locked: LOCKED.getter };
   }
-  if (value !== undefined && !isJsonValue(value)) return { locked: LOCKED.notJson };
-  const shown = serializeNamed(prop, value, VALUE_LIMITS);
-  if (hasRedaction(shown)) return { locked: LOCKED.redacted };
-  // The panel edits what it shows, so a clipped value would lose its tail.
+  // A value it cannot replace whole may still hold values a path can write.
+  const inside = editsInside(edit, value);
+  const locked = (reason: string) =>
+    inside ? { locked: reason, editInside: edit } : { locked: reason };
+  if (value !== undefined && !isJsonValue(value)) return locked(LOCKED.notJson);
+  const shown = serializeNamed(prop, value, { ...EDIT_LIMITS, ancestors: [instance] });
+  if (hasRedaction(shown)) return locked(LOCKED.redacted);
+  // The panel edits what it reads, so a clipped value would lose its tail.
   if (value !== undefined && JSON.stringify(shown) !== JSON.stringify(value)) {
-    return { locked: LOCKED.clipped };
+    return locked(inside ? LOCKED.nested : LOCKED.clipped);
   }
-  return { edit };
+  return inside ? { edit, editInside: edit } : { edit };
+}
+
+/**
+ * Whether paths inside the value can be written: a signal is set to a copy,
+ * which needs plain objects and arrays; a property is written in place, which
+ * any object but a Map or Set allows.
+ */
+function editsInside(kind: ComponentEditKind, value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  if (Array.isArray(value) || isPlainObject(value)) return true;
+  return kind === 'property' && !(value instanceof Map) && !(value instanceof Set);
 }
 
 /** Adds `edit` or `locked` to the component's own inputs and properties. */

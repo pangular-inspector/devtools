@@ -1,9 +1,11 @@
 import { markEditable } from './component-edit.ts';
 import { componentSource } from './component-source.ts';
 import { elementById, elementId, pruneElementIds } from './element-id.ts';
+import { MAX_DIRECTIVE_HOSTS, selectorAttributes } from './directive-hosts.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
+import { createHydrationTally, type HydrationDebugNg } from './hydration.ts';
 import { className, dependenciesOf, type DebugNg } from './injector-tree.ts';
-import { isSecretName, serializeNamed } from './serialize.ts';
+import { isSecretName, serializeNamed, VALUE_LEVEL } from './serialize.ts';
 import type {
   ComponentDetail,
   ComponentProp,
@@ -11,7 +13,7 @@ import type {
   LiveComponentNode,
 } from './types.ts';
 
-export interface ComponentDebugNg<H extends object = Element> extends DebugNg<H> {
+export interface ComponentDebugNg<H extends object = Element> extends DebugNg<H>, HydrationDebugNg {
   getComponent?(el: H): unknown;
   getDirectives?(el: H): unknown[];
   getDirectiveMetadata?(instance: unknown): {
@@ -27,7 +29,6 @@ export interface ComponentDebugNg<H extends object = Element> extends DebugNg<H>
 const MAX_COMPONENTS = 2000;
 const MAX_DEPTH = 256;
 const MAX_PROPS = 60;
-const VALUE_LIMITS = { depth: 3, keys: 30, items: 30, text: 300 };
 
 const CHANGE_DETECTION: Record<number, string> = { 0: 'OnPush', 1: 'Eager' };
 const ENCAPSULATION: Record<number, string> = {
@@ -129,10 +130,15 @@ export function componentHostOf<H extends object = Element>(
   return null;
 }
 
-function unwrap<H extends object>(ng: ComponentDebugNg<H>, value: unknown): unknown {
+export function unwrap<H extends object>(ng: ComponentDebugNg<H>, value: unknown): unknown {
   if (typeof value !== 'function') return value;
   const signal = read(() => !!ng.isSignal?.(value), false);
   return signal ? read(() => (value as () => unknown)(), undefined) : value;
+}
+
+/** The first level of a value, with the instance itself shown as `[Circular]` inside it. */
+function levelOf(instance: object) {
+  return { ...VALUE_LEVEL, ancestors: [instance] };
 }
 
 function propName(entry: unknown, fallback: string): string {
@@ -152,11 +158,11 @@ function readInputs<H extends object>(
       const prop = propName(entry, name);
       const raw = read(() => (instance as Record<string, unknown>)[prop], undefined);
       const key = isSecretName(prop) ? prop : name;
-      return { name, prop, value: serializeNamed(key, unwrap(ng, raw), VALUE_LIMITS) };
+      return { name, prop, value: serializeNamed(key, unwrap(ng, raw), levelOf(instance)) };
     });
 }
 
-function resourceOf<H extends object>(
+export function resourceOf<H extends object>(
   ng: ComponentDebugNg<H>,
   value: unknown,
 ): Record<string, unknown> | null {
@@ -182,7 +188,7 @@ function resourceOf<H extends object>(
   return snapshot;
 }
 
-function injectedValues<H extends object>(
+export function injectedValues<H extends object>(
   ng: ComponentDebugNg<H>,
   injector: unknown,
   owner: unknown,
@@ -214,7 +220,7 @@ function readProperties<H extends object>(
         name,
         prop: name,
         kind: 'resource',
-        value: serializeNamed(name, resource, VALUE_LIMITS),
+        value: serializeNamed(name, resource, levelOf(instance)),
       });
       continue;
     }
@@ -223,7 +229,7 @@ function readProperties<H extends object>(
     const prop: ComponentProp = {
       name,
       prop: name,
-      value: serializeNamed(name, unwrap(ng, raw), VALUE_LIMITS),
+      value: serializeNamed(name, unwrap(ng, raw), levelOf(instance)),
     };
     if (isSignal) prop.kind = 'signal';
     out.push(prop);
@@ -304,13 +310,30 @@ export function componentDetail<H extends object = Element>(
   return detail;
 }
 
+export interface CollectOptions<H extends object> {
+  tree?: HostTree<H>;
+  selectedId?: string | null;
+  /**
+   * List elements that host directives but no component as `kind: 'directive'`
+   * nodes, up to {@link MAX_DIRECTIVE_HOSTS}. The browser overlay turns it on;
+   * the native overlays describe views, not elements, and leave it off.
+   */
+  directiveHosts?: boolean;
+  /** Read each component host's hydration status, for a DOM page that may come from the server. */
+  hydration?: boolean;
+  /** Adds to the selected instance's detail, such as the value levels the panel opened. */
+  withDetail?: (detail: ComponentDetail, host: H) => void;
+}
+
 export function collectComponentTree<H extends object = Element>(
   ng: ComponentDebugNg<H> | undefined,
-  options: { tree?: HostTree<H>; selectedId?: string | null } = {},
+  options: CollectOptions<H> = {},
 ): Omit<ComponentTreeReport, 'pageId'> {
   const tree = options.tree ?? documentTree<H>();
   const report: Omit<ComponentTreeReport, 'pageId'> = { roots: [], count: 0, detail: null };
   if (!ng?.getComponent) return report;
+  const hydration = options.hydration ? createHydrationTally(ng) : null;
+  let directiveHosts = 0;
 
   const visit = (el: H, out: LiveComponentNode[], depth: number) => {
     if (depth > MAX_DEPTH) {
@@ -333,20 +356,52 @@ export function collectComponentTree<H extends object = Element>(
         tag: tree.tag(el),
         children: [],
       };
-      const directives = directivesAt(ng, el)
-        .filter((d) => d !== instance)
-        .map(nameOf);
-      if (directives.length) node.directives = directives;
+      const others = directivesAt(ng, el).filter((d) => d !== instance);
+      if (others.length) {
+        node.directives = others.map(nameOf);
+        if (options.directiveHosts) {
+          const attributes = selectorAttributes(others);
+          if (attributes.length) node.attributes = attributes;
+        }
+      }
+      hydration?.add(node, el);
       out.push(node);
       target = node.children;
+    } else if (options.directiveHosts) {
+      const directives = directivesAt(ng, el);
+      if (directives.length) {
+        if (directiveHosts >= MAX_DIRECTIVE_HOSTS) {
+          report.truncated = true;
+          report.truncatedBy = { ...report.truncatedBy, directiveHosts: MAX_DIRECTIVE_HOSTS };
+        } else {
+          directiveHosts++;
+          const names = directives.map(nameOf);
+          const node: LiveComponentNode = {
+            id: elementId(el),
+            name: names[0],
+            tag: tree.tag(el),
+            kind: 'directive',
+            directives: names,
+            children: [],
+          };
+          const attributes = selectorAttributes(directives);
+          if (attributes.length) node.attributes = attributes;
+          out.push(node);
+          target = node.children;
+        }
+      }
     }
     for (const child of tree.children(el)) visit(child, target, depth + 1);
   };
   for (const root of tree.roots()) visit(root, report.roots, 0);
+  if (directiveHosts) report.directiveHostCount = directiveHosts;
+  const summary = hydration?.finish(typeof document === 'undefined' ? undefined : document);
+  if (summary) report.hydration = summary;
 
   const connected = (host: object) => tree.isHost(host) && tree.connected(host);
   pruneElementIds(connected);
   const selected = options.selectedId ? elementById<H>(options.selectedId, connected) : null;
   if (selected) report.detail = componentDetail(ng, selected, options.tree);
+  if (selected && report.detail) options.withDetail?.(report.detail, selected);
   return report;
 }

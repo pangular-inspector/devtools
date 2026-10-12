@@ -1,26 +1,38 @@
+import {
+  isEmptyTreeQuery,
+  matchesTreeQuery,
+  parseTreeQuery,
+} from '@pangular-inspector/devtools/config';
+
+export type HydrationStatus = 'hydrated' | 'skipped' | 'mismatched' | 'client';
+
 export interface TreeNode {
   id: string;
   name: string;
   tag: string;
+  /** `directive` for an element that hosts directives but no component. */
+  kind?: 'directive';
   directives?: string[];
+  /** Selector attribute names of the directives, such as `routerLink`. */
+  attributes?: string[];
+  hydration?: HydrationStatus;
   children: TreeNode[];
 }
 
-/** Keeps matching nodes and their ancestors; `matches` counts the matching nodes only. */
+/**
+ * Keeps matching nodes and their ancestors; `matches` counts the matching
+ * nodes only. The query takes plain text, `<tag>` and `[dir]` tokens.
+ */
 export function filterTree<T extends TreeNode>(
   roots: T[],
   query: string,
 ): { nodes: T[]; matches: number } {
-  const q = query.trim().toLowerCase();
-  if (!q) return { nodes: roots, matches: 0 };
+  const parsed = parseTreeQuery(query);
+  if (isEmptyTreeQuery(parsed)) return { nodes: roots, matches: 0 };
   let matches = 0;
-  const keep = (node: T) =>
-    node.name.toLowerCase().includes(q) ||
-    node.tag.toLowerCase().includes(q) ||
-    !!node.directives?.some((d) => d.toLowerCase().includes(q));
   const prune = (nodes: T[]): T[] =>
     nodes.flatMap((node) => {
-      const hit = keep(node);
+      const hit = matchesTreeQuery(node, parsed);
       if (hit) matches++;
       const children = prune(node.children as T[]);
       return hit || children.length ? [{ ...node, children }] : [];
@@ -28,15 +40,47 @@ export function filterTree<T extends TreeNode>(
   return { nodes: prune(roots), matches };
 }
 
+/** The tree without directive hosts; their children move up to their parent. */
+export function withoutDirectiveHosts<T extends TreeNode>(nodes: T[]): T[] {
+  return nodes.flatMap((node) =>
+    node.kind === 'directive'
+      ? withoutDirectiveHosts(node.children as T[])
+      : [{ ...node, children: withoutDirectiveHosts(node.children as T[]) }],
+  );
+}
+
+/** The label a directive host shows: its selector attributes, else its directive class names. */
+export function directiveHostLabel(node: TreeNode): string {
+  const names = node.attributes?.length ? node.attributes : (node.directives ?? [node.name]);
+  return names.map((name) => `[${name}]`).join(' ');
+}
+
+const HYDRATION_LABELS: Record<HydrationStatus, string> = {
+  hydrated: 'Hydrated',
+  skipped: 'Skipped',
+  mismatched: 'Mismatch',
+  client: 'Client',
+};
+
+/** The text of a tree row's hydration badge. */
+export function hydrationLabel(status: HydrationStatus): string {
+  return HYDRATION_LABELS[status];
+}
+
 export function countText(
   total: number,
   matches: number,
   filtering: boolean,
   truncated = false,
+  directiveHosts = 0,
 ): string {
   const shown = truncated ? `${total}+` : `${total}`;
-  if (filtering) return `${matches} of ${shown}`;
-  return `${shown} ${total === 1 && !truncated ? 'instance' : 'instances'}`;
+  if (filtering)
+    return `${matches} of ${truncated ? `${total + directiveHosts}+` : total + directiveHosts}`;
+  const hosts = directiveHosts
+    ? ` · ${directiveHosts} directive ${directiveHosts === 1 ? 'host' : 'hosts'}`
+    : '';
+  return `${shown} ${total === 1 && !truncated ? 'instance' : 'instances'}${hosts}`;
 }
 
 export function filterAnnouncement(

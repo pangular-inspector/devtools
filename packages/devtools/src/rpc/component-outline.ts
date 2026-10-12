@@ -1,3 +1,4 @@
+import { isEmptyTreeQuery, matchesTreeQuery, parseTreeQuery, type TreeQuery } from '../config.ts';
 import type { ComponentPage, LiveComponentNode } from '../types.ts';
 import { redactMessage } from '../router.ts';
 import { truncationText } from './component-tools.ts';
@@ -8,12 +9,14 @@ import { byRecency, unknownPageText } from './pages.ts';
 export const OUTLINE_MAX_CHARS = 20_000;
 
 export const LIST_COMPONENTS_DESCRIPTION =
-  'List the live component tree of a connected page as an indented outline, one line per rendered instance: class name, host tag and instance id, then `[routed ...]` for a component a router outlet shows (its route, and the outlet name when it is not the primary one) and `[directives: ...]` for the other directives on its host. It carries no input or property values: pass an id to pangular:inspect-component for those, or to pangular:highlight to show it on the page. `filter` keeps the instances whose class name, host tag or a host directive contains the text (case-insensitive) plus their ancestors, and `depth` stops the outline at that many levels (1 for the roots only; unlimited without it) and counts what it hides as `(+N below)`. Uses the most recent page that has a component tree unless `page` names another tab, and names the other tabs that report one. Says so when the page stopped collecting at its size limit, and when the outline itself is cut at 20,000 characters. Says that no component tree has been reported when no page is connected, and lists the reporting tabs when `page` names an unknown one.';
+  'List the live component tree of a connected page as an indented outline, one line per rendered instance: class name, host tag and instance id, then `[routed ...]` for a component a router outlet shows (its route, and the outlet name when it is not the primary one), `[directives: ...]` for the other directives on its host, and `[hydration: skipped]`, `[hydration: mismatched]` or `[hydration: client]` in a page rendered on the server when the host was not hydrated from the server HTML (see pangular:hydration). Elements that host directives but no component are lines too, as `<a> [routerLink] c14 [directive host: RouterLink]`, so the outline shows where directives sit; `directiveHosts: false` leaves them out. It carries no input or property values: pass an id to pangular:inspect-component for those, or to pangular:highlight to show it on the page. `filter` keeps the matching lines plus their ancestors: plain text found in a class name, host tag or directive (case-insensitive), `<tag>` for a host tag, and `[dir]` for a directive by selector attribute or class name, combined as in `<button> [matTooltip] save`; every part must match. `depth` stops the outline at that many levels (1 for the roots only; unlimited without it) and counts what it hides as `(+N below)`. Uses the most recent page that has a component tree unless `page` names another tab, and names the other tabs that report one. Says so when the page stopped collecting at its size limit, and when the outline itself is cut at 20,000 characters. Says that no component tree has been reported when no page is connected, and lists the reporting tabs when `page` names an unknown one.';
 
 export interface OutlineOptions {
   filter?: string;
   depth?: number;
   maxChars?: number;
+  /** False leaves out the elements that host directives but no component. */
+  directiveHosts?: boolean;
 }
 
 interface Routed {
@@ -52,30 +55,46 @@ function plain(text: string): string {
   return redactMessage(text).replace(/`/g, "'").replace(/\s+/g, ' ');
 }
 
-function matches(node: LiveComponentNode, needle: string): boolean {
-  return (
-    node.name.toLowerCase().includes(needle) ||
-    node.tag.toLowerCase().includes(needle) ||
-    (node.directives ?? []).some((name) => name.toLowerCase().includes(needle))
-  );
-}
-
-/** The tree cut down to the instances that match and their ancestors. */
-function filterTree(nodes: LiveComponentNode[], needle: string): LiveComponentNode[] {
+/** The tree cut down to the nodes that match and their ancestors. */
+function filterTree(nodes: LiveComponentNode[], query: TreeQuery): LiveComponentNode[] {
   const out: LiveComponentNode[] = [];
   for (const node of nodes) {
-    const children = filterTree(node.children, needle);
-    if (children.length || matches(node, needle)) out.push({ ...node, children });
+    const children = filterTree(node.children, query);
+    if (children.length || matchesTreeQuery(node, query)) out.push({ ...node, children });
   }
   return out;
+}
+
+/** The tree without directive hosts; their children move up to their parent. */
+export function withoutDirectiveHosts(nodes: LiveComponentNode[]): LiveComponentNode[] {
+  return nodes.flatMap((node) =>
+    node.kind === 'directive'
+      ? withoutDirectiveHosts(node.children)
+      : [{ ...node, children: withoutDirectiveHosts(node.children) }],
+  );
 }
 
 function countTree(nodes: LiveComponentNode[]): number {
   return nodes.reduce((sum, node) => sum + 1 + countTree(node.children), 0);
 }
 
+function countKind(nodes: LiveComponentNode[], directive: boolean): number {
+  return nodes.reduce(
+    (sum, node) =>
+      sum +
+      ((node.kind === 'directive') === directive ? 1 : 0) +
+      countKind(node.children, directive),
+    0,
+  );
+}
+
 function lineOf(node: LiveComponentNode, level: number, routed: Map<string, Routed>): string {
-  const parts = [`${'  '.repeat(level)}${plain(node.name)} <${plain(node.tag)}> ${plain(node.id)}`];
+  const indent = '  '.repeat(level);
+  if (node.kind === 'directive') {
+    const attributes = (node.attributes ?? []).map((name) => `[${plain(name)}]`).join(' ');
+    return `${indent}<${plain(node.tag)}>${attributes ? ` ${attributes}` : ''} ${plain(node.id)} [directive host: ${(node.directives ?? [node.name]).map(plain).join(', ')}]`;
+  }
+  const parts = [`${indent}${plain(node.name)} <${plain(node.tag)}> ${plain(node.id)}`];
   const route = routed.get(node.id);
   if (route) {
     const where = [
@@ -87,6 +106,7 @@ function lineOf(node: LiveComponentNode, level: number, routed: Map<string, Rout
   if (node.directives?.length) {
     parts.push(`[directives: ${node.directives.map(plain).join(', ')}]`);
   }
+  if (node.hydration && node.hydration !== 'hydrated') parts.push(`[hydration: ${node.hydration}]`);
   return parts.join(' ');
 }
 
@@ -97,19 +117,23 @@ export function componentOutlineText(
   options: OutlineOptions = {},
 ): string {
   const maxChars = options.maxChars ?? OUTLINE_MAX_CHARS;
-  const needle = options.filter?.trim().toLowerCase() ?? '';
+  const query = parseTreeQuery(options.filter ?? '');
+  const filtering = !isEmptyTreeQuery(query);
   const depth =
     typeof options.depth === 'number' && Number.isFinite(options.depth) && options.depth >= 1
       ? Math.floor(options.depth)
       : undefined;
   const title = `Page ${code(page.pageId)}${page.url ? ` (${code(page.url)})` : ''}`;
-  const total = countTree(page.roots);
-  const roots = needle ? filterTree(page.roots, needle) : page.roots;
+  const all = options.directiveHosts === false ? withoutDirectiveHosts(page.roots) : page.roots;
+  const total = countKind(all, false);
+  const hosts = countKind(all, true);
+  const totalText = `${total} component instance(s)${hosts ? ` and ${hosts} directive host(s)` : ''}`;
+  const roots = filtering ? filterTree(all, query) : all;
   const truncated = truncationText([page]);
 
   if (!roots.length) {
     return [
-      `${title}: ${total} component instance(s), none of them matches ${code(options.filter ?? '')} by class name, host tag or directive.`,
+      `${title}: ${totalText}, none of them matches ${code(options.filter ?? '')} by class name, host tag or directive.`,
       truncated,
     ]
       .filter(Boolean)
@@ -144,7 +168,7 @@ export function componentOutlineText(
 
   const shown = countTree(roots);
   const scope = [
-    needle ? `${shown} of them match ${code(options.filter ?? '')} or contain a match` : '',
+    filtering ? `${shown} of them match ${code(options.filter ?? '')} or contain a match` : '',
     depth !== undefined ? `outline stops at depth ${depth}` : '',
   ].filter(Boolean);
   const notes = [
@@ -158,7 +182,7 @@ export function componentOutlineText(
   ].filter(Boolean);
 
   return [
-    `${title}: ${total} component instance(s)${scope.length ? `, ${scope.join(', ')}` : ''}. Each line is \`Name <tag> id\`; pass the id to pangular:inspect-component or pangular:highlight.`,
+    `${title}: ${totalText}${scope.length ? `, ${scope.join(', ')}` : ''}. Each line is \`Name <tag> id\`${hosts ? ', or `<tag> [attribute] id` for a directive host' : ''}; pass the id to pangular:inspect-component or pangular:highlight.`,
     '',
     '```text',
     ...lines,
