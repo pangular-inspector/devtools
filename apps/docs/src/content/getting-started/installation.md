@@ -144,9 +144,9 @@ A client-only app (no SSR) has no server of its own to mount the devtools in. Se
 
 ### Browser part
 
-Load the overlay after bootstrap, in development only. The check depends on your build tool:
+Load the overlay after bootstrap, in development only:
 
-```ts group="overlay" name="Angular CLI" image="https://cdn.simpleicons.org/angular/DD0031" active
+```ts
 // src/main.ts
 import {bootstrapApplication} from '@angular/platform-browser';
 import {App} from './app/app';
@@ -162,16 +162,7 @@ bootstrapApplication(App, appConfig)
   .catch((err) => console.error(err));
 ```
 
-```ts group="overlay" name="Analog (Vite)" image="https://cdn.simpleicons.org/vite/646CFF"
-// src/main.ts
-import {bootstrapApplication} from '@angular/platform-browser';
-import {App} from './app/app';
-import {appConfig} from './app/app.config';
-
-bootstrapApplication(App, appConfig).then(() => {
-  if (import.meta.env.DEV) void import('@pangular-inspector/devtools/overlay');
-});
-```
+With the [Vite plugin](./vite.md), skip this step: the plugin adds the overlay to the pages the dev server serves. To load it yourself, see [Load the overlay yourself](./vite.md#load-the-overlay-yourself).
 
 The standalone CLI on its own has no page connected, so it needs no browser part. Behind the `ng serve` proxy of a client-only app it does, like any other setup.
 
@@ -190,7 +181,7 @@ An app created with `ng new --ssr=false` only runs `ng serve`. Run the standalon
     Set <code>proxyConfig</code> in the <code>serve</code> options of <code>angular.json</code>, or run <code>ng serve --proxy-config proxy.conf.json</code>.
   </ngmd-step>
   <ngmd-step title="Load the overlay">
-    Import the overlay in <code>main.ts</code>, as in the <strong>Angular CLI</strong> tab above.
+    Import the overlay in <code>main.ts</code>, as in the <a href="#browser-part">browser part</a> above.
   </ngmd-step>
   <ngmd-step title="Enter the one-time code">
     When your app connects, the CLI prints a code and a link like <code>http://localhost:4200/__pangular/#devframe_otp=123456</code>. Open the link, then reload your app if the panel was already open. Without <code>--proxy-origin</code>, the link points at port 9999, which only trusts port 9999. Then open the same code on your app's origin instead.

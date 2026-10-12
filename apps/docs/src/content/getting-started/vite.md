@@ -1,15 +1,15 @@
 ---
 title: Vite and Analog
-description: Add the devtools Vite plugin to an Analog app or another Vite-based Angular app.
+description: Add the devtools Vite plugin to an Analog app or another Vite-based Angular app. It mounts the hub and loads the overlay.
 ---
 
 <ngmd-hero title="Vite and Analog" logo="/logos/vite-mark.svg" gradient>
-  One plugin next to <code>analog()</code>, one import in <code>main.ts</code>. The hub mounts on the Vite dev server.
+  One plugin next to <code>analog()</code>. It mounts the hub on the Vite dev server and loads the overlay into your pages.
 </ngmd-hero>
 
 # Vite and Analog
 
-For *Analog apps, add the *Vite plugin next to `analog()` and load the overlay in `main.ts`. The plugin mounts the devtools hub on the Vite dev server. It works the same in any Angular app built with its own `vite.config.ts`, not only in Analog. If you serve your app with `ng serve`, this plugin does not apply, because the Angular CLI dev server does not accept Vite plugins. See [Angular CLI apps](#angular-cli-apps).
+For *Analog apps, add the *Vite plugin next to `analog()`. The plugin mounts the devtools hub on the Vite dev server and adds the overlay to the pages it serves, so there is nothing to import in `main.ts`. It works the same in any Angular app built with its own `vite.config.ts`, not only in Analog. If you serve your app with `ng serve`, this plugin does not apply, because the Angular CLI dev server does not accept Vite plugins. See [Angular CLI apps](#angular-cli-apps).
 
 ## Setup at a glance
 
@@ -19,9 +19,6 @@ For *Analog apps, add the *Vite plugin next to `analog()` and load the overlay i
   </ngmd-step>
   <ngmd-step title="Add the plugin">
     Register <code>pangular()</code> after <code>analog()</code> in <code>vite.config.ts</code>.
-  </ngmd-step>
-  <ngmd-step title="Load the overlay">
-    Import the overlay in <code>src/main.ts</code> when <code>import.meta.env.DEV</code> is true.
   </ngmd-step>
   <ngmd-step title="Open the devtools">
     Start the dev server and click the amber button, or open <code>/__devframes/</code>.
@@ -43,22 +40,9 @@ export default defineConfig({
 });
 ```
 
-### Load the overlay
+### The overlay loads itself
 
-The plugin does not inject the overlay. Your app imports it in `main.ts`:
-
-```ts {7}
-// src/main.ts
-import {bootstrapApplication} from '@angular/platform-browser';
-import {App} from './app/app';
-import {appConfig} from './app/app.config';
-
-bootstrapApplication(App, appConfig).then(() => {
-  if (import.meta.env.DEV) void import('@pangular-inspector/devtools/overlay');
-});
-```
-
-`import.meta.env.DEV` is false in `vite build`, so the overlay stays out of your production bundle.
+The plugin adds a module script to every HTML page the dev server transforms, at the end of `<body>`. The script imports `@pangular-inspector/devtools/overlay`, which starts the overlay and the floating button. `vite build` skips the plugin, so the overlay stays out of your production bundle. See [Load the overlay yourself](#load-the-overlay-yourself) to turn it off.
 
 ### Where to find it
 
@@ -75,6 +59,12 @@ When the dev server starts, Vite prints the full-page viewer URL under its own U
 ### Dev server only
 
 The plugin applies to `vite serve` only. `vite build` is not affected, so nothing from the plugin reaches your production output.
+
+### Loads the overlay
+
+It adds the overlay to the HTML that Vite transforms, including the template an Analog SSR render starts from. It works under a Vite `base`. A page whose HTML already imports `@pangular-inspector/devtools/overlay` gets no second script.
+
+An app that still imports the overlay in `main.ts` gets one overlay, not two: Vite resolves both imports to the same module, which runs once.
 
 ### Mounts the hub
 
@@ -110,12 +100,13 @@ pangular({
 | `allowedOrigins` | none                             | Extra exact origins allowed to reach the devtools, for example a tunnel. |
 | `auth`           | on                               | Whether the devtools ask for the one-time code, and its pairing tokens.  |
 | `allowLan`       | `false`                          | Answer other machines, such as a phone on Wi-Fi, from listed origins.    |
+| `overlay`        | `true`                           | Add the overlay to the pages the dev server serves.                      |
 
 The plugin also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](./configuration.md).
 
 ### `base`
 
-Change `base` if `/__devframes/` clashes with a route of your own. The leading and trailing slashes are optional: `'devtools'`, `'/devtools'` and `'/devtools/'` all mount the hub at `/devtools/`, and the loopback checks cover the whole path. The overlay looks for `/__devframes/pangular/` and `/__pangular/` by default, so a custom base also needs a custom overlay path: pass `<base>pangular/` to `initOverlay`. The floating button follows that path. See [A custom mount path](./overlay.md#a-custom-mount-path).
+Change `base` if `/__devframes/` clashes with a route of your own. The leading and trailing slashes are optional: `'devtools'`, `'/devtools'` and `'/devtools/'` all mount the hub at `/devtools/`, and the loopback checks cover the whole path. The overlay the plugin adds connects to `<base>pangular/` on its own, and the floating button follows that path. If you load the overlay yourself, pass `<base>pangular/` to `initOverlay`. See [A custom mount path](./overlay.md#a-custom-mount-path).
 
 ### `apiPrefix`
 
@@ -145,6 +136,34 @@ To turn the code and the MCP token off on a machine only you use, pass `auth: fa
 // vite.config.ts
 pangular({auth: false});
 ```
+
+### `overlay`
+
+Pass `overlay: false` when you start the overlay yourself, for example to give `initOverlay` a pairing token. See [Load the overlay yourself](#load-the-overlay-yourself).
+
+## Load the overlay yourself
+
+Turn the injected script off in `vite.config.ts`:
+
+```ts
+// vite.config.ts
+pangular({overlay: false});
+```
+
+Then import the overlay in `main.ts`, in development only:
+
+```ts {7}
+// src/main.ts
+import {bootstrapApplication} from '@angular/platform-browser';
+import {App} from './app/app';
+import {appConfig} from './app/app.config';
+
+bootstrapApplication(App, appConfig).then(() => {
+  if (import.meta.env.DEV) void import('@pangular-inspector/devtools/overlay');
+});
+```
+
+`import.meta.env.DEV` is false in `vite build`, so the import stays out of your production bundle. Use the same import when your framework renders HTML without passing it through Vite's `transformIndexHtml`, which is where the plugin adds the script.
 
 ## Hostnames other than localhost
 
@@ -200,7 +219,7 @@ Start Vite on every interface too, with `server.host: true`. A request from anot
 
 <ngmd-accordion>
   <ngmd-accordion-item title="Does the plugin change my production build?" open>
-    No. It applies to the dev server only, and the overlay import is guarded by <code>import.meta.env.DEV</code>.
+    No. It applies to the dev server only, so the overlay script it adds is not part of a build.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why do I get a 403 from the devtools?">
     The request did not come from your machine, or its origin or the host it was sent to is not trusted. The terminal names a refused origin or host. Open the app on <code>localhost</code>, list your hostname in <code>server.allowedHosts</code>, or add the origin to <code>allowedOrigins</code>.

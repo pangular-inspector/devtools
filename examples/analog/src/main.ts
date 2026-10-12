@@ -2,6 +2,5 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { App } from './app/app';
 import { appConfig } from './app/app.config';
 
-bootstrapApplication(App, appConfig).then(() => {
-  if (import.meta.env.DEV) void import('@pangular-inspector/devtools/overlay');
-});
+// The pangular() Vite plugin adds the overlay to the pages the dev server serves.
+bootstrapApplication(App, appConfig).catch((err) => console.error(err));

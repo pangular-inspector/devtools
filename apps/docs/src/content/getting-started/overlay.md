@@ -9,15 +9,15 @@ description: The script that runs in your page and sends live data to the devtoo
 
 # Browser overlay
 
-The overlay runs inside your *Angular page. It reads Angular's debug API and sends live data to the devtools server. Importing the module starts it, so in most apps one dynamic import in `main.ts` is all you need.
+The overlay runs inside your *Angular page. It reads Angular's debug API and sends live data to the devtools server. Importing the module starts it, so in most apps one dynamic import in `main.ts` is all you need. The [Vite plugin](./vite.md) adds that import to your pages itself.
 
 ## Load it in development
 
-### Pick your build tool
+### Import it in `main.ts`
 
 Load the overlay after bootstrap, with a dynamic import that only runs in development:
 
-```ts group="overlay" name="Angular CLI" image="https://cdn.simpleicons.org/angular/DD0031" active
+```ts
 // src/main.ts
 import {bootstrapApplication} from '@angular/platform-browser';
 import {App} from './app/app';
@@ -31,17 +31,6 @@ bootstrapApplication(App, appConfig)
     return undefined;
   })
   .catch((err) => console.error(err));
-```
-
-```ts group="overlay" name="Analog (Vite)" image="https://cdn.simpleicons.org/vite/646CFF"
-// src/main.ts
-import {bootstrapApplication} from '@angular/platform-browser';
-import {App} from './app/app';
-import {appConfig} from './app/app.config';
-
-bootstrapApplication(App, appConfig).then(() => {
-  if (import.meta.env.DEV) void import('@pangular-inspector/devtools/overlay');
-});
 ```
 
 ### Why development only

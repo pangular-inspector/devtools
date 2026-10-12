@@ -137,7 +137,7 @@ pnpm --filter analog-demo preview
 ```
 
 <ngmd-alert severity="helpful">
-  The Vite plugin runs on the dev server only, and the overlay loads only when <code>import.meta.env.DEV</code> is true. A production build has no devtools. Use it to check the <code>analog-prerender-plan</code> tool against real build output.
+  The Vite plugin, and the overlay it adds to each page, run on the dev server only. A production build has no devtools. Use it to check the <code>analog-prerender-plan</code> tool against real build output.
 </ngmd-alert>
 
 ## Angular Native demo

@@ -21,6 +21,7 @@ import {
   type HubOriginPolicy,
 } from './hub-gate.ts';
 import { pickPangularConfig, resolvePangularConfig, type PangularConfig } from './config.ts';
+import { overlayTags } from './vite-overlay.ts';
 
 export type { PangularConfig } from './config.ts';
 
@@ -39,6 +40,11 @@ export interface PangularViteOptions extends PangularConfig {
    * `auth: false` it is ignored. Off by default: only this machine.
    */
   allowLan?: boolean;
+  /**
+   * Add the overlay to the pages the dev server serves. On by default; pass
+   * `false` to load it yourself, for example with `initOverlay` options.
+   */
+  overlay?: boolean;
 }
 
 export {
@@ -110,6 +116,11 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
     name: 'pangular',
     apply: 'serve',
     enforce: 'pre',
+    // `pre`, so Vite's own HTML pass resolves the injected import like any other.
+    transformIndexHtml: {
+      order: 'pre',
+      handler: (html) => (options.overlay === false ? [] : overlayTags(html, base)),
+    },
     configureServer(server) {
       const logger = server.config.logger;
       const policy: HubOriginPolicy = {

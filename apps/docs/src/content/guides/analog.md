@@ -35,10 +35,7 @@ This guide adds the devtools to an *Analog app. Everything runs on the *Vite dev
     Add <code>@pangular-inspector/devtools</code> as a dev dependency.
   </ngmd-step>
   <ngmd-step title="Add the Vite plugin">
-    Register it next to <code>analog()</code> in <code>vite.config.ts</code>.
-  </ngmd-step>
-  <ngmd-step title="Load the overlay">
-    Import the overlay in <code>src/main.ts</code>, in development only.
+    Register it next to <code>analog()</code> in <code>vite.config.ts</code>. It also loads the overlay into your pages.
   </ngmd-step>
   <ngmd-step title="Open the devtools">
     Start the dev server and click the floating button.
@@ -97,22 +94,11 @@ The plugin also takes the devtools options. See [Vite and Analog](../getting-sta
 
 The devtools only answer requests from this machine. If you open the dev server through another hostname, add it to Vite's `server.allowedHosts`. See [Security](../security.md).
 
-## Step 3: Load the overlay
+### The overlay
 
-```ts {7}
-// src/main.ts
-import {bootstrapApplication} from '@angular/platform-browser';
-import {App} from './app/app';
-import {appConfig} from './app/app.config';
+The plugin adds the overlay to the pages the dev server serves, so `src/main.ts` needs no import. A production build does not include it. To load it yourself instead, see [Load the overlay yourself](../getting-started/vite.md#load-the-overlay-yourself).
 
-bootstrapApplication(App, appConfig).then(() => {
-  if (import.meta.env.DEV) void import('@pangular-inspector/devtools/overlay');
-});
-```
-
-The import is dynamic and guarded by `import.meta.env.DEV`, so production bundles do not include it.
-
-## Step 4: Open the devtools
+## Step 3: Open the devtools
 
 Start the dev server as usual. Then:
 
@@ -130,7 +116,7 @@ Open the **Analog** dock to see file routes, server calls, render modes, content
 
 ## Catch hydration errors from the first load
 
-The overlay loads after the first render, so it misses hydration errors (`NG0500` to `NG0506`) logged during the first load. `providePangularHttp()` starts listening for them when the app starts. The Analog dock lists them under **Hydration error** in **Lint**, and the `analog-current-page` tool returns them.
+The overlay can connect after the first render, so it can miss hydration errors (`NG0500` to `NG0506`) logged during the first load. `providePangularHttp()` starts listening for them when the app starts. The Analog dock lists them under **Hydration error** in **Lint**, and the `analog-current-page` tool returns them.
 
 Analog's own `load()` fetches and API calls show in the Analog dock without extra setup. `withPangular()` also records `HttpClient` calls in the **SSR & HTTP** tab.
 
@@ -164,7 +150,7 @@ pnpm analog:dev
 The script builds the devtools package first, then starts the Vite dev server.
 
 <ngmd-alert severity="helpful">
-  The demo aliases <code>@pangular-inspector/devtools/overlay</code> to the built package in its <code>vite.config.ts</code>. Your app does not need that alias.
+  The demo aliases <code>@pangular-inspector/devtools/overlay</code> to the built package in its <code>vite.config.ts</code>, and the overlay script the plugin adds resolves through that alias. Your app does not need it.
 </ngmd-alert>
 
 ## Where to next
