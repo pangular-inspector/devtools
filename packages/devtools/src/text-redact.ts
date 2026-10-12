@@ -13,8 +13,9 @@ const BEARER = /Bearer\s+[\w.~+/-]+=*/gi;
 const LONG_TOKEN = /(?<=[/=])[A-Za-z0-9_-]{32,}(?=[/?#&;]|$)/g;
 const UUID_OR_ULID =
   /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9A-HJKMNP-TV-Z]{26})$/i;
-const TEXT_PAIR = /(^|[?&#;])([^=&#;?\s"'/]+)=([^&#;\s"']*)/g;
-const URL_PAIR = /(^|[?&#;])([^=&#;?\s/]+)=([^&#;\s]*)/g;
+// The `=` can arrive percent-encoded (`#access_token%3D…`), so the first `%3D` ends a key too.
+const TEXT_PAIR = /(^|[?&#;])((?:(?!%3D)[^=&#;?\s"'/])+)(=|%3D)([^&#;\s"']*)/gi;
+const URL_PAIR = /(^|[?&#;])((?:(?!%3D)[^=&#;?\s/])+)(=|%3D)([^&#;\s]*)/gi;
 const MAX_KNOWN_SECRETS = 100;
 
 /** Secret values seen this session, such as secret route params, newest last. */
@@ -78,12 +79,12 @@ export function redactText(
 ): string {
   let out = redactCredentials(text, REDACTED).replace(
     mode === 'url' ? URL_PAIR : TEXT_PAIR,
-    (match, sep: string, key: string, value: string) => {
-      if (isSecretKey(decode(key))) return `${sep}${key}=${REDACTED}`;
+    (match, sep: string, key: string, eq: string, value: string) => {
+      if (isSecretKey(decode(key))) return `${sep}${key}${eq}${REDACTED}`;
       const decoded = decode(value);
       if (depth > 1 || decoded === value || !decoded.includes('=')) return match;
       const inner = redactText(decoded, secrets, mode, depth + 1);
-      return inner === decoded ? match : `${sep}${key}=${encodeURIComponent(inner)}`;
+      return inner === decoded ? match : `${sep}${key}${eq}${encodeURIComponent(inner)}`;
     },
   );
   out = out.replace(JWT, REDACTED).replace(BEARER, `Bearer ${REDACTED}`);

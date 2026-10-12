@@ -217,7 +217,8 @@ function redactValue(value: unknown, secrets: string[]): unknown {
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
-      key,
+      // `?access_token%3D…` parses to a key that holds the whole pair.
+      redactText(key, secrets),
       isSecretKey(key) ? REDACTED : redactValue(item, secrets),
     ]),
   );

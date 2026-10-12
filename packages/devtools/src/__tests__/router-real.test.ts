@@ -14,6 +14,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   findRouter,
+  redactUrl,
   snapshotRouter,
   watchRouter,
   type NavigationRecord,
@@ -277,6 +278,16 @@ describe('real Router', () => {
     expect(snapshot.url).toContain('code=[redacted]');
     expect(snapshot.url).toContain(`returnUrl=${encodeURIComponent('/reset?token=[redacted]')}`);
     expect(JSON.stringify({ snapshot, navigations })).not.toMatch(/abc|xyz/);
+  });
+
+  it('redacts secret pairs whose = arrived percent-encoded', async () => {
+    await router.navigateByUrl('/slow?access_token%3DENCODEDSECRET9&tab=1');
+    const snapshot = snapshotRouter(router as never)!;
+    // Angular reads the whole pair as a key with no value.
+    expect(snapshot.url).toBe('/slow?access_token%3D[redacted]&tab=1');
+    expect(snapshot.queryParams).toEqual({ 'access_token=[redacted]': '[redacted]', tab: '1' });
+    expect(redactUrl('/cb?Token%3dLOWERSECRET9&tab=1')).toBe('/cb?Token%3d[redacted]&tab=1');
+    expect(JSON.stringify({ snapshot, navigations })).not.toMatch(/ENCODEDSECRET9|LOWERSECRET9/);
   });
 
   it('redacts secret-named params, data, titles and repeated query params', async () => {
