@@ -6,6 +6,9 @@ import { countInjectors, largestFitting, outlineInjectors } from './injector-out
 
 export const MAX_TOOL_CHARS = 20_000;
 
+/** Longest `selector` or `token` taken; answers echo them, so they must stay short. */
+export const MAX_ARG_CHARS = 500;
+
 export const NO_INJECTORS = `No injector data available. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.`;
 
 const NARROW = 'pass `selector` or `token` to narrow it down';
@@ -30,7 +33,8 @@ const fits = (text: string) => text.length <= MAX_TOOL_CHARS;
  * injectors become an outline (names, kinds, provider and dependency counts),
  * and when even that is too long whole subtrees drop from the bottom. The
  * environment injectors always stay, in full when they take at most half the
- * budget. The JSON is never cut, so it always parses.
+ * budget, and as an outline otherwise, which drops its own subtrees from the
+ * bottom when it is still too long. The JSON is never cut, so it always parses.
  */
 function wholeTreeText(
   intro: string,
@@ -45,33 +49,54 @@ function wholeTreeText(
   const full = render('', JSON.stringify(roots), environmentFull);
   if (fits(full)) return full;
 
-  const environmentJson =
-    environmentFull.length <= MAX_TOOL_CHARS / 2
-      ? environmentFull
-      : JSON.stringify(outlineInjectors(environment));
-  const environmentNote =
-    environmentJson === environmentFull
-      ? ''
-      : ' Environment injectors are outlined too; pass an environment injector name as `selector` to see its providers.';
-  const outlined = `\n\nThe whole tree is longer than ${MAX_TOOL_CHARS} characters, so element injectors are shown as an outline: \`providers\` and \`dependencies\` are counts. To see providers and lookup paths, ${NARROW}.${environmentNote}`;
+  const total = countInjectors(roots);
+  const elementsLeftOut = (dropped: number, of: number) =>
+    ` ${dropped} of ${of} element injectors are left out, deepest first (\`moreChildren\` counts the children left out under an injector); ${NARROW}.`;
+  const outlineNote = (environmentNote: string) =>
+    `\n\nThe whole tree is longer than ${MAX_TOOL_CHARS} characters, so element injectors are shown as an outline: \`providers\` and \`dependencies\` are counts. To see providers and lookup paths, ${NARROW}.${environmentNote}`;
+  const environmentOutlined =
+    ' Environment injectors are outlined too; pass an environment injector name as `selector` to see its providers.';
+  let environmentJson = environmentFull;
+  let outlined = outlineNote('');
+  if (environmentFull.length > MAX_TOOL_CHARS / 2) {
+    environmentJson = JSON.stringify(outlineInjectors(environment));
+    outlined = outlineNote(environmentOutlined);
+    // Even with no element injectors the environment outline can be too long, so it drops
+    // whole subtrees from the bottom too, the same way the element outline does.
+    if (!fits(render(outlined, '[]', environmentJson))) {
+      const envTotal = countInjectors(environment);
+      const envPartial = (kept: number) => {
+        const note = outlineNote(
+          `${environmentOutlined} ${envTotal - kept} of ${envTotal} environment injectors are left out, deepest first.`,
+        );
+        return { note, json: JSON.stringify(outlineInjectors(environment, kept)) };
+      };
+      const fitsEnv = (kept: number) => {
+        const { note, json } = envPartial(kept);
+        return fits(render(`${note}${elementsLeftOut(total, total)}`, '[]', json));
+      };
+      ({ note: outlined, json: environmentJson } = envPartial(largestFitting(envTotal, fitsEnv)));
+    }
+  }
   const outline = render(outlined, JSON.stringify(outlineInjectors(roots)), environmentJson);
   if (fits(outline)) return outline;
 
-  const total = countInjectors(roots);
-  const partial = (kept: number) => {
-    const dropped = total - kept;
-    return render(
-      `${outlined} ${dropped} of ${total} element injectors are left out, deepest first (\`moreChildren\` counts the children left out under an injector); ${NARROW}.`,
+  const partial = (kept: number) =>
+    render(
+      `${outlined}${elementsLeftOut(total - kept, total)}`,
       JSON.stringify(outlineInjectors(roots, kept)),
       environmentJson,
     );
-  };
   return partial(largestFitting(total, (kept) => fits(partial(kept))));
 }
 
+/** The answer when the text around the lists alone is longer than {@link MAX_TOOL_CHARS}. */
+const TOO_LONG = `The answer does not fit in ${MAX_TOOL_CHARS} characters even without any injectors in it. Pass a shorter \`selector\` or \`token\`.`;
+
 /**
  * Keeps the first items of every list, the same share of each, so `render`
- * fits in {@link MAX_TOOL_CHARS}. Whole items drop; no JSON is cut.
+ * fits in {@link MAX_TOOL_CHARS}. Whole items drop; no JSON is cut. When even
+ * empty lists do not fit, answers {@link TOO_LONG}.
  */
 function fitLists<T extends unknown[][]>(lists: T, render: (lists: T) => string): string {
   const full = render(lists);
@@ -79,7 +104,8 @@ function fitLists<T extends unknown[][]>(lists: T, render: (lists: T) => string)
   const steps = 1000;
   const take = (step: number) =>
     lists.map((list) => list.slice(0, Math.ceil((list.length * step) / steps))) as T;
-  return render(take(largestFitting(steps, (step) => fits(render(take(step))))));
+  const fitted = render(take(largestFitting(steps, (step) => fits(render(take(step))))));
+  return fits(fitted) ? fitted : TOO_LONG;
 }
 
 /** ` Showing 3 of 40; narrow ...` when a list lost items to the budget. */
@@ -153,6 +179,9 @@ export function inspectProvidersText(
 
   const selector = args.selector?.trim();
   const token = args.token?.trim();
+  if ((selector?.length ?? 0) > MAX_ARG_CHARS || (token?.length ?? 0) > MAX_ARG_CHARS) {
+    return `\`selector\` and \`token\` take at most ${MAX_ARG_CHARS} characters each. Pass a tag name, a class name, an injector name or id, or a token name.`;
+  }
 
   if (!selector && !token) {
     const zone = zoneModeText(page.zone, pageId);

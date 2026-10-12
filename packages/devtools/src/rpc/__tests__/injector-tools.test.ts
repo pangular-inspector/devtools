@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { InjectorPage, InjectorTreeNode } from '../../types.ts';
-import { MAX_TOOL_CHARS, inspectProvidersText } from '../injector-tools.ts';
+import { MAX_ARG_CHARS, MAX_TOOL_CHARS, inspectProvidersText } from '../injector-tools.ts';
 
 const providers = (count: number, prefix: string) =>
   Array.from({ length: count }, (_, i) => ({
@@ -127,6 +127,53 @@ describe('inspectProvidersText', () => {
       },
     ]);
     expect(text).toMatch(/Environment injectors are outlined too/);
+  });
+
+  it('leaves out the deepest environment injectors when even their outline is too long', () => {
+    const env: InjectorTreeNode[] = [
+      {
+        injector: { id: 'platform', type: 'environment', name: 'Platform', providerCount: 0 },
+        providers: providers(400, 'Big'),
+        children: Array.from({ length: 2500 }, (_, i) => ({
+          injector: {
+            id: `route-${i}`,
+            type: 'environment' as const,
+            name: `Route: feature-${i}`,
+            providerCount: 0,
+          },
+          providers: [],
+          children: [],
+        })),
+      },
+    ];
+    const roots = Array.from({ length: 50 }, (_, i) => element(`n${i}`, {}, 10));
+    const text = inspectProvidersText({ ...page(roots), environment: env }, {});
+    expect(text.length).toBeLessThanOrEqual(MAX_TOOL_CHARS);
+    const outline = section(text, 'Environment injectors:') as {
+      id: string;
+      children: unknown[];
+      moreChildren?: number;
+    }[];
+    expect(outline[0]!.id).toBe('platform');
+    const kept = outline[0]!.children.length;
+    expect(kept).toBeLessThan(2500);
+    expect(outline[0]!.moreChildren).toBe(2500 - kept);
+    expect(text).toContain(`${2500 - kept} of 2501 environment injectors are left out`);
+    expect(() => section(text, 'Element injectors:', 'Environment injectors:')).not.toThrow();
+  });
+
+  it('asks for a shorter selector or token instead of echoing a very long one', () => {
+    const long = 'x'.repeat(MAX_TOOL_CHARS);
+    for (const args of [{ selector: long }, { token: long }, { selector: 'app-a', token: long }]) {
+      const text = inspectProvidersText(page([element('a')]), args);
+      expect(text.length).toBeLessThan(500);
+      expect(text).toContain(`at most ${MAX_ARG_CHARS} characters`);
+    }
+    const text = inspectProvidersText(page([element('a')]), {
+      selector: 'app-a',
+      token: 'y'.repeat(MAX_ARG_CHARS),
+    });
+    expect(text.length).toBeLessThanOrEqual(MAX_TOOL_CHARS);
   });
 
   it('drops whole matches from a narrowed answer instead of cutting its JSON', () => {
