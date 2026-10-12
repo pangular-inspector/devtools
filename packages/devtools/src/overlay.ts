@@ -44,6 +44,7 @@ import { registerSignalPeek } from './signal-peek.ts';
 export { installSignalWriteHook } from './signal-history.ts';
 import { collectComponentTree, componentHostOf } from './component-tree.ts';
 import { startComponentPick } from './component-pick.ts';
+import { registerComponentEdit } from './component-edit-overlay.ts';
 import { installSourceHelpers } from './component-source.ts';
 import { createDeferTracker } from './defer-blocks.ts';
 import { elementById, elementId } from './element-id.ts';
@@ -764,6 +765,11 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       },
     });
     own(() => cancelComponentPick?.());
+    registerComponentEdit(my.rpc, pageId, {
+      getNg,
+      allowed: devtoolsConfig.actions.components,
+      edited: () => void pushTree(true).catch(() => {}),
+    });
 
     const componentOf = (el: unknown) => {
       const host = el instanceof Element ? componentHostOf(getNg(), el) : null;

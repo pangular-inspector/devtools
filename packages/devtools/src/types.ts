@@ -131,6 +131,10 @@ export interface ComponentProp {
   value?: unknown;
   listened?: boolean;
   kind?: 'signal' | 'resource';
+  /** The write that edits it: `property` (set-component-property) or `signal` (set-signal). */
+  edit?: 'property' | 'signal';
+  /** Why it cannot be edited, when it cannot. */
+  locked?: string;
 }
 
 export interface ComponentSource {
@@ -193,6 +197,8 @@ export interface ComponentTreeReport {
   deferBlocks?: DeferBlockInfo[];
   /** True when the page has more defer blocks than the 500 in `deferBlocks`. */
   deferTruncated?: boolean;
+  /** Missing when the page's Angular has no `ɵgetControlFlowBlocks` (before 22.0). */
+  /** The page has more `@for` blocks than it lists. */
 }
 
 export interface ComponentPage extends ComponentTreeReport {

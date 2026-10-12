@@ -33,6 +33,8 @@ import {
 import { CdRecording, type CdPage } from './cd-recording';
 import type { ComponentFocus } from '../types/component-focus.types';
 import { SourceLink } from '../ui/source-link';
+import { actionAllowed } from '../devtools-config';
+import { PropValue } from './component-prop-value';
 
 interface SourceComponent {
   selector: string;
@@ -59,6 +61,8 @@ interface Prop {
   value?: unknown;
   listened?: boolean;
   kind?: 'signal' | 'resource';
+  edit?: 'property' | 'signal';
+  locked?: string;
 }
 
 interface Dependency {
@@ -146,7 +150,7 @@ function bare(name: string): string {
 
 @Component({
   selector: 'app-component-tree',
-  imports: [JsonPipe, Select, CdRecording, SourceLink],
+  imports: [JsonPipe, Select, CdRecording, SourceLink, PropValue],
   host: { '(keydown.escape)': 'cancelPick()' },
   template: `
     @if (live()) {
@@ -364,7 +368,13 @@ function bare(name: string): string {
                             <span class="muted">({{ p.prop }})</span>
                           }
                         </span>
-                        <pre>{{ p.value | json }}</pre>
+                        <app-prop-value
+                          [prop]="p"
+                          [componentId]="d.id"
+                          [pageId]="page()?.pageId ?? null"
+                          [rpc]="rpc()"
+                          [writes]="canEdit()"
+                        />
                       </li>
                     }
                   </ul>
@@ -405,7 +415,13 @@ function bare(name: string): string {
                             <span class="flag">{{ p.kind }}</span>
                           }
                         </span>
-                        <pre>{{ p.value | json }}</pre>
+                        <app-prop-value
+                          [prop]="p"
+                          [componentId]="d.id"
+                          [pageId]="page()?.pageId ?? null"
+                          [rpc]="rpc()"
+                          [writes]="canEdit()"
+                        />
                       </li>
                     }
                   </ul>
@@ -1442,6 +1458,14 @@ export class ComponentTree {
 
   readonly live = computed(() => (this.page()?.roots.length ?? 0) > 0);
   readonly native = computed(() => isNativePage(this.page()));
+  /** Inputs, properties and writable signals are editable on a live browser page. */
+  readonly canEdit = computed(
+    () =>
+      this.live() &&
+      !this.native() &&
+      !this.staticReport() &&
+      actionAllowed(this.rpc(), 'components'),
+  );
   readonly devtoolsActions = computed(
     () => this.bridge.available && !!this.page() && !this.native() && !this.staticReport(),
   );

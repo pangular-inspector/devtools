@@ -76,6 +76,7 @@ import {
 } from './rpc/component-tools.ts';
 import { LIST_COMPONENTS_DESCRIPTION, listComponentsText } from './rpc/component-outline.ts';
 import { inspectComponentText } from './rpc/component-detail-text.ts';
+import { createComponentEdits } from './rpc/component-edits.ts';
 import {
   explainFormsText,
   formsResourceText,
@@ -1649,6 +1650,29 @@ const pangular = defineDevframe({
       },
     });
 
+    // Writes to component inputs, properties and signals: panel and agent tools.
+    const componentEdits = createComponentEdits({
+      config,
+      pages: () => componentPages.values(),
+      broadcast: (method, message) =>
+        void my.rpc.broadcast({ method, args: [message], optional: true }),
+      answersFor,
+    });
+    register({
+      name: 'component-edit-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: componentEdits.answer,
+    });
+    register({
+      name: 'request-component-edit',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; request?: unknown } | null) =>
+        componentEdits.request(message?.pageId, message?.request),
+    });
+    for (const tool of componentEdits.tools) agent.registerTool(tool);
+
     const pendingPicks = new Map<
       string,
       { pageId: string; settle: (result: Record<string, unknown>) => void }
@@ -2181,7 +2205,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-component',
       description:
-        'Get the live detail of one component instance: inputs, outputs with whether a parent listens, other own properties (signals and resources unwrapped), DOM listeners, host directives, change detection, encapsulation, host path, injected services and the source file and line of the class when a dev build has them. Pass an instance id from the pangular:component-tree resource, a class name or a host tag. This selects the instance on its page (the panel follows) and waits for the page to report it. A class name or tag that matches several instances answers for the first and lists the ids of all of them. Secret-looking values are redacted. Past 20,000 characters, values longer than 1,000 characters show only their start, then each list keeps fewer entries, with a note saying what was left out; the `detail` of the pangular:component-tree resource has it all.',
+        'Get the live detail of one component instance: inputs, outputs with whether a parent listens, other own properties (signals and resources unwrapped), DOM listeners, host directives, change detection, encapsulation, host path, injected services and the source file and line of the class when a dev build has them. Pass an instance id from the pangular:component-tree resource, a class name or a host tag. This selects the instance on its page (the panel follows) and waits for the page to report it. A class name or tag that matches several instances answers for the first and lists the ids of all of them. Each input and property of the component carries `edit` (`property` for pangular:set-component-property, `signal` for pangular:set-signal) when it can be written, or `locked` with the reason it cannot. Secret-looking values are redacted. Past 20,000 characters, values longer than 1,000 characters show only their start, then each list keeps fewer entries, with a note saying what was left out; the `detail` of the pangular:component-tree resource has it all.',
       inputSchema: {
         type: 'object',
         properties: {

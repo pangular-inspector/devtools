@@ -101,7 +101,7 @@ type PangularInspector =
   | 'analog'
   | 'capacitor';
 
-type PangularAction = 'forms' | 'router' | 'ngrx' | 'http' | 'analog';
+type PangularAction = 'forms' | 'router' | 'ngrx' | 'http' | 'analog' | 'components';
 
 interface PangularConfig {
   inspectors?: Partial<Record<PangularInspector, boolean>>;
@@ -122,11 +122,11 @@ interface PangularConfig {
 
 ### Inspectors and agent tools
 
-| Option               | Default | What it does                                                                                                                                                                                                                                                                                                                    |
-| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `inspectors.<name>`  | `true`  | `false` removes the inspector: no tab or dock, no page collector, no RPC functions, and no agent tools or resources. Its actions are blocked too.                                                                                                                                                                               |
-| `agent.readOnly`     | `false` | `true` keeps only the agent tools in the `read` [safety tier](../agents/tools.md#action-tools). It drops `form-action`, `fill-form`, `navigate`, `dispatch-ngrx-action`, `set-http-rule`, `remove-http-rule`, `record-pipes`, `analog-call-api` and `clear-recordings`. `change-detection` stays without its `record` argument. |
-| `agent.tools.<name>` | `true`  | `false` hides one inspector's agent tools and resources, and its [shared-state keys](../agents/resources.md#shared-state) over HTTP MCP. The tab stays.                                                                                                                                                                         |
+| Option               | Default | What it does                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inspectors.<name>`  | `true`  | `false` removes the inspector: no tab or dock, no page collector, no RPC functions, and no agent tools or resources. Its actions are blocked too.                                                                                                                                                                                                                       |
+| `agent.readOnly`     | `false` | `true` keeps only the agent tools in the `read` [safety tier](../agents/tools.md#action-tools). It drops `form-action`, `fill-form`, `navigate`, `dispatch-ngrx-action`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `record-pipes`, `analog-call-api` and `clear-recordings`. `change-detection` stays without its `record` argument. |
+| `agent.tools.<name>` | `true`  | `false` hides one inspector's agent tools and resources, and its [shared-state keys](../agents/resources.md#shared-state) over HTTP MCP. The tab stays.                                                                                                                                                                                                                 |
 
 `agent.tools` has the same keys as `inspectors`. An inspector that is off has no agent tools, whatever `agent.tools` says.
 
@@ -136,20 +136,21 @@ If you open a tab that is turned off, the panel says so, shows the option that t
 
 Actions are the writes that the panel and agents make to your app or the server.
 
-| Option           | Default | What `false` blocks                                                                                                                                                                                                |
-| ---------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `actions.forms`  | `true`  | Form writes: set value, fill, mark touched, untouched, dirty or pristine, touch all, revalidate, reset, enable, disable, submit and restore. Drops `form-action` and `fill-form`.                                  |
-| `actions.router` | `true`  | Navigate, abort, replay and probe, and clearing the navigations list. Drops router clearing in `clear-recordings`. The `navigate` agent tool stays for `instrument` and `resolve-lazy` and refuses the other four. |
-| `actions.ngrx`   | `true`  | Restoring NgRx state from the change log and dispatching `@ngrx/store` actions. Drops the `dispatch-ngrx-action` agent tool.                                                                                       |
-| `actions.http`   | `true`  | Editing fault injection rules and SSR overrides, and clearing the HTTP timeline. Drops the `set-http-rule` and `remove-http-rule` agent tools and HTTP clearing in `clear-recordings`.                             |
-| `actions.analog` | `true`  | The Analog request playground and clearing server calls. Drops the `analog-call-api` agent tool and Analog clearing in `clear-recordings`.                                                                         |
-| `actions`        | `true`  | All of the above.                                                                                                                                                                                                  |
+| Option               | Default | What `false` blocks                                                                                                                                                                                                |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `actions.forms`      | `true`  | Form writes: set value, fill, mark touched, untouched, dirty or pristine, touch all, revalidate, reset, enable, disable, submit and restore. Drops `form-action` and `fill-form`.                                  |
+| `actions.router`     | `true`  | Navigate, abort, replay and probe, and clearing the navigations list. Drops router clearing in `clear-recordings`. The `navigate` agent tool stays for `instrument` and `resolve-lazy` and refuses the other four. |
+| `actions.ngrx`       | `true`  | Restoring NgRx state from the change log and dispatching `@ngrx/store` actions. Drops the `dispatch-ngrx-action` agent tool.                                                                                       |
+| `actions.http`       | `true`  | Editing fault injection rules and SSR overrides, and clearing the HTTP timeline. Drops the `set-http-rule` and `remove-http-rule` agent tools and HTTP clearing in `clear-recordings`.                             |
+| `actions.analog`     | `true`  | The Analog request playground and clearing server calls. Drops the `analog-call-api` agent tool and Analog clearing in `clear-recordings`.                                                                         |
+| `actions.components` | `true`  | Editing component inputs, properties and writable signals from the **Components** tab. Drops the `set-component-property` and `set-signal` agent tools.                                                            |
+| `actions`            | `true`  | All of the above.                                                                                                                                                                                                  |
 
 Pass `actions: false` to block every action, or an object to block some. Keys you leave out of the object stay on.
 
 `actions.forms` leaves the panel's **Record details** and **Store as global** on. They don't change the form: **Record details** wraps form methods to record who called them, and **Store as global** sets `$form` and `$control` in the page console only when the page has not defined them itself.
 
-The server refuses a blocked action. The panel disables its controls and shows a note that names the option, for example: **Navigating and clearing navigations is turned off in the devtools config (actions.router).**
+The server refuses a blocked action, and with `actions.components` the page refuses it too. The panel disables its controls (the **Components** tab hides **Edit**) and shows a note that names the option, for example: **Navigating and clearing navigations is turned off in the devtools config (actions.router).**
 
 ### Redaction
 

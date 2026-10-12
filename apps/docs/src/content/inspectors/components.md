@@ -73,6 +73,20 @@ A fact shows **Unknown** when Angular does not report it.
 
 **Properties** lists the component's other own fields: plain fields, state objects, signals and resources. It leaves out inputs, outputs, methods and injected services. Signals show their current value and a **signal** flag. A field that holds a `resource()` or `httpResource()` shows its status, value and error, with a **resource** flag.
 
+### Editing values
+
+On a live browser page, each input, property and writable signal of the selected component has an **Edit** button. **Edit** opens a field with the value as JSON. Type a new JSON value, such as `"Paris"`, `42`, `true` or `{"page": 2}`. Press Enter or **Apply** to write it, or Escape or **Cancel** to leave it. If the page refuses the write, the reason shows under the field.
+
+| Value                                                           | How the page writes it                                                           |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `signal()`, `linkedSignal()` or `model()`                       | Calls `.set()`. A `model()` also emits its change, so a two-way binding follows. |
+| A decorator input or a plain field                              | Assigns the value, then runs change detection with `ng.applyChanges`.            |
+| A signal input, `computed()`, `asReadonly()` signal or resource | No **Edit**. The row says why, for example that a parent binding sets the input. |
+
+A row also has no **Edit** when its value is not JSON (a class instance, `Map` or `Date`), when it is redacted, or when the panel shows it shortened. A parent binding sets a bound input again the next time its own value changes, so the edit lasts until then. Directive inputs are read-only.
+
+Set [`actions.components`](../getting-started/configuration.md#actions) to `false` to turn editing off. Agents write the same values with [`set-component-property` and `set-signal`](../agents/tools.md#edit-a-component).
+
 ### Injected services
 
 **Injected** lists each token the component class injects, with its flags and the injector that provided it. The block marks a token nobody provides as **not provided**. The block leaves out tokens that host directives inject. Use the [Injectors tab](./injectors.md) for those.
@@ -127,6 +141,7 @@ The live tree reads `window.ng`, which only development builds expose. It uses t
 | `ɵcmp.debugInfo` on the component class                                    | The source file and line in the detail header.                      |
 | `ng.isSignal`                                                              | Unwrapping signal inputs.                                           |
 | `ng.getListeners`                                                          | Output listeners and DOM listeners.                                 |
+| `ng.applyChanges`                                                          | Refreshing the view after an edit to an input or a plain field.     |
 | `ng.getInjector`, `ɵgetDependenciesFromInjectable`, `ɵgetInjectorMetadata` | The **Injected** block, and the services **Properties** leaves out. |
 | `ng.ɵgetControlFlowBlocks`, or `ng.ɵgetDeferBlocks` before Angular 22      | The **Defer blocks** list.                                          |
 
@@ -227,15 +242,17 @@ Press Escape in the filter box to clear it. When the filter matches nothing, **C
 
 ## Agent tools
 
-| Tool or resource             | Kind     | What it does                                                                                                                                                                          |
-| ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:get-components`    | tool     | Lists components and directives from source, with selector, kind, inputs, outputs, change detection, file and line.                                                                   |
-| `pangular:highlight`         | tool     | Highlights a component in the page and selects it. Takes an instance id, class name, host tag or CSS selector. Also retargets the Signals graph. Lists every instance a name matches. |
-| `pangular:inspect-component` | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services.                                                           |
-| `pangular:list-components`   | tool     | Returns the live tree of one page as an indented outline with routed and directive markers. Takes a `filter` and a `depth`.                                                           |
-| `pangular:defer-blocks`      | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                  |
-| `pangular:change-detection`  | tool     | Starts, stops or clears a change detection recording, and returns the slowest and most often checked components and the latest cycles.                                                |
-| `pangular:component-tree`    | resource | The live tree per page, with the detail of the selected instance and the defer blocks.                                                                                                |
+| Tool or resource                  | Kind     | What it does                                                                                                                                                                          |
+| --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:get-components`         | tool     | Lists components and directives from source, with selector, kind, inputs, outputs, change detection, file and line.                                                                   |
+| `pangular:highlight`              | tool     | Highlights a component in the page and selects it. Takes an instance id, class name, host tag or CSS selector. Also retargets the Signals graph. Lists every instance a name matches. |
+| `pangular:inspect-component`      | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services.                                                           |
+| `pangular:list-components`        | tool     | Returns the live tree of one page as an indented outline with routed and directive markers. Takes a `filter` and a `depth`.                                                           |
+| `pangular:defer-blocks`           | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                  |
+| `pangular:change-detection`       | tool     | Starts, stops or clears a change detection recording, and returns the slowest and most often checked components and the latest cycles.                                                |
+| `pangular:set-component-property` | tool     | Writes an input or property of one instance and runs change detection. An action.                                                                                                     |
+| `pangular:set-signal`             | tool     | Sets a writable signal that one instance holds as a property. An action.                                                                                                              |
+| `pangular:component-tree`         | resource | The live tree per page, with the detail of the selected instance and the defer blocks.                                                                                                |
 
 See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 

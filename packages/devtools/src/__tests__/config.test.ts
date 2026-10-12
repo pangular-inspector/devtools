@@ -61,6 +61,7 @@ describe('resolvePangularConfig', () => {
       ngrx: true,
       http: true,
       analog: true,
+      components: true,
     });
   });
 
@@ -79,6 +80,7 @@ describe('resolvePangularConfig', () => {
       ngrx: false,
       http: true,
       analog: true,
+      components: true,
     });
   });
 
@@ -89,6 +91,7 @@ describe('resolvePangularConfig', () => {
       ngrx: false,
       http: false,
       analog: false,
+      components: false,
     });
     expect(resolvePangularConfig({ actions: { router: false } }).actions).toEqual({
       forms: true,
@@ -96,6 +99,7 @@ describe('resolvePangularConfig', () => {
       ngrx: true,
       http: true,
       analog: true,
+      components: true,
     });
   });
 
@@ -254,7 +258,9 @@ describe('agent tool and RPC registration', () => {
         'navigate',
         'record-pipes',
         'remove-http-rule',
+        'set-component-property',
         'set-http-rule',
+        'set-signal',
       ].sort(),
     );
     expect(tools).toContain('inspect-forms');
@@ -348,7 +354,9 @@ describe('agent tool and RPC registration', () => {
         'navigate',
         'record-pipes',
         'remove-http-rule',
+        'set-component-property',
         'set-http-rule',
+        'set-signal',
       ].sort(),
     );
     expect(forms.tools).toEqual(expect.arrayContaining(['inspect-forms', 'form-history']));
@@ -366,6 +374,10 @@ describe('agent tool and RPC registration', () => {
     expect(http.actionTools).not.toContain('set-http-rule');
     expect(http.actionTools).not.toContain('remove-http-rule');
     expect(http.tools).toContain('list-http-rules');
+    const components = await boot({ actions: { components: false } });
+    expect(components.actionTools).not.toContain('set-component-property');
+    expect(components.actionTools).not.toContain('set-signal');
+    expect(components.tools).toContain('inspect-component');
   });
 
   it('leaves out the RPC functions, tools and resources of a disabled inspector', async () => {

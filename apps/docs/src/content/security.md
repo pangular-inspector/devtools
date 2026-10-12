@@ -266,6 +266,8 @@ A secret route param is known from the route config before a navigation is recog
 
 Component inputs, signal values, NgRx state, and pipe inputs, outputs and async values use the same secret names and the same `mask` and `unmask` lists as forms. A value whose name looks secret is replaced with `[redacted]`. JWTs, bearer tokens and `key=value` pairs under secret keys (such as `token=abc123` or `password=…&user=a`) inside strings and error messages are replaced too, NgRx strings and errors included, and so are tokens used as object keys. The URL and title of the NgRx page, and the request URL of an `httpResource`, are redacted like router URLs.
 
+The **Components** tab and the `set-component-property` and `set-signal` tools never write a value you could not see: a name on the path that looks secret, or a value that shows `[redacted]` anywhere, is refused. Write a field next to a secret instead of the object that holds it. See [Editing values](./inspectors/components.md#editing-values).
+
 These values are read without running code on the page. A getter shows as `[Getter]` instead of its value, and a value that throws when it is read shows as `[Unreadable]`. An object seen again inside itself shows as `[Circular]`. An error shows as `Name: message`, and an error with a `cause` shows one level of the cause next to its message.
 
 ### Analog

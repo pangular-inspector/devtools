@@ -1,3 +1,4 @@
+import { markEditable } from './component-edit.ts';
 import { componentSource } from './component-source.ts';
 import { elementById, elementId, pruneElementIds } from './element-id.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
@@ -282,6 +283,7 @@ export function componentDetail<H extends object = Element>(
     }),
     dependencies: [],
   };
+  markEditable(ng, instance, detail);
   const source = componentSource(instance);
   if (source) detail.source = source;
   const cd = meta?.changeDetection;

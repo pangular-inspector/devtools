@@ -8,6 +8,7 @@ import {
   hostPath,
   type ComponentDebugNg,
 } from '../component-tree.ts';
+import { LOCKED } from '../component-edit.ts';
 import { elementById, elementId } from '../element-id.ts';
 
 const SIGNAL = Symbol('SIGNAL');
@@ -446,10 +447,21 @@ describe('component properties', () => {
       }),
     });
     expect(detail.properties).toEqual([
-      { name: 'trips', prop: 'trips', value: ['Rome', 'Lisbon'], kind: 'signal' },
-      { name: 'loading', prop: 'loading', value: false },
-      { name: 'filters', prop: 'filters', value: { city: 'Rome', sessionToken: '[redacted]' } },
-      { name: 'password', prop: 'password', value: '[redacted]' },
+      {
+        name: 'trips',
+        prop: 'trips',
+        value: ['Rome', 'Lisbon'],
+        kind: 'signal',
+        locked: LOCKED.readonlySignal,
+      },
+      { name: 'loading', prop: 'loading', value: false, edit: 'property' },
+      {
+        name: 'filters',
+        prop: 'filters',
+        value: { city: 'Rome', sessionToken: '[redacted]' },
+        locked: LOCKED.redacted,
+      },
+      { name: 'password', prop: 'password', value: '[redacted]', locked: LOCKED.redacted },
     ]);
   });
 
@@ -464,6 +476,7 @@ describe('component properties', () => {
         prop: 'trips',
         kind: 'resource',
         value: { status: 'error', error: 'Error: Offline' },
+        locked: LOCKED.resource,
       },
     ]);
   });

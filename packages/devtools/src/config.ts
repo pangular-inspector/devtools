@@ -36,7 +36,14 @@ export function hubDockId(view: string): string {
   return `pangular:${view}`;
 }
 
-export const PANGULAR_ACTIONS = ['forms', 'router', 'ngrx', 'http', 'analog'] as const;
+export const PANGULAR_ACTIONS = [
+  'forms',
+  'router',
+  'ngrx',
+  'http',
+  'analog',
+  'components',
+] as const;
 
 export type PangularAction = (typeof PANGULAR_ACTIONS)[number];
 
@@ -448,6 +455,7 @@ export const ACTION_TOOLS: Record<PangularAction, readonly string[]> = {
   ngrx: ['dispatch-ngrx-action'],
   http: ['set-http-rule', 'remove-http-rule', 'clear-recordings'],
   analog: ['analog-call-api', 'clear-recordings'],
+  components: ['set-component-property', 'set-signal'],
 };
 
 /**
@@ -481,6 +489,8 @@ export const AGENT_SAFETY: Record<string, Exclude<AgentSafety, 'read'>> = {
   'change-detection': 'action',
   'clear-recordings': 'destructive',
   'analog-call-api': 'destructive',
+  'set-component-property': 'action',
+  'set-signal': 'action',
 };
 
 /**
@@ -503,6 +513,7 @@ export function actionBlockedMessage(action: PangularAction): string {
     ngrx: 'Restoring NgRx state and dispatching actions',
     http: 'Changing HTTP mock rules and clearing HTTP calls',
     analog: 'Calling API routes and clearing server calls',
+    components: 'Editing component properties and signals',
   }[action];
   return `${what} is turned off in the devtools config (actions.${action}).`;
 }
@@ -539,6 +550,8 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'cancel-component-pick': 'components',
   'component-pick-result': 'components',
   'request-page-highlight': 'components',
+  'request-component-edit': 'components',
+  'component-edit-result': 'components',
   'get-signals': 'signals',
   'push-signal-graph': 'signals',
   'ping-signal-graph': 'signals',
@@ -608,6 +621,8 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'list-components': 'components',
   'defer-blocks': 'components',
   'change-detection': 'components',
+  'set-component-property': 'components',
+  'set-signal': 'components',
   'signal-graph': 'signals',
   'inspect-signals': 'signals',
   'injector-tree': 'injectors',
@@ -704,6 +719,8 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'list-components',
   'defer-blocks',
   'change-detection',
+  'set-component-property',
+  'set-signal',
   'signal-graph',
   'inspect-signals',
   'injector-tree',
@@ -810,6 +827,7 @@ const ACTION_LABEL: Record<PangularAction, string> = {
   ngrx: 'NgRx restore and dispatch',
   http: 'HTTP mocking',
   analog: 'Analog API calls',
+  components: 'Component edits',
 };
 
 const LIMIT_LABEL: Record<PangularLimit, (value: number) => string> = {
