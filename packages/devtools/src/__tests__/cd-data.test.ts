@@ -8,7 +8,7 @@ import {
   sanitizeCdRecording,
   type CdTraceEvent,
 } from '../cd-data.ts';
-import type { CdRecording } from '../config.ts';
+import type { CdRecording, CdSpan } from '../config.ts';
 
 function recording(): CdRecording {
   return {
@@ -246,6 +246,21 @@ describe('change detection trace export', () => {
     validateTrace(trace.traceEvents);
     const ts = trace.traceEvents.filter((e) => e.ph === 'X').map((e) => e.ts);
     expect(ts).toEqual([10_000, 20_000]);
+  });
+
+  it('keeps the full duration of an output that ran inside the cycle', () => {
+    const base = recording();
+    const output: CdSpan = [4, 0.2, 0.7, 0, 'o'];
+    const first = { ...base.cycles[0]!, spans: [output, ...base.cycles[0]!.spans!.slice(1)] };
+    const trace = cdTraceFile({ ...base, cycles: [first] }, 'p1');
+    validateTrace(trace.traceEvents);
+    expect(trace.traceEvents.find((e) => e.cat === 'output')).toMatchObject({ ts: 1700, dur: 700 });
+  });
+
+  it('drops a start time no Date can hold, so the export does not throw', () => {
+    const sanitized = sanitizeCdRecording({ ...recording(), startedAt: 1e300 }, 200);
+    expect(sanitized?.startedAt).toBeNull();
+    expect(() => cdTraceFile({ ...recording(), startedAt: 1e300 }, 'p1')).not.toThrow();
   });
 
   it('shifts every event to start at zero when an output ran before the first cycle', () => {

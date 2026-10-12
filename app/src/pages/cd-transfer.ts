@@ -20,8 +20,12 @@ function download(value: unknown, fileName: string) {
   const link = document.createElement('a');
   link.href = url;
   link.download = fileName;
+  // Some browsers (Firefox, extension panels) need the link in the document
+  // and the URL alive until the download has read it.
+  document.body.append(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 /** Export the shown recording as JSON or as a Perfetto trace, or import a recording file. */

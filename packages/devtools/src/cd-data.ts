@@ -10,6 +10,9 @@ import type {
   CdSpanKind,
 } from './config.ts';
 
+/** The largest time a JavaScript Date can hold, in ms. */
+const MAX_DATE_MS = 8.64e15;
+
 // Shared by the server, which checks what pages push, and the panel, which
 // checks a recording file before it shows it. It imports nothing at runtime,
 // so `config.ts` can re-export it to the panel.
@@ -175,7 +178,10 @@ export function sanitizeCdRecording(value: unknown, maxCycles: number): CdRecord
   const used = cycles.some((c) => c.spans?.length);
   return {
     recording: value['recording'] === true,
-    startedAt: typeof value['startedAt'] === 'number' ? num(value['startedAt']) : null,
+    startedAt:
+      typeof value['startedAt'] === 'number' && value['startedAt'] <= MAX_DATE_MS
+        ? num(value['startedAt'])
+        : null,
     dropped: num(value['dropped']),
     cycles,
     components: components
@@ -352,7 +358,8 @@ export function cdTraceFile(recording: CdRecording, pageId: string): CdTraceFile
           pid: PID,
           tid: OUTPUT_TID,
           ts: us(ts),
-          dur: us(Math.max(0, Math.min(ms, start - ts))),
+          // Only an output that ran before the cycle is clamped to the cycle's start.
+          dur: us(offset < 0 ? Math.max(0, Math.min(ms, -offset)) : ms),
           args: { cycle: cycle.id },
         });
         continue;
@@ -401,7 +408,9 @@ export function cdTraceFile(recording: CdRecording, pageId: string): CdTraceFile
       droppedCycles: recording.dropped,
       spans,
       droppedSpans,
-      ...(recording.startedAt ? { startedAt: new Date(recording.startedAt).toISOString() } : {}),
+      ...(recording.startedAt && recording.startedAt <= MAX_DATE_MS
+        ? { startedAt: new Date(recording.startedAt).toISOString() }
+        : {}),
     },
   };
 }
