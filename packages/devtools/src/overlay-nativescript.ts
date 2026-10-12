@@ -193,6 +193,7 @@ async function startSession(
   // Before any report, so the server hands this connection the page at once.
   await claimPageOnServer(my.rpc, pageId, pageKey);
   const config = configFromConnection(rpc.connectionMeta);
+  const on = config.inspectors;
   const tickMs = intervalMs ?? config.limits.refreshMs;
   setRedaction(config.redaction);
   const title = `NativeScript (${isAndroid ? 'Android' : 'iOS'})`;
@@ -238,7 +239,7 @@ async function startSession(
     Date.now,
     (value, name) => graphValue(name, value),
   );
-  const restoreSignalHook = await installSignalWriteHook(signalHistory.onWrite);
+  const restoreSignalHook = on.signals ? await installSignalWriteHook(signalHistory.onWrite) : null;
 
   let signalTarget: SignalTarget = null;
   let lastSignalKey = '';
@@ -316,22 +317,24 @@ async function startSession(
     }
   }
 
-  const ngrx = attachNgrx(my, pageId, angularDebugApi, config.limits.changeLog, {
-    tree,
-    describe: () => ({ url: '/', title }),
-  });
+  const ngrx = on.ngrx
+    ? attachNgrx(my, pageId, angularDebugApi, config.limits.changeLog, {
+        tree,
+        describe: () => ({ url: '/', title }),
+      })
+    : null;
 
-  const pipes = config.inspectors.pipes
+  const pipes = on.pipes
     ? attachPipes(my, pageId, () => angularDebugApi() as NgDebugApi | undefined, { tree })
     : null;
 
   const collectors = [
-    pushTree,
-    pushSignalGraph,
-    pushInjectorTree,
-    () => ngrx.push(),
-    ...(pipes ? [async () => pipes.push()] : []),
-  ];
+    on.components && pushTree,
+    on.signals && pushSignalGraph,
+    on.injectors && pushInjectorTree,
+    ngrx && (() => ngrx.push()),
+    pipes && (async () => pipes.push()),
+  ].filter((collect) => typeof collect === 'function');
   const report = async () => {
     for (const collect of collectors) {
       await collect().catch((error: unknown) => console.warn('[pangular] report failed', error));
@@ -399,19 +402,22 @@ async function startSession(
     clearInterval(interval);
     clearFlash();
     restoreSignalHook?.();
-    ngrx.stop();
+    ngrx?.stop();
     pipes?.stop();
     if (!forget) {
       rpc.close?.();
       return;
     }
-    void Promise.allSettled([
-      my.rpc.call('forget-component-page', pageId),
-      my.rpc.call('forget-signal-page', pageId),
-      my.rpc.call('forget-injector-page', pageId),
-      my.rpc.call('forget-ngrx-page', pageId),
-      ...(pipes ? [my.rpc.call('forget-pipes-page', pageId)] : []),
-    ]).finally(() => rpc.close?.());
+    const pages = [
+      on.components && 'forget-component-page',
+      on.signals && 'forget-signal-page',
+      on.injectors && 'forget-injector-page',
+      on.ngrx && 'forget-ngrx-page',
+      on.pipes && 'forget-pipes-page',
+    ].filter((name): name is string => typeof name === 'string');
+    void Promise.allSettled(pages.map((name) => my.rpc.call(name, pageId))).finally(() =>
+      rpc.close?.(),
+    );
   };
 }
 

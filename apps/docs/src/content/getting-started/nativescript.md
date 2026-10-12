@@ -25,6 +25,8 @@ This page describes what the overlay shows and how it works. To add it to an app
 
 The source scans (routes, pipes, NgRx declarations) come from the server, so they work as with the [Standalone CLI](./cli.md). The Router, Forms, SSR & HTTP and change detection tabs show no live data for a NativeScript app, and there is no in-app popup.
 
+The server's [configuration](./configuration.md) applies to the app: inspectors you turn off there are not collected, and `redaction.secretNames` masks values before they leave the device.
+
 ### Hidden controls
 
 Some controls only work with the [browser overlay](./overlay.md), so the panel hides them while the Components tab shows a NativeScript app:
