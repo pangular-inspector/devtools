@@ -589,7 +589,12 @@ function bare(name: string): string {
         (highlight)="highlight($event)"
       />
       @if (!staticReport() && !native()) {
-        <app-cd-recording [page]="cdPage()" [pageId]="page()!.pageId" [rpc]="rpc()" />
+        <app-cd-recording
+          [page]="cdPage()"
+          [pageId]="page()!.pageId"
+          [rpc]="rpc()"
+          (showComponent)="showCdComponent($event)"
+        />
       }
     } @else {
       @if (page()) {
@@ -1980,6 +1985,25 @@ export class ComponentTree {
 
   showOwner(block: DeferBlock) {
     if (block.owner && this.index().map.has(block.owner.id)) this.reveal(block.owner.id);
+  }
+
+  /**
+   * Shows an instance of a component class from the change detection recording,
+   * the one checked most often when there are several.
+   */
+  showCdComponent(name: string) {
+    const hosts = this.cdHosts();
+    let best: LiveNode | null = null;
+    for (const node of this.index().map.values()) {
+      if (node.name !== name) continue;
+      if (!best || (hosts[node.id] ?? 0) > (hosts[best.id] ?? 0)) best = node;
+    }
+    if (!best) {
+      this.say(`No ${name} is in the tree now.`);
+      return;
+    }
+    this.say(`Showing ${name} in the tree.`);
+    this.reveal(best.id);
   }
 
   showForOwner(block: ForBlock) {

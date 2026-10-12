@@ -119,6 +119,9 @@ The list needs Angular 22.0 or later in a development build. On an older Angular
 
 Below the tree and the defer blocks, the **Change detection** section records change detection cycles with Angular's profiler. Click **Record**, use the app, then click **Stop recording**. **Clear** empties the recording. Each new recording starts empty, but a start sent while the page records, such as an agent's `record: "start"`, keeps the cycles recorded so far.
 
+- **Cycles**: a bar chart with one bar per recorded cycle, its height the cycle's duration. A line marks the 16.6 ms frame budget (one frame at 60 frames per second). A cycle over the budget has a striped bar, a triangle under it, and says "over budget" in its tooltip and in the table. Hover or focus a bar to see the cycle number, duration, output trigger, checks and its three slowest components.
+- **Spans in the picked cycles**: when the page reports timed spans, a flame graph of the picked cycles. Time runs left to right, cycle after cycle with the idle time between them left out, and a span nested in another sits one row lower. Each span is a component check (solid), a lifecycle hook (stripes), an `afterRender` callback (dots) or the output listener that triggered the cycle (lines, drawn before the cycle's start), with a key under the graph. Hover or focus a span to read its total and self time. The arrow keys move along a row, **Up** goes to the enclosing span and **Down** to the first nested one. **Enter** or a click on a component, hook or output selects that component in the tree. **Show the spans as a table** lists the same spans. The graph shows at most 30 cycles; pick a smaller range when more are picked.
+- **Self time by component**: a treemap of each component class's self time in the picked cycles, largest first. The recording has no parent links between components, so the cells are not nested. Click a cell, or press **Enter** on it, to select an instance of that class in the tree (the one checked most often).
 - **Slowest components**: each component class with its check count, its self time (its own template and hooks, children excluded) and its slowest single check.
 - **Latest cycles**, newest first: the start time, the duration, how many components Angular checked, how many sync passes it ran, the output listener that ran just before the cycle (an output that ended more than 50 ms before the cycle is not counted), the time in lifecycle hooks and in `afterRender` callbacks, and the slowest component in it.
 - **Lifecycle hooks**: time per class and hook (`ngOnChanges`, `ngOnInit`, `ngDoCheck`, `ngAfterContentChecked`, `ngAfterViewChecked` and the others Angular calls), with call count and slowest call. A hook's time is also part of the self time of the component whose view runs it.
@@ -130,7 +133,13 @@ Below the tree and the defer blocks, the **Change detection** section records ch
 
 **Slowest components** shows the 100 component classes with the most self time among the first 1000 classes a recording checks. A class first checked after those 1000 has no totals, so it isn't ranked. Tree rows count checks for up to 2000 instances. When a recording checks more classes or instances, a note in the section says how many were left out.
 
+Each cycle keeps its 40 longest timed spans, and the flame graph says how many shorter spans it left out. A recording without spans, such as a file saved by an older version, has no flame graph. The section says so and shows the treemap.
+
 Recording is off by default. While it is off, the page registers no profiler for it. The page keeps the last 200 cycles, set with [`limits.cdCycles`](../getting-started/configuration.md#limits). Recording needs Angular 20 or later. On older versions, the section says so. Times come from a development build, so they are higher than in production.
+
+#### Pick a range of cycles
+
+Drag across the bars to pick a range of cycles, or type cycle numbers in **Start** and **End**. With the chart focused, the arrow keys move between cycles, **Shift** with an arrow key extends the range, **Enter** picks one cycle and **Escape** shows all cycles again. **Show all cycles** does the same. The flame graph, the treemap and **Slowest components** then cover only the picked cycles. Each cycle lists its 10 slowest components, so totals for a range leave out the components a cycle did not list. **Show the cycles as a table** lists the picked cycles with their duration, budget, checks, passes, trigger and slowest component.
 
 #### Export and import a recording
 
