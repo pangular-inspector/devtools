@@ -1,10 +1,9 @@
-import { componentHostOf, type ComponentDebugNg } from './component-tree.ts';
+import { blockOwnerOf, type BlockOwnerDebugNg } from './block-owner.ts';
 import { elementId } from './element-id.ts';
 import { angularRoots } from './host-tree.ts';
-import { className } from './injector-tree.ts';
 import type { ForBlockInfo } from './types.ts';
 
-export interface ControlFlowDebugNg extends ComponentDebugNg {
+export interface ControlFlowDebugNg extends BlockOwnerDebugNg {
   ɵgetControlFlowBlocks?(node: Node): unknown[];
 }
 
@@ -105,15 +104,6 @@ export function createForTracker() {
     return (keys[index] ??= {});
   };
 
-  const ownerOf = (ng: ControlFlowDebugNg, anchor: Node | null): ForBlockInfo['owner'] => {
-    const parent = !anchor ? null : anchor instanceof Element ? anchor : anchor.parentElement;
-    const owner = parent ? componentHostOf(ng, parent) : null;
-    const instance = owner ? read(() => ng.getComponent?.(owner), null) : null;
-    const ctor = (instance as { constructor?: unknown } | null)?.constructor;
-    if (!owner || typeof ctor !== 'function') return undefined;
-    return { id: elementId(owner), name: className(ctor), tag: owner.tagName.toLowerCase() };
-  };
-
   return {
     /**
      * Every `@for` block on the page, or `undefined` when Angular exposes no
@@ -153,7 +143,7 @@ export function createForTracker() {
               .slice(0, MAX_ROOT_IDS)
               .map((el) => elementId(el)),
           };
-          const owner = ownerOf(
+          const owner = blockOwnerOf(
             ng,
             anchor ?? (roots.find((n) => n instanceof Node) as Node) ?? null,
           );

@@ -1,10 +1,9 @@
-import { componentHostOf, type ComponentDebugNg } from './component-tree.ts';
+import { blockOwnerOf, type BlockOwnerDebugNg } from './block-owner.ts';
 import { elementId } from './element-id.ts';
 import { angularRoots } from './host-tree.ts';
-import { className } from './injector-tree.ts';
 import type { DeferBlockInfo } from './types.ts';
 
-export interface DeferDebugNg extends ComponentDebugNg {
+export interface DeferDebugNg extends BlockOwnerDebugNg {
   ɵgetControlFlowBlocks?(node: Node): unknown[];
   ɵgetDeferBlocks?(node: Node): unknown[];
 }
@@ -106,15 +105,6 @@ export function createDeferTracker(now: () => number = Date.now) {
     return id;
   };
 
-  const ownerOf = (ng: DeferDebugNg, host: Node | null): DeferBlockInfo['owner'] => {
-    const parent = !host ? null : host instanceof Element ? host : host.parentElement;
-    const owner = parent ? componentHostOf(ng, parent) : null;
-    const instance = owner ? read(() => ng.getComponent?.(owner), null) : null;
-    const ctor = (instance as { constructor?: unknown } | null)?.constructor;
-    if (!owner || typeof ctor !== 'function') return undefined;
-    return { id: elementId(owner), name: className(ctor), tag: owner.tagName.toLowerCase() };
-  };
-
   return {
     /** True when the last `collect` stopped at {@link MAX_DEFER_BLOCKS} with blocks left. */
     get truncated() {
@@ -185,10 +175,7 @@ export function createDeferTracker(now: () => number = Date.now) {
               .slice(0, MAX_ROOT_IDS)
               .map((el) => elementId(el)),
           };
-          const owner = ownerOf(
-            ng,
-            raw.hostNode instanceof Node ? raw.hostNode : (hostNode?.parentNode ?? null),
-          );
+          const owner = blockOwnerOf(ng, hostNode);
           if (owner) block.owner = owner;
           if (triggers.includes('hydrate never')) block.hydrateNever = true;
           if (raw.loadingBlock?.exists) {

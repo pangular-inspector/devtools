@@ -38,6 +38,27 @@ Component({
   `,
 })(TripList);
 
+class ExamplePanel {}
+Component({
+  selector: 'app-example-panel',
+  template: `<div class="panel"><ng-content /></div>`,
+})(ExamplePanel);
+
+class SignalsExample {
+  readonly items = signal(['x', 'y']);
+}
+Component({
+  selector: 'app-root',
+  imports: [ExamplePanel],
+  template: `
+    <app-example-panel>
+      @for (item of items(); track item) {
+        <i>{{ item }}</i>
+      }
+    </app-example-panel>
+  `,
+})(SignalsExample);
+
 const settle = async (app: ApplicationRef) => {
   for (let i = 0; i < 5; i++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -89,5 +110,23 @@ describe('createForTracker with a real app', () => {
     const [moreTrips, someTags] = tracker.collect(ng)!.forBlocks;
     expect(moreTrips).toMatchObject({ id: trips.id, count: 3 });
     expect(someTags).toMatchObject({ id: tags.id, count: 1, showingEmpty: false });
+  });
+
+  it('names the template owner of a @for block projected into another component', async () => {
+    document.body.innerHTML = '<app-root></app-root>';
+    app = await bootstrapApplication(SignalsExample, {
+      providers: [provideZonelessChangeDetection()],
+    });
+    await settle(app);
+
+    const ng = (globalThis as { ng?: ControlFlowDebugNg }).ng!;
+    const tracker = createForTracker();
+    const [block] = tracker.collect(ng)!.forBlocks;
+    expect(block).toMatchObject({
+      count: 2,
+      owner: { name: 'SignalsExample', tag: 'app-root' },
+    });
+    expect(elementById(block.owner!.id)).toBe(document.querySelector('app-root'));
+    expect(tracker.collect(ng)!.forBlocks[0].id).toBe(block.id);
   });
 });
