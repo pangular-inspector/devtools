@@ -1,7 +1,13 @@
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPangularCli } from '../cli.ts';
-import { isLoopbackHost, mcpEndpoint, mcpPrintConfig, shellQuote } from '../mcp-print-config.ts';
+import {
+  isLoopbackHost,
+  mcpEndpoint,
+  mcpPrintConfig,
+  printConfigPort,
+  shellQuote,
+} from '../mcp-print-config.ts';
 import { fixtureDir } from '../rpc/__tests__/fixture-dir.ts';
 
 const SECRET = 'do-not-print-this-token-0123456789';
@@ -254,6 +260,42 @@ describe('pangular mcp --print-config', () => {
       '== HTTP: live pages, at https://192.168.1.20:4000/__devframes/__mcp ==',
     );
     expect(text).not.toContain('Warning');
+  });
+
+  it.each(['abc', '0', '65536', '1.5', '80abc', ''])(
+    'fails on --port %j and prints nothing',
+    async (port) => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const lines: string[] = [];
+      await createPangularCli({ env: {}, log: (line) => lines.push(line) }).parse([
+        'node',
+        'pangular',
+        'mcp',
+        '--print-config',
+        '--root',
+        fixtureDir('pangular-print-config-port-'),
+        '--port',
+        port,
+      ]);
+      expect(process.exitCode).toBe(1);
+      expect(String(error.mock.calls[0]?.[0])).toContain(
+        '--port must be a whole number from 1 to 65535',
+      );
+      expect(lines).toEqual([]);
+    },
+  );
+
+  it('takes ports from 1 to 65535 and nothing else', () => {
+    for (const bad of [-1, 0, 65536, 1.5, Number.NaN, true, '0x50', '1e3']) {
+      expect(() => printConfigPort(bad)).toThrow('--port must be a whole number');
+    }
+    expect([1, '80', ' 4000 ', 65535, undefined].map(printConfigPort)).toEqual([
+      1,
+      80,
+      4000,
+      65535,
+      undefined,
+    ]);
   });
 
   it('fails on a project folder that does not exist', async () => {

@@ -15,7 +15,7 @@ import {
   type CliAccessFlags,
 } from './cli-access.ts';
 import pangular, { createPangular } from './devframe.ts';
-import { mcpPrintConfig } from './mcp-print-config.ts';
+import { mcpPrintConfig, printConfigPort } from './mcp-print-config.ts';
 import {
   resolvePangularConfig,
   type PangularConfig,
@@ -254,7 +254,7 @@ function printConfig(flags: PangularCliFlags & PrintConfigFlags, env: Env): stri
     ...(named ? { config: resolve(named) } : {}),
     readOnly: flags.readOnly,
     host: flags.host,
-    port: flags.port,
+    port: printConfigPort(flags.port),
     base: flags.base,
     https: flags.https === true,
     env,

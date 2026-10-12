@@ -35,6 +35,20 @@ export interface McpPrintConfigOptions {
   env?: Record<string, string | undefined>;
 }
 
+/**
+ * The `--port` of `--print-config` as a number: a whole number from 1 to
+ * 65535, or `undefined` when it was left out. Throws on anything else.
+ */
+export function printConfigPort(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  const text = String(value).trim();
+  const port = /^\d+$/.test(text) ? Number(text) : NaN;
+  if (Number.isInteger(port) && port >= 1 && port <= 65535) return port;
+  throw new Error(
+    `[pangular] --port must be a whole number from 1 to 65535, not "${String(value)}".`,
+  );
+}
+
 /** Quotes `value` for a POSIX shell when it holds anything but plain path characters. */
 export function shellQuote(value: string): string {
   return /^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`;
