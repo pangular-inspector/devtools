@@ -199,6 +199,15 @@ describe('hub messages', () => {
     expect(badge('pangular:group')).toBeUndefined();
   });
 
+  it('still posts a write whose answer starts with "No" but did something', async () => {
+    const { feed, list } = setup();
+    await run(feed, 'pangular:change-detection', 'No longer paused; recording resumed.').handler({
+      page: 'p1',
+      record: 'start',
+    });
+    expect(list().map((m) => m.message)).toEqual(['Agent ran change-detection']);
+  });
+
   it('posts a new NG error once per page and counts it when another page reports it', () => {
     const { feed, list } = setup();
     const error = "NG01203: No value accessor for form control name: 'age'";

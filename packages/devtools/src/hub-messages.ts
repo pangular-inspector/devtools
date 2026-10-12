@@ -132,7 +132,9 @@ function answerLine(result: unknown): string {
  * an argument to fix. The tools return these as text, not as errors.
  */
 const NOTHING_DONE = [
-  /^No\b/,
+  // The no-data openings the tools use; a bare `No` would also catch a
+  // success such as "No longer paused".
+  /^No (?:@ngrx|Analog|Capacitor|Content|HTTP|HttpClient|NgRx|SSR|ServerRoute|build|calls?|change|checks|components?|connected|content|devtools|element|error|field|file|forms?|history|injector|invalid|markdown|matching|navigations?|page|pages|part|pick|pipe|plugins?|prerender|problems|recent|recordings|route|routes|routed|router|rules?|server|signal|snapshot|store|submit|timed)\b/,
   /^Not dispatched\b/,
   /^Refused\b/,
   /^error: /,
