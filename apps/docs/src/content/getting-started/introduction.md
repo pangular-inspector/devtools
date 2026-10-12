@@ -147,8 +147,8 @@ The devtools are a <a href="https://devfra.me" target="_blank" rel="noopener nor
 ## Where to next
 
 <ngmd-card-grid columns="2">
-  <ngmd-card icon="box" title="Install" link="/getting-started/installation" cta="Install the package">
-    Add the package and pick how you want to run it.
+  <ngmd-card icon="rocket" title="Quick start" link="/getting-started/quick-start" cta="Open the panel">
+    From install to a live panel in an Angular CLI app with SSR.
   </ngmd-card>
   <ngmd-card icon="layers" title="Angular CLI and Express" link="/getting-started/express" cta="Set it up">
     Mount the devtools in the Express server of an SSR app.

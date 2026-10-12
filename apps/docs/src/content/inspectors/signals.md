@@ -11,6 +11,8 @@ description: The live signal graph of one component or injector, drawn with its 
 
 The Signals tab shows the reactive graph of one component, or of the root or a route injector, at a time. Only signals that a template or an effect has read appear. A signal nothing has read yet is not part of the graph. Without a live page, the tab lists the signal declarations in your source.
 
+<ngmd-image src="/images/panel/signals.png" alt="The Signals tab following the routed SignalsExample component: kind filters with counts, the graph of signals feeding computeds, a linkedSignal and an effect into the template, and a resource that resolved with four changes"></ngmd-image>
+
 ## What it shows
 
 ### Page picker

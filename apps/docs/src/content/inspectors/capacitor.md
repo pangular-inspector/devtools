@@ -13,6 +13,8 @@ The Capacitor tab shows a Capacitor app from the inside: its platform and enviro
 
 The tab appears in the panel while a Capacitor app reports. In the hub, the **Capacitor** dock shows it, and shows the setup steps while no app reports. While no app reports, the dock's tooltip in the rail reads **Capacitor: no app connected**.
 
+<ngmd-image src="/images/panel/capacitor.png" alt="The Capacitor tab for an Android app: the summary strip with calls, one failed and one slow call, the environment with the server URL and user agent, and the plugin calls list with a Camera.getPhoto call selected and its arguments shown" caption="Calls from a simulated Android bridge on the demo app."></ngmd-image>
+
 ## What it shows
 
 ### Summary

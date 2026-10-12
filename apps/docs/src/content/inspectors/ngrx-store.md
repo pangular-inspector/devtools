@@ -13,6 +13,8 @@ The Store tab shows your *NgRx state live. It covers `@ngrx/signals` stores (`si
 
 The tab has two sections. **Live stores** reads the running page. **Source declarations** lists what your files declare.
 
+<ngmd-image src="/images/panel/ngrx-store.png" alt="The Store tab with three live stores listed and the PackingStore signal store selected, showing its scope, its source file, the state as a tree of packing items, its methods with call counts, and the start of its change log"></ngmd-image>
+
 ## What it shows
 
 ### Store list

@@ -11,6 +11,8 @@ description: Every form on the page with each field's state and errors, a change
 
 The Forms tab reads the forms of the running page, in development builds only. It covers Signal Forms, reactive forms and template-driven forms. Actions you run from the tab go back to the page and run there. Forms inside open shadow roots, such as `ViewEncapsulation.ShadowDom` components, are included.
 
+<ngmd-image src="/images/panel/forms.png" alt="The Forms tab listing five forms from the demo, with a Signal Forms signup form selected: its invalid, pristine and untouched state, the error count, its WebMCP tool, the actions bar and the Fields view with each field's status and errors"></ngmd-image>
+
 ## What it shows
 
 ### Forms list

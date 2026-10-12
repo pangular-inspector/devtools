@@ -109,6 +109,7 @@ Rules:
 - Inside components use HTML (`<code>`, `<strong>`, `<a>`); markdown doesn't render there. Write `@` as `&#64;`.
 - Raw HTML external links need `target="_blank" rel="noopener noreferrer"` or the build fails. Markdown links get it automatically.
 - `*Angular`, `*Analog`, `*Devframe`, `*NgRx`, `*MCP`, `*Vite` are keyword links (`keywords` in `ngmd.config.ts`). The asterisk is intentional. Never "fix" it.
+- Panel screenshots live in `apps/docs/public/images/panel` and come from `node scripts/docs-screenshots.mjs` (`--only <names>` for some, `--list` for the names). Regenerate the ones a panel change affects, and give each `ngmd-image` an `alt` that says what it shows.
 
 ## 6. Code samples
 

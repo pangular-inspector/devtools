@@ -13,6 +13,8 @@ The Analog tab reads an *Analog app from three sides: its files, its dev server,
 
 The Analog dock is always in the rail. In other apps it shows a **This app doesn’t use Analog** page. Its tooltip in the rail then reads **Analog: not an Analog app**. Without the hub, the Analog tab appears only in Analog apps.
 
+<ngmd-image src="/images/panel/analog.png" alt="The Analog tab for the Analog demo: the summary strip with the Analog version and counts of pages, API routes, server calls and lint issues, a Test a URL box, and the Routes view mapping each route to its file under pages"></ngmd-image>
+
 ## Setup
 
 ### Add the plugin

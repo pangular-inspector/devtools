@@ -11,6 +11,8 @@ description: Project metadata and a count for each inspector.
 
 The Dashboard opens by default. The top block describes your workspace. The cards below count what each inspector found, and each card opens its tab.
 
+<ngmd-image src="/images/panel/dashboard.png" alt="The Dashboard tab for the demo app: a project block with chips for the Angular and TypeScript versions, SSR on and zoneless change detection, then one card per inspector with its count, and the Configuration block reading Defaults"></ngmd-image>
+
 ## What it shows
 
 ### Project block

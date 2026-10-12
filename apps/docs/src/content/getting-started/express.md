@@ -28,7 +28,7 @@ In an *Angular app with server-side rendering, the devtools run inside your Expr
     Import the overlay in <code>main.ts</code>, in development only.
   </ngmd-step>
   <ngmd-step title="Open the devtools">
-    Start the app in development mode and click the amber button in the corner of the page.
+    Start the app in development mode and click the Pangular Inspector button in the corner of the page.
   </ngmd-step>
 </ngmd-workflow>
 
@@ -201,13 +201,13 @@ When you run `ng serve`, the Angular dev server runs `server.ts` too, so the hub
 
 ```bash group="run" name="ng serve" image="https://cdn.simpleicons.org/angular/DD0031" active
 ng serve
-# open http://localhost:4200 and click the amber button
+# open http://localhost:4200 and click the Pangular Inspector button
 ```
 
 ```bash group="run" name="SSR server" image="https://cdn.simpleicons.org/nodedotjs/5FA04E"
 ng build --configuration development
 node dist/<your-app>/server/server.mjs
-# open http://localhost:4000 and click the amber button
+# open http://localhost:4000 and click the Pangular Inspector button
 ```
 
 ### With the built SSR server

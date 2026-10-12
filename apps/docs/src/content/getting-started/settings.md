@@ -11,6 +11,8 @@ description: Pick the panel theme, hide, pin and reorder tabs, and hide the popu
 
 Open **Settings** with the gear button in the panel header, or with **Open settings** in the [command palette](./command-palette.md). Press the gear button again to go back to the tab you had open. The page is also at `#tab=settings`.
 
+<ngmd-image src="/images/panel/settings.png" alt="The Settings page with the Theme choices System, Light and Dark, and the Tabs list where each tab has a Pin button, a Shown checkbox and buttons to move it up or down"></ngmd-image>
+
 ## Where settings are saved
 
 Settings belong to you, not to the project. The panel saves them in the browser's `localStorage`, so every panel on the same address uses them, and they survive reloads. The Chrome extension and the panel on your dev server have different addresses, so each keeps its own.

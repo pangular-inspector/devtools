@@ -11,6 +11,8 @@ description: An HTTP timeline for SSR and client calls, fault injection, hydrati
 
 The SSR & HTTP tab shows the HTTP calls your app makes during server rendering and in the browser. It also shows the hydration result and the TransferState payload, and it can inject faults into requests. Pick the page at the top. The tab shows that page's data.
 
+<ngmd-image src="/images/panel/ssr-http.png" alt="The SSR & HTTP tab with the server render of the HTTP example selected: the SSR requests table with status, render mode, render time and server calls, and the start of the details for that request"></ngmd-image>
+
 ## Setup
 
 The timeline and fault rules need the interceptor. The hydration warnings need the provider. Add both to the app config, with `withPangular()` before your own interceptors:

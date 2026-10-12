@@ -11,6 +11,8 @@ description: Errors from Angular's ErrorHandler, uncaught errors, unhandled prom
 
 The Errors tab collects what goes wrong on the running page: errors that reach Angular's `ErrorHandler`, uncaught errors and unhandled promise rejections. It groups them by message, links Angular error codes to their reference page, and points at the component that threw when it can find it. A second view shows the page's console calls.
 
+<ngmd-image src="/images/panel/errors.png" alt="The Errors tab with one error that reached the ErrorHandler twice, report service is down, with a Show component link to RoutesExample and its stack open, plus Errors and Console view buttons"></ngmd-image>
+
 ## What it shows
 
 ### Errors

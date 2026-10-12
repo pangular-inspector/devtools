@@ -11,6 +11,8 @@ description: The injector hierarchy, token lookup paths and the providers at eac
 
 When a component asks for a token, Angular walks up the element injectors, then through the environment injectors, until something provides it. The Injectors tab shows that tree. Without a live page, it lists the DI found in your source.
 
+<ngmd-image src="/images/panel/injectors.png" alt="The Injectors tab on the Elements view with the demo's app-di-child element selected: the element injector tree on the left, and on the right its lookup path through the parent elements, Root, Platform and the Null injector, with the tokens injected there"></ngmd-image>
+
 ## What it shows
 
 ### View switch

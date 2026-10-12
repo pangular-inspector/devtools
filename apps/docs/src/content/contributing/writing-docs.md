@@ -154,6 +154,18 @@ Card icons come from a fixed set: `book`, `box`, `code`, `compass`, `file`, `lay
 
 Write `*Angular`, `*Analog`, `*Devframe`, `*NgRx`, `*MCP` or `*Vite` in prose to link the word to its site. The list is `keywords` in `ngmd.config.ts`. The asterisk is not a typo, so don't remove it.
 
+### Panel screenshots
+
+The inspector pages show the panel with `<ngmd-image>`, from `apps/docs/public/images/panel`. `scripts/docs-screenshots.mjs` builds the demo app, serves it on a free port, opens each tab in Chromium and saves one PNG per tab, at 1280 by 800 pixels in the light theme. The Analog shot comes from the Analog demo. Run it again after you change a tab:
+
+```bash
+# Every screenshot, or only the ones you name
+node scripts/docs-screenshots.mjs
+node scripts/docs-screenshots.mjs --only components,signals
+```
+
+`--list` prints the names, and `--chrome <path>` picks the Chromium executable. Give each image an `alt` that says what the screenshot shows.
+
 ## Code samples
 
 ### Fences

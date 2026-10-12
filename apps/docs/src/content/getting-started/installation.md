@@ -223,7 +223,7 @@ The [Chrome extension](./chrome-extension.md) adds a panel to Chrome DevTools. I
     Run <code>ng serve</code> for an Angular CLI app, or the Vite dev server for an Analog app. For a client-only app, keep <code>pangular dev</code> running next to <code>ng serve</code>.
   </ngmd-step>
   <ngmd-step title="Look for the button">
-    An amber button appears in the bottom-right corner of the page. The overlay adds it.
+    The Pangular Inspector button appears in the bottom-right corner of the page. The overlay adds it.
   </ngmd-step>
   <ngmd-step title="Open the panel">
     Click the button. The header shows <strong>Live</strong> once the panel is connected.

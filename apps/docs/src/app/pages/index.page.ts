@@ -169,7 +169,7 @@ interface StackItem {
               class="mt-8 flex flex-wrap items-center justify-center gap-x-2 gap-y-3 sm:mt-10 lg:justify-start"
             >
               <a
-                routerLink="/getting-started/introduction"
+                routerLink="/getting-started/quick-start"
                 class="inline-flex h-9 items-center gap-2 rounded-md bg-(--accent) px-3.5 text-sm font-medium text-(--accent-fg) hover:bg-(--accent-strong) transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
               >
                 Get started
@@ -582,10 +582,10 @@ interface StackItem {
         </div>
         <div class="mt-8">
           <a
-            routerLink="/getting-started/installation"
+            routerLink="/getting-started/quick-start"
             class="inline-flex items-center gap-2 text-base font-medium text-[color:var(--accent-strong)] hover:opacity-80"
           >
-            Read the installation guide
+            Follow the quick start
             <svg [lucideIcon]="arrowIcon" class="size-4"></svg>
           </a>
         </div>

@@ -11,6 +11,8 @@ description: Every component instance on the page, with live inputs, properties,
 
 The Components tab lists each rendered component instance as a tree. It walks each app root in document order, including shadow roots, then the components outside the app root, such as overlays. When no page is connected, it lists what your source declares instead.
 
+<ngmd-image src="/images/panel/components.png" alt="The Components tab with the demo's ComponentsExample selected: the component tree with Hydrated chips and route chips on the left, and on the right the detail pane with its source file, change detection OnPush, the host path, the route and its signal properties with Edit buttons"></ngmd-image>
+
 ## What it shows
 
 ### The tree

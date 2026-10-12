@@ -175,6 +175,7 @@ const config: NgmdConfig = {
     {
       label: 'Getting Started',
       items: [
+        {label: 'Quick start', href: '/getting-started/quick-start', status: 'new'},
         {label: 'Introduction', href: '/getting-started/introduction'},
         {label: 'Installation', href: '/getting-started/installation'},
         {label: 'Angular CLI and Express', href: '/getting-started/express'},

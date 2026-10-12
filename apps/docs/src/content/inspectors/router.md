@@ -11,6 +11,8 @@ description: The live route, every navigation as a story, the live route config,
 
 The Routes tab reads the running app's Router. The top section, **Live router**, has five views. The bottom section, **Source route config**, lists the routes your files declare. When more than one page is connected, a **Page** picker chooses which one you see.
 
+<ngmd-image src="/images/panel/router.png" alt="The Routes tab on the Current view after navigating to a user page: the URL and document title, the active routes with their components, params, static and resolved data and the resolver, and the outlets with Show in Components buttons"></ngmd-image>
+
 ## What it shows
 
 ### Current

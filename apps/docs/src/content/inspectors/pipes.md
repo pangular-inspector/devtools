@@ -11,6 +11,8 @@ description: Custom, built-in and library pipes, where they are used, live insta
 
 The Pipes tab lists your `@Pipe` classes, the built-in pipes from `@angular/common` that your templates use, and pipes from libraries that the page uses. It shows the live instances on the page, and records calls when you ask it to.
 
+<ngmd-image src="/images/panel/pipes.png" alt="The Pipes tab listing the demo's custom pipes and the built-in pipes it uses, with chips for live instances, NgModule, pure and impure, and below them the async subscriptions with duplicate subscription warnings"></ngmd-image>
+
 ## What it shows
 
 ### Pipe list

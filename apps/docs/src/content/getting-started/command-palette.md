@@ -11,6 +11,8 @@ description: Open any tab and run the main panel actions from the keyboard with 
 
 The command palette lists a command for every tab and for the main actions of the panel. Type a few letters to filter it, then press <kbd>Enter</kbd>.
 
+<ngmd-image src="/images/panel/command-palette.png" alt="The panel's own command palette open over the Dashboard, with an empty filter box and the Go to commands for each tab, Open settings and the first action"></ngmd-image>
+
 ## Open it
 
 | Where you are                                                                                                    | What <kbd>Cmd</kbd>+<kbd>K</kbd> or <kbd>Ctrl</kbd>+<kbd>K</kbd> opens                   |
@@ -54,6 +56,8 @@ The palette is a modal dialog. The filter box is a combobox that controls the li
 ## In the hub
 
 In the hub, the Pangular commands are in the hub's command palette, in the **Pangular Inspector** category. **Pangular: open a tab** groups the tab commands. A **Go to** or **Components** command first opens the **All tools** dock, so the panel is on screen.
+
+<ngmd-image src="/images/panel/command-palette-hub.png" alt="The hub's command palette over the hub page, filtered by pangular, listing Pangular: open a tab and its Go to commands for each tab"></ngmd-image>
 
 The server registers the commands through Devframe's command registry when the hub starts, and each one asks the open panels to run it. A panel in a background browser tab ignores it. If you have the hub open in two windows, both run the command. The **Popup** commands stay out of the hub's palette, because the hub has its own dock modes.
 

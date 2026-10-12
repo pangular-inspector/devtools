@@ -11,6 +11,8 @@ description: Navigations, HTTP calls, NgRx actions, change detection cycles, for
 
 The Timeline tab puts the events that other tabs already record on one time axis. Each source is a layer with its own lane. Turn layers on and off, pick a range, and open any event in the tab that shows it in full.
 
+<ngmd-image src="/images/panel/timeline.png" alt="The Timeline tab after a few navigations, an HTTP call, NgRx actions and signal changes: layer buttons with their counts, the time axis with one lane per layer, the event list newest first, and an NgRx add action selected with an Open in Store button"></ngmd-image>
+
 ## What it shows
 
 ### Layers
