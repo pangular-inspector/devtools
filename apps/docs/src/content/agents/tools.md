@@ -494,7 +494,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 ## Shared state
 
-`devframe_state_read` reads the devtools' live shared state. Call it without arguments to list the keys, then with `key` to read a value as JSON.
+`devframe_state_read` reads the devtools' live shared state. Call it without arguments to list the keys, then with `key` to read a value as JSON. Over HTTP, it leaves out the keys of an inspector whose agent tools are hidden (`agent.tools.<name>: false`).
 
 Use it for data that has no dedicated tool, such as hydration data and TransferState payloads (`pangular:http`, `pangular:http-payloads`) or live pipe usage (`pangular:pipe-usage`). See [Resources](./resources.md) for every key.
 

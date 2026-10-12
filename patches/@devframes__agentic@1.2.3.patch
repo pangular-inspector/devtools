@@ -1,0 +1,42 @@
+diff --git a/dist/mcp/index.mjs b/dist/mcp/index.mjs
+index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..85d3993f0d8355684f65d8a83387a009a116f499 100644
+--- a/dist/mcp/index.mjs
++++ b/dist/mcp/index.mjs
+@@ -26,10 +26,13 @@ function buildMcpServerFromContext(ctx, options) {
+ 	const server = new Server({
+ 		name: options.serverName,
+ 		version: options.serverVersion
+-	}, { capabilities: {
+-		tools: { listChanged: true },
+-		resources: { listChanged: true }
+-	} });
++	}, {
++		capabilities: {
++			tools: { listChanged: true },
++			resources: { listChanged: true }
++		},
++		...options.instructions ? { instructions: options.instructions } : {}
++	});
+ 	registerToolHandlers(server, ctx, options.exposeSharedState);
+ 	registerResourceHandlers(server, ctx, options.exposeSharedState);
+ 	return server;
+@@ -89,7 +92,8 @@ async function createMcpServer(definition, options = {}) {
+ 	const buildOptions = {
+ 		serverName: options.serverName ?? `${definition.id} (devframe)`,
+ 		serverVersion: options.serverVersion ?? definition.version ?? "0.0.0",
+-		exposeSharedState: options.exposeSharedState ?? true
++		exposeSharedState: options.exposeSharedState ?? true,
++		instructions: options.instructions
+ 	};
+ 	let handle;
+ 	try {
+@@ -398,7 +402,8 @@ function createMcpFetchHandler(ctx, options) {
+ 	const handler = createMcpHandler(() => buildMcpServerFromContext(ctx, {
+ 		serverName: options.serverName,
+ 		serverVersion: options.serverVersion,
+-		exposeSharedState: options.exposeSharedState
++		exposeSharedState: options.exposeSharedState,
++		instructions: options.instructions
+ 	}));
+ 	const unbridge = bridgeListChanged(ctx, {
+ 		tools: () => {

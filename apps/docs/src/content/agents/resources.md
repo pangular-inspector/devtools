@@ -82,6 +82,8 @@ The active route tree (params, data, guards, resolvers) and recent navigations o
 
 The devtools keep their live data in shared-state keys. Every key is also listed as a resource, at `devframe://state/<key>` with the key encoded.
 
+The HTTP endpoint leaves out the keys of an inspector whose agent tools are hidden with `agent.tools.<name>: false`, in the resource list, in direct reads and in `devframe_state_read`. With `agent.tools.forms: false`, an agent can't read `pangular:forms`. The panel still gets every key. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
+
 ### Keys
 
 This table covers the data that has no resource of its own.

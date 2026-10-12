@@ -16,7 +16,12 @@ import {
 } from './cli-access.ts';
 import pangular, { createPangular } from './devframe.ts';
 import { mcpPrintConfig } from './mcp-print-config.ts';
-import type { PangularConfig } from './config.ts';
+import {
+  resolvePangularConfig,
+  type PangularConfig,
+  type ResolvedPangularConfig,
+} from './config.ts';
+import { pangularMcp } from './agent-mcp.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 export const PANGULAR_CONFIG_FILE = 'pangular.config.json';
@@ -269,6 +274,7 @@ export function createPangularCli(options: PangularCliOptions = {}) {
   const env = options.env ?? process.env;
   const log = options.log ?? ((message: string) => console.log(message));
   let current = createPangular();
+  let resolved: ResolvedPangularConfig = resolvePangularConfig();
   let requestedPort: number | undefined;
   let mcpOn = true;
   let access: CliAccess = { allowedOrigins: [], authTokens: [] };
@@ -305,6 +311,7 @@ export function createPangularCli(options: PangularCliOptions = {}) {
         `[pangular] ${root} has no angular.json and no package.json that depends on @angular/core, so the source scans find nothing. Pass --root <dir> or set PANGULAR_ROOT to your project folder.`,
       );
     }
+    resolved = resolvePangularConfig(config);
     current = createPangular(config, cliHostOptions(command, access));
   };
 
@@ -339,7 +346,7 @@ export function createPangularCli(options: PangularCliOptions = {}) {
           host: listenHost,
           port,
           flags: flags as Record<string, unknown>,
-          mcp: flags.mcp ?? true,
+          mcp: pangularMcp(flags.mcp ?? true, resolved),
           ...(access.allowedOrigins.length ? { allowedOrigins: access.allowedOrigins } : {}),
           // devframe builds the handler from a function too; its dev server
           // types only list the handler object. `--no-auth` still turns it off.
