@@ -1901,7 +1901,10 @@ const pangular = defineDevframe({
     const requestNgrxAction = (page: unknown, request: unknown) =>
       new Promise<NgrxRequestResult>((resolve) => {
         if (!config.actions.ngrx) return resolve({ error: actionBlockedMessage('ngrx') });
-        const pages = ngrxStateOf(ngrxPages).pages;
+        const all = ngrxStateOf(ngrxPages).pages;
+        // A restore can target a signal store; every other request needs the classic Store.
+        const kind = (request as { type?: unknown } | null)?.type;
+        const pages = kind === 'restore' ? all : all.filter((p) => p.classic);
         // Without a page, the request would reach every tab, or one the caller did not choose.
         if (typeof page !== 'string' && pages.length !== 1) {
           return resolve({

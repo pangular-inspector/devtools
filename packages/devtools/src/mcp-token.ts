@@ -1,5 +1,13 @@
 import { randomBytes } from 'node:crypto';
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  linkSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -27,6 +35,33 @@ function readToken(file: string): string | undefined {
 }
 
 /**
+ * Puts `token` in `file` unless another process created the file first, and
+ * returns the token the file holds. The token goes to a temp file in the same
+ * folder, which is then linked to `file`: the link fails when `file` exists,
+ * so two servers starting at once end up with the same token.
+ */
+export function writeTokenOnce(file: string, token: string): string {
+  const temp = `${file}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
+  try {
+    writeFileSync(temp, `${token}\n`, { mode: 0o600, flag: 'wx' });
+    chmodSync(temp, 0o600);
+    try {
+      linkSync(temp, file);
+      return token;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+    const existing = readToken(file);
+    if (existing) return existing;
+    // The file holds no valid token: replace it in one step.
+    renameSync(temp, file);
+    return token;
+  } finally {
+    rmSync(temp, { force: true });
+  }
+}
+
+/**
  * The MCP token: `PANGULAR_MCP_TOKEN` when set, else the token in the token
  * file, else a new one written to that file with mode 0600. The token itself
  * is never printed; `log` gets the file path.
@@ -39,12 +74,11 @@ export function loadMcpToken(
   if (fromEnv) return fromEnv;
   const file = mcpTokenFile(env);
   const existing = readToken(file);
-  const token = existing ?? randomBytes(24).toString('base64url');
+  let token = existing ?? randomBytes(24).toString('base64url');
   if (!existing) {
     try {
       mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
-      writeFileSync(file, `${token}\n`, { mode: 0o600 });
-      chmodSync(file, 0o600);
+      token = writeTokenOnce(file, token);
     } catch (error) {
       log(
         `\n  Pangular Inspector could not write its MCP token to ${file}: ${(error as Error).message}\n` +

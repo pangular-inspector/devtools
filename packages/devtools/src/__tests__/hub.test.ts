@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hubDefaultOrigins, initPangularHub, type PangularHubOptions } from '../hub.ts';
 import { httpRegistry } from '../http-rules.ts';
+import { writeTokenOnce } from '../mcp-token.ts';
 import { BASE_FILES, makeProject } from './analog-fixture.ts';
 
 const hubs: { close: () => Promise<void> }[] = [];
@@ -318,6 +319,21 @@ describe('Pangular Inspector hub MCP route', () => {
     const mcp = await bootMcp({});
     expect((await mcp(saved)).status).toBe(200);
     if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(0o600);
+  });
+
+  it('keeps the token another server wrote first, so both servers share one token', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pangular-token-'));
+    const file = join(dir, 'mcp-token');
+    expect(writeTokenOnce(file, 'first-server-token-0001')).toBe('first-server-token-0001');
+    // The second server read no file, then the first one wrote it before the second could.
+    expect(writeTokenOnce(file, 'second-server-token-002')).toBe('first-server-token-0001');
+    expect(readFileSync(file, 'utf8').trim()).toBe('first-server-token-0001');
+    if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(0o600);
+    // A file without a valid token is replaced.
+    writeFileSync(file, 'bad\n');
+    expect(writeTokenOnce(file, 'third-server-token-0003')).toBe('third-server-token-0003');
+    expect(readFileSync(file, 'utf8').trim()).toBe('third-server-token-0003');
+    expect(readdirSync(dir)).toEqual(['mcp-token']);
   });
 
   it('keeps the token and the mcp setting next to the devtools config', async () => {

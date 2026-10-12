@@ -220,6 +220,38 @@ describe('dispatch-ngrx-action tool', () => {
     expect(sent.map((options) => options.args[0].pageId)).toEqual(['p1', 'p2']);
   });
 
+  it('counts only tabs with a Store for a dispatch without pageId, and every tab for a restore', async () => {
+    const { ctx, push } = await boot();
+    const sent: Broadcast[] = [];
+    vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: Broadcast) => {
+      if (!options.method.endsWith('ngrx-action')) return;
+      sent.push(options);
+      const { requestId, pageId } = options.args[0];
+      setTimeout(
+        () => void push('ngrx-action-result', { requestId, pageId, result: { ok: true } }),
+        5,
+      );
+    }) as never);
+    await push('push-ngrx-state', page('p1', true));
+    await push('push-ngrx-state', page('p2', false));
+
+    // p2 reports only signal stores, so the dispatch has one place to go.
+    for (const request of [
+      { type: 'dispatch', action: '[A] B' },
+      { type: 'dispatch-again', seq: 1 },
+      { type: 'latest' },
+    ]) {
+      expect(await push('request-ngrx-action', { request })).toEqual({ ok: true });
+    }
+    expect(sent.map((options) => options.args[0].pageId)).toEqual(['p1', 'p1', 'p1']);
+
+    // A restore can target a signal store on either tab, so it still needs a page.
+    expect(await push('request-ngrx-action', { request: { type: 'restore', seq: 1 } })).toEqual({
+      error: expect.stringMatching(/^2 pages report NgRx state: /),
+    });
+    expect(sent).toHaveLength(3);
+  });
+
   it('is left out when the ngrx write action is off, and the RPC refuses dispatches', async () => {
     const { ctx, push } = await boot({ actions: { ngrx: false } });
     const tools = ctx.agent.list().tools.map((tool) => tool.id);

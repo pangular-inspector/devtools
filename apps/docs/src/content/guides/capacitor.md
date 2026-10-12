@@ -20,12 +20,12 @@ This guide adds the devtools to an Ionic or Capacitor *Angular app. The app runs
 
 ## Which setup you need
 
-| Your devtools server             | iOS simulator, Android emulator or USB device         | Phone over Wi-Fi, and any iPhone or iPad                                   |
-| -------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------- |
-| Express hub in `server.ts`       | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `allowedOrigins`   |
-| Vite plugin (Analog)             | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `allowLan`         |
-| Standalone CLI behind `ng serve` | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `--allowed-origin` |
-| Standalone CLI on its own        | [A bundled build](#a-bundled-build)                   | [A bundled build](#a-bundled-build)                                        |
+| Your devtools server             | iOS simulator, Android emulator or USB device         | Phone over Wi-Fi, and any iPhone or iPad                                                |
+| -------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Express hub in `server.ts`       | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `allowLan` and `allowedOrigins` |
+| Vite plugin (Analog)             | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `allowLan`                      |
+| Standalone CLI behind `ng serve` | [Live reload on localhost](#live-reload-on-localhost) | [Live reload over Wi-Fi](#live-reload-over-wi-fi), with `--allowed-origin`              |
+| Standalone CLI on its own        | [A bundled build](#a-bundled-build)                   | [A bundled build](#a-bundled-build)                                                     |
 
 USB applies to Android only: `adb reverse` forwards the port. An iPhone or iPad reaches your machine over the network, even when it is plugged in. Over Wi-Fi, the page's origin is your machine's network address, not `localhost`, so the server has to allow that origin. A bundled build works with the standalone CLI and the Express hub, and with the Vite plugin for iOS. See [Run the server where the device reaches it](#run-the-server-where-the-device-reaches-it).
 
