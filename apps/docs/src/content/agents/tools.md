@@ -418,9 +418,9 @@ Resets recorded data between reproduction runs: recorded HTTP calls, router navi
 | ------------------ | -------------------------------------------------------------------------------------------------------------- | --------------------------- |
 | `clear-recordings` | Clears recorded HTTP calls, router navigations, or Analog server calls, and broadcasts the reset to the panel. | `target` (required), `page` |
 
-`target` is one of `http`, `router`, `analog`, or `all`. With `router`, `page` clears navigations for that browser tab only; when left out, it clears navigations for every reporting page.
+`target` is one of `http`, `router`, `analog`, or `all`. With `router`, `page` clears navigations for that browser tab only; when left out, it clears navigations for every reporting page. A `page` that sends no router data gets an answer that lists the pages that do, and nothing is cleared.
 
-`clear-recordings` needs the matching write action ([`actions.http`](../getting-started/configuration.md#actions), `actions.router`, `actions.analog`). When `target` is `all` and an action is disabled, the permitted recordings are cleared and the disabled ones are reported as skipped.
+Each target needs three settings turned on: its write action ([`actions.http`](../getting-started/configuration.md#actions), `actions.router` or `actions.analog`), its agent tools (`agent.tools.<target>`) and its inspector (`inspectors.<target>`). A single target with one of them off is refused. With `all`, the targets that pass are cleared and the others are reported as skipped. When no target passes, the tool is not listed.
 
 ## Capacitor
 

@@ -67,7 +67,7 @@ Tracked in [#343](https://github.com/pangular-inspector/devtools/issues/343).
 
 ## Fixes and improvements per inspector
 
-Besides the phases, issues [#344](https://github.com/pangular-inspector/devtools/issues/344) through [#359](https://github.com/pangular-inspector/devtools/issues/359) track inspector and package audit findings and proposed improvements. Pull requests for any of them are welcome. Start with [Development setup](./contributing/development.md).
+Besides the phases, issues [#366](https://github.com/pangular-inspector/devtools/issues/366) through [#373](https://github.com/pangular-inspector/devtools/issues/373) track the open audit findings and proposed improvements for each inspector and the package. Pull requests for any of them are welcome. Start with [Development setup](./contributing/development.md).
 
 ## Where to next
 
