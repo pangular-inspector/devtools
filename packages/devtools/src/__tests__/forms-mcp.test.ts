@@ -274,7 +274,9 @@ describe('forms MCP tools', () => {
       expect(request).toEqual({ action: 'locate', selector: '#email' });
       await ctx.rpc.invokeLocal(
         'pangular:form-action-result' as never,
-        ...([{ requestId, result: { ok: true, formId: 'form-1@pg1', path: 'email' } }] as never),
+        ...([
+          { requestId, pageId: 'pg1', result: { ok: true, formId: 'form-1@pg1', path: 'email' } },
+        ] as never),
       );
     }) as never);
     expect(await call('explain-field', { selector: '#email' })).toContain(
@@ -555,7 +557,7 @@ describe('forms MCP tools', () => {
           : { ok: false, error: 'reset changes app state; call again with confirm: true.' };
       await ctx.rpc.invokeLocal(
         'pangular:form-action-result' as never,
-        ...([{ requestId, result }] as never),
+        ...([{ requestId, pageId: options.args[0].pageId ?? 'pg1', result }] as never),
       );
     }) as never);
     const refused = await call('form-action', { action: 'reset', form: 'form-1' });

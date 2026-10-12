@@ -273,6 +273,7 @@ describe('component pick', () => {
       if (options.args[0]['cancel']) {
         await push('component-pick-result', {
           requestId,
+          pageId: 'p1',
           result: { ok: false, error: 'Picking cancelled.' },
         });
       } else {

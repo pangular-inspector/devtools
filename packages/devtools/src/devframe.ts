@@ -300,6 +300,10 @@ const pangular = defineDevframe({
       typeof pageId === 'string' && owners.write(pageId);
     const mayForget = (pageId: unknown): pageId is string =>
       typeof pageId === 'string' && owners.forget(pageId);
+    // A request is settled only by the page it was sent to, from the connection
+    // that owns that page, so another client can't answer for it.
+    const answersFor = (target: string | undefined, pageId: unknown) =>
+      (target === undefined || pageId === target) && owns(pageId);
 
     register({
       name: 'claim-page',
@@ -626,7 +630,10 @@ const pangular = defineDevframe({
       },
     });
 
-    const pendingActions = new Map<string, (result: unknown) => void>();
+    const pendingActions = new Map<
+      string,
+      { pageId: string | undefined; settle: (result: unknown) => void }
+    >();
     let actionSeq = 0;
 
     const defaultPageId = () => {
@@ -653,10 +660,13 @@ const pangular = defineDevframe({
           });
         }, 15_000);
         timer.unref?.();
-        pendingActions.set(requestId, (result) => {
-          clearTimeout(timer);
-          pendingActions.delete(requestId);
-          resolve(result);
+        pendingActions.set(requestId, {
+          pageId,
+          settle: (result) => {
+            clearTimeout(timer);
+            pendingActions.delete(requestId);
+            resolve(result);
+          },
         });
         void my.rpc.broadcast({
           method: 'router-action',
@@ -669,9 +679,10 @@ const pangular = defineDevframe({
       name: 'router-action-result',
       type: 'action',
       jsonSerializable: true,
-      handler: (message: { requestId?: unknown; result?: unknown }) => {
+      handler: (message: { requestId?: unknown; pageId?: unknown; result?: unknown }) => {
         if (typeof message?.requestId !== 'string') return;
-        pendingActions.get(message.requestId)?.(message.result);
+        const pending = pendingActions.get(message.requestId);
+        if (pending && answersFor(pending.pageId, message.pageId)) pending.settle(message.result);
       },
     });
 
@@ -1359,7 +1370,10 @@ const pangular = defineDevframe({
       },
     });
 
-    const pendingFormActions = new Map<string, (result: unknown) => void>();
+    const pendingFormActions = new Map<
+      string,
+      { pageId: string | undefined; settle: (result: unknown) => void }
+    >();
     let formActionSeq = 0;
 
     const requestFormAction = (request: Record<string, unknown>, timeoutMs = 15_000) => {
@@ -1395,14 +1409,17 @@ const pangular = defineDevframe({
           });
         }, timeoutMs);
         timer.unref?.();
-        pendingFormActions.set(requestId, (result) => {
-          clearTimeout(timer);
-          pendingFormActions.delete(requestId);
-          resolve(
-            (result && typeof result === 'object'
-              ? result
-              : { ok: false, error: 'Empty answer.' }) as Record<string, unknown>,
-          );
+        pendingFormActions.set(requestId, {
+          pageId,
+          settle: (result) => {
+            clearTimeout(timer);
+            pendingFormActions.delete(requestId);
+            resolve(
+              (result && typeof result === 'object'
+                ? result
+                : { ok: false, error: 'Empty answer.' }) as Record<string, unknown>,
+            );
+          },
         });
         void my.rpc.broadcast({
           method: 'form-action',
@@ -1415,9 +1432,10 @@ const pangular = defineDevframe({
       name: 'form-action-result',
       type: 'action',
       jsonSerializable: true,
-      handler: (message: { requestId?: unknown; result?: unknown }) => {
+      handler: (message: { requestId?: unknown; pageId?: unknown; result?: unknown }) => {
         if (typeof message?.requestId !== 'string') return;
-        pendingFormActions.get(message.requestId)?.(message.result);
+        const pending = pendingFormActions.get(message.requestId);
+        if (pending && answersFor(pending.pageId, message.pageId)) pending.settle(message.result);
       },
     });
 
@@ -1612,7 +1630,10 @@ const pangular = defineDevframe({
       },
     });
 
-    const pendingPicks = new Map<string, (result: Record<string, unknown>) => void>();
+    const pendingPicks = new Map<
+      string,
+      { pageId: string; settle: (result: Record<string, unknown>) => void }
+    >();
     let pickSeq = 0;
 
     register({
@@ -1636,15 +1657,18 @@ const pangular = defineDevframe({
             });
           }, 20_000);
           timer.unref?.();
-          pendingPicks.set(requestId, (result) => {
-            clearTimeout(timer);
-            pendingPicks.delete(requestId);
-            if (result['ok'] === true && typeof result['id'] === 'string') {
-              componentTree.mutate((draft) => {
-                draft.selectedId = result['id'] as string;
-              });
-            }
-            resolve({ ...result, pageId });
+          pendingPicks.set(requestId, {
+            pageId,
+            settle: (result) => {
+              clearTimeout(timer);
+              pendingPicks.delete(requestId);
+              if (result['ok'] === true && typeof result['id'] === 'string') {
+                componentTree.mutate((draft) => {
+                  draft.selectedId = result['id'] as string;
+                });
+              }
+              resolve({ ...result, pageId });
+            },
           });
           void my.rpc.broadcast({
             method: 'component-pick',
@@ -1673,13 +1697,15 @@ const pangular = defineDevframe({
       name: 'component-pick-result',
       type: 'action',
       jsonSerializable: true,
-      handler: (message: { requestId?: unknown; result?: unknown } | null) => {
+      handler: (message: { requestId?: unknown; pageId?: unknown; result?: unknown } | null) => {
         if (typeof message?.requestId !== 'string') return;
+        const pending = pendingPicks.get(message.requestId);
+        if (!pending || !answersFor(pending.pageId, message.pageId)) return;
         const result =
           message.result && typeof message.result === 'object'
             ? (message.result as Record<string, unknown>)
             : { ok: false, error: 'Empty answer.' };
-        pendingPicks.get(message.requestId)?.(result);
+        pending.settle(result);
       },
     });
 
@@ -1749,7 +1775,10 @@ const pangular = defineDevframe({
       name: 'signal-graph-peek-result',
       type: 'action',
       jsonSerializable: true,
-      handler: (message: unknown) => signalPeeks.answer(message),
+      handler: (message: unknown) => {
+        const pageId = (message as { pageId?: unknown } | null)?.pageId;
+        if (answersFor(undefined, pageId)) signalPeeks.answer(message);
+      },
     });
 
     register({
@@ -1855,16 +1884,17 @@ const pangular = defineDevframe({
       }));
     };
 
-    const pendingNgrx = new Map<string, (result: unknown) => void>();
+    const pendingNgrx = new Map<string, { pageId: string; settle: (result: unknown) => void }>();
     let ngrxSeq = 0;
 
     register({
       name: 'ngrx-action-result',
       type: 'action',
       jsonSerializable: true,
-      handler: (message: { requestId?: unknown; result?: unknown }) => {
+      handler: (message: { requestId?: unknown; pageId?: unknown; result?: unknown }) => {
         if (typeof message?.requestId !== 'string') return;
-        pendingNgrx.get(message.requestId)?.(message.result);
+        const pending = pendingNgrx.get(message.requestId);
+        if (pending && answersFor(pending.pageId, message.pageId)) pending.settle(message.result);
       },
     });
 
@@ -1890,10 +1920,13 @@ const pangular = defineDevframe({
           });
         }, 10_000);
         timer.unref?.();
-        pendingNgrx.set(requestId, (result) => {
-          clearTimeout(timer);
-          pendingNgrx.delete(requestId);
-          resolve((result ?? {}) as NgrxRequestResult);
+        pendingNgrx.set(requestId, {
+          pageId,
+          settle: (result) => {
+            clearTimeout(timer);
+            pendingNgrx.delete(requestId);
+            resolve((result ?? {}) as NgrxRequestResult);
+          },
         });
         void my.rpc.broadcast({
           method: 'ngrx-action',

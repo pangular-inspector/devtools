@@ -125,7 +125,8 @@ describe('dispatch-ngrx-action tool', () => {
           action: { type: '[Cart] Add Item', id: 7 },
         },
       };
-      setTimeout(() => void push('ngrx-action-result', { requestId, result }), 5);
+      const { pageId } = options.args[0];
+      setTimeout(() => void push('ngrx-action-result', { requestId, pageId, result }), 5);
     }) as never);
 
     const text = await call('dispatch-ngrx-action', {
@@ -195,8 +196,11 @@ describe('dispatch-ngrx-action tool', () => {
     vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: Broadcast) => {
       if (!options.method.endsWith('ngrx-action')) return;
       sent.push(options);
-      const { requestId } = options.args[0];
-      setTimeout(() => void push('ngrx-action-result', { requestId, result: { ok: true } }), 5);
+      const { requestId, pageId } = options.args[0];
+      setTimeout(
+        () => void push('ngrx-action-result', { requestId, pageId, result: { ok: true } }),
+        5,
+      );
     }) as never);
     const dispatch = { request: { type: 'dispatch', action: '[A] B' } };
 

@@ -442,7 +442,7 @@ describe('panel actions', () => {
     const { ctx, invoke } = await boot();
     const broadcast = vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: never) => {
       const { requestId } = (options as { args: [{ requestId: string }] }).args[0];
-      await invoke('form-action-result', { requestId, result: { ok: true } });
+      await invoke('form-action-result', { requestId, pageId: 'p1', result: { ok: true } });
     }) as never);
     expect(await invoke('request-form-action', { action: 'focus' })).toEqual({
       ok: false,
@@ -457,7 +457,7 @@ describe('panel actions', () => {
     const { ctx, invoke } = await boot({ actions: { router: false } });
     const broadcast = vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: never) => {
       const { requestId } = (options as { args: [{ requestId: string }] }).args[0];
-      await invoke('router-action-result', { requestId, result: { ok: true } });
+      await invoke('router-action-result', { requestId, pageId: 'p1', result: { ok: true } });
     }) as never);
     expect(
       await invoke('request-router-action', { request: { action: 'probe', url: '/' } }),

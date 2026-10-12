@@ -205,6 +205,29 @@ describe('page ownership on the devframe server', () => {
     expect(await counts()).toEqual({ 'tab-2': 2 });
   });
 
+  it('settles a page request only with the answer from that page’s owner', async () => {
+    const { as, invoke, rpc } = await boot();
+    as(1);
+    await invoke('push-component-tree', { pageId: 'tab-1', roots: [], count: 1 });
+    const broadcast = vi.spyOn(rpc as never as { broadcast: () => Promise<void> }, 'broadcast');
+    broadcast.mockImplementation((async (options: { args: [{ requestId: string }] }) => {
+      const { requestId } = options.args[0];
+      // Another connection answers for tab-1, then with a page of its own.
+      as(2);
+      await invoke('router-action-result', { requestId, pageId: 'tab-1', result: 'forged' });
+      await invoke('router-action-result', { requestId, pageId: 'tab-2', result: 'forged' });
+      as(1);
+      await invoke('router-action-result', { requestId, pageId: 'tab-1', result: 'real' });
+    }) as never);
+    as(3);
+    expect(
+      await invoke('request-router-action', {
+        pageId: 'tab-1',
+        request: { action: 'probe', url: '/' },
+      }),
+    ).toBe('real');
+  });
+
   it('applies the same rule to every inspector that takes reports', async () => {
     const { as, invoke, rpc } = await boot();
     const state = async (key: string) => (await rpc.sharedState.get(`pangular:${key}`)).value();

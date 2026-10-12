@@ -392,7 +392,11 @@ describe('router MCP tools', () => {
       ).args;
       expect(pageId).toBe('p1');
       expect(request).toMatchObject({ action: 'navigate', url: '/users/9' });
-      await push('router-action-result', { requestId, result: { outcome: 'succeeded', id: 6 } });
+      await push('router-action-result', {
+        requestId,
+        pageId,
+        result: { outcome: 'succeeded', id: 6 },
+      });
       return undefined as never;
     }) as never);
     const text = await call('navigate', { action: 'navigate', url: '/users/9' });
@@ -404,9 +408,11 @@ describe('router MCP tools', () => {
     const { ctx, push, call } = await boot();
     await push('push-router', report());
     vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: never) => {
-      const { requestId } = (options as { args: [{ requestId: string }] }).args[0];
+      const { requestId, pageId } = (options as { args: [{ requestId: string; pageId: string }] })
+        .args[0];
       await push('router-action-result', {
         requestId,
+        pageId,
         result: { outcome: 'succeeded', rows: 'x'.repeat(20_000) },
       });
       return undefined as never;
@@ -427,7 +433,7 @@ describe('router MCP tools', () => {
       const { requestId, pageId } = (options as { args: [{ requestId: string; pageId?: string }] })
         .args[0];
       seen.push(pageId);
-      await push('router-action-result', { requestId, result: { ok: true } });
+      await push('router-action-result', { requestId, pageId, result: { ok: true } });
     }) as never);
     await push('request-router-action', { request: { action: 'probe', url: '/' } });
     await push('request-router-action', { pageId: '', request: { action: 'probe', url: '/' } });
@@ -457,11 +463,11 @@ describe('router MCP tools', () => {
     await push('push-router', report());
     const sent: unknown[] = [];
     vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: never) => {
-      const { requestId, request } = (
-        options as { args: [{ requestId: string; request: unknown }] }
+      const { requestId, pageId, request } = (
+        options as { args: [{ requestId: string; pageId: string; request: unknown }] }
       ).args[0];
       sent.push(request);
-      await push('router-action-result', { requestId, result: { ok: true } });
+      await push('router-action-result', { requestId, pageId, result: { ok: true } });
     }) as never);
     for (const action of ['navigate', 'abort', 'replay', 'probe']) {
       expect(await call('navigate', { action, url: '/users/9', id: 3 })).toBe(

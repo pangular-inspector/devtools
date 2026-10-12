@@ -238,6 +238,7 @@ describe('untrusted-data notice on agent tools that return page text', () => {
         () =>
           void push('form-action-result', {
             requestId,
+            pageId: 'p1',
             result: { ok: false, error: INJECTED, skipped: [] },
           }),
         5,

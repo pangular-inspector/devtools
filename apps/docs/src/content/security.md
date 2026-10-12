@@ -160,7 +160,7 @@ If you build the extension with another `key`, add its origin to `allowedOrigins
 
 ### Page ownership
 
-Each tab, Angular Native app or Capacitor app that reports to the server has a page id. The first connection that reports a page owns it. A report or a `forget` for that page id from any other connection is ignored, so one client can't overwrite or remove the data of another tab.
+Each tab, Angular Native app or Capacitor app that reports to the server has a page id. The first connection that reports a page owns it. A report or a `forget` for that page id from any other connection is ignored, so one client can't overwrite or remove the data of another tab. The answer to a request sent to a page, such as a navigation, a form action, an NgRx dispatch or a component pick, is taken only from the connection that owns that page.
 
 A page reconnects with the same page id after a reload. To take its page back, the overlay mints a random secret together with the page id and sends it before its first report. In a browser, the overlay keeps both in `sessionStorage` for the life of the tab. A duplicated tab gets a fresh pair. Angular Native and NativeScript apps keep both in memory. Another connection takes over a page id in one of these cases:
 
@@ -170,7 +170,7 @@ A page reconnects with the same page id after a reload. To take its page back, t
 | The old connection closed                | On its next report.                                                                      |
 | The old connection sent nothing for 15 s | On its next report. A tab in the background stays owned while it says it is still there. |
 
-Agent tools and the panel don't report pages, so these rules don't apply to them. A write that leaves out `page`, such as [`dispatch-ngrx-action`](./agents/tools.md#dispatch-an-action), is refused while more than one page could take it. The answer lists those pages, so you can call it again with one.
+Agent tools and the panel don't report pages, so these rules don't apply to them. [`dispatch-ngrx-action`](./agents/tools.md#dispatch-an-action) without `page` is refused while more than one page reports NgRx state. The answer lists those pages, so you can call it again with one. Other tools that act on a page pick one when `page` is left out. `navigate`, for example, acts on the first page that reports a router. Pass `page` when more than one tab is open.
 
 ## What is redacted
 
