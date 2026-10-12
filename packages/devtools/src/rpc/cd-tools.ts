@@ -1,5 +1,6 @@
 import type { CdReport } from '../cd-overlay.ts';
-import { sanitizeCdRecording } from '../cd-data.ts';
+import type { CdOptions } from '../config.ts';
+import { sanitizeCdRecording, toCdOptions } from '../cd-data.ts';
 import type { CdComponentStat, CdCycle } from '../cd-recorder.ts';
 import { droppedNote } from '../timeline-limits.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
@@ -26,12 +27,79 @@ export function toCdPage(value: unknown, maxCycles: number, now = Date.now()): C
   if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return null;
   const recording = sanitizeCdRecording(report, maxCycles);
   if (!recording) return null;
+  const options = toCdOptions(report['options']);
   return {
     pageId,
     supported: report['supported'] !== false,
     ...recording,
+    ...(options ? { options } : {}),
     reportedAt: now,
   };
+}
+
+/** Whether a `change-detection` call asks to turn a view on or off. */
+export function cdViewsAsked(
+  args: { flash?: unknown; track?: unknown; angularProfiling?: unknown } | undefined,
+): boolean {
+  return (
+    args?.flash !== undefined || args?.track !== undefined || args?.angularProfiling !== undefined
+  );
+}
+
+/** The answer to a `change-detection` call that turns views on or off. */
+export function cdViewsText(args: {
+  page?: string;
+  flash?: unknown;
+  track?: unknown;
+  angularProfiling?: unknown;
+}): string {
+  const where = args.page ? `for page ${code(args.page)}` : 'for every connected page';
+  const lines: string[] = [];
+  if (typeof args.flash === 'boolean') {
+    lines.push(
+      args.flash
+        ? `Flash overlay turned on ${where}: each component Angular checks gets a box with its class name and how often it was checked, fading over a second.`
+        : `Flash overlay turned off ${where}.`,
+    );
+  }
+  if (typeof args.track === 'boolean') {
+    lines.push(
+      args.track
+        ? `Performance panel track turned on ${where}: record in the Chrome DevTools Performance panel and look for the "Pangular" track. Browsers without \`console.timeStamp\` draw nothing.`
+        : `Performance panel track turned off ${where}.`,
+    );
+  }
+  if (args.angularProfiling === true) {
+    lines.push(
+      `Angular profiling (\`ng.enableProfiling()\`) requested ${where}. It stays on until the page reloads. Call this tool without arguments to see whether the page has it: it needs Angular 20 or later in a development build.`,
+    );
+  } else if (args.angularProfiling !== undefined) {
+    lines.push(
+      'Angular profiling cannot be turned off once it is on; reload the page to turn it off. Only `angularProfiling: true` is accepted.',
+    );
+  }
+  if (args.flash !== undefined && typeof args.flash !== 'boolean') {
+    lines.push('`flash` must be true or false.');
+  }
+  if (args.track !== undefined && typeof args.track !== 'boolean') {
+    lines.push('`track` must be true or false.');
+  }
+  return lines.join('\n\n');
+}
+
+/**
+ * One line on the views a page has on, for the `change-detection` answer;
+ * empty when the page reported none.
+ */
+export function cdOptionsText(options: CdOptions | undefined): string {
+  if (!options) return '';
+  const on = (value: boolean) => (value ? 'on' : 'off');
+  const profiling = options.angularProfiling
+    ? 'on until the page reloads'
+    : options.angularProfilingAvailable
+      ? 'off'
+      : 'not available on this page (it needs Angular 20 or later in a development build)';
+  return `Live views: flash overlay ${on(options.flash)}, Performance panel track ${on(options.track)}, Angular profiling ${profiling}.`;
 }
 
 export function expireCdPages(

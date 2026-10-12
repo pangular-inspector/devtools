@@ -140,6 +140,15 @@ describe('hub messages', () => {
     expect(hub.messages.add).toHaveBeenCalledTimes(1);
   });
 
+  it('posts a change-detection call that turns a live view on or off', async () => {
+    const { feed, list } = setup();
+    const cd = run(feed, 'pangular:change-detection');
+    await cd.handler({ angularProfiling: false });
+    expect(list()).toEqual([]);
+    await cd.handler({ flash: true });
+    expect(list().map((m) => m.message)).toEqual(['Agent ran change-detection']);
+  });
+
   it('describes a write by its first meaningful line, past the untrusted-data notice and the JSON fence', async () => {
     const { feed, list } = setup();
     await run(

@@ -153,6 +153,18 @@ An import goes through the same checks as a report from the page: unknown fields
 
 The trace has one complete event per cycle on a **Change detection** thread, with the component checks, lifecycle hooks and `afterRender` callbacks nested inside it, and the output listener that started each cycle on an **Outputs** thread. Times are in microseconds from the start of the recording. Each cycle keeps its 40 longest timed spans, so a large app's trace shows the slowest checks of each cycle, not all of them.
 
+#### Watch checks live
+
+The **Live views** toggles below **Record** show change detection as it happens, without a recording. Each one is per page, off by default, and registers no profiler while it is off. They need Angular 20 or later.
+
+| Toggle                | What it does                                                                                                                                                                                                                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Flash checks**      | Draws a box over the host of each component Angular checks, labeled with its class name and `×N`, the number of checks since the box appeared. The box fades out over about a second. With reduced motion, it shows a still outline for 0.4 seconds instead.                                                       |
+| **Performance track** | Adds a **Pangular** track to the Chrome DevTools Performance panel, with one entry per component check, lifecycle hook and output listener. Record a profile in the Performance panel to see it. Browsers without `console.timeStamp` show nothing.                                                                |
+| **Angular profiling** | Calls `ng.enableProfiling()`, so Angular adds its own track to the Performance panel. Angular has no way to turn it off, so it stays on until the page reloads and the toggle stays pressed. If the page has no `ng.enableProfiling`, such as a production build, the toggle does nothing and the section says so. |
+
+The flash boxes are drawn on a canvas in a shadow root that the overlay adds to the page. It doesn't take clicks, and the overlay never changes the app's own elements. The page measures the checked hosts once per animation frame and draws at most 150 boxes at a time.
+
 ### Source mode
 
 Without live data, the tab lists the `@Component` and `@Directive` classes in your source. Expand a row to see its class, file, standalone flag, change detection, inputs and outputs. Click **Refresh** to scan again.
@@ -302,18 +314,18 @@ Press Escape in the filter box to clear it. When the filter matches nothing, **C
 
 ## Agent tools
 
-| Tool or resource                  | Kind     | What it does                                                                                                                                                                          |
-| --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:get-components`         | tool     | Lists components and directives from source, with selector, kind, inputs, outputs, change detection, file and line.                                                                   |
-| `pangular:highlight`              | tool     | Highlights a component in the page and selects it. Takes an instance id, class name, host tag or CSS selector. Also retargets the Signals graph. Lists every instance a name matches. |
-| `pangular:inspect-component`      | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services.                                                           |
-| `pangular:list-components`        | tool     | Returns the live tree of one page as an indented outline with routed and directive markers. Takes a `filter` and a `depth`.                                                           |
-| `pangular:defer-blocks`           | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                  |
-| `pangular:for-blocks`             | tool     | Lists the `@for` blocks of each page with their item count, track kind and `@empty` block.                                                                                            |
-| `pangular:change-detection`       | tool     | Starts, stops or clears a change detection recording, and returns the slowest and most often checked components, hook, output and afterRender time, the latest cycles, or an export.  |
-| `pangular:set-component-property` | tool     | Writes an input or property of one instance and runs change detection. An action.                                                                                                     |
-| `pangular:set-signal`             | tool     | Sets a writable signal that one instance holds as a property. An action.                                                                                                              |
-| `pangular:component-tree`         | resource | The live tree per page, with the detail of the selected instance and the defer blocks.                                                                                                |
+| Tool or resource                  | Kind     | What it does                                                                                                                                                                                                         |
+| --------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:get-components`         | tool     | Lists components and directives from source, with selector, kind, inputs, outputs, change detection, file and line.                                                                                                  |
+| `pangular:highlight`              | tool     | Highlights a component in the page and selects it. Takes an instance id, class name, host tag or CSS selector. Also retargets the Signals graph. Lists every instance a name matches.                                |
+| `pangular:inspect-component`      | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services.                                                                                          |
+| `pangular:list-components`        | tool     | Returns the live tree of one page as an indented outline with routed and directive markers. Takes a `filter` and a `depth`.                                                                                          |
+| `pangular:defer-blocks`           | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                                                 |
+| `pangular:for-blocks`             | tool     | Lists the `@for` blocks of each page with their item count, track kind and `@empty` block.                                                                                                                           |
+| `pangular:change-detection`       | tool     | Starts, stops or clears a change detection recording, turns the live views on or off, and returns the slowest and most often checked components, hook, output and afterRender time, the latest cycles, or an export. |
+| `pangular:set-component-property` | tool     | Writes an input or property of one instance and runs change detection. An action.                                                                                                                                    |
+| `pangular:set-signal`             | tool     | Sets a writable signal that one instance holds as a property. An action.                                                                                                                                             |
+| `pangular:component-tree`         | resource | The live tree per page, with the detail of the selected instance and the defer blocks.                                                                                                                               |
 
 See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 

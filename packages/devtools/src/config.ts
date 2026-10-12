@@ -547,6 +547,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'ping-change-detection': 'components',
   'forget-change-detection-page': 'components',
   'request-change-detection-record': 'components',
+  'request-change-detection-options': 'components',
   'ping-component-tree': 'components',
   'forget-component-page': 'components',
   'select-component': 'components',
@@ -994,9 +995,23 @@ export interface CdRecording {
   spanNames?: string[];
 }
 
+/** The change detection views a page shows while it runs, turned on from the panel or an agent. */
+export interface CdOptions {
+  /** A box flashes over each component as Angular checks it. */
+  flash: boolean;
+  /** Component checks, hooks and outputs go to the "Pangular" track of the Chrome Performance panel. */
+  track: boolean;
+  /** `ng.enableProfiling()` was called. It stays on until the page reloads. */
+  angularProfiling: boolean;
+  /** Whether the page has `ng.enableProfiling` (Angular 20 or later, development build). */
+  angularProfilingAvailable: boolean;
+}
+
 /** What a page pushes: its recording, with the page id and whether it can record. */
 export interface CdReport extends CdRecording {
   pageId: string;
   /** False when the page has no profiler hook to record with (before Angular 20). */
   supported: boolean;
+  /** The views the page has on; missing from pages that report none. */
+  options?: CdOptions;
 }

@@ -310,10 +310,18 @@ describe('agent tool and RPC registration', () => {
     expect(tool?.safety).toBe('read');
     const schema = tool?.inputSchema as { properties: Record<string, unknown> };
     expect(Object.keys(schema.properties)).not.toContain('record');
+    for (const view of ['flash', 'track', 'angularProfiling']) {
+      expect(Object.keys(fullSchema.properties)).toContain(view);
+      expect(Object.keys(schema.properties)).not.toContain(view);
+    }
     const answer = (await readOnly.ctx.agent.invoke('pangular:change-detection', {
       record: 'start',
     })) as { markdown: string };
     expect(answer.markdown).toContain('agent.readOnly');
+    const flash = (await readOnly.ctx.agent.invoke('pangular:change-detection', {
+      flash: true,
+    })) as { markdown: string };
+    expect(flash.markdown).toContain('agent.readOnly');
   });
 
   it('keeps navigate for its free modes when actions.router is off', async () => {

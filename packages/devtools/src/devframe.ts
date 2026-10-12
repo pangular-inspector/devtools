@@ -171,7 +171,10 @@ import {
   type SetHttpRuleArgs,
 } from './rpc/http-rule-tools.ts';
 import {
+  cdOptionsText,
   cdUnknownPageText,
+  cdViewsAsked,
+  cdViewsText,
   changeDetectionText,
   expireCdPages,
   pickCdPage,
@@ -180,6 +183,7 @@ import {
   type CdState,
 } from './rpc/cd-tools.ts';
 import { cdExportText } from './rpc/cd-export-tools.ts';
+import { toCdOptionsRequest } from './cd-data.ts';
 import type { HttpPage, HttpPayloadState, HttpReport, HttpState } from './types.ts';
 
 import { analogPages, nameServerFns, registerAnalog } from './rpc/analog-register.ts';
@@ -1573,6 +1577,16 @@ const pangular = defineDevframe({
       });
     };
 
+    const requestCdOptions = (message: unknown) => {
+      const raw = (message && typeof message === 'object' ? message : {}) as { pageId?: unknown };
+      const pageId = typeof raw.pageId === 'string' ? raw.pageId.slice(0, 50) : undefined;
+      void my.rpc.broadcast({
+        method: 'change-detection-options',
+        args: [{ pageId, ...toCdOptionsRequest(message) }],
+        optional: true,
+      });
+    };
+
     register({
       name: 'push-change-detection',
       type: 'action',
@@ -1614,6 +1628,15 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: (message: { pageId?: unknown; on?: unknown; clear?: unknown }) => {
         requestCdRecord(message);
+      },
+    });
+
+    register({
+      name: 'request-change-detection-options',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: unknown) => {
+        requestCdOptions(message);
       },
     });
 
@@ -2365,14 +2388,32 @@ const pangular = defineDevframe({
       id: 'pangular:change-detection',
       description: `Change detection cycles recorded with Angular's profiler (Angular 20+, development build): the slowest components by self time, the most often checked components, and the latest cycles with duration, component checks, sync passes and the output that ran before each one. ${
         cdRecordAllowed
-          ? 'Recording is off until the panel or this tool starts it; pass `record: "start"`, use the app, then call again without `record`. `stop` keeps the recording, `clear` empties it.'
-          : 'Recording is off until the panel starts it. The agent is read-only, so this tool cannot start, stop or clear a recording.'
+          ? 'Recording is off until the panel or this tool starts it; pass `record: "start"`, use the app, then call again without `record`. `stop` keeps the recording, `clear` empties it. `flash: true` draws a fading box with the class name and check count over each component as Angular checks it, so a person watching the page sees what each interaction checks; `track: true` writes every component check, lifecycle hook and output to a "Pangular" track in the Chrome Performance panel while it records; `angularProfiling: true` calls `ng.enableProfiling()` for Angular\'s own track, which stays on until the page reloads. Each view is off by default and costs nothing while off.'
+          : 'Recording is off until the panel starts it. The agent is read-only, so this tool cannot start, stop or clear a recording, or turn on the flash overlay, the Performance panel track or Angular profiling.'
       } The answer starts with the change detection mode the page runs: zoneless, zone.js, or zoneless with zone.js still loaded. Times include lifecycle hooks per class and hook, output listeners and afterRender callbacks. Pass \`export: "json"\` for the recording as the file the panel imports, or \`export: "trace"\` for a Trace Event Format file that Perfetto (ui.perfetto.dev) and chrome://tracing open; exporting only reads, and a file over 100,000 characters is not returned, only its counts.`,
       inputSchema: {
         type: 'object',
         properties: {
           ...(cdRecordAllowed
-            ? { record: { type: 'string', enum: ['start', 'stop', 'clear'] } }
+            ? {
+                record: { type: 'string', enum: ['start', 'stop', 'clear'] },
+                flash: {
+                  type: 'boolean',
+                  description:
+                    'Turn the flash overlay on or off: a box over each component as it is checked.',
+                },
+                track: {
+                  type: 'boolean',
+                  description:
+                    'Turn the "Pangular" track in the Chrome Performance panel on or off.',
+                },
+                angularProfiling: {
+                  type: 'boolean',
+                  enum: [true],
+                  description:
+                    "Call `ng.enableProfiling()` for Angular's own Performance panel track. It cannot be turned off until the page reloads.",
+                },
+              }
             : {}),
           page: { type: 'string', description: 'Page id; defaults to the page that is recording.' },
           limit: { type: 'number', description: 'Rows per list (default 10, max 50).' },
@@ -2389,6 +2430,9 @@ const pangular = defineDevframe({
         page?: string;
         limit?: number;
         export?: string;
+        flash?: boolean;
+        track?: boolean;
+        angularProfiling?: boolean;
       }) => {
         const unknown =
           args?.page &&
@@ -2407,6 +2451,12 @@ const pangular = defineDevframe({
           if (args.record !== undefined) {
             return { markdown: 'Pass either `record` or `export`, not both.' };
           }
+          if (cdViewsAsked(args)) {
+            return {
+              markdown:
+                'Pass either `export` or `flash`, `track` and `angularProfiling`, not both.',
+            };
+          }
           return {
             markdown: cdExportText(cdState.value() as CdState, {
               page: args.page,
@@ -2414,11 +2464,21 @@ const pangular = defineDevframe({
             }),
           };
         }
-        if (args?.record !== undefined && !cdRecordAllowed) {
+        if ((args?.record !== undefined || cdViewsAsked(args)) && !cdRecordAllowed) {
           return {
             markdown:
-              'The agent is read-only in the devtools config (agent.readOnly), so it cannot start, stop or clear a change detection recording. Start it from the panel, then call this tool without `record`.',
+              'The agent is read-only in the devtools config (agent.readOnly), so it cannot start, stop or clear a change detection recording, or turn on the flash overlay, the Performance panel track or Angular profiling. Use the panel, then call this tool without those arguments.',
           };
+        }
+        const views = cdViewsAsked(args) ? cdViewsText(args) : '';
+        if (views) {
+          requestCdOptions({
+            pageId: args.page,
+            flash: args.flash,
+            track: args.track,
+            angularProfiling: args.angularProfiling,
+          });
+          if (args.record === undefined) return { markdown: views };
         }
         if (args?.record === 'start' || args?.record === 'stop' || args?.record === 'clear') {
           requestCdRecord({
@@ -2432,7 +2492,7 @@ const pangular = defineDevframe({
               : args.record === 'stop'
                 ? 'Recording stopped. The cycles recorded so far stay available.'
                 : 'Recording cleared.';
-          return { markdown: next };
+          return { markdown: views ? `${next}\n\n${views}` : next };
         }
         const cd = cdState.value() as CdState;
         const text = changeDetectionText(cd, args ?? {});
@@ -2440,7 +2500,9 @@ const pangular = defineDevframe({
         const zonePage = args?.page ?? pickCdPage(cd)?.pageId;
         const injectors = zonePage ? injectorPages.get(zonePage) : latestInjectorPage();
         const mode = injectors ? zoneModeText(injectors.zone, injectors.pageId) : '';
-        return { markdown: mode ? `${mode}\n\n${text}` : text };
+        const options = cdOptionsText(pickCdPage(cd, args?.page)?.options);
+        const parts = [mode, text, options].filter(Boolean);
+        return { markdown: parts.join('\n\n') };
       },
     });
 

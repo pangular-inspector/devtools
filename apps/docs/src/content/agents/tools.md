@@ -59,11 +59,11 @@ Every tool has one of three safety tiers. The server sends the tier to your clie
   The twelve <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
-When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `change-detection` posts only when it starts, stops or clears a recording. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
+When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
 
 ### Turn tools off
 
-The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record` argument, so it reads a recording the panel started. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
+The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record`, `flash`, `track` and `angularProfiling` arguments, so it reads a recording the panel started. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ## Source scan
 
@@ -160,13 +160,18 @@ Each page lists at most 50 blocks, with a note on how many more are not shown, a
 
 Change detection cycles recorded with Angular's profiler: the slowest components by self time, the most often checked components, lifecycle hook time per class and hook, output listener time, `afterRender` callback time, and the latest cycles with their duration, component checks, sync passes, hook and afterRender time and the output that ran before each one. Reads: page. Needs Angular 20 or later.
 
-| Argument | Required | Value                                                                                                                                                                            |
-| -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `record` | no       | `start` starts a fresh recording on a page that is not recording and leaves a running one as it is, `stop` stops it and keeps the cycles, `clear` empties it. Leave out to read. |
-| `limit`  | no       | Rows per list. Default 10, at most 50.                                                                                                                                           |
-| `export` | no       | `json` returns the recording as the file the panel's **Import** reads. `trace` returns it in the Trace Event Format for Perfetto. Can't be combined with `record`.               |
+| Argument           | Required | Value                                                                                                                                                                            |
+| ------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `record`           | no       | `start` starts a fresh recording on a page that is not recording and leaves a running one as it is, `stop` stops it and keeps the cycles, `clear` empties it. Leave out to read. |
+| `limit`            | no       | Rows per list. Default 10, at most 50.                                                                                                                                           |
+| `export`           | no       | `json` returns the recording as the file the panel's **Import** reads. `trace` returns it in the Trace Event Format for Perfetto. Can't be combined with `record`.               |
+| `flash`            | no       | `true` turns the flash overlay on: a fading box with the class name and check count over each component Angular checks. `false` turns it off.                                    |
+| `track`            | no       | `true` writes each component check, lifecycle hook and output listener to a **Pangular** track in the Chrome Performance panel. `false` turns it off.                            |
+| `angularProfiling` | no       | `true` calls `ng.enableProfiling()` for Angular's own Performance panel track. It stays on until the page reloads, so `false` is refused.                                        |
 
 Without `page`, it reads the page that is recording, and `record` goes to every connected page. A `page` that names no connected tab gets the list of connected tabs. A connected tab that has not recorded yet gets a hint to start a recording there. The answer starts with the change detection mode of the page it reports on: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. With `agent.readOnly`, the tool has no `record` argument and is marked read-only, so start the recording from the panel. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many. A recording lists at most 100 component classes and counts checks for up to 2000 instances. When it checked more, the answer says how many were left out.
+
+`flash`, `track` and `angularProfiling` go to the page in `page`, or to every connected page, and can be combined with `record`, but not with `export`. They are the **Live views** toggles of the panel; see [Watch checks live](../inspectors/components.md#watch-checks-live). Once a page reports them, the answer ends with a line that says which views are on. With `agent.readOnly`, the tool has none of these three arguments.
 
 `export` only reads, so it stays available with `agent.readOnly`. The file is masked like other answers (JWTs, bearer tokens and secret names), has no instance check counts, and comes in a `json` code block to save as a `.json` file. An export over 100,000 characters is not returned, because cut JSON doesn't parse. The answer gives its size and the counts of cycles, timed spans, component classes, hook rows and output rows instead. Export it from the panel then, or clear the recording and record a shorter session. See [Export and import a recording](../inspectors/components.md#export-and-import-a-recording).
 

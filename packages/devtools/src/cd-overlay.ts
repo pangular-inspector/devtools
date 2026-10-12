@@ -1,4 +1,6 @@
 import { addProfilerListener, keepaliveDue } from './change-detection.ts';
+import { toCdOptionsRequest } from './cd-data.ts';
+import { createCdLive } from './cd-live.ts';
 import { createCdRecorder, type CdReport } from './cd-recorder.ts';
 import { elementId } from './element-id.ts';
 
@@ -29,6 +31,7 @@ export function attachChangeDetection(
   tickMs: () => number = () => 0,
 ) {
   const recorder = createCdRecorder({ maxCycles });
+  const live = createCdLive({ getNg });
   const hostIds = new WeakMap<object, string>();
   let removeListener: (() => void) | null = null;
   let supported = true;
@@ -68,7 +71,13 @@ export function attachChangeDetection(
   const push = async (force = false) => {
     // After leave() a stopped recording with cycles is still worth sending again.
     if (!force && !recorder.recording && !recorder.hasCycles && !lastJson) return;
-    const report: CdReport = { pageId, supported, ...recorder.snapshot(hostId) };
+    const options = live.report();
+    const report: CdReport = {
+      pageId,
+      supported,
+      ...recorder.snapshot(hostId),
+      ...(options ? { options } : {}),
+    };
     const json = JSON.stringify(report);
     if (!force && json === lastJson) {
       if (!keepaliveDue(sentAt, tickMs())) return;
@@ -94,6 +103,17 @@ export function attachChangeDetection(
     },
   });
 
+  my.rpc.register({
+    name: 'change-detection-options',
+    type: 'event',
+    jsonSerializable: true,
+    handler: (message: { pageId?: unknown } | null) => {
+      if (typeof message?.pageId === 'string' && message.pageId !== pageId) return;
+      live.apply(toCdOptionsRequest(message));
+      void push(true).catch(() => {});
+    },
+  });
+
   return {
     push,
     get recording() {
@@ -103,6 +123,9 @@ export function attachChangeDetection(
       lastJson = '';
       void my.rpc.call('forget-change-detection-page', pageId).catch(() => {});
     },
-    stop: () => setRecording(false),
+    stop: () => {
+      setRecording(false);
+      live.stop();
+    },
   };
 }

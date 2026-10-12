@@ -4,6 +4,7 @@ import type {
   CdComponentStat,
   CdCycle,
   CdHookStat,
+  CdOptions,
   CdOutputStat,
   CdRecording,
   CdSpan,
@@ -417,5 +418,35 @@ export function cdTraceFile(recording: CdRecording, pageId: string): CdTraceFile
         ? { startedAt: new Date(recording.startedAt).toISOString() }
         : {}),
     },
+  };
+}
+
+/** A `change-detection-options` request; a missing field leaves that view as it is. */
+export interface CdOptionsRequest {
+  flash?: boolean;
+  track?: boolean;
+  /** Only `true` does anything: Angular has no way to turn its profiling off again. */
+  angularProfiling?: boolean;
+}
+
+/** Reads an options request from the wire, keeping only the fields it knows. */
+export function toCdOptionsRequest(value: unknown): CdOptionsRequest {
+  const message = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  const request: CdOptionsRequest = {};
+  if (typeof message['flash'] === 'boolean') request.flash = message['flash'];
+  if (typeof message['track'] === 'boolean') request.track = message['track'];
+  if (message['angularProfiling'] === true) request.angularProfiling = true;
+  return request;
+}
+
+/** The views a page reports it has on, with only the known boolean fields. */
+export function toCdOptions(value: unknown): CdOptions | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const options = value as Record<string, unknown>;
+  return {
+    flash: options['flash'] === true,
+    track: options['track'] === true,
+    angularProfiling: options['angularProfiling'] === true,
+    angularProfilingAvailable: options['angularProfilingAvailable'] === true,
   };
 }

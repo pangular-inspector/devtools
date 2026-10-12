@@ -1,5 +1,5 @@
-import { Component, computed, input, output, signal } from '@angular/core';
-import type { CdReport } from '@pangular-inspector/devtools/config';
+import { Component, computed, input, linkedSignal, output, signal } from '@angular/core';
+import type { CdOptions, CdReport } from '@pangular-inspector/devtools/config';
 import type { DevframeRpcClient } from 'devframe/client';
 import { panelConfig } from '../devtools-config';
 import { time } from '../format';
@@ -58,6 +58,57 @@ const SHOWN_CYCLES = 30;
       </p>
       @if (page()?.supported === false) {
         <p class="note">This page can't record change detection. It needs Angular 20 or later.</p>
+      }
+      @if (!imported()) {
+        <div class="views" role="group" aria-labelledby="cd-views-label">
+          <span id="cd-views-label" class="views-label">Live views</span>
+          <button
+            type="button"
+            class="view"
+            [attr.aria-pressed]="views().flash"
+            [disabled]="!canShowViews()"
+            (click)="setView('flash', !views().flash)"
+          >
+            <span class="dot" aria-hidden="true"></span>
+            Flash checks
+          </button>
+          <button
+            type="button"
+            class="view"
+            [attr.aria-pressed]="views().track"
+            [disabled]="!canShowViews()"
+            (click)="setView('track', !views().track)"
+          >
+            <span class="dot" aria-hidden="true"></span>
+            Performance track
+          </button>
+          <button
+            type="button"
+            class="view"
+            [attr.aria-pressed]="views().angularProfiling"
+            [disabled]="
+              !canShowViews() || views().angularProfiling || !views().angularProfilingAvailable
+            "
+            (click)="setView('angularProfiling', true)"
+          >
+            <span class="dot" aria-hidden="true"></span>
+            Angular profiling
+          </button>
+        </div>
+        <p class="hint">
+          Flash checks draws a box over each component on the page as Angular checks it, with its
+          name and how often it was checked, fading over a second. Performance track adds a Pangular
+          track to the Chrome Performance panel with every component check, hook and output. Angular
+          profiling turns on Angular's own track there.
+        </p>
+        @if (views().angularProfiling) {
+          <p class="note">Angular profiling stays on until the page reloads.</p>
+        } @else if (!views().angularProfilingAvailable) {
+          <p class="note">
+            This page has no <span class="mono">ng.enableProfiling</span>. It needs Angular 20 or
+            later in a development build.
+          </p>
+        }
       }
       <app-limit-note
         [dropped]="page()?.dropped ?? 0"
@@ -215,6 +266,22 @@ const SHOWN_CYCLES = 30;
       cursor: not-allowed;
       opacity: 0.6;
     }
+    .views {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .views-label {
+      @include m.label;
+    }
+    button.view[aria-pressed='true'] {
+      border-color: var(--accent-line);
+    }
+    button.view[aria-pressed='true'] .dot {
+      background: var(--accent);
+    }
     .dot {
       width: 8px;
       height: 8px;
@@ -329,6 +396,18 @@ export class CdRecording {
   /** The recording on screen: an imported one, else the page's. */
   readonly page = computed(() => this.imported()?.page ?? this.livePage());
 
+  /** The views the page has on, set ahead of the page's next report when a toggle is used. */
+  readonly views = linkedSignal<CdOptions>(
+    () =>
+      this.livePage()?.options ?? {
+        flash: false,
+        track: false,
+        angularProfiling: false,
+        angularProfilingAvailable: true,
+      },
+  );
+  readonly canShowViews = computed(() => !!this.pageId() && this.livePage()?.supported !== false);
+
   protected readonly message = signal('');
   /**
    * What a screen reader hears. It changes only when Record, Stop or Clear finishes or fails.
@@ -426,24 +505,47 @@ export class CdRecording {
     await this.send({ clear: true }, '', () => 'Cleared the recorded cycles.');
   }
 
+  /** Turns a live view on or off on the page. Angular profiling only turns on. */
+  async setView(view: 'flash' | 'track' | 'angularProfiling', on: boolean) {
+    const before = this.views();
+    this.views.set({ ...before, [view]: on });
+    const done = {
+      flash: on ? 'Flash checks on.' : 'Flash checks off.',
+      track: on
+        ? 'Performance track on. Record in the Chrome Performance panel to see it.'
+        : 'Performance track off.',
+      angularProfiling: 'Angular profiling on. It stays on until the page reloads.',
+    }[view];
+    const sent = await this.send(
+      { [view]: on },
+      '',
+      () => done,
+      'request-change-detection-options',
+    );
+    if (!sent) this.views.set(before);
+  }
+
   private async send(
-    request: { on?: boolean; clear?: boolean },
+    request: { on?: boolean; clear?: boolean; flash?: boolean; track?: boolean },
     pending: string,
     done: () => string,
-  ) {
+    rpc = 'request-change-detection-record',
+  ): Promise<boolean> {
     this.message.set(pending);
     try {
       if (!this.rpc()) throw new Error('no client');
-      await call(this.rpc(), 'request-change-detection-record', {
+      await call(this.rpc(), rpc, {
         pageId: this.pageId(),
         ...request,
       });
       this.message.set('');
       this.announce(done());
+      return true;
     } catch {
       const failed = 'Could not reach the page.';
       this.message.set(failed);
       this.announce(failed);
+      return false;
     }
   }
 

@@ -16,6 +16,17 @@ import { clip } from './text.ts';
 import type { HydrationStats } from './types.ts';
 
 /** The kinds of item the feed posts, as the message `category`. */
+/** Whether a `change-detection` call changes the page rather than only reading it. */
+function cdWrites(args: unknown): boolean {
+  const call = (args ?? {}) as Record<string, unknown>;
+  return (
+    typeof call['record'] === 'string' ||
+    typeof call['flash'] === 'boolean' ||
+    typeof call['track'] === 'boolean' ||
+    call['angularProfiling'] === true
+  );
+}
+
 export const HUB_MESSAGE_CATEGORIES = {
   agent: 'agent',
   error: 'runtime',
@@ -279,10 +290,9 @@ export function createHubFeed(
   const agentWrite = (id: string, args: unknown, result: unknown) => {
     const name = id.replace(/^pangular:/, '');
     if (agentSafety(id, config) === 'read' || !agentAllowed({ id }, config)) return;
-    // change-detection only writes when it starts, stops or clears a recording.
-    if (name === 'change-detection' && typeof (args as { record?: unknown })?.record !== 'string') {
-      return;
-    }
+    // change-detection only writes when it starts, stops or clears a recording,
+    // or turns a live view on or off.
+    if (name === 'change-detection' && !cdWrites(args)) return;
     if (changedNothing(result)) return;
     const page = pageOf(args);
     post(
