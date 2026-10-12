@@ -151,6 +151,7 @@ const config: NgmdConfig = {
     {label: 'Docs', href: '/getting-started/introduction'},
     {label: 'Inspectors', href: '/inspectors/dashboard'},
     {label: 'Agents', href: '/agents/mcp-server'},
+    {label: 'Roadmap', href: '/roadmap'},
   ],
 
   footerNav: [{label: 'Press kit', href: '/press-kit'}],
