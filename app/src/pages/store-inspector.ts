@@ -34,6 +34,7 @@ import {
   type NgrxState,
   type NgrxStoreEntry,
 } from './store-types';
+import { SourceLink } from '../ui/source-link';
 
 const KIND_COLORS: Record<string, string> = {
   action: '#f59e0b',
@@ -94,7 +95,7 @@ const CLASSIC_KINDS = new Set([
 
 @Component({
   selector: 'app-store-inspector',
-  imports: [LimitNote, RovingList, Select, NgTemplateOutlet],
+  imports: [LimitNote, RovingList, Select, NgTemplateOutlet, SourceLink],
   template: `
     <div class="toolbar">
       <input
@@ -209,7 +210,7 @@ const CLASSIC_KINDS = new Set([
                   <span class="chip">{{ kindLabel(current.kind) }}</span>
                   <span class="chip">scope: {{ current.scope }}</span>
                   @if (current.signal?.declaredIn; as file) {
-                    <span class="chip mono" [title]="file">{{ file }}</span>
+                    <app-source-link class="chip mono" [file]="file" />
                   }
                   @if (current.classic) {
                     <span class="chip">{{
@@ -802,9 +803,7 @@ const CLASSIC_KINDS = new Set([
                 <span class="chip">{{ kindLabel(entry.kind) }}</span>
               </div>
               <div class="node-meta">
-                <span class="file" [title]="entry.file + ':' + entry.line"
-                  >{{ entry.file }}:{{ entry.line }}</span
-                >
+                <app-source-link class="file" [file]="entry.file" [line]="entry.line" />
               </div>
               @if (entry.detail) {
                 <p class="detail">{{ entry.detail }}</p>

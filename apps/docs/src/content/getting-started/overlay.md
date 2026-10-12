@@ -260,7 +260,7 @@ The overlay and the button do not start inside the devtools panel frame, so a mi
 
 When you hover or focus a row in the devtools, the overlay draws an amber box around its element in the page. The box follows the element and stays until the pointer or focus leaves the row. The box also clears when the panel closes, reloads or loses its connection to the dev server. If that clear never reaches the page, the box clears after 60 seconds. A box drawn by the [`highlight` agent tool](../agents/tools.md) clears after 2 seconds.
 
-While you pick an element on the page, the box follows the pointer and clears when the pointer leaves the page or picking ends.
+While you pick an element on the page, the box follows the pointer and clears when the pointer leaves the page or picking ends. An Alt+click (Option+click on macOS) picks the component and asks the server to open its file in your editor. See [Pick a component on the page](../inspectors/components.md#pick-a-component-on-the-page).
 
 - The box also works for SVG hosts, like `g[app-bar]` in a chart.
 - A host with `display: contents` has no box of its own, so the box goes around its children.

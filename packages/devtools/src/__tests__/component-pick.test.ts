@@ -205,4 +205,65 @@ describe('startComponentPick', () => {
     expect(await third.pick.result).toEqual({ ok: false, error: 'No component was picked.' });
     expect(third.popup.hasAttribute('data-picking')).toBe(false);
   });
+  describe('Alt+click', () => {
+    class _MapView {
+      static ɵcmp = {
+        debugInfo: { className: 'MapView', filePath: 'src/app/map.ts', lineNumber: 12 },
+      };
+    }
+
+    function pickOn(instance: object) {
+      document.body.innerHTML = `<app-map><b>pin</b></app-map><div id="${POPUP_ROOT_ID}"></div>`;
+      const host = document.querySelector('app-map')!;
+      const ng: ComponentDebugNg = { getComponent: (el) => (el === host ? instance : null) };
+      const pick = startComponentPick({
+        getNg: () => ng,
+        highlight: { show: vi.fn(), clear: vi.fn() },
+        timeoutMs: 1000,
+      });
+      return { pick, target: host.querySelector('b')! };
+    }
+
+    it('asks to open the source of the component picked with Alt held', async () => {
+      const { pick, target } = pickOn(new _MapView());
+      target.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true, altKey: true }),
+      );
+      expect(await pick.result).toMatchObject({
+        ok: true,
+        name: 'MapView',
+        source: { file: 'src/app/map.ts', line: 12 },
+        openInEditor: true,
+      });
+    });
+
+    it('reads Alt from the pointerup that picks', async () => {
+      const { pick, target } = pickOn(new _MapView());
+      const fire = (type: string) =>
+        target.dispatchEvent(
+          new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, altKey: true }),
+        );
+      fire('pointerdown');
+      fire('pointerup');
+      expect(await pick.result).toMatchObject({ ok: true, openInEditor: true });
+    });
+
+    it('keeps a plain click a plain pick, with the source but no open', async () => {
+      const { pick, target } = pickOn(new _MapView());
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      const result = await pick.result;
+      expect(result).toMatchObject({ ok: true, source: { file: 'src/app/map.ts', line: 12 } });
+      expect(result.ok && result.openInEditor).toBeFalsy();
+    });
+
+    it('does not ask to open anything when the source is unknown', async () => {
+      const { pick, target } = pickOn({});
+      target.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true, altKey: true }),
+      );
+      const result = await pick.result;
+      expect(result).toMatchObject({ ok: true });
+      expect(result.ok && (result.openInEditor || result.source)).toBeFalsy();
+    });
+  });
 });

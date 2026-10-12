@@ -754,6 +754,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
           if (result.ok) {
             componentTarget = result.id;
             void pushTree(true).catch(() => {});
+            if (result.openInEditor && result.source) {
+              void my.rpc.call('open-in-editor', result.source).catch(() => {});
+            }
           }
           void my.rpc.call('component-pick-result', { requestId, pageId, result }).catch(() => {});
         });

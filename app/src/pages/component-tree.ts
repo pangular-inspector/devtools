@@ -32,6 +32,7 @@ import {
 } from './component-tree-state';
 import { CdRecording, type CdPage } from './cd-recording';
 import type { ComponentFocus } from '../types/component-focus.types';
+import { SourceLink } from '../ui/source-link';
 
 interface SourceComponent {
   selector: string;
@@ -143,7 +144,7 @@ function bare(name: string): string {
 
 @Component({
   selector: 'app-component-tree',
-  imports: [JsonPipe, Select, CdRecording],
+  imports: [JsonPipe, Select, CdRecording, SourceLink],
   host: { '(keydown.escape)': 'cancelPick()' },
   template: `
     @if (live()) {
@@ -309,7 +310,9 @@ function bare(name: string): string {
               <h2 id="ct-detail-title" class="mono">{{ sel.name }}</h2>
               <span class="mono muted">&lt;{{ sel.tag }}&gt;</span>
               @if (whereOf(sel); as where) {
-                <p class="where mono">{{ where.file }}:{{ where.line }}</p>
+                <p class="where mono">
+                  <app-source-link [file]="where.file" [line]="where.line" />
+                </p>
               }
               @if (devtoolsActions()) {
                 <div class="actions" role="group" aria-label="Chrome DevTools">
@@ -667,7 +670,9 @@ function bare(name: string): string {
                     <dt>Class</dt>
                     <dd class="mono">{{ bareName(comp.className) }}</dd>
                     <dt>File</dt>
-                    <dd class="mono">{{ comp.file }}:{{ comp.line }}</dd>
+                    <dd class="mono">
+                      <app-source-link [file]="comp.file" [line]="comp.line" />
+                    </dd>
                     <dt>Standalone</dt>
                     <dd>{{ comp.isStandalone ? 'Yes' : 'No' }}</dd>
                     @if (comp.kind === 'component') {

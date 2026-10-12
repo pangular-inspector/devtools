@@ -18,6 +18,7 @@ import { pickPage, type ReportedPage } from '../live-pages';
 import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
 import { zoneLabel } from './dashboard';
+import { SourceLink } from '../ui/source-link';
 
 interface ProviderInfo {
   token: string;
@@ -109,7 +110,7 @@ function isTree(value: unknown): value is InjectorNode[] {
 
 @Component({
   selector: 'app-di-inspector',
-  imports: [NgTemplateOutlet, Select],
+  imports: [NgTemplateOutlet, Select, SourceLink],
   template: `
     <p class="sr-only" role="status">{{ announcement() }}</p>
     <ng-template #loadError let-compact="compact">
@@ -577,7 +578,7 @@ function isTree(value: unknown): value is InjectorNode[] {
                       }
                     </div>
                     <div class="provider-meta">
-                      <span class="path">{{ p.file }}:{{ p.line }}</span>
+                      <app-source-link class="path" [file]="p.file" [line]="p.line" />
                       @if (p.source !== 'class' && p.source !== 'providers array') {
                         <span class="as">as {{ p.source }}</span>
                       }

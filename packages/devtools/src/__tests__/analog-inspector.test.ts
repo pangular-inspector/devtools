@@ -25,6 +25,7 @@ async function mount(handler: Handler, state: unknown = {}) {
   const { Input, Output, ViewChild } = await import('@angular/core');
   const { AnalogInspector } = await import('../../../../app/src/pages/analog-inspector.ts');
   const { Select } = await import('../../../../app/src/ui/select.ts');
+  const { SourceLink } = await import('../../../../app/src/ui/source-link.ts');
   const signalInput = (name: string, required = false) => [
     { type: Input, args: [{ isSignal: true, alias: name, required }] },
   ];
@@ -41,6 +42,10 @@ async function mount(handler: Handler, state: unknown = {}) {
     emptyText: signalInput('emptyText'),
     trigger: [{ type: ViewChild, args: ['trigger', { isSignal: true }] }],
     list: [{ type: ViewChild, args: ['list', { isSignal: true }] }],
+  };
+  (SourceLink as unknown as { propDecorators: unknown }).propDecorators = {
+    file: signalInput('file', true),
+    line: signalInput('line'),
   };
   if (!testBedReady) {
     TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());

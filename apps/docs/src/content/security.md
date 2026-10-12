@@ -158,6 +158,17 @@ Every installed extension can send requests to a loopback host, with its own `ch
 
 If you build the extension with another `key`, add its origin to `allowedOrigins`. Each entry names one extension. The ID is on the extension card in `chrome://extensions`. See [Server origin](./getting-started/chrome-extension.md#server-origin).
 
+### Open in editor
+
+The panel and the overlay can ask the server to open a source file in your editor (see [Open a file in your editor](./inspectors/components.md#open-a-file-in-your-editor)). The request goes through the same gate and one-time code as every other call. The server then checks the path before it starts the editor:
+
+- It resolves the path against the workspace root, the directory the server runs in and the served app. A path that leaves all of them, with `..` or as an absolute path, is refused.
+- It follows symlinks and refuses the file when its real path is outside those directories.
+- It opens regular files only. Folders and missing files are refused.
+- Line and column must be positive whole numbers, or they are left out.
+
+The request names a file and a line, never a command. The editor comes from the server's environment. Agent tools can't open files.
+
 ### Page ownership
 
 Each tab, Angular Native app or Capacitor app that reports to the server has a page id. The first connection that reports a page owns it. A report or a `forget` for that page id from any other connection is ignored, so one client can't overwrite or remove the data of another tab. The answer to a request sent to a page, such as a navigation, a form action, an NgRx dispatch or a component pick, is taken only from the connection that owns that page.

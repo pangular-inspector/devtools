@@ -40,7 +40,7 @@ The tree shows up to 2000 component instances, and walks up to 256 levels of DOM
 
 ### Detail header
 
-The header of the selected instance shows the class name, the host tag, and the source file and line. In a development build, the file and line come from the debug info Angular's compiler attaches to the component, so they point at the exact class. Without it, they come from the source scan, matched by class name. They are missing when neither has them.
+The header of the selected instance shows the class name, the host tag, and the source file and line. In a development build, the file and line come from the debug info Angular's compiler attaches to the component, so they point at the exact class. Without it, they come from the source scan, matched by class name. They are missing when neither has them. With a live devtools server, the file and line are a button that opens the file in your editor. See [Open a file in your editor](#open-a-file-in-your-editor).
 
 In the [Chrome extension](../getting-started/chrome-extension.md), the header also has two buttons:
 
@@ -163,6 +163,24 @@ On Angular 20 and later, the page reads the tree about 250 ms after Angular runs
 While picking, presses and clicks in the app don't reach it, so menus and drag handles stay as they are.
 
 Press Escape, in the app or in the panel, or click **Cancel pick** to stop. Picking also stops after 15 seconds.
+
+Hold Alt (Option on macOS) while you click to also open the file of the picked component in your editor, at its class line. The tab still selects the component. This needs the debug info of a development build. Without it, the click only picks.
+
+### Open a file in your editor
+
+With a live devtools server, the source file and line of a component, provider, signal, store, pipe, route or Analog file is a button. Click it, or focus it and press Enter, to open the file at that line in your editor. In a list row that is itself a button, select the row and use the file in its details. In a static report, and in the Chrome extension without a devtools server, the file and line stay plain text.
+
+The server launches the editor on the machine it runs on. It picks the editor in this order:
+
+| Source                    | Example                                  |
+| ------------------------- | ---------------------------------------- |
+| `LAUNCH_EDITOR`           | `LAUNCH_EDITOR=code pnpm start`          |
+| An editor already running | VS Code, Cursor, WebStorm and other IDEs |
+| `VISUAL`, then `EDITOR`   | `EDITOR=vim`                             |
+
+If the host installs the `@devframes/service-open` service, its `editor` option takes over.
+
+The server only opens regular files inside the project. Paths outside the workspace root and the served app, symlinks that point outside them, folders and missing files are refused, and the button says why. See [Open in editor](../security.md#open-in-editor).
 
 ### Start from the Elements panel
 

@@ -19,7 +19,7 @@ import { PANGULAR_MCP_TOKEN_ENV, loadMcpToken } from './mcp-token.ts';
 import { authTokensFrom, isAuthTokens, type PangularAuthTokens } from './auth-tokens.ts';
 import { PANGULAR_EXTENSION_ORIGINS, isAllowedExtensionOrigin } from './extension-origin.ts';
 import { pickPangularConfig, type PangularConfig } from './config.ts';
-import { PANGULAR_LOGO_DATA_URI } from './brand.ts';
+import { PANGULAR_LOGO_DATA_URI, PANGULAR_PRIMARY_COLOR } from './brand.ts';
 import { createSsrMiddleware } from './ssr-middleware.ts';
 import { releaseServerState } from './server-state.ts';
 import pkg from '../package.json' with { type: 'json' };
@@ -67,7 +67,7 @@ function hubUi() {
     branding: {
       productName: 'Pangular Inspector',
       logo: PANGULAR_LOGO_DATA_URI,
-      primaryColor: '#f5a524',
+      primaryColor: PANGULAR_PRIMARY_COLOR,
     },
   });
   const dir = hubUiClientDir();

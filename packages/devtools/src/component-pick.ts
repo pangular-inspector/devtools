@@ -1,12 +1,24 @@
+import { componentSource } from './component-source.ts';
 import { componentHostOf, type ComponentDebugNg } from './component-tree.ts';
 import { elementId } from './element-id.ts';
 import { className } from './injector-tree.ts';
 import { POPUP_ROOT_ID } from './panel-frame.ts';
+import type { ComponentSource } from './types.ts';
 
 export const COMPONENT_PICK_TIMEOUT_MS = 15_000;
 
 export type ComponentPickResult =
-  { ok: true; id: string; name: string; tag: string } | { ok: false; error: string };
+  | {
+      ok: true;
+      id: string;
+      name: string;
+      tag: string;
+      /** The class's file and line, when a dev build has them. */
+      source?: ComponentSource;
+      /** Alt+click (Option+click): open `source` in the editor too. */
+      openInEditor?: true;
+    }
+  | { ok: false; error: string };
 
 const PRESS_EVENTS = ['pointerdown', 'mousedown'] as const;
 const RELEASE_EVENTS = ['pointerup', 'mouseup'] as const;
@@ -39,7 +51,8 @@ interface PickOptions {
 /**
  * Lets the user click or tap an element on the page and resolves with the
  * component that hosts it. Presses outside the popup do not reach the page. Escape, `cancel()` or the timeout end the pick. The floating
- * panel fades while picking so it does not cover the page.
+ * panel fades while picking so it does not cover the page. An Alt+click
+ * marks the result `openInEditor` when the component's source is known.
  */
 export function startComponentPick(options: PickOptions): {
   result: Promise<ComponentPickResult>;
@@ -80,12 +93,17 @@ export function startComponentPick(options: PickOptions): {
       const host = hostOf(event);
       const instance = host ? options.getNg()?.getComponent?.(host) : null;
       const ctor = (instance as { constructor?: unknown } | null)?.constructor;
+      const source = componentSource(instance);
       return host
         ? {
             ok: true,
             id: elementId(host),
             name: typeof ctor === 'function' ? className(ctor) : 'Anonymous',
             tag: host.tagName.toLowerCase(),
+            ...(source ? { source } : {}),
+            ...(source && (event as MouseEvent).altKey === true
+              ? { openInEditor: true as const }
+              : {}),
           }
         : { ok: false, error: 'That element is not inside an Angular component.' };
     };

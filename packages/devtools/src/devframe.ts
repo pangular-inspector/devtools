@@ -23,6 +23,8 @@ import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipe
 import { createPageOwners } from './rpc/page-owners.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
 import { getBuildMeta } from './rpc/build-meta.ts';
+import { createOpenInEditor, defaultLauncher } from './rpc/open-in-editor.ts';
+import { servedAnalogRoot } from './rpc/analog-scan.ts';
 import { getSignals } from './rpc/get-signals.ts';
 import { SIGNAL_TOOL_MAX, signalGraphText, type InspectSignalsArgs } from './rpc/signal-tools.ts';
 import { createSignalPeeks } from './rpc/signal-peeks.ts';
@@ -191,6 +193,7 @@ import {
 } from './rpc/pages.ts';
 import { LIVE_RESOURCE_NOTE, liveResourceText } from './rpc/resource-text.ts';
 import { trackHubDocks } from './hub-dock-status.ts';
+import { createHubFeed } from './hub-messages.ts';
 import { clip } from './text.ts';
 import { setRedaction } from './forms-privacy.ts';
 import {
@@ -263,11 +266,13 @@ const pangular = defineDevframe({
       const exposed = !definition.agent || agentAllowed({ id: definition.name }, config);
       my.rpc.register(exposed ? definition : { ...definition, agent: undefined });
     };
+    // Agent writes, NG errors and hydration mismatches, posted to the hub's messages.
+    const feed = createHubFeed(ctx, config);
     const agent = {
       registerTool: (tool: Parameters<typeof ctx.agent.registerTool>[0]) => {
         // The tier comes from AGENT_SAFETY, so the config is the one place that sets it.
         if (agentExposed(tool))
-          ctx.agent.registerTool({ ...tool, safety: agentSafety(tool.id, config) });
+          ctx.agent.registerTool(feed.wrapTool({ ...tool, safety: agentSafety(tool.id, config) }));
       },
       registerResource: (resource: Parameters<typeof ctx.agent.registerResource>[0]) => {
         if (agentExposed(resource)) ctx.agent.registerResource(resource);
@@ -281,6 +286,17 @@ const pangular = defineDevframe({
     register(getProviders);
     register(getNgrxStore);
     register(getBuildMeta);
+    register({
+      name: 'open-in-editor',
+      type: 'action',
+      jsonSerializable: true,
+      handler: createOpenInEditor({
+        // The served app can live in a subfolder (an Nx app, an Analog example),
+        // and its scans report paths from there.
+        roots: () => [ctx.workspaceRoot, ctx.cwd, servedAnalogRoot(ctx.cwd)],
+        launch: defaultLauncher(ctx.services),
+      }),
+    });
 
     // Tabs in the background stop reporting, so their last data stays until
     // they come back or close.
@@ -464,6 +480,7 @@ const pangular = defineDevframe({
             visibility.ttl(FORMS_PAGE_TTL_MS),
           ),
         );
+        feed.ngErrors(report.pageId, 'forms', report.setupErrors ?? []);
       },
     });
 
@@ -611,6 +628,7 @@ const pangular = defineDevframe({
           routerPages.delete(report.pageId);
           applyRouter(currentRouter(routerPages));
         }
+        feed.navigations(report.pageId, report.navigations);
         return { hasConfig: !!routerPages.get(report.pageId)?.config };
       },
     });
@@ -879,6 +897,7 @@ const pangular = defineDevframe({
           reportedAt: Date.now(),
         });
         applyHttpPages();
+        feed.hydration(page.pageId, httpPages.get(page.pageId)?.hydration);
         if (hasPayload) {
           const payload = nameServerFns(sanitizePayload(page.payload));
           httpPayloads.set(page.pageId, payload);
@@ -3270,10 +3289,19 @@ const pangular = defineDevframe({
         owners,
       });
     }
-    trackHubDocks(ctx, 'pangular', config, {
-      cwd: ctx.cwd,
-      capacitor: capacitorShared,
-      components: componentTree,
+    feed.attachDocks(
+      trackHubDocks(ctx, 'pangular', config, {
+        cwd: ctx.cwd,
+        capacitor: capacitorShared,
+        components: componentTree,
+      }),
+    );
+    // The panel says which dock it shows, which clears that dock's unseen count.
+    register({
+      name: 'hub-dock-seen',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (dockId: unknown) => feed.seen(dockId),
     });
   },
 });

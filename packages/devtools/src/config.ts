@@ -508,6 +508,20 @@ export function actionBlockedMessage(action: PangularAction): string {
 }
 
 /**
+ * Server RPC functions that belong to no inspector, so turning inspectors off
+ * keeps them. `open-in-editor` launches the editor on the dev machine for a
+ * file inside the project root; it is not an agent tool.
+ */
+export const SHARED_RPC: readonly string[] = [
+  'build-meta',
+  'claim-page',
+  'report-page-visibility',
+  'list-pages',
+  'open-in-editor',
+  'hub-dock-seen',
+];
+
+/**
  * The inspector each server RPC function belongs to. A function missing here
  * is shared and always registered.
  */
@@ -704,7 +718,8 @@ function agentName(id: string): string {
   return id.replace(/^pangular:/, '');
 }
 
-function agentInspector(id: string): PangularInspector | undefined {
+/** The inspector an agent tool or resource belongs to; `undefined` for shared ones. */
+export function agentInspector(id: string): PangularInspector | undefined {
   const name = agentName(id);
   return (
     AGENT_INSPECTOR[name] ??

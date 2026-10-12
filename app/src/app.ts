@@ -40,7 +40,8 @@ import { hostPageId, scopeToPage } from './page-id';
 import { angularNativePage, type PlatformPage } from './native-page';
 import { initialTab, storeTab, storedTab } from './tab-memory';
 import { detectBaseURL } from './base-url';
-import { clearHighlightsOnHide } from './rpc';
+import { clearHighlightsOnHide, rpcTry } from './rpc';
+import { EditorOpener } from './ui/source-link';
 import { viewAccent } from './view-accents';
 import {
   HUB_ALL_TOOLS,
@@ -992,6 +993,8 @@ export class App implements OnInit, OnDestroy {
     return (view && (VIEW_TAB[view] ?? VIEW_TABS[view]?.[0])) || 'dashboard';
   });
   rpc = signal<DevframeRpcClient | null>(null);
+  /** The hub dock opened last, a new object each time, so opening it again counts. */
+  private readonly openedDock = signal<{ dock: string } | null>(null);
   connected = signal(false);
   readonly connectionFailed = signal(false);
   private readonly hiddenPages = signal<string[]>([]);
@@ -1020,6 +1023,7 @@ export class App implements OnInit, OnDestroy {
   readonly navFade = signal({ start: false, end: false });
 
   constructor() {
+    inject(EditorOpener).use(this.rpc);
     afterNextRender(() => {
       const nav = this.nav()?.nativeElement;
       if (!nav || typeof ResizeObserver === 'undefined') return;
@@ -1033,6 +1037,13 @@ export class App implements OnInit, OnDestroy {
         this.revealActiveTab();
         this.measureNav();
       });
+    });
+    // Opening a dock clears the count of unseen messages on it.
+    effect(() => {
+      const opened = this.openedDock();
+      const client = this.rpc();
+      if (!opened || !client) return;
+      untracked(() => void rpcTry(client, 'hub-dock-seen', hubDockId(opened.dock)));
     });
     effect(() => {
       const theme = this.themeService.current();
@@ -1070,9 +1081,11 @@ export class App implements OnInit, OnDestroy {
   ngOnInit() {
     // The views and the full panel share one hub frame, so whichever loaded
     // first follows the rail.
-    this.stopFollowing = followHubDocks(HUB_DOCKS, (dock) =>
-      dock === ALL_TOOLS ? this.showFullPanel() : this.showView(dock),
-    );
+    this.stopFollowing = followHubDocks(HUB_DOCKS, (dock) => {
+      this.openedDock.set({ dock });
+      if (dock === ALL_TOOLS) this.showFullPanel();
+      else this.showView(dock);
+    });
     const restored = initialTab(
       location.hash,
       storedTab(this.tabScope()),

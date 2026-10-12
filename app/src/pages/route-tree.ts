@@ -21,6 +21,7 @@ import {
   type RouterPage,
   type SourceRoute,
 } from './router-types';
+import { SourceLink } from '../ui/source-link';
 
 /** "3 of 12 routes": the filtered count, worded like the other panel pages. */
 export function routeCountText(matches: number, total: number): string {
@@ -31,6 +32,7 @@ interface NodeRow {
   node: RouteNode;
   depth: number;
   source?: string;
+  at?: SourceRoute;
 }
 
 interface MatchResult {
@@ -49,7 +51,7 @@ interface TestedUrl {
 
 @Component({
   selector: 'app-route-tree',
-  imports: [JsonPipe],
+  imports: [JsonPipe, SourceLink],
   template: `
     <form class="test" (submit)="$event.preventDefault(); predict()">
       <label for="test-url">Test a URL</label>
@@ -186,10 +188,11 @@ interface TestedUrl {
                   @if (row.node.outlet) {
                     <span class="tag">outlet {{ row.node.outlet }}</span>
                   }
-                  @if (row.source) {
+                  @if (row.at) {
                     <span class="src"
-                      ><span class="visually-hidden">declared in </span>{{ row.source }}</span
-                    >
+                      ><span class="visually-hidden">declared in </span
+                      ><app-source-link [file]="row.at.file" [line]="row.at.line"
+                    /></span>
                   }
                 </td>
                 <td>
@@ -496,7 +499,7 @@ export class RouteTree {
           !!node.component?.toLowerCase().includes(needle) ||
           !!source?.toLowerCase().includes(needle)
         ) {
-          rows.push({ node, depth, source });
+          rows.push({ node, depth, source, at: found });
         }
         if (node.children) visit(node.children, depth + 1);
       }

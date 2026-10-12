@@ -19,6 +19,7 @@ import { pickPage, type ReportedPage } from '../live-pages';
 import { hostPageId } from '../page-id';
 import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
+import { SourceLink } from '../ui/source-link';
 
 interface SignalNode {
   id: string;
@@ -151,7 +152,7 @@ const KIND_COLORS: Record<string, string> = {
 
 @Component({
   selector: 'app-signal-inspector',
-  imports: [DatePipe, JsonPipe, NgTemplateOutlet, RovingList, Select],
+  imports: [DatePipe, JsonPipe, NgTemplateOutlet, RovingList, Select, SourceLink],
   template: `
     <div class="toolbar">
       <input
@@ -308,9 +309,7 @@ const KIND_COLORS: Record<string, string> = {
               <span class="node-label">{{ sig.name }}</span>
             </div>
             <div class="node-meta">
-              <span class="file" [title]="sig.file + ':' + sig.line"
-                >{{ sig.file }}:{{ sig.line }}</span
-              >
+              <app-source-link class="file" [file]="sig.file" [line]="sig.line" />
               @if (sig.component) {
                 <span class="sep" aria-hidden="true">·</span>
                 <span>in &lt;{{ sig.component }}&gt;</span>

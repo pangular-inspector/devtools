@@ -18,7 +18,9 @@ async function boot(cwd: string) {
   const ctx = await hub.context;
   const docks = [...ctx.docks.views.values()].map((dock) => ({
     id: dock.id,
+    type: dock.type,
     title: dock.title,
+    defaultChildId: 'defaultChildId' in dock ? dock.defaultChildId : undefined,
     url: 'url' in dock ? dock.url : undefined,
     frameId: 'frameId' in dock ? dock.frameId : undefined,
     defaultOrder: dock.defaultOrder ?? 0,
@@ -60,7 +62,7 @@ afterEach(async () => {
 describe('Pangular Inspector hub', () => {
   it('adds an All tools dock first, then a dock per tool, Analog included even outside Analog apps', async () => {
     const { docks } = await boot(makeProject({ 'package.json': '{}' }));
-    const ours = docks.filter((d) => d.id.startsWith('pangular:'));
+    const ours = docks.filter((d) => d.id.startsWith('pangular:') && d.type !== 'group');
     // The rail puts lower orders first.
     const rail = [...ours].sort((a, b) => a.defaultOrder - b.defaultOrder);
     expect(rail.map((d) => [d.id, d.url])).toEqual([
@@ -74,7 +76,13 @@ describe('Pangular Inspector hub', () => {
     ]);
     expect(rail[0].title).toBe('All tools');
     expect(ours.filter((d) => d.title.endsWith('Coming Soon'))).toEqual([]);
-    expect(ours.some((d) => d.groupId)).toBe(false);
+    // One rail button for all of them: the Pangular group, which opens All tools.
+    expect(ours.every((d) => d.groupId === 'pangular:group')).toBe(true);
+    expect(docks.find((d) => d.id === 'pangular:group')).toMatchObject({
+      type: 'group',
+      title: 'Pangular',
+      defaultChildId: 'pangular:all',
+    });
     expect(new Set(ours.map((d) => d.frameId))).toEqual(new Set(['pangular']));
     expect(docks.find((d) => d.id === 'pangular')?.visibility).toBe('false');
   });
@@ -83,10 +91,11 @@ describe('Pangular Inspector hub', () => {
     const { docks } = await boot(makeProject({ 'package.json': '{}' }));
     const status = Object.fromEntries(
       docks
-        .filter((d) => d.id.startsWith('pangular:'))
+        .filter((d) => d.id.startsWith('pangular:') && d.type !== 'group')
         .map((d) => [d.id, [d.title, d.badge, d.badgeVariant]]),
     );
     // The hub fades a badge with its button, so it would fail axe and cover the icon.
+    // A badge only counts unseen messages, and there are none yet.
     expect(status).toEqual({
       'pangular:all': ['All tools', undefined, undefined],
       'pangular:angular': ['Angular', undefined, undefined],
@@ -158,6 +167,32 @@ describe('Pangular Inspector hub', () => {
       undefined,
     ]);
     expect(update).toHaveBeenCalledTimes(4);
+  });
+
+  it('posts NG errors to the hub messages and counts them on the dock until it is opened', async () => {
+    const { ctx } = await boot(makeProject({ 'package.json': '{}' }));
+    const invoke = (name: string, arg: unknown) =>
+      ctx.rpc.invokeLocal(name as never, ...([arg] as never));
+    const report = {
+      pageId: 'pg1',
+      forms: [],
+      events: [],
+      setupErrors: ['NG01050: formControlName must be used with a parent formGroup directive'],
+    };
+    await invoke('pangular:push-forms', report);
+    await invoke('pangular:push-forms', report);
+    await vi.waitFor(() => expect(ctx.messages.entries.size).toBe(1));
+    const [message] = [...ctx.messages.entries.values()];
+    expect(message).toMatchObject({
+      level: 'error',
+      category: 'runtime',
+      message: 'NG01050: formControlName must be used with a parent formGroup directive',
+      labels: ['pangular', 'page:pg1'],
+    });
+    const badge = (id: string) => ctx.docks.views.get(id)?.badge;
+    expect([badge('pangular:angular'), badge('pangular:group')]).toEqual(['1', '1']);
+    await invoke('pangular:hub-dock-seen', 'pangular:angular');
+    expect([badge('pangular:angular'), badge('pangular:group')]).toEqual([undefined, undefined]);
   });
 
   it('serves the dock script, the viewer and the MCP tools', async () => {

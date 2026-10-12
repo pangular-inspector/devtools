@@ -15,6 +15,7 @@ import { hostPageId } from '../page-id';
 import { rpcCall, rpcTry as call } from '../rpc';
 import { actionAllowed, actionBlockedMessage } from '../devtools-config';
 import { Select } from '../ui/select';
+import { SourceLink } from '../ui/source-link';
 
 interface AnalogRoute {
   id: string;
@@ -314,7 +315,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
 
 @Component({
   selector: 'app-analog-inspector',
-  imports: [Select],
+  imports: [Select, SourceLink],
   template: `
     @if (project() === null && loadFailed()) {
       <div class="empty" role="alert">
@@ -428,7 +429,13 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                     <ol class="chain">
                       @for (r of e.match.chain; track r.id) {
                         <li>
-                          <span class="mono">{{ short(r.file) ?? r.fullPath }}</span>
+                          @if (r.file) {
+                            <app-source-link class="mono" [file]="r.file">{{
+                              short(r.file)
+                            }}</app-source-link>
+                          } @else {
+                            <span class="mono">{{ r.fullPath }}</span>
+                          }
                           <span class="pill" [attr.data-kind]="r.kind">{{ r.kind }}</span>
                         </li>
                       }
@@ -447,7 +454,13 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                       <ul class="plain">
                         @for (r of e.match.rejected.slice(0, 5); track $index) {
                           <li>
-                            <span class="mono">{{ short(r.file) ?? r.path }}</span>
+                            @if (r.file) {
+                              <app-source-link class="mono" [file]="r.file">{{
+                                short(r.file)
+                              }}</app-source-link>
+                            } @else {
+                              <span class="mono">{{ r.path }}</span>
+                            }
                             <span class="muted">{{ r.reason }}</span>
                           </li>
                         }
@@ -489,9 +502,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                       </td>
                       <td>
                         @if (row.route.file) {
-                          <span class="file"
+                          <app-source-link class="file" [file]="row.route.file"
                             ><span class="dir">{{ dir(row.route.file) }}</span
-                            >{{ base(row.route.file) }}</span
+                            >{{ base(row.route.file) }}</app-source-link
                           >
                         } @else {
                           <span class="muted">folder only</span>
@@ -653,7 +666,11 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                             <span class="method" [attr.data-method]="c.method">{{ c.method }}</span>
                             @if (fnOf(c); as fn) {
                               <strong class="mono url">{{ fn.name }}</strong>
-                              <span class="mono muted">{{ short(fn.file) }}</span>
+                              @if (fn.file) {
+                                <app-source-link class="mono muted" [file]="fn.file">{{
+                                  short(fn.file)
+                                }}</app-source-link>
+                              }
                             } @else {
                               <span class="mono url">{{ c.url }}</span>
                             }
@@ -752,9 +769,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                       </td>
                       <td class="mono">{{ api.path }}</td>
                       <td>
-                        <span class="file"
+                        <app-source-link class="file" [file]="api.file"
                           ><span class="dir">{{ dir(api.file) }}</span
-                          >{{ base(api.file) }}</span
+                          >{{ base(api.file) }}</app-source-link
                         >
                       </td>
                       <td class="actions">
@@ -799,9 +816,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                         </td>
                         <td class="mono">{{ fn.name }}</td>
                         <td>
-                          <span class="file"
+                          <app-source-link class="file" [file]="fn.file"
                             ><span class="dir">{{ dir(fn.file) }}</span
-                            >{{ base(fn.file) }}</span
+                            >{{ base(fn.file) }}</app-source-link
                           >
                         </td>
                         <td class="num tnum">{{ fnCalls(fn.id) }}</td>
@@ -940,9 +957,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                       </td>
                       <td>
                         @if (row.file) {
-                          <span class="file"
+                          <app-source-link class="file" [file]="row.file"
                             ><span class="dir">{{ dir(row.file) }}</span
-                            >{{ base(row.file) }}</span
+                            >{{ base(row.file) }}</app-source-link
                           >
                         }
                       </td>
@@ -1052,9 +1069,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                         <td class="mono">{{ f.slug }}</td>
                         <td class="muted nowrap tnum">{{ f.attributes['date'] || '' }}</td>
                         <td>
-                          <span class="file"
+                          <app-source-link class="file" [file]="f.file"
                             ><span class="dir">{{ dir(f.file) }}</span
-                            >{{ base(f.file) }}</span
+                            >{{ base(f.file) }}</app-source-link
                           >
                         </td>
                       </tr>
@@ -1095,9 +1112,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                       @for (item of card.items; track $index) {
                         <li>
                           @if (item.file) {
-                            <span class="file"
+                            <app-source-link class="file" [file]="item.file"
                               ><span class="dir">{{ dir(item.file) }}</span
-                              >{{ base(item.file) }}</span
+                              >{{ base(item.file) }}</app-source-link
                             >
                           }
                           @if (item.path && item.path !== item.file) {

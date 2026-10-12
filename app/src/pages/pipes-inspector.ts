@@ -14,6 +14,7 @@ import {
 import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
+import { SourceLink } from '../ui/source-link';
 
 interface UsageSite {
   file: string;
@@ -136,7 +137,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
 
 @Component({
   selector: 'app-pipes-inspector',
-  imports: [Select],
+  imports: [Select, SourceLink],
   template: `
     <p class="intro">
       Pipes declared in your source, the built-in pipes your templates use and library pipes seen on
@@ -343,7 +344,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                 <dd>{{ sourceLabel(p) }}</dd>
                 @if (!p.builtin && !p.runtime) {
                   <dt>File</dt>
-                  <dd class="mono">{{ p.file }}:{{ p.line }}</dd>
+                  <dd class="mono"><app-source-link [file]="p.file" [line]="p.line" /></dd>
                 }
                 @if (!p.runtime) {
                   <dt>Standalone</dt>
@@ -367,7 +368,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                 </h3>
                 <ul class="sites">
                   @for (u of p.usages; track u.file + ':' + u.line) {
-                    <li class="mono">{{ u.file }}:{{ u.line }}</li>
+                    <li class="mono"><app-source-link [file]="u.file" [line]="u.line" /></li>
                   }
                 </ul>
               </div>
@@ -596,7 +597,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                   } @else {
                     {{ f.pipe }}
                   }
-                  · {{ f.file }}:{{ f.line }}
+                  · <app-source-link [file]="f.file" [line]="f.line" />
                 </span>
               </div>
               <p class="finding-message">{{ f.message }}</p>

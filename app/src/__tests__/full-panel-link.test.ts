@@ -33,9 +33,12 @@ const capacitorPage = {
   dropped: 0,
 };
 
-function fakeClient(capacitorPages: Record<string, unknown>) {
+function fakeClient(capacitorPages: Record<string, unknown>, calls: unknown[][] = []) {
   const rpc = {
-    call: () => new Promise(() => {}),
+    call: (...args: unknown[]) => {
+      calls.push(args);
+      return new Promise(() => {});
+    },
     callEvent: () => Promise.resolve(),
     sharedState: (name: string) =>
       Promise.resolve(
@@ -82,11 +85,15 @@ async function settle(fixture: ComponentFixture<unknown>) {
   }
 }
 
-async function open(path: string, capacitorPages: Record<string, unknown> = {}) {
+async function open(
+  path: string,
+  capacitorPages: Record<string, unknown> = {},
+  calls: unknown[][] = [],
+) {
   history.replaceState(null, '', path);
   const fixture = TestBed.createComponent(App);
   await settle(fixture);
-  connection.resolve(fakeClient(capacitorPages));
+  connection.resolve(fakeClient(capacitorPages, calls));
   await settle(fixture);
   return { fixture, el: fixture.nativeElement as HTMLElement };
 }
@@ -174,6 +181,22 @@ describe('Hub rail and the full panel', () => {
     await settle(fixture);
     expect(el.querySelector('h1')?.textContent?.trim()).toBe('Pangular Inspector');
     expect(new URLSearchParams(location.search).get('view')).toBeNull();
+  });
+});
+
+describe('Hub dock badges', () => {
+  it('tells the server which dock is open, on load and on each switch, to clear its count', async () => {
+    const hub = fakeHub('pangular:ngrx');
+    const calls: unknown[][] = [];
+    const { fixture } = await open(`${BASE}?view=ngrx`, {}, calls);
+    const seen = () => calls.filter(([name]) => name === 'hub-dock-seen').map(([, dock]) => dock);
+    expect(seen()).toEqual(['pangular:ngrx']);
+
+    await hub.activate('pangular:all');
+    await settle(fixture);
+    await hub.activate('pangular:all');
+    await settle(fixture);
+    expect(seen()).toEqual(['pangular:ngrx', 'pangular:all', 'pangular:all']);
   });
 });
 

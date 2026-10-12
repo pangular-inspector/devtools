@@ -7,6 +7,7 @@ import {
   AGENT_SAFETY,
   PANGULAR_INSPECTORS,
   RPC_INSPECTOR,
+  SHARED_RPC,
   agentAllowed,
   agentSafety,
   pangularConfigProblems,
@@ -19,8 +20,6 @@ import { createPangular } from '../devframe.ts';
 import { initPangularHub } from '../hub.ts';
 import { makeProject } from './analog-fixture.ts';
 import { isSecretKey, setRedaction } from '../forms-privacy.ts';
-
-const SHARED_RPC = ['build-meta', 'claim-page', 'report-page-visibility', 'list-pages'];
 
 async function boot(config?: PangularConfig) {
   const host = {
@@ -227,6 +226,19 @@ describe('agent tool and RPC registration', () => {
     expect(Object.keys(AGENT_INSPECTOR).every((id) => [...tools, ...resources].includes(id))).toBe(
       true,
     );
+  });
+
+  it('keeps open-in-editor with every inspector off, as an RPC only, inside the project root', async () => {
+    const { rpc, tools, invoke } = await boot({ inspectors: offAll() });
+    expect(rpc).toContain('open-in-editor');
+    expect(tools).not.toContain('open-in-editor');
+    expect(await invoke('open-in-editor', { file: '../../../../etc/passwd' })).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/outside the project root/),
+    });
+    expect(await invoke('open-in-editor', { file: 'package.json/nope' })).toMatchObject({
+      ok: false,
+    });
   });
 
   it('registers everything by default', async () => {

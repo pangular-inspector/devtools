@@ -113,7 +113,7 @@ The panel follows the color scheme of the hub, which follows your system unless 
 
 ### Docks in the side rail
 
-When the page's server mounts the hub (`/__devframes/`), the button opens the whole hub. A side rail shows **All tools** first, then one dock per tool:
+When the page's server mounts the hub (`/__devframes/`), the button opens the whole hub. The side rail holds every Pangular dock in one **Pangular** group. Pick the group to see its docks: **All tools** first, then one dock per tool. The group opens **All tools** the first time, then the dock you picked last.
 
 | Dock           | Shows                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -142,6 +142,24 @@ The Analog, Angular Native and Capacitor docks open setup steps when their tool 
 | Capacitor      | `Capacitor: no app connected`      | A Capacitor app reports              |
 
 The tooltip comes back when the app stops reporting and its data expires. The Angular and NgRx docks always have data. The NativeScript dock always shows setup steps, because a NativeScript app's data shows in the Angular dock, so its tooltip stays **NativeScript**.
+
+### Messages and badges
+
+The hub keeps a list of messages. Pangular Inspector posts to it when something happens in the app:
+
+| Message                                      | Level | Category    | Posted when                                                                                                            |
+| -------------------------------------------- | ----- | ----------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `Agent ran <tool>`                           | info  | `agent`     | An [action tool](../agents/tools.md#action-tools) that changes the app or the server finishes, such as `set-http-rule` |
+| The NG error, such as `NG01203: ...`         | error | `runtime`   | A page reports a forms setup error (`NG01xxx`)                                                                         |
+| `Navigation failed (NG04002): ...`           | error | `runtime`   | A page reports a failed navigation                                                                                     |
+| `Hydration mismatch at <app-cart>`           | error | `hydration` | A page reports a node that failed to hydrate, with the expected and actual node                                        |
+| The hydration message, such as `NG0505: ...` | warn  | `hydration` | A page logs an `NG05xx` hydration message                                                                              |
+
+Each message names the pages it came from (also as `page:<pageId>` labels) and has an **Open in Pangular** action that opens the dock that shows it. An error opens a toast the first time it shows up. When the same item comes back, from the same page after a reload or from another tab, the first message counts it (`(3 times)`) instead of posting it again. A call that only reads, like `change-detection` without `record`, posts nothing. Text in messages is masked like the rest of the panel. An agent message shows the first line of the tool's answer and the `page` argument, not the other arguments.
+
+A dock shows how many items it has that you have not seen yet: NgRx writes on **NgRx**, Analog writes on **Analog**, and everything else on **Angular**. The **Pangular** group shows the total. The badge is red while one of them is an error or a warning. Opening a dock clears its count, and opening **All tools** clears every count.
+
+Messages follow the config. An inspector that is off posts nothing (forms errors need `inspectors.forms`, failed navigations `inspectors.router`, hydration messages `inspectors.http`), and an agent tool turned off with `agent.tools`, `agent.readOnly` or `actions` posts nothing either. See [Configuration](./configuration.md).
 
 ### Full-page viewer
 

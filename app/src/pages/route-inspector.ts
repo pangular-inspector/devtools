@@ -11,12 +11,13 @@ import {
 import type { DevframeRpcClient } from 'devframe/client';
 import { isStaticReport } from '../rpc';
 import { LiveRoute } from './live-route';
-import { SHARED_STYLES, sourceLocation, type SourceRoute } from './router-types';
+import { SHARED_STYLES, type SourceRoute } from './router-types';
 import type { ComponentFocus } from '../types/component-focus.types';
+import { SourceLink } from '../ui/source-link';
 
 @Component({
   selector: 'app-route-inspector',
-  imports: [LiveRoute],
+  imports: [LiveRoute, SourceLink],
   template: `
     <app-live-route
       [rpc]="rpc()"
@@ -153,7 +154,9 @@ import type { ComponentFocus } from '../types/component-focus.types';
                         ><span class="visually-hidden">none</span>
                       }
                     </td>
-                    <td class="file">{{ location(route) }}</td>
+                    <td class="file">
+                      <app-source-link [file]="route.file" [line]="route.line" />
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -281,10 +284,6 @@ export class RouteInspector {
       ),
       ...(route.resolvers ?? []).map((resolver) => `resolve ${resolver}`),
     ];
-  }
-
-  location(route: SourceRoute) {
-    return sourceLocation(route);
   }
 
   onFilterInput(event: Event) {
