@@ -1145,19 +1145,31 @@ export class App implements OnInit, OnDestroy {
         );
         client.events.on('connection:status', (status) => {
           this.connected.set(status === 'connected');
+          // The client doesn't reconnect by itself, so a dropped one is replaced.
+          if ((status !== 'disconnected' && status !== 'error') || this.rpc() !== client) return;
+          this.rpc.set(null);
+          client.close?.();
+          this.retryLater();
         });
       },
       () => {
         this.connecting = false;
         if (this.destroyed) return;
-        this.connectionFailed.set(true);
         this.analogKnown.set(true);
         this.nativeKnown.set(true);
-        // A dev server that starts slowly or restarts answers a moment later.
-        const delay = RETRY_DELAYS_MS[Math.min(this.retries++, RETRY_DELAYS_MS.length - 1)];
-        this.retryTimer = setTimeout(() => this.connect(), delay);
+        this.retryLater();
       },
     );
+  }
+
+  /** Shows the connection error and calls `connect()` again after the next backoff delay. */
+  private retryLater() {
+    if (this.destroyed) return;
+    this.connectionFailed.set(true);
+    // A dev server that starts slowly or restarts answers a moment later.
+    const delay = RETRY_DELAYS_MS[Math.min(this.retries++, RETRY_DELAYS_MS.length - 1)];
+    clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(() => this.connect(), delay);
   }
 
   /** Tries the connection again at once, instead of waiting for the next retry. */

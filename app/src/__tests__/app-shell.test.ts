@@ -6,6 +6,8 @@ const connection = vi.hoisted(() => ({
   attempts: 0,
   /** What each attempt does: `true` connects, `false` fails. */
   answers: [] as boolean[],
+  /** Sends a `connection:status` event to the last connected client's listeners. */
+  emitStatus: (_status: string) => {},
 }));
 
 function fakeClient(): DevframeRpcClient {
@@ -14,10 +16,18 @@ function fakeClient(): DevframeRpcClient {
     callEvent: () => Promise.resolve(),
     sharedState: () => Promise.resolve({ value: () => null, on: () => () => {} }),
   };
+  const listeners: ((status: string) => void)[] = [];
+  connection.emitStatus = (status) => listeners.forEach((listener) => listener(status));
   return {
     connectionMeta: { configs: {} },
     scope: () => ({ rpc }),
-    events: { on: () => () => {} },
+    events: {
+      on: (name: string, listener: (status: string) => void) => {
+        if (name === 'connection:status') listeners.push(listener);
+        return () => {};
+      },
+    },
+    close: () => {},
   } as unknown as DevframeRpcClient;
 }
 
@@ -77,6 +87,24 @@ describe('App connection retry', () => {
     const fixture = TestBed.createComponent(App);
     await settle(fixture);
     expect(connection.attempts).toBe(1);
+
+    await vi.waitFor(() => expect(connection.attempts).toBe(2), { timeout: 3000 });
+    await settle(fixture);
+    expect(status(fixture)).toBe('Live');
+    fixture.destroy();
+  });
+
+  it('connects again when an open connection drops', async () => {
+    connection.answers = [true, true];
+    const fixture = TestBed.createComponent(App);
+    await settle(fixture);
+    expect(status(fixture)).toBe('Live');
+
+    // The dev server restarted: the old client is closed for good.
+    connection.emitStatus('disconnected');
+    await settle(fixture);
+    expect(status(fixture)).toBe('Disconnected');
+    expect(host(fixture).querySelector('.connection-error button')).not.toBeNull();
 
     await vi.waitFor(() => expect(connection.attempts).toBe(2), { timeout: 3000 });
     await settle(fixture);
