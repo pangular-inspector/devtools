@@ -205,6 +205,40 @@ describe('Pangular Inspector hub', () => {
     const forms = (await ctx.agent.invoke('pangular:inspect-forms', {})) as { markdown: string };
     expect(forms.markdown).toContain('No forms');
   });
+
+  it('lists the posted messages for the hub UI and serves the Messages panel from the hub', async () => {
+    const { hub, ctx } = await boot(makeProject({ 'package.json': '{}' }));
+    expect(ctx.rpc.has('devframes:plugin:messages:list')).toBe(true);
+    const report = {
+      pageId: 'pg1',
+      forms: [],
+      events: [],
+      setupErrors: ['NG01050: formControlName must be used with a parent formGroup directive'],
+    };
+    await ctx.rpc.invokeLocal('pangular:push-forms' as never, ...([report] as never));
+    await vi.waitFor(() => expect(ctx.messages.entries.size).toBe(1));
+    const list = (await ctx.rpc.invokeLocal(
+      'devframes:plugin:messages:list' as never,
+      ...([undefined] as never),
+    )) as { entries: { message: string; level: string; notify?: boolean }[]; full: boolean };
+    expect(list.full).toBe(true);
+    expect(list.entries).toEqual([
+      expect.objectContaining({
+        message: 'NG01050: formControlName must be used with a parent formGroup directive',
+        level: 'error',
+        notify: true,
+      }),
+    ]);
+    const dock = ctx.docks.views.get('devframes_plugin_messages');
+    expect(dock && 'url' in dock ? dock.url : undefined).toBe(
+      '/__devframes/devframes_plugin_messages/',
+    );
+    const panel = await hub.handler(
+      new Request('http://localhost/__devframes/devframes_plugin_messages/'),
+    );
+    expect(panel.status).toBe(200);
+    expect(await panel.text()).toContain('<html');
+  });
 });
 
 const PANGULAR_EXTENSION = 'chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk';

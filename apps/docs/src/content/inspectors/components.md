@@ -182,7 +182,7 @@ The server launches the editor on the machine it runs on. It picks the editor in
 | An editor already running | VS Code, Cursor, WebStorm and other IDEs |
 | `VISUAL`, then `EDITOR`   | `EDITOR=vim`                             |
 
-If the host installs the `@devframes/service-open` service, its `editor` option takes over.
+If the host installs the `@devframes/service-open` service (the Messages devframe in the hub brings it in), the server tries it first so its `editor` option applies. That service only opens files under the workspace root, so when it refuses a file, such as one in a served app outside the workspace, the server opens it the way the table above describes.
 
 The server only opens regular files inside the project. Paths outside the workspace root and the served app, symlinks that point outside them, folders and missing files are refused, and the button says why. See [Open in editor](../security.md#open-in-editor).
 

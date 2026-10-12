@@ -117,20 +117,36 @@ interface OpenServiceApi {
   openInEditor: (input: { path: string; line?: number; column?: number }) => Promise<void>;
 }
 
+/** Opens the file through devframe's `launch-editor`, which needs no root of its own. */
+export const launchEditorDirectly: EditorLauncher = async (path, line, column) => {
+  const { launchEditor } = await import('devframe/utils/launch-editor');
+  launchEditor(line ? `${path}:${line}${column ? `:${column}` : ''}` : path);
+};
+
 /**
- * Launches through the `@devframes/service-open` wire service when the host
- * installed it, so its editor setting applies, and otherwise through
- * devframe's `launch-editor`, which picks the editor from `LAUNCH_EDITOR`,
- * then a running editor, then `VISUAL` or `EDITOR`.
+ * Launches a path that `resolveEditorFile` already allowed. It tries the
+ * `@devframes/service-open` wire service first, when the host installed it,
+ * so its editor setting applies. That service only allows the workspace root
+ * (and its own extra roots), so a file Pangular allows under the server's
+ * directory or a served app outside the workspace can be refused there. When
+ * the service is missing, refuses or throws, the file goes to devframe's
+ * `launch-editor`, which picks the editor from `LAUNCH_EDITOR`, then a
+ * running editor, then `VISUAL` or `EDITOR`.
  */
-export function defaultLauncher(services: { get(id: string): unknown }): EditorLauncher {
+export function defaultLauncher(
+  services: { get(id: string): unknown },
+  fallback: EditorLauncher = launchEditorDirectly,
+): EditorLauncher {
   return async (path, line, column) => {
     const service = services.get(OPEN_SERVICE_PACKAGE) as OpenServiceApi | undefined;
     if (typeof service?.openInEditor === 'function') {
-      await service.openInEditor({ path, line, column });
-      return;
+      try {
+        await service.openInEditor({ path, line, column });
+        return;
+      } catch {
+        // Refused (outside the service's roots) or failed: use launch-editor.
+      }
     }
-    const { launchEditor } = await import('devframe/utils/launch-editor');
-    launchEditor(line ? `${path}:${line}${column ? `:${column}` : ''}` : path);
+    await fallback(path, line, column);
   };
 }
