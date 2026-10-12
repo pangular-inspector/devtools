@@ -169,7 +169,10 @@ export function startPangularHub(
   gate?: HubOriginPolicy,
 ): PangularHub {
   const { browserDistFolder, auth: authOption, ...hubOptions } = options;
-  const { config, rest } = pickPangularConfig(hubOptions);
+  const { config, rest: picked } = pickPangularConfig(hubOptions);
+  // Behind a gate, a shared `server` is attached through the gated `attach`
+  // below, so its upgrades pass the same checks as `handleUpgrade`.
+  const { server: sharedServer, ...rest } = picked;
   const authTokens = isAuthTokens(authOption) ? authTokensFrom(authOption.tokens) : [];
   const auth = isAuthTokens(authOption) ? undefined : authOption;
   const hub = initHub({
@@ -182,9 +185,11 @@ export function startPangularHub(
     mcp: hubMcpFor({ ...rest, auth }),
     devframes: [createPangular(config, { authTokens })],
     ui: hubUi(),
+    ...(gate || sharedServer === undefined ? {} : { server: sharedServer }),
   });
   const hubs = (hubRegistry().hubs ??= new Map());
   let closing: Promise<void> | undefined;
+  let detachShared: (() => void) | undefined;
   const own: PangularHub = {
     ...hub,
     ...(gate ? gatedTransport(hub, gate) : {}),
@@ -192,12 +197,14 @@ export function startPangularHub(
     ssrMiddleware: createSsrMiddleware({ skip: [hub.base], browserDistFolder }),
     close: () => {
       if (hubs.get(hub.base) === own) hubs.delete(hub.base);
+      detachShared?.();
       // Stop the HTTP registry timers and SSR capture this hub installed, as Vite does.
       return (closing ??= hub.context
         .then(releaseServerState, () => undefined)
         .finally(() => hub.close()));
     },
   };
+  if (gate && sharedServer) detachShared = own.attach(sharedServer);
   const previous = hubs.get(hub.base);
   hubs.set(hub.base, own);
   void previous?.close();
@@ -226,7 +233,7 @@ export function hubGatePolicy(
 function gatedTransport(
   hub: ReturnType<typeof initHub>,
   policy: HubOriginPolicy,
-): Pick<ReturnType<typeof initHub>, 'nodeMiddleware' | 'handleUpgrade' | 'handler'> {
+): Pick<ReturnType<typeof initHub>, 'nodeMiddleware' | 'handleUpgrade' | 'handler' | 'attach'> {
   const blocked = blockedOriginReporter((message) => console.warn(message));
   return {
     // A web request carries no peer address, so the handler checks the
@@ -251,6 +258,30 @@ function gatedTransport(
     handleUpgrade: (req, socket, head) => {
       if (isAllowedHubRequest(req, policy, blocked)) hub.handleUpgrade(req, socket, head);
       else socket.destroy();
+    },
+    // The hub's own `attach` adds an ungated upgrade listener. Take the
+    // listeners it adds off the server and run them behind the gate instead,
+    // for hub paths only, so the server's other upgrades are left alone.
+    attach: (server) => {
+      const before = new Set(server.listeners('upgrade'));
+      const detach = hub.attach(server);
+      const added = server.listeners('upgrade').filter((listener) => !before.has(listener)) as ((
+        ...args: unknown[]
+      ) => void)[];
+      for (const listener of added) server.off('upgrade', listener);
+      const gated = (...args: Parameters<ReturnType<typeof initHub>['handleUpgrade']>) => {
+        const [req, socket] = args;
+        if (isHubPath(req.url, hub.base) && !isAllowedHubRequest(req, policy, blocked)) {
+          socket.destroy();
+          return;
+        }
+        for (const listener of added) listener.apply(server, args);
+      };
+      server.on('upgrade', gated);
+      return () => {
+        server.off('upgrade', gated);
+        detach();
+      };
     },
   };
 }

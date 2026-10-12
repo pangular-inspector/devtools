@@ -114,13 +114,31 @@ const server = serve({fetch: app.fetch, port: 4000});
 devtools.attach(server);
 ```
 
-The other hub options, access control and the production warning are the same as for Express. See [Hub options](./express.md#hub-options) and [Access control](./express.md#access-control).
+The upgrades that `attach(server)` routes pass the same request gate as `nodeMiddleware`. Upgrades outside `devtools.base` are left to the server.
+
+## Access and production
+
+The other hub options are the same as for Express. See [Hub options](./express.md#hub-options).
+
+The hub answers `403` to a request it refuses. Each handler checks what it can see of the request:
+
+| Handler                               | Checks                                                                                         |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `nodeMiddleware` and `attach(server)` | A loopback peer address, a loopback or allowed `Host`, and the origin check, as for Express.   |
+| `handler`                             | The `Host`, `Origin` and `Sec-Fetch-Site` headers only. A web request carries no peer address. |
+
+A client outside the browser can set any header, so `handler` alone doesn't keep other machines out. Keep the one-time code (`auth`) on, or bind the server to `localhost`. Pass `allowLan: true` to answer other machines on purpose. [Access control](./express.md#access-control) covers the code and the origin check.
+
+The hub is off when `NODE_ENV` is `production`. `handler` then answers 404, `attach(server)` does nothing and `devtools.enabled` is `false`. Check `enabled` before you mount the hub, and pass `enabled: true` only on a server only you can reach. See [Production](./express.md#production).
 
 ## Troubleshooting
 
 <ngmd-accordion>
   <ngmd-accordion-item title="Every app route answers 404" open>
     <code>devtools.handler</code> is mounted on a route that matches more than <code>devtools.base</code>. It answers 404 outside the base and doesn't fall through. Mount it on <code>`${devtools.base}*`</code> (Hono) or <code>`${devtools.base}**`</code> (h3).
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="The hub answers 403">
+    The request gate refused the request. Open the app on <code>localhost</code> or <code>127.0.0.1</code>, not on a LAN address or a host name. To reach the hub from another machine, pass <code>allowLan: true</code> and keep <code>auth</code> on.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel does not connect">
     The hub advertises a WebSocket that no upgrade reaches. Pass <code>ws: false</code>, pass <code>ws: {sidecar: true}</code>, or call <code>devtools.attach(server)</code> on the Node server you start.

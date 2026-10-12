@@ -153,6 +153,34 @@ describe('the Express hub request gate', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('Ignoring allowLan'));
   });
 
+  it('gates the upgrades of a server given to attach() or the server option', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    for (const shared of [false, true]) {
+      const server = createServer((_req, res) => res.end());
+      servers.push(server);
+      const hub = initPangularHub({
+        cwd: makeProject({ 'package.json': '{}' }),
+        auth: false,
+        ...(shared ? { server } : {}),
+      });
+      hubs.push(hub);
+      if (!shared) hub.attach(server);
+      await hub.ready;
+      const [listener] = server.listeners('upgrade');
+      const upgrade = (url: string, remoteAddress: string, host: string) => {
+        const socket = { remoteAddress, destroy: vi.fn() };
+        const req = { url, headers: { host }, socket };
+        listener!.call(server, req, socket, Buffer.alloc(0));
+        return socket.destroy;
+      };
+      expect(server.listeners('upgrade')).toHaveLength(1);
+      expect(upgrade('/__devframes/__ws', '127.0.0.1', 'evil.test')).toHaveBeenCalled();
+      expect(upgrade('/__devframes/__ws', '192.168.1.30', '192.168.1.20:4000')).toHaveBeenCalled();
+      // Upgrades outside the hub, such as a dev server's own socket, are left alone.
+      expect(upgrade('/hmr', '192.168.1.30', 'evil.test')).not.toHaveBeenCalled();
+    }
+  });
+
   it('turns the gate off with allowedOrigins: false', () => {
     expect(hubGatePolicy(false)).toBeUndefined();
   });
