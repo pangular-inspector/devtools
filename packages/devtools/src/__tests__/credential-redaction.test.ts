@@ -105,6 +105,8 @@ describe('Authorization credentials', () => {
 });
 
 describe('well-known secret shapes', () => {
+  // Every value below is made up. They only match the provider formats so the redaction
+  // patterns can be tested; none of them is a real or working key.
   const secrets: [string, string][] = [
     ['sk_live_51Hx9QaLkdW3n4bZ0Tq8YxF2', `sk_live_${REDACTED}`],
     ['rk_test_51Hx9QaLkdW3n4bZ0Tq8YxF2', `rk_test_${REDACTED}`],
