@@ -17,6 +17,7 @@ const SELECTED =
   host: {
     '(keydown)': 'onKey($event)',
     '(focusin)': 'onFocusIn($event)',
+    '(focusout)': 'onFocusOut($event)',
   },
 })
 export class RovingList {
@@ -25,6 +26,8 @@ export class RovingList {
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private current: HTMLElement | null = null;
+  /** Whether focus is in the list, kept when the focused item is removed rather than left. */
+  private focusInside = false;
 
   constructor() {
     const destroyRef = inject(DestroyRef);
@@ -55,21 +58,39 @@ export class RovingList {
   /** Keeps exactly one item in the Tab order. */
   private sync() {
     const items = this.items();
+    let refocus = false;
     if (!this.current || !this.host.contains(this.current)) {
+      // A removed item that had focus leaves it on the page body, outside the list.
+      const active = document.activeElement;
+      refocus = this.focusInside && (!active || active === document.body);
       this.current = items.find((item) => item.matches(SELECTED)) ?? items[0] ?? null;
     }
     for (const item of items) {
       const tabIndex = item === this.current ? '0' : '-1';
       if (item.getAttribute('tabindex') !== tabIndex) item.setAttribute('tabindex', tabIndex);
     }
+    if (refocus) this.current?.focus();
   }
 
   onFocusIn(event: FocusEvent) {
+    this.focusInside = true;
     const target = event.target as HTMLElement | null;
     if (!this.isItem(target) || target === this.current) return;
     this.current?.setAttribute('tabindex', '-1');
     this.current = target;
     target.setAttribute('tabindex', '0');
+  }
+
+  onFocusOut(event: FocusEvent) {
+    const next = event.relatedTarget as Node | null;
+    if (next && this.host.contains(next)) return;
+    const target = event.target as HTMLElement | null;
+    // Some browsers send focusout when the focused item is removed; that isn't leaving.
+    setTimeout(() => {
+      if (target?.isConnected !== false && !this.host.contains(document.activeElement)) {
+        this.focusInside = false;
+      }
+    });
   }
 
   onKey(event: KeyboardEvent) {

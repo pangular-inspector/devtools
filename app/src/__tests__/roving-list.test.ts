@@ -91,4 +91,35 @@ describe('RovingList', () => {
     await settle(fixture);
     expect(tabStops(fixture)).toEqual(['c']);
   });
+  it('moves focus to the new stop when the focused row is removed', async () => {
+    const fixture = mount();
+    await settle(fixture);
+    rows(fixture)[1].focus();
+
+    fixture.componentInstance.items.set(['c', 'd']);
+    await settle(fixture);
+    expect(document.activeElement).toBe(rows(fixture)[0]);
+    press('ArrowDown');
+    expect(document.activeElement?.textContent?.trim()).toBe('d');
+  });
+
+  it('leaves focus alone when it had already left the list', async () => {
+    const fixture = mount();
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    await settle(fixture);
+
+    rows(fixture)[1].focus();
+    outside.focus();
+    fixture.componentInstance.items.set(['c', 'd']);
+    await settle(fixture);
+    expect(document.activeElement).toBe(outside);
+
+    rows(fixture)[0].focus();
+    rows(fixture)[0].blur();
+    await settle(fixture);
+    fixture.componentInstance.items.set(['d']);
+    await settle(fixture);
+    expect(document.activeElement).toBe(document.body);
+  });
 });
