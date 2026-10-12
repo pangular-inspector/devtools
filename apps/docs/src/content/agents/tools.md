@@ -134,7 +134,7 @@ The `@defer` blocks of each page: the component that holds each one, its state, 
 
 Without a development build, the page has no util to read defer blocks, and the answer says so.
 
-Each page lists at most 50 blocks in the table and 50 under **Needs attention**, with a note on how many more are not shown. The whole answer stops at 20,000 characters. If several tabs report, pass `page` to read one. The **Defer blocks** list on the [Components](../inspectors/components.md#defer-blocks) page has every block.
+Each page lists at most 50 blocks in the table and 50 under **Needs attention**, with a note on how many more are not shown. The whole answer stops at 20,000 characters. If several tabs report, pass `page` to read one. The **Defer blocks** list on the [Components](../inspectors/components.md#defer-blocks) page has every block the page reported. A page reports its first 500 blocks. When it has more, the answer says so.
 
 ### change-detection <ngmd-badge variant="alpha">Action</ngmd-badge>
 
@@ -145,7 +145,7 @@ Change detection cycles recorded with Angular's profiler: the slowest components
 | `record` | no       | `start` starts a fresh recording on a page that is not recording and leaves a running one as it is, `stop` stops it and keeps the cycles, `clear` empties it. Leave out to read. |
 | `limit`  | no       | Rows per list. Default 10, at most 50.                                                                                                                                           |
 
-Without `page`, it reads the page that is recording, and `record` goes to every connected page. A `page` that names no connected tab gets the list of connected tabs. A connected tab that has not recorded yet gets a hint to start a recording there. The answer starts with the change detection mode of the page it reports on: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. With `agent.readOnly`, the tool has no `record` argument and is marked read-only, so start the recording from the panel. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many.
+Without `page`, it reads the page that is recording, and `record` goes to every connected page. A `page` that names no connected tab gets the list of connected tabs. A connected tab that has not recorded yet gets a hint to start a recording there. The answer starts with the change detection mode of the page it reports on: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. With `agent.readOnly`, the tool has no `record` argument and is marked read-only, so start the recording from the panel. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many. A recording lists at most 100 component classes and counts checks for up to 2000 instances. When it checked more, the answer says how many were left out.
 
 ### inspect-signals
 
@@ -187,7 +187,7 @@ The injectors a page reported. Element injectors list what each component inject
 
 A `selector` that names an element injector returns it with its lookup path resolved to names and provided tokens. One that names an environment injector, in any case, returns that injector's providers, what the services it already created inject, and its parent injectors. When nothing matches, the answer lists the tags and environment injector names on the page to retry with.
 
-Without `selector` or `token`, the answer is the whole tree and says which change detection mode the page runs. The answer stays within 20,000 characters and its JSON always parses. A larger tree shows element injectors as an outline (id, name, type, component, and provider and dependency counts), and when that is still too long it leaves out the deepest injectors and says how many. The environment injectors are always there, as an outline when they are large, and without their deepest injectors when even that outline is too long. A `selector` or `token` answer that is too long keeps whole entries and says how many it shows. `selector` and `token` take at most 500 characters each. When the page has more than 2000 element injectors, the answer says that it holds only the first 2000.
+Without `selector` or `token`, the answer is the whole tree and says which change detection mode the page runs. The answer stays within 20,000 characters and its JSON always parses. A larger tree shows element injectors as an outline (id, name, type, component, and provider and dependency counts), and when that is still too long it leaves out the deepest injectors and says how many. The environment injectors are always there, as an outline when they are large, and without their deepest injectors when even that outline is too long. A `selector` or `token` answer that is too long keeps whole entries and says how many it shows. `selector` and `token` take at most 500 characters each. When the page reported only part of its injector tree (it stops at 2000 element injectors, 2500 in all), the answer says so.
 
 ## NgRx
 

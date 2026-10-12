@@ -7,8 +7,9 @@ import { SHARED_STYLES, type RouterPage } from './router-types';
     @if (page().setup; as setup) {
       @if (setup.mode === 'events-only') {
         <p class="note" role="note">
-          Events-only mode: this build has no debug utils (production build or unusual setup), so
-          the route config, lint and actions are limited.
+          Events-only mode: this build lacks the injector provider debug helper, so setup detection
+          is limited. The preloader, the scroller and the router providers can't be found, and the
+          features and options below can show defaults.
         </p>
       }
       <dl class="facts">

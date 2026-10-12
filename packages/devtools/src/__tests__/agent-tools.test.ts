@@ -814,11 +814,15 @@ describe('agent tools', () => {
     });
     const state = await injectorState();
     expect(state).toMatchObject({ truncated: true, pages: { p1: { truncated: true } } });
-    expect(await call('inspect-providers', '')).toMatch(/more than 2000 element injectors/);
-    expect(await call('inspect-providers', 'A')).toMatch(/more than 2000 element injectors/);
+    expect(await call('inspect-providers', '')).toMatch(
+      /only part of its injector tree \(it stops at 2000 element injectors, 2500 in all\)/,
+    );
+    expect(await call('inspect-providers', 'A')).toMatch(
+      /only part of its injector tree \(it stops at 2000 element injectors, 2500 in all\)/,
+    );
     await push('push-injector-tree', { pageId: 'p1', roots: [injectorRoot('A')], environment: [] });
     expect(await injectorState()).toMatchObject({ truncated: false });
-    expect(await call('inspect-providers', '')).not.toMatch(/more than 2000/);
+    expect(await call('inspect-providers', '')).not.toMatch(/only part of its injector tree/);
   });
 
   it('resolves a class name on the most recent tab and names the other tabs', async () => {

@@ -621,7 +621,7 @@ export function routerConfigText(
   if (!setup)
     return `Page ${code(page.pageId)} has not reported its router setup yet.${freshness(page, now)}`;
   const lines = [
-    `**Mode** ${setup.mode === 'full' ? 'full' : 'events-only (no debug utils: production build or unusual setup; config, lint and actions are limited)'}`,
+    `**Mode** ${setup.mode === 'full' ? 'full' : 'events-only (`ng.ɵgetInjectorProviders` is missing, so setup detection is limited: the preloader, the scroller and the router providers cannot be found, and the features and options below can show defaults)'}`,
     `**Set up with** ${setup.setupKind}${setup.routers > 1 ? `, ${setup.routers} routers on the page (showing the first in use)` : ''}`,
   ];
   if (setup.angularVersion) lines.push(`**Angular** ${code(setup.angularVersion)}`);

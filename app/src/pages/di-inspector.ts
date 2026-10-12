@@ -212,9 +212,9 @@ function isTree(value: unknown): value is InjectorNode[] {
             <path d="M12 11v5M12 8h.01" />
           </svg>
           <span>
-            <strong>This page has more than 2000 element injectors.</strong>
-            Only the first 2000 are shown, so a lookup path or a provider can point to one that is
-            not listed.
+            <strong>The page reported only part of its injector tree.</strong>
+            It stops at 2000 element injectors, 2500 in all, so a lookup path or a provider can
+            point to one that is not listed.
           </span>
         </p>
       }

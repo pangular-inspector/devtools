@@ -127,7 +127,7 @@ The overlay reads the helper `provideRouter()` publishes (`ng.ɵgetRouterInstanc
 
 The live views need `window.ng`, so they need a development build. In a production build the overlay finds no Router, and **Current** says **This page reports no Router**.
 
-When the debug API exists but lacks the provider helpers, the tab runs in events-only mode. The **Setup** view says so, and the config, lint and actions are limited.
+When the debug API exists but lacks the provider helper (`ng.ɵgetInjectorProviders`), the tab runs in events-only mode. The route config is still read, so the tree and lint work. Setup detection is limited: the overlay can't find the preloader, the scroller or the router providers, so the **Setup** view says so and its features and options can show defaults.
 
 ### Guard verdicts
 

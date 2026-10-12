@@ -1,4 +1,5 @@
 import { MAX_INJECTOR_NODES, NULL_INJECTOR_ID } from '../injector-tree.ts';
+import { MAX_REPORTED_INJECTORS } from './injector-report.ts';
 import type { InjectorPage, InjectorTreeNode } from '../types.ts';
 import { zoneModeText } from '../zone-mode.ts';
 import { untrusted } from './forms-tools.ts';
@@ -174,7 +175,7 @@ export function inspectProvidersText(
       ? 'Null injector'
       : (byId.get(id)?.injector.name ?? '(not in the report)');
   const notes = page.truncated
-    ? `\n\nThe page has more than ${MAX_INJECTOR_NODES} element injectors and stopped reporting there, so injectors further down the page are missing from this answer.`
+    ? `\n\nThe page reported only part of its injector tree (it stops at ${MAX_INJECTOR_NODES} element injectors, ${MAX_REPORTED_INJECTORS} in all), so some injectors are missing from this answer and a lookup path or a provider can point to one that is not listed.`
     : '';
 
   const selector = args.selector?.trim();

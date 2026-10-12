@@ -348,6 +348,20 @@ describe('router MCP tools', () => {
     expect(text).toContain('`onSameUrlNavigation`: `ignore`');
     expect(text).toContain('`preloading`: `PreloadAllModules`');
     expect(text).toContain('**Instrumentation** on');
+    expect(text).toContain('**Mode** full');
+  });
+
+  it('router-config says events-only mode limits setup detection, not the config', async () => {
+    const { push, call } = await boot();
+    await push('push-router', report({ setup: { ...report().setup, mode: 'events-only' } }));
+    const text = await call('router-config');
+    expect(text).toContain('**Mode** events-only');
+    expect(text).toMatch(
+      /setup detection is limited: the preloader, the scroller and the router providers/,
+    );
+    expect(text).not.toMatch(/config, lint and actions are limited/);
+    expect(await call('list-routes')).toContain('/users/:id');
+    expect(await call('lint-routes')).not.toMatch(/No checks ran/);
   });
 
   it('export-navigation builds a repro for the latest failure', async () => {
