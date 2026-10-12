@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CD_EXPORT_FORMAT,
+  MAX_CD_IMPORT_BYTES,
   MAX_SPANS,
   cdExportFile,
   cdTraceFile,
@@ -170,6 +171,16 @@ describe('change detection recording files', () => {
     expect(parsed.pageId).toBe('p1');
     expect(parsed.exportedAt).toBe(5);
     expect(parsed.recording).toEqual({ ...recording(), recording: false, hosts: {} });
+  });
+
+  it('refuses a file over the limit in UTF-8 bytes, not string length', () => {
+    // 7 million emoji are 14 million string units but 28 million bytes.
+    const padded = JSON.stringify({ ...recording(), padding: '\u{1F600}'.repeat(7_000_000) });
+    expect(padded.length).toBeLessThan(MAX_CD_IMPORT_BYTES);
+    expect(parseCdImport(padded, 200)).toEqual({
+      ok: false,
+      error: 'The file is larger than 20 MB.',
+    });
   });
 
   it('reads a bare recording and refuses files that are not recordings', () => {

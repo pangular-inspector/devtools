@@ -244,7 +244,12 @@ export function parseCdImport(
 ):
   | { ok: true; pageId: string; exportedAt?: number; recording: CdRecording }
   | { ok: false; error: string } {
-  if (json.length > MAX_CD_IMPORT_BYTES) {
+  // A UTF-16 unit is at most 3 UTF-8 bytes, so only a long string needs encoding.
+  const tooLarge =
+    json.length > MAX_CD_IMPORT_BYTES ||
+    (json.length * 3 > MAX_CD_IMPORT_BYTES &&
+      new TextEncoder().encode(json).byteLength > MAX_CD_IMPORT_BYTES);
+  if (tooLarge) {
     return { ok: false, error: 'The file is larger than 20 MB.' };
   }
   let value: unknown;
