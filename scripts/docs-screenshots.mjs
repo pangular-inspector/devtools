@@ -503,9 +503,12 @@ const SERVERS = {
 };
 
 // Output folders the build and the dev servers create. The ones missing now are removed at the end.
-const built = ['dist', 'packages/devtools/dist', 'examples/analog/dist'].filter(
-  (dir) => !existsSync(join(root, dir)),
-);
+// With --skip-build this run creates none of them, so it removes none.
+const built = flag('--skip-build')
+  ? []
+  : ['dist', 'packages/devtools/dist', 'examples/analog/dist'].filter(
+      (dir) => !existsSync(join(root, dir)),
+    );
 if (!flag('--skip-build')) {
   // Builds the package (with the panel) and the demo, in development mode so ngDevMode is on.
   execFileSync('pnpm', ['build', '--configuration', 'development'], {
