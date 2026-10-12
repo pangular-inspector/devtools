@@ -60,7 +60,7 @@ The signal graph of each page, under `pages[pageId]`. `graph` is the latest one.
 
 ### injector-tree
 
-The injector hierarchy the page last reported, with the providers at each level. Each page is under `pages[pageId]`. `roots` and `environment` are the latest. Element injectors list what their components and directives inject in `dependencies`. Environment injectors list what the services they already created inject, with `from` naming the service or `InjectionToken`. `zone` is the change detection mode: `zoneless`, `zone` (zone.js) or `zone-unused` (zoneless, with zone.js still loaded). `truncated` is `true` when the page has more than 2000 element injectors and reported only the first 2000, or more than 2500 injectors in all. The server drops malformed nodes and clips long names.
+The injector hierarchy the page last reported, with the providers at each level. Each page is under `pages[pageId]`. `roots` and `environment` are the latest. Element injectors list what their components and directives inject in `dependencies`. Environment injectors list what the services they already created inject, with `from` naming the service or `InjectionToken`. `zone` is the change detection mode: `zoneless`, `zone` (zone.js) or `zone-unused` (zoneless, with zone.js still loaded). `truncated` is `true` when the tree was cut: it keeps at most 2000 element injectors and 2500 injectors in all, and leaves out injectors nested more than 1000 levels deep. The server drops malformed nodes and clips long names.
 
 ### ngrx-store
 

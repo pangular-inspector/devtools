@@ -137,7 +137,7 @@ See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
 ### Up to 2000 element injectors
 
-The page reports at most 2000 element injectors. Environment injectors are kept after them, up to 2500 injectors in all, so they never push element injectors out. When the page cuts either part of the tree, a notice above the tree says the page reported only part of its injector tree, and a lookup path or a provider can point to an injector that isn't listed. `inspect-providers` says it too.
+The page reports at most 2000 element injectors. Environment injectors are kept after them, up to 2500 injectors in all, so they never push element injectors out. Injectors nested more than 1000 levels deep are left out too. When any of these limits cuts the tree, a notice above the tree says the page reported only part of its injector tree, and a lookup path or a provider can point to an injector that isn't listed. `inspect-providers` says it too.
 
 ### Some injectors can't be highlighted
 

@@ -160,7 +160,7 @@ It runs only while recording. It reads the template source, so it needs an unmin
 
 ### Highlighting keeps 10 hosts per component
 
-A component chip keeps up to 10 host elements per page to highlight. When a component has more instances, `pangular:pipe-usage` carries their number in `targetTotal`.
+A component chip keeps up to 10 host elements per page to highlight. When a component has more, `pangular:pipe-usage` gives the number of distinct host elements in `targetTotal`. A report that combines pages keeps at most 10 host elements per component across all pages, and its `targetTotal` adds up the host elements of every page.
 
 ### Recording ends on reload
 

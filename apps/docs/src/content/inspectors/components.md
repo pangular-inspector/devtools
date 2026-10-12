@@ -93,7 +93,7 @@ Below the tree and the defer blocks, the **Change detection** section records ch
 - **Latest cycles**, newest first: the start time, the duration, how many components Angular checked, how many sync passes it ran, the output listener that ran just before the cycle (an output that ended more than 50 ms before the cycle is not counted), and the slowest component in it.
 - Tree rows show how many times each instance was checked while recording.
 
-**Slowest components** draws on the 100 component classes with the most self time, and tree rows count checks for up to 2000 instances. When a recording checks more classes or instances, a note in the section says how many were left out.
+**Slowest components** shows the 100 component classes with the most self time among the first 1000 classes a recording checks. A class first checked after those 1000 has no totals, so it isn't ranked. Tree rows count checks for up to 2000 instances. When a recording checks more classes or instances, a note in the section says how many were left out.
 
 Recording is off by default. While it is off, the page registers no profiler for it. The page keeps the last 200 cycles, set with [`limits.cdCycles`](../getting-started/configuration.md#limits). Recording needs Angular 20 or later. On older versions, the section says so. Times come from a development build, so they are higher than in production.
 
