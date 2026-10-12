@@ -58,6 +58,8 @@ export const PANGULAR_GROUP_ID = hubDockId('group');
 export interface HubDockBadge {
   text: string;
   variant: DevframeDockBadgeVariant;
+  /** The worst unseen item, which the title names: `with errors` or `with warnings`. */
+  severity?: 'error' | 'warning';
 }
 
 /** The views whose dock says when the tool has nothing to show yet. */
@@ -109,10 +111,12 @@ function withStatus(
   return { ...entry, title: UNAVAILABLE_TITLES[view] };
 }
 
+const SEVERITY_NOTES = { error: ', with errors', warning: ', with warnings' } as const;
+
 /** The dock title with its badge, as `Angular (2 new, with errors)`. */
 export function badgeTitle(title: string, badge: HubDockBadge): string {
-  const errors = badge.variant === 'danger' ? ', with errors' : '';
-  return `${title} (${badge.text} new${errors})`;
+  const note = badge.severity ? SEVERITY_NOTES[badge.severity] : '';
+  return `${title} (${badge.text} new${note})`;
 }
 
 export function registerHubDocks(
@@ -207,7 +211,13 @@ export function registerHubDocks(
     setBadge: (entryId, badge) => {
       if (!plain.has(entryId)) return;
       const current = badges.get(entryId);
-      if (current?.text === badge?.text && current?.variant === badge?.variant) return;
+      if (
+        current?.text === badge?.text &&
+        current?.variant === badge?.variant &&
+        current?.severity === badge?.severity
+      ) {
+        return;
+      }
       if (badge) badges.set(entryId, badge);
       else badges.delete(entryId);
       ctx.docks.update(render(entryId));

@@ -81,7 +81,7 @@ describe('hub docks', () => {
   it('keeps the explaining title when a badge is set, and drops only the badge when cleared', () => {
     const hub = fakeHub();
     const docks = registerHubDocks(hub, 'pangular', undefined, { capacitor: false });
-    docks?.setBadge('pangular:capacitor', { text: '2', variant: 'danger' });
+    docks?.setBadge('pangular:capacitor', { text: '2', variant: 'danger', severity: 'error' });
     expect(hub.docks.views.get('pangular:capacitor')).toMatchObject({
       title: 'Capacitor: no app connected (2 new, with errors)',
       badge: '2',
@@ -106,8 +106,10 @@ describe('hub docks', () => {
     const docks = registerHubDocks(hub, 'pangular');
     docks?.setBadge('pangular:ngrx', { text: '3', variant: 'info' });
     expect(hub.docks.views.get('pangular:ngrx')?.title).toBe('NgRx (3 new)');
-    docks?.setBadge('pangular:group', { text: '99+', variant: 'danger' });
+    docks?.setBadge('pangular:group', { text: '99+', variant: 'danger', severity: 'error' });
     expect(hub.docks.views.get('pangular:group')?.title).toBe('Pangular (99+ new, with errors)');
+    docks?.setBadge('pangular:group', { text: '1', variant: 'danger', severity: 'warning' });
+    expect(hub.docks.views.get('pangular:group')?.title).toBe('Pangular (1 new, with warnings)');
     docks?.setBadge('pangular:ngrx', undefined);
     expect(hub.docks.views.get('pangular:ngrx')?.title).toBe('NgRx');
   });

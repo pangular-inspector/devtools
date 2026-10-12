@@ -22,6 +22,7 @@ interface Entry {
   type: string;
   badge?: string;
   badgeVariant?: string;
+  title?: string;
   groupId?: string;
 }
 
@@ -252,6 +253,25 @@ describe('hub dock badges', () => {
     expect(hub.docks.views.get('pangular:angular')?.badgeVariant).toBe('danger');
     expect(badge('pangular:group')).toBe('3');
     expect(hub.docks.views.get('pangular:group')?.badgeVariant).toBe('danger');
+  });
+
+  it('says "with warnings" for a dock with only warnings, and "with errors" once an error comes', () => {
+    const { feed, hub } = setup();
+    const view = (id: string) => hub.docks.views.get(id);
+    feed.hydration('p1', stats({ warnings: ['NG0505: no hydration info'] }));
+    expect(view('pangular:angular')).toMatchObject({
+      badge: '1',
+      badgeVariant: 'danger',
+      title: 'Angular (1 new, with warnings)',
+    });
+    expect(view('pangular:group')?.title).toBe('Pangular (1 new, with warnings)');
+    feed.hydration('p1', stats({ mismatches: [{ component: 'app-a' }] }));
+    expect(view('pangular:angular')).toMatchObject({
+      badge: '2',
+      badgeVariant: 'danger',
+      title: 'Angular (2 new, with errors)',
+    });
+    expect(view('pangular:group')?.title).toBe('Pangular (2 new, with errors)');
   });
 
   it('clears a dock when the panel opens it, and every dock for All tools', async () => {

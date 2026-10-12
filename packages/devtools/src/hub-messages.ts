@@ -58,6 +58,13 @@ export interface HubFeed {
   seen: (dockId: unknown) => void;
 }
 
+/** A dock's unseen items, with how many of them are errors and warnings. */
+interface Unseen {
+  count: number;
+  errors: number;
+  warnings: number;
+}
+
 interface Posted {
   id: string;
   count: number;
@@ -125,7 +132,7 @@ export function createHubFeed(
   const messages = messagesOf(ctx);
   const posted = new Map<string, Posted>();
   const pages = new Map<string, { keys: Set<string>; at: number }>();
-  const unseen = new Map<string, { count: number; errors: number }>();
+  const unseen = new Map<string, Unseen>();
   let docks: HubDocks | undefined;
 
   messages?.events?.on('messages:removed', (id) => {
@@ -152,30 +159,37 @@ export function createHubFeed(
     return true;
   };
 
-  const badgeOf = (count: number, errors: number): HubDockBadge | undefined =>
-    count > 0
-      ? { text: count > 99 ? '99+' : String(count), variant: errors > 0 ? 'danger' : 'info' }
-      : undefined;
+  /** Red for any unseen error or warning; the title says which of the two. */
+  const badgeOf = ({ count, errors, warnings }: Unseen): HubDockBadge | undefined => {
+    if (count <= 0) return undefined;
+    const severity = errors > 0 ? 'error' : warnings > 0 ? 'warning' : undefined;
+    return {
+      text: count > 99 ? '99+' : String(count),
+      variant: severity ? 'danger' : 'info',
+      ...(severity ? { severity } : {}),
+    };
+  };
 
   const renderBadges = () => {
     if (!docks) return;
-    let count = 0;
-    let errors = 0;
+    const total: Unseen = { count: 0, errors: 0, warnings: 0 };
     for (const id of docks.ids) {
-      const item = unseen.get(id);
-      count += item?.count ?? 0;
-      errors += item?.errors ?? 0;
-      docks.setBadge(id, badgeOf(item?.count ?? 0, item?.errors ?? 0));
+      const item = unseen.get(id) ?? { count: 0, errors: 0, warnings: 0 };
+      total.count += item.count;
+      total.errors += item.errors;
+      total.warnings += item.warnings;
+      docks.setBadge(id, badgeOf(item));
     }
-    docks.setBadge(docks.groupId, badgeOf(count, errors));
+    docks.setBadge(docks.groupId, badgeOf(total));
   };
 
   const bump = (dock: string, level: DevframeMessageLevel) => {
     if (!docks) return;
     const target = docks.ids.includes(dock) ? dock : dockId('angular');
-    const item = unseen.get(target) ?? { count: 0, errors: 0 };
+    const item = unseen.get(target) ?? { count: 0, errors: 0, warnings: 0 };
     item.count++;
-    if (level === 'error' || level === 'warn') item.errors++;
+    if (level === 'error') item.errors++;
+    else if (level === 'warn') item.warnings++;
     unseen.set(target, item);
     renderBadges();
   };
