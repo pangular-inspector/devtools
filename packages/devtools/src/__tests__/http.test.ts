@@ -598,8 +598,13 @@ describe('interceptor', () => {
     );
     await get(new HttpRequest('GET', '/api/trips', null, { transferCache: false }));
     await get(new HttpRequest('GET', '/api/trips', null, { withCredentials: true }));
-    await get(new HttpRequest('GET', '/api/trips', null, { credentials: 'include' }));
-    expect(httpRegistry().calls?.map((c) => c.cacheHit)).toEqual([false, false, false, false]);
+    // Angular 20.0 has no credentials option and drops it, which leaves a plain GET.
+    const include = new HttpRequest('GET', '/api/trips', null, { credentials: 'include' });
+    const knowsCredentials = include.credentials === 'include';
+    if (knowsCredentials) await get(include);
+    expect(httpRegistry().calls?.map((c) => c.cacheHit)).toEqual(
+      knowsCredentials ? [false, false, false, false] : [false, false, false],
+    );
 
     const stable = Injector.create({
       providers: [
