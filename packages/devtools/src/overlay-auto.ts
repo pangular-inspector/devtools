@@ -3,6 +3,7 @@
 // (`overlay.ts`) exports the same API and starts nothing.
 import { initOverlay } from './overlay.ts';
 import { showOverlayPopup } from './overlay-popup.ts';
+import { overlayStarts } from './overlay-start.ts';
 import { insideDevtoolsPanel } from './panel-frame.ts';
 
 export * from './overlay.ts';
@@ -13,6 +14,12 @@ if (
   !(typeof process !== 'undefined' && process.env?.['VITEST']) &&
   !insideDevtoolsPanel()
 ) {
-  initOverlay().catch(console.error);
+  // Started on the next task, so a script that imports this entry and calls
+  // initOverlay({baseURL}) right away starts the only overlay, and nothing
+  // looks for the server on the default paths first.
+  const before = overlayStarts.count;
+  setTimeout(() => {
+    if (overlayStarts.count === before) initOverlay().catch(console.error);
+  });
   showOverlayPopup();
 }

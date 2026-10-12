@@ -70,6 +70,7 @@ import {
 import { attachChangeDetection } from './cd-overlay.ts';
 import { createScanBackoff } from './router-attach.ts';
 import { DEVTOOLS_BASES, SETUP_URL } from './panel-frame.ts';
+import { overlayStarts } from './overlay-start.ts';
 import { clearHighlight, showHighlight } from './page-highlight.ts';
 import { claimPageOnServer, newPageId, newPageKey } from './page-id.ts';
 
@@ -178,6 +179,7 @@ let current: { stop: () => void } | null = null;
  * page: starting another stops the one before it, including the auto-started one.
  */
 export function initOverlay(options: OverlayOptions = {}): Promise<() => void> {
+  overlayStarts.count++;
   current?.stop();
   const cleanups: (() => void)[] = [];
   let stopped = false;

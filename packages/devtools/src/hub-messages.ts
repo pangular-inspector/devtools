@@ -96,8 +96,11 @@ const pageOf = (args: unknown) => {
   return typeof page === 'string' && page && page.length < 50 ? page : undefined;
 };
 
-/** The first line of a tool's answer, masked, to say what the write did. */
-function answerLine(result: unknown): string {
+/** Lines that frame an answer instead of saying what happened: the untrusted-data notices, code fences and bare JSON brackets. */
+const FRAME_LINE = /^(?:_.*_|```[\w-]*|[[\]{}(),\s]*)$/;
+
+/** The lines of a tool's answer that say something, with headings and JSON keys made plain. */
+function answerLines(result: unknown): string[] {
   const record = result as { markdown?: unknown } | null | undefined;
   const text =
     typeof result === 'string'
@@ -105,8 +108,50 @@ function answerLine(result: unknown): string {
       : typeof record?.markdown === 'string'
         ? record.markdown
         : '';
-  const line = text.split('\n').find((part) => part.trim()) ?? '';
-  return masked(line.replace(/^#+\s*/, '').trim(), 200);
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !FRAME_LINE.test(line))
+    .map((line) =>
+      line
+        .replace(/^#+\s*/, '')
+        .replace(/^"([^"]+)":\s*/, '$1: ')
+        .replace(/,$/, '')
+        .replace(/^([\w-]+): "(.*)"$/, '$1: $2'),
+    );
+}
+
+/** The first line of a tool's answer that says what the write did, masked. */
+function answerLine(result: unknown): string {
+  return masked(answerLines(result)[0] ?? '', 200);
+}
+
+/**
+ * How the write tools start an answer when they changed nothing: no page or
+ * data to act on, a refusal (by the page, the config or a read-only agent), or
+ * an argument to fix. The tools return these as text, not as errors.
+ */
+const NOTHING_DONE = [
+  // The no-data openings the tools use; a bare `No` would also catch a
+  // success such as "No longer paused".
+  /^No (?:@ngrx|Analog|Capacitor|Content|HTTP|HttpClient|NgRx|SSR|ServerRoute|build|calls?|change|checks|components?|connected|content|devtools|element|error|field|file|forms?|history|injector|invalid|markdown|matching|navigations?|page|pages|part|pick|pipe|plugins?|prerender|problems|recent|recordings|route|routes|routed|router|rules?|server|signal|snapshot|store|submit|timed)\b/,
+  /^Not dispatched\b/,
+  /^Refused\b/,
+  /^error: /,
+  /^Page `[^`]*` (?:reports|has) no\b/,
+  /^\d+ (?:pages report|forms match)\b/,
+  /\b(?:is turned off|is disabled) in the devtools config\b/,
+  /^The agent is read-only\b/,
+  /^(?:Pass|Provide|Give)\b/,
+  /^`?[\w-]+`? (?:is required|must be)\b/,
+  /^There are already \d+ rules\b/,
+  /^The rule changes nothing\b/,
+];
+
+/** Whether a write tool's answer says it changed nothing, so the feed has nothing to post. */
+export function changedNothing(result: unknown): boolean {
+  const first = answerLines(result)[0];
+  return first !== undefined && NOTHING_DONE.some((pattern) => pattern.test(first));
 }
 
 /** The dock that shows an inspector's data: its own dock when it has one, else Angular. */
@@ -238,6 +283,7 @@ export function createHubFeed(
     if (name === 'change-detection' && typeof (args as { record?: unknown })?.record !== 'string') {
       return;
     }
+    if (changedNothing(result)) return;
     const page = pageOf(args);
     post(
       `agent:${name}:${page ?? ''}`,

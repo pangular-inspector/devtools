@@ -139,7 +139,59 @@ describe('defaultLauncher', () => {
   it('goes through the open wire service when the host installed it', async () => {
     const openInEditor = vi.fn(async () => {});
     const get = vi.fn((id: string) => (id === OPEN_SERVICE_PACKAGE ? { openInEditor } : undefined));
-    await defaultLauncher({ get })('/w/src/app.ts', 4, 2);
+    const fallback = vi.fn();
+    await defaultLauncher({ get }, fallback)('/w/src/app.ts', 4, 2);
     expect(openInEditor).toHaveBeenCalledWith({ path: '/w/src/app.ts', line: 4, column: 2 });
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  it('falls back to launch-editor when the service refuses a path Pangular allowed', async () => {
+    const openInEditor = vi.fn(async () => {
+      throw new Error('Refusing to open: the path is outside the workspace root');
+    });
+    const fallback = vi.fn();
+    await defaultLauncher({ get: () => ({ openInEditor }) }, fallback)('/served/src/a.ts', 3);
+    expect(openInEditor).toHaveBeenCalledOnce();
+    expect(fallback).toHaveBeenCalledWith('/served/src/a.ts', 3, undefined);
+  });
+
+  it('uses launch-editor when the service is not installed', async () => {
+    const fallback = vi.fn();
+    await defaultLauncher({ get: () => undefined }, fallback)('/w/src/app.ts');
+    expect(fallback).toHaveBeenCalledWith('/w/src/app.ts', undefined, undefined);
+  });
+
+  it('opens a file the service would refuse, under a second root, through the fallback', async () => {
+    const { base, root } = project();
+    const served = join(base, 'served');
+    mkdirSync(served);
+    writeFileSync(join(served, 'main.ts'), 'export {};\n');
+    const openInEditor = vi.fn(async ({ path }: { path: string }) => {
+      if (!path.startsWith(root)) throw new Error('outside the workspace root');
+    });
+    const fallback = vi.fn();
+    const open = createOpenInEditor({
+      roots: () => [root, served],
+      launch: defaultLauncher({ get: () => ({ openInEditor }) }, fallback),
+    });
+    expect(await open({ file: join(served, 'main.ts'), line: 2 })).toEqual({
+      ok: true,
+      file: join(served, 'main.ts'),
+    });
+    expect(fallback).toHaveBeenCalledWith(join(served, 'main.ts'), 2, undefined);
+  });
+
+  it('refuses a path outside every root before the service or launch-editor runs', async () => {
+    const { root, outside } = project();
+    const openInEditor = vi.fn(async () => {});
+    const fallback = vi.fn();
+    const open = createOpenInEditor({
+      roots: () => [root],
+      launch: defaultLauncher({ get: () => ({ openInEditor }) }, fallback),
+    });
+    const result = await open({ file: join(outside, 'keys.txt') });
+    expect(result.ok).toBe(false);
+    expect(openInEditor).not.toHaveBeenCalled();
+    expect(fallback).not.toHaveBeenCalled();
   });
 });

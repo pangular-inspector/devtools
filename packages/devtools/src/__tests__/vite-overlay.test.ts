@@ -37,12 +37,12 @@ const proxies = (html: string) =>
   [...html.matchAll(/src="([^"]*html-proxy[^"]*)"/g)].map((m) => m[1]!);
 
 describe('overlayTags', () => {
-  it('adds one module script at the end of the body that imports the overlay', () => {
+  it('adds one module script at the end of the body that starts the overlay on the hub', () => {
     expect(overlayTags(HTML, '/__devframes/')).toEqual([
       {
         tag: 'script',
         attrs: { type: 'module', 'data-pangular-overlay': '' },
-        children: `import "${OVERLAY_ENTRY}";`,
+        children: `import { initOverlay } from "${OVERLAY_ENTRY}";\ninitOverlay({ baseURL: "/__devframes/pangular/" }).catch(console.error);`,
         injectTo: 'body',
       },
     ]);

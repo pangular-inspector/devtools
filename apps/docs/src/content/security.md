@@ -165,6 +165,7 @@ The panel and the overlay can ask the server to open a source file in your edito
 - It resolves the path against the workspace root, the directory the server runs in and the served app. A path that leaves all of them, with `..` or as an absolute path, is refused.
 - It follows symlinks and refuses the file when its real path is outside those directories.
 - It opens regular files only. Folders and missing files are refused.
+- Only a path that passed these checks reaches a launcher: the `@devframes/service-open` service when the host has it, and devframe's `launch-editor` when the service is missing or refuses the path.
 - Line and column must be positive whole numbers, or they are left out.
 
 The request names a file and a line, never a command. The editor comes from the server's environment. Agent tools can't open files.

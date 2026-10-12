@@ -107,7 +107,7 @@ The floating button follows the path the overlay connected to. If that path is `
 
 ### One overlay per page
 
-Only one overlay runs on a page. Importing `@pangular-inspector/devtools/overlay` already starts one on the default URLs. When you call `initOverlay`, it stops the running overlay first, the auto-started one included, and then starts yours. The page never ends up with two connections.
+Only one overlay runs on a page. Importing `@pangular-inspector/devtools/overlay` starts one on the default URLs, on the next task after the import. If `initOverlay` runs before that task, only that overlay starts. The [Vite plugin](./vite.md) does this. If you call `initOverlay` later, it stops the running overlay first, the auto-started one included. Then it starts yours. The page never ends up with two connections.
 
 An overlay that was stopped or replaced before it connected does not report its connection error.
 

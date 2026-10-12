@@ -191,7 +191,7 @@ npx @pangular-inspector/devtools mcp --print-config --port 4000 --base /__devfra
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `--print-config` | Print the client config and exit.                                                                                            |
 | `--host <host>`  | Host of the server that runs your app, for the HTTP config. The default is `localhost`.                                      |
-| `--port <port>`  | Port of that server. The default is 9999, the standalone CLI.                                                                |
+| `--port <port>`  | Port of that server, from 1 to 65535. The default is 9999, the standalone CLI.                                               |
 | `--base <path>`  | The hub base, such as `/__devframes/` for the Express hub and the Vite plugin. With it, the HTTP config sends the MCP token. |
 | `--https`        | The server is behind TLS, so the HTTP config uses `https://`.                                                                |
 

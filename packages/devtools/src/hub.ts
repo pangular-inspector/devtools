@@ -8,6 +8,7 @@ import type { InitHubOptions } from '@devframes/hub/initiate';
 import type { WsOriginRegistry } from 'devframe/rpc/transports/ws-server';
 import { isAllowedOrigin } from 'devframe/utils/origin';
 import { createPangular } from './devframe.ts';
+import { withMessagesPanel } from './hub-messages-panel.ts';
 import {
   blockedOriginReporter,
   isAllowedHubRequest,
@@ -173,7 +174,8 @@ export function startPangularHub(
   const { config, rest: picked } = pickPangularConfig(hubOptions);
   // Behind a gate, a shared `server` is attached through the gated `attach`
   // below, so its upgrades pass the same checks as `handleUpgrade`.
-  const { server: sharedServer, ...rest } = picked;
+  const { server: sharedServer, ...hubRest } = picked;
+  const rest = withMessagesPanel(hubRest, normalizeHubBase(hubRest.base ?? PANGULAR_HUB_BASE));
   const authTokens = isAuthTokens(authOption) ? authTokensFrom(authOption.tokens) : [];
   const auth = isAuthTokens(authOption) ? undefined : authOption;
   const hub = initHub({

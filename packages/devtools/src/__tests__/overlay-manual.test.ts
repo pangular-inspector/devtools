@@ -345,6 +345,17 @@ describe.sequential('overlay entries', () => {
     });
   });
 
+  it('the default entry starts no overlay of its own when the importing script starts one', async () => {
+    vi.resetModules();
+    await import('./overlay-injected-fixture.ts');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(connects.map((c) => c.baseURL)).toEqual(['/__devframes/pangular/']);
+    expect(fetches).not.toContain('./__connection.json');
+    expect(fetches).not.toContain('/__pangular/__connection.json');
+    expect(fetches[0]).toBe('/__devframes/pangular/__connection.json');
+  });
+
   it('the default entry exports the same API as the manual one', async () => {
     const auto = await loadAuto();
     const manual = await import('../overlay.ts');
