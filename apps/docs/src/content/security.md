@@ -19,10 +19,10 @@ The devtools read your running app and send what they find to a server on your m
 
 <ngmd-card-grid columns="2">
   <ngmd-card icon="zap" title="Vite plugin">
-    Loopback requests only, unless <code>allowLan</code> is on. A request that sends an <code>Origin</code> must come from a loopback host, the Pangular Inspector extension, an entry in <code>allowedOrigins</code> or Vite's <code>server.allowedHosts</code>. Asks for a one-time code when a non-loopback host or origin is allowed.
+    Loopback requests only, unless <code>allowLan</code> is on, sent to a loopback or allowed <code>Host</code>. A request that sends an <code>Origin</code> must come from a loopback host, the Pangular Inspector extension, an entry in <code>allowedOrigins</code> or Vite's <code>server.allowedHosts</code>. Asks for a one-time code by default.
   </ngmd-card>
   <ngmd-card icon="layers" title="Express hub">
-    A one-time code and an origin check that accepts loopback origins and the Pangular Inspector extension. Both on by default.
+    The same request gate as the Vite plugin, a one-time code, and an origin check that accepts loopback origins and the Pangular Inspector extension. All on by default, and the hub is off when <code>NODE_ENV</code> is <code>production</code>.
   </ngmd-card>
   <ngmd-card icon="terminal" title="Standalone CLI">
     Binds to <code>localhost</code> and asks for a one-time code by default.
@@ -36,18 +36,22 @@ The devtools read your running app and send what they find to a server on your m
 
 ### Vite plugin
 
-The devtools only answer requests from this machine. When a request carries an `Origin` header, that origin must be a loopback host, the Pangular Inspector extension or an origin you allowed. Requests without an `Origin` header pass the origin check. Browsers leave the header out of some cross-site requests, such as image loads and link clicks, so the origin check alone does not stop every request from another website.
+The devtools only answer requests from this machine. When a request carries an `Origin` header, that origin must be a loopback host, the Pangular Inspector extension or an origin you allowed. Browsers leave the header out of some cross-site requests, such as image loads and link clicks. Those requests carry `Sec-Fetch-Site: cross-site` instead, and the devtools refuse them.
 
 In detail, a request to the devtools must:
 
-- come from a loopback address (any `127.x.x.x` address or `::1`), and
-- have no `Origin` header, or an origin that is a loopback host, the [Pangular Inspector extension](#chrome-extension), an entry in `allowedOrigins`, or a host that Vite's `server.allowedHosts` accepts.
+- come from a loopback address (any `127.x.x.x` address or `::1`),
+- be sent to a `Host` that is a loopback host, a host that Vite's `server.allowedHosts` accepts, or the host of an entry in `allowedOrigins`, and
+- have an origin that is a loopback host, the [Pangular Inspector extension](#chrome-extension), an entry in `allowedOrigins`, or a host that Vite's `server.allowedHosts` accepts, or
+- have no `Origin` header, and a `Sec-Fetch-Site` header of `same-origin`, `same-site` or `none`, or no `Sec-Fetch-Site` header at all.
+
+The `Host` check stops DNS rebinding: a website that points its own name at `127.0.0.1` still sends that name as the `Host`. Clients that send neither `Origin` nor `Sec-Fetch-Site`, such as curl or a native app, are not browsers, so they pass the last check. A request without a `Host` header passes the `Host` check, since browsers always send one.
 
 Other requests get `403` with the message "Pangular Inspector only answers requests from this machine." A request from another machine also gets the fix: set `allowLan: true` and list its origin in `allowedOrigins`. WebSocket upgrades follow the same rules.
 
 With `allowLan: true`, the plugin also answers other machines, such as a phone on Wi-Fi, whose origin is in `allowedOrigins`. It needs the one-time code on, and ignores `allowLan` with `auth: false`. See [Other devices on your network](./getting-started/vite.md#other-devices-on-your-network).
 
-If you open the dev server through another hostname that points to your machine (for example `myapp.test`), list it in Vite's `server.allowedHosts` and the devtools trust it too. Add other origins with `allowedOrigins`:
+If you open the dev server through another hostname that points to your machine (for example `myapp.test`), list it in Vite's `server.allowedHosts` and the devtools trust it too, as `Host` and as origin. Add other origins with `allowedOrigins`:
 
 ```ts {7-8}
 // vite.config.ts
@@ -65,26 +69,28 @@ export default defineConfig({
 
 The plugin's `auth` option decides whether the devtools also ask for the one-time code. The server prints the code in the terminal, and a browser reads data only after it exchanges that code.
 
-| `auth`  | One-time code                                                                                                                                                |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| not set | On if `server.allowedHosts` or `allowedOrigins` allows a host other than `localhost` or a loopback address, otherwise off. `allowedHosts: true` turns it on. |
-| `true`  | Always on.                                                                                                                                                   |
-| `false` | Always off. The loopback and origin checks still apply.                                                                                                      |
-
-With only loopback hosts allowed, the loopback and origin checks take the place of the code.
+| `auth`          | One-time code                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| not set, `true` | On. The HTTP MCP endpoint asks for a [token](#mcp-endpoint) too.                                 |
+| `false`         | Off, and the MCP endpoint asks for no token. The loopback, `Host` and origin checks still apply. |
 
 <ngmd-callout type="warning" title="Tunnels look local">
-  A tunnel client runs on your machine, so the requests it forwards come from a loopback address. That is why an allowed tunnel host or origin turns the one-time code on. If your tunnel rewrites the <code>Host</code> header to <code>localhost</code>, nothing in your config names the tunnel, so pass <code>auth: true</code>. Don't pass <code>auth: false</code> while a tunnel is allowed.
+  A tunnel client runs on your machine, so the requests it forwards come from a loopback address. Only the one-time code tells them apart from you. Don't pass <code>auth: false</code> while a tunnel is allowed.
 </ngmd-callout>
 
 ### Express hub
 
-`initPangularHub()` has two checks, both on by default:
+`initPangularHub()` has three checks, all on by default:
 
-| Check         | Option           | What it does                                                                                                                                          |
-| ------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| One-time code | `auth`           | The server prints a code. A browser can read data only after it exchanges that code.                                                                  |
-| Origin check  | `allowedOrigins` | Only loopback origins, the Pangular Inspector extension, or clients that send no `Origin`, can open the WebSocket. Pass a list to allow more origins. |
+| Check         | Option           | What it does                                                                                                                                                                                    |
+| ------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Request gate  | `allowLan`       | The same checks as the [Vite plugin](#vite-plugin): a loopback address, a loopback or allowed `Host`, and no cross-site request without `Origin`. `allowLan: true` also answers other machines. |
+| One-time code | `auth`           | The server prints a code. A browser can read data only after it exchanges that code.                                                                                                            |
+| Origin check  | `allowedOrigins` | Only loopback origins, the Pangular Inspector extension, or clients that send no `Origin`, can reach the hub. Pass a list to allow more origins.                                                |
+
+The request gate covers `nodeMiddleware`, `handler` and `handleUpgrade`. A web request reaches `handler` without the address it came from, so `handler` applies the `Host`, `Origin` and `Sec-Fetch-Site` checks only. With `allowLan: true` and the one-time code on, a request from another machine passes when its `Origin` passes the origin check, or when it sends none. `allowLan` needs the code: with `auth: false`, the hub ignores it and prints a warning. `allowedOrigins: false` turns the request gate off along with the origin check.
+
+The hub is off when `NODE_ENV` is `production`: its middlewares only call `next()`. Pass `enabled: true` to mount it anyway. The hub then prints a warning when it starts.
 
 ```ts {8}
 // src/server.ts
@@ -102,7 +108,7 @@ app.use(devtools.nodeMiddleware);
 A list keeps loopback origins and the Pangular Inspector extension. So does a custom origin registry passed as `allowedOrigins`: the hub accepts the published extension before it asks the registry. See [Chrome extension](#chrome-extension).
 
 <ngmd-callout type="warning" title="Turning the checks off">
-  Pass <code>auth: false</code> only on a machine only you use. Keep it on when you allow a tunnel origin: the origin check does not tell who is on the other end of the tunnel. <code>allowedOrigins: false</code> turns the origin check off, and the hub prints a warning once when it starts. Keep the check on for your own apps.
+  Pass <code>auth: false</code> only on a machine only you use. Keep it on when you allow a tunnel origin: the origin check does not tell who is on the other end of the tunnel. <code>allowedOrigins: false</code> turns the origin check and the request gate off, and the hub prints a warning once when it starts. Keep the check on for your own apps.
 </ngmd-callout>
 
 ### Standalone CLI
@@ -134,9 +140,9 @@ The page sends the token as the `authToken` option of [`initOverlay`](./getting-
 
 The HTTP MCP endpoint answers only requests that carry a loopback `Origin` header. In the Vite plugin, the request must also come from a loopback address, like every devtools request.
 
-While the one-time code is on, the endpoint also asks for a bearer token. That is the Express hub by default, and the Vite plugin when its code is on. The hub prints a generated token when it starts. Set `PANGULAR_MCP_TOKEN` to choose the token yourself. Requests without the right `Authorization: Bearer <token>` header get `401`. The stdio server needs no token. See [Send a token](./agents/mcp-server.md#send-a-token).
+While the one-time code is on, the endpoint also asks for a bearer token. That is the default for the Express hub and the Vite plugin. The hub writes a generated token to `~/.pangular-inspector/mcp-token`, a file only you can read (mode `0600`), and prints the path, not the token. It keeps that token across restarts. Set `PANGULAR_MCP_TOKEN` to choose the token yourself, or `PANGULAR_MCP_TOKEN_FILE` to use another file. Requests without the right `Authorization: Bearer <token>` header get `401`. The stdio server needs no token. See [Send a token](./agents/mcp-server.md#send-a-token).
 
-Without a token, the Express hub answers only requests from a loopback address. With a token, it also answers other addresses that send the right token and a loopback `Origin`. Any client can set that header, so treat the token like a password.
+The Express hub answers MCP requests from other addresses only with `allowLan: true`, and then only those that send the right token and a loopback `Origin`. Any client can set that header, so treat the token like a password.
 
 ### Chrome extension
 
@@ -148,7 +154,7 @@ Granting the extension a host doesn't change what the devtools server accepts. T
 
 Every installed extension can send requests to a loopback host, with its own `chrome-extension://<id>` origin. So the Vite plugin and the Express hub accept one extension by default: `chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk`. The `key` in the extension manifest fixes that ID, so the unpacked extension and the store build share it. Every other extension origin is refused.
 
-If you build the extension with another `key`, add its origin to `allowedOrigins`. Each entry names one extension. The ID is on the extension card in `chrome://extensions`. In the Vite plugin, an extension entry does not turn the one-time code on. See [Server origin](./getting-started/chrome-extension.md#server-origin).
+If you build the extension with another `key`, add its origin to `allowedOrigins`. Each entry names one extension. The ID is on the extension card in `chrome://extensions`. See [Server origin](./getting-started/chrome-extension.md#server-origin).
 
 ## What is redacted
 

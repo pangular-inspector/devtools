@@ -114,12 +114,19 @@ The header value is the origin of your dev server. Every example below sets it.
 
 If the hub asks for the one-time code, the HTTP endpoint also asks for a bearer token. Requests without the right token get `401`.
 
-| Setup                                        | Token required                                                                                        |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| [Express hub](../getting-started/express.md) | Yes, unless you pass `auth: false` or your own `mcp` option.                                          |
-| [Vite plugin](../getting-started/vite.md)    | Only when the one-time code is on. See the plugin's [`auth` option](../getting-started/vite.md#auth). |
+| Setup                                        | Token required                                                                                         |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [Express hub](../getting-started/express.md) | Yes, unless you pass `auth: false` or your own `mcp` option.                                           |
+| [Vite plugin](../getting-started/vite.md)    | Yes, unless you pass `auth: false`. See the plugin's [`auth` option](../getting-started/vite.md#auth). |
 
-The hub prints a generated token in the terminal when it starts. The token changes when the server process restarts, but not when `ng serve` rebuilds `server.ts`. To keep the same token across restarts, set `PANGULAR_MCP_TOKEN` in the environment of the server. The hub then uses that value and prints nothing.
+The hub writes a generated token to `~/.pangular-inspector/mcp-token` when it first starts, with mode `0600` so only your user can read it. It prints the path of that file, never the token. Later starts read the same file, so the token stays the same across restarts and across projects. Read it from your client, for example with `cat ~/.pangular-inspector/mcp-token`.
+
+| Variable                  | Effect                                                            |
+| ------------------------- | ----------------------------------------------------------------- |
+| `PANGULAR_MCP_TOKEN`      | The token to use. The hub then writes no file and prints nothing. |
+| `PANGULAR_MCP_TOKEN_FILE` | Another file to keep the token in.                                |
+
+To get a new token, delete the file and restart the server.
 
 Send the token in an `Authorization: Bearer <token>` header, next to the `Origin` header. If your setup needs no token, leave the `Authorization` header out.
 
@@ -182,7 +189,7 @@ The stdio server never needs a token.
 }
 ```
 
-The Claude Code and Cursor examples read the token from `PANGULAR_MCP_TOKEN`, so set the same value for the server and the client. VS Code asks for the token the first time it starts the server.
+The Claude Code and Cursor examples read the token from `PANGULAR_MCP_TOKEN`. Set it for the client from the token file, for example `export PANGULAR_MCP_TOKEN="$(cat ~/.pangular-inspector/mcp-token)"`, or set the same value for the server and the client. VS Code asks for the token the first time it starts the server.
 
 ### Open the app in a browser
 

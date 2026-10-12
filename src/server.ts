@@ -14,15 +14,18 @@ const app = express();
 const angularApp = new AngularNodeAppEngine();
 
 const auth = process.env['PANGULAR_AUTH'] === 'true';
+// Off when NODE_ENV is production, so a production start serves the app only.
 const devtools = initPangularHub({
   ws: { sidecar: true },
   auth,
   // Lets an SSR override serve index.csr.html to force a Client render.
   browserDistFolder,
 });
-app.use(devtools.nodeMiddleware);
-// Traces each SSR request for the SSR & HTTP tab and adds a Server-Timing header.
-app.use(devtools.ssrMiddleware);
+if (devtools.enabled) {
+  app.use(devtools.nodeMiddleware);
+  // Traces each SSR request for the SSR & HTTP tab and adds a Server-Timing header.
+  app.use(devtools.ssrMiddleware);
+}
 
 const products = [
   { id: 1, name: 'Signal lamp', price: 24, stock: 12 },

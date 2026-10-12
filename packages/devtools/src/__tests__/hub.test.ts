@@ -1,4 +1,7 @@
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { connect } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hubDefaultOrigins, initPangularHub, type PangularHubOptions } from '../hub.ts';
@@ -289,14 +292,32 @@ describe('Pangular Inspector hub MCP route', () => {
     expect(await allowed.text()).toContain('pangular_get-routes');
   });
 
-  it('prints a generated token when none is configured', async () => {
+  it('writes a generated token to a file only the user can read, and prints the path only', async () => {
     vi.stubEnv('PANGULAR_MCP_TOKEN', '');
+    const file = join(mkdtempSync(join(tmpdir(), 'pangular-token-')), 'nested', 'mcp-token');
+    vi.stubEnv('PANGULAR_MCP_TOKEN_FILE', file);
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     const mcp = await bootMcp({ auth: true });
-    const token = /MCP token: (\S+)/.exec(log.mock.calls.flat().join('\n'))?.[1];
+    const token = readFileSync(file, 'utf8').trim();
     expect(token).toMatch(/^[\w-]{32}$/);
+    if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(0o600);
+    const printed = log.mock.calls.flat().join('\n');
+    expect(printed).toContain(file);
+    expect(printed).not.toContain(token);
     expect((await mcp()).status).toBe(401);
     expect((await mcp(token)).status).toBe(200);
+  });
+
+  it('reuses the token in the file across restarts and tightens its mode', async () => {
+    vi.stubEnv('PANGULAR_MCP_TOKEN', '');
+    const file = join(mkdtempSync(join(tmpdir(), 'pangular-token-')), 'mcp-token');
+    const saved = ['kept', 'across', 'restarts', 'x'.repeat(8)].join('-');
+    writeFileSync(file, `${saved}\n`, { mode: 0o644 });
+    vi.stubEnv('PANGULAR_MCP_TOKEN_FILE', file);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const mcp = await bootMcp({});
+    expect((await mcp(saved)).status).toBe(200);
+    if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(0o600);
   });
 
   it('keeps the token and the mcp setting next to the devtools config', async () => {
@@ -349,12 +370,13 @@ describe('Pangular Inspector hub on a server that reloads server.ts', () => {
     const first = await boot();
     const second = await boot();
     await first.hub.close();
-    const tokens = log.mock.calls
-      .flat()
-      .join('\n')
-      .match(/MCP token: \S+/g);
-    expect(tokens).toHaveLength(1);
-    const token = tokens![0].slice('MCP token: '.length);
+    expect(
+      log.mock.calls
+        .flat()
+        .join('\n')
+        .match(/MCP token: /g),
+    ).toHaveLength(1);
+    const token = readFileSync(process.env['PANGULAR_MCP_TOKEN_FILE']!, 'utf8').trim();
     const mcp = await second.hub.handler(
       new Request('http://localhost/__devframes/__mcp', {
         method: 'POST',

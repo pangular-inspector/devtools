@@ -89,7 +89,7 @@ With `ws: {sidecar: true}`, the WebSocket runs on its own port, picked automatic
 
 ### Rebuilds under `ng serve`
 
-`ng serve` runs `server.ts` again after a rebuild that changes the server output. The process keeps one hub per `base`, so each new `initPangularHub()` call closes the hub from the run before, along with its side-car port. A generated MCP token stays the same until the process exits.
+`ng serve` runs `server.ts` again after a rebuild that changes the server output. The process keeps one hub per `base`, so each new `initPangularHub()` call closes the hub from the run before, along with its side-car port. The MCP token stays the same: the hub keeps it in a file. See [Send a token](../agents/mcp-server.md#send-a-token).
 
 ### Hub options
 
@@ -99,15 +99,19 @@ With `ws: {sidecar: true}`, the WebSocket runs on its own port, picked automatic
 | ---------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `base`           | `'/__devframes/'`                         | Where the hub is mounted. The devtools panel lives at `<base>pangular/`.                                                                                                                                                            |
 | `ws`             |                                           | `false` uses server-sent events only. `{ sidecar: true }` runs the WebSocket on its own port.                                                                                                                                       |
+| `enabled`        | on unless `NODE_ENV` is `production`      | `false` mounts nothing: the middlewares only call `next()`. `true` mounts the hub in production too, with a warning. See [Production](#production).                                                                                 |
 | `auth`           | on                                        | `false` turns off the one-time code. `{tokens: [...]}` keeps it on and trusts clients that send one of the [pairing tokens](../security.md#pairing-tokens).                                                                         |
-| `allowedOrigins` | loopback origins and the Chrome extension | Extra origins allowed to open the WebSocket, such as a tunnel. `false` turns the origin check off.                                                                                                                                  |
+| `allowedOrigins` | loopback origins and the Chrome extension | Extra origins allowed to reach the hub, such as a tunnel. `false` turns the origin check and the request gate off.                                                                                                                  |
+| `allowLan`       | `false`                                   | Answer other machines, such as a phone on Wi-Fi. Needs the one-time code on.                                                                                                                                                        |
 | `mcp`            | a bearer token                            | Mounts the MCP endpoint at `<base>__mcp` and asks for a bearer token. With `auth: false` the default is `'auto'`: it mounts once agent tools exist and asks for no token. See [Send a token](../agents/mcp-server.md#send-a-token). |
 
 The hub also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](./configuration.md). Pass `browserDistFolder`, the folder that holds `index.csr.html`, to let the **Force Client render** override serve it. See [SSR overrides](../inspectors/ssr-http.md#ssr-overrides).
 
 ### Access control
 
-The hub protects its connection with a one-time code by default. The server prints the code, and a browser can read data only after it exchanges that code. On a machine only you use, pass `auth: false` to turn the gate off.
+The hub answers only requests from this machine, sent to a loopback `Host` such as `localhost:4000`, the same gate as the [Vite plugin](./vite.md#answers-only-your-machine). Other requests to the hub get `403`. Pass `allowLan: true` to also answer other machines, such as a [Capacitor](../guides/capacitor.md) app on Wi-Fi.
+
+The hub protects its connection with a one-time code by default. The server prints the code, and a browser can read data only after it exchanges that code. On a machine only you use, pass `auth: false` to turn the code off.
 
 The origin check is on by default too. Only loopback origins and the [Chrome extension](./chrome-extension.md#server-origin), `chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk`, can open the WebSocket. A list in `allowedOrigins` keeps both and adds its entries. A custom origin registry passed as `allowedOrigins` still accepts the published extension. `allowedOrigins: false` turns the check off and prints a warning once. A build of the extension with another ID needs its own entry, with the ID from `chrome://extensions`:
 
@@ -131,13 +135,22 @@ const devtools = initPangularHub({
   ws: {sidecar: true},
   auth,
 });
-app.use(devtools.nodeMiddleware);
+if (devtools.enabled) {
+  app.use(devtools.nodeMiddleware);
+  app.use(devtools.ssrMiddleware);
+}
 ```
 
 It turns the one-time code off unless `PANGULAR_AUTH` is `true`. Don't copy that setting. Keep the one-time code on for your own apps. The demo keeps the default origin check.
 
+### Production
+
+The hub is off when `NODE_ENV` is `production`. `initPangularHub()` then mounts nothing: `nodeMiddleware` and `ssrMiddleware` only call `next()`, and `devtools.enabled` is `false`. Check `enabled` to skip the `app.use()` calls, as the demo does.
+
+Pass `enabled: true` to mount the hub in production anyway, for example on a staging server only you can reach. The hub prints a warning when it starts. Pass `enabled: false` to keep it off in any environment.
+
 <ngmd-alert severity="warning">
-  <code>initPangularHub()</code> has no production switch of its own. If your <code>server.ts</code> also runs in production, decide there whether to mount it.
+  The switch reads <code>NODE_ENV</code> when <code>initPangularHub()</code> runs. If your production server does not set <code>NODE_ENV=production</code>, the hub stays on. Set it, or pass <code>enabled</code> yourself.
 </ngmd-alert>
 
 ## Load the overlay
@@ -276,6 +289,9 @@ The overlay looks for `/__pangular/` too. Without the hub, every tab sits in one
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel says Disconnected">
     Check that the server is running and that the hub middleware is mounted before <code>express.static</code> and the SSR handler. The panel keeps trying to connect; click <strong>Retry now</strong> to try at once.
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="The hub answers 403">
+    The request did not come from this machine, was sent to a host other than a loopback host, or came from an origin the hub does not trust. The terminal names a refused origin or host. Open the app on <code>localhost</code>, add the origin to <code>allowedOrigins</code>, or pass <code>allowLan: true</code> for another device.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel connects but shows no data">
     With <code>auth</code> on, a browser reads data only after it exchanges the one-time code the server printed. On a machine only you use, pass <code>auth: false</code>.

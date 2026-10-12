@@ -1,13 +1,21 @@
-import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { createUi } from '@devframes/hub-ui';
 import { DEVFRAMES_HUB_BASE, initHub } from '@devframes/hub/initiate';
+import { normalizeHubBase } from '@devframes/hub/constants';
 import type { InitHubOptions } from '@devframes/hub/initiate';
 import type { WsOriginRegistry } from 'devframe/rpc/transports/ws-server';
 import { isAllowedOrigin } from 'devframe/utils/origin';
 import { createPangular } from './devframe.ts';
+import {
+  blockedOriginReporter,
+  isAllowedHubRequest,
+  isHubPath,
+  refuseHubRequest,
+  type HubOriginPolicy,
+} from './hub-gate.ts';
+import { PANGULAR_MCP_TOKEN_ENV, loadMcpToken } from './mcp-token.ts';
 import { authTokensFrom, isAuthTokens, type PangularAuthTokens } from './auth-tokens.ts';
 import { PANGULAR_EXTENSION_ORIGINS, isAllowedExtensionOrigin } from './extension-origin.ts';
 import { pickPangularConfig, type PangularConfig } from './config.ts';
@@ -20,8 +28,6 @@ export const PANGULAR_HUB_BASE = DEVFRAMES_HUB_BASE;
 
 export type { PangularConfig } from './config.ts';
 
-const PANGULAR_MCP_TOKEN_ENV = 'PANGULAR_MCP_TOKEN';
-
 export type PangularHubOptions = Partial<Omit<InitHubOptions, 'devframes' | 'ui' | 'auth'>> &
   PangularConfig & {
     /**
@@ -31,6 +37,18 @@ export type PangularHubOptions = Partial<Omit<InitHubOptions, 'devframes' | 'ui'
     auth?: InitHubOptions['auth'] | PangularAuthTokens;
     /** The app's browser build folder, so a forced Client render can serve `index.csr.html`. */
     browserDistFolder?: string;
+    /**
+     * Mount the hub. Defaults to `process.env.NODE_ENV !== 'production'`. When
+     * off, the middlewares only call `next()`. Passing `true` in production
+     * mounts it anyway, with a warning.
+     */
+    enabled?: boolean;
+    /**
+     * Also answer other machines, such as a phone on Wi-Fi, under the same
+     * origin check. Needs the one-time code on: with `auth: false` it is
+     * ignored. Off by default: only this machine.
+     */
+    allowLan?: boolean;
   };
 
 function hubUiClientDir(): string | undefined {
@@ -107,6 +125,8 @@ type PangularHub = ReturnType<typeof initHub> & {
    * a `Server-Timing` header. Add it before the Angular request handler.
    */
   ssrMiddleware: ReturnType<typeof createSsrMiddleware>;
+  /** Whether the hub is mounted. `false` when `enabled` is off, as in production by default. */
+  enabled: boolean;
 };
 
 interface HubRegistry {
@@ -123,14 +143,7 @@ function mcpToken(): string {
   const fromEnv = process.env[PANGULAR_MCP_TOKEN_ENV];
   if (fromEnv) return fromEnv;
   const registry = hubRegistry();
-  if (registry.token) return registry.token;
-  const token = (registry.token = randomBytes(24).toString('base64url'));
-  console.log(
-    `\n  Pangular Inspector MCP token: ${token}\n` +
-      `  HTTP MCP clients send it as "Authorization: Bearer <token>".\n` +
-      `  Set ${PANGULAR_MCP_TOKEN_ENV} to keep it the same across restarts.\n`,
-  );
-  return token;
+  return (registry.token ??= loadMcpToken());
 }
 
 function hubMcpFor(options: {
@@ -142,10 +155,19 @@ function hubMcpFor(options: {
 }
 
 /**
+ * Starts the hub without the `enabled` switch, behind `gate` when one is
+ * given. The Vite plugin calls it and runs the same gate in front of its whole
+ * server; apps call `initPangularHub()`.
+ *
  * Keeps one hub per base in the process. A dev server that runs `server.ts`
  * again after a rebuild gets a fresh hub, and the previous one is closed.
+ *
+ * @internal
  */
-export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
+export function startPangularHub(
+  options: Omit<PangularHubOptions, 'enabled' | 'allowLan'> = {},
+  gate?: HubOriginPolicy,
+): PangularHub {
   const { browserDistFolder, auth: authOption, ...hubOptions } = options;
   const { config, rest } = pickPangularConfig(hubOptions);
   const authTokens = isAuthTokens(authOption) ? authTokensFrom(authOption.tokens) : [];
@@ -165,6 +187,8 @@ export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
   let closing: Promise<void> | undefined;
   const own: PangularHub = {
     ...hub,
+    ...(gate ? gatedTransport(hub, gate) : {}),
+    enabled: true,
     ssrMiddleware: createSsrMiddleware({ skip: [hub.base], browserDistFolder }),
     close: () => {
       if (hubs.get(hub.base) === own) hubs.delete(hub.base);
@@ -178,4 +202,118 @@ export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
   hubs.set(hub.base, own);
   void previous?.close();
   return own;
+}
+
+const REFUSED_BODY = 'Pangular Inspector only answers requests from this machine.';
+const EXPRESS_LAN_FIX = 'To answer other machines, pass allowLan: true and keep auth on.';
+
+/**
+ * The request gate for the Express hub: the one the Vite plugin runs, with
+ * the hub's own origin check. `undefined` when `allowedOrigins` is `false`.
+ */
+export function hubGatePolicy(
+  allowedOrigins: NonNullable<InitHubOptions['allowedOrigins']>,
+  remote = false,
+): HubOriginPolicy | undefined {
+  if (allowedOrigins === false) return undefined;
+  const isAllowed = Array.isArray(allowedOrigins)
+    ? (origin: string) => isAllowedOrigin(origin, allowedOrigins)
+    : (origin: string) => (allowedOrigins as WsOriginRegistry).isAllowed(origin);
+  return { isAllowedOrigin: isAllowed, remote };
+}
+
+/** Puts the gate in front of the hub's Express middleware and WebSocket upgrades. */
+function gatedTransport(
+  hub: ReturnType<typeof initHub>,
+  policy: HubOriginPolicy,
+): Pick<ReturnType<typeof initHub>, 'nodeMiddleware' | 'handleUpgrade' | 'handler'> {
+  const blocked = blockedOriginReporter((message) => console.warn(message));
+  return {
+    // A web request carries no peer address, so the handler checks the
+    // headers as for a request from this machine (or from any, with allowLan).
+    handler: (request) => {
+      const headers = Object.fromEntries(request.headers);
+      headers['host'] ??= new URL(request.url).host;
+      const remoteAddress = policy.remote ? '' : '127.0.0.1';
+      const req = { url: request.url, headers, socket: { remoteAddress } };
+      if (!isAllowedHubRequest(req as never, policy, blocked)) {
+        return Promise.resolve(new Response(REFUSED_BODY, { status: 403 }));
+      }
+      return hub.handler(request);
+    },
+    nodeMiddleware: (req, res, next) => {
+      if (isHubPath(req.url, hub.base) && !isAllowedHubRequest(req, policy, blocked)) {
+        refuseHubRequest(req, res, EXPRESS_LAN_FIX);
+        return;
+      }
+      hub.nodeMiddleware(req, res, next);
+    },
+    handleUpgrade: (req, socket, head) => {
+      if (isAllowedHubRequest(req, policy, blocked)) hub.handleUpgrade(req, socket, head);
+      else socket.destroy();
+    },
+  };
+}
+
+/** `enabled`, or on unless `NODE_ENV` is `production`. */
+export function hubEnabled(
+  enabled: boolean | undefined,
+  env: Record<string, string | undefined> = process.env,
+  warn: (message: string) => void = console.warn,
+): boolean {
+  const production = env['NODE_ENV'] === 'production';
+  if (enabled === undefined) return !production;
+  if (enabled && production) {
+    warn(
+      '\n  [pangular] WARNING: the Pangular Inspector hub is on in production (enabled: true with NODE_ENV=production).\n' +
+        '  It exposes your app state, source and agent tools to anyone who can pass its checks.\n' +
+        '  Remove enabled: true unless this server only runs on your machine.\n',
+    );
+  }
+  return enabled;
+}
+
+/** The hub when `enabled` is off: every middleware calls `next()` and nothing is mounted. */
+function disabledHub(base: string): PangularHub {
+  const context = Promise.reject(new Error('[pangular] The hub is off (enabled: false).'));
+  context.catch(() => undefined);
+  return {
+    base,
+    enabled: false,
+    handler: async () => new Response(null, { status: 404 }),
+    nodeMiddleware: (_req, _res, next) => next?.(),
+    ssrMiddleware: ((_req: unknown, _res: unknown, next: () => void) =>
+      next()) as PangularHub['ssrMiddleware'],
+    attach: () => () => undefined,
+    handleUpgrade: (_req, socket) => socket.destroy(),
+    ready: Promise.resolve(),
+    context,
+    connectionMeta: () => {
+      throw new Error('[pangular] The hub is off (enabled: false).');
+    },
+    close: async () => undefined,
+  };
+}
+
+/**
+ * Mounts the devtools hub in an Express or Connect server, behind the request
+ * gate: loopback requests only (unless `allowLan`), a loopback or allowed
+ * `Host`, and the origin check. Off in production unless `enabled` is `true`.
+ */
+export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
+  const { enabled, allowLan, ...hubOptions } = options;
+  const base = normalizeHubBase(hubOptions.base ?? PANGULAR_HUB_BASE);
+  if (!hubEnabled(enabled)) return disabledHub(base);
+  const authOn = hubOptions.auth !== false;
+  if (allowLan === true && !authOn) {
+    console.warn(
+      '[pangular] Ignoring allowLan: it needs the one-time code, and auth is false. Only this machine can reach the devtools.',
+    );
+  }
+  // `allowedOrigins: false` turns the gate off; startPangularHub prints that warning.
+  const policy =
+    hubOptions.allowedOrigins === false
+      ? undefined
+      : hubGatePolicy(hubAllowedOrigins(hubOptions.allowedOrigins), allowLan === true && authOn);
+  return startPangularHub(hubOptions, policy);
 }

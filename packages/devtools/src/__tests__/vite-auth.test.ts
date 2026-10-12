@@ -4,7 +4,7 @@ const hubOptions = vi.hoisted(() => [] as Record<string, unknown>[]);
 
 vi.mock('../hub.ts', () => ({
   PANGULAR_HUB_BASE: '/__devframes/',
-  initPangularHub: (options: Record<string, unknown>) => {
+  startPangularHub: (options: Record<string, unknown>) => {
     hubOptions.push(options);
     return { nodeMiddleware: vi.fn(), close: vi.fn() };
   },
@@ -56,19 +56,17 @@ describe('allowsRemoteOrigins', () => {
 });
 
 describe('hubAuthFor', () => {
-  it('follows the origin policy unless auth is set explicitly', () => {
-    const remote = { allowedOrigins: ['https://tunnel.example'] };
-    expect(hubAuthFor({})).toBe(false);
-    expect(hubAuthFor(remote)).toBe(true);
-    expect(hubAuthFor(remote, false)).toBe(false);
-    expect(hubAuthFor({}, true)).toBe(true);
+  it('is on unless auth is false', () => {
+    expect(hubAuthFor()).toBe(true);
+    expect(hubAuthFor(true)).toBe(true);
+    expect(hubAuthFor(false)).toBe(false);
   });
 });
 
 describe('pangularVite hub auth', () => {
-  it('skips the one-time code for a purely local dev server', () => {
-    expect(hubAuth({})).toBe(false);
-    expect(hubAuth({ allowedOrigins: ['http://localhost:4200'] }, ['localhost'])).toBe(false);
+  it('asks for the one-time code by default, a purely local dev server included', () => {
+    expect(hubAuth({})).toBe(true);
+    expect(hubAuth({ allowedOrigins: ['http://localhost:4200'] }, ['localhost'])).toBe(true);
   });
 
   it('keeps the one-time code when a tunnel host or origin is allowed', () => {
@@ -107,11 +105,12 @@ describe('pangularVite allowedOrigins', () => {
       server,
     );
     const gate = use.mock.calls[0][0] as (req: unknown, res: unknown, next: () => void) => void;
-    const status = (origin: string) => {
+    const status = (origin: string | undefined, host?: string) => {
       const res = { statusCode: 200, end: vi.fn() };
       const next = vi.fn();
+      const headers = { ...(origin === undefined ? {} : { origin }), ...(host ? { host } : {}) };
       gate(
-        { url: '/__devframes/__sse', headers: { origin }, socket: { remoteAddress: '127.0.0.1' } },
+        { url: '/__devframes/__sse', headers, socket: { remoteAddress: '127.0.0.1' } },
         res,
         next,
       );
@@ -133,9 +132,16 @@ describe('pangularVite allowedOrigins', () => {
     }
   });
 
-  it('drops an entry that is not an origin and says so, without turning the code on', () => {
-    const { auth, warn } = plugin(['abc.trycloudflare.com']);
-    expect(auth).toBe(false);
+  it('refuses a loopback request sent to a foreign Host, with or without an Origin', () => {
+    const { warn, status } = plugin([]);
+    expect(status(undefined, 'evil.test')).toBe(403);
+    expect(status('http://localhost:5173', 'evil.test:5173')).toBe(403);
+    expect(status(undefined, 'localhost:5173')).toBe('next');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('host evil.test'));
+  });
+
+  it('drops an entry that is not an origin and says so', () => {
+    const { warn } = plugin(['abc.trycloudflare.com']);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('Ignoring allowedOrigins entry'));
   });
 
@@ -147,9 +153,8 @@ describe('pangularVite allowedOrigins', () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('https://evil.example'));
   });
-  it('accepts the Pangular Inspector extension with no allowedOrigins, without the one-time code', () => {
-    const { auth, status } = plugin([]);
-    expect(auth).toBe(false);
+  it('accepts the Pangular Inspector extension with no allowedOrigins', () => {
+    const { status } = plugin([]);
     expect(status('chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk')).toBe('next');
   });
 
@@ -159,10 +164,9 @@ describe('pangularVite allowedOrigins', () => {
     expect(status('chrome-extension://abcdefghijklmnopabcdefghijklmnop')).toBe(403);
   });
 
-  it('accepts an unpacked extension ID listed in allowedOrigins, without the one-time code', () => {
+  it('accepts an unpacked extension ID listed in allowedOrigins', () => {
     const selfBuilt = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
-    const { auth, warn, status } = plugin([selfBuilt]);
-    expect(auth).toBe(false);
+    const { warn, status } = plugin([selfBuilt]);
     expect(warn).not.toHaveBeenCalled();
     expect(status(selfBuilt)).toBe('next');
     expect(status('chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk')).toBe('next');

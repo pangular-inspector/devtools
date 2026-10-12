@@ -88,9 +88,9 @@ It records Analog page renders, `load()` fetches, server functions and API calls
 
 ### Answers only your machine
 
-The plugin only answers requests from a loopback address (any `127.x.x.x` address or `::1`). Other requests to the devtools get `403` with the message "Pangular Inspector only answers requests from this machine." A request from another machine also gets the fix: set `allowLan: true` and list its origin in `allowedOrigins`. WebSocket upgrades follow the same rules.
+The plugin only answers requests from a loopback address (any `127.x.x.x` address or `::1`) that were sent to a loopback host, or to a host in `server.allowedHosts` or `allowedOrigins`. Other requests to the devtools get `403` with the message "Pangular Inspector only answers requests from this machine." A request from another machine also gets the fix: set `allowLan: true` and list its origin in `allowedOrigins`. WebSocket upgrades follow the same rules.
 
-By default the plugin leaves the one-time code off, and the loopback and origin checks take its place. If `server.allowedHosts` or `allowedOrigins` allows a host that is not a loopback host, the plugin also asks for the code. See [`auth`](#auth). [Access and redaction](../security.md) covers every check.
+The plugin also asks for the one-time code, and the HTTP MCP endpoint for a token, unless you pass `auth: false`. See [`auth`](#auth). [Access and redaction](../security.md) covers every check.
 
 ## Options
 
@@ -103,13 +103,13 @@ pangular({
 });
 ```
 
-| Option           | Default                                                       | What it does                                                             |
-| ---------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `base`           | `'/__devframes/'`                                             | Where the hub is mounted.                                                |
-| `apiPrefix`      | Analog's `apiPrefix`, or `'api'`                              | The prefix of your server routes, used to classify API calls.            |
-| `allowedOrigins` | none                                                          | Extra exact origins allowed to reach the devtools, for example a tunnel. |
-| `auth`           | on if a non-loopback host or origin is allowed, otherwise off | Whether the devtools ask for the one-time code, and its pairing tokens.  |
-| `allowLan`       | `false`                                                       | Answer other machines, such as a phone on Wi-Fi, from listed origins.    |
+| Option           | Default                          | What it does                                                             |
+| ---------------- | -------------------------------- | ------------------------------------------------------------------------ |
+| `base`           | `'/__devframes/'`                | Where the hub is mounted.                                                |
+| `apiPrefix`      | Analog's `apiPrefix`, or `'api'` | The prefix of your server routes, used to classify API calls.            |
+| `allowedOrigins` | none                             | Extra exact origins allowed to reach the devtools, for example a tunnel. |
+| `auth`           | on                               | Whether the devtools ask for the one-time code, and its pairing tokens.  |
+| `allowLan`       | `false`                          | Answer other machines, such as a phone on Wi-Fi, from listed origins.    |
 
 The plugin also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](./configuration.md).
 
@@ -123,28 +123,27 @@ The plugin reads `apiPrefix` from your Analog config. Set it here only when the 
 
 ### `allowedOrigins`
 
-Each entry is an origin, such as `https://tunnel.example` or `chrome-extension://<id>`. The request itself must still come from a loopback address. The plugin trusts the [Chrome extension](./chrome-extension.md#server-origin) by its fixed ID with no entry, and refuses every other extension that is not listed. Add an entry only for a build of the extension with another ID. An extension entry does not turn the one-time code on. A Capacitor app on iOS sends `capacitor://localhost`, which works as an entry too and turns the one-time code on. See [Capacitor](../guides/capacitor.md).
+Each entry is an origin, such as `https://tunnel.example` or `chrome-extension://<id>`. The request itself must still come from a loopback address. The plugin trusts the [Chrome extension](./chrome-extension.md#server-origin) by its fixed ID with no entry, and refuses every other extension that is not listed. Add an entry only for a build of the extension with another ID. A Capacitor app on iOS sends `capacitor://localhost`, which works as an entry too. See [Capacitor](../guides/capacitor.md).
 
 The plugin reads each entry the way a browser sends an origin: it drops a path or a trailing slash and lowercases the host, so `'https://Tunnel.example/app/'` allows `https://tunnel.example`. It prints a warning in the terminal when it changes an entry, and it ignores an entry that is not a URL, such as `'tunnel.example'`. The first request from each origin that the check refuses also prints a warning that names the origin.
 
 ### `auth`
 
-A tunnel forwards other people's requests to your machine, and those requests arrive from a loopback address. So the plugin turns the one-time code on when Vite's `server.allowedHosts` or `allowedOrigins` allows anything other than `localhost` or a loopback address (`allowedHosts: true` counts too). The server prints the code in the terminal, and a browser reads data only after it exchanges that code.
+The plugin asks for the one-time code by default. The server prints the code in the terminal, and a browser reads data only after it exchanges that code. A tunnel forwards other people's requests to your machine, and those requests arrive from a loopback address, so the loopback check alone does not keep them out.
 
 | Value             | Effect                                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------------------------------ |
-| not set           | The code is on only if a non-loopback host or origin is allowed.                                             |
-| `true`            | The code is always on.                                                                                       |
+| not set, `true`   | The code is on.                                                                                              |
 | `false`           | The code is always off. The loopback and origin checks still apply.                                          |
 | `{tokens: [...]}` | The code is on, and a client that sends one of the [pairing tokens](../security.md#pairing-tokens) skips it. |
 
-While the code is on, the HTTP MCP endpoint also asks for a bearer token. See [Send a token](../agents/mcp-server.md#send-a-token).
+While the code is on, the HTTP MCP endpoint also asks for a bearer token, which the server writes to a file only you can read. See [Send a token](../agents/mcp-server.md#send-a-token).
 
-If your tunnel rewrites the `Host` header to `localhost`, you don't list it in `server.allowedHosts`, so the plugin leaves the code off. Pass `auth: true`:
+To turn the code and the MCP token off on a machine only you use, pass `auth: false`. The loopback, `Host` and origin checks still apply. Keep the code on whenever a tunnel or another device can reach the dev server:
 
 ```ts
 // vite.config.ts
-pangular({auth: true});
+pangular({auth: false});
 ```
 
 ## Hostnames other than localhost
@@ -174,7 +173,7 @@ Add other origins with `allowedOrigins`:
 pangular({allowedOrigins: ['https://tunnel.example']});
 ```
 
-A non-loopback entry in `server.allowedHosts` or `allowedOrigins` turns the one-time code on. See [`auth`](#auth).
+Keep the one-time code on while a tunnel is allowed. See [`auth`](#auth).
 
 ### Other devices on your network
 
@@ -204,7 +203,7 @@ Start Vite on every interface too, with `server.host: true`. A request from anot
     No. It applies to the dev server only, and the overlay import is guarded by <code>import.meta.env.DEV</code>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why do I get a 403 from the devtools?">
-    The request did not come from your machine, or its origin is not trusted. The terminal names a refused origin. Open the app on <code>localhost</code>, list your hostname in <code>server.allowedHosts</code>, or add the origin to <code>allowedOrigins</code>.
+    The request did not come from your machine, or its origin or the host it was sent to is not trusted. The terminal names a refused origin or host. Open the app on <code>localhost</code>, list your hostname in <code>server.allowedHosts</code>, or add the origin to <code>allowedOrigins</code>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The Analog tab shows no server calls">
     The plugin records server calls made through the Vite dev server. Check that the plugin is registered and that <code>apiPrefix</code> matches your server routes. The <a href="../guides/analog.md">Analog guide</a> walks through a full setup.

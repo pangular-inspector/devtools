@@ -5,7 +5,7 @@ const hubOptions = vi.hoisted(() => [] as Record<string, unknown>[]);
 
 vi.mock('../hub.ts', () => ({
   PANGULAR_HUB_BASE: '/__devframes/',
-  initPangularHub: (options: Record<string, unknown>) => {
+  startPangularHub: (options: Record<string, unknown>) => {
     hubOptions.push(options);
     return {
       nodeMiddleware: vi.fn(),

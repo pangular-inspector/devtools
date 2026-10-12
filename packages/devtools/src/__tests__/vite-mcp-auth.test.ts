@@ -7,7 +7,7 @@ type Middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) 
 
 const servers: Server[] = [];
 
-async function devServer(allowedHosts?: readonly string[] | true) {
+async function devServer(allowedHosts?: readonly string[] | true, auth?: boolean) {
   const middlewares: Middleware[] = [];
   const httpServer = createServer((req, res) => {
     const run = (i: number): void => {
@@ -22,7 +22,7 @@ async function devServer(allowedHosts?: readonly string[] | true) {
     run(0);
   });
   servers.push(httpServer);
-  const plugin = pangularVite({ apiPrefix: 'api' });
+  const plugin = pangularVite({ apiPrefix: 'api', ...(auth === undefined ? {} : { auth }) });
   (plugin.configureServer as (server: unknown) => void)({
     config: { root: process.cwd(), server: { allowedHosts } },
     middlewares: { use: (middleware: Middleware) => middlewares.push(middleware) },
@@ -53,8 +53,15 @@ afterEach(async () => {
 });
 
 describe('pangularVite MCP route', () => {
-  it('stays open for a purely local dev server', async () => {
+  it('asks for the MCP token on a purely local dev server too', async () => {
+    vi.stubEnv('PANGULAR_MCP_TOKEN', 'local-secret');
     const mcp = await devServer();
+    expect((await mcp()).status).toBe(401);
+    expect((await mcp('local-secret')).status).toBe(200);
+  });
+
+  it('stays open with auth: false', async () => {
+    const mcp = await devServer(undefined, false);
     expect((await mcp()).status).toBe(200);
   });
 
