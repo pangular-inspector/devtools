@@ -49,20 +49,23 @@ describe('injector tree loading and row actions', () => {
     const rpc = {
       call: () => Promise.resolve([]),
       callEvent: () => Promise.resolve(),
-      sharedState: () =>
-        new Promise((resolve) => {
-          pending.push(() =>
-            resolve({
-              value: () => ({ roots: [], environment: [] }),
-              on: () => {
-                active++;
-                return () => {
-                  active--;
-                };
-              },
+      // The page-angular state answers at once; only the tree load is held.
+      sharedState: (name: string) =>
+        name === 'page-angular'
+          ? Promise.resolve({ value: () => null, on: () => () => {} })
+          : new Promise((resolve) => {
+              pending.push(() =>
+                resolve({
+                  value: () => ({ roots: [], environment: [] }),
+                  on: () => {
+                    active++;
+                    return () => {
+                      active--;
+                    };
+                  },
+                }),
+              );
             }),
-          );
-        }),
     };
     const client = { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
     const fixture = TestBed.createComponent(DiInspector);
@@ -91,7 +94,10 @@ describe('injector tree loading and row actions', () => {
     const rpc = {
       call: () => Promise.resolve([]),
       callEvent: () => Promise.resolve(),
-      sharedState: () => {
+      sharedState: (name: string) => {
+        if (name === 'page-angular') {
+          return Promise.resolve({ value: () => null, on: () => () => {} });
+        }
         const state = states[call++];
         return new Promise((resolve) => {
           pending.push(() => resolve({ value: () => state, on: () => () => {} }));

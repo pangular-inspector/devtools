@@ -125,7 +125,7 @@ The live tree needs a development build. It uses `ng.getInjector`, `ng.getCompon
 - `ɵgetInjectorResolutionPath` gives the lookup path.
 - `ɵgetDependenciesFromInjectable` gives the tokens each class injects.
 
-The source-mode notice says to connect the overlay on Angular 20 or later for the live tree.
+The source-mode notice says to connect the overlay to a development build for the live tree. Before Angular 17.0 some of these helpers are missing, and the tree is reduced. See [On older Angular](#on-older-angular).
 
 ## How to use it
 
@@ -174,6 +174,17 @@ See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
 ## Limits and gotchas
 
+### On older Angular
+
+The full tree needs Angular 17.0 or later. On older versions the tab shows a note with the page's version above a reduced tree:
+
+| Angular      | What the tree shows                                                                                                  |
+| ------------ | -------------------------------------------------------------------------------------------------------------------- |
+| 16.2 to 16.x | Element and environment injectors with providers and dependencies. Lookup paths list only the environment injectors. |
+| 12.0 to 16.1 | Element injectors with their components and directives, without providers or environment injectors.                  |
+
+`inspect-providers` starts its answer with the same note. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
+
 ### Up to 2000 element injectors
 
 The page reports at most 2000 element injectors. Environment injectors are kept after them, up to 2500 injectors in all, so they never push element injectors out. Injectors nested more than 1000 levels deep are left out too. When any of these limits cuts the tree, a notice above the tree says the page reported only part of its injector tree, and a lookup path or a provider can point to an injector that isn't listed. `inspect-providers` says it too.
@@ -193,7 +204,7 @@ The **Root Providers** group matches a fixed list of Angular `provide*()` functi
     The source scan reads constructor parameters only in classes with an Angular decorator, such as <code>&#64;Component</code> or <code>&#64;Injectable</code>. A parameter typed as a primitive, without <code>&#64;Inject()</code>, has no token to list. The live tree has every injection.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why does the tab show source mode instead of the live tree?">
-    No live tree has reached the tab. The live tree needs the overlay, a development build and Angular 20 or later.
+    No live tree has reached the tab. The live tree needs the overlay and a development build of Angular 12 or later. If the page's Angular lacks the debug API, the tab says which version it needs.
   </ngmd-accordion-item>
 </ngmd-accordion>
 

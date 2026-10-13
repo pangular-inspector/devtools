@@ -829,6 +829,9 @@ export const SHARED_RPC: readonly string[] = [
   'build-meta',
   'claim-page',
   'report-page-visibility',
+  // Each page's Angular version and debug API parts, read by every view.
+  'report-page-angular',
+  'forget-page-angular',
   // The activity lease: pages ask whether a panel or an agent watches.
   'page-interest',
   'list-pages',
@@ -1016,7 +1019,7 @@ export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
 };
 
 /** Shared-state keys that belong to no inspector, without the `pangular:` prefix. */
-export const SHARED_STATE_KEYS: readonly string[] = ['page-visibility'];
+export const SHARED_STATE_KEYS: readonly string[] = ['page-visibility', 'page-angular'];
 
 /**
  * Whether MCP clients may read a shared-state key. A `pangular:` key in
@@ -1419,4 +1422,130 @@ export function matchesTreeQuery(node: TreeQueryNode, query: TreeQuery): boolean
     if (!hit) return false;
   }
   return true;
+}
+
+// --- Angular versions ---
+// What each inspector needs from Angular's debug API, shared by the overlay,
+// the agent tools and the panel so they all name the same version.
+// `docs/angular-compat.md` lists where each version comes from.
+/**
+ * A part of Angular's debug API that some inspector needs. The overlay finds
+ * each one on the page at runtime (`ng-capabilities.ts`).
+ */
+export type AngularCapability =
+  /** `ng.getComponent`, `getDirectives`, `getInjector`, `getHostElement`: Ivy development builds, Angular 12+. */
+  | 'debugApi'
+  /** `ng.ɵgetInjectorProviders`, `ɵgetInjectorResolutionPath`, `ɵgetDependenciesFromInjectable`: 16.2+. */
+  | 'injectorProviders'
+  /** `ng.ɵgetInjectorMetadata`: 17.0+. */
+  | 'injectorMetadata'
+  /** `ng.isSignal`: 17.1+. */
+  | 'isSignal'
+  /** `ng.ɵgetSignalGraph`: 19.1+, with node ids from 20.1. */
+  | 'signalGraph'
+  /** `ng.ɵgetDeferBlocks` (19.1 to 21.x) or `ng.ɵgetControlFlowBlocks` (22.0+). */
+  | 'deferBlocks'
+  /** `ng.ɵgetControlFlowBlocks`: 22.0+. */
+  | 'forBlocks'
+  /** `ng.ɵsetProfiler` that adds a profiler and hands back its remover: 20.0+. */
+  | 'profiler'
+  /** `ng.enableProfiling`: 20.0+. */
+  | 'angularProfiling'
+  /** `ng.ɵgetRouterInstance`, published by `provideRouter()`: 20.3.5+. */
+  | 'routerInstance';
+
+export const ANGULAR_CAPABILITIES: readonly AngularCapability[] = [
+  'debugApi',
+  'injectorProviders',
+  'injectorMetadata',
+  'isSignal',
+  'signalGraph',
+  'deferBlocks',
+  'forBlocks',
+  'profiler',
+  'angularProfiling',
+  'routerInstance',
+];
+
+/** The Angular a page runs and the debug API parts it has, as the overlay reports them. */
+export interface AngularPageInfo {
+  /** The `ng-version` attribute of the first Angular root, such as `15.2.10`. */
+  version?: string;
+  /** Each capability the overlay checked, `true` when the page has it. */
+  capabilities: Partial<Record<AngularCapability, boolean>>;
+}
+
+interface FeatureNeed {
+  /** What needs it, as the subject of "… needs Angular X or later". */
+  subject: string;
+  /** The first Angular version where it works, `major.minor`. */
+  since: string;
+}
+
+/**
+ * The first version each capability works in, and how the panel and the
+ * agent tools name what is missing without it.
+ */
+export const ANGULAR_FEATURE_NEEDS: Record<AngularCapability, FeatureNeed> = {
+  debugApi: { subject: 'Live data', since: '12.0' },
+  injectorProviders: { subject: 'Reading providers and environment injectors', since: '16.2' },
+  injectorMetadata: { subject: 'The full injector tree', since: '17.0' },
+  isSignal: { subject: 'Telling signals apart in component values', since: '17.1' },
+  // `ɵgetSignalGraph` exists from 19.1, but its nodes carry ids only from 20.1.
+  signalGraph: { subject: 'The live signal graph', since: '20.1' },
+  deferBlocks: { subject: 'Listing @defer blocks', since: '19.1' },
+  forBlocks: { subject: 'Listing @for blocks', since: '22.0' },
+  profiler: { subject: 'Recording change detection', since: '20.0' },
+  angularProfiling: { subject: 'Angular profiling', since: '20.0' },
+  routerInstance: { subject: 'The router debug util', since: '20.3' },
+};
+
+/** `15.2.10` as `15.2`; anything that is not a version as it is. */
+export function shortAngularVersion(version: string): string {
+  const match = /^(\d+)\.(\d+)/.exec(version.trim());
+  return match ? `${match[1]}.${match[2]}` : version.trim();
+}
+
+function versionParts(version: string): [number, number] | null {
+  const match = /^(\d+)(?:\.(\d+))?/.exec(version.trim());
+  return match ? [Number(match[1]), Number(match[2] ?? 0)] : null;
+}
+
+/** Whether `version` is at least `since` (both `major.minor`, patch ignored). */
+export function angularVersionAtLeast(version: string, since: string): boolean {
+  const have = versionParts(version);
+  const want = versionParts(since);
+  if (!have || !want) return false;
+  return have[0] !== want[0] ? have[0] > want[0] : have[1] >= want[1];
+}
+
+/**
+ * Whether the page lacks `capability`. A page that never reported its
+ * capabilities (an older overlay, a native platform) is not marked as lacking it.
+ */
+export function lacksCapability(
+  info: AngularPageInfo | null | undefined,
+  capability: AngularCapability,
+): boolean {
+  return info?.capabilities?.[capability] === false;
+}
+
+/**
+ * One sentence that says what needs which Angular version and what the page
+ * runs, such as "The live signal graph needs Angular 20.1 or later; this page
+ * runs Angular 15.2." A page on a new enough version without the util runs a
+ * production build, which leaves the debug API out.
+ */
+export function angularUnavailableText(
+  capability: AngularCapability,
+  version: string | undefined,
+): string {
+  const need = ANGULAR_FEATURE_NEEDS[capability];
+  const head = `${need.subject} needs Angular ${need.since} or later`;
+  if (!version) return `${head}; this page's Angular version is unknown.`;
+  const runs = shortAngularVersion(version);
+  if (angularVersionAtLeast(version, need.since)) {
+    return `${head} in a development build; this page runs Angular ${runs} without it, which usually means a production build.`;
+  }
+  return `${head}; this page runs Angular ${runs}.`;
 }

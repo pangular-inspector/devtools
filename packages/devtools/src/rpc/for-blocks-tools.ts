@@ -1,4 +1,6 @@
+import type { AngularPageInfo } from '../config.ts';
 import type { ComponentPage, ForBlockInfo } from '../types.ts';
+import { unsupportedToolText } from './angular-pages.ts';
 import { untrusted } from './forms-tools.ts';
 import { capped } from './router-tools.ts';
 
@@ -24,7 +26,10 @@ function notes(block: ForBlockInfo): string {
  * page lists at most {@link FOR_ROWS} blocks, and the whole answer is cut by
  * {@link capped}.
  */
-export function forBlocksText(pages: ComponentPage[]): string {
+export function forBlocksText(
+  pages: ComponentPage[],
+  angularOf: (pageId: string) => AngularPageInfo | undefined = () => undefined,
+): string {
   if (!pages.length) {
     return 'No component tree has been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.';
   }
@@ -34,6 +39,12 @@ export function forBlocksText(pages: ComponentPage[]): string {
     const title = `Page \`${page.pageId}\`${page.url ? ` (${page.url})` : ''}`;
     const blocks = page.forBlocks;
     if (!blocks) {
+      const unsupported = unsupportedToolText(
+        angularOf(page.pageId),
+        'forBlocks',
+        'Its `@for` blocks cannot be listed.',
+      );
+      if (unsupported) return `${title}: ${unsupported}`;
       return `${title}: this page's Angular has no \`ng.ɵgetControlFlowBlocks\`, which Angular 22.0 added for development builds, so its \`@for\` blocks cannot be listed. Update Angular or use a development build.`;
     }
     if (!blocks.length) return `${title}: no \`@for\` blocks are rendered.`;

@@ -18,6 +18,8 @@ import { NgTemplateOutlet } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { pickPage, type ReportedPage } from '../live-pages';
 import { hostPageId } from '../page-id';
+import { angularPageFor, injectAngularPages } from '../angular-pages';
+import { AngularUnavailable } from '../ui/angular-unavailable';
 import { Select, type SelectOption } from '../ui/select';
 import { zoneLabel } from './dashboard';
 import { SourceLink } from '../ui/source-link';
@@ -120,7 +122,7 @@ function isTree(value: unknown): value is InjectorNode[] {
 
 @Component({
   selector: 'app-di-inspector',
-  imports: [NgTemplateOutlet, Select, SourceLink, StoreGlobal],
+  imports: [AngularUnavailable, NgTemplateOutlet, Select, SourceLink, StoreGlobal],
   template: `
     <p class="sr-only" role="status">{{ announcement() }}</p>
     <ng-template #loadError let-compact="compact">
@@ -154,6 +156,10 @@ function isTree(value: unknown): value is InjectorNode[] {
         Every component and directive gets an injector. When it asks for a token, Angular walks up
         this tree, then through the environment injectors, until something provides it.
       </p>
+      <app-angular-unavailable [page]="angularPage()" capability="injectorMetadata" compact>
+        This tree shows the element injectors the page reports, with providers and environment
+        injectors only where its Angular exposes them.
+      </app-angular-unavailable>
 
       <div class="toolbar">
         <div class="segmented" role="group" aria-label="Injector tree">
@@ -605,9 +611,10 @@ function isTree(value: unknown): value is InjectorNode[] {
         </svg>
         <span>
           <strong>DI from source scan (static analysis).</strong>
-          Connect the overlay on Angular 20 or later to see the live injector tree.
+          Connect the overlay to a development build to see the live injector tree.
         </span>
       </p>
+      <app-angular-unavailable [page]="angularPage()" capability="debugApi" compact />
       @if (groupedProviders().length === 0) {
         <div class="state">
           <p class="state-title">No providers match “{{ query() }}”</p>
@@ -1468,6 +1475,11 @@ export class DiInspector {
 
   readonly nullId = NULL_ID;
   private readonly hostPage = hostPageId();
+  private readonly angularPages = injectAngularPages(() => this.rpc());
+  /** The shown page's Angular version and debug API parts, for the unavailable notes. */
+  readonly angularPage = computed(() =>
+    angularPageFor(this.angularPages(), this.shownPageId() || this.hostPage),
+  );
   private readonly treeState = signal<InjectorTreeState | null>(null);
   private readonly pageTitles = signal<Record<string, { title?: string; url?: string }>>({});
   readonly chosenPageId = signal<string | null>(null);

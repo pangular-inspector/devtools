@@ -17,6 +17,9 @@ import {
 import type { DevframeRpcClient } from 'devframe/client';
 import { ExtensionBridge, type SourceLocation } from '../extension-bridge';
 import { hostPageId } from '../page-id';
+import { angularVersionAtLeast, lacksCapability } from '@pangular-inspector/devtools/config';
+import { angularPageFor, injectAngularPages } from '../angular-pages';
+import { AngularUnavailable } from '../ui/angular-unavailable';
 import { pickPage } from '../live-pages';
 import { isNativePage } from '../native-page';
 import { isStaticReport } from '../rpc';
@@ -198,6 +201,7 @@ function storedDirectiveHosts(): boolean {
     StoreGlobal,
     ForBlocksSection,
     HydrationSection,
+    AngularUnavailable,
   ],
   host: { '(keydown.escape)': 'cancelPick()' },
   template: `
@@ -772,6 +776,14 @@ function storedDirectiveHosts(): boolean {
           </ul>
         </section>
       }
+      @if (deferUnavailable()) {
+        <app-angular-unavailable
+          class="defer"
+          [page]="angularPage()"
+          capability="deferBlocks"
+          compact
+        />
+      }
       @if (!native()) {
         <app-hydration-section
           [report]="page()?.hydration"
@@ -783,7 +795,8 @@ function storedDirectiveHosts(): boolean {
       <app-for-blocks
         [blocks]="page()?.forBlocks"
         [truncated]="page()?.forBlocksTruncated === true"
-        [supported]="page()?.deferBlocks && !page()?.forBlocks ? false : null"
+        [supported]="(page()?.deferBlocks && !page()?.forBlocks) || forUnavailable() ? false : null"
+        [angular]="angularPage()"
         (showOwner)="showForOwner($event)"
         (highlight)="highlight($event)"
       />
@@ -1705,6 +1718,22 @@ export class ComponentTree {
   readonly openKey = signal<string | null>(null);
   private readonly routerPages = signal<{ pageId?: string; outlets?: OutletInfo[] }[]>([]);
   private readonly pageId = hostPageId();
+  private readonly angularPages = injectAngularPages(() => this.rpc());
+  /** The shown page's Angular version and debug API parts, for the unavailable notes. */
+  readonly angularPage = computed(() =>
+    angularPageFor(this.angularPages(), this.page()?.pageId ?? this.pageId),
+  );
+  /** `@defer` and `@for` exist from Angular 17.0, so older pages get no note about them. */
+  private readonly hasControlFlow = computed(() => {
+    const version = this.angularPage()?.version;
+    return !version || angularVersionAtLeast(version, '17.0');
+  });
+  readonly deferUnavailable = computed(
+    () => this.hasControlFlow() && lacksCapability(this.angularPage(), 'deferBlocks'),
+  );
+  readonly forUnavailable = computed(
+    () => this.hasControlFlow() && lacksCapability(this.angularPage(), 'forBlocks'),
+  );
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);

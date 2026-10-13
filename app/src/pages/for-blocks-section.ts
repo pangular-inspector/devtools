@@ -1,4 +1,6 @@
 import { Component, input, output } from '@angular/core';
+import type { AngularPageInfo } from '@pangular-inspector/devtools/config';
+import { AngularUnavailable } from '../ui/angular-unavailable';
 
 export interface ForBlock {
   id: string;
@@ -23,6 +25,7 @@ const TRACK_LABEL: Record<string, string> = {
  */
 @Component({
   selector: 'app-for-blocks',
+  imports: [AngularUnavailable],
   template: `
     @if (blocks(); as list) {
       @if (list.length) {
@@ -66,10 +69,13 @@ const TRACK_LABEL: Record<string, string> = {
         </section>
       }
     } @else if (supported() === false) {
-      <p class="note for">
-        &#64;for blocks are listed from Angular 22.0 in development builds. This page's Angular does
-        not report them.
-      </p>
+      <app-angular-unavailable
+        class="for"
+        [page]="angular()"
+        capability="forBlocks"
+        missing
+        compact
+      />
     }
   `,
   styles: `
@@ -175,6 +181,8 @@ export class ForBlocksSection {
   readonly truncated = input(false);
   /** `false` when the page reports defer blocks but no `@for` blocks: its Angular is older than 22.0. */
   readonly supported = input<boolean | null>(null);
+  /** The page's Angular version, which the unavailable note names. */
+  readonly angular = input<AngularPageInfo | null>(null);
   readonly showOwner = output<ForBlock>();
   /** The element to highlight in the app, or `null` to clear it. */
   readonly highlight = output<string | null>();

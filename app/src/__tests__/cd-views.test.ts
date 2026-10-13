@@ -129,7 +129,7 @@ describe('CdRecording live views', () => {
       }),
     );
     expect(toggle('Angular profiling').disabled).toBe(true);
-    expect(host().textContent).toContain('It needs Angular 20 or later in a development build.');
+    expect(host().textContent).toContain('Angular profiling needs Angular 20.0 or later');
   });
 
   it('puts a toggle back when the page cannot be reached', async () => {

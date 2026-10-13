@@ -39,9 +39,13 @@ Most page tools take an optional `page` argument to pick a browser tab. It defau
 
 If `page` names a tab that doesn't report that data, the tool answers `No page <id> is reporting ...` and lists the tabs that do, newest first. It never falls back to another tab. Without `page`, a class name or tag resolves on the most recent tab that has it, and `highlight` names the other tabs where it also matches.
 
+### Older Angular versions
+
+When the page's Angular lacks the debug API a tool needs, the tool answers **Unsupported on this Angular version** with the version the feature needs and the version the page runs, instead of an empty list. `inspect-signals`, `watch-signal`, `defer-blocks`, `for-blocks` and `change-detection` answer this way. `inspect-providers` puts the same note before a reduced tree. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
+
 ### list-pages
 
-Lists the tabs, [Angular Native](../getting-started/angular-native.md) apps, [NativeScript](../getting-started/nativescript.md) apps and [Capacitor](../guides/capacitor.md) apps that report to the server, newest first: page id, URL, title, platform (`browser`, `Angular Native`, `NativeScript`, or `Capacitor (android)` and `Capacitor (ios)` for an app in a native WebView), seconds since the last report, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
+Lists the tabs, [Angular Native](../getting-started/angular-native.md) apps, [NativeScript](../getting-started/nativescript.md) apps and [Capacitor](../guides/capacitor.md) apps that report to the server, newest first: page id, URL, title, platform (`browser`, `Angular Native`, `NativeScript`, or `Capacitor (android)` and `Capacitor (ios)` for an app in a native WebView, followed by the page's Angular version when it reported one, as in `browser, Angular 15.2`), seconds since the last report, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
 
 The URL comes from the HTTP or router report. A page that sends neither (no router, and no [HTTP setup](../getting-started/express.md)) still shows the URL its component tree reports, which also stands in when the other reports are more than 15 seconds older. A tab in the background stops reporting until it is shown again, so its last report is marked `(background)`: an old time there means the data is the last known state, not that the page is gone.
 

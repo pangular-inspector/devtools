@@ -15,6 +15,8 @@ import {
 import type { DevframeRpcClient } from 'devframe/client';
 import { time } from '../format';
 import { hostPageId } from '../page-id';
+import { angularPageFor, injectAngularPages } from '../angular-pages';
+import { AngularUnavailable } from '../ui/angular-unavailable';
 import { rpcCall as call } from '../rpc';
 import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
 import { LimitNote } from '../ui/limit-note';
@@ -97,7 +99,15 @@ const CLASSIC_KINDS = new Set([
 
 @Component({
   selector: 'app-store-inspector',
-  imports: [LimitNote, RovingList, Select, NgTemplateOutlet, SourceLink, StoreGlobal],
+  imports: [
+    AngularUnavailable,
+    LimitNote,
+    RovingList,
+    Select,
+    NgTemplateOutlet,
+    SourceLink,
+    StoreGlobal,
+  ],
   template: `
     <div class="toolbar">
       <input
@@ -151,6 +161,10 @@ const CLASSIC_KINDS = new Set([
           </p>
         </div>
       } @else if (!liveStores().length) {
+        <app-angular-unavailable [page]="angularPage()" capability="injectorProviders" compact>
+          The overlay finds stores through the injectors, so stores it can't reach from a component
+          are not listed.
+        </app-angular-unavailable>
         <div class="empty">
           @if (usesSignals()) {
             <p class="empty-title">No signal store instance on this page yet.</p>
@@ -1736,6 +1750,11 @@ export class StoreInspector {
   readonly stateLoaded = signal(false);
   readonly selectedPageId = signal<string | null>(null);
   private readonly hostPageId = hostPageId();
+  private readonly angularPages = injectAngularPages(() => this.rpc());
+  /** The shown page's Angular version and debug API parts, for the unavailable note. */
+  readonly angularPage = computed(() =>
+    angularPageFor(this.angularPages(), this.page()?.pageId ?? this.hostPageId),
+  );
   readonly maxLog = computed(() => panelConfig(this.rpc()).limits.changeLog);
   readonly selectedStoreId = signal<string | null>(null);
   private readonly focusEventSeq = signal<number | null>(null);

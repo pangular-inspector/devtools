@@ -1,3 +1,5 @@
+import type { AngularPageInfo } from '../config.ts';
+import { unsupportedToolText } from './angular-pages.ts';
 import { MAX_DEFER_BLOCKS } from '../defer-blocks.ts';
 import { MAX_FOR_BLOCKS } from '../for-blocks.ts';
 import type {
@@ -235,7 +237,11 @@ const PANEL = 'The Defer blocks list on the Components page of the panel has eve
  * page lists at most {@link DEFER_ROWS} blocks, and the whole answer is cut
  * by {@link capped}.
  */
-export function deferBlocksText(pages: ComponentPage[], now = Date.now()): string {
+export function deferBlocksText(
+  pages: ComponentPage[],
+  now = Date.now(),
+  angularOf: (pageId: string) => AngularPageInfo | undefined = () => undefined,
+): string {
   if (!pages.length) {
     return 'No component tree has been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.';
   }
@@ -244,6 +250,8 @@ export function deferBlocksText(pages: ComponentPage[], now = Date.now()): strin
   const sections = pages.map((page) => {
     const title = `Page \`${page.pageId}\`${page.url ? ` (${page.url})` : ''}`;
     if (!page.deferBlocks) {
+      const unsupported = unsupportedToolText(angularOf(page.pageId), 'deferBlocks');
+      if (unsupported) return `${title}: ${unsupported}`;
       return `${title}: this page's Angular exposes no defer block util (\`ng.ɵgetControlFlowBlocks\` or \`ng.ɵgetDeferBlocks\`). It needs a development build.`;
     }
     if (!page.deferBlocks.length) return `${title}: no \`@defer\` blocks are rendered.`;

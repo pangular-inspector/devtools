@@ -1,3 +1,5 @@
+import type { AngularPageInfo } from '../config.ts';
+import { unsupportedToolText } from './angular-pages.ts';
 import type { CdReport } from '../cd-overlay.ts';
 import type { CdOptions } from '../config.ts';
 import { sanitizeCdRecording, toCdOptions } from '../cd-data.ts';
@@ -223,6 +225,7 @@ export function cdTimingText(
 export function changeDetectionText(
   state: CdState,
   args: { page?: string; limit?: number } = {},
+  angularOf: (pageId: string) => AngularPageInfo | undefined = () => undefined,
 ): string {
   const page = pickCdPage(state, args.page);
   if (!page) {
@@ -231,6 +234,8 @@ export function changeDetectionText(
       : 'No change detection recording yet. Call this tool with `record: "start"`, use the app, then call it again.';
   }
   if (!page.supported) {
+    const unsupported = unsupportedToolText(angularOf(page.pageId), 'profiler');
+    if (unsupported) return `Page ${code(page.pageId)}: ${unsupported}`;
     return `Page ${code(page.pageId)} can't record change detection: it needs Angular 20 or later in a development build.`;
   }
   // Agents send strings, NaN and null too: anything that is not a finite number is the default.

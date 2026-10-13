@@ -5,6 +5,8 @@ import { panelConfig } from '../devtools-config';
 import { time } from '../format';
 import { rpcCall as call } from '../rpc';
 import { LimitNote } from '../ui/limit-note';
+import { AngularUnavailable } from '../ui/angular-unavailable';
+import { angularPageFor, injectAngularPages } from '../angular-pages';
 import { aggregateComponents, cyclesInRange, type CdRange } from './cd-chart-data';
 import { CdCycleChart } from './cd-cycle-chart';
 import { CdFlameGraph } from './cd-flame-graph';
@@ -22,7 +24,15 @@ const SHOWN_CYCLES = 30;
 /** Record and Stop for change detection, with the slowest components and the latest cycles. */
 @Component({
   selector: 'app-cd-recording',
-  imports: [LimitNote, CdTiming, CdTransfer, CdCycleChart, CdFlameGraph, CdTreemap],
+  imports: [
+    AngularUnavailable,
+    LimitNote,
+    CdTiming,
+    CdTransfer,
+    CdCycleChart,
+    CdFlameGraph,
+    CdTreemap,
+  ],
   template: `
     <section class="cd" aria-labelledby="cd-heading">
       <div class="cd-head">
@@ -57,7 +67,7 @@ const SHOWN_CYCLES = 30;
         instance was checked. Times come from a development build.
       </p>
       @if (page()?.supported === false) {
-        <p class="note">This page can't record change detection. It needs Angular 20 or later.</p>
+        <app-angular-unavailable [page]="angularPage()" capability="profiler" missing compact />
       }
       @if (!imported()) {
         <div class="views" role="group" aria-labelledby="cd-views-label">
@@ -104,10 +114,12 @@ const SHOWN_CYCLES = 30;
         @if (views().angularProfiling) {
           <p class="note">Angular profiling stays on until the page reloads.</p>
         } @else if (!views().angularProfilingAvailable) {
-          <p class="note">
-            This page has no <span class="mono">ng.enableProfiling</span>. It needs Angular 20 or
-            later in a development build.
-          </p>
+          <app-angular-unavailable
+            [page]="angularPage()"
+            capability="angularProfiling"
+            missing
+            compact
+          />
         }
       }
       <app-limit-note
@@ -386,6 +398,9 @@ export class CdRecording {
   readonly livePage = input<CdPage | null>(null, { alias: 'page' });
   readonly pageId = input<string | null>(null);
   readonly rpc = input<DevframeRpcClient | null>(null);
+  private readonly angularPages = injectAngularPages(() => this.rpc());
+  /** This page's Angular version, for the unavailable notes. */
+  readonly angularPage = computed(() => angularPageFor(this.angularPages(), this.pageId()));
   /** A component class picked in the treemap, to show in the component tree. */
   readonly showComponent = output<string>();
   /** The cycles picked in the chart by id, or null for all of them. */

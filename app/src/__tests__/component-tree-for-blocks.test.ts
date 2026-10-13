@@ -91,7 +91,7 @@ describe('@for blocks section', () => {
 
   it('says when the page Angular is too old to report @for blocks', async () => {
     const { el } = await render({ ...basePage, deferBlocks: [] });
-    expect(el.textContent).toContain('@for blocks are listed from Angular 22.0');
+    expect(el.textContent).toContain('Listing @for blocks needs Angular 22.0 or later');
     expect(el.querySelector('#ct-for-title')).toBeNull();
   });
 

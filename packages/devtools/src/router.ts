@@ -1,3 +1,4 @@
+import { routerHeldOnPage } from './router-fallback.ts';
 import { REDACTED, serializeFormValue } from './forms.ts';
 import { decode, isSecretKey, knownSecrets, redactText, rememberSecret } from './text-redact.ts';
 import { clip } from './text.ts';
@@ -291,10 +292,16 @@ function inUse(router: AnyRecord): boolean {
  */
 export function findRouters(ng: RouterDebugApi, roots: Iterable<Element>): AnyRecord[] {
   const candidates: AnyRecord[] = [];
-  for (const el of roots) {
+  const elements = [...roots];
+  for (const el of elements) {
     const injector = read(() => ng.getInjector?.(el), undefined);
     const router = injector ? routerOf(ng, injector) : null;
     if (router && !candidates.includes(router)) candidates.push(router);
+  }
+  // Angular before 16.2 can't look the Router up by name (`router-fallback.ts`).
+  if (!candidates.length && typeof ng.ɵgetInjectorProviders !== 'function') {
+    const held = routerHeldOnPage(ng, elements, isRouter);
+    if (held) candidates.push(held);
   }
   return [...candidates.filter(inUse), ...candidates.filter((r) => !inUse(r))];
 }

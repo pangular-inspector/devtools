@@ -123,7 +123,7 @@ Components rendered by the router show their route and outlet in the [Components
 
 ### Finding the Router
 
-The overlay reads the helper `provideRouter()` publishes (`ng.ɵgetRouterInstance`). For `RouterModule.forRoot()` apps, and on Angular 20.0 to 20.3.4 (which lack the helper), it looks for the `Router` token in the injectors instead. With several app roots, the router that has routes or has navigated wins.
+The overlay reads the helper `provideRouter()` publishes (`ng.ɵgetRouterInstance`). For `RouterModule.forRoot()` apps, and on Angular 20.0 to 20.3.4 (which lack the helper), it looks for the `Router` token in the injectors instead. With several app roots, the router that has routes or has navigated wins. Before Angular 16.2 neither lookup exists; see [On older Angular](#on-older-angular).
 
 ### Development builds
 
@@ -202,6 +202,10 @@ Without that recording, the guards listed for a navigation are candidates: the `
 `navigate` only accepts same-origin relative URLs that start with `/`. `resolve-lazy` needs a `routeId`. With [`actions.router`](../getting-started/configuration.md#actions) set to `false`, the tool refuses `navigate`, `abort`, `replay` and `probe`, and keeps `instrument` and `resolve-lazy`. See [Tools](../agents/tools.md).
 
 ## Limits and gotchas
+
+### On older Angular
+
+Before Angular 16.2, Angular has neither `ng.ɵgetRouterInstance` nor `ng.ɵgetInjectorProviders`, so the overlay can't look the `Router` up by name. It reads the `Router` that a router link, the component an outlet renders or the root component holds, and asks the root injector for that class. If nothing on the page holds the `Router`, the tab shows no router data. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
 
 ### Guard recording is on by default
 

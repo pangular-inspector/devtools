@@ -240,6 +240,10 @@ The `pangular:highlight` tool also switches the graph to the component it highli
 
 ## Limits and gotchas
 
+### On older Angular
+
+The live graph needs Angular 20.1 or later. On an older page the tab shows the source scan with a note that names the page's version, and `inspect-signals` and `watch-signal` answer **Unsupported on this Angular version**. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
+
 ### Unread signals are missing
 
 Signals join the graph when a template or an effect reads them. If a signal is missing, check that something reads it.

@@ -18,7 +18,7 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`. It contain
     The package declares <code>node &gt;=22</code> in its <code>engines</code> field. CI tests Node.js 22 and 24.
   </ngmd-card>
   <ngmd-card icon="code" title="Angular 20 or later">
-    <code>&#64;angular/core</code> and <code>&#64;angular/common</code> 20 and newer are supported, with no upper bound. See <a href="#tested-versions">Tested versions</a>.
+    <code>&#64;angular/core</code> and <code>&#64;angular/common</code> 20 and newer are supported, with no upper bound. See <a href="#supported-angular-versions">Supported Angular versions</a> for older versions.
   </ngmd-card>
   <ngmd-card icon="box" title="Package manager">
     pnpm, npm, yarn or bun. Any of the four.
@@ -28,6 +28,35 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`. It contain
 <ngmd-callout type="warning" title="Development builds only">
   Live data comes from Angular's debug API (<code>window.ng</code>). Production builds remove it, so the live tabs stay empty there. Run your app in development mode while you inspect it.
 </ngmd-callout>
+
+## Supported Angular versions
+
+The peer range covers Angular 20 and later, and CI tests it (see [Tested versions](#tested-versions)). The overlay doesn't look at the version to decide what to read. It checks each debug API on the page and sends what it finds with the page's Angular version, so each tab shows the data that version provides.
+
+When a tab needs a debug API the page doesn't have, it says which Angular version the feature needs and which one the page runs, for example "The live signal graph needs Angular 20.1 or later; this page runs Angular 15.2." The agent tools answer **Unsupported on this Angular version** with the same sentence, and `list-pages` shows each page's Angular version next to its platform.
+
+| Feature                                                | Needs Angular |
+| ------------------------------------------------------ | ------------- |
+| Live component tree, detail and values                 | 12.0          |
+| Injected services, providers and environment injectors | 16.2          |
+| Full injector tree with lookup paths                   | 17.0          |
+| Signal values in the component detail (`ng.isSignal`)  | 17.1          |
+| **Defer blocks** list                                  | 19.1          |
+| Change detection recording and Angular profiling       | 20.0          |
+| Live signal graph                                      | 20.1          |
+| **&#64;for blocks** list                               | 22.0          |
+
+All of them need a development build, since production builds leave out `window.ng`.
+
+### Angular 12 to 19
+
+Angular 12 to 19 are outside the peer range and CI doesn't test them, so your package manager warns about the peer dependency. On those versions the overlay degrades as the table above shows:
+
+- The **Injectors** tab shows the element injectors with their components and directives. From 16.2 it adds providers, dependencies and environment injectors.
+- Before 16.2, the overlay finds the `Router` through a router link, the component an outlet renders or the root component, whichever holds it. A page where none of them injects the `Router` shows no router data.
+- Before 16.2, the **NgRx** tab can't find the `@ngrx/store` `Store` or signal stores that components provide.
+
+The overlay loads `@angular/core/primitives/signals` for exact signal history. That entry exists from Angular 17, so a build that resolves it ahead of time can fail on Angular 12 to 16.
 
 ### Tested versions
 

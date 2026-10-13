@@ -76,6 +76,7 @@ import {
   type RefreshScheduler,
 } from './change-detection.ts';
 import { attachChangeDetection } from './cd-overlay.ts';
+import { attachAngularInfo } from './ng-capabilities.ts';
 import { createScanBackoff } from './router-attach.ts';
 import { DEVTOOLS_BASES, SETUP_URL } from './panel-frame.ts';
 import { overlayStarts } from './overlay-start.ts';
@@ -479,6 +480,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     : null;
   const ngrx = on.ngrx ? attachNgrx(my, pageId, getNg, limits.changeLog) : null;
   const errors = on.errors ? attachErrors(my, pageId, getNg, { tickMs }) : null;
+  const angularInfo = attachAngularInfo(my, pageId, getNg, { tickMs });
   const consoleGlobals = attachConsoleGlobals(my, pageId, {
     getNg,
     inspectors: on,
@@ -665,6 +667,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     return run;
   };
   const collectors = [
+    () => void angularInfo.push(),
     on.components && paced(() => void pushTree().catch(() => {})),
     on.signals && (() => void pushSignalGraph().catch(() => {})),
     on.injectors && paced(() => void pushInjectorTree().catch(() => {})),
@@ -889,6 +892,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     forget('analog', 'forget-analog-page');
     ngrx?.leave();
     errors?.leave();
+    angularInfo.leave();
   };
   addEventListener('pagehide', leave);
   const resendConfig = () => {

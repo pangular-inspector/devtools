@@ -42,7 +42,9 @@ const PARENT = 3;
 const CONTEXT = 8;
 const LCONTAINER_TYPE = 1;
 const COMPONENT_VIEW = 1;
+/** The LView slot of the declaring component view: 15 from Angular 16.0, 16 before. */
 const DECLARATION_COMPONENT_VIEW = 15;
+const LEGACY_DECLARATION_COMPONENT_VIEW = 16;
 
 function isLView(value: unknown): value is AnyRecord[] {
   if (!Array.isArray(value)) return false;
@@ -79,8 +81,19 @@ export function childViewsOf(lView: AnyRecord[]): AnyRecord[][] {
   return children;
 }
 
+/**
+ * The view that declares `view`'s template. Angular 16.0 moved the slot; slot
+ * 16 holds a component view only before that (from 16.0 it holds an
+ * LContainer or null), so the old layout is found by what it holds.
+ */
+function declaringViewOf(view: AnyRecord[]): unknown {
+  const legacy = read(() => view[LEGACY_DECLARATION_COMPONENT_VIEW], undefined);
+  if (isLView(legacy) && read(() => legacy[TVIEW]['type'] === COMPONENT_VIEW, false)) return legacy;
+  return read(() => view[DECLARATION_COMPONENT_VIEW], undefined);
+}
+
 function ownerOf(view: AnyRecord[], inherited: unknown): unknown {
-  const declaring = read(() => view[DECLARATION_COMPONENT_VIEW], undefined);
+  const declaring = declaringViewOf(view);
   const source = isLView(declaring) ? declaring : view;
   const type = read(() => (source[TVIEW] as { type?: number }).type, undefined);
   if (type !== COMPONENT_VIEW) return inherited;
@@ -96,6 +109,8 @@ function ownerOf(view: AnyRecord[], inherited: unknown): unknown {
 function lViewOf(el: Element): AnyRecord[] | null {
   const ctx = (el as AnyRecord)['__ngContext__'];
   if (!ctx || typeof ctx !== 'object') return null;
+  // Angular 12 and 13 patch the LView itself onto the node.
+  if (isLView(ctx)) return ctx;
   const lView = read(() => ctx.lView, null);
   return Array.isArray(lView) ? lView : null;
 }

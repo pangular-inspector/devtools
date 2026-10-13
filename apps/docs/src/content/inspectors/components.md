@@ -172,7 +172,7 @@ When the page renders `@for` blocks, an **&#64;for blocks** list follows the def
 
 A block with no items and no `@empty` block is marked **renders nothing**. Hover or focus a row to highlight the block in the page. Click it to select the component that holds it. The page lists up to 500 blocks, and the count reads **500+** past that.
 
-The list needs Angular 22.0 or later in a development build. On an older Angular, the section says that the page does not report `@for` blocks.
+The list needs Angular 22.0 or later in a development build. On an older Angular, the section names the version the list needs and the version the page runs.
 
 ### Change detection
 
@@ -392,6 +392,10 @@ Press Escape in the filter box to clear it. When the filter matches nothing, **C
 See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
 ## Limits and gotchas
+
+### On older Angular
+
+The tree, the detail and component values work from Angular 12. Before 17.1 the detail leaves out signal values, since `ng.isSignal` is missing, and before 16.2 it lists no injected services. The **Defer blocks** list needs 19.1, the **&#64;for blocks** list 22.0 and change detection recording 20.0. On Angular 17.0 and later, where `@defer` and `@for` exist, the tab names the version each list needs and the version the page runs. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
 
 ### Development builds only
 

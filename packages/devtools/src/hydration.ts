@@ -19,7 +19,7 @@ export interface HydrationDebugNg {
 
 /**
  * The property Angular's dev mode sets on each node hydration claims, skips or
- * finds mismatched (`HYDRATION_INFO_KEY` in `@angular/core`, Angular 16+):
+ * finds mismatched (`HYDRATION_INFO_KEY` in `@angular/core`, Angular 17.1+):
  * `{ status: 'hydrated' | 'skipped' | 'mismatched', expectedNodeDetails?,
  * actualNodeDetails? }`.
  */

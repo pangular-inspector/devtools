@@ -17,6 +17,8 @@ import { DatePipe, JsonPipe, NgTemplateOutlet } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { pickPage, type ReportedPage } from '../live-pages';
 import { hostPageId } from '../page-id';
+import { angularPageFor, injectAngularPages } from '../angular-pages';
+import { AngularUnavailable } from '../ui/angular-unavailable';
 import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
 import { SourceLink } from '../ui/source-link';
@@ -165,7 +167,16 @@ const KIND_COLORS: Record<string, string> = {
 
 @Component({
   selector: 'app-signal-inspector',
-  imports: [DatePipe, JsonPipe, NgTemplateOutlet, RovingList, Select, SignalGraphView, SourceLink],
+  imports: [
+    AngularUnavailable,
+    DatePipe,
+    JsonPipe,
+    NgTemplateOutlet,
+    RovingList,
+    Select,
+    SignalGraphView,
+    SourceLink,
+  ],
   template: `
     <div class="toolbar">
       <input
@@ -233,10 +244,15 @@ const KIND_COLORS: Record<string, string> = {
         Every signal, computed and effect found in your source. Pick a kind to filter.
       }
     </p>
-    @if (unsupported()) {
-      <p class="fallback" role="status">
-        The live signal graph needs Angular 20.1 or later. This list comes from a source scan.
-      </p>
+    @if (!graph()) {
+      <app-angular-unavailable
+        [page]="angularPage()"
+        capability="signalGraph"
+        [missing]="unsupported()"
+        compact
+      >
+        This list comes from a source scan.
+      </app-angular-unavailable>
     }
     @if (graph()?.writeHook === false) {
       <p class="fallback" role="status">
@@ -1606,6 +1622,11 @@ export class SignalInspector {
   private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
   private readonly injector = inject(Injector);
   private readonly pageId = hostPageId();
+  private readonly angularPages = injectAngularPages(() => this.rpc());
+  /** The shown page's Angular version and debug API parts, for the unavailable note. */
+  readonly angularPage = computed(() =>
+    angularPageFor(this.angularPages(), this.shownPageId() ?? this.pageId),
+  );
   private readonly cleanups: (() => void)[] = [];
   /** Counts graph loads, so only the newest one applies its result. */
   private graphLoad = 0;

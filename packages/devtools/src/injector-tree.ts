@@ -142,6 +142,43 @@ function environmentName(injector: unknown, source: unknown): string {
 
 export const NULL_INJECTOR_ID = 'inj-null';
 
+type InjectorMetadata = { type: string; source: unknown };
+
+/**
+ * What `ng.ɵgetInjectorMetadata` (Angular 17.0+) says about an injector.
+ * Before 17.0 an environment injector is told by its own `records` map and
+ * `source` (an `R3Injector` in every Ivy version), and the null injector by its
+ * class; an element injector can't be tied to its host without Angular's
+ * internals, so it is left unnamed (null).
+ */
+export function injectorMetadata<H extends object>(
+  ng: DebugNg<H>,
+  injector: unknown,
+): InjectorMetadata | null {
+  if (typeof ng.ɵgetInjectorMetadata === 'function') {
+    try {
+      return ng.ɵgetInjectorMetadata(injector) ?? null;
+    } catch {
+      return null;
+    }
+  }
+  if (!injector || typeof injector !== 'object') return null;
+  try {
+    const own = injector as {
+      records?: unknown;
+      source?: unknown;
+      constructor?: { name?: string };
+    };
+    if (own.records instanceof Map) {
+      return { type: 'environment', source: typeof own.source === 'string' ? own.source : null };
+    }
+    if (own.constructor?.name === 'NullInjector') return { type: 'null', source: null };
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 type HostNames<H extends object> = Pick<HostTree<H>, 'isHost' | 'tag'>;
 
 function pageTree<H extends object>(): HostTree<H> {
@@ -154,11 +191,17 @@ export function injectorRef<H extends object = Element>(
   hosts: HostNames<H> = pageTree<H>(),
 ): { id: string; name: string } | null {
   if (!injector || typeof injector !== 'object') return null;
-  let meta: { type: string; source: unknown } | null = null;
-  try {
-    meta = ng.ɵgetInjectorMetadata?.(injector) ?? null;
-  } catch {
-    return null;
+  let meta: InjectorMetadata | null = null;
+  if (typeof ng.ɵgetInjectorMetadata === 'function') {
+    try {
+      meta = ng.ɵgetInjectorMetadata(injector) ?? null;
+    } catch {
+      return null;
+    }
+  } else {
+    meta = injectorMetadata(ng, injector);
+    // Before Angular 17.0 an element injector has no metadata to name its host by.
+    if (!meta) return null;
   }
   if (meta?.type === 'element') {
     const source = meta.source;
@@ -186,13 +229,9 @@ function listedOnPath<H extends object>(
     if (i === 0 && flags.skipSelf) continue;
     const candidate = path[i];
     if (flags.host) {
-      let type: string | undefined;
-      try {
-        type = ng.ɵgetInjectorMetadata?.(candidate)?.type;
-      } catch {
-        type = undefined;
-      }
-      if (type !== 'element') break;
+      const type = injectorMetadata(ng, candidate)?.type;
+      // Without metadata an element injector reads as unknown, not as the boundary.
+      if (type !== 'element' && (type || ng.ɵgetInjectorMetadata)) break;
     }
     if (records(candidate).some((record) => record.token === token)) return candidate;
     if (i === 0 && flags.self) break;
@@ -330,13 +369,9 @@ function environmentDependencies<H extends object>(
 const elementEntries = new WeakMap<object, ElementEntry>();
 
 function environmentsOf<H extends object>(ng: DebugNg<H>, path: unknown[]): object[] {
-  return path.filter((injector) => {
-    try {
-      return ng.ɵgetInjectorMetadata!(injector)?.type === 'environment';
-    } catch {
-      return false;
-    }
-  }) as object[];
+  return path.filter(
+    (injector) => injectorMetadata(ng, injector)?.type === 'environment',
+  ) as object[];
 }
 
 function readElement<H extends object>(
@@ -409,19 +444,16 @@ export function collectInjectorTree<H extends object = Element>(
   tree: HostTree<H> = pageTree<H>(),
 ): InjectorTreeReport {
   const empty: InjectorTreeReport = { roots: [], environment: [] };
-  if (!ng?.getInjector || !ng.ɵgetInjectorMetadata) return empty;
+  // Before Angular 17.0 there is no `ɵgetInjectorMetadata` and before 16.2 no
+  // resolution path or providers: the tree is then reduced to what remains.
+  if (!ng?.getInjector) return empty;
 
   const records = recordReader(ng);
   const envs = new Map<object, Env>();
   const noteEnvironment = (chain: object[]) => {
     chain.forEach((injector, index) => {
       if (envs.has(injector)) return;
-      let meta: { type: string; source: unknown } | null = null;
-      try {
-        meta = ng.ɵgetInjectorMetadata!(injector);
-      } catch {
-        meta = null;
-      }
+      const meta = injectorMetadata(ng, injector);
       const providers = toProviders(injector, records);
       envs.set(injector, {
         parent: chain[index + 1] ?? null,

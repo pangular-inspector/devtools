@@ -207,6 +207,11 @@ import { analogPages, nameServerFns, registerAnalog } from './rpc/analog-registe
 import { clearCalls } from './analog-server-log.ts';
 import { createPageVisibility } from './rpc/page-ttl.ts';
 import {
+  createAngularPages,
+  sanitizeAngularReport,
+  unsupportedToolText,
+} from './rpc/angular-pages.ts';
+import {
   PAGE_ARGUMENT,
   byRecency,
   listPagesText,
@@ -235,6 +240,7 @@ import {
   actionBlockedMessage,
   agentAllowed,
   agentSafety,
+  angularUnavailableText,
   enabledPanelTabs,
   isPageAgentEntry,
   pangularConfigWarning,
@@ -411,6 +417,34 @@ const pangular = defineDevframe({
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return;
         if (!owners.write(pageId)) return;
         if (visibility.set(pageId, report?.hidden === true)) applyVisibility();
+      },
+    });
+
+    // Each page's Angular version and debug API parts, so a view can say why it is empty.
+    const angularPages = createAngularPages();
+    const pageAngularState = await my.rpc.sharedState('page-angular', {
+      initialValue: angularPages.snapshot(),
+    });
+    const applyAngularPages = () =>
+      pageAngularState.mutate((draft) => {
+        draft.pages = angularPages.snapshot().pages;
+      });
+    register({
+      name: 'report-page-angular',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (report: unknown) => {
+        const info = sanitizeAngularReport(report);
+        if (!info || !owns(info.pageId)) return;
+        if (angularPages.set(info)) applyAngularPages();
+      },
+    });
+    register({
+      name: 'forget-page-angular',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (pageId: unknown) => {
+        if (mayForget(pageId) && angularPages.forget(pageId)) applyAngularPages();
       },
     });
 
@@ -1104,6 +1138,7 @@ const pangular = defineDevframe({
 
     const expiry = setInterval(() => {
       if (visibility.expire()) applyVisibility();
+      if (angularPages.expire(liveTtl)) applyAngularPages();
       owners.expire();
       const staleHttp = [...httpPages].filter(([id, p]) => Date.now() - p.reportedAt > liveTtl(id));
       if (staleHttp.length) forgetHttpPages(staleHttp.map(([id]) => id));
@@ -2009,6 +2044,10 @@ const pangular = defineDevframe({
         },
       },
       handler: async (args: WatchSignalArgs) => {
+        const unsupported = signalPages.size
+          ? null
+          : unsupportedToolText(angularPages.pick(pageArgument(args)), 'signalGraph');
+        if (unsupported) return { markdown: unsupported };
         const asked = watchSignalRequests(args ?? {}, signalPages, pageArgument(args));
         if ('markdown' in asked) return asked;
         for (const request of asked.requests) sendSignalWatch({ ...request, pageId: asked.pageId });
@@ -2616,6 +2655,8 @@ const pangular = defineDevframe({
           unknownComponentPage(page) ?? {
             markdown: deferBlocksText(
               byRecency(componentPages.values()).filter((entry) => !page || entry.pageId === page),
+              Date.now(),
+              angularPages.get,
             ),
           }
         );
@@ -2643,6 +2684,7 @@ const pangular = defineDevframe({
           unknownComponentPage(page) ?? {
             markdown: forBlocksText(
               byRecency(componentPages.values()).filter((entry) => !page || entry.pageId === page),
+              angularPages.get,
             ),
           }
         );
@@ -2816,7 +2858,7 @@ const pangular = defineDevframe({
           return { markdown: views ? `${next}\n\n${views}` : next };
         }
         const cd = cdState.value() as CdState;
-        const text = changeDetectionText(cd, args ?? {});
+        const text = changeDetectionText(cd, args ?? {}, angularPages.get);
         // The zone mode comes from the same page as the recording, not the latest tab.
         const zonePage = args?.page ?? pickCdPage(cd)?.pageId;
         const injectors = zonePage ? injectorPages.get(zonePage) : latestInjectorPage();
@@ -2897,14 +2939,22 @@ const pangular = defineDevframe({
           (page
             ? all.find((entry) => entry.pageId === page)?.graph
             : (signalGraphState.value().graph as PageGraph | null));
+        const signalSupport = unsupportedToolText(
+          angularPages.pick(page),
+          'signalGraph',
+          'The get-signals source scan still lists the signals in the source.',
+        );
+        if (!graph && signalSupport) return { markdown: signalSupport };
         if (!graph) {
           return {
             markdown: `No signal graph available. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.`,
           };
         }
         if (graph.unsupported) {
+          // Angular 19.1 to 20.0 have `ɵgetSignalGraph`, but without node ids.
+          const version = angularPages.get(page ?? graph.pageId)?.version;
           return {
-            markdown: `The page runs an Angular version whose signal graph has no node ids, so there is no live graph. The live signal graph needs Angular 20.1 or later. The get-signals source scan still works.`,
+            markdown: `**Unsupported on this Angular version.** The page's signal graph has no node ids, so there is no live graph. ${angularUnavailableText('signalGraph', version)} The get-signals source scan still works.`,
           };
         }
         const view = { node: args.node, history: args.history, framework: args.framework };
@@ -2964,7 +3014,19 @@ const pangular = defineDevframe({
           };
         }
         const page = requested ? injectorPages.get(requested) : latestInjectorPage();
-        return { markdown: inspectProvidersText(page, args) };
+        const angular = angularPages.pick(page?.pageId ?? requested);
+        const noTree = unsupportedToolText(angular, 'debugApi');
+        if (noTree && !page?.roots.length) return { markdown: noTree };
+        // Before Angular 17.0 the page sends only the element injectors it can see.
+        const reduced =
+          unsupportedToolText(angular, 'injectorMetadata') ??
+          unsupportedToolText(angular, 'injectorProviders');
+        const text = inspectProvidersText(page, args);
+        return {
+          markdown: reduced
+            ? `${reduced} The page reports a reduced tree: element injectors with their components and directives, and providers and environment injectors only where its Angular exposes them.\n\n${text}`
+            : text,
+        };
       },
     });
 
@@ -3721,7 +3783,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:list-pages',
       description:
-        'List the browser tabs, Angular Native apps and Capacitor apps that report live data to this server, newest first: page id, URL, title, platform (`browser`, `Angular Native`, or `Capacitor (android)` / `Capacitor (ios)` for an app in a native WebView), seconds since the last report (marked `background` for a tab in the background, which stops reporting until shown again) and which inspectors report. The URL comes from the HTTP or router report, or from the component tree when those have none. Pass a page id as `page` to the live tools to pick a page; without it they use the most recent page.',
+        'List the browser tabs, Angular Native apps and Capacitor apps that report live data to this server, newest first: page id, URL, title, platform (`browser`, `Angular Native`, or `Capacitor (android)` / `Capacitor (ios)` for an app in a native WebView, followed by the Angular version of the page when it reported one), seconds since the last report (marked `background` for a tab in the background, which stops reporting until shown again) and which inspectors report. The URL comes from the HTTP or router report, or from the component tree when those have none. Pass a page id as `page` to the live tools to pick a page; without it they use the most recent page.',
       inputSchema: { type: 'object', properties: {} },
       handler: async () => {
         const details = livePageDetails();
@@ -3740,6 +3802,7 @@ const pangular = defineDevframe({
             reportedAt: page.reportedAt,
             ...details.get(page.pageId),
             platform: platforms.get(page.pageId),
+            angular: angularPages.get(page.pageId)?.version,
           }));
         const pages = summarizePages(
           {
