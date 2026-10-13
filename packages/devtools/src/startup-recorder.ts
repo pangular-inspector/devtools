@@ -116,7 +116,7 @@ function isAppRef(value: unknown): value is AnyRecord {
  * resolution path (`ng.ɵgetInjectorProviders`, 16.2+), as `providerOf()` in
  * `router.ts` finds the Router.
  */
-export function applicationRefOf(ng: unknown, root: Element): AnyRecord | null {
+export function applicationRefOf(ng: unknown, root: unknown): AnyRecord | null {
   const api = ng as AnyRecord | undefined;
   if (!api || typeof api['getInjector'] !== 'function') return null;
   const injector = read(() => api['getInjector'](root), null);

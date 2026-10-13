@@ -366,6 +366,54 @@ describe('initAngularNativeOverlay', () => {
     expect(session.rpc.close).toHaveBeenCalled();
   });
 
+  it("runs the diagnosis collectors and hears React Native's global errors", async () => {
+    const { root, ng } = fixture();
+    g['ng'] = ng;
+    const appHandler = vi.fn();
+    let current: (error: unknown, isFatal?: boolean) => void = appHandler;
+    g['ErrorUtils'] = {
+      getGlobalHandler: () => current,
+      setGlobalHandler: (next: typeof current) => {
+        current = next;
+      },
+    };
+    const session = fakeRpc();
+    connectDevframe.mockResolvedValue(session.rpc);
+    const { initAngularNativeOverlay } = await import('../overlay-angular-native.ts');
+    const dispose = initAngularNativeOverlay({ root: asNode(root), intervalMs: 1000 });
+    try {
+      await vi.waitFor(() =>
+        expect(session.calls.map(([name]) => name)).toEqual(
+          expect.arrayContaining(['push-leaks', 'push-errors', 'push-startup']),
+        ),
+      );
+      expect(session.handlers.has('change-detection-record')).toBe(true);
+      expect(session.handlers.has('provider-value')).toBe(true);
+      expect(session.handlers.has('leak-tracking')).toBe(true);
+
+      const crash = new Error('Trip list failed');
+      current(crash, false);
+      expect(appHandler).toHaveBeenCalledWith(crash, false);
+      await vi.advanceTimersByTimeAsync(300);
+      const groups = session.calls
+        .filter(([name]) => name === 'push-errors')
+        .flatMap(
+          ([, report]) => (report as { errors: { message: string; sources: string[] }[] }).errors,
+        );
+      expect(groups).toContainEqual(
+        expect.objectContaining({ message: 'Error: Trip list failed', sources: ['window'] }),
+      );
+    } finally {
+      dispose();
+      await vi.advanceTimersByTimeAsync(0);
+      delete g['ErrorUtils'];
+    }
+    expect(current).toBe(appHandler);
+    expect(session.calls.map(([name]) => name)).toEqual(
+      expect.arrayContaining(['forget-errors-page', 'forget-leaks-page', 'forget-startup-page']),
+    );
+  });
+
   it('retries an unreachable server and reconnects after a drop', async () => {
     const { root, ng } = fixture();
     g['ng'] = ng;

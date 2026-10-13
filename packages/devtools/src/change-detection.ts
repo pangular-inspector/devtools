@@ -66,18 +66,34 @@ interface ProfilerHub {
 const hubs = new WeakMap<object, ProfilerHub>();
 
 /**
+ * How a platform without a DOM says whether the profiler slot can be shared.
+ * `major` is the Angular major it read, 0 when unknown. `alone`: no other
+ * profiler can hold the slot (an app on a device has no Angular DevTools
+ * extension), so with an unknown version the slot is tried, and given back
+ * at once when Angular returns no remover (before 20.0).
+ */
+export interface ProfilerGate {
+  major: number;
+  alone?: boolean;
+}
+
+/**
  * Adds `listener` to the one profiler this package registers with Angular, and
  * returns its remover. Returns null before Angular 20: there is a single
  * profiler slot there, and taking it would evict the Angular DevTools
- * extension with no remover to give it back.
+ * extension with no remover to give it back. In a browser the version comes
+ * from the `ng-version` attribute; a platform without a DOM passes a gate.
  */
 export function addProfilerListener(
   ng: unknown,
   listener: Profiler,
-  doc: Document = document,
+  where: Document | ProfilerGate = document,
 ): (() => void) | null {
   const setProfiler = (ng as ProfilerApi | undefined)?.ɵsetProfiler;
-  if (!ng || typeof setProfiler !== 'function' || angularMajor(doc) < 20) return null;
+  if (!ng || typeof setProfiler !== 'function') return null;
+  const gate: ProfilerGate = 'major' in where ? where : { major: angularMajor(where) };
+  const tryUnknown = gate.alone === true && gate.major === 0;
+  if (gate.major < 20 && !tryUnknown) return null;
   let hub = hubs.get(ng as object);
   if (!hub) {
     const listeners = new Set<Profiler>();
@@ -96,7 +112,18 @@ export function addProfilerListener(
     } catch {
       return null;
     }
-    if (typeof remove !== 'function') return null;
+    if (typeof remove !== 'function') {
+      // An Angular before 20 took the profiler into its one slot. Only a
+      // caller that is alone gets here, so clearing the slot evicts nobody.
+      if (tryUnknown) {
+        try {
+          setProfiler(null);
+        } catch {
+          // The slot keeps a dispatcher with no listeners, which does nothing.
+        }
+      }
+      return null;
+    }
     hub = { listeners, remove: remove as () => void };
     hubs.set(ng as object, hub);
   }

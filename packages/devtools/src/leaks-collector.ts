@@ -45,8 +45,8 @@ const MAX_SOURCE = 200;
 export const TRACKING_KEY = 'pangular-leak-subscriptions';
 
 /** The parts of `window.ng` this collector reads. */
-export interface LeaksDebugNg extends ComponentDebugNg {
-  getInjector?(el: Element): unknown;
+export interface LeaksDebugNg<H extends object = Element> extends ComponentDebugNg<H> {
+  getInjector?(el: H): unknown;
   ɵgetSignalGraph?(injector: unknown): { nodes?: { id?: unknown; kind?: unknown }[] } | null;
 }
 
@@ -61,7 +61,7 @@ export interface LeaksDebugNg extends ComponentDebugNg {
  * class as key, so each destroyed instance stays reachable through its own or
  * its parent's view. Nothing on the page can tell that apart from a leak.
  */
-export function holdsDestroyedInstances(ng: LeaksDebugNg | undefined): boolean {
+export function holdsDestroyedInstances(ng: LeaksDebugNg<object> | undefined): boolean {
   return read(() => typeof ng?.ɵgetInjectorProviders === 'function', false);
 }
 
@@ -91,13 +91,15 @@ interface ObservableModule {
   Observable?: { prototype?: Record<string, unknown> };
 }
 
-export interface LeaksOptions {
+export interface LeaksOptions<H extends object = Element> {
   /** The refresh interval, so keepalives come before the server expires the page. */
   tickMs?: () => number;
   now?: () => number;
-  tree?: () => HostTree<Element>;
+  tree?: () => HostTree<H>;
   /** The page's current location, to count navigations and name routes. */
   route?: () => string;
+  /** The page's title, where there is no `document` to read it from. */
+  title?: () => string;
   /** Loads the app's RxJS when tracking starts. */
   loadRxjs?: () => Promise<ObservableModule>;
   /** Adds an Angular profiler listener; `null` where Angular has no safe hook (before 20.0). */
@@ -110,6 +112,12 @@ export interface LeaksOptions {
   weak?: WeakApi;
   /** Whether a scan is due; the default watches the DOM for added and removed elements. */
   dirty?: DomDirty | null;
+  /**
+   * A host Angular never rendered, to read the injector Angular gives an
+   * unknown host and tell a dropped view from a detached one. A detached
+   * `<div>` by default; null where there is none, which turns detached views off.
+   */
+  probe?: (() => H | null) | null;
   /** Navigation events, the page's window by default. */
   target?: Pick<Window, 'addEventListener' | 'removeEventListener'> | null;
   /**
@@ -147,7 +155,7 @@ interface Live {
   id: string;
   name: string;
   ref: Ref<object>;
-  host: Ref<Element>;
+  host: Ref<object>;
   /** Where and when (in navigations) the page last showed it. */
   route: string;
   navigation: number;
@@ -159,7 +167,7 @@ interface Destroyed {
   id: string;
   name: string;
   ref: Ref<object>;
-  host: Ref<Element>;
+  host: Ref<object>;
   route: string;
   destroyedAt: number;
   navigation: number;
@@ -258,18 +266,20 @@ function nameOf(instance: object): string {
  * `Observable.prototype.subscribe` only while it is on, and restores it when
  * turned off.
  */
-export function attachLeaks(
+export function attachLeaks<H extends object = Element>(
   my: Rpc,
   pageId: string,
-  getNg: () => LeaksDebugNg | undefined,
-  options: LeaksOptions = {},
+  getNg: () => LeaksDebugNg<H> | undefined,
+  options: LeaksOptions<H> = {},
 ): LeaksCollector {
   const now = options.now ?? Date.now;
   const tickMs = options.tickMs ?? (() => 0);
   const active = options.active ?? (() => true);
   const hasDocument = typeof document !== 'undefined';
   // Through `dirty.watch`, so changes inside open shadow roots mark the walk due.
-  const tree = options.tree ?? (() => (dirty ? dirty.watch(domTree()) : domTree()));
+  const tree =
+    options.tree ??
+    ((() => (dirty ? dirty.watch(domTree()) : domTree())) as unknown as () => HostTree<H>);
   const route =
     options.route ?? (() => read(() => location.pathname + location.search + location.hash, ''));
   const major =
@@ -339,7 +349,7 @@ export function attachLeaks(
    * `true` when retained instances can be listed; `'dev-di-debug'` when the
    * page's Angular keeps every destroyed instance itself, so none can be.
    */
-  const retention = (ng: LeaksDebugNg | undefined): LeaksReport['support']['retention'] => {
+  const retention = (ng: LeaksDebugNg<H> | undefined): LeaksReport['support']['retention'] => {
     if (!weak.WeakRef || !registry || typeof ng?.getComponent !== 'function') return false;
     return holdsDestroyedInstances(ng) ? 'dev-di-debug' : true;
   };
@@ -352,20 +362,26 @@ export function attachLeaks(
   };
 
   /** The injector Angular gives for an element it does not know, to tell a dropped view apart. */
-  const emptyInjector = (ng: LeaksDebugNg) => {
+  const probeHost =
+    options.probe === undefined
+      ? hasDocument
+        ? () => document.createElement('div') as unknown as H
+        : null
+      : options.probe;
+  const emptyInjector = (ng: LeaksDebugNg<H>) => {
     if (nullInjector?.for === ng) return nullInjector.value;
     // A detached element is never put on the page, so the app's DOM is untouched.
-    const probe = hasDocument ? document.createElement('div') : null;
+    const probe = probeHost ? read(probeHost, null) : null;
     const value = probe ? read(() => ng.getInjector?.(probe) ?? null, null) : null;
     nullInjector = { for: ng, value };
     return value;
   };
-  const detachSupported = (ng: LeaksDebugNg | undefined) =>
-    !!ng && typeof ng.getInjector === 'function' && major() >= 14;
+  const detachSupported = (ng: LeaksDebugNg<H> | undefined) =>
+    !!probeHost && !!ng && typeof ng.getInjector === 'function' && major() >= 14;
   /** Angular still holds the view the host was rendered in. */
-  const viewAlive = (ng: LeaksDebugNg, host: Element | undefined) => {
+  const viewAlive = (ng: LeaksDebugNg<H>, host: object | undefined) => {
     if (!host || !detachSupported(ng)) return false;
-    const injector = read(() => ng.getInjector!(host), null);
+    const injector = read(() => ng.getInjector!(host as H), null);
     if (!injector) return false;
     const empty = emptyInjector(ng);
     return empty !== null && injector !== empty;
@@ -376,7 +392,7 @@ export function attachLeaks(
     registry?.unregister(entry);
   };
 
-  const markGone = (entry: Live, ng: LeaksDebugNg) => {
+  const markGone = (entry: Live, ng: LeaksDebugNg<H>) => {
     live.delete(entry.id);
     const instance = entry.ref.deref();
     if (!instance) {
@@ -409,7 +425,7 @@ export function attachLeaks(
   };
 
   /** Effect node ids per component, from Angular's signal graph (ids from 20.1). */
-  const effectIds = (ng: LeaksDebugNg, host: Element): string[] | null => {
+  const effectIds = (ng: LeaksDebugNg<H>, host: H): string[] | null => {
     const injector = read(() => ng.getInjector?.(host) ?? null, null);
     if (!injector) return [];
     const graph = read(() => ng.ɵgetSignalGraph!(injector), null);
@@ -431,7 +447,7 @@ export function attachLeaks(
     const WeakRefImpl = weak.WeakRef;
     const walk = read(() => tree(), null);
     if (!walk) return;
-    const hosts = read(() => componentHosts(ng, walk, MAX_WALK), [] as Element[]);
+    const hosts = read(() => componentHosts(ng, walk, MAX_WALK), [] as H[]);
     const seen = new Set<string>();
     for (const host of hosts) {
       const instance = read(() => ng.getComponent!(host), null);
@@ -469,7 +485,8 @@ export function attachLeaks(
       if (seen.has(entry.id)) continue;
       const host = entry.host.deref();
       // Still on the page, past the walk's cap.
-      if (host && read(() => walk.connected(host), false) && hosts.length >= MAX_WALK) continue;
+      if (host && read(() => walk.connected(host as H), false) && hosts.length >= MAX_WALK)
+        continue;
       markGone(entry, ng);
     }
     // A detached view that Angular has since dropped is destroyed now.
@@ -498,7 +515,7 @@ export function attachLeaks(
     refreshEffects();
   };
 
-  const countEffects = (ng: LeaksDebugNg) => {
+  const countEffects = (ng: LeaksDebugNg<H>) => {
     effectsSupported = typeof ng.ɵgetSignalGraph === 'function';
     if (!effectsSupported) return;
     const owners = new Map<string, string[]>();
@@ -510,7 +527,7 @@ export function attachLeaks(
       if (n++ >= MAX_EFFECT_HOSTS) continue;
       const host = entry.host.deref();
       if (!host) continue;
-      const ids = effectIds(ng, host);
+      const ids = effectIds(ng, host as H);
       if (ids === null) {
         // Before 20.1 graph nodes carry no ids, so effects can't be told apart.
         effectsSupported = false;
@@ -803,7 +820,9 @@ export function attachLeaks(
     return {
       pageId,
       url: redactUrl(route()),
-      title: redactMessage(read(() => (hasDocument ? document.title : ''), '')),
+      title: redactMessage(
+        read(() => (options.title ? options.title() : hasDocument ? document.title : ''), ''),
+      ),
       at,
       support: {
         retention: kept,

@@ -1,6 +1,7 @@
 import { keepaliveDue } from './change-detection.ts';
 import { CONSOLE_LEVELS, tapConsole, type ConsoleLevel } from './console-tap.ts';
 import { elementById, elementId } from './element-id.ts';
+import type { HostTree } from './host-tree.ts';
 import { enrichExplain, explainError, rawMessage, type RecentWrites } from './error-explain.ts';
 import type { HydrationDebugNg } from './hydration.ts';
 import { className } from './injector-tree.ts';
@@ -71,6 +72,14 @@ export interface ErrorsOptions {
    * it turns true sends everything captured meanwhile.
    */
   active?: () => boolean;
+  /**
+   * The tree Angular rendered into, on a platform without a DOM. Owners are
+   * looked up and the app's ErrorHandler is found through it instead of the
+   * document.
+   */
+  tree?: HostTree<object>;
+  /** The page's URL and title, where there is no `location` or `document` to read. */
+  describe?: () => { url: string; title: string };
 }
 
 interface Group extends ErrorGroup {
@@ -240,7 +249,19 @@ export function attachErrors(
   let queue = Promise.resolve();
   let handler: { instance: AnyRecord; wrapped: Function; original: unknown; own: boolean } | null =
     null;
-  let handlerRoot: Element | null = null;
+  let handlerRoot: object | null = null;
+  const tree = options.tree;
+  /** Whether a value is a host Angular rendered: an element, or a host of the tree. */
+  const isHost = (value: unknown): value is Element =>
+    tree
+      ? read(() => tree.isHost(value), false)
+      : typeof Element !== 'undefined' && value instanceof Element;
+  const describe =
+    options.describe ??
+    (() => ({
+      url: redactUrl(read(() => location.pathname + location.search, '')),
+      title: redactMessage(read(() => document.title, '')),
+    }));
 
   const schedulePush = () => {
     if (left || stopped || pushTimer) return;
@@ -265,11 +286,11 @@ export function attachErrors(
 
   const ownerOfElement = (el: unknown): ErrorOwner | undefined => {
     const ng = getNg();
-    if (!ng?.getOwningComponent || !ng.getHostElement || !(el instanceof Element)) return undefined;
+    if (!ng?.getOwningComponent || !ng.getHostElement || !isHost(el)) return undefined;
     const component = read(() => ng.getOwningComponent!(el), null);
     if (!component || typeof component !== 'object') return undefined;
     const host = read(() => ng.getHostElement!(component), null);
-    if (!(host instanceof Element)) return undefined;
+    if (!isHost(host)) return undefined;
     return { id: elementId(host), name: className((component as object).constructor) };
   };
 
@@ -280,18 +301,34 @@ export function attachErrors(
     return ownerOfElement(event.currentTarget) ?? ownerOfElement(event.target);
   };
 
+  /** The hosts to look owners up in, at most `MAX_OWNER_SCAN`, in document order. */
+  const ownerHosts = function* (): Generator<object> {
+    if (tree) {
+      const stack = [...read(() => tree.roots(), [] as object[])].reverse();
+      while (stack.length) {
+        const host = stack.pop()!;
+        yield host;
+        stack.push(...[...read(() => tree.children(host), [] as object[])].reverse());
+      }
+      return;
+    }
+    if (typeof document === 'undefined') return;
+    const walker = document.createTreeWalker(document.body ?? document.documentElement, 1);
+    for (let node: Node | null = walker.currentNode; node; node = walker.nextNode()) yield node;
+  };
+
   const ownerByName = (names: readonly string[]): ErrorOwner | undefined => {
     const ng = getNg();
-    if (!names.length || !ng?.getComponent || typeof document === 'undefined') return undefined;
-    const found = new Map<string, Element>();
-    const walker = document.createTreeWalker(document.body ?? document.documentElement, 1);
-    for (let n = 0, node = walker.currentNode; node && n < MAX_OWNER_SCAN; n++) {
+    if (!names.length || !ng?.getComponent) return undefined;
+    const found = new Map<string, object>();
+    let n = 0;
+    for (const node of ownerHosts()) {
+      if (n++ >= MAX_OWNER_SCAN) break;
       const component = read(() => ng.getComponent!(node as Element), null);
       if (component && typeof component === 'object') {
         const name = className((component as object).constructor);
-        if (!found.has(name)) found.set(name, node as Element);
+        if (!found.has(name)) found.set(name, node);
       }
-      node = walker.nextNode() as Node;
     }
     for (const name of names) {
       const host = found.get(name);
@@ -413,13 +450,23 @@ export function attachErrors(
   };
 
   /** Wraps the app's ErrorHandler once it exists; the app's own handler still runs first in line. */
+  const connected = (root: object) =>
+    tree
+      ? read(() => tree.connected(root), false)
+      : (root as { isConnected?: boolean }).isConnected !== false;
+  const handlerRoots = (): object[] => {
+    if (tree) return read(() => tree.roots(), []);
+    if (typeof document === 'undefined') return [];
+    return Array.from(document.querySelectorAll('[ng-version]'));
+  };
+
   const wrapHandler = () => {
-    if (handler && handlerRoot?.isConnected !== false) return;
+    if (handler && handlerRoot && connected(handlerRoot)) return;
     if (handler) unwrapHandler();
     const ng = getNg();
-    if (!ng?.getInjector || typeof document === 'undefined') return;
-    for (const root of Array.from(document.querySelectorAll('[ng-version]'))) {
-      const injector = read(() => ng.getInjector!(root), null);
+    if (!ng?.getInjector) return;
+    for (const root of handlerRoots()) {
+      const injector = read(() => ng.getInjector!(root as Element), null);
       if (!injector) continue;
       const instance = providerOf(
         ng,
@@ -468,7 +515,11 @@ export function attachErrors(
     for (const group of changedGroups) {
       if (group.explainAt === undefined || !group.explain) continue;
       const ng = getNg();
-      const host = group.owner ? elementById(group.owner.id) : null;
+      const host = !group.owner
+        ? null
+        : tree
+          ? elementById<Element>(group.owner.id, connected)
+          : elementById(group.owner.id);
       const component =
         host && ng?.getComponent ? read(() => ng.getComponent!(host), null) : undefined;
       group.explain = read(
@@ -501,8 +552,7 @@ export function attachErrors(
     return {
       pageId,
       full: all,
-      url: redactUrl(read(() => location.pathname + location.search, '')),
-      title: redactMessage(read(() => document.title, '')),
+      ...describe(),
       handler: handler ? 'wrapped' : 'none',
       errors,
       ...(all ? {} : { removed: [...removedIds] }),
@@ -520,8 +570,7 @@ export function attachErrors(
     const answer = (await my.rpc.call('push-errors', {
       pageId,
       full: false,
-      url: redactUrl(read(() => location.pathname + location.search, '')),
-      title: redactMessage(read(() => document.title, '')),
+      ...describe(),
       handler: handler ? 'wrapped' : 'none',
       errors: [],
       removed: [],

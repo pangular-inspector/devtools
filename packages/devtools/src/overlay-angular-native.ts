@@ -7,7 +7,9 @@ import { elementById } from './element-id.ts';
 import { setRedaction } from './forms-privacy.ts';
 import { hostBySelector } from './host-tree.ts';
 import { collectInjectorTree } from './injector-tree.ts';
+import { attachNativeDiagnostics, errorUtilsTarget } from './native-diagnostics.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
+import { installReduxDevtoolsHook, uninstallReduxDevtoolsHook } from './redux-devtools-hook.ts';
 import { attachPipes } from './pipes-collector.ts';
 import type { NgDebugApi } from './pipes-runtime.ts';
 import {
@@ -70,6 +72,8 @@ export function initAngularNativeOverlay(options: AngularNativeOverlayOptions): 
   }
   ensureWebSocketStates();
 
+  // Stores that look for the Redux DevTools extension from now on find the stand-in.
+  installReduxDevtoolsHook();
   const root = options.root;
   const getRoot = typeof root === 'function' ? root : () => root;
   const pageId = newPageId();
@@ -184,6 +188,15 @@ async function startSession(
   const tickMs = intervalMs ?? config.limits.refreshMs;
   setRedaction(config.redaction);
   const tree = angularNativeTree(getRoot, angularDebugApi);
+  if (!on.ngrx) uninstallReduxDevtoolsHook();
+  const diagnostics = attachNativeDiagnostics(my, pageId, {
+    getNg: angularDebugApi,
+    tree,
+    config,
+    tickMs: () => tickMs,
+    describe: () => ({ url: '/', title: TITLE }),
+    errorTarget: errorUtilsTarget(),
+  });
 
   const pingKnows = async (name: string) => {
     const answer = (await my.rpc.call(name, pageId)) as { known?: boolean } | undefined;
@@ -213,6 +226,7 @@ async function startSession(
       treeSentAt = Date.now();
       if (await pingKnows('ping-component-tree')) return;
     }
+    if (json !== lastTreeJson) diagnostics.treeChanged();
     lastTreeJson = json;
     treeSentAt = Date.now();
     try {
@@ -228,8 +242,10 @@ async function startSession(
     (value, name) => serializeNamed(name, value, { budget: 1000 }),
     Date.now,
     (value, name) => graphValue(name, value),
+    { onChange: diagnostics.onSignalChange },
   );
   const restoreSignalHook = on.signals ? await installSignalWriteHook(signalHistory.onWrite) : null;
+  if (restoreSignalHook) diagnostics.signalHookReady();
 
   let signalTarget: SignalTarget = null;
   let lastSignalKey = '';
@@ -323,6 +339,7 @@ async function startSession(
     on.injectors && pushInjectorTree,
     ngrx && (() => ngrx.push()),
     pipes && (async () => pipes.push()),
+    ...diagnostics.collectors,
   ].filter((collect) => typeof collect === 'function');
   const tick = () => {
     if (rpc.status !== 'connected' && rpc.status !== 'connecting') return;
@@ -388,6 +405,8 @@ async function startSession(
     restoreSignalHook?.();
     ngrx?.stop();
     pipes?.stop();
+    diagnostics.leave();
+    diagnostics.stop();
     const forget = [
       on.components && 'forget-component-page',
       on.signals && 'forget-signal-page',

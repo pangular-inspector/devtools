@@ -172,6 +172,14 @@ function computeProviderSummary(
 
 export interface StartupEnv {
   doc?: Document;
+  /** The Angular version, where there is no `ng-version` attribute to read it from. */
+  version?: string;
+  /**
+   * Why provider timing can't be measured where the startup hook can't load,
+   * such as an app on a device: the providers are reported `unavailable` with
+   * it instead of asking for the hook.
+   */
+  noHook?: string;
   performance?: Pick<Performance, 'getEntriesByType' | 'getEntriesByName'>;
   buffer?: StartupBuffer;
 }
@@ -185,7 +193,7 @@ export function readStartupTiming(
   const doc = env.doc ?? (typeof document === 'undefined' ? undefined : document);
   const perf = env.performance ?? (typeof performance === 'undefined' ? undefined : performance);
   const buffer = env.buffer;
-  const version = angularVersionOf(doc);
+  const version = env.version ?? angularVersionOf(doc);
   const nav = read(
     () => perf?.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined,
     undefined,
@@ -219,7 +227,10 @@ export function readStartupTiming(
     ...(firstStable ? { firstStable } : {}),
     overlayStart,
     hook: !!buffer,
-    providers: providerSummary(buffer, version, !!version),
+    providers:
+      !buffer && env.noHook
+        ? { status: 'unavailable', note: env.noHook, count: 0, totalSelfMs: 0, slowest: [] }
+        : providerSummary(buffer, version, !!version),
   };
 }
 
@@ -235,6 +246,10 @@ export interface StartupOptions {
   target?: object;
   now?: () => number;
   env?: StartupEnv;
+  /** The app's root host, where there is no `[ng-version]` element to find it by. */
+  root?: () => unknown;
+  /** The page's URL and title, where there is no `location` or `document` to read. */
+  describe?: () => { url: string; title: string };
 }
 
 /** Reports the page's startup timing as `push-startup`. */
@@ -259,7 +274,9 @@ export function attachStartup(
   const lookForStable = (buffer: StartupBuffer | undefined) => {
     if (stable || stopStable || buffer?.stable) return;
     const doc = options.env?.doc ?? (typeof document === 'undefined' ? undefined : document);
-    const root = read(() => doc?.querySelector('[ng-version]') ?? null, null);
+    const root = options.root
+      ? read(options.root, null)
+      : read(() => doc?.querySelector('[ng-version]') ?? null, null);
     const appRef = root ? applicationRefOf(getNg(), root) : null;
     if (!appRef) return;
     stopStable = watchFirstStable(
@@ -278,8 +295,12 @@ export function attachStartup(
     lookForStable(buffer);
     const report: StartupReport = {
       pageId,
-      ...(typeof location === 'undefined' ? {} : { url: redactUrl(location.href) }),
-      ...(typeof document === 'undefined' ? {} : { title: redactMessage(document.title) }),
+      ...(options.describe
+        ? options.describe()
+        : {
+            ...(typeof location === 'undefined' ? {} : { url: redactUrl(location.href) }),
+            ...(typeof document === 'undefined' ? {} : { title: redactMessage(document.title) }),
+          }),
       ...readStartupTiming(overlayStart, stable, { ...options.env, buffer }),
     };
     const json = JSON.stringify(report);

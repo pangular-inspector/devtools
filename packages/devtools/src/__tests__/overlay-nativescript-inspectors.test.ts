@@ -83,9 +83,29 @@ describe('NativeScript overlay inspectors', () => {
     const { initNativeScriptOverlay } = await import('../overlay-nativescript.ts');
     const dispose = initNativeScriptOverlay({ baseURL: 'http://localhost:9999/', intervalMs: 100 });
     await flush();
+    // The collectors report one after another.
+    await vi.advanceTimersByTimeAsync(50);
+    await flush();
     expect(names()).toEqual(
-      expect.arrayContaining(['push-component-tree', 'push-signal-graph', 'push-injector-tree']),
+      expect.arrayContaining([
+        'push-component-tree',
+        'push-signal-graph',
+        'push-injector-tree',
+        'push-leaks',
+        'push-errors',
+        'push-startup',
+        'report-page-angular',
+      ]),
     );
+    for (const [name, payload] of calls) {
+      if (name.startsWith('push-') || name === 'report-page-angular') {
+        expect(payload).toMatchObject({ pageId: expect.any(String) });
+      }
+    }
+    expect(calls.find(([name]) => name === 'push-errors')?.[1]).toMatchObject({
+      url: '/',
+      title: 'NativeScript (iOS)',
+    });
     expect(attachNgrx).toHaveBeenCalledTimes(1);
     expect(installSignalWriteHook).toHaveBeenCalledTimes(1);
 
@@ -99,6 +119,11 @@ describe('NativeScript overlay inspectors', () => {
         'forget-injector-page',
         'forget-ngrx-page',
         'forget-pipes-page',
+        'forget-change-detection-page',
+        'forget-leaks-page',
+        'forget-errors-page',
+        'forget-startup-page',
+        'forget-page-angular',
       ]),
     );
   });
@@ -107,7 +132,15 @@ describe('NativeScript overlay inspectors', () => {
     connectionMeta = {
       configs: {
         pangular: {
-          inspectors: { components: false, signals: false, ngrx: false, pipes: false },
+          inspectors: {
+            components: false,
+            signals: false,
+            ngrx: false,
+            pipes: false,
+            errors: false,
+            tanstackQuery: false,
+            plugins: false,
+          },
         },
       },
     };
@@ -125,10 +158,18 @@ describe('NativeScript overlay inspectors', () => {
     expect(attachNgrx).not.toHaveBeenCalled();
     expect(installSignalWriteHook).not.toHaveBeenCalled();
     expect(names().some((name) => name.includes('pipe'))).toBe(false);
+    for (const off of ['change-detection', 'leaks', 'errors', 'tanstack-query', 'redux-stores']) {
+      expect(names().some((name) => name.includes(off))).toBe(false);
+    }
+    expect(names()).toEqual(expect.arrayContaining(['push-startup', 'report-page-angular']));
 
     calls.length = 0;
     dispose();
     await flush();
-    expect(names()).toEqual(['forget-injector-page']);
+    expect(names().sort()).toEqual([
+      'forget-injector-page',
+      'forget-page-angular',
+      'forget-startup-page',
+    ]);
   });
 });

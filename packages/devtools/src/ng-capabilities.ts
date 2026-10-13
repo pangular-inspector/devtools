@@ -68,9 +68,11 @@ const CHECKS: Record<AngularCapability, (ng: AnyRecord | null, version?: string)
 export function detectAngular(
   ng: unknown,
   doc: Document | undefined = typeof document === 'undefined' ? undefined : document,
+  /** The version read another way, on a platform without `ng-version` attributes. */
+  knownVersion?: string,
 ): AngularPageInfo {
   const api = ng && typeof ng === 'object' ? (ng as AnyRecord) : null;
-  const version = angularVersionOf(doc);
+  const version = knownVersion ?? angularVersionOf(doc);
   const capabilities: AngularPageInfo['capabilities'] = {};
   for (const name of ANGULAR_CAPABILITIES) capabilities[name] = CHECKS[name](api, version);
   return version ? { version, capabilities } : { capabilities };
@@ -94,6 +96,8 @@ export function attachAngularInfo(
     tickMs?: () => number;
     now?: () => number;
     doc?: () => Document | undefined;
+    /** The Angular version, on a platform without a DOM to read `ng-version` from. */
+    version?: () => string | undefined;
   } = {},
 ) {
   const now = options.now ?? Date.now;
@@ -105,7 +109,7 @@ export function attachAngularInfo(
   return {
     async push(): Promise<void> {
       if (sending) return;
-      const info = detectAngular(getNg(), doc());
+      const info = detectAngular(getNg(), doc(), options.version?.());
       const key = JSON.stringify(info);
       if (key === last && !keepaliveDue(sentAt, tickMs(), now())) return;
       sending = true;

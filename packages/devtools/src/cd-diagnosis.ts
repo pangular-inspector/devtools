@@ -108,7 +108,7 @@ interface ZoneApi {
 }
 
 interface DebugNg {
-  getInjector?(el: Element): unknown;
+  getInjector?(el: unknown): unknown;
   ɵgetInjectorResolutionPath?(injector: unknown): unknown[];
   getDirectiveMetadata?(instance: unknown): {
     inputs?: Record<string, unknown>;
@@ -218,7 +218,7 @@ function isScheduler(value: unknown): value is SchedulerLike {
  * through `ng.getInjector` and `ng.ɵgetInjectorResolutionPath`. Nothing is
  * created. Null when the page has no such scheduler (before Angular 18).
  */
-export function findCdScheduler(ng: unknown, roots: Iterable<Element>): SchedulerLike | null {
+export function findCdScheduler(ng: unknown, roots: Iterable<unknown>): SchedulerLike | null {
   const api = ng as DebugNg | null;
   if (!api || typeof api.getInjector !== 'function') return null;
   for (const root of roots) {
@@ -347,6 +347,11 @@ export interface CdDiagnosisOptions {
   getNg: () => unknown;
   maxCycles: number;
   doc?: () => Document | undefined;
+  /**
+   * The app's root hosts, where the scheduler is looked up. The `[ng-version]`
+   * elements of `doc` by default; a platform without a DOM passes its host tree's roots.
+   */
+  roots?: () => unknown[];
   global?: () => AnyRecord;
   now?: () => number;
   stack?: () => string | undefined;
@@ -686,7 +691,11 @@ export function createCdDiagnosis(options: CdDiagnosisOptions) {
 
   const hookScheduler = () => {
     const document = doc();
-    const roots = document ? read(() => [...document.querySelectorAll('[ng-version]')], []) : [];
+    const roots = options.roots
+      ? read(options.roots, [])
+      : document
+        ? read(() => [...document.querySelectorAll('[ng-version]')], [] as Element[])
+        : [];
     scheduler = findCdScheduler(options.getNg(), roots);
     const target = scheduler;
     if (!target) return;

@@ -1,4 +1,9 @@
-import { addProfilerListener, angularMajor, type Profiler } from './change-detection.ts';
+import {
+  addProfilerListener,
+  angularMajor,
+  type Profiler,
+  type ProfilerGate,
+} from './change-detection.ts';
 import { createCdDiagnosis } from './cd-diagnosis.ts';
 import { createDeltaChannel } from './delta-channel.ts';
 import { CHANGE_DETECTION_SHAPE } from './push-delta.ts';
@@ -23,6 +28,20 @@ interface RpcScope {
 export type { CdReport } from './cd-recorder.ts';
 
 /**
+ * What a platform without a DOM gives the recorder instead. The browser
+ * defaults read the `ng-version` attribute, `[ng-version]` roots and host
+ * elements, and draw the live views (flash boxes, the Performance track).
+ */
+export interface CdPlatform {
+  /** The Angular major and whether the profiler slot is shared. */
+  profilerGate: () => ProfilerGate;
+  /** The app's root hosts, where the diagnosis finds Angular's scheduler. */
+  roots: () => unknown[];
+  /** The stable id of a component's host, or null when it is not a host of the tree. */
+  hostId: (host: unknown) => string | null;
+}
+
+/**
  * Records change detection cycles while the panel or an agent turns recording
  * on, and reports them. It does nothing until then.
  */
@@ -34,15 +53,21 @@ export function attachChangeDetection(
   tickMs: () => number = () => 0,
   /** Whether a panel or an agent watches (`page-lease.ts`); an idle page only keeps itself alive. */
   active: () => boolean = () => true,
+  /** Set on a platform without a DOM: no live views, and no DOM updates to tell wasted checks by. */
+  platform?: CdPlatform,
 ) {
   const recorder = createCdRecorder({ maxCycles });
-  const diagnosis = createCdDiagnosis({ getNg, maxCycles });
+  const diagnosis = createCdDiagnosis({
+    getNg,
+    maxCycles,
+    ...(platform ? { roots: platform.roots, doc: () => undefined } : {}),
+  });
   // The diagnosis reads each event after the recorder, with the id it gave the cycle.
   const onEvent: Profiler = (event, instance, hook) => {
     recorder.onEvent(event, instance, hook);
     diagnosis.onEvent(event, instance, hook, recorder.cycleId);
   };
-  const live = createCdLive({ getNg });
+  const live = platform ? null : createCdLive({ getNg });
   const hostIds = new WeakMap<object, string>();
   let removeListener: (() => void) | null = null;
   let supported = true;
@@ -64,7 +89,7 @@ export function attachChangeDetection(
     try {
       const ng = getNg() as { getHostElement?: (instance: object) => unknown } | undefined;
       const host = ng?.getHostElement?.(instance);
-      id = host instanceof Element ? elementId(host) : null;
+      id = platform ? platform.hostId(host) : host instanceof Element ? elementId(host) : null;
     } catch {
       id = null;
     }
@@ -75,7 +100,11 @@ export function attachChangeDetection(
 
   const setRecording = (on: boolean) => {
     if (on) {
-      removeListener ??= addProfilerListener(getNg(), onEvent);
+      removeListener ??= addProfilerListener(
+        getNg(),
+        onEvent,
+        platform ? platform.profilerGate() : document,
+      );
       supported = removeListener !== null;
       // A second start, such as an agent start sent to every tab, keeps the
       // recording that is running. Only `clear` empties it.
@@ -92,9 +121,9 @@ export function attachChangeDetection(
   };
 
   const collect = (): Record<string, unknown> => {
-    const options = live.report();
+    const options = live?.report();
     const recording = recorder.snapshot(hostId);
-    const found = diagnosis.snapshot(angularMajor());
+    const found = diagnosis.snapshot(platform ? platform.profilerGate().major : angularMajor());
     const report: CdReport = {
       pageId,
       supported,
@@ -139,7 +168,7 @@ export function attachChangeDetection(
     jsonSerializable: true,
     handler: (message: { pageId?: unknown } | null) => {
       if (typeof message?.pageId === 'string' && message.pageId !== pageId) return;
-      live.apply(toCdOptionsRequest(message));
+      live?.apply(toCdOptionsRequest(message));
       void push(true).catch(() => {});
     },
   });
@@ -156,7 +185,7 @@ export function attachChangeDetection(
     },
     stop: () => {
       setRecording(false);
-      live.stop();
+      live?.stop();
     },
   };
 }

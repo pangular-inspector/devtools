@@ -85,6 +85,8 @@ export interface PluginsOptions {
   /** Where the registry lives; the global object by default. */
   target?: object;
   now?: () => number;
+  /** The page's URL and title, where there is no `location` or `document` to read. */
+  describe?: () => { url: string; title: string };
 }
 
 export interface PluginsCollector {
@@ -278,8 +280,12 @@ export function attachPlugins(
 
   const report = (): PluginsReport => ({
     pageId,
-    ...(typeof location === 'undefined' ? {} : { url: redactUrl(location.href) }),
-    ...(typeof document === 'undefined' ? {} : { title: redactMessage(document.title) }),
+    ...(options.describe
+      ? options.describe()
+      : {
+          ...(typeof location === 'undefined' ? {} : { url: redactUrl(location.href) }),
+          ...(typeof document === 'undefined' ? {} : { title: redactMessage(document.title) }),
+        }),
     plugins: [...running.values()].map(({ plugin, status, error, view }) => ({
       id: plugin.id,
       version: String(plugin.version ?? '').slice(0, 40),
