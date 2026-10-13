@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { isAuthTokens, type PangularAuthTokens } from './auth-tokens.ts';
 import type { Plugin } from 'vite';
 import { normalizeHubBase } from '@devframes/hub/constants';
@@ -125,7 +126,8 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
     apply: 'serve',
     enforce: 'pre',
     config(user) {
-      const alias = signalPrimitivesAlias(user.root ?? process.cwd());
+      // Vite allows a relative `root`, and `createRequire` needs an absolute path.
+      const alias = signalPrimitivesAlias(resolve(process.cwd(), user.root ?? ''));
       return alias.length ? { resolve: { alias } } : undefined;
     },
     // `pre`, so Vite's own HTML pass resolves the injected import like any other.

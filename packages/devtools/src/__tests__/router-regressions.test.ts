@@ -112,6 +112,32 @@ describe('router events', () => {
     expect(navigations.map((nav) => nav.trigger)).toEqual(['popstate', 'unknown']);
   });
 
+  it('links a guard redirect from a cancel with no code, as Angular 12 to 14 send it', () => {
+    const navigations: NavigationRecord[] = [];
+    const router = { url: '/', routerState: { snapshot: null } };
+    applyRouterEvent(
+      navigations,
+      { type: EventType.NavigationStart, id: 1, url: '/admin' },
+      0,
+      router,
+    );
+    applyRouterEvent(
+      navigations,
+      { type: EventType.NavigationCancel, id: 1, url: '/admin', reason: 'Redirecting to "/login"' },
+      1,
+      router,
+    );
+    applyRouterEvent(
+      navigations,
+      { type: EventType.NavigationStart, id: 2, url: '/login' },
+      2,
+      router,
+    );
+    const [admin, login] = navigations;
+    expect(admin).toMatchObject({ outcome: 'redirected', code: 'Redirect', redirectTo: '/login' });
+    expect(login).toMatchObject({ url: '/login', redirectedFrom: admin.id });
+  });
+
   it('reports the title set after NavigationEnd', async () => {
     const navigations: NavigationRecord[] = [];
     const router = { url: '/', routerState: { snapshot: null } };

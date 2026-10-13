@@ -1048,7 +1048,14 @@ export function applyRouterEvent(
     }
     case EventType.NavigationCancel: {
       const code = read(() => event['code'] as number | undefined, undefined);
-      nav.code = code === undefined ? undefined : (CANCEL_CODES[code] ?? String(code));
+      const rawReason = String(event['reason'] ?? '').replace(/^NavigationCancelingError: /, '');
+      // Before the cancel codes (15.x), a guard redirect shows only in its reason.
+      const legacyRedirect = code === undefined && /^Redirecting to "/.test(rawReason);
+      nav.code = legacyRedirect
+        ? 'Redirect'
+        : code === undefined
+          ? undefined
+          : (CANCEL_CODES[code] ?? String(code));
       nav.outcome = nav.code === 'Redirect' ? 'redirected' : 'cancelled';
       const byGuard = nav.code === 'Redirect' || nav.code === 'GuardRejected';
       if (byGuard && nav.guards && nav.guards.passed === undefined) {
@@ -1062,10 +1069,7 @@ export function applyRouterEvent(
       nav.reason =
         nav.code === 'Redirect' && state.handled?.redirected
           ? state.handled.reason
-          : errorText(
-              String(event['reason'] ?? '').replace(/^NavigationCancelingError: /, ''),
-              state.secrets,
-            );
+          : errorText(rawReason, state.secrets);
       finish(nav, at, router);
       return true;
     }
