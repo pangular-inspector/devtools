@@ -53,7 +53,9 @@ export function createPageLease(my: Rpc, pageId: string, options: PageLeaseOptio
       try {
         await options.wake();
       } catch {
-        // A failed push resyncs on its own; the server still hears the page is awake.
+        // A report failed, so the server may still hold an old one. Leave its
+        // wait to time out rather than say the page is synced.
+        return;
       }
       await my.rpc.call('page-interest', { pageId, synced: true }).catch(() => {});
     })().finally(() => {

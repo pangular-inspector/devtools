@@ -176,6 +176,22 @@ describe('page lease', () => {
     lease.stop();
   });
 
+  it('does not say it is synced when a wake push fails', async () => {
+    const { my, emit, calls } = rpc(false);
+    const wake = vi.fn(async () => {
+      throw new Error('push failed');
+    });
+    const lease = createPageLease(my, 'p1', { wake });
+    await lease.refresh();
+    emit('page-interest-changed', { watching: true });
+    await vi.waitFor(() => expect(wake).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(
+      calls.some((c) => c.name === 'page-interest' && (c.arg as { synced?: boolean })?.synced),
+    ).toBe(false);
+    lease.stop();
+  });
+
   it('asks again while idle, in case it missed the server', async () => {
     vi.useFakeTimers();
     const { my, calls } = rpc(false);

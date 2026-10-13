@@ -441,7 +441,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   // Wakes up with a push of every leased report when a panel or an agent looks again.
   const lease = createPageLease(my, pageId, {
     wake: () =>
-      Promise.allSettled([
+      Promise.all([
         on.components && pushTree(true),
         on.injectors && pushInjectorTree(true),
         on.components && cd?.push(false, true),
