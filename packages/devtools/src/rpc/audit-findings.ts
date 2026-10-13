@@ -192,6 +192,8 @@ export interface AuditInputs {
   pipes?: () => PipeLintFinding[];
   /** The page's last axe pass. `null` when none ran. */
   axe?: AxeReport | null;
+  /** Why axe can't run on this page, such as an app on a device with no DOM. */
+  noAxe?: string;
 }
 
 /** Most findings an audit keeps. */
@@ -630,8 +632,13 @@ const AXE_SEVERITY: Record<AxeImpact, AuditSeverity> = {
   minor: 'info',
 };
 
-function accessibility(report: AxeReport | null | undefined, pageId: string): Collected {
+function accessibility(
+  report: AxeReport | null | undefined,
+  pageId: string,
+  noAxe?: string,
+): Collected {
   const area = 'accessibility';
+  if (noAxe) return { findings: [], source: { area, state: 'off', note: noAxe } };
   if (report === undefined) return { findings: [], source: { area, state: 'off' } };
   if (!report) {
     return {
@@ -704,7 +711,7 @@ export function buildAudit(
 ): AuditReport {
   const id = pageId ?? '';
   const parts: Collected[] = [
-    accessibility(inputs.axe, id),
+    accessibility(inputs.axe, id, inputs.noAxe),
     errors(inputs.errors, id),
     hydration(inputs.components),
     changeDetection(inputs.cd, id),

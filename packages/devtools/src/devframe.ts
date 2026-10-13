@@ -232,6 +232,7 @@ import {
   listPagesText,
   pageArgument,
   choosePageText,
+  needsDomText,
   pageDetails,
   summarizePages,
   unknownPageText,
@@ -3047,6 +3048,16 @@ const pangular = defineDevframe({
               'The agent is read-only in the devtools config (agent.readOnly), so it cannot start, stop or clear a change detection recording, or turn on the flash overlay, the Performance panel track or Angular profiling. Use the panel, then call this tool without those arguments.',
           };
         }
+        // The live views draw on a DOM or into the browser's Performance panel.
+        const noViews =
+          args?.page && cdViewsAsked(args)
+            ? needsDomText(
+                args.page,
+                componentPages.get(args.page)?.platform,
+                'the flash overlay, the Performance panel track and Angular profiling',
+              )
+            : undefined;
+        if (noViews) return { markdown: `${noViews} Recording with \`record\` works there.` };
         const views = cdViewsAsked(args) ? cdViewsText(args) : '';
         if (views) {
           requestCdOptions({
@@ -4157,6 +4168,7 @@ const pangular = defineDevframe({
       agentSees: (inspector) => config.agent.tools[inspector],
       agentAxe: !config.agent.readOnly,
       agentReadOnly: config.agent.readOnly,
+      platform: (pageId) => componentPages.get(pageId)?.platform,
       // Every page the overlay claimed, so axe works with any set of inspectors on.
       pages: () =>
         withPageUrls([

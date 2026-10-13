@@ -4,7 +4,7 @@ import { clip } from '../text.ts';
 import type { ComponentPage } from '../types.ts';
 import { findComponents, otherMatchesText, truncationText } from './component-tools.ts';
 import { untrusted } from './forms-tools.ts';
-import { byRecency, pageArgument, unknownPageText } from './pages.ts';
+import { byRecency, needsDomText, pageArgument, unknownPageText } from './pages.ts';
 
 /** How long a capture waits for its page; drawing a large component and its images takes a moment. */
 export const SCREENSHOT_TIMEOUT_MS = 15_000;
@@ -162,10 +162,16 @@ export function createComponentScreenshots(deps: Deps) {
       if (page && !all.some((entry) => entry.pageId === page)) {
         return { markdown: unknownPageText(page, all, 'a component tree') };
       }
+      const asked = page ? all.find((entry) => entry.pageId === page) : undefined;
+      const native = asked && needsDomText(asked.pageId, asked.platform, 'a screenshot');
+      if (native) return { markdown: native };
+      // A native app has no DOM to draw, so only browser pages are searched.
       const scope = (page ? all.filter((entry) => entry.pageId === page) : all).filter(
-        (entry) => entry.roots.length > 0,
+        (entry) => entry.roots.length > 0 && !needsDomText(entry.pageId, entry.platform, ''),
       );
       if (!scope.length) {
+        const app = all.find((entry) => needsDomText(entry.pageId, entry.platform, ''));
+        if (app) return { markdown: needsDomText(app.pageId, app.platform, 'a screenshot')! };
         return {
           markdown:
             'No page reports a component tree, so there is nothing to capture. Open the app in a browser with the devtools connected.',

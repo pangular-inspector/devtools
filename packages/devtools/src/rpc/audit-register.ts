@@ -2,6 +2,7 @@ import { createSharedState } from 'devframe/utils/shared-state';
 import type { PangularInspector } from '../config.ts';
 import type { ComponentPage, HttpState } from '../types.ts';
 import { withoutAxeOwners, withoutOwnerSubjects } from './audit-audience.ts';
+import type { AxeRunResult } from '../axe-runner.ts';
 import { createAxeRequests } from './audit-axe.ts';
 import {
   AUDIT_AREAS,
@@ -28,7 +29,7 @@ import type { ErrorsState } from './errors-tools.ts';
 import type { FormsState } from './forms-tools.ts';
 import { code } from './forms-tools.ts';
 import type { LeaksState } from './leaks-tools.ts';
-import { PAGE_ARGUMENT, byRecency, pageArgument, unknownPageText } from './pages.ts';
+import { PAGE_ARGUMENT, byRecency, needsDomText, pageArgument, unknownPageText } from './pages.ts';
 import type { PipeLintFinding } from './pipe-lint.ts';
 import type { RouterState } from './router-tools.ts';
 
@@ -92,6 +93,8 @@ export interface AuditHost {
   sources: AuditSources;
   /** The pages that report to the server, with their URL and title when known. */
   pages(): { pageId: string; reportedAt: number; url?: string; title?: string }[];
+  /** The platform a page reported (`angular-native`, `nativescript`), undefined for a browser page. */
+  platform?(pageId: string): string | undefined;
   /** Whether an agent may read an inspector (`agent.tools`). */
   agentSees(inspector: PangularInspector): boolean;
   /** Whether the agent may run axe on the page: off in `agent.readOnly`. */
@@ -181,8 +184,12 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       ...(sources.http && sees('http') ? { http: sources.http() } : {}),
       ...(sources.pipes && sees('pipes') ? { pipes: sources.pipes } : {}),
       axe: sessions.get(pageId)?.axe ?? null,
+      ...(noAxe(pageId) ? { noAxe: noAxe(pageId) } : {}),
     };
   };
+
+  /** Why axe can't run on a page: an app on a device renders no DOM. */
+  const noAxe = (pageId: string) => needsDomText(pageId, host.platform?.(pageId), 'an axe pass');
 
   const pageList = () => {
     const seen = new Map<
@@ -289,7 +296,9 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
     handler: (message: unknown) => axe.answer(message),
   });
 
-  const runAxe = async (pageId: string) => {
+  const runAxe = async (pageId: string): Promise<AxeRunResult> => {
+    const unavailable = noAxe(pageId);
+    if (unavailable) return { ok: false, error: unavailable };
     const result = await axe.run(pageId);
     if (result.ok) sessions.setAxe(pageId, result.report);
     return result;
