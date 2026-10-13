@@ -11,6 +11,7 @@ import {
   type LeaksOptions,
 } from '../leaks-collector.ts';
 import type { Profiler } from '../change-detection.ts';
+import type { DomDirty } from '../dom-dirty.ts';
 import type { LeaksReport } from '../rpc/leaks-tools.ts';
 
 const JWT = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
@@ -171,6 +172,24 @@ describe('attachLeaks: destroyed but alive', () => {
     expect(gone[0]!.detached).toBeUndefined();
     expect(h.reports.at(-1)!.totals.components).toBe(2);
     expect(h.reports.at(-1)!.pageId).toBe('page-1');
+  });
+
+  it('walks the page through the dirty tracker, so changes in open shadow roots are seen', async () => {
+    const { components } = page(1);
+    const ng = fakeNg(components);
+    let watched = 0;
+    const dirty: DomDirty = {
+      watch: (tree) => {
+        watched++;
+        return tree;
+      },
+      cached: (read) => () => read(),
+      stop: () => {},
+    };
+    const h = harness(() => ng, { dirty });
+    await h.collector.push();
+    expect(watched).toBeGreaterThan(0);
+    expect(h.reports.at(-1)!.totals.components).toBe(2);
   });
 
   it('counts navigations since the destroy, and forgets an instance once it is collected', async () => {

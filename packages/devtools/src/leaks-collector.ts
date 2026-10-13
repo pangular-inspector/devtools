@@ -268,7 +268,8 @@ export function attachLeaks(
   const tickMs = options.tickMs ?? (() => 0);
   const active = options.active ?? (() => true);
   const hasDocument = typeof document !== 'undefined';
-  const tree = options.tree ?? (() => domTree());
+  // Through `dirty.watch`, so changes inside open shadow roots mark the walk due.
+  const tree = options.tree ?? (() => (dirty ? dirty.watch(domTree()) : domTree()));
   const route =
     options.route ?? (() => read(() => location.pathname + location.search + location.hash, ''));
   const major =

@@ -247,7 +247,7 @@ The server registers tools with a colon, as `pangular:get-routes`. MCP clients s
 
 ### Read and action tools
 
-Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Fourteen tools act on the app, so the server does not mark them read-only:
+Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Fifteen tools act on the app, so the server does not mark them read-only:
 
 | Tool                     | Tier          | Reference                                             |
 | ------------------------ | ------------- | ----------------------------------------------------- |
@@ -263,6 +263,7 @@ Each tool has a safety tier: `read`, `action` or `destructive`. The server marks
 | `record-pipes`           | `action`      | [Record pipe calls](./tools.md#record-pipe-calls)     |
 | `track-subscriptions`    | `action`      | [Track subscriptions](./tools.md#track-subscriptions) |
 | `change-detection`       | `action`      | [change-detection](./tools.md#change-detection)       |
+| `hydration`              | `action`      | [hydration](./tools.md#hydration)                     |
 | `clear-recordings`       | `destructive` | [Clear recordings](./tools.md#clear-recordings)       |
 | `analog-call-api`        | `destructive` | [Call a server route](./tools.md#call-a-server-route) |
 

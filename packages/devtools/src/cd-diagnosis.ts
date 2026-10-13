@@ -280,7 +280,16 @@ function inputValue(instance: object, prop: string): unknown {
  * path and `ComponentRef.setInput` in `@angular/core/fesm2022`.
  */
 const ANGULAR_NOTIFY_PATH =
-  /^(markViewDirty|markForCheck|markAncestorsForTraversal|updateAncestorTraversalFlagsOnAttach|consumerMarkedDirty|producerNotifyConsumers|producerIncrementEpoch|signalValueChanged|signalSetFn|signalUpdateFn|linkedSignalSetFn|linkedSignalUpdateFn|runPostSignalSetFn|setInput|set|update|notify|addSequence|register|attachView|detachView|insertView)$/;
+  /^(markViewDirty|markForCheck|markAncestorsForTraversal|updateAncestorTraversalFlagsOnAttach|consumerMarkedDirty|producerNotifyConsumers|producerIncrementEpoch|signalValueChanged|signalSetFn|signalUpdateFn|linkedSignalSetFn|linkedSignalUpdateFn|runPostSignalSetFn|setInput|addSequence|attachView|detachView|insertView)$/;
+/** Names Angular uses on that path that app classes use too, skipped only without an app class: `signalFn.set`, not `CartStore.update`. */
+const GENERIC_NOTIFY_PATH = /^(set|update|notify|register)$/;
+
+/** A frame on Angular's path to `notify`, not app code. */
+export const isAngularNotifyFrame = (line: string): boolean => {
+  const name = frameName(line);
+  if (ANGULAR_NOTIFY_PATH.test(name)) return true;
+  return GENERIC_NOTIFY_PATH.test(name) && !frameClass(line.trim().replace(/^at\s+/, ''));
+};
 
 /** A stack frame's function name without its class and alias: `markForCheck` for `ViewRef.markForCheck [as m]`. */
 function frameName(line: string): string {
@@ -306,7 +315,7 @@ const isTickFrame = (line: string) => /^_?tick(Impl)?$/.test(frameName(line));
 export function callerStack(
   raw: string,
   marker: (line: string) => boolean,
-  options: { skip?: RegExp; last?: boolean } = {},
+  options: { skip?: RegExp | ((line: string) => boolean); last?: boolean } = {},
 ): string {
   const { skip, last = false } = options;
   const lines = raw.split('\n');
@@ -320,7 +329,9 @@ export function callerStack(
   let rest = lines.slice(cut + 1);
   if (skip) {
     let i = 0;
-    while (i < rest.length && skip.test(frameName(rest[i]!))) i++;
+    const skipped = (line: string) =>
+      typeof skip === 'function' ? skip(line) : skip.test(frameName(line));
+    while (i < rest.length && skipped(rest[i]!)) i++;
     rest = rest.slice(i);
   }
   return ['Error', ...rest].join('\n');
@@ -425,7 +436,7 @@ export function createCdDiagnosis(options: CdDiagnosisOptions) {
     const task = zoneTask();
     // A listener's own frames are Angular's; the app's run after this call.
     const taken = source === NOTIFY.Listener ? undefined : stack();
-    const raw = taken && callerStack(taken, isWrapperFrame, { skip: ANGULAR_NOTIFY_PATH });
+    const raw = taken && callerStack(taken, isWrapperFrame, { skip: isAngularNotifyFrame });
     const http =
       !!event?.xhr || (!!raw && HTTP_FRAME.test(raw)) || (!!task && HTTP_TASK.test(task));
     const appStack = raw ? appFrames(raw) : [];

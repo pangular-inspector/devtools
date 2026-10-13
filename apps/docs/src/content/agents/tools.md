@@ -72,7 +72,7 @@ Every tool has one of three safety tiers. The server sends the tier to your clie
 | `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                                                                                                               |
 
 <ngmd-alert severity="important">
-  The fourteen <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
+  The fifteen <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
 When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, and `hydration` only when it turns the overlay on or off. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).

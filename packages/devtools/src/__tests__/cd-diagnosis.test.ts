@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   callerStack,
+  isAngularNotifyFrame,
   createCdDiagnosis,
   findCdScheduler,
   NOTIFY,
@@ -395,6 +396,22 @@ describe('change detection diagnosis', () => {
       callerStack(firefox, (line) => line.startsWith('wrapper@'), { skip: /^markViewDirty$/ }),
     ).toBe('Error\nPoller.poll@app.js:3:3');
     expect(callerStack('no marker here', () => false)).toBe('no marker here');
+  });
+
+  it("keeps an app method named like a step of Angular's notify path", () => {
+    const raw = [
+      'Error',
+      '    at wrapper [as notify] (chunk.js:1:1)',
+      '    at markViewDirty (chunk.js:2:2)',
+      '    at signalFn.set (chunk.js:3:3)',
+      '    at CartStore.update (src/app/cart.store.ts:12:5)',
+      '    at Cart.add (src/app/cart.ts:4:4)',
+    ].join('\n');
+    expect(
+      callerStack(raw, (line) => /\[as notify\]/.test(line), { skip: isAngularNotifyFrame }),
+    ).toBe(
+      'Error\n    at CartStore.update (src/app/cart.store.ts:12:5)\n    at Cart.add (src/app/cart.ts:4:4)',
+    );
   });
 
   it('credits ApplicationRef.tick to the app frame below it', () => {
