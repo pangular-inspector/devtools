@@ -139,6 +139,7 @@ export function groupCalls(calls: readonly WaterfallCall[]): Group[] {
                   <button
                     type="button"
                     class="wf-row"
+                    [attr.data-call-id]="row.call.id"
                     [class.selected]="selectedId() === row.call.id"
                     [attr.aria-pressed]="selectedId() === row.call.id"
                     [attr.aria-label]="row.label"

@@ -278,13 +278,18 @@ export class ProviderValue {
     if (open && !this.answer()) void this.load();
   }
 
+  /** Counts reads, so only the latest one's answer is shown. */
+  private requests = 0;
+
   async load() {
     const key = this.key();
+    const request = ++this.requests;
     this.loading.set(true);
     // A fresh read starts the nested levels over.
     this.store.follow({ rpc: null, pageId: null, componentId: `${key}#${Date.now()}` }, undefined);
     const answer = await this.read({ path: [] });
-    if (key !== this.key()) return;
+    // A newer read, or another provider, owns the view now.
+    if (request !== this.requests || key !== this.key()) return;
     this.loading.set(false);
     this.answer.set(answer);
   }

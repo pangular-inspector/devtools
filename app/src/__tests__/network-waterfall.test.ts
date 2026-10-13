@@ -163,6 +163,23 @@ describe('NetworkInspector waterfall and headers', () => {
     expect(preview.querySelector('dd.masked')!.textContent).toBe('[redacted]');
   });
 
+  it('returns focus to the waterfall row when its preview closes', async () => {
+    viewButton('Waterfall').click();
+    await fixture.whenStable();
+    waterfallRows()[2].click();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(document.activeElement?.id).toBe('preview-heading');
+    const close = [...host().querySelectorAll<HTMLButtonElement>('#call-preview button')].find(
+      (b) => b.textContent!.trim() === 'Close',
+    )!;
+    close.click();
+    await fixture.whenStable();
+    expect(host().querySelector('#call-preview')).toBeNull();
+    expect(document.activeElement).toBe(waterfallRows()[2]);
+    expect(waterfallRows()[2].dataset['callId']).toBe('c2');
+  });
+
   it('says when no headers were recorded', async () => {
     fixture.componentInstance.openCall('c2');
     await fixture.whenStable();

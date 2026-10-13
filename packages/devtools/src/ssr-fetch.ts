@@ -1,4 +1,4 @@
-import { SSR_REQUEST_HEADER, ssrRegistry } from './ssr-registry.ts';
+import { SSR_REQUEST_HEADER, ssrRegistry, touchSsrRequest } from './ssr-registry.ts';
 import {
   OVERRIDE_HEADER,
   SNIFF_BYTES,
@@ -216,6 +216,7 @@ function traceFinisher(trace: SsrTrace, method: string, url: string) {
     });
   };
   const count = (chunk: Uint8Array) => {
+    touchSsrRequest(trace.active);
     bytes += chunk.byteLength;
     if (sniff.length < SNIFF_BYTES) {
       sniff += decoder.decode(chunk.subarray(0, SNIFF_BYTES), { stream: true });

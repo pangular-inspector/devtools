@@ -1,7 +1,7 @@
 import type { IncomingMessage, OutgoingHttpHeaders, ServerResponse } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { SSR_REQUEST_HEADER, ssrRegistry } from './ssr-registry.ts';
+import { SSR_REQUEST_HEADER, ssrRegistry, touchSsrRequest } from './ssr-registry.ts';
 import {
   OVERRIDE_HEADER,
   SNIFF_BYTES,
@@ -143,6 +143,7 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
 
     const count = (chunk: unknown) => {
       if (chunk === undefined || chunk === null || typeof chunk === 'function') return;
+      touchSsrRequest(trace.active);
       const buffer =
         typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk as Uint8Array);
       bytes += buffer.length;
@@ -176,6 +177,7 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
       const callbacks: ((error?: Error | null) => void)[] = [];
       res.write = function (this: ServerResponse, chunk: unknown, ...rest: unknown[]) {
         if (chunk !== undefined && chunk !== null && typeof chunk !== 'function') {
+          touchSsrRequest(trace.active);
           chunks.push(
             typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk as Uint8Array),
           );

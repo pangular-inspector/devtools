@@ -414,6 +414,34 @@ describe('Provider value', () => {
     expect(region.textContent).toContain('id:');
   });
 
+  it('shows only the latest read when it is closed and reopened while a read is pending', async () => {
+    const pending: ((answer: unknown) => void)[] = [];
+    const call = vi.fn(() => new Promise((resolve) => pending.push(resolve)));
+    const fixture = await mount(call);
+    const toggle = button(fixture, 'Show the value of CartService');
+    toggle.click();
+    await settle(fixture);
+    toggle.click();
+    await settle(fixture);
+    toggle.click();
+    await settle(fixture);
+    expect(call).toHaveBeenCalledTimes(2);
+
+    const answer = (type: string) => ({
+      ok: true,
+      type,
+      members: [{ name: 'label', value: type }],
+    });
+    pending[1](answer('Newer'));
+    await settle(fixture);
+    pending[0](answer('Older'));
+    await settle(fixture);
+    const region = el(fixture).querySelector('[role="region"]')!;
+    expect(region.textContent).toContain('Newer');
+    expect(region.textContent).not.toContain('Older');
+    expect(fixture.componentInstance.loading()).toBe(false);
+  });
+
   it('says when the provider was not created yet', async () => {
     const fixture = await mount(async () => ({
       error:

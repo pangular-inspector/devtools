@@ -162,6 +162,45 @@ describe('withPangularSsr', () => {
     expect(recorded[0]).toMatchObject({ aborted: true, bytes: HTML.length });
   });
 
+  it('keeps a slow stream that still sends chunks past the TTL, and expires it once idle', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(1_000_000);
+      const encoder = new TextEncoder();
+      let source!: ReadableStreamDefaultController<Uint8Array>;
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          source = controller;
+        },
+      });
+      const response = await withPangularSsr(async () => html(stream as unknown as string))(
+        page('/slow'),
+      );
+      const reader = response!.body!.getReader();
+      const chunkAt = async (at: number, text: string) => {
+        vi.setSystemTime(at);
+        source.enqueue(encoder.encode(text));
+        expect(new TextDecoder().decode((await reader.read()).value)).toBe(text);
+      };
+
+      // A chunk every four minutes, so the stream runs well past five minutes in all.
+      const step = ACTIVE_SSR_TTL_MS - 60_000;
+      await chunkAt(1_000_000 + step, '<html>');
+      await chunkAt(1_000_000 + 2 * step, '<body>');
+      vi.setSystemTime(1_000_000 + 2 * step + ACTIVE_SSR_TTL_MS);
+      expect(soleActiveSsrRequest()).toBeDefined();
+      expect(recorded).toEqual([]);
+
+      // Five minutes and a moment with no chunk: the sweep ends it as aborted.
+      vi.setSystemTime(1_000_000 + 2 * step + ACTIVE_SSR_TTL_MS + 1);
+      expect(soleActiveSsrRequest()).toBeUndefined();
+      expect(ssrRegistry().active.size).toBe(0);
+      expect(recorded).toMatchObject([{ url: '/slow', aborted: true, bytes: 12 }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('expires a trace whose Response was dropped unread, and records it as aborted', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
@@ -351,6 +390,28 @@ describe('server calls without an Angular REQUEST', () => {
     ).subscribe();
     return httpRegistry().calls!.at(-1)!;
   };
+
+  it('counts a server call as activity on the trace', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(1_000_000);
+      ssrRegistry().active.set('abc123', {
+        fetches: 0,
+        fetchMs: 0,
+        url: '/blog',
+        startedAt: 1_000_000,
+      });
+      vi.setSystemTime(1_000_000 + ACTIVE_SSR_TTL_MS - 1);
+      expect(run()).toMatchObject({ requestId: 'abc123' });
+      // Past the TTL since the start, but not since the call.
+      vi.setSystemTime(1_000_000 + 2 * ACTIVE_SSR_TTL_MS - 2);
+      expect(soleActiveSsrRequest()).toBe('abc123');
+      vi.setSystemTime(1_000_000 + 2 * ACTIVE_SSR_TTL_MS);
+      expect(soleActiveSsrRequest()).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it('links to the only traced request in flight', () => {
     ssrRegistry().active.set('abc123', { fetches: 0, fetchMs: 0, url: '/blog' });
