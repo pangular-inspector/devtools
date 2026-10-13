@@ -23,12 +23,13 @@ import { pangularHttpInterceptor } from '../http.ts';
 import { httpRegistry } from '../http-rules.ts';
 import { pangularSsrEventHandler, withPangularSsr } from '../ssr.ts';
 import { renderModeOf } from '../ssr-trace.ts';
+import { runInSsrRequest } from '../ssr-context.ts';
 import type { SsrOverride } from '../ssr-overrides.ts';
 import {
   ACTIVE_SSR_TTL_MS,
   SSR_REQUEST_HEADER,
-  soleActiveSsrRequest,
   ssrRegistry,
+  sweepActiveSsrRequests,
   type SsrRequest,
 } from '../ssr-registry.ts';
 import type { HttpState } from '../types.ts';
@@ -188,12 +189,13 @@ describe('withPangularSsr', () => {
       await chunkAt(1_000_000 + step, '<html>');
       await chunkAt(1_000_000 + 2 * step, '<body>');
       vi.setSystemTime(1_000_000 + 2 * step + ACTIVE_SSR_TTL_MS);
-      expect(soleActiveSsrRequest()).toBeDefined();
+      sweepActiveSsrRequests();
+      expect(ssrRegistry().active.size).toBe(1);
       expect(recorded).toEqual([]);
 
       // Five minutes and a moment with no chunk: the sweep ends it as aborted.
       vi.setSystemTime(1_000_000 + 2 * step + ACTIVE_SSR_TTL_MS + 1);
-      expect(soleActiveSsrRequest()).toBeUndefined();
+      sweepActiveSsrRequests();
       expect(ssrRegistry().active.size).toBe(0);
       expect(recorded).toMatchObject([{ url: '/slow', aborted: true, bytes: 12 }]);
     } finally {
@@ -212,7 +214,8 @@ describe('withPangularSsr', () => {
 
       // Still in flight before the TTL.
       vi.setSystemTime(1_000_000 + ACTIVE_SSR_TTL_MS);
-      expect(soleActiveSsrRequest()).toBeDefined();
+      sweepActiveSsrRequests();
+      expect(ssrRegistry().active.size).toBe(1);
 
       vi.setSystemTime(1_000_000 + ACTIVE_SSR_TTL_MS + 1);
       const next = await withPangularSsr(async () => html(null, { status: 302 }))(page('/next'));
@@ -381,15 +384,19 @@ describe('server calls without an Angular REQUEST', () => {
     ssrRegistry().active.clear();
   });
 
-  const run = () => {
-    const injector = Injector.create({ providers: [{ provide: PLATFORM_ID, useValue: 'server' }] });
-    runInInjectionContext(injector, () =>
-      pangularHttpInterceptor(new HttpRequest('GET', 'http://localhost/api/posts'), () =>
-        of(new HttpResponse({ status: 200, body: [] }) as HttpEvent<unknown>),
-      ),
-    ).subscribe();
+  const run = (requestId?: string, injector = serverInjector()) => {
+    const call = () =>
+      runInInjectionContext(injector, () =>
+        pangularHttpInterceptor(new HttpRequest('GET', 'http://localhost/api/posts'), () =>
+          of(new HttpResponse({ status: 200, body: [] }) as HttpEvent<unknown>),
+        ),
+      ).subscribe();
+    if (requestId) runInSsrRequest(requestId, call);
+    else call();
     return httpRegistry().calls!.at(-1)!;
   };
+  const serverInjector = () =>
+    Injector.create({ providers: [{ provide: PLATFORM_ID, useValue: 'server' }] });
 
   it('counts a server call as activity on the trace', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -402,44 +409,47 @@ describe('server calls without an Angular REQUEST', () => {
         startedAt: 1_000_000,
       });
       vi.setSystemTime(1_000_000 + ACTIVE_SSR_TTL_MS - 1);
-      expect(run()).toMatchObject({ requestId: 'abc123' });
+      expect(run('abc123')).toMatchObject({ requestId: 'abc123' });
       // Past the TTL since the start, but not since the call.
       vi.setSystemTime(1_000_000 + 2 * ACTIVE_SSR_TTL_MS - 2);
-      expect(soleActiveSsrRequest()).toBe('abc123');
+      sweepActiveSsrRequests();
+      expect(ssrRegistry().active.has('abc123')).toBe(true);
       vi.setSystemTime(1_000_000 + 2 * ACTIVE_SSR_TTL_MS);
-      expect(soleActiveSsrRequest()).toBeUndefined();
+      sweepActiveSsrRequests();
+      expect(ssrRegistry().active.has('abc123')).toBe(false);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('links to the only traced request in flight', () => {
-    ssrRegistry().active.set('abc123', { fetches: 0, fetchMs: 0, url: '/blog' });
-    expect(run()).toMatchObject({ requestId: 'abc123', pageUrl: '/blog' });
-    expect(ssrRegistry().active.get('abc123')!.fetches).toBe(1);
-  });
-
-  it('drops a trace in flight past its TTL before linking', () => {
-    ssrRegistry().active.set('stale', {
-      fetches: 0,
-      fetchMs: 0,
-      url: '/old',
-      startedAt: Date.now() - ACTIVE_SSR_TTL_MS - 1,
-    });
-    ssrRegistry().active.set('abc123', {
-      fetches: 0,
-      fetchMs: 0,
-      url: '/blog',
-      startedAt: Date.now(),
-    });
-    expect(run()).toMatchObject({ requestId: 'abc123', pageUrl: '/blog' });
-    expect(ssrRegistry().active.has('stale')).toBe(false);
-  });
-
-  it('links nothing while two requests are in flight', () => {
+  it('links a call to the traced request it runs under', () => {
     ssrRegistry().active.set('abc123', { fetches: 0, fetchMs: 0, url: '/blog' });
     ssrRegistry().active.set('def456', { fetches: 0, fetchMs: 0, url: '/about' });
+    expect(run('abc123')).toMatchObject({ requestId: 'abc123', pageUrl: '/blog' });
+    expect(run('def456')).toMatchObject({ requestId: 'def456', pageUrl: '/about' });
+    expect(ssrRegistry().active.get('abc123')!.fetches).toBe(1);
+    expect(ssrRegistry().active.get('def456')!.fetches).toBe(1);
+  });
+
+  it('links nothing to a request that is no longer in flight', () => {
+    ssrRegistry().active.set('def456', { fetches: 0, fetchMs: 0, url: '/about' });
+    expect(run('abc123')).not.toHaveProperty('requestId');
+  });
+
+  it('links nothing outside a traced request, even with one in flight', () => {
+    ssrRegistry().active.set('abc123', { fetches: 0, fetchMs: 0, url: '/blog' });
     expect(run()).not.toHaveProperty('requestId');
+    expect(run()).toMatchObject({ pageUrl: undefined });
+  });
+
+  it('keeps an app on the request it first ran under, when a later call loses the context', () => {
+    ssrRegistry().active.set('abc123', { fetches: 0, fetchMs: 0, url: '/blog' });
+    ssrRegistry().active.set('def456', { fetches: 0, fetchMs: 0, url: '/about' });
+    const app = serverInjector();
+    expect(run('abc123', app)).toMatchObject({ requestId: 'abc123' });
+    // A zone.js microtask, for one, can run the call under another request's context.
+    expect(run('def456', app)).toMatchObject({ requestId: 'abc123' });
+    expect(run(undefined, app)).toMatchObject({ requestId: 'abc123' });
   });
 });
 

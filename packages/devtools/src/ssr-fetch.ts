@@ -1,4 +1,5 @@
 import { SSR_REQUEST_HEADER, ssrRegistry, touchSsrRequest } from './ssr-registry.ts';
+import { runInSsrRequest } from './ssr-context.ts';
 import {
   OVERRIDE_HEADER,
   SNIFF_BYTES,
@@ -143,7 +144,8 @@ export function withPangularSsr<Args extends unknown[], Result extends Response 
       const clean = request.headers.has(SSR_REQUEST_HEADER)
         ? withHeaders(request, (headers) => headers.delete(SSR_REQUEST_HEADER))
         : request;
-      return handler(clean, ...rest);
+      // Untraced, so its server calls never link to a render running alongside.
+      return runInSsrRequest(undefined, () => handler(clean, ...rest));
     }
     const trace = beginSsrTrace(url)!;
     const finish = traceFinisher(trace, request.method, url);
@@ -178,7 +180,7 @@ export function withPangularSsr<Args extends unknown[], Result extends Response 
     });
     let response: Result;
     try {
-      response = await handler(tagged, ...rest);
+      response = await runInSsrRequest(trace.id, () => handler(tagged, ...rest));
     } catch (error) {
       finish.failed();
       throw error;

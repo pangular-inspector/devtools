@@ -152,15 +152,11 @@ export default defineEventHandler(pangularSsrEventHandler());
 
 It wraps the Node response of each HTML request, adds the `Server-Timing` header that links the page to its render, and records the render with its render mode. Analog marks its renders `ssr-analog`, which the tab shows as **Server**. It does nothing while the Vite plugin is not running, so it is safe in a production build.
 
-Analog gives the render its own `REQUEST` token, not the one from `@angular/core`, so `withPangular()` can't read the request id from a header. Instead, the tracer links each server call to the only traced request in flight.
+Analog gives the render its own `REQUEST` token, not the one from `@angular/core`, so `withPangular()` can't read the request id from a header. Instead, the tracer keeps the id in the request's async context (Node's `AsyncLocalStorage`), and each server call is linked to the request it ran under. Renders that run at the same time each keep their own calls.
 
-If two traced renders run at once, the tracer can't tell their calls apart. The calls show in the timeline without a link to their request.
+The tracer skips a request that does not accept `text/html`, such as `curl` without an `Accept` header. It also skips a path in `skip`. The calls of a render it skips show in the timeline without a link to a request, even while a traced render runs alongside.
 
-The tracer skips a request that does not accept `text/html`, such as `curl` without an `Accept` header. It also skips a path in `skip`. A render it skips is not in flight for the tracer.
-
-If an untraced render runs alongside one traced render, the tracer links the untraced render's calls to the traced one.
-
-The tracer drops a traced request after five minutes without activity, such as a response nobody reads. A response that keeps sending chunks stays in flight.
+The tracer drops a traced request after five minutes without activity, such as a response nobody reads. A response that keeps sending chunks stays in flight. A server call made after its request was dropped is not linked.
 
 ## Try the demo
 

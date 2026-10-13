@@ -2,6 +2,7 @@ import type { IncomingMessage, OutgoingHttpHeaders, ServerResponse } from 'node:
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SSR_REQUEST_HEADER, ssrRegistry, touchSsrRequest } from './ssr-registry.ts';
+import { runInSsrRequest } from './ssr-context.ts';
 import {
   OVERRIDE_HEADER,
   SNIFF_BYTES,
@@ -85,7 +86,8 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
     const url = req.url ?? '/';
     if (!wantsHtml(req.method, url, req.headers.accept, skip)) {
       delete req.headers[SSR_REQUEST_HEADER];
-      return next();
+      // Untraced, so its server calls never link to a render running alongside.
+      return runInSsrRequest(undefined, () => next());
     }
     const trace = beginSsrTrace(url)!;
     const { id } = trace;
@@ -260,6 +262,7 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
     }
     const edits = stateEditsFor(url);
     if (edits.length) bufferForEdits(edits);
-    next();
+    // A render without Angular's `REQUEST` finds its request id through this context.
+    runInSsrRequest(id, () => next());
   };
 }

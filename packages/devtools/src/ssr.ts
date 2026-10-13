@@ -6,6 +6,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { withPangularSsr as traceWebHandler, type PangularSsrOptions } from './ssr-fetch.ts';
 import { createSsrMiddleware } from './ssr-middleware.ts';
+import { enterSsrRequest } from './ssr-context.ts';
+import { SSR_REQUEST_HEADER, activeSsrRequest, ssrRegistry } from './ssr-registry.ts';
 
 export type { PangularSsrOptions, WebRequestHandler } from './ssr-fetch.ts';
 
@@ -52,6 +54,13 @@ export function pangularSsrEventHandler(options: PangularSsrOptions = {}) {
   return (event: NodeEventLike): true | undefined => {
     const { req, res } = event.node;
     trace(req, res, () => {});
-    return res.writableEnded ? true : undefined;
+    if (res.writableEnded) return true;
+    // The render runs after this handler returns, outside any callback the tracer could wrap,
+    // so the rest of this request is marked instead: traced with its id, or untraced.
+    if (ssrRegistry().record) {
+      const id = req.headers[SSR_REQUEST_HEADER];
+      enterSsrRequest(activeSsrRequest(typeof id === 'string' ? id : undefined));
+    }
+    return undefined;
   };
 }

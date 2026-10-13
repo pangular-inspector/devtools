@@ -73,7 +73,7 @@ The request that served the selected page opens on its own. Click another row to
 
 The middleware gives each request an id. The id reaches the render in the `x-pangular-ssr-id` request header, so the interceptor tags each server call with it. It goes back to the browser in a `Server-Timing` header (`pangular;desc="<id>"`, `render;dur=...`, `fetch;dur=...`, and `guards;dur=...` and `resolve;dur=...` when the router ran them), so the overlay links the page to the render, and the browser's own Network panel shows the same times.
 
-A render without the `REQUEST` token from `@angular/core`, as in Analog, has no header to read. Its server calls are linked to the only traced request in flight. A render that is not traced can run alongside it, and its calls are still linked to that request. A traced request with no activity for five minutes no longer counts as in flight. See [Set up Analog](../guides/analog.md#trace-server-renders).
+A render without the `REQUEST` token from `@angular/core`, as in Analog, has no header to read. The tracer keeps the id in the request's async context instead (Node's `AsyncLocalStorage`), so each server call is linked to the request it ran under, even when several renders run at the same time. The calls of a render that is not traced are not linked to any request. A traced request with no activity for five minutes no longer counts as in flight. See [Set up Analog](../guides/analog.md#trace-server-renders).
 
 #### Render modes
 

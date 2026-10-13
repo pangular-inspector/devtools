@@ -10,6 +10,7 @@ import {
   ApplicationRef,
   DestroyRef,
   EnvironmentInjector,
+  Injector,
   PLATFORM_ID,
   REQUEST,
   TransferState,
@@ -43,9 +44,9 @@ import {
   activeSsrRequest,
   noteOverride,
   noteSsrFetch,
-  soleActiveSsrRequest,
   ssrRegistry,
 } from './ssr-registry.ts';
+import { currentSsrRequest } from './ssr-context.ts';
 import { matchingOverrides } from './ssr-overrides.ts';
 import { watchSsrNavigations } from './ssr-navigation.ts';
 import { tapConsole } from './console-tap.ts';
@@ -186,13 +187,12 @@ function devMode(): boolean {
 
 /**
  * The traced request of a render that has no Angular `REQUEST`, such as an
- * Analog page, when it is the only one in flight. A render the tracer skipped
- * (no `Accept: text/html`, a `skip` path) is not in flight, so one running at
- * the same time as a single traced render is linked to it: the known limit,
- * documented in the Analog guide.
+ * Analog page: the one the tracer marked the render's async context with
+ * (`ssr-context.ts`). A render the tracer did not trace, or never saw, is
+ * linked to nothing, even while other renders are in flight.
  */
 function untaggedServerRequest(): { requestId?: string; pageUrl?: string } {
-  const requestId = soleActiveSsrRequest();
+  const requestId = currentSsrRequest(inject(Injector));
   if (!requestId) return {};
   return { requestId, pageUrl: ssrRegistry().active.get(requestId)?.url };
 }
