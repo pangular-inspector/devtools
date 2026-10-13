@@ -88,22 +88,23 @@ The HTTP endpoint leaves out the keys of an inspector whose agent tools are hidd
 
 This table covers the data that has no resource of its own.
 
-| Key                         | Content                                                                                                   |
-| --------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `pangular:http`             | The SSR & HTTP timeline, SSR requests, fault rules and hydration data                                     |
-| `pangular:http-payloads`    | The TransferState payload of each page, by page id                                                        |
-| `pangular:change-detection` | Change detection recordings, by page id                                                                   |
-| `pangular:pipe-usage`       | Live pipe instances and recorded calls                                                                    |
-| `pangular:errors`           | Error groups and console calls, by page id                                                                |
-| `pangular:leaks`            | Leak hints: retained instances, open subscriptions, effects, by page id                                   |
-| `pangular:redux-stores`     | NGXS, Elf, MiniRx and other Redux DevTools stores and their actions, by page id                           |
-| `pangular:tanstack-query`   | TanStack Query clients, queries and mutations, by page id                                                 |
-| `pangular:startup`          | Startup timing: milestones and the slowest providers, by page id                                          |
-| `pangular:plugins`          | Plugin views by page id, and the server plugins with their tools. Hidden while any plugin's tools are off |
-| `pangular:plugin.<id>`      | A server plugin's own state, hidden with that plugin's tools                                              |
-| `pangular:audit`            | Audit sessions and axe passes: when each was taken, by page id                                            |
-| `pangular:analog`           | Analog page data and the server call log                                                                  |
-| `pangular:routes`           | Declared but not filled. Use `get-routes` or `list-routes` instead.                                       |
+| Key                         | Content                                                                                                                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:http`             | The SSR & HTTP timeline, SSR requests, fault rules and hydration data                                                                           |
+| `pangular:http-payloads`    | The TransferState payload of each page, by page id                                                                                              |
+| `pangular:change-detection` | Change detection recordings, by page id                                                                                                         |
+| `pangular:pipe-usage`       | Live pipe instances and recorded calls                                                                                                          |
+| `pangular:errors`           | Error groups and console calls, by page id                                                                                                      |
+| `pangular:leaks`            | Leak hints: retained instances, open subscriptions, effects, by page id                                                                         |
+| `pangular:redux-stores`     | NGXS, Elf, MiniRx and other Redux DevTools stores and their actions, by page id                                                                 |
+| `pangular:tanstack-query`   | TanStack Query clients, queries and mutations, by page id                                                                                       |
+| `pangular:startup`          | Startup timing: milestones and the slowest providers, by page id                                                                                |
+| `pangular:plugins`          | Plugin views by page id, and the server plugins with their tools. Hidden while any plugin's tools are off                                       |
+| `pangular:plugin.<id>`      | A server plugin's own state, hidden with that plugin's tools                                                                                    |
+| `pangular:audit`            | Audit sessions and axe passes: when each was taken, by page id                                                                                  |
+| `pangular:browser-tools`    | Whether pages register the [browser agent tools](./browser-agents.md) (`enabled`), and the `agent.browserTools` value it starts from (`config`) |
+| `pangular:analog`           | Analog page data and the server call log                                                                                                        |
+| `pangular:routes`           | Declared but not filled. Use `get-routes` or `list-routes` instead.                                                                             |
 
 The list also includes the keys behind the six resources above (`pangular:component-tree`, `pangular:forms`, and so on).
 

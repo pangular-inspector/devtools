@@ -1,10 +1,10 @@
 ---
 title: Settings
-description: Pick the panel theme, hide, pin and reorder tabs, and hide the popup button until you press its shortcut.
+description: Pick the panel theme, hide, pin and reorder tabs, hide the popup button until you press its shortcut, and turn the browser agent tools on or off.
 ---
 
 <ngmd-hero title="Settings" gradient>
-  Your own preferences for the panel: theme, tab bar and the popup on your app's page.
+  Your own preferences for the panel (theme, tab bar and the popup on your app's page), and the dev server's browser agent tools switch.
 </ngmd-hero>
 
 # Settings
@@ -24,6 +24,8 @@ Settings belong to you, not to the project. The panel saves them in the browser'
 | `pangular-pref:passive` | `true` when passive mode is on.              |
 
 If the browser blocks storage, the settings apply until the panel reloads. Remove the keys to go back to the defaults.
+
+[Browser agents](#browser-agents) is the exception. The dev server keeps it, not the browser, so it applies to every page and panel connected to that server.
 
 ## Theme
 
@@ -58,10 +60,29 @@ The popup saves passive mode with its layout, under `pangular-popup` in your app
 
 With `popup.hotkey: false` there is no shortcut to bring the button back, so passive mode is off and the checkbox is disabled.
 
+## Browser agents
+
+The **Browser agent tools** switch registers the read-only agent tools on your app's page, so an agent that drives the browser finds them through WebMCP or Chrome DevTools for agents. See [Browser agents](../agents/browser-agents.md) for what is registered and how the tools answer.
+
+| What                 | Behavior                                                                                                                                                       |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Default              | Off, unless [`agent.browserTools`](./configuration.md#inspectors-and-agent-tools) is `true` in the devtools config.                                            |
+| Turning it on or off | Every page connected to the dev server registers or unregisters the tools right away. No reload is needed.                                                     |
+| How long it lasts    | Until the dev server restarts. Then `agent.browserTools` decides again. The hint under the switch says whether the config has it on or off.                    |
+| Where it is kept     | On the dev server, not in `localStorage`. Every panel connected to the server shows the same value and follows a change made in another one.                   |
+| When it is disabled  | While the panel connects, in a saved report from `pangular build`, and with a devtools server that has no switch. Then set `agent.browserTools` in the config. |
+
+If the server refuses the change, an error with **Retry** shows under the switch.
+
+<ngmd-callout type="warning" title="Any script on the page can call them">
+  In-page agents and other scripts can list WebMCP tools and run them. Leave the switch off if your development page loads scripts you don't trust.
+</ngmd-callout>
+
 ## Where to next
 
 <ngmd-pill-row>
   <ngmd-pill href="/getting-started/command-palette" title="Command palette"></ngmd-pill>
   <ngmd-pill href="/getting-started/popup-and-hub" title="Popup and hub"></ngmd-pill>
   <ngmd-pill href="/getting-started/configuration" title="Configuration"></ngmd-pill>
+  <ngmd-pill href="/agents/browser-agents" title="Browser agents"></ngmd-pill>
 </ngmd-pill-row>
