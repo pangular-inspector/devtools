@@ -1,33 +1,39 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
-import {
-  Component,
-  afterEveryRender,
-  provideZonelessChangeDetection,
-  signal,
-  type ApplicationRef,
-} from '@angular/core';
-import { bootstrapApplication } from '@angular/platform-browser';
+import { Component } from '@angular/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { attachChangeDetection, type CdReport } from '../cd-overlay.ts';
 import { PROFILER_EVENT as E } from '../cd-recorder.ts';
 import { addProfilerListener } from '../change-detection.ts';
 import { elementId } from '../element-id.ts';
-import { angularAtLeast } from './angular-version.ts';
+import {
+  afterEachRender,
+  angularAtLeast,
+  bootstrapRoot,
+  writableSignal,
+  STANDALONE,
+  type BootedApp,
+} from './angular-version.ts';
 
 class TripCart {
-  readonly items = signal(0);
+  readonly items = writableSignal(0);
   add() {
     this.items.update((n) => n + 1);
   }
 }
 Component({
+  ...STANDALONE,
   selector: 'app-trip-cart',
   template: '<button type="button" (click)="add()">Add</button> {{ items() }} items',
 })(TripCart);
 
 class TripShell {}
-Component({ selector: 'app-root', imports: [TripCart], template: '<app-trip-cart />' })(TripShell);
+Component({
+  ...STANDALONE,
+  selector: 'app-root',
+  imports: [TripCart],
+  template: '<app-trip-cart></app-trip-cart>',
+})(TripShell);
 
 // Plain inputs: JIT without the CLI transform cannot see signal inputs.
 class HookBadge {
@@ -37,23 +43,29 @@ class HookBadge {
   ngDoCheck() {}
   ngAfterViewChecked() {}
 }
-Component({ selector: 'app-hook-badge', inputs: ['count'], template: 'n={{ count }}' })(HookBadge);
+Component({
+  ...STANDALONE,
+  selector: 'app-hook-badge',
+  inputs: ['count'],
+  template: 'n={{ count }}',
+})(HookBadge);
 
 class HookShell {
-  readonly count = signal(0);
+  readonly count = writableSignal(0);
   rendered = 0;
   constructor() {
-    afterEveryRender(() => this.rendered++);
+    afterEachRender(() => this.rendered++);
   }
   bump() {
     this.count.update((n) => n + 1);
   }
 }
 Component({
+  ...STANDALONE,
   selector: 'app-root',
   imports: [HookBadge],
   template:
-    '<button type="button" (click)="bump()">Bump</button><app-hook-badge [count]="count()" />',
+    '<button type="button" (click)="bump()">Bump</button><app-hook-badge [count]="count()"></app-hook-badge>',
 })(HookShell);
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -77,7 +89,7 @@ function fakeRpc() {
 }
 
 describe('change detection recorder with a real app', () => {
-  let app: ApplicationRef | null = null;
+  let app: BootedApp | null = null;
   let cleanup: (() => void) | null = null;
   afterEach(() => {
     cleanup?.();
@@ -89,10 +101,8 @@ describe('change detection recorder with a real app', () => {
 
   async function boot() {
     document.body.innerHTML = '<app-root></app-root>';
-    app = await bootstrapApplication(TripShell, {
-      providers: [provideZonelessChangeDetection()],
-    });
-    app.tick();
+    app = await bootstrapRoot(TripShell, { declarations: [TripCart] });
+    app.appRef.tick();
   }
 
   it('gets the profiler events the recorder reads, with the numbers it expects', async () => {
@@ -174,10 +184,8 @@ describe('change detection recorder with a real app', () => {
 
   it('times real lifecycle hooks, outputs and afterRender callbacks', async () => {
     document.body.innerHTML = '<app-root></app-root>';
-    app = await bootstrapApplication(HookShell, {
-      providers: [provideZonelessChangeDetection()],
-    });
-    app.tick();
+    app = await bootstrapRoot(HookShell, { declarations: [HookBadge] });
+    app.appRef.tick();
     const events: number[] = [];
     const removeSpy = addProfilerListener(ngOf(), (event) => events.push(event));
     const { my, handlers, reports } = fakeRpc();

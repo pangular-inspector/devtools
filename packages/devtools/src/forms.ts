@@ -293,9 +293,10 @@ function read<T>(fn: () => T, fallback: T): T {
 export function isAbstractControl(value: unknown): value is AnyRecord {
   if (!value || typeof value !== 'object') return false;
   const v = value as AnyRecord;
+  // `FormControl.getRawValue` only exists from 14.0, so it can't tell controls apart.
   return read(
     () =>
-      typeof v['getRawValue'] === 'function' &&
+      typeof v['setValue'] === 'function' &&
       typeof v['setParent'] === 'function' &&
       typeof v['updateValueAndValidity'] === 'function' &&
       'status' in v,

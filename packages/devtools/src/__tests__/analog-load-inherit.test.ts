@@ -2,15 +2,15 @@
 import '@angular/compiler';
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { Router, RouterOutlet, provideRouter, type Route, type Routes } from '@angular/router';
 import { describe, expect, it } from 'vitest';
 import { ANALOG_META_DESCRIPTION, chainOf, collectAnalog } from '../analog-runtime.ts';
 import { scanAnalog } from '../rpc/analog-scan.ts';
 import { resolveAnalogReport } from '../rpc/analog-tools.ts';
 import { BASE_FILES, makeProject } from './analog-fixture.ts';
+import { initAngularTestBed } from './angular-version.ts';
 
-TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+initAngularTestBed();
 
 const META = Symbol(ANALOG_META_DESCRIPTION);
 

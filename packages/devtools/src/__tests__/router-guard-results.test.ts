@@ -2,7 +2,6 @@
 import '@angular/compiler';
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { Router, provideRouter, type Routes } from '@angular/router';
 import {
   BehaviorSubject,
@@ -16,8 +15,10 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { watchRouter, type NavigationRecord } from '../router.ts';
 import { instrument } from '../router-actions.ts';
+import { initAngularTestBed, STANDALONE } from './angular-version.ts';
+import { functionalRouter } from './router-testing.ts';
 
-TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+initAngularTestBed();
 
 class StateObservable<T> extends Observable<T> {
   constructor(state: Observable<T>) {
@@ -39,7 +40,7 @@ class FakeStore<T> extends Observable<T> {
 }
 
 class Page {}
-Component({ selector: 'app-page', template: 'page' })(Page);
+Component({ ...STANDALONE, selector: 'app-page', template: 'page' })(Page);
 
 const state = new BehaviorSubject({ authed: true });
 const behavior = new BehaviorSubject<boolean>(true);
@@ -80,63 +81,67 @@ function wrapGuard(value: Observable<boolean>) {
   return { wrapped, nav };
 }
 
-describe('instrumented guards keep the observable they return working', () => {
-  let router: Router;
-  let navigations: NavigationRecord[];
-  let cleanup: (() => void)[];
-  const last = () => navigations[navigations.length - 1];
+// provideRouter and functional guards exist from 14.2.
+describe.runIf(functionalRouter)(
+  'instrumented guards keep the observable they return working',
+  () => {
+    let router: Router;
+    let navigations: NavigationRecord[];
+    let cleanup: (() => void)[];
+    const last = () => navigations[navigations.length - 1];
 
-  beforeEach(() => {
-    TestBed.resetTestingModule();
-    TestBed.configureTestingModule({ providers: [provideRouter(routes)] });
-    router = TestBed.inject(Router);
-    navigations = [];
-    cleanup = [];
-    const stop = watchRouter(router as never, navigations, () => {});
-    if (stop) cleanup.push(stop);
-    cleanup.push(instrument(router as never, navigations));
-    subject = new Subject<boolean>();
-    asyncValue = later(true);
-  });
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({ providers: [provideRouter(routes)] });
+      router = TestBed.inject(Router);
+      navigations = [];
+      cleanup = [];
+      const stop = watchRouter(router as never, navigations, () => {});
+      if (stop) cleanup.push(stop);
+      cleanup.push(instrument(router as never, navigations));
+      subject = new Subject<boolean>();
+      asyncValue = later(true);
+    });
 
-  afterEach(() => {
-    for (const fn of cleanup) fn();
-  });
+    afterEach(() => {
+      for (const fn of cleanup) fn();
+    });
 
-  it('passes a Store-like observable with its own lift and constructor', async () => {
-    expect(storeGuard()).toBeInstanceOf(FakeStore);
-    await expect(router.navigateByUrl('/store')).resolves.toBe(true);
-    expect(router.url).toBe('/store');
-    expect(last().runs).toEqual([
-      expect.objectContaining({ guard: 'storeGuard', kind: 'canActivate', result: 'true' }),
-    ]);
-  });
+    it('passes a Store-like observable with its own lift and constructor', async () => {
+      expect(storeGuard()).toBeInstanceOf(FakeStore);
+      await expect(router.navigateByUrl('/store')).resolves.toBe(true);
+      expect(router.url).toBe('/store');
+      expect(last().runs).toEqual([
+        expect.objectContaining({ guard: 'storeGuard', kind: 'canActivate', result: 'true' }),
+      ]);
+    });
 
-  it('passes the current value of a BehaviorSubject, not a function', async () => {
-    behavior.next(false);
-    await expect(router.navigateByUrl('/behavior')).resolves.toBe(false);
-    expect(last().runs?.[0]).toMatchObject({ guard: 'behaviorGuard', result: 'false' });
-    behavior.next(true);
-    await expect(router.navigateByUrl('/behavior')).resolves.toBe(true);
-    expect(last().runs?.[0]).toMatchObject({ result: 'true' });
-  });
+    it('passes the current value of a BehaviorSubject, not a function', async () => {
+      behavior.next(false);
+      await expect(router.navigateByUrl('/behavior')).resolves.toBe(false);
+      expect(last().runs?.[0]).toMatchObject({ guard: 'behaviorGuard', result: 'false' });
+      behavior.next(true);
+      await expect(router.navigateByUrl('/behavior')).resolves.toBe(true);
+      expect(last().runs?.[0]).toMatchObject({ result: 'true' });
+    });
 
-  it('waits for a Subject to emit', async () => {
-    const navigation = router.navigateByUrl('/subject');
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    subject.next(true);
-    await expect(navigation).resolves.toBe(true);
-    expect(last().runs?.[0]).toMatchObject({ guard: 'subjectGuard', result: 'true' });
-  });
+    it('waits for a Subject to emit', async () => {
+      const navigation = router.navigateByUrl('/subject');
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      subject.next(true);
+      await expect(navigation).resolves.toBe(true);
+      expect(last().runs?.[0]).toMatchObject({ guard: 'subjectGuard', result: 'true' });
+    });
 
-  it('records an async guard and resolver on their first value', async () => {
-    await expect(router.navigateByUrl('/async')).resolves.toBe(true);
-    expect(last().runs?.map((run) => [run.kind, run.guard, run.result])).toEqual([
-      ['canActivate', 'asyncGuard', 'true'],
-      ['resolve', 'v: asyncResolver', 'string'],
-    ]);
-  });
-});
+    it('records an async guard and resolver on their first value', async () => {
+      await expect(router.navigateByUrl('/async')).resolves.toBe(true);
+      expect(last().runs?.map((run) => [run.kind, run.guard, run.result])).toEqual([
+        ['canActivate', 'asyncGuard', 'true'],
+        ['resolve', 'v: asyncResolver', 'string'],
+      ]);
+    });
+  },
+);
 
 describe('tracked guard observables', () => {
   it('records the first value of an async source read through first()', async () => {

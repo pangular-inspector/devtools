@@ -184,10 +184,14 @@ A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:
 
 ### Angular compatibility
 
-`.github/workflows/compat.yml` runs the page-side tests on the oldest and newest Angular versions the peer range allows, and on the `next` prerelease. It runs on pushes to `main`, every Monday at 06:00 UTC, and on demand from the **Actions** tab. It doesn't run on pull requests.
+`.github/workflows/compat.yml` runs the page-side tests on the oldest Angular version the peer range allows, the last minor of 15, 17 and 19, each current major, and the `next` prerelease. It runs on pushes to `main`, every Monday at 06:00 UTC, and on demand from the **Actions** tab. It doesn't run on pull requests.
 
 | Job          | Angular range | Node.js |
 | ------------ | ------------- | ------- |
+| Angular 12.2 | `~12.2.0`     | 22      |
+| Angular 15.2 | `~15.2.0`     | 22      |
+| Angular 17.3 | `~17.3.0`     | 22      |
+| Angular 19.2 | `~19.2.0`     | 22      |
 | Angular 20.0 | `~20.0.0`     | 22      |
 | Angular 21   | `^21.0.0`     | 22      |
 | Angular 22   | `^22.0.0`     | 22      |
@@ -195,9 +199,11 @@ A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:
 
 The `next` job installs the `next` dist-tag, so a renamed `ɵ` API shows up before the next major ships. It runs with `continue-on-error`: a failure marks the job red but not the workflow.
 
-Each job appends `overrides` for the `@angular/*` runtime packages to `pnpm-workspace.yaml`, reinstalls, and runs `vitest` with `packages/devtools/vitest.compat.config.ts`. That config picks the tests that render a real Angular app or read Angular's private debug APIs, including the `*-real` tests that boot a real app where the main tests use fakes, and leaves out the panel tests and most server tests. It adds the Signal Forms tests on Angular 22 and later, and loads `zone.js` before Angular 21, where `TestBed` still expects it. A test that needs a feature from a later release checks the version with `angularAtLeast()` from `src/__tests__/angular-version.ts` and skips on older ones.
+Each job appends `overrides` for the `@angular/*` runtime packages to `pnpm-workspace.yaml`, reinstalls, and runs `vitest` with `packages/devtools/vitest.compat.config.ts`. That config picks the tests that render a real Angular app or read Angular's private debug APIs, including the `*-real` tests that boot a real app where the main tests use fakes, and leaves out the panel tests and most server tests. It adds the Signal Forms tests on Angular 22 and later, and loads `zone.js` before Angular 21, where `TestBed` still expects it. Before Angular 17 it also points `@angular/core/primitives/signals` at the stub the Vite plugin uses. The Angular 12 job then compiles the View Engine packages for Ivy with ngcc from `@angular/compiler-cli` 12, after a copying install, since ngcc rewrites the installed files.
 
-To reproduce a job, add the same `overrides` block to `pnpm-workspace.yaml`, run `pnpm install --no-frozen-lockfile`, then `pnpm exec vitest run --root packages/devtools --config vitest.compat.config.ts`. Don't commit the changed lockfile.
+`src/__tests__/angular-version.ts` has the helpers that make a test run on every version: `initAngularTestBed()`, `bootstrapRoot()` (an NgModule before 14.1), `zonelessProviders()`, `STANDALONE`, `writableSignal()` and `testModuleFor()`. `router-testing.ts` gives `provideRouter` or `RouterModule.forRoot`. A test of a feature that a version's debug API lacks checks the unavailable result there with `angularAtLeast()`. It is skipped only when the Angular API the test builds on doesn't exist yet, such as `@defer` before 17.0.
+
+To reproduce a job, add the same `overrides` block to `pnpm-workspace.yaml`, run `pnpm install --no-frozen-lockfile`, then `pnpm exec vitest run --root packages/devtools --config vitest.compat.config.ts`. For Angular 12, run the ngcc step from the workflow before the tests. Do this in a copy of the repository, and don't commit the changed lockfile.
 
 ### Pull request checks
 

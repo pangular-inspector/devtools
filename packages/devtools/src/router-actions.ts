@@ -2,6 +2,7 @@ import { isRouterLink } from './router-links.ts';
 import {
   CANCEL_CODES,
   EventType,
+  routerEventType,
   MAX_DEPTH,
   clip,
   componentName,
@@ -112,7 +113,7 @@ export function onGuardsCheckStart(router: AnyRecord, run: () => void): () => vo
   const subscription = read(
     () =>
       events?.['subscribe']((event: AnyRecord) => {
-        if (read(() => event['type'] === EventType.GuardsCheckStart, false)) run();
+        if (routerEventType(event) === EventType.GuardsCheckStart) run();
       }) as { unsubscribe(): void } | undefined,
     undefined,
   );
@@ -600,17 +601,33 @@ function waitForNavigation(
   });
 }
 
+/** Whether `value` can be subscribed to, like an RxJS subject. */
+function subscribable(value: unknown): value is AnyRecord {
+  return !!value && typeof (value as AnyRecord)['subscribe'] === 'function';
+}
+
+/**
+ * The stream of the root pending tasks the Router holds as `pendingTasks`:
+ * `hasPendingTasksObservable` from 20.0, the `hasPendingTasks` subject from
+ * 16.0 to 19.x (in 20.0 that name is a boolean). Before 16.0 the Router has none.
+ */
+function pendingTasksOf(router: AnyRecord): AnyRecord | null {
+  const tasks = read(() => router['pendingTasks'] as AnyRecord | undefined, undefined);
+  if (!tasks) return null;
+  const current = read(() => tasks['hasPendingTasksObservable'], null);
+  if (subscribable(current)) return current;
+  const legacy = read(() => tasks['hasPendingTasks'], null);
+  return subscribable(legacy) ? legacy : null;
+}
+
 /**
  * Waits until the app has no pending tasks, the same signal as
  * `ApplicationRef.whenStable()`: both read the root `PendingTasksInternal`,
- * which the Router holds as `pendingTasks`.
+ * which the Router holds as `pendingTasks`. Null when the Router has none.
  */
 export function waitForStable(router: AnyRecord, ms: number): Promise<boolean | null> {
-  const pending = read(
-    () => router['pendingTasks']['hasPendingTasksObservable'] as AnyRecord,
-    null,
-  );
-  if (typeof pending?.['subscribe'] !== 'function') return Promise.resolve(null);
+  const pending = pendingTasksOf(router);
+  if (!pending) return Promise.resolve(null);
   return new Promise((resolve) => {
     let done = false;
     let subscription: { unsubscribe(): void } | null = null;

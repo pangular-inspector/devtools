@@ -24,7 +24,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # The oldest supported minor of each tested major, then each current major. The tests run
+        # on Node.js 22 for every version: they load Angular in jsdom, not through its CLI.
         include:
+          - angular: '12.2'
+            range: '~12.2.0'
+            # Angular 12 ships View Engine bundles that its CLI compiles for Ivy with ngcc.
+            ngcc: true
+          - angular: '15.2'
+            range: '~15.2.0'
+          - angular: '17.3'
+            range: '~17.3.0'
+          - angular: '19.2'
+            range: '~19.2.0'
           - angular: '20.0'
             range: '~20.0.0'
           - angular: '21'
@@ -46,6 +58,9 @@ jobs:
       - name: Install Angular ${{ matrix.angular }}
         env:
           RANGE: ${{ matrix.range }}
+          # ngcc rewrites the installed files in place, so they are copied rather than linked to
+          # the pnpm store.
+          IMPORT_METHOD: ${{ matrix.ngcc && 'copy' || 'auto' }}
         run: |
           {
             echo 'overrides:'
@@ -53,7 +68,23 @@ jobs:
               echo "  '@angular/$pkg': '$RANGE'"
             done
           } >> pnpm-workspace.yaml
-          pnpm install --no-frozen-lockfile
+          pnpm install --no-frozen-lockfile --config.package-import-method="$IMPORT_METHOD"
+
+      - name: Compile Angular ${{ matrix.angular }} for Ivy
+        if: matrix.ngcc
+        run: |
+          version=$(node -p "require('@angular/core/package.json').version")
+          npm install --prefix "$RUNNER_TEMP/ngcc" --no-audit --no-fund --no-save \
+            "@angular/compiler-cli@$version" "@angular/compiler@$version" "@angular/core@$version" \
+            typescript@~4.3.5 rxjs@~7.8.0 zone.js@~0.11.4
+          # Each package's folder in the pnpm store links its dependencies. A package is compiled
+          # after the ones it depends on, so core and common go first.
+          for pkg in core common compiler platform-browser platform-browser-dynamic platform-server forms router elements animations; do
+            for dir in node_modules/.pnpm/@angular+"$pkg"@"$version"*/node_modules; do
+              [ -d "$dir" ] || continue
+              "$RUNNER_TEMP/ngcc/node_modules/.bin/ngcc" --source "$PWD/$dir" --properties main es2015 module --first-only
+            done
+          done
 
       - name: List the versions under test
         run: |

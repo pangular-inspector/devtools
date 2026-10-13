@@ -20,6 +20,10 @@ import {
 } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { transferCacheKeys } from '../http-cache-key.ts';
+import { angularAtLeast } from './angular-version.ts';
+
+/** `@pangular-inspector/devtools/http` imports `REQUEST` and `provideEnvironmentInitializer`, which arrived in 19.0. */
+const httpEntry = angularAtLeast('19.0');
 import {
   pangularHttpInterceptor,
   parseBody,
@@ -368,7 +372,8 @@ describe('hydration helpers', () => {
   });
 });
 
-describe('interceptor', () => {
+// The interceptor runs through runInInjectionContext (16.0) here; the entry itself builds from 19.0.
+describe.runIf(angularAtLeast('16.0'))('interceptor', () => {
   const g = globalThis as { ngDevMode?: unknown };
   let saved: unknown;
   beforeEach(() => {
@@ -820,7 +825,7 @@ describe('hydration scanner', () => {
   });
 });
 
-describe('hydration warning capture', () => {
+describe.runIf(httpEntry)('hydration warning capture', () => {
   const originals = { warn: console.warn, error: console.error };
 
   afterEach(() => {
@@ -935,28 +940,31 @@ describe('http overlay edge cases', () => {
     expect(sent[0]['title']).toContain('[redacted]');
   });
 
-  it('masks a token that straddles the warning clip and the mismatch detail clip', () => {
-    const original = console.warn;
-    console.warn = () => {};
-    delete httpRegistry().warnings;
-    try {
-      createEnvironmentInjector([providePangularHttp()], Injector.NULL as EnvironmentInjector);
-      console.warn(`NG0500: ${'x'.repeat(980)} ${jwt}`);
-      expect(httpRegistry().warnings).toHaveLength(1);
-      expect(httpRegistry().warnings![0]).not.toContain('eyJ');
-    } finally {
-      console.warn = original;
-    }
-    document.body.innerHTML = '<app-card></app-card>';
-    (document.querySelector('app-card') as unknown as Record<string, unknown>)[
-      '__ngDebugHydrationInfo__'
-    ] = {
-      status: 'mismatched',
-      expectedNodeDetails: `${'y'.repeat(470)} ${jwt}`,
-      actualNodeDetails: 'Bearer abc123def456',
-    };
-    const [mismatch] = scanHydration(document).mismatches;
-    expect(JSON.stringify(mismatch)).not.toMatch(/eyJ|abc123def456/);
-    document.body.innerHTML = '';
-  });
+  it.runIf(httpEntry)(
+    'masks a token that straddles the warning clip and the mismatch detail clip',
+    () => {
+      const original = console.warn;
+      console.warn = () => {};
+      delete httpRegistry().warnings;
+      try {
+        createEnvironmentInjector([providePangularHttp()], Injector.NULL as EnvironmentInjector);
+        console.warn(`NG0500: ${'x'.repeat(980)} ${jwt}`);
+        expect(httpRegistry().warnings).toHaveLength(1);
+        expect(httpRegistry().warnings![0]).not.toContain('eyJ');
+      } finally {
+        console.warn = original;
+      }
+      document.body.innerHTML = '<app-card></app-card>';
+      (document.querySelector('app-card') as unknown as Record<string, unknown>)[
+        '__ngDebugHydrationInfo__'
+      ] = {
+        status: 'mismatched',
+        expectedNodeDetails: `${'y'.repeat(470)} ${jwt}`,
+        actualNodeDetails: 'Bearer abc123def456',
+      };
+      const [mismatch] = scanHydration(document).mismatches;
+      expect(JSON.stringify(mismatch)).not.toMatch(/eyJ|abc123def456/);
+      document.body.innerHTML = '';
+    },
+  );
 });

@@ -10,19 +10,15 @@ import {
   provideExperimentalWebMcpForms,
   required,
 } from '@angular/forms/signals';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachForms, setupErrorOf } from '../forms-collector.ts';
 import type { FormEvent } from '../forms.ts';
 import { LEASED_PUSH_MS } from '../page-lease.ts';
+import { initAngularTestBed } from './angular-version.ts';
 
-try {
-  TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
-} catch {
-  // already initialized in this worker
-}
+initAngularTestBed();
 
 const stops: (() => void)[] = [];
 afterEach(() => {

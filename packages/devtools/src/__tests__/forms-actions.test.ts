@@ -10,7 +10,6 @@ import {
   Validators,
 } from '@angular/forms';
 import { FormField, FormRoot, form, hidden, required } from '@angular/forms/signals';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { findForms } from '../forms.ts';
 import {
@@ -20,12 +19,9 @@ import {
   secretInside,
   type ActionContext,
 } from '../forms-actions.ts';
+import { initAngularTestBed } from './angular-version.ts';
 
-try {
-  TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
-} catch {
-  // already initialized in this worker
-}
+initAngularTestBed();
 
 afterEach(() => TestBed.resetTestingModule());
 

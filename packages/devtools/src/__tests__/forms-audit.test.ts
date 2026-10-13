@@ -13,7 +13,6 @@ import {
   submit,
   validate,
 } from '@angular/forms/signals';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachForms } from '../forms-collector.ts';
 import { coerceToCurrent } from '../forms-actions.ts';
@@ -28,12 +27,9 @@ import {
 } from '../forms.ts';
 import { controlFacts } from '../forms-read.ts';
 import { lintForm } from '../rpc/forms-lint.ts';
+import { initAngularTestBed } from './angular-version.ts';
 
-try {
-  TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
-} catch {
-  // already initialized in this worker
-}
+initAngularTestBed();
 
 const stops: (() => void)[] = [];
 afterEach(() => {

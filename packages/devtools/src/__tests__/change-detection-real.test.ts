@@ -1,27 +1,28 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
-import {
-  Component,
-  VERSION,
-  provideZonelessChangeDetection,
-  signal,
-  type ApplicationRef,
-} from '@angular/core';
-import { bootstrapApplication } from '@angular/platform-browser';
+import { Component, VERSION } from '@angular/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { addProfilerListener, angularMajor, watchChangeDetection } from '../change-detection.ts';
-import { angularAtLeast } from './angular-version.ts';
+import {
+  angularAtLeast,
+  bootstrapRoot,
+  writableSignal,
+  STANDALONE,
+  type BootedApp,
+} from './angular-version.ts';
 
 class TripCounter {
-  readonly count = signal(0);
+  readonly count = writableSignal(0);
 }
-Component({ selector: 'app-root', template: '<p>{{ count() }} trips</p>' })(TripCounter);
+Component({ ...STANDALONE, selector: 'app-root', template: '<p>{{ count() }} trips</p>' })(
+  TripCounter,
+);
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const ngOf = () => (globalThis as { ng?: unknown }).ng;
 
 describe('watchChangeDetection with a real app', () => {
-  let app: ApplicationRef | null = null;
+  let app: BootedApp | null = null;
   let stop: (() => void) | null = null;
   afterEach(() => {
     stop?.();
@@ -33,11 +34,9 @@ describe('watchChangeDetection with a real app', () => {
 
   async function boot() {
     document.body.innerHTML = '<app-root></app-root>';
-    app = await bootstrapApplication(TripCounter, {
-      providers: [provideZonelessChangeDetection()],
-    });
-    app.tick();
-    return app.components[0].instance as TripCounter;
+    app = await bootstrapRoot(TripCounter);
+    app.appRef.tick();
+    return app.appRef.components[0]!.instance as TripCounter;
   }
 
   it('reads the major version from the ng-version attribute', async () => {

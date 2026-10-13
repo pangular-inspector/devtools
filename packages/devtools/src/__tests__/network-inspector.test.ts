@@ -2,16 +2,12 @@
 import '@angular/compiler';
 import { Component, EventEmitter } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { NetworkInspector } from '../../../../app/src/pages/network-inspector.ts';
 import { Select } from '../../../../app/src/ui/select.ts';
+import { initAngularTestBed } from './angular-version.ts';
 
-try {
-  TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
-} catch {
-  // already initialized in this worker
-}
+initAngularTestBed();
 
 class StubSelect {
   valueChange = new EventEmitter<string | null>();

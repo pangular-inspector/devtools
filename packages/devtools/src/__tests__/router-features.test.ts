@@ -2,7 +2,6 @@
 import '@angular/compiler';
 import { Component, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import {
   PreloadAllModules,
   RedirectCommand,
@@ -30,18 +29,22 @@ import {
   type PreloadRecord,
 } from '../router-actions.ts';
 import { matchUrl } from '../rpc/router-config-tools.ts';
-import { angularAtLeast } from './angular-version.ts';
+import { angularAtLeast, initAngularTestBed, STANDALONE } from './angular-version.ts';
+import { functionalRouter, routerTestModule } from './router-testing.ts';
 
-TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+/** The navigation error handler can redirect (`RedirectCommand`) from 18.0. */
+const handlerRedirects = angularAtLeast('18.0');
+
+initAngularTestBed();
 
 class Page {}
-Component({ selector: 'app-page', template: '' })(Page);
+Component({ ...STANDALONE, selector: 'app-page', template: '' })(Page);
 
 class UserPage {
   id?: string;
   user?: unknown;
 }
-Component({ selector: 'app-user', template: '', inputs: ['id', 'user'] })(UserPage);
+Component({ ...STANDALONE, selector: 'app-user', template: '', inputs: ['id', 'user'] })(UserPage);
 
 const authGuard = () => inject(Router).parseUrl('/login');
 const slowResolver = () => new Promise((resolve) => setTimeout(() => resolve('late'), 40));
@@ -81,7 +84,8 @@ const routes: Routes = [
   { path: '**', component: Page },
 ];
 
-describe('router features on a real Router', () => {
+// provideRouter and functional guards exist from 14.2.
+describe.runIf(functionalRouter)('router features on a real Router', () => {
   let router: Router;
   let navigations: NavigationRecord[];
   let cleanup: (() => void)[];
@@ -157,7 +161,9 @@ describe('router features on a real Router', () => {
       total: expect.any(Number),
       recognize: expect.any(Number),
     });
-    expect(last().checked?.activate).toEqual(['/users/:id']);
+    // The guard checks are read from the router's current transition, exposed from 16.2.
+    if (angularAtLeast('16.2')) expect(last().checked?.activate).toEqual(['/users/:id']);
+    else expect(last().checked).toBeUndefined();
   });
 
   it('links a guard redirect to the navigation it starts', async () => {
@@ -172,7 +178,7 @@ describe('router features on a real Router', () => {
     expect(login).toMatchObject({ url: '/login', redirectedFrom: admin.id });
   });
 
-  it('keeps what the navigation error handler did', async () => {
+  it.runIf(handlerRedirects)('keeps what the navigation error handler did', async () => {
     await router.navigateByUrl('/broken').catch(() => {});
     const broken = navigations.find((n) => n.url === '/broken')!;
     expect(broken.errorHandler).toMatch(/redirected to \/login/);
@@ -187,16 +193,19 @@ describe('router features on a real Router', () => {
     expect(last()).toMatchObject({ url: '/login', redirectedFrom: broken.id });
   });
 
-  it('keeps the error code of an error the handler redirected away from', async () => {
-    await router.navigateByUrl('/coded').catch(() => {});
-    const coded = navigations.find((n) => n.url === '/coded')!;
-    expect(coded).toMatchObject({
-      outcome: 'redirected',
-      redirectKind: 'error handler',
-      reason: 'Error: NG04002: db down',
-      errorCode: 'NG04002',
-    });
-  });
+  it.runIf(handlerRedirects)(
+    'keeps the error code of an error the handler redirected away from',
+    async () => {
+      await router.navigateByUrl('/coded').catch(() => {});
+      const coded = navigations.find((n) => n.url === '/coded')!;
+      expect(coded).toMatchObject({
+        outcome: 'redirected',
+        redirectKind: 'error handler',
+        reason: 'Error: NG04002: db down',
+        errorCode: 'NG04002',
+      });
+    },
+  );
 
   it('records calls that throw before a navigation starts', () => {
     expect(() =>
@@ -326,29 +335,35 @@ describe('router features on a real Router', () => {
     });
   });
 
-  it('maps outlets to routed components and their router-bound inputs', async () => {
-    TestBed.resetTestingModule();
-    TestBed.configureTestingModule({
-      providers: [
-        provideRouter(routes, (await import('@angular/router')).withComponentInputBinding()),
-      ],
-    });
-    const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/users/9');
-    const outlets = outletsOf(TestBed.inject(Router) as never);
-    expect(outlets[0]).toMatchObject({ outlet: 'primary', activated: true });
-    const leaf = outlets[0].children?.[0] ?? outlets[0];
-    expect(leaf).toMatchObject({ component: 'UserPage', route: '/users/:id' });
-    expect(leaf.inputs).toEqual([
-      { input: 'id', source: 'param' },
-      { input: 'user', source: 'data' },
-    ]);
-  });
+  // withComponentInputBinding exists from 16.0.
+  it.runIf(angularAtLeast('16.0'))(
+    'maps outlets to routed components and their router-bound inputs',
+    async () => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter(routes, (await import('@angular/router')).withComponentInputBinding()),
+        ],
+      });
+      const harness = await RouterTestingHarness.create();
+      await harness.navigateByUrl('/users/9');
+      const outlets = outletsOf(TestBed.inject(Router) as never);
+      expect(outlets[0]).toMatchObject({ outlet: 'primary', activated: true });
+      const leaf = outlets[0].children?.[0] ?? outlets[0];
+      expect(leaf).toMatchObject({ component: 'UserPage', route: '/users/:id' });
+      expect(leaf.inputs).toEqual([
+        { input: 'id', source: 'param' },
+        { input: 'user', source: 'data' },
+      ]);
+    },
+  );
 });
 
-describe('routerOutletData', () => {
+// routerOutletData exists from 19.0.
+describe.runIf(angularAtLeast('19.0'))('routerOutletData', () => {
   class Shell {}
   Component({
+    ...STANDALONE,
     selector: 'app-shell',
     imports: [RouterOutlet],
     template: `<router-outlet />
@@ -403,7 +418,7 @@ describe('routerOutletData', () => {
   });
 });
 
-describe('preloads', () => {
+describe.runIf(functionalRouter)('preloads', () => {
   it('records preloads that run between navigations', async () => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
@@ -452,7 +467,7 @@ describe('helpers', () => {
 
   it('predicts matches like the default matcher', () => {
     TestBed.resetTestingModule();
-    TestBed.configureTestingModule({ providers: [provideRouter(routes)] });
+    TestBed.configureTestingModule(routerTestModule(routes));
     const tree = walkConfig(TestBed.inject(Router) as never);
     expect(matchUrl(tree, '/users/3').chain.map((n) => n.fullPath)).toEqual([
       '/users',

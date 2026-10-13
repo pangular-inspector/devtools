@@ -210,7 +210,13 @@ export function detectSetup(
     : 'off';
 
   const strategies: Record<string, string> = {
-    locationStrategy: strategyName(read(() => router['location']['_locationStrategy'], null)),
+    // `Location` holds it as `_platformStrategy` before 14.0 and `_locationStrategy` from it.
+    locationStrategy: strategyName(
+      read(
+        () => router['location']['_locationStrategy'] ?? router['location']['_platformStrategy'],
+        null,
+      ),
+    ),
     titleStrategy: strategyName(read(() => transitions?.['titleStrategy'], null)),
     routeReuseStrategy: strategyName(read(() => router['routeReuseStrategy'], null)),
     urlHandlingStrategy: strategyName(read(() => router['urlHandlingStrategy'], null)),

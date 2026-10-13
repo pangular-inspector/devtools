@@ -22,6 +22,7 @@ import {
 } from './hub-gate.ts';
 import { pickPangularConfig, resolvePangularConfig, type PangularConfig } from './config.ts';
 import { overlayTags } from './vite-overlay.ts';
+import { signalPrimitivesAlias } from './vite-signals-stub.ts';
 import { terminalsEnabled } from './hub-terminals.ts';
 
 export type { PangularConfig } from './config.ts';
@@ -123,6 +124,10 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
     name: 'pangular',
     apply: 'serve',
     enforce: 'pre',
+    config(user) {
+      const alias = signalPrimitivesAlias(user.root ?? process.cwd());
+      return alias.length ? { resolve: { alias } } : undefined;
+    },
     // `pre`, so Vite's own HTML pass resolves the injected import like any other.
     transformIndexHtml: {
       order: 'pre',

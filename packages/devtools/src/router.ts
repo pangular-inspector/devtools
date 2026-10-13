@@ -137,6 +137,27 @@ export const EventType = {
   NavigationSkipped: 16,
 } as const;
 
+/** Angular's `EventType` numbers by event class, for routers whose events have no `type`. */
+const EVENT_TYPES: Record<string, number> = {
+  ...EventType,
+  ChildActivationEnd: 12,
+  ActivationEnd: 14,
+};
+
+/**
+ * The `EventType` of a router event. Events carry it as `type` from 14.0;
+ * before, every public event class names itself in `toString()`, such as
+ * `NavigationStart(id: 1, url: '/')`, which survives minification.
+ */
+export function routerEventType(event: AnyRecord): number | undefined {
+  const type = read(() => event['type'], undefined);
+  if (typeof type === 'number') return type;
+  if (type !== undefined) return undefined;
+  const text = read(() => String(event['toString']?.() ?? ''), '');
+  const name = /^([A-Za-z]+)\(/.exec(text)?.[1];
+  return name ? EVENT_TYPES[name] : undefined;
+}
+
 interface NavState {
   secrets: string[];
   guardsAt?: number;
@@ -574,6 +595,27 @@ function isBeforeActivate(event: AnyRecord, nav: NavigationRecord | undefined): 
   return !!nav && stateOf(nav).recognizedAt !== undefined;
 }
 
+/**
+ * Before 18.0 the router emits no redirect request, so a guard or resolver
+ * redirect shows only as a cancel whose reason names the target
+ * (`Redirecting to "/login"`), followed at once by the navigation to it.
+ */
+function linkCancelledRedirect(navigations: NavigationRecord[], nav: NavigationRecord): void {
+  const source = navigations[navigations.length - 1];
+  if (
+    !source ||
+    source.outcome !== 'redirected' ||
+    source.redirectTo !== undefined ||
+    source.id !== nav.id - 1 ||
+    !/^Redirecting to "/.test(source.reason ?? '')
+  ) {
+    return;
+  }
+  source.redirectTo = nav.url;
+  source.redirectKind = redirectKindOf(source);
+  nav.redirectedFrom = source.id;
+}
+
 function redirectKindOf(nav: NavigationRecord): string {
   const state = stateOf(nav);
   if (state.resolveAt !== undefined) return 'resolver';
@@ -807,7 +849,7 @@ export function applyRouterEvent(
   router?: AnyRecord,
   onLateChange?: () => void,
 ): boolean {
-  const type = read(() => event['type'] as number | undefined, undefined);
+  const type = routerEventType(event);
   const id = read(() => event['id'] as number, -1);
   const current = findPending(navigations);
   if (type === undefined) {
@@ -872,6 +914,8 @@ export function applyRouterEvent(
     if (pendingRedirect) {
       nav.redirectedFrom = pendingRedirect.from;
       pendingRedirect = null;
+    } else {
+      linkCancelledRedirect(navigations, nav);
     }
     navigations.push(nav);
     return true;
@@ -1055,10 +1099,16 @@ function urlOf(router: AnyRecord, tree: unknown): string | undefined {
 /**
  * The navigation that finished before the overlay subscribed, from
  * `router.lastSuccessfulNavigation` (a signal since Angular 20, a property
- * before). It has no timing or guard details.
+ * before). 15.0 to 16.x keep it on `navigationTransitions` only. It has no timing or
+ * guard details.
  */
 export function lastNavigationOf(router: AnyRecord, at: number): NavigationRecord | null {
-  const raw = read(() => router['lastSuccessfulNavigation'], null);
+  const raw = read(
+    () =>
+      router['lastSuccessfulNavigation'] ??
+      router['navigationTransitions']?.['lastSuccessfulNavigation'],
+    null,
+  );
   const last = read(() => (typeof raw === 'function' ? raw() : raw) as AnyRecord | null, null);
   if (!last) return null;
   const rawUrl = urlOf(router, last['extractedUrl']) ?? urlOf(router, last['initialUrl']);

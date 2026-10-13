@@ -52,6 +52,49 @@
       "./vite": "./dist/vite.mjs"
     }
   },
+  "typesVersions": {
+    "*": {
+      "devframe": [
+        "./dist/devframe.d.mts"
+      ],
+      "config": [
+        "./dist/config.d.mts"
+      ],
+      "cd-data": [
+        "./dist/cd-data.d.mts"
+      ],
+      "overlay": [
+        "./dist/overlay.d.mts"
+      ],
+      "overlay-manual": [
+        "./dist/overlay-manual.d.mts"
+      ],
+      "capacitor-hook": [
+        "./dist/capacitor-hook.d.mts"
+      ],
+      "overlay-angular-native": [
+        "./dist/overlay-angular-native.d.mts"
+      ],
+      "popup": [
+        "./dist/popup.d.mts"
+      ],
+      "overlay-nativescript": [
+        "./dist/overlay-nativescript.d.mts"
+      ],
+      "cli": [
+        "./dist/cli.d.mts"
+      ],
+      "http": [
+        "./dist/http.d.mts"
+      ],
+      "hub": [
+        "./dist/hub.d.mts"
+      ],
+      "vite": [
+        "./dist/vite.d.mts"
+      ]
+    }
+  },
   "scripts": {
     "build": "tsdown && vite build --config ../../app/vite.config.ts --outDir ../packages/devtools/dist/public --emptyOutDir",
     "prepack": "pnpm build"
@@ -96,8 +139,8 @@
   },
   "peerDependencies": {
     "@nativescript/core": ">=8",
-    "@angular/common": ">=20",
-    "@angular/core": ">=20",
+    "@angular/common": ">=12.2",
+    "@angular/core": ">=12.2",
     "rxjs": ">=7",
     "vite": ">=5"
   },

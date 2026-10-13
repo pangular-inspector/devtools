@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
-import { Component, Pipe, TemplateRef, signal } from '@angular/core';
+import { Component, Pipe, TemplateRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { CurrencyPipe, NgTemplateOutlet, UpperCasePipe } from '@angular/common';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
+import { CurrencyPipe, NgForOf, NgIf, NgTemplateOutlet, UpperCasePipe } from '@angular/common';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   findPipeUsages,
@@ -14,12 +13,15 @@ import {
   staleCheckFor,
   type PipeCall,
 } from '../pipes-runtime.ts';
+import {
+  controlFlow,
+  initAngularTestBed,
+  testModuleFor,
+  writableSignal,
+  STANDALONE,
+} from './angular-version.ts';
 
-try {
-  TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
-} catch {
-  // already initialized in this worker
-}
+initAngularTestBed();
 
 afterEach(() => {
   TestBed.resetTestingModule();
@@ -27,6 +29,8 @@ afterEach(() => {
 });
 
 async function mount<T>(type: new () => T) {
+  const declared = testModuleFor(type);
+  if (declared.declarations) TestBed.configureTestingModule(declared);
   const fixture = TestBed.createComponent(type);
   document.body.appendChild(fixture.nativeElement);
   fixture.detectChanges();
@@ -43,6 +47,7 @@ class Price {
   name = 'widget';
 }
 Component({
+  ...STANDALONE,
   selector: 'app-price',
   imports: [CurrencyPipe, UpperCasePipe],
   template: `<p>{{ amount | currency }}</p><p>{{ name | uppercase }}</p>`,
@@ -100,9 +105,10 @@ describe('pipe runtime discovery (real Angular render)', () => {
 });
 
 class Cart {
-  items = signal<string[]>(['a', 'b']);
+  items = writableSignal<string[]>(['a', 'b']);
 }
 Component({
+  ...STANDALONE,
   selector: 'app-cart',
   imports: [UpperCasePipe],
   // json isn't imported here; slice the array to a single-string binding so
@@ -115,6 +121,7 @@ class Labelled {
   value = 'a';
 }
 Component({
+  ...STANDALONE,
   selector: 'app-labelled',
   imports: [UpperCasePipe],
   template: `<th>uppercase</th><p>{{ value | uppercase }}</p>`,
@@ -162,17 +169,21 @@ describe('stale pure-pipe check (experimental, real Angular render)', () => {
 });
 
 class Badge {}
-Component({ selector: 'app-badge', template: `<b>badge</b>` })(Badge);
+Component({ ...STANDALONE, selector: 'app-badge', template: `<b>badge</b>` })(Badge);
 
 class Board {
-  show = signal(true);
-  items = signal(['x', 'y']);
+  show = writableSignal(true);
+  items = writableSignal(['x', 'y']);
   title = 'board';
 }
 Component({
+  ...STANDALONE,
   selector: 'app-board',
-  imports: [Badge, UpperCasePipe],
-  template: `<app-badge />@if (show()) {{{ title | uppercase }}}@for (item of items(); track item) {{{ item | uppercase }}}`,
+  imports: [Badge, UpperCasePipe, ...(controlFlow ? [] : [NgIf, NgForOf])],
+  // Views that hold only text: control flow blocks from 17.0, containers before.
+  template: controlFlow
+    ? `<app-badge></app-badge>@if (show()) {{{ title | uppercase }}}@for (item of items(); track item) {{{ item | uppercase }}}`
+    : `<app-badge></app-badge><ng-container *ngIf="show()">{{ title | uppercase }}</ng-container><ng-container *ngFor="let item of items()">{{ item | uppercase }}</ng-container>`,
 })(Board);
 
 class _ShoutPipe {
@@ -180,13 +191,14 @@ class _ShoutPipe {
     return `${value}!`;
   }
 }
-Pipe({ name: 'shout' })(_ShoutPipe);
+Pipe({ ...STANDALONE, name: 'shout' })(_ShoutPipe);
 
 class _Shell {
-  a = signal('one');
-  b = signal('two');
+  a = writableSignal('one');
+  b = writableSignal('two');
 }
 Component({
+  ...STANDALONE,
   selector: 'app-shell',
   imports: [_ShoutPipe],
   template: `<p>{{ a() | shout }}</p><p>{{ b() | shout }}</p>`,
@@ -196,19 +208,21 @@ class _Frame {
   tpl: TemplateRef<unknown> | null = null;
 }
 Component({
+  ...STANDALONE,
   selector: 'app-frame',
   inputs: ['tpl'],
   imports: [NgTemplateOutlet],
-  template: `<section><ng-container [ngTemplateOutlet]="tpl" /></section>`,
+  template: `<section><ng-container [ngTemplateOutlet]="tpl"></ng-container></section>`,
 })(_Frame);
 
 class _Declarer {
   label = 'row';
 }
 Component({
+  ...STANDALONE,
   selector: 'app-declarer',
   imports: [_Frame, UpperCasePipe],
-  template: `<ng-template #cell><span>{{ label | uppercase }}</span></ng-template><app-frame [tpl]="cell" />`,
+  template: `<ng-template #cell><span>{{ label | uppercase }}</span></ng-template><app-frame [tpl]="cell"></app-frame>`,
 })(_Declarer);
 
 describe('pipe discovery through the view tree', () => {

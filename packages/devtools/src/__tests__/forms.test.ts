@@ -20,6 +20,10 @@ import {
   type FormFieldNode,
   type FormsDebugApi,
 } from '../forms.ts';
+import { angularAtLeast } from './angular-version.ts';
+
+/** `AbstractControl.events` exists from Angular 18.0. */
+const controlEvents = angularAtLeast('18.0');
 
 function directive(selectors: unknown[][], props: Record<string, unknown>) {
   class Directive {}
@@ -522,22 +526,34 @@ describe('diffForms', () => {
 });
 
 describe('control events', () => {
-  it('turns Angular control events into timeline entries with the changed path', () => {
-    const form = new FormGroup({ address: new FormGroup({ city: new FormControl('') }) });
-    const seen: FormEvent[] = [];
-    const stop = watchControlEvents(form, 'form-9', (e) => seen.push(e))!;
-    form.controls.address.controls.city.setValue('Izmir');
-    form.controls.address.controls.city.markAsTouched();
-    stop();
-    form.controls.address.controls.city.setValue('Ankara');
-    expect(seen.map((e) => [e.path, e.type, e.detail])).toEqual([
-      ['address.city', 'value', '"Izmir"'],
-      ['address.city', 'status', 'VALID'],
-      ['address.city', 'touched', 'true'],
-    ]);
+  it.skipIf(controlEvents)('has none before Angular 18.0, so the collector diffs snapshots', () => {
+    const form = new FormGroup({ city: new FormControl('') });
+    expect(watchControlEvents(form, 'form-9', () => {})).toBeNull();
+    const before = snapshot(serializeControl(form), { kind: 'reactive' });
+    form.controls.city.setValue('Izmir');
+    const events = diffForms([before], [snapshot(serializeControl(form), { kind: 'reactive' })]);
+    expect(events.map((e) => [e.path, e.type])).toContainEqual(['city', 'value']);
   });
 
-  it('maps submit and reset events by their class name', () => {
+  it.runIf(controlEvents)(
+    'turns Angular control events into timeline entries with the changed path',
+    () => {
+      const form = new FormGroup({ address: new FormGroup({ city: new FormControl('') }) });
+      const seen: FormEvent[] = [];
+      const stop = watchControlEvents(form, 'form-9', (e) => seen.push(e))!;
+      form.controls.address.controls.city.setValue('Izmir');
+      form.controls.address.controls.city.markAsTouched();
+      stop();
+      form.controls.address.controls.city.setValue('Ankara');
+      expect(seen.map((e) => [e.path, e.type, e.detail])).toEqual([
+        ['address.city', 'value', '"Izmir"'],
+        ['address.city', 'status', 'VALID'],
+        ['address.city', 'touched', 'true'],
+      ]);
+    },
+  );
+
+  it.runIf(controlEvents)('maps submit and reset events by their class name', () => {
     class FormSubmittedEvent {
       source = null;
     }
@@ -629,7 +645,7 @@ describe('redaction', () => {
     expect(form.value.confirm).toBe('hunter2');
   });
 
-  it('redacts secret values in the event timeline', () => {
+  it.runIf(controlEvents)('redacts secret values in the event timeline', () => {
     document.body.innerHTML = '<input id="pw" type="password">';
     const form = new FormGroup({ pw: new FormControl('') });
     const elements = new WeakMap<object, Element>([
@@ -662,25 +678,28 @@ describe('redaction', () => {
     expect(node.errors[0].message).toBe('needs at least 8 characters');
   });
 
-  it('redacts a standalone control by the property that holds it, in snapshots and events', () => {
-    document.body.innerHTML = '<app-settings></app-settings>';
-    const host = document.querySelector('app-settings')!;
-    const apiKey = new FormControl('');
-    class Settings {
-      apiKey = apiKey;
-    }
-    const ng = fakeNg(new Map([[host, new Settings()]]), new Map(), new Map());
-    apiKey.setValue('sk-live-123');
-    const [form] = collectForms(findForms(ng, [host]));
-    expect(form.label).toBe('Settings.apiKey');
-    expect(form.root.value).toBe('[redacted]');
+  it.runIf(controlEvents)(
+    'redacts a standalone control by the property that holds it, in snapshots and events',
+    () => {
+      document.body.innerHTML = '<app-settings></app-settings>';
+      const host = document.querySelector('app-settings')!;
+      const apiKey = new FormControl('');
+      class Settings {
+        apiKey = apiKey;
+      }
+      const ng = fakeNg(new Map([[host, new Settings()]]), new Map(), new Map());
+      apiKey.setValue('sk-live-123');
+      const [form] = collectForms(findForms(ng, [host]));
+      expect(form.label).toBe('Settings.apiKey');
+      expect(form.root.value).toBe('[redacted]');
 
-    const seen: FormEvent[] = [];
-    const stop = watchControlEvents(apiKey, form.id, (e) => seen.push(e), { rootKey: 'apiKey' })!;
-    apiKey.setValue('sk-live-456');
-    stop();
-    expect(JSON.stringify(seen)).not.toContain('sk-live');
-  });
+      const seen: FormEvent[] = [];
+      const stop = watchControlEvents(apiKey, form.id, (e) => seen.push(e), { rootKey: 'apiKey' })!;
+      apiKey.setValue('sk-live-456');
+      stop();
+      expect(JSON.stringify(seen)).not.toContain('sk-live');
+    },
+  );
 
   it('redacts nested object values by key', () => {
     expect(serializeFormValue({ user: 'kam', password: 'x' })).toEqual({
@@ -720,32 +739,36 @@ describe('extra reactive state', () => {
     const [nameNode, noteNode] = collected.root.children!;
     expect(nameNode).toMatchObject({
       validators: { sync: true, async: true },
-      defaultValue: 'kam',
       accessor: 'DefaultValueAccessor',
     });
+    // `nonNullable` and `defaultValue` exist from 14.0.
+    expect(nameNode.defaultValue).toBe(angularAtLeast('14.0') ? 'kam' : undefined);
     expect(noteNode.validators).toBeUndefined();
-    expect(noteNode.defaultValue).toBeNull();
+    expect(noteNode.defaultValue).toBe(angularAtLeast('14.0') ? null : undefined);
   });
 });
 
 describe('secret parents and disabled children', () => {
-  it('redacts every field under a secret-named group or array, in snapshots and events', () => {
-    const form = new FormGroup({
-      passwords: new FormGroup({ first: new FormControl('a1'), second: new FormControl('a2') }),
-      apiKeys: new FormArray([new FormControl('sk-1')]),
-      name: new FormControl('kam'),
-    });
-    const text = JSON.stringify(serializeControl(form));
-    expect(text).not.toMatch(/a1|a2|sk-1/);
-    expect(text).toContain('kam');
+  it.runIf(controlEvents)(
+    'redacts every field under a secret-named group or array, in snapshots and events',
+    () => {
+      const form = new FormGroup({
+        passwords: new FormGroup({ first: new FormControl('a1'), second: new FormControl('a2') }),
+        apiKeys: new FormArray([new FormControl('sk-1')]),
+        name: new FormControl('kam'),
+      });
+      const text = JSON.stringify(serializeControl(form));
+      expect(text).not.toMatch(/a1|a2|sk-1/);
+      expect(text).toContain('kam');
 
-    const seen: FormEvent[] = [];
-    const stop = watchControlEvents(form, 'form-1', (e) => seen.push(e))!;
-    form.controls.passwords.controls.first.setValue('new-secret');
-    form.controls.apiKeys.at(0).setValue('sk-2');
-    stop();
-    expect(JSON.stringify(seen)).not.toMatch(/new-secret|sk-2/);
-  });
+      const seen: FormEvent[] = [];
+      const stop = watchControlEvents(form, 'form-1', (e) => seen.push(e))!;
+      form.controls.passwords.controls.first.setValue('new-secret');
+      form.controls.apiKeys.at(0).setValue('sk-2');
+      stop();
+      expect(JSON.stringify(seen)).not.toMatch(/new-secret|sk-2/);
+    },
+  );
 
   it('flags children of a secret-named group as redacted by their parent', () => {
     const form = new FormGroup({
@@ -774,32 +797,38 @@ describe('secret parents and disabled children', () => {
     expect(token).toMatchObject({ materialized: false, value: '[redacted]', redacted: 'key' });
   });
 
-  it('leaves disabled children out of a group value event, like form.value', () => {
-    const form = new FormGroup({ a: new FormControl('x'), b: new FormControl('y') });
-    form.controls.b.disable();
-    const seen: FormEvent[] = [];
-    const stop = watchControlEvents(form, 'form-1', (e) => seen.push(e))!;
-    form.setValue({ a: 'z', b: 'w' });
-    stop();
-    expect(seen.find((e) => e.type === 'value')?.detail).toBe(JSON.stringify(form.value));
-  });
+  it.runIf(controlEvents)(
+    'leaves disabled children out of a group value event, like form.value',
+    () => {
+      const form = new FormGroup({ a: new FormControl('x'), b: new FormControl('y') });
+      form.controls.b.disable();
+      const seen: FormEvent[] = [];
+      const stop = watchControlEvents(form, 'form-1', (e) => seen.push(e))!;
+      form.setValue({ a: 'z', b: 'w' });
+      stop();
+      expect(seen.find((e) => e.type === 'value')?.detail).toBe(JSON.stringify(form.value));
+    },
+  );
 
-  it('reads the submitted flag after Angular updates it, so a minified reset is not a submit', async () => {
-    class E {
-      source: unknown = null;
-    }
-    const form = new FormGroup({});
-    let submitted = true;
-    const seen: FormEvent[] = [];
-    const stop = watchControlEvents(form, 'form-1', (e) => seen.push(e), {
-      submitted: () => submitted,
-    })!;
-    (form as unknown as { _events: { next(e: unknown): void } })._events.next(new E());
-    submitted = false;
-    await Promise.resolve();
-    stop();
-    expect(seen.map((e) => e.type)).toEqual(['reset']);
-  });
+  it.runIf(controlEvents)(
+    'reads the submitted flag after Angular updates it, so a minified reset is not a submit',
+    async () => {
+      class E {
+        source: unknown = null;
+      }
+      const form = new FormGroup({});
+      let submitted = true;
+      const seen: FormEvent[] = [];
+      const stop = watchControlEvents(form, 'form-1', (e) => seen.push(e), {
+        submitted: () => submitted,
+      })!;
+      (form as unknown as { _events: { next(e: unknown): void } })._events.next(new E());
+      submitted = false;
+      await Promise.resolve();
+      stop();
+      expect(seen.map((e) => e.type)).toEqual(['reset']);
+    },
+  );
 
   it('tells submit from reset by the submitted flag when class names are minified', () => {
     class E {
@@ -905,26 +934,29 @@ describe('findFieldElement for Signal Forms', () => {
 });
 
 describe('group value events', () => {
-  it('redact password inputs under non-secret keys when the whole group changes', () => {
-    document.body.innerHTML = '<input id="confirm" type="password">';
-    const form = new FormGroup({
-      user: new FormControl('kam'),
-      confirm: new FormControl(''),
-    });
-    const elements = new WeakMap<object, Element>([
-      [form.controls.confirm, document.querySelector('#confirm')!],
-    ]);
-    const seen: FormEvent[] = [];
-    const stop = watchControlEvents(form, 'form-1', (e) => seen.push(e), {
-      elements: () => elements,
-    })!;
-    form.setValue({ user: 'kam', confirm: 'hunter2' });
-    form.reset();
-    stop();
-    const details = seen.filter((e) => e.type === 'value').map((e) => e.detail);
-    expect(details.join(' ')).not.toContain('hunter2');
-    expect(details[0]).toBe('{"user":"kam","confirm":"[redacted]"}');
-  });
+  it.runIf(controlEvents)(
+    'redact password inputs under non-secret keys when the whole group changes',
+    () => {
+      document.body.innerHTML = '<input id="confirm" type="password">';
+      const form = new FormGroup({
+        user: new FormControl('kam'),
+        confirm: new FormControl(''),
+      });
+      const elements = new WeakMap<object, Element>([
+        [form.controls.confirm, document.querySelector('#confirm')!],
+      ]);
+      const seen: FormEvent[] = [];
+      const stop = watchControlEvents(form, 'form-1', (e) => seen.push(e), {
+        elements: () => elements,
+      })!;
+      form.setValue({ user: 'kam', confirm: 'hunter2' });
+      form.reset();
+      stop();
+      const details = seen.filter((e) => e.type === 'value').map((e) => e.detail);
+      expect(details.join(' ')).not.toContain('hunter2');
+      expect(details[0]).toBe('{"user":"kam","confirm":"[redacted]"}');
+    },
+  );
 });
 
 describe('Angular spec edge cases', () => {

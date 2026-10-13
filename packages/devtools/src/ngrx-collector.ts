@@ -1,4 +1,4 @@
-import { untracked } from '@angular/core';
+import * as angularCore from '@angular/core';
 import { isRedactedKey, REDACTED } from './forms-privacy.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
 import { className, tokenName } from './injector-tree.ts';
@@ -20,6 +20,16 @@ import {
   type NgrxUnrestorableUpdate,
 } from './ngrx-shared.ts';
 import { registeredPatchState, registeredWatchState } from './ngrx-register.ts';
+
+/**
+ * Angular's `untracked` (16.0+), read at runtime: a named import of it fails
+ * the build of an app on Angular 12 to 15 under webpack's strict ESM rules.
+ * Signals don't exist before 16.0, so reading the value directly is the same.
+ */
+function untracked<T>(body: () => T): T {
+  const fn = Reflect.get(angularCore, 'untracked') as ((body: () => T) => T) | undefined;
+  return typeof fn === 'function' ? fn(body) : body();
+}
 
 type AnyRecord = Record<PropertyKey, any>;
 

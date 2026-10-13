@@ -11,16 +11,12 @@ import {
   ɵwithHttpTransferCache as withHttpTransferCache,
 } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { firstValueFrom } from 'rxjs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { sha256Hex, transferCacheKeys } from '../http-cache-key.ts';
+import { angularAtLeast, initAngularTestBed } from './angular-version.ts';
 
-try {
-  TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
-} catch {
-  // already initialized in this worker
-}
+initAngularTestBed();
 
 afterEach(() => TestBed.resetTestingModule());
 
@@ -32,7 +28,24 @@ describe('sha256Hex', () => {
   });
 });
 
-describe('transferCacheKeys', () => {
+/** The DJB2 variant Angular 16.0 to 17.0 hash the key with (makeCacheKey in @angular/common/http). */
+function angular16Hash(value: string): string {
+  let hash = 0;
+  for (const char of value) hash = (Math.imul(31, hash) + char.charCodeAt(0)) << 0;
+  return String(hash + 2147483647 + 1);
+}
+
+describe('transferCacheKeys for each Angular key format', () => {
+  it('includes the 16.0 to 17.0 key, which leaves the body out', () => {
+    const req = new HttpRequest('GET', '/api/feed', null, {
+      params: new HttpParams({ fromObject: { page: 1, tag: 'b' } }),
+    });
+    expect(transferCacheKeys(req)).toContain(angular16Hash('GET.json./api/feed?page=1&tag=b'));
+  });
+});
+
+// Angular caches HTTP responses in TransferState from 16.0 (ɵwithHttpTransferCache).
+describe.runIf(angularAtLeast('16.0'))('transferCacheKeys', () => {
   const cachedBy = async (stored: HttpRequest<unknown>, sent: { page: number }) => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting(), withHttpTransferCache({})],

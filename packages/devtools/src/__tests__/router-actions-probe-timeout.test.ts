@@ -2,13 +2,13 @@
 import '@angular/compiler';
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { Router, provideRouter, type Routes } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { watchRouter, type NavigationRecord } from '../router.ts';
 import { runAction } from '../router-actions.ts';
+import { initAngularTestBed } from './angular-version.ts';
 
-TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+initAngularTestBed();
 
 class Page {}
 Component({ selector: 'app-page', template: '' })(Page);

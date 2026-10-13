@@ -2,7 +2,6 @@
 import '@angular/compiler';
 import { Component, Injector, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import {
   PreloadAllModules,
   Router,
@@ -20,12 +19,13 @@ import {
   type NavigationRecord,
   type RouterDebugApi,
 } from '../router.ts';
-import { angularAtLeast } from './angular-version.ts';
+import { angularAtLeast, initAngularTestBed, STANDALONE } from './angular-version.ts';
+import { functionalRouter } from './router-testing.ts';
 
-TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+initAngularTestBed();
 
 class Page {}
-Component({ selector: 'app-page', template: '' })(Page);
+Component({ ...STANDALONE, selector: 'app-page', template: '' })(Page);
 
 const authGuard = () => inject(Router).parseUrl('/login');
 const denyGuard = () => false;
@@ -75,7 +75,8 @@ const routes: Routes = [
   { path: 'lazy', loadChildren: () => Promise.resolve([{ path: '', component: Page }]) },
 ];
 
-describe('real Router', () => {
+// The routes use functional guards and resolvers, which exist from 14.2 with provideRouter.
+describe.runIf(functionalRouter)('real Router', () => {
   let router: Router;
   let navigations: NavigationRecord[];
   let stop: (() => void) | null;

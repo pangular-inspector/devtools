@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
-import {
-  ChangeDetectorRef,
-  Component,
-  Pipe,
-  inject,
-  signal,
-  type PipeTransform,
-} from '@angular/core';
+import { ChangeDetectorRef, Component, Pipe, type PipeTransform } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { AsyncPipe, CurrencyPipe, DatePipe, JsonPipe, UpperCasePipe } from '@angular/common';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
+import {
+  AsyncPipe,
+  CurrencyPipe,
+  DatePipe,
+  JsonPipe,
+  NgForOf,
+  NgIf,
+  UpperCasePipe,
+} from '@angular/common';
 import { BehaviorSubject, of, type Observable } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachPipes } from '../pipes-collector.ts';
@@ -19,22 +19,32 @@ import { setRedaction } from '../forms-privacy.ts';
 import { explainPipeText } from '../rpc/pipe-explain.ts';
 import { mergePipePageReport } from '../rpc/pipes-tools.ts';
 import type { PipePageReport } from '../rpc/pipes-tools.ts';
+import {
+  controlFlow,
+  initAngularTestBed,
+  injectHere,
+  testModuleFor,
+  writableSignal,
+  STANDALONE,
+} from './angular-version.ts';
 
-try {
-  TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
-} catch {
-  // already initialized in this worker
-}
+initAngularTestBed();
 
 const stops: (() => void)[] = [];
+let configured = false;
 afterEach(() => {
+  configured = false;
   stops.splice(0).forEach((stop) => stop());
   setRedaction();
   TestBed.resetTestingModule();
   document.body.innerHTML = '';
 });
 
-async function mount<T>(type: new () => T) {
+/** Creates `type`; before 14.0, components a test creates later are declared up front in `also`. */
+async function mount<T>(type: new () => T, also: (new () => unknown)[] = []) {
+  const declared = testModuleFor(type, ...also);
+  if (declared.declarations && !configured) TestBed.configureTestingModule(declared);
+  configured = true;
   const fixture = TestBed.createComponent(type);
   document.body.appendChild(fixture.nativeElement);
   fixture.detectChanges();
@@ -47,10 +57,11 @@ function ng(): any {
 }
 
 class Receipt {
-  a = signal(1);
-  b = signal(2);
+  a = writableSignal(1);
+  b = writableSignal(2);
 }
 Component({
+  ...STANDALONE,
   selector: 'app-receipt',
   imports: [CurrencyPipe],
   template: `<p>{{ a() | currency }}</p><p>{{ b() | currency }}</p>`,
@@ -63,21 +74,21 @@ class JoinPipe implements PipeTransform {
     return value.join(',');
   }
 }
-Pipe({ name: 'join' })(JoinPipe);
+Pipe({ ...STANDALONE, name: 'join' })(JoinPipe);
 
 class KeysPipe implements PipeTransform {
   transform(value: Map<string, number> | Set<string>): string {
     return [...value.keys()].join(',');
   }
 }
-Pipe({ name: 'keys' })(KeysPipe);
+Pipe({ ...STANDALONE, name: 'keys' })(KeysPipe);
 
 class FilterPipe implements PipeTransform {
   transform(value: string[], term: string): string {
     return value.filter((v) => v.includes(term)).join(',');
   }
 }
-Pipe({ name: 'filter' })(FilterPipe);
+Pipe({ ...STANDALONE, name: 'filter' })(FilterPipe);
 
 class ExplodePipe implements PipeTransform {
   transform(value: string): string {
@@ -85,12 +96,13 @@ class ExplodePipe implements PipeTransform {
     return value;
   }
 }
-Pipe({ name: 'explode' })(ExplodePipe);
+Pipe({ ...STANDALONE, name: 'explode' })(ExplodePipe);
 
 class Explodes {
-  value = signal('start');
+  value = writableSignal('start');
 }
 Component({
+  ...STANDALONE,
   selector: 'app-explodes',
   imports: [ExplodePipe],
   template: `<p>{{ value() | explode }}</p>`,
@@ -100,9 +112,12 @@ class Receipts {
   rows = Array.from({ length: 12 }, (_, i) => i);
 }
 Component({
+  ...STANDALONE,
   selector: 'app-receipts',
-  imports: [Receipt],
-  template: `@for (row of rows; track row) {<app-receipt />}`,
+  imports: [Receipt, ...(controlFlow ? [] : [NgForOf])],
+  template: controlFlow
+    ? `@for (row of rows; track row) {<app-receipt></app-receipt>}`
+    : `<app-receipt *ngFor="let row of rows"></app-receipt>`,
 })(Receipts);
 
 function harness(pageId = 'pg', tree?: HostTree<Element>) {
@@ -127,6 +142,7 @@ function harness(pageId = 'pg', tree?: HostTree<Element>) {
 
 describe('pipes collector', () => {
   it('scans a host tree in place of the document', async () => {
+    TestBed.configureTestingModule(testModuleFor(Receipt));
     const fixture = TestBed.createComponent(Receipt);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -267,6 +283,7 @@ describe('pipes collector', () => {
       solo$ = new BehaviorSubject('solo');
     }
     Component({
+      ...STANDALONE,
       selector: 'app-feed',
       imports: [AsyncPipe],
       template: `<p>{{ shared$ | async }}</p><p>{{ shared$ | async }}</p><p>{{ solo$ | async }}</p>`,
@@ -292,10 +309,11 @@ describe('pipes collector', () => {
 
   it('flags a pure pipe fed a mutated-in-place argument (experimental stale check)', async () => {
     class ListView {
-      items = signal<string[]>(['a', 'b']);
-      cdr = inject(ChangeDetectorRef);
+      items = writableSignal<string[]>(['a', 'b']);
+      cdr = injectHere(ChangeDetectorRef);
     }
     Component({
+      ...STANDALONE,
       selector: 'app-list',
       // Bound directly to the array reference (not a derived primitive), so
       // a mutation in place is genuinely invisible to Angular's `Object.is`
@@ -333,9 +351,10 @@ describe('pipes collector', () => {
 
   it('does not flag a normal, immutable update as stale', async () => {
     class ListView {
-      items = signal<string[]>(['a', 'b']);
+      items = writableSignal<string[]>(['a', 'b']);
     }
     Component({
+      ...STANDALONE,
       selector: 'app-list2',
       imports: [JoinPipe],
       template: `<p>{{ items() | join }}</p>`,
@@ -363,10 +382,11 @@ describe('pipes collector', () => {
 
   it('does not run the stale check while not instrumented', async () => {
     class ListView {
-      items = signal<string[]>(['a', 'b']);
-      cdr = inject(ChangeDetectorRef);
+      items = writableSignal<string[]>(['a', 'b']);
+      cdr = injectHere(ChangeDetectorRef);
     }
     Component({
+      ...STANDALONE,
       selector: 'app-list3',
       imports: [JoinPipe],
       template: `<p>{{ items() | join }}</p>`,
@@ -394,10 +414,11 @@ describe('pipes collector', () => {
 
   it('keeps a stale finding, with its first detection time, until the argument changes', async () => {
     class ListView {
-      items = signal<string[]>(['a', 'b']);
-      cdr = inject(ChangeDetectorRef);
+      items = writableSignal<string[]>(['a', 'b']);
+      cdr = injectHere(ChangeDetectorRef);
     }
     Component({
+      ...STANDALONE,
       selector: 'app-list4',
       imports: [JoinPipe],
       template: `<p>{{ items() | join }}</p>`,
@@ -444,7 +465,16 @@ describe('pipes collector', () => {
   });
 
   it('walks the whole DOM once, then only again when it changes', async () => {
-    await mount(Receipt);
+    class Extra {
+      label = 'late';
+    }
+    Component({
+      ...STANDALONE,
+      selector: 'app-extra',
+      imports: [UpperCasePipe],
+      template: `<i>{{ label | uppercase }}</i>`,
+    })(Extra);
+    await mount(Receipt, [Extra]);
     const h = harness();
     const spy = vi.spyOn(document, 'querySelectorAll');
     const fullScans = () => spy.mock.calls.filter(([selector]) => selector === '*').length;
@@ -456,14 +486,6 @@ describe('pipes collector', () => {
     await Promise.resolve();
     expect(fullScans()).toBe(1);
 
-    class Extra {
-      label = 'late';
-    }
-    Component({
-      selector: 'app-extra',
-      imports: [UpperCasePipe],
-      template: `<i>{{ label | uppercase }}</i>`,
-    })(Extra);
     await mount(Extra);
     await new Promise((resolve) => setTimeout(resolve));
     h.collector.resume();
@@ -480,13 +502,17 @@ describe('pipes collector', () => {
 
   it('picks up a text-only view that appears later without walking the whole DOM', async () => {
     class Toggle {
-      show = signal(false);
+      show = writableSignal(false);
       label = 'late';
     }
     Component({
+      ...STANDALONE,
       selector: 'app-toggle',
-      imports: [UpperCasePipe],
-      template: `<p>@if (show()) {{{ label | uppercase }}}</p>`,
+      imports: [UpperCasePipe, ...(controlFlow ? [] : [NgIf])],
+      // A text-only view: an @if block from 17.0, an *ngIf container before.
+      template: controlFlow
+        ? `<p>@if (show()) {{{ label | uppercase }}}</p>`
+        : `<p><ng-container *ngIf="show()">{{ label | uppercase }}</ng-container></p>`,
     })(Toggle);
     const fixture = await mount(Toggle);
     const h = harness();
@@ -515,6 +541,7 @@ describe('pipes collector', () => {
       total = 3;
     }
     Component({
+      ...STANDALONE,
       selector: 'app-invoice',
       imports: [CurrencyPipe],
       template: `<p>{{ total | currency }}</p>`,
@@ -535,6 +562,7 @@ describe('pipes collector', () => {
       source$: BehaviorSubject<string> | null = null;
     }
     Component({
+      ...STANDALONE,
       selector: 'app-empty',
       imports: [AsyncPipe],
       template: `<p>{{ source$ | async }}</p>`,
@@ -556,6 +584,7 @@ describe('pipes collector', () => {
       header$ = new BehaviorSubject(`Bearer ${jwt}`);
     }
     Component({
+      ...STANDALONE,
       selector: 'app-session',
       imports: [AsyncPipe],
       template: `<p>{{ (session$ | async)?.user }}</p><p>{{ header$ | async }}</p>`,
@@ -576,6 +605,7 @@ describe('pipes collector', () => {
       token$ = new BehaviorSubject(`token ${jwt}`);
     }
     Component({
+      ...STANDALONE,
       selector: 'app-long-token',
       imports: [AsyncPipe],
       template: `<p>{{ token$ | async }}</p>`,
@@ -593,9 +623,10 @@ describe('pipes collector', () => {
   it('redacts instrumented inputs and outputs, including configured secret names', async () => {
     setRedaction({ secretNames: ['voucher'] });
     class Checkout {
-      form = signal({ email: 'ada@example.com', password: 'hunter2', voucher: 'ABC123' });
+      form = writableSignal({ email: 'ada@example.com', password: 'hunter2', voucher: 'ABC123' });
     }
     Component({
+      ...STANDALONE,
       selector: 'app-checkout',
       imports: [JsonPipe],
       template: `<pre>{{ form() | json }}</pre>`,
@@ -675,10 +706,11 @@ describe('pipes collector', () => {
 
   it('starts each recording with a fresh stale baseline', async () => {
     class ListView {
-      items = signal<string[]>(['a', 'b']);
-      cdr = inject(ChangeDetectorRef);
+      items = writableSignal<string[]>(['a', 'b']);
+      cdr = injectHere(ChangeDetectorRef);
     }
     Component({
+      ...STANDALONE,
       selector: 'app-list-baseline',
       imports: [JoinPipe],
       template: `<p>{{ items() | join }}</p>`,
@@ -698,9 +730,10 @@ describe('pipes collector', () => {
   it('flags a Date mutated in place and shown with the real DatePipe', async () => {
     class When {
       when = new Date(2020, 0, 1);
-      cdr = inject(ChangeDetectorRef);
+      cdr = injectHere(ChangeDetectorRef);
     }
     Component({
+      ...STANDALONE,
       selector: 'app-when',
       imports: [DatePipe],
       template: `<p>{{ when | date: 'yyyy' }}</p>`,
@@ -730,9 +763,10 @@ describe('pipes collector', () => {
   ])('flags a %s mutated in place', async (_kind, create, mutate) => {
     class Bag {
       bag = create();
-      cdr = inject(ChangeDetectorRef);
+      cdr = injectHere(ChangeDetectorRef);
     }
     Component({
+      ...STANDALONE,
       selector: `app-bag-${_kind.toLowerCase()}`,
       imports: [KeysPipe],
       template: `<p>{{ bag | keys }}</p>`,
@@ -750,10 +784,11 @@ describe('pipes collector', () => {
   it('does not flag a pipe that reran because another argument changed', async () => {
     class Search {
       items = ['apple', 'banana'];
-      term = signal('a');
-      cdr = inject(ChangeDetectorRef);
+      term = writableSignal('a');
+      cdr = injectHere(ChangeDetectorRef);
     }
     Component({
+      ...STANDALONE,
       selector: 'app-search',
       imports: [FilterPipe],
       template: `<p>{{ items | filter: term() }}</p>`,
@@ -773,10 +808,11 @@ describe('pipes collector', () => {
   it('clears a stale finding once the pipe reruns', async () => {
     class Search {
       items = ['apple', 'banana'];
-      term = signal('a');
-      cdr = inject(ChangeDetectorRef);
+      term = writableSignal('a');
+      cdr = injectHere(ChangeDetectorRef);
     }
     Component({
+      ...STANDALONE,
       selector: 'app-search2',
       imports: [FilterPipe],
       template: `<p>{{ items | filter: term() }}</p>`,
@@ -800,7 +836,7 @@ describe('pipes collector', () => {
     const cached = of('cached');
     class Feed {
       stable$ = new BehaviorSubject('stable');
-      cdr = inject(ChangeDetectorRef);
+      cdr = injectHere(ChangeDetectorRef);
       getData(): Observable<string> {
         return of('fresh');
       }
@@ -809,6 +845,7 @@ describe('pipes collector', () => {
       }
     }
     Component({
+      ...STANDALONE,
       selector: 'app-resubscribe',
       imports: [AsyncPipe],
       template: `<p>{{ getData() | async }}</p><p>{{ getCached() | async }}</p><p>{{ stable$ | async }}</p>`,
@@ -837,9 +874,10 @@ describe('pipes collector', () => {
   it('does not mark an async pipe whose source changed once', async () => {
     class Feed {
       source$ = new BehaviorSubject('one');
-      cdr = inject(ChangeDetectorRef);
+      cdr = injectHere(ChangeDetectorRef);
     }
     Component({
+      ...STANDALONE,
       selector: 'app-switch',
       imports: [AsyncPipe],
       template: `<p>{{ source$ | async }}</p>`,

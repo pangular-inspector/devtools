@@ -2,7 +2,6 @@
 import '@angular/compiler';
 import { Component, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { Router, RouterLink, RouterLinkActive, provideRouter, type Routes } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -24,9 +23,9 @@ import {
   storedInstrumented,
 } from '../router-actions.ts';
 import { touchRouterPage } from '../rpc/router-tools.ts';
-import { angularAtLeast } from './angular-version.ts';
+import { angularAtLeast, initAngularTestBed, STANDALONE } from './angular-version.ts';
 
-TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+initAngularTestBed();
 
 class Nav {
   readonly router = inject(Router);
@@ -36,6 +35,7 @@ class Nav {
   }
 }
 Component({
+  ...STANDALONE,
   selector: 'app-nav',
   imports: [RouterLink, RouterLinkActive],
   template: `
@@ -59,8 +59,13 @@ Component({
     <ul>
       <li routerLinkActive="on"><a routerLink="/a/child">Nested</a></li>
     </ul>
-    @if (nullOptions) {
+    ${
+      // Control flow blocks exist from 17.0; the link only matters on 22.0+.
+      angularAtLeast('17.0')
+        ? `@if (nullOptions) {
       <a routerLink="/b" routerLinkActive="on" [routerLinkActiveOptions]="$any(null)">Never</a>
+    }`
+        : ''
     }
   `,
 })(Nav);
@@ -86,7 +91,8 @@ const routes: Routes = [
   },
 ];
 
-describe('router audit fixes on a real Router', () => {
+// RouterTestingHarness exists from 15.2.
+describe.runIf(angularAtLeast('15.2'))('router audit fixes on a real Router', () => {
   let router: Router;
   let navigations: NavigationRecord[];
   let cleanup: (() => void)[];
@@ -237,18 +243,22 @@ describe('route-config secrets before any navigation event', () => {
     expect(adopted?.url).toBe('/reset/[redacted]');
   });
 
-  it('masks a short path-param token in a rendered routerLink href', async () => {
-    TestBed.resetTestingModule();
-    TestBed.configureTestingModule({
-      providers: [provideRouter([{ path: 'invite/:code', component: Nav }, ...routes])],
-    });
-    const real = TestBed.inject(Router);
-    const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/a');
-    harness.detectChanges();
-    const links = linksOf((globalThis as { ng?: RouterDebugApi }).ng!, real as never);
-    expect(links.find((l) => l.text === 'Invite')?.href).toBe('/invite/[redacted]');
-  });
+  // RouterTestingHarness exists from 15.2.
+  it.runIf(angularAtLeast('15.2'))(
+    'masks a short path-param token in a rendered routerLink href',
+    async () => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [provideRouter([{ path: 'invite/:code', component: Nav }, ...routes])],
+      });
+      const real = TestBed.inject(Router);
+      const harness = await RouterTestingHarness.create();
+      await harness.navigateByUrl('/a');
+      harness.detectChanges();
+      const links = linksOf((globalThis as { ng?: RouterDebugApi }).ng!, real as never);
+      expect(links.find((l) => l.text === 'Invite')?.href).toBe('/invite/[redacted]');
+    },
+  );
 });
 
 describe('router heartbeat', () => {

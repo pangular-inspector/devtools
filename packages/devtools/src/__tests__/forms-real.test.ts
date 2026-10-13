@@ -15,11 +15,11 @@ import {
   validate,
 } from '@angular/forms/signals';
 import { SignalFormControl, compatForm } from '@angular/forms/signals/compat';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { describe, expect, it } from 'vitest';
 import { isFieldTree, serializeControl, serializeField } from '../forms.ts';
+import { initAngularTestBed } from './angular-version.ts';
 
-TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+initAngularTestBed();
 
 function signalForm<T>(model: T, schema?: Parameters<typeof form<T>>[1]) {
   return TestBed.runInInjectionContext(() =>

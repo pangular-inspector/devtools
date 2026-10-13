@@ -4,16 +4,12 @@ import { Component, ViewEncapsulation, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { FormField, FormRoot, form } from '@angular/forms/signals';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachForms } from '../forms-collector.ts';
 import { createFormIds, pageElements, type FoundForm } from '../forms.ts';
+import { initAngularTestBed } from './angular-version.ts';
 
-try {
-  TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
-} catch {
-  // already initialized in this worker
-}
+initAngularTestBed();
 
 const stops: (() => void)[] = [];
 afterEach(() => {

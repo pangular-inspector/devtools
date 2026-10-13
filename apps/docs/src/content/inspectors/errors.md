@@ -43,7 +43,7 @@ When several tabs report, **Page** picks one, or **All pages** to see them toget
 
 <ngmd-card-grid columns="3">
   <ngmd-card icon="shield" title="ErrorHandler">
-    The overlay wraps the <code>handleError</code> method of the app's <code>ErrorHandler</code>, your own or Angular's. Your handler still runs, with the same arguments, after the overlay records the error.
+    The overlay wraps the <code>handleError</code> method of the app's <code>ErrorHandler</code>, your own or Angular's. Your handler still runs, with the same arguments, after the overlay records the error. Before Angular 16.2 the overlay can't find the handler, so it records what Angular's default handler logs.
   </ngmd-card>
   <ngmd-card icon="zap" title="Window">
     Listeners for <code>error</code> and <code>unhandledrejection</code> on <code>window</code>. They only listen, so the browser and Angular handle the event as before.

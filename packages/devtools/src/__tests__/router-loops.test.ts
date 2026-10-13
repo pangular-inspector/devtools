@@ -2,7 +2,6 @@
 import '@angular/compiler';
 import { Component, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import {
   RedirectCommand,
   Router,
@@ -17,8 +16,10 @@ import type { RouteNode } from '../router-config.ts';
 import { lintRoutes } from '../rpc/router-config-tools.ts';
 import { detectLoops, redirectCycles } from '../rpc/router-loops.ts';
 import { describeNavigation, type RouterPage } from '../rpc/router-tools.ts';
+import { angularAtLeast, initAngularTestBed, STANDALONE } from './angular-version.ts';
+import { functionalRouter } from './router-testing.ts';
 
-TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+initAngularTestBed();
 
 function nav(id: number, extra: Partial<NavigationRecord> = {}): NavigationRecord {
   return {
@@ -208,7 +209,7 @@ describe('detectLoops', () => {
 });
 
 class Page {}
-Component({ selector: 'app-page', template: '' })(Page);
+Component({ ...STANDALONE, selector: 'app-page', template: '' })(Page);
 
 let signedIn = false;
 let bounces = 0;
@@ -231,7 +232,8 @@ const routes: Routes = [
   { path: 'step/4', component: Page },
 ];
 
-describe('detectLoops on a real Router', () => {
+// provideRouter and functional guards exist from 14.2.
+describe.runIf(functionalRouter)('detectLoops on a real Router', () => {
   let router: Router;
   let navigations: NavigationRecord[];
   let cleanup: (() => void)[];
@@ -275,11 +277,18 @@ describe('detectLoops on a real Router', () => {
   it('flags a redirectTo loop that Angular stops with NG04016', async () => {
     await router.navigateByUrl('/x').catch(() => {});
     const failed = navigations[navigations.length - 1];
-    expect(failed).toMatchObject({ url: '/x', outcome: 'failed', errorCode: 'NG04016' });
     const config: RouteNode[] = [
       { id: '3', path: 'x', fullPath: '/x', kind: 'redirect', redirectTo: '/y' },
       { id: '4', path: 'y', fullPath: '/y', kind: 'redirect', redirectTo: '/x' },
     ];
+    if (!angularAtLeast('17.0')) {
+      // Angular names the loop (NG04016) from 17.0. Before, the navigation fails
+      // with "Cannot match any routes" (NG04002) and is not reported as a loop.
+      expect(failed).toMatchObject({ url: '/x', outcome: 'failed', errorCode: 'NG04002' });
+      expect(detectLoops(navigations, config)).toEqual([]);
+      return;
+    }
+    expect(failed).toMatchObject({ url: '/x', outcome: 'failed', errorCode: 'NG04016' });
     expect(detectLoops(navigations, config)).toEqual([
       expect.objectContaining({ kind: 'config', ids: [failed.id], cycle: ['/x', '/y', '/x'] }),
     ]);
@@ -300,7 +309,8 @@ function flakyResolver() {
 }
 const backToReport = () => inject(Router).parseUrl('/report');
 
-describe('detectLoops through the navigation error handler', () => {
+// The navigation error handler can redirect (`RedirectCommand`) from 18.0.
+describe.runIf(angularAtLeast('18.0'))('detectLoops through the navigation error handler', () => {
   let router: Router;
   let navigations: NavigationRecord[];
   let cleanup: (() => void)[];

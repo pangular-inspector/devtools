@@ -3,18 +3,14 @@ import '@angular/compiler';
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachChangeDetection } from '../cd-overlay.ts';
 import { attachForms } from '../forms-collector.ts';
 import { CHANGE_DETECTION_SHAPE, FORMS_SHAPE } from '../push-delta.ts';
 import { createReportDeltas, deltaPush } from '../rpc/report-deltas.ts';
+import { initAngularTestBed } from './angular-version.ts';
 
-try {
-  TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
-} catch {
-  // already initialized in this worker
-}
+initAngularTestBed();
 
 /** An RPC scope whose push answers like the server, rebuilding each report. */
 function server(name: string, shape: typeof FORMS_SHAPE) {

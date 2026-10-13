@@ -1,20 +1,17 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
-import {
-  Component,
-  provideZonelessChangeDetection,
-  signal,
-  type ApplicationRef,
-} from '@angular/core';
+import { Component, signal, type ApplicationRef } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { afterEach, describe, expect, it } from 'vitest';
 import { elementById } from '../element-id.ts';
 import { createDeferTracker, type DeferDebugNg } from '../defer-blocks.ts';
+import { angularAtLeast, zonelessProviders, STANDALONE } from './angular-version.ts';
 
 class TripReviews {
   readonly ready = signal(false);
 }
 Component({
+  ...STANDALONE,
   selector: 'app-root',
   template: `
     @defer (when ready()) {
@@ -29,12 +26,14 @@ Component({
 
 class ExamplePanel {}
 Component({
+  ...STANDALONE,
   selector: 'app-example-panel',
   template: `<div class="panel"><ng-content /></div>`,
 })(ExamplePanel);
 
 class LazyExample {}
 Component({
+  ...STANDALONE,
   selector: 'app-root',
   imports: [ExamplePanel],
   template: `
@@ -55,7 +54,11 @@ const settle = async (app: ApplicationRef) => {
   }
 };
 
-describe('createDeferTracker with a real app', () => {
+/** `ɵgetDeferBlocks` exists from 19.1 (`ɵgetControlFlowBlocks` from 22.0). */
+const deferUtil = angularAtLeast('19.1');
+
+// @defer exists from 17.0; angular-real-app.test.ts covers the versions before it.
+describe.runIf(angularAtLeast('17.0'))('createDeferTracker with a real app', () => {
   let app: ApplicationRef | null = null;
   afterEach(() => {
     app?.destroy();
@@ -66,13 +69,19 @@ describe('createDeferTracker with a real app', () => {
   it('reads a real @defer block through the private defer block util', async () => {
     document.body.innerHTML = '<app-root></app-root>';
     app = await bootstrapApplication(TripReviews, {
-      providers: [provideZonelessChangeDetection()],
+      providers: [...zonelessProviders()],
     });
     await settle(app);
 
     const ng = (globalThis as { ng?: DeferDebugNg }).ng!;
-    expect(typeof (ng.ɵgetControlFlowBlocks ?? ng.ɵgetDeferBlocks)).toBe('function');
     const tracker = createDeferTracker();
+    if (!deferUtil) {
+      // 17.0 to 19.0 render @defer but publish no util: the page reports none.
+      expect(ng.ɵgetControlFlowBlocks ?? ng.ɵgetDeferBlocks).toBeUndefined();
+      expect(tracker.collect(ng)).toBeUndefined();
+      return;
+    }
+    expect(typeof (ng.ɵgetControlFlowBlocks ?? ng.ɵgetDeferBlocks)).toBe('function');
     const [block] = tracker.collect(ng) ?? [];
     expect(block).toMatchObject({
       state: 'placeholder',
@@ -93,12 +102,16 @@ describe('createDeferTracker with a real app', () => {
   it('names the template owner of a @defer block projected into another component', async () => {
     document.body.innerHTML = '<app-root></app-root>';
     app = await bootstrapApplication(LazyExample, {
-      providers: [provideZonelessChangeDetection()],
+      providers: [...zonelessProviders()],
     });
     await settle(app);
 
     const ng = (globalThis as { ng?: DeferDebugNg }).ng!;
     const tracker = createDeferTracker();
+    if (!deferUtil) {
+      expect(tracker.collect(ng)).toBeUndefined();
+      return;
+    }
     const [block] = tracker.collect(ng) ?? [];
     expect(block).toMatchObject({ owner: { name: 'LazyExample', tag: 'app-root' } });
     expect(elementById(block.owner!.id)).toBe(document.querySelector('app-root'));

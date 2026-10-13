@@ -12,6 +12,14 @@ import {
   type NgrxPageReport,
 } from '../ngrx-shared.ts';
 import { mergeNgrxReport, nameStore, ngrxStateOf, type NgrxPages } from '../rpc/ngrx-tools.ts';
+import { angularAtLeast, STANDALONE } from './angular-version.ts';
+
+/**
+ * The workspace installs @ngrx 22, which loads on Angular 19.0 and later (it
+ * imports `linkedSignal`). The compat workflow keeps it, so on older versions
+ * the NgRx coverage is the fake-ng tests here and the capability checks.
+ */
+const realNgrx = angularAtLeast('19.0');
 
 const SIGNAL = Symbol('SIGNAL');
 const STATE_SOURCE = Symbol('STATE_SOURCE');
@@ -1488,7 +1496,7 @@ describe('ngrx tools', () => {
   });
 });
 
-describe('ngrx collector with @ngrx/signals', () => {
+describe.runIf(realNgrx)('ngrx collector with @ngrx/signals', () => {
   it('reads, logs and restores a real signal store from an injector', async () => {
     await import('@angular/compiler');
     const { Injector, computed } = await import('@angular/core');
@@ -1678,7 +1686,9 @@ describe('ngrx collector with @ngrx/signals', () => {
       store = inject(PackingStore);
       view = signalState({ hidePacked: false });
     }
-    Component({ selector: 'app-packing', template: '', providers: [PackingStore] })(Packing);
+    Component({ ...STANDALONE, selector: 'app-packing', template: '', providers: [PackingStore] })(
+      Packing,
+    );
     const fixture = TestBed.createComponent(Packing);
     document.body.replaceChildren(fixture.nativeElement);
     const collector = createNgrxCollector(
@@ -1877,7 +1887,12 @@ describe('ngrx collector with @ngrx/signals', () => {
     class Panel {
       dispatcher = inject(Dispatcher);
     }
-    Component({ selector: 'app-panel', template: '', providers: [provideDispatcher()] })(Panel);
+    Component({
+      ...STANDALONE,
+      selector: 'app-panel',
+      template: '',
+      providers: [provideDispatcher()],
+    })(Panel);
     const fixture = TestBed.createComponent(Panel);
     document.body.replaceChildren(fixture.nativeElement);
     const collector = createNgrxCollector(
@@ -1957,16 +1972,15 @@ async function testBed() {
   await import('@angular/compiler');
   const { TestBed } = await import('@angular/core/testing');
   if (!testBedReady) {
-    const { BrowserTestingModule, platformBrowserTesting } =
-      await import('@angular/platform-browser/testing');
-    TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+    const { initAngularTestBed } = await import('./angular-version.ts');
+    initAngularTestBed();
     testBedReady = true;
   }
   TestBed.resetTestingModule();
   return TestBed;
 }
 
-describe('ngrx collector with @ngrx/store', () => {
+describe.runIf(realNgrx)('ngrx collector with @ngrx/store', () => {
   async function realStore(
     options: {
       devtools?: { maxAge?: number; actionsBlocklist?: string[] };
@@ -2034,7 +2048,9 @@ describe('ngrx collector with @ngrx/store', () => {
     store.next(add({ by: 3 }));
     const by = signal(4);
     store.dispatch(() => add({ by: by() }));
-    TestBed.tick();
+    // `TestBed.tick()` from 20.0; `flushEffects()` runs the reactive dispatch before.
+    const testBed = TestBed as unknown as { tick?: () => void; flushEffects?: () => void };
+    (testBed.tick ?? testBed.flushEffects)!.call(TestBed);
     expect(collector.logSince(0).map((e) => [e.type, e.origin, e.diff])).toEqual([
       ['[Counter] Add', 'dispatch', [{ path: 'count', op: 'change', before: 0, after: 2 }]],
       ['[Counter] Add', 'effect', [{ path: 'count', op: 'change', before: 2, after: 5 }]],

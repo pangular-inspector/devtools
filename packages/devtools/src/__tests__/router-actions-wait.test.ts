@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
-import { Component, PendingTasks, inject } from '@angular/core';
+import * as core from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import {
   RedirectCommand,
   Router,
@@ -13,12 +13,13 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { watchRouter, type NavigationRecord } from '../router.ts';
 import { runAction, waitForStable } from '../router-actions.ts';
-import { angularAtLeast } from './angular-version.ts';
+import { angularAtLeast, initAngularTestBed, STANDALONE } from './angular-version.ts';
+import { functionalRouter } from './router-testing.ts';
 
-TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+initAngularTestBed();
 
 class Page {}
-Component({ selector: 'app-page', template: '' })(Page);
+Component({ ...STANDALONE, selector: 'app-page', template: '' })(Page);
 
 let landingGuardRuns = 0;
 let landingResolverRuns = 0;
@@ -61,7 +62,26 @@ const routes: Routes = [
   },
 ];
 
-describe('router actions that wait on the app', () => {
+/** The Router holds the root pending tasks from 16.0. */
+const routerTasks = angularAtLeast('16.0');
+
+/**
+ * Adds a pending task and returns its remover: through the public
+ * `PendingTasks` from 19.0, through the root tasks the Router holds before.
+ */
+function addPendingTask(router: Router): () => void {
+  const publicTasks = (core as unknown as Record<string, unknown>)['PendingTasks'];
+  if (publicTasks && angularAtLeast('19.0')) {
+    return TestBed.inject(publicTasks as core.Type<{ add(): () => void }>).add();
+  }
+  const tasks = (router as unknown as { pendingTasks: { add(): number; remove(id: number): void } })
+    .pendingTasks;
+  const id = tasks.add();
+  return () => tasks.remove(id);
+}
+
+// provideRouter and functional guards exist from 14.2.
+describe.runIf(functionalRouter)('router actions that wait on the app', () => {
   let router: Router;
   let navigations: NavigationRecord[];
   let stop: (() => void) | null;
@@ -90,16 +110,19 @@ describe('router actions that wait on the app', () => {
 
   afterEach(() => stop?.());
 
-  it('waitFor "navigation" returns when the navigation ends, without waiting for pending tasks', async () => {
-    const done = TestBed.inject(PendingTasks).add();
-    const result = await act({ action: 'navigate', url: '/plain', waitFor: 'navigation' });
-    expect(result).toMatchObject({ outcome: 'succeeded', url: '/plain' });
-    expect(result['stable']).toBeUndefined();
-    done();
-  });
+  it.runIf(routerTasks)(
+    'waitFor "navigation" returns when the navigation ends, without waiting for pending tasks',
+    async () => {
+      const done = addPendingTask(router);
+      const result = await act({ action: 'navigate', url: '/plain', waitFor: 'navigation' });
+      expect(result).toMatchObject({ outcome: 'succeeded', url: '/plain' });
+      expect(result['stable']).toBeUndefined();
+      done();
+    },
+  );
 
-  it('waitFor "stable" waits until the app has no pending tasks', async () => {
-    const done = TestBed.inject(PendingTasks).add();
+  it.runIf(routerTasks)('waitFor "stable" waits until the app has no pending tasks', async () => {
+    const done = addPendingTask(router);
     setTimeout(done, 400);
     const started = Date.now();
     const result = await act({ action: 'navigate', url: '/plain', waitFor: 'stable' });
@@ -107,8 +130,8 @@ describe('router actions that wait on the app', () => {
     expect(result).toMatchObject({ outcome: 'succeeded', stable: true });
   });
 
-  it('says when the app did not become stable in time', async () => {
-    const done = TestBed.inject(PendingTasks).add();
+  it.runIf(routerTasks)('says when the app did not become stable in time', async () => {
+    const done = addPendingTask(router);
     expect(await waitForStable(router as never, 30)).toBe(false);
     done();
     expect(await waitForStable(router as never, 30)).toBe(true);
@@ -117,6 +140,15 @@ describe('router actions that wait on the app', () => {
   it('reports an unknown stability when the router has no pending tasks', async () => {
     expect(await waitForStable({} as never, 30)).toBeNull();
   });
+
+  it.skipIf(routerTasks)(
+    'reports an unknown stability before 16.0, whose Router has no pending tasks',
+    async () => {
+      expect(await waitForStable(router as never, 30)).toBeNull();
+      const result = await act({ action: 'navigate', url: '/plain', waitFor: 'stable' });
+      expect(result).toMatchObject({ outcome: 'succeeded', url: '/plain' });
+    },
+  );
 
   it.skipIf(!angularAtLeast('20.2.0')).each([
     ['a UrlTree', '/members'],

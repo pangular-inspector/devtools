@@ -103,5 +103,8 @@ export function transferCacheKeys(req: HttpRequest<unknown>): string[] {
     keys.add(sha256Hex(parts.join('|')));
     keys.add(legacyHash(parts.join('|')));
   }
+  // 16.0 to 17.0 leave the body out: `method.responseType.url?params`.
+  const params = legacyParams(req.params as ParamsLike);
+  keys.add(legacyHash(`${req.method}.${req.responseType}.${req.url}?${params}`));
   return [...keys];
 }

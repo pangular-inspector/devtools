@@ -277,10 +277,24 @@ export function createSignalHistory(
 
 type SignalSetHook = ((node: RawSignalNode) => void) | null;
 
+/**
+ * Loads Angular's signal primitives, a package entry from 17.0. webpack is
+ * told to leave the import alone, so an Angular 12 to 16 app (which has no
+ * such entry) still builds; in a webpack bundle the import then fails at run
+ * time and history falls back to samples. Vite and esbuild resolve it as
+ * usual, and the Vite plugin stubs it out before 17.0 (`signals-stub.ts`).
+ */
+function loadSignalPrimitives(): Promise<{
+  setPostSignalSetFn: (fn: SignalSetHook) => SignalSetHook;
+}> {
+  return import(/* webpackIgnore: true */ '@angular/core/primitives/signals') as never;
+}
+
 export async function installSignalWriteHook(
   onWrite: (node: RawSignalNode) => void,
-  load: () => Promise<{ setPostSignalSetFn: (fn: SignalSetHook) => SignalSetHook }> = () =>
-    import('@angular/core/primitives/signals') as never,
+  load: () => Promise<{
+    setPostSignalSetFn: (fn: SignalSetHook) => SignalSetHook;
+  }> = loadSignalPrimitives,
 ): Promise<(() => void) | null> {
   let setHook: (fn: SignalSetHook) => SignalSetHook;
   try {

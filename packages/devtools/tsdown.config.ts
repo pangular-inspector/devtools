@@ -15,6 +15,7 @@ export default defineConfig({
     'overlay-nativescript': 'src/overlay-nativescript.ts',
     'overlay-angular-native': 'src/overlay-angular-native.ts',
     vite: 'src/vite.ts',
+    'signals-stub': 'src/signals-stub.ts',
     http: 'src/http.ts',
     hub: 'src/hub.ts',
     cli: 'src/cli.ts',

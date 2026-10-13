@@ -118,7 +118,7 @@ The actions bar works on the selected form:
 
 ### When the page reports
 
-The overlay reads the forms after change detection and pushes them when they change. It also pushes shortly after each `input`, `change`, `focusout`, `submit` or `reset` event. Reactive and template-driven forms also report each change through `control.events`.
+The overlay reads the forms after change detection and pushes them when they change. It also pushes shortly after each `input`, `change`, `focusout`, `submit` or `reset` event. Reactive and template-driven forms also report each change through `control.events`, which Angular has from 18.0. On older versions the timeline comes from comparing the forms between reads.
 
 ### Validators run only when needed
 

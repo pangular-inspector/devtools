@@ -1,12 +1,14 @@
 import { createRequire } from 'node:module';
 import { defineConfig, mergeConfig } from 'vitest/config';
 import base from './vitest.config.ts';
+import { signalPrimitivesAlias } from './src/vite-signals-stub.ts';
 
 const require = createRequire(import.meta.url);
 const angular = Number(require('@angular/core/package.json').version.split('.')[0]);
 
 const pageSide = [
   'analog-scan',
+  'angular-real-app',
   'cd-recorder',
   'cd-recorder-real',
   'change-detection',
@@ -64,5 +66,8 @@ export default mergeConfig(
       ),
       setupFiles: angular >= 21 ? [] : ['src/__tests__/zone-setup.ts'],
     },
+    // What the Vite plugin does for an app before Angular 17, which has no
+    // `@angular/core/primitives/signals` for the signal write hook to import.
+    resolve: { alias: signalPrimitivesAlias(import.meta.dirname) },
   }),
 );

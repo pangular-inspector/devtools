@@ -18,7 +18,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { bootstrapApplication } from '@angular/platform-browser';
 import { afterEach, describe, expect, it } from 'vitest';
 import { collectSignalGraph, type SignalDebugNg } from '../signal-graph.ts';
-import { angularAtLeast } from './angular-version.ts';
+import { angularAtLeast, STANDALONE } from './angular-version.ts';
 
 class TripStore {
   readonly trips = signal(['Lisbon'], { debugName: 'trips' });
@@ -69,6 +69,7 @@ class TripPage {
 }
 
 Component({
+  ...STANDALONE,
   selector: 'app-root',
   template: `{{ city() }} {{ weather.value() }} {{ weather.status() }} {{ forecast.error() }}
     {{ unnamed.value() }} {{ airport.value() }} {{ airport.statusCode() }} {{ selected() }}`,

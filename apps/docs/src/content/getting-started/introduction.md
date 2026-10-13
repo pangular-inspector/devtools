@@ -112,8 +112,8 @@ The devtools are a <a href="https://devfra.me" target="_blank" rel="noopener nor
 ## Requirements
 
 <ngmd-card-grid columns="3">
-  <ngmd-card icon="code" title="Angular 20 or later">
-    The package declares Angular 20 and later as its peer range.
+  <ngmd-card icon="code" title="Angular 12.2 or later">
+    The package declares Angular 12.2 and later as its peer range. Older versions show less data.
   </ngmd-card>
   <ngmd-card icon="terminal" title="Node.js 22 or later">
     The package runs on Node.js 22 and newer.

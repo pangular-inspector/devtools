@@ -17,8 +17,8 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`. It contain
   <ngmd-card icon="terminal" title="Node.js 22 or later">
     The package declares <code>node &gt;=22</code> in its <code>engines</code> field. CI tests Node.js 22 and 24.
   </ngmd-card>
-  <ngmd-card icon="code" title="Angular 20 or later">
-    <code>&#64;angular/core</code> and <code>&#64;angular/common</code> 20 and newer are supported, with no upper bound. See <a href="#supported-angular-versions">Supported Angular versions</a> for older versions.
+  <ngmd-card icon="code" title="Angular 12.2 or later">
+    <code>&#64;angular/core</code> and <code>&#64;angular/common</code> 12.2 and newer are supported, with no upper bound. Older versions show less data. See <a href="#supported-angular-versions">Supported Angular versions</a>.
   </ngmd-card>
   <ngmd-card icon="box" title="Package manager">
     pnpm, npm, yarn or bun. Any of the four.
@@ -31,7 +31,7 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`. It contain
 
 ## Supported Angular versions
 
-The peer range covers Angular 20 and later, and CI tests it (see [Tested versions](#tested-versions)). The overlay checks each debug API on the page and sends what it finds with the page's Angular version, so each tab shows the data that version provides. Only the profiler also looks at the version: the overlay uses `ɵsetProfiler` from Angular 20.0, because before that it holds a single profiler.
+The peer range covers Angular 12.2 and later, and CI tests it (see [Tested versions](#tested-versions)). The overlay checks each debug API on the page and sends what it finds with the page's Angular version, so each tab shows the data that version provides. Only the profiler also looks at the version: the overlay uses `ɵsetProfiler` from Angular 20.0, because before that it holds a single profiler.
 
 When a tab needs a debug API the page doesn't have, it says which Angular version the feature needs and which one the page runs, for example "The live signal graph needs Angular 20.1 or later; this page runs Angular 15.2." The agent tools answer **Unsupported on this Angular version** with the same sentence, and `list-pages` shows each page's Angular version next to its platform.
 
@@ -41,6 +41,8 @@ When a tab needs a debug API the page doesn't have, it says which Angular versio
 | Injected services, providers and environment injectors | 16.2          |
 | Full injector tree with lookup paths                   | 17.0          |
 | Signal values in the component detail (`ng.isSignal`)  | 17.1          |
+| Form events from `AbstractControl.events`              | 18.0          |
+| The `@pangular-inspector/devtools/http` entry          | 19.0          |
 | **Defer blocks** list                                  | 19.1          |
 | Change detection recording and Angular profiling       | 20.0          |
 | Live signal graph                                      | 20.1          |
@@ -50,27 +52,51 @@ All of them need a development build, since production builds leave out `window.
 
 ### Angular 12 to 19
 
-Angular 12 to 19 are outside the peer range and CI doesn't test them, so your package manager warns about the peer dependency. On those versions the overlay degrades as the table above shows:
+On Angular 12 to 19 the overlay degrades as the table above shows:
 
 - The **Injectors** tab shows the element injectors with their components and directives. From 16.2 it adds providers, dependencies and environment injectors.
-- Before 16.2, the overlay finds the `Router` through a router link, the component an outlet renders or the root component, whichever holds it. A page where none of them injects the `Router` shows no router data.
+- Before 16.2, the overlay finds the `Router` through a router link, the component an outlet renders or the root component, whichever holds it. A page where none of them injects the `Router` shows no router data. The router setup is then read in `events-only` mode, so the setup kind shows `unknown` and features found through providers (preloading, the scroller, `withDebugTracing()`) show `off`.
 - Before 16.2, the **NgRx** tab can't find the `@ngrx/store` `Store` or signal stores that components provide.
+- Before 16.2, the errors collector can't wrap the app's `ErrorHandler`. It counts the errors Angular's default handler logs instead, so errors a custom handler swallows don't show.
+- Before 18.0, the **Forms** tab builds its event timeline by comparing snapshots, since controls have no `events` stream.
 
-The overlay loads `@angular/core/primitives/signals` for exact signal history. That entry exists from Angular 17, so a build that resolves it ahead of time can fail on Angular 12 to 16.
+### Setup on Angular 12 to 19
+
+| Setup                                    | Angular 12 to 16                                                                                                                                                      | Angular 17 to 19                                                                    |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Overlay import in `main.ts`              | Works with the webpack-based `@angular-devkit/build-angular:browser` builder. Signal history uses samples, since `@angular/core/primitives/signals` exists from 17.0. | Works with `browser` and `application`. Under webpack, signal history uses samples. |
+| Vite plugin (Analog)                     | Works. The plugin points `@angular/core/primitives/signals` at a stub before 17.0.                                                                                    | Works.                                                                              |
+| `initPangularHub()` in an Express server | Works when the server runs on Node.js 22 or later. On an older Node.js, use the standalone CLI.                                                                       | Works.                                                                              |
+| Standalone CLI next to `ng serve`        | Works. Run `npx pangular dev` with Node.js 22 or later, and the app's own CLI with the Node.js version it supports.                                                   | Works.                                                                              |
+| Chrome extension                         | Works on top of any of the setups above.                                                                                                                              | Works.                                                                              |
+| `@pangular-inspector/devtools/http`      | Not available. It imports `REQUEST` and `provideEnvironmentInitializer`, so the build fails. Leave it out; the HTTP timeline and fault rules need it.                 | Not available before 19.0, for the same reason.                                     |
+
+With the webpack-based `browser` builder, use the standalone CLI next to `ng serve`, as in [Client-only Angular CLI app](#client-only-angular-cli-app), or the Express hub for an SSR app.
+
+TypeScript before 4.7 (Angular 12 and 13) can't read the package's `.d.mts` types, so `import('@pangular-inspector/devtools/overlay')` fails the type check. Declare the module in a typings file:
+
+```ts
+// src/typings.d.ts
+declare module '@pangular-inspector/devtools/overlay';
+```
 
 ### Tested versions
 
-The peer range is `@angular/* >=20` with no upper bound. CI tests these versions:
+The peer range is `@angular/core` and `@angular/common` `>=12.2` with no upper bound. CI tests these versions:
 
 | Angular                 | Node.js | What runs                                                                 | When                                  |
 | ----------------------- | ------- | ------------------------------------------------------------------------- | ------------------------------------- |
-| 20.0 (lowest supported) | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
+| 12.2 (lowest supported) | 22      | The page-side tests against a real Angular app, after ngcc                | Every push to `main`, and weekly      |
+| 15.2                    | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
+| 17.3                    | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
+| 19.2                    | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
+| 20.0                    | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
 | 21 (latest 21.x)        | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
 | 22 (latest 22.x)        | 22      | The page-side tests, including Signal Forms                               | Every push to `main`, and weekly      |
 | 22 (repository version) | 24      | Every package and panel test, the type checks and axe                     | Every pull request and push to `main` |
 | Newest the ranges allow | 24      | A fresh Angular CLI app and a fresh Analog app with the package installed | Weekly                                |
 
-Some features need a later Angular release than 20.0. The inspector pages list them, for example [abort and probe](../inspectors/router.md#abort-and-probe-need-angular-20-2) (20.2) and the live [signal graph](../inspectors/signals.md#debug-apis) (20.1). The Signal Forms tests run on Angular 22 and later, where Signal Forms are stable.
+The page-side tests run in Node.js 22 for every Angular version, since they load Angular in jsdom rather than through its CLI. Tests of a feature a version lacks check the unavailable state on that version instead. Angular 13, 14, 16 and 18 are in the peer range but not tested. Some features need a later Angular release than 20.0. The inspector pages list them, for example [abort and probe](../inspectors/router.md#abort-and-probe-need-angular-20-2) (20.2) and the live [signal graph](../inspectors/signals.md#debug-apis) (20.1). The Signal Forms tests run on Angular 22 and later, where Signal Forms are stable.
 
 ## Install the package
 

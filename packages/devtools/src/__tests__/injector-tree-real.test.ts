@@ -1,46 +1,52 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
-import {
-  Component,
-  Injectable,
-  InjectionToken,
-  inject,
-  provideZonelessChangeDetection,
-  type ApplicationRef,
-} from '@angular/core';
-import { bootstrapApplication } from '@angular/platform-browser';
+import { Component, Inject, Injectable, InjectionToken } from '@angular/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { collectInjectorTree, type DebugNg } from '../injector-tree.ts';
 import type { InjectorTreeNode } from '../types.ts';
+import { angularAtLeast, bootstrapRoot, STANDALONE, type BootedApp } from './angular-version.ts';
 
 const API_URL = new InjectionToken<string>('API_URL');
 
+// Constructor injection, as the CLI compiles it, so the classes work before inject() (14.0).
 class TripStore {
-  readonly api = inject(API_URL);
+  constructor(readonly api: string) {}
 }
 Injectable({ providedIn: 'root' })(TripStore);
+(TripStore as unknown as { ctorParameters: () => unknown[] }).ctorParameters = () => [
+  { type: String, decorators: [{ type: Inject, args: [API_URL] }] },
+];
 
 class CardState {}
 Injectable()(CardState);
 
 class TripCard {
-  readonly state = inject(CardState);
-  readonly store = inject(TripStore);
+  constructor(
+    readonly state: CardState,
+    readonly store: TripStore,
+  ) {}
 }
-Component({ selector: 'app-trip-card', template: 'card', providers: [CardState] })(TripCard);
+(TripCard as unknown as { ctorParameters: () => unknown[] }).ctorParameters = () => [
+  { type: CardState },
+  { type: TripStore },
+];
+Component({ ...STANDALONE, selector: 'app-trip-card', template: 'card', providers: [CardState] })(
+  TripCard,
+);
 
 class TripPage {}
 Component({
+  ...STANDALONE,
   selector: 'app-root',
   imports: [TripCard],
-  template: '<app-trip-card />',
+  template: '<app-trip-card></app-trip-card>',
 })(TripPage);
 
 const flatten = (nodes: InjectorTreeNode[]): InjectorTreeNode[] =>
   nodes.flatMap((node) => [node, ...flatten(node.children)]);
 
 describe('collectInjectorTree with a real app', () => {
-  let app: ApplicationRef | null = null;
+  let app: BootedApp | null = null;
   afterEach(() => {
     app?.destroy();
     app = null;
@@ -49,25 +55,35 @@ describe('collectInjectorTree with a real app', () => {
 
   it('reads element and environment injectors through the private injector utils', async () => {
     document.body.innerHTML = '<app-root></app-root>';
-    app = await bootstrapApplication(TripPage, {
-      providers: [provideZonelessChangeDetection(), { provide: API_URL, useValue: '/api' }],
+    app = await bootstrapRoot(TripPage, {
+      declarations: [TripCard],
+      providers: [{ provide: API_URL, useValue: '/api' }],
     });
-    app.tick();
+    app.appRef.tick();
 
     const ng = (globalThis as { ng?: DebugNg }).ng!;
-    expect(typeof ng.ɵgetInjectorProviders).toBe('function');
-    expect(typeof ng.ɵgetInjectorResolutionPath).toBe('function');
     const report = collectInjectorTree(ng);
-
     const elements = flatten(report.roots);
     const card = elements.find((n) => n.injector.component === 'TripCard');
+    const page = elements.find((n) => n.injector.component === 'TripPage');
     expect(card?.injector.type).toBe('element');
+    expect(page?.children).toContain(card);
+    if (!angularAtLeast('16.2')) {
+      // Before 16.2 there are no provider or resolution path utils: element
+      // injectors with their components only.
+      expect(ng.ɵgetInjectorProviders).toBeUndefined();
+      expect(card?.providers).toEqual([]);
+      expect(card?.injector.path).toEqual([]);
+      expect(card?.dependencies ?? []).toEqual([]);
+      expect(report.environment).toEqual([]);
+      return;
+    }
+    expect(typeof ng.ɵgetInjectorProviders).toBe('function');
+    expect(typeof ng.ɵgetInjectorResolutionPath).toBe('function');
     expect(card?.providers).toContainEqual(
       expect.objectContaining({ token: 'CardState', type: 'class' }),
     );
     expect(card?.providers.map((p) => p.token)).not.toContain('ElementRef');
-    const page = elements.find((n) => n.injector.component === 'TripPage');
-    expect(page?.children).toContain(card);
     expect(card?.injector.path?.slice(0, 2)).toEqual([card?.injector.id, page?.injector.id]);
     expect(card?.dependencies).toEqual(
       expect.arrayContaining([

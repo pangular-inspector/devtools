@@ -4,7 +4,6 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormArray, FormControl, FormGroup, Validators } from '@angular/forms';
 import { form } from '@angular/forms/signals';
-import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { describe, expect, it } from 'vitest';
 import { collectForms, diffForms } from '../forms.ts';
 import {
@@ -14,12 +13,9 @@ import {
   instrumentForms,
   type InstrumentCall,
 } from '../forms-instrument.ts';
+import { initAngularTestBed } from './angular-version.ts';
 
-try {
-  TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
-} catch {
-  // already initialized in this worker
-}
+initAngularTestBed();
 
 describe('caller frames', () => {
   it('skips framework and devtools frames and trims URLs', () => {

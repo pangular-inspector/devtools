@@ -361,6 +361,12 @@ describe('installSignalWriteHook', () => {
     expect(await installSignalWriteHook(vi.fn(), async () => ({}) as never)).toBeNull();
   });
 
+  it('returns null with the stub the Vite plugin uses before Angular 17', async () => {
+    expect(
+      await installSignalWriteHook(vi.fn(), () => import('../signals-stub.ts') as never),
+    ).toBeNull();
+  });
+
   it('returns a restore function when the hook installs', async () => {
     expect(await installSignalWriteHook(vi.fn(), async () => fakeCore())).toBeTypeOf('function');
   });

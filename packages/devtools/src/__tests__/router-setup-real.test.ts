@@ -1,12 +1,7 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
 import { HashLocationStrategy, PlatformNavigation } from '@angular/common';
-import {
-  Component,
-  provideZonelessChangeDetection,
-  type EnvironmentProviders,
-  type Provider,
-} from '@angular/core';
+import { Component, type EnvironmentProviders, type Provider } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import {
   PreloadAllModules,
@@ -28,6 +23,8 @@ import * as router from '@angular/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RouterDebugApi } from '../router.ts';
 import { detectSetup, type RouterSetup } from '../router-setup.ts';
+import { angularAtLeast, zonelessProviders, STANDALONE } from './angular-version.ts';
+import { functionalRouter, injectorProviders } from './router-testing.ts';
 
 const optionalRouter: Partial<typeof router> = router;
 const withExperimentalAutoCleanupInjectors = optionalRouter.withExperimentalAutoCleanupInjectors;
@@ -35,7 +32,7 @@ const withExperimentalPlatformNavigation = optionalRouter.withExperimentalPlatfo
 const withRouterResources = optionalRouter.ɵwithRouterResources;
 
 class Root {}
-Component({ selector: 'app-root', template: '' })(Root);
+Component({ ...STANDALONE, selector: 'app-root', template: '' })(Root);
 
 const routes = [{ path: '', component: Root }];
 let destroy: (() => void) | null = null;
@@ -51,7 +48,7 @@ async function setupWith(
 ): Promise<RouterSetup> {
   document.body.innerHTML = '<app-root></app-root>';
   const app = await bootstrapApplication(Root, {
-    providers: [provideZonelessChangeDetection(), provideRouter(routes, ...features), ...extra],
+    providers: [...zonelessProviders(), provideRouter(routes, ...features), ...extra],
   });
   destroy = () => app.destroy();
   const ng = (globalThis as { ng?: RouterDebugApi }).ng!;
@@ -61,11 +58,29 @@ async function setupWith(
 
 const option = (setup: RouterSetup, name: string) => setup.options.find((o) => o.name === name);
 
-describe('detectSetup on a real provideRouter app', () => {
+/**
+ * What the overlay reads for each feature, and the first version it can: from
+ * the Router's own fields once the feature stores one there, else from the
+ * providers (`ɵgetInjectorProviders`, 16.2). Before that the feature reads `off`.
+ */
+const READABLE_FROM: Record<string, string> = {
+  componentInputBinding: '16.0',
+  viewTransitions: '17.0',
+  // Before 18.0 the handler is an environment initializer the Router does not hold.
+  navigationErrorHandler: '18.0',
+  routerResources: '20.0',
+  injectorCleanup: '20.0',
+  preloading: '16.2',
+  scroller: '16.2',
+};
+
+// `provideRouter` and its features exist from 14.2.
+describe.runIf(functionalRouter)('detectSetup on a real provideRouter app', () => {
   it('reports defaults when no feature is used', async () => {
     const setup = await setupWith([]);
-    expect(setup.setupKind).toBe('provideRouter');
-    expect(setup.mode).toBe('full');
+    // Before 16.2 nothing tells provideRouter apart, and only router events are read.
+    expect(setup.setupKind).toBe(injectorProviders ? 'provideRouter' : 'unknown');
+    expect(setup.mode).toBe(injectorProviders ? 'full' : 'events-only');
     expect(option(setup, 'initialNavigation')).toEqual({
       name: 'initialNavigation',
       value: 'enabledNonBlocking',
@@ -87,15 +102,21 @@ describe('detectSetup on a real provideRouter app', () => {
 
   it('reads the initial navigation mode of withEnabledBlockingInitialNavigation()', async () => {
     const setup = await setupWith([withEnabledBlockingInitialNavigation()]);
-    expect(option(setup, 'initialNavigation')).toMatchObject({
-      value: 'enabledBlocking',
-      set: true,
-    });
+    // The mode is read from a provider, so before 16.2 the default shows.
+    expect(option(setup, 'initialNavigation')).toMatchObject(
+      injectorProviders
+        ? { value: 'enabledBlocking', set: true }
+        : { value: 'enabledNonBlocking', set: false },
+    );
   });
 
   it('reads the initial navigation mode of withDisabledInitialNavigation()', async () => {
     const setup = await setupWith([withDisabledInitialNavigation()]);
-    expect(option(setup, 'initialNavigation')).toMatchObject({ value: 'disabled', set: true });
+    expect(option(setup, 'initialNavigation')).toMatchObject(
+      injectorProviders
+        ? { value: 'disabled', set: true }
+        : { value: 'enabledNonBlocking', set: false },
+    );
   });
 
   it('detects withDebugTracing()', async () => {
@@ -103,7 +124,8 @@ describe('detectSetup on a real provideRouter app', () => {
     vi.spyOn(console, 'group').mockImplementation(() => {});
     vi.spyOn(console, 'groupEnd').mockImplementation(() => {});
     const setup = await setupWith([withDebugTracing()]);
-    expect(setup.features['debugTracing']).toBe('on');
+    // withDebugTracing() is found in the injector records on the resolution path (16.2).
+    expect(setup.features['debugTracing']).toBe(injectorProviders ? 'on' : 'off');
     vi.restoreAllMocks();
   });
 
@@ -121,7 +143,7 @@ describe('detectSetup on a real provideRouter app', () => {
     ).filter(([, feature]) => typeof feature === 'function'),
   )('detects the %s feature', async (name, feature, value) => {
     const setup = await setupWith([(feature as () => unknown)() as RouterFeatures]);
-    expect(setup.features[name]).toBe(value);
+    expect(setup.features[name]).toBe(angularAtLeast(READABLE_FROM[name]!) ? value : 'off');
   });
 
   it.skipIf(typeof withExperimentalPlatformNavigation !== 'function')(
@@ -160,6 +182,9 @@ describe('detectSetup on a real provideRouter app', () => {
       }),
     ]);
     const values = Object.fromEntries(setup.options.map((o) => [o.name, [o.value, o.set]]));
+    // The scroll options come from the RouterScroller, found through its provider (16.2).
+    const scroll = (value: string, fallback: string) =>
+      injectorProviders ? [value, false] : [fallback, false];
     expect(values).toMatchObject({
       onSameUrlNavigation: ['reload', true],
       paramsInheritanceStrategy: ['always', true],
@@ -167,8 +192,8 @@ describe('detectSetup on a real provideRouter app', () => {
       canceledNavigationResolution: ['computed', true],
       defaultQueryParamsHandling: ['merge', true],
       resolveNavigationPromiseOnError: ['true', true],
-      scrollPositionRestoration: ['top', false],
-      anchorScrolling: ['enabled', false],
+      scrollPositionRestoration: scroll('top', 'disabled'),
+      anchorScrolling: scroll('enabled', 'disabled'),
     });
   });
 
