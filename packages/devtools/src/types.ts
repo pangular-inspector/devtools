@@ -78,12 +78,7 @@ export interface SignalGraphComponent {
 }
 
 export type SignalResourceStatus =
-  | 'idle'
-  | 'loading'
-  | 'reloading'
-  | 'resolved'
-  | 'error'
-  | 'local';
+  'idle' | 'loading' | 'reloading' | 'resolved' | 'error' | 'local';
 
 export interface SignalResource {
   /** Stable id, also the key of the status history. */

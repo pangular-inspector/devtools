@@ -176,8 +176,7 @@ export function installReduxDevtoolsHook(
 
   const connect = (connectOptions?: unknown) => {
     const upstream = attempt(() => realOf()?.['connect']?.(connectOptions), undefined) as
-      | AnyRecord
-      | undefined;
+      AnyRecord | undefined;
     if (isNgrxDevtoolsOptions(connectOptions)) return upstream ?? silentConnection();
     const named = attempt(() => (connectOptions as AnyRecord | undefined)?.['name'], undefined);
     const name = typeof named === 'string' ? named.slice(0, MAX_NAME) : '';

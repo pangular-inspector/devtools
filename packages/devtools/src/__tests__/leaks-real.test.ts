@@ -18,8 +18,7 @@ import {
 const updates = new Subject<number>();
 
 const effect = (core as unknown as Record<string, unknown>)['effect'] as
-  | ((fn: () => void) => unknown)
-  | undefined;
+  ((fn: () => void) => unknown) | undefined;
 
 class LeakyCard {
   readonly seats = writableSignal(3);

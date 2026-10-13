@@ -1428,7 +1428,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:list-capacitor-calls',
       description:
-        'List Capacitor plugin calls made by the app, newest first: plugin, method, bridge target (native vs web), arguments, result/error, and duration. Also includes active listeners and event counts. Filter by `plugin`, `failed` calls, or `slowMs`. Arguments, results, and errors are masked for privacy. Empty when no Capacitor app reports.',
+        'List Capacitor plugin calls made by the app, newest first: plugin, method, bridge target (native vs web), arguments, result/error, and duration. Also includes active listeners and event counts. Filter by `plugin`, `failed` calls, or `slowMs`. Calls a web implementation answers are logged only when `@pangular-inspector/devtools/capacitor-hook` loads before @capacitor/core. Arguments, results, and errors are masked for privacy. Empty when no Capacitor app reports.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1690,9 +1690,7 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: (
         selector:
-          | string
-          | { pageId?: unknown; id?: unknown; selector?: unknown; reveal?: unknown }
-          | null,
+          string | { pageId?: unknown; id?: unknown; selector?: unknown; reveal?: unknown } | null,
       ) => {
         const target =
           selector && typeof selector === 'object' && typeof selector.id === 'string'
@@ -2196,7 +2194,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:watch-signal',
       description:
-        'Watch a signal on the running page and toggle write stack recording. Watched signals log changes to the console; pangular:inspect-signals includes them in `watch`. When write stacks are enabled, exact history entries include the top app call frames. Pass `node` (id or label) to watch, `watch: false` to unwatch, or `stacks: true|false` to toggle stack traces. Resets on reload. Defaults to the active page.',
+        'Watch a signal on the running page and toggle write stack recording. Watched signals log changes to the console; pangular:inspect-signals includes them in `watch`. When write stacks are enabled, exact history entries include the top app call frames. Pass `node` (id or label) to watch, `watch: false` to unwatch, or `stacks: true|false` to toggle stack traces. Resets on reload. Uses `page` or the most recent page with a signal graph.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -2713,7 +2711,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-component',
       description:
-        'Get live details of a component instance: inputs, outputs, signals, properties, DOM listeners, host directives, DI dependencies, change detection, and source location. Pass an instance id, class name, or host tag to select it on the page. When multiple instances match, details for the first are returned along with the remaining ids. Use path to inspect nested values. Secret values are redacted; large results are truncated past 20,000 characters.',
+        'Get live details of a component instance: inputs, outputs, properties (signals unwrapped), listeners, host directives, DI dependencies, change detection, and source location. Pass `selector` (instance id, class name, or host tag); without `page` it searches every page. It selects the instance on its page (the panel follows); several matches answer for the first and list the other ids. Fields carry `edit` (for pangular:set-component-property or pangular:set-signal) or `locked`. `path` reads a nested value without changing the selection. Secrets are redacted; cut past 20,000 characters.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -2854,7 +2852,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:defer-blocks',
       description:
-        'List live `@defer` blocks rendered on the page: owning component, state (placeholder, loading, complete, error), triggers, and incremental hydration status. Flags blocks needing attention (failed loads, stuck placeholders, dehydrated). Supports `page` selection across tabs. Requires an Angular development build with debug APIs enabled.',
+        'List live `@defer` blocks rendered on the page: owning component, state (placeholder, loading, complete, error), triggers, and incremental hydration status. Flags blocks needing attention (failed loads, stuck placeholders, dehydrated). Lists every page unless `page` names one. Requires an Angular development build with debug APIs enabled.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -2883,7 +2881,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:for-blocks',
       description:
-        'List live `@for` blocks rendered on the running page (Angular 22+ dev builds): owning component, item count, `track` expression target (`$index`, item, or expression), and `@empty` block status. Flags empty blocks lacking `@empty`. Supports `page` filtering. Returns up to 50 blocks per page; results cut at 20,000 chars.',
+        'List live `@for` blocks rendered on the running page (Angular 22+ dev builds): owning component, item count, `track` expression target (`$index`, item, or expression), and `@empty` block status. Flags empty blocks lacking `@empty`. Lists every page unless `page` names one. Returns up to 50 blocks per page; results cut at 20,000 chars.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -2965,11 +2963,11 @@ const pangular = defineDevframe({
     // Read-only mode keeps this tool as a read tool, without `record`.
     const cdRecordAllowed = !config.agent.readOnly;
     const cdActionDesc = cdRecordAllowed
-      ? 'Use `record: "start"|"stop"|"clear"`, `flash` (visual box on check), `track` (Performance panel), or `angularProfiling`.'
-      : 'Recording controls require write access.';
+      ? 'Recording is off until started: pass `record: "start"`, use the app, then call again; `stop` keeps it, `clear` empties it. `flash`, `track` (Chrome Performance panel) and `angularProfiling` turn on extra views.'
+      : 'Recording is off until the panel starts it: under agent.readOnly this tool cannot record or turn on views.';
     agent.registerTool({
       id: 'pangular:change-detection',
-      description: `Inspect change detection cycles from Angular profiler (v20+ dev): slowest components, check counts, cycle durations, hooks/outputs, and mode (zoneless/zone.js). ${cdActionDesc} Supports \`export: "json"|"trace"\`.`,
+      description: `Inspect change detection cycles from Angular's profiler (Angular 20+, dev build): slowest components, check counts, cycle durations, hooks and outputs, and the mode (zoneless or zone.js). ${cdActionDesc} \`export: "json"\` returns the panel file, \`"trace"\` a Perfetto trace (only counts past 100,000 characters). Uses \`page\` or the page that is recording.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -3088,7 +3086,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:diagnose-change-detection',
       description:
-        'Why change detection ran and what it wasted, from the recording `pangular:change-detection` or the panel started (Angular 20+, development build). Lists what started each cycle (a DOM event with its type, target and listener component, a signal write with the signal name, an HTTP response, a timer, markForCheck, setInput, an effect, `ApplicationRef.tick()` from app code with its app frames, or a zone.js tick nothing in Angular asked for), the components that changed only in such zone.js ticks and so depend on zone.js, refreshed checks that changed nothing per component, inputs mutated in place or given an equal new reference (both break OnPush), and OnPush hints for components refreshed often that rarely change. While recording, the page wraps Angular\'s scheduler `notify`, adds a signal write hook and watches DOM updates; all three stop with the recording. Only reads. Empty until a recording ran: start one with `pangular:change-detection` and `record: "start"`.',
+        'Why change detection ran and what it wasted, from the recording pangular:change-detection or the panel started (Angular 20+, dev build). Lists what started each cycle (DOM event, signal write, HTTP response, timer, markForCheck, setInput, effect, an app `ApplicationRef.tick()`, or a zone.js tick nothing asked for), components that change only in zone.js ticks, checks that changed nothing, inputs mutated in place or given an equal new reference, and OnPush hints. `limit` sets rows per list. Uses `page` or the page that is recording. Only reads. Empty until a recording ran.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3119,7 +3117,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-signals',
       description:
-        'Get the reactive signal dependency graph from the running page: signal nodes (signal, computed, linkedSignal, effect), dependency edges, resources, and value history. Use `selector` to target a component (tag, class, id), `root` for root service effects, or a route path. Use `node` to inspect a single node with direct producers and consumers; `framework: false` excludes internal nodes; `history: false` omits history.',
+        "Get the signal graph the running page last reported: signal nodes (signal, computed, linkedSignal, effect), dependency edges, resources, and value history. Only signals a template or an effect has read appear. `selector` names a component (tag, class, id), `root` for root service effects, or a route path. The page reports one component graph: for another component, call pangular:highlight first, or you get the graph available. Use `node` for a single node with its direct producers and consumers; `framework: false` excludes Angular's own nodes; `history: false` omits history.",
       inputSchema: {
         type: 'object',
         properties: {
@@ -3459,7 +3457,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:navigate',
       description:
-        'Performs router actions in the running app (dev only). Actions: `navigate` (navigates to `url` or `pattern` with `params`), `abort` (cancels in-flight navigation), `replay` (re-runs navigation by `id`), `probe` (tests route matching without navigating), `instrument` (toggles guard/resolver logging), and `resolve-lazy` (inspects lazy routes). Actions `navigate`, `abort`, `replay`, and `probe` require `actions.router` permission.',
+        'Performs router actions in the running app (dev only). Actions: `navigate` (navigates to `url` or `pattern` with `params`), `abort` (cancels in-flight navigation), `replay` (re-runs navigation by `id`), `probe` (runs the matcher without navigating; runs canMatch guards and may load lazy chunks), `instrument` (toggles guard/resolver logging), and `resolve-lazy` (inspects lazy routes). Actions `navigate`, `abort`, `replay`, and `probe` require `actions.router` permission.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3544,7 +3542,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:dispatch-ngrx-action',
       description:
-        'Dispatches an action to the @ngrx/store Store in the running app (dev only) and returns the action log entry with origin and state diff. Pass `type` with optional `payload`, or `seq` to redispatch an action from the log. Supports `page` selection across tabs. Requires `actions.ngrx` write permission.',
+        'Dispatches an action to the @ngrx/store Store in the running app (dev only) and returns the action log entry with origin and state diff. Pass `type` with optional `payload`, or `seq` to redispatch an action from the log. Without `page` it uses the one page with a Store; with several, it dispatches nothing and lists them. Requires `actions.ngrx` write permission.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3967,7 +3965,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:form-action',
       description:
-        'Perform actions on a live form in dev mode. Actions include `set-value` (modes: code/user), `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`, `touch-all`, `revalidate`, `reset`, `enable`, `disable`, `submit`, `focus`, `focus-first-invalid`, `store-as-global`, `snapshot`, `restore`, and `instrument`. Actions `reset`, `submit`, and `restore` require `confirm: true`. Disabled reactive fields require `force: true`.',
+        'Perform actions on a live form in dev mode. Actions include `set-value` (modes: code/user), `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`, `touch-all`, `revalidate`, `reset`, `enable`, `disable`, `submit`, `focus`, `focus-first-invalid`, `store-as-global`, `snapshot`, `restore`, and `instrument`. Actions `reset`, `submit`, and `restore` require `confirm: true`. Secret, hidden and readonly fields are never written; disabled reactive fields require `force: true`.',
       inputSchema: {
         type: 'object',
         required: ['action', 'form'],
@@ -4049,7 +4047,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:list-pages',
       description:
-        'List connected browser tabs, Angular Native apps, and Capacitor apps reporting live data, newest first: page id, URL, title, platform, Angular version, recency, background status, and reporting inspectors. Pass a page id as `page` to live tools to target a specific tab; defaults to the most recent page.',
+        'List connected browser tabs, Angular Native apps, and Capacitor apps reporting live data, newest first: page id, URL, title, platform, Angular version, recency, background status, and reporting inspectors. Pass a page id as `page` to the live tools to target a specific tab.',
       inputSchema: { type: 'object', properties: {} },
       handler: async () => {
         const details = livePageDetails();

@@ -789,8 +789,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               role="region"
               [attr.aria-label]="detail.error ? 'Response error' : 'Response body'"
               [class.error]="!!detail.error && !detail.cancelled"
-              >{{ detail.error ?? previewText(detail) ?? '(no body)' }}</pre
-            >
+              >{{ detail.error ?? previewText(detail) ?? '(no body)' }}</pre>
             <app-http-headers
               [callId]="detail.id"
               [request]="detail.requestHeaders"

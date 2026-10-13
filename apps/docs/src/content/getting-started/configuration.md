@@ -105,14 +105,7 @@ type PangularInspector =
   | 'plugins';
 
 type PangularAction =
-  | 'forms'
-  | 'router'
-  | 'ngrx'
-  | 'http'
-  | 'analog'
-  | 'components'
-  | 'tanstackQuery'
-  | 'plugins';
+  'forms' | 'router' | 'ngrx' | 'http' | 'analog' | 'components' | 'tanstackQuery' | 'plugins';
 
 interface PangularConfig {
   inspectors?: Partial<Record<PangularInspector, boolean>>;

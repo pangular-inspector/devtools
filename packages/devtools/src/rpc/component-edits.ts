@@ -128,8 +128,8 @@ export function createComponentEdits(deps: Deps) {
       id: kind === 'signal' ? 'pangular:set-signal' : 'pangular:set-component-property',
       description:
         kind === 'signal'
-          ? 'Sets a writable signal of a live component instance via `.set()` (dev only). Returns updated redacted value. Pass property name or path within signal value (e.g. `filters.query`). Supports signal(), linkedSignal(), model(); rejects inputs, computed, and readonly signals. Specify instance id, class name, or host tag. Multi-tab setups require `page`. Requires `actions.components` write permission.'
-          : 'Sets a property or input of a live component instance and triggers change detection (dev only). Returns updated redacted value. Accepts property names or nested paths (e.g. `user.name`). Rejects signals (use pangular:set-signal), methods, and getters without setters. Specify instance id, class name, or host tag. Multi-tab setups require `page`. Requires `actions.components` write permission.',
+          ? 'Sets a writable signal of a live component instance via `.set()` (dev only). Returns updated redacted value. Pass property name or path within signal value (e.g. `filters.query`). Supports signal(), linkedSignal(), model(); rejects inputs, computed, readonly signals, non-JSON values and redacted names. Specify an instance id, or a class name or host tag matching one instance. Multi-tab setups require `page`. Requires `actions.components` write permission.'
+          : 'Sets a property or input of a live component instance and triggers change detection (dev only). Returns updated redacted value. Accepts property names or nested paths (e.g. `user.name`). Rejects signals (use pangular:set-signal), methods, getters without setters, non-JSON values and redacted names. Specify an instance id, or a class name or host tag matching one instance. Multi-tab setups require `page`. Requires `actions.components` write permission.',
       inputSchema: {
         type: 'object',
         properties: {

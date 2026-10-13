@@ -135,13 +135,7 @@ export function statusTone(
 
 /** The status filters of the Queries view. */
 export type QueryFilter =
-  | 'all'
-  | 'fetching'
-  | 'success'
-  | 'error'
-  | 'pending'
-  | 'stale'
-  | 'inactive';
+  'all' | 'fetching' | 'success' | 'error' | 'pending' | 'stale' | 'inactive';
 
 export function matchesQueryFilter(query: QueryInfo, filter: QueryFilter): boolean {
   switch (filter) {

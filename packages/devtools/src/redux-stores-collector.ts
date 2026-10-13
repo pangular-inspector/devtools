@@ -125,8 +125,7 @@ export function attachReduxStores(my: RpcScope, pageId: string, options: ReduxSt
       };
       const report: ReduxStoresReport = { pageId, ...page, stores, log, since: sent };
       const answer = (await my.rpc.call('push-redux-stores', report)) as
-        | { seq?: unknown }
-        | undefined;
+        { seq?: unknown } | undefined;
       const confirmed = typeof answer?.seq === 'number' ? answer.seq : collector.lastSeq();
       // A lower seq means the server forgot this page: send the held log again.
       const lost = confirmed < sent;

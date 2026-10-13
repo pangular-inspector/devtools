@@ -57,18 +57,16 @@ afterEach(() => {
 class TabsHost {
   readonly seq = signal(2);
   readonly truncated = signal<number | undefined>(undefined);
-  loader = vi.fn(
-    async (seq: number): Promise<EntryDetailAnswer> => ({
-      ok: true,
-      detail: {
-        seq,
-        storeId: 'store',
-        before: { count: 1 },
-        after: { count: 2 },
-        diff: [{ path: 'count', op: 'change', before: 1, after: 2 }],
-      },
-    }),
-  );
+  loader = vi.fn(async (seq: number): Promise<EntryDetailAnswer> => ({
+    ok: true,
+    detail: {
+      seq,
+      storeId: 'store',
+      before: { count: 1 },
+      after: { count: 2 },
+      diff: [{ path: 'count', op: 'change', before: 1, after: 2 }],
+    },
+  }));
 }
 
 describe('Entry tabs', () => {

@@ -366,15 +366,13 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
 
   host.agent.registerTool({
     id: 'pangular:audit',
-    description: `One ranked list of what is wrong on the running page, gathered from the inspectors: change detection (OnPush candidates, inputs mutated in place, components that depend on zone.js, checks slower than a frame; needs a recording from pangular:change-detection), leaks (components still retained after destroy, subscriptions open after destroy; retention is not judged when Angular's DI debug data holds every destroyed component), errors with their explainers, hydration mismatches and skipped hosts, route lint and redirect loops, form lint, failed HttpClient calls and calls the browser fetched again because the transfer cache missed, pipe lint from the source scan, and accessibility violations from an axe-core pass over the app (the overlay's own elements left out, selectors and attributes masked, text content left out). Each finding has a severity, area, the component, route or URL it is about, one line on why, and the tool to call for detail. Also lists key numbers: mean and slowest change detection cycle, wasted checks, retained components, open subscriptions, errors, axe violations and failed calls. ${
-      host.agentAxe
-        ? '`axe: true` runs a fresh axe pass first. '
-        : 'The agent is read-only, so it uses the last axe pass the panel ran. '
-    }Measure a change with \`session\`: \`before\` saves this audit as the page's baseline, \`after\` takes the audit again and compares: findings resolved, new and still there, and each number before and after. Sessions are kept per page for 30 minutes after their last use and survive a reload of the tab. \`clear\` drops the page's session.${
+    description: `One ranked list of what is wrong on the running page: change detection (needs a pangular:change-detection recording), leaks, errors, hydration, route and form lint, failed HTTP calls and transfer cache misses, pipe lint and axe-core violations. Each finding has severity, area, target, why and the tool for detail, then key numbers. ${
+      host.agentAxe ? '`axe: true` runs a fresh axe pass first. ' : ''
+    }\`session\`: \`before\` saves a baseline, \`after\` compares, \`clear\` drops it; kept per page 30 minutes.${
       host.agentReadOnly
-        ? ' The agent is read-only, so it can take a baseline only when the page has none, and cannot clear one.'
+        ? " Read-only: uses the panel's last axe pass; cannot clear or replace a baseline."
         : ''
-    } An area whose inspector is off, or whose agent tools are off, is left out and named under Coverage.`,
+    } Areas turned off are named under Coverage. Uses \`page\` or the most recent page.`,
     inputSchema: {
       type: 'object',
       properties: {

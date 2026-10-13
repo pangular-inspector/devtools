@@ -296,7 +296,7 @@ export async function registerStartup(host: StartupHost): Promise<StartupRegistr
   host.agent.registerTool({
     id: 'pangular:startup-timing',
     description:
-      "How the running app started, from navigation start: DOM content loaded, first contentful paint, when Angular started (when it published `ng`, with the startup hook, or its first `mark_feature_usage` performance mark), the root component's creation (startup hook, Angular 20+), the first time `ApplicationRef.isStable` was true (exact when the overlay or the hook watched it happen, otherwise an upper bound), and the slowest providers to construct with own and total time and instance count. Provider timing comes from Angular's own profiling and needs the `@pangular-inspector/devtools/startup-hook` entry loaded from the polyfills of a development build on Angular 20 or later; without it the answer says so. Only reads. Empty when no page is connected.",
+      "How the running app started, from navigation start: DOM content loaded, first contentful paint, when Angular started, the root component's creation (Angular 20+), and the first time `ApplicationRef.isStable` was true (an upper bound unless it was watched), then the slowest providers to construct with own and total time and instance count (`limit`, default 10). Root component and provider timing need `@pangular-inspector/devtools/startup-hook` loaded from the polyfills of an Angular 20+ dev build; the answer says when it is not. Uses `page` or the most recent page. Only reads.",
     inputSchema: {
       type: 'object',
       properties: {

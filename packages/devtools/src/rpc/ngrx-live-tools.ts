@@ -243,7 +243,7 @@ export const INSPECT_SIGNAL_STORE_DESCRIPTION =
   'Read the live @ngrx/signals state reported by a connected page: state, computed values, entities, and methods with call count and duration. Pass `storeId` to inspect a specific store; without it, lists all discovered signal stores and classic @ngrx/store state. Supports `page` filtering across tabs. Requires a running app in a connected browser tab.';
 
 export const SIGNAL_STORE_HISTORY_DESCRIPTION =
-  "Live change log for connected NgRx stores: @ngrx/signals state diffs (methods and patchState writes), classic actions, and events. Shows `durationMs` from the method's start to that specific patch. Tags changes with `causedByEvent` (e.g. `withReducer()` cases). Filter by `storeId`, poll newer entries with `since` (sequence number), or filter by `page`.";
+  "Live change log for connected NgRx stores, oldest first: @ngrx/signals state diffs (methods and patchState writes), classic actions and events. A method entry's `durationMs` is its synchronous time, not async work; with watchState, each patch gets an entry timed from the method's start to that specific patch. Changes during an event dispatch carry `causedByEvent` (such as a `withReducer()` case; best effort). Filter by `storeId` and `page` (every page without it). Poll with `since` (a `seq` from a previous call); it needs `page` when several pages connect.";
 
 /**
  * Prefixes an untrusted-data preamble to the live-tool text and caps the body

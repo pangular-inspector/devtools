@@ -16,12 +16,7 @@ export const SSR_REQUEST_HEADER = 'x-pangular-ssr-id';
 export const SSR_TIMING_NAME = 'pangular';
 
 export type SsrRenderMode =
-  | 'server'
-  | 'prerender'
-  | 'client'
-  | 'redirect'
-  | 'not-rendered'
-  | 'unknown';
+  'server' | 'prerender' | 'client' | 'redirect' | 'not-rendered' | 'unknown';
 
 export interface SsrRequest {
   id: string;

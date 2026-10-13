@@ -87,8 +87,7 @@ export function createPageLease(my: Rpc, pageId: string, options: PageLeaseOptio
   const refresh = async () => {
     try {
       const answer = (await my.rpc.call('page-interest', { pageId })) as
-        | { watching?: unknown }
-        | undefined;
+        { watching?: unknown } | undefined;
       set(answer?.watching ?? true);
     } catch {
       set(true);

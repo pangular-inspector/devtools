@@ -163,7 +163,7 @@ export async function registerTanstackQuery(host: QueryHost): Promise<QueryRegis
   host.agent.registerTool({
     id: 'pangular:list-queries',
     description:
-      "TanStack Query on the running page: the `QueryClient`s the app provides (found in the app's environment injectors once something injected them; the overlay never creates one), then the cached queries and the mutations, each with its id, key, status (`pending`, `error`, `success`), fetch status (`fetching`, `paused`, `idle`), freshness (`fresh`, `stale` or `invalidated`), when the data was last updated, how many observers it has, and the error message. Keys and errors are masked like other live values. The page reports up to 300 queries and 100 mutations, the most recently updated. Pass an id to pangular:inspect-query for the data. Empty when no page is connected or the app has no QueryClient yet.",
+      'TanStack Query on the running page: the `QueryClient`s the app provides (found once something injected them; the overlay never creates one), then cached queries and mutations with id, key, status, fetch status, freshness, last update, observer count and error. Filter with `status` and `search`; `limit` caps rows (default 50). The page reports up to 300 queries and 100 mutations, the most recently updated. Keys and errors are masked. Pass an id to pangular:inspect-query for the data. Uses `page` or the most recent page.',
     inputSchema: {
       type: 'object',
       properties: {

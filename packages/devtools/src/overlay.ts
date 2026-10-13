@@ -700,8 +700,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       lastRouterPayload = payload;
       lastRouterPushAt = Date.now();
       const answer = (await my.rpc.call('push-router', report)) as
-        | { hasConfig?: boolean }
-        | undefined;
+        { hasConfig?: boolean } | undefined;
       if (answer?.hasConfig === false) sentGeneration = -1;
       else if (report['config']) sentGeneration = configTracker.generation;
     } catch {

@@ -66,9 +66,7 @@ export interface MissingProviderExplain {
 }
 
 export type ErrorExplain =
-  | ExpressionChangedExplain
-  | HydrationMismatchExplain
-  | MissingProviderExplain;
+  ExpressionChangedExplain | HydrationMismatchExplain | MissingProviderExplain;
 
 export const MAX_VALUE_TEXT = 200;
 export const MAX_DOM_TEXT = 3000;

@@ -87,8 +87,7 @@ export function attachBrowserTools(
 
   async function run(name: string, args: unknown): Promise<string> {
     const answer = (await my.rpc.call('call-browser-tool', { pageId, name, args })) as
-      | { text?: unknown; isError?: unknown }
-      | undefined;
+      { text?: unknown; isError?: unknown } | undefined;
     const text =
       typeof answer?.text === 'string' ? answer.text : 'The devtools server gave no answer.';
     if (answer?.isError) throw new Error(text);

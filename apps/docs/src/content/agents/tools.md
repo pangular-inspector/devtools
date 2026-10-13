@@ -292,7 +292,7 @@ An image of one component's host element as the page renders it now. The answer 
 | Argument   | Required | Value                                                                                                         |
 | ---------- | -------- | ------------------------------------------------------------------------------------------------------------- |
 | `selector` | yes      | An instance id from the `component-tree` resource (like `c12`), a class name, a host tag or any CSS selector. |
-| `page`     | no       | The page id, from `list-pages`. Defaults to the most recent page.                                             |
+| `page`     | no       | The page id, from `list-pages`. Without it, every page is searched, newest first.                             |
 | `pageId`   | no       | Same as `page`.                                                                                               |
 
 The page draws a copy of the element, not the screen: it copies the element's DOM with every computed style written inline into an SVG, and draws that on a canvas that is never added to the page. Nothing in the app changes, no app code runs, and a component scrolled out of view or behind a dialog is drawn all the same. A class name or tag that matches several instances captures the first and lists the ids of all of them. A CSS selector captures the first element it matches on the most recent page, or on `page`.

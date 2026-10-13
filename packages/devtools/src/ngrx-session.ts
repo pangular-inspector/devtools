@@ -27,8 +27,7 @@ export const MAX_DETAIL_DIFF = 500;
 export type PatchKey = string | number;
 
 export type NgrxPatch =
-  | { op: 'set'; path: PatchKey[]; value: unknown }
-  | { op: 'delete'; path: PatchKey[] };
+  { op: 'set'; path: PatchKey[]; value: unknown } | { op: 'delete'; path: PatchKey[] };
 
 export type NgrxSessionStoreKind = 'store' | 'signal-store' | 'signal-state';
 

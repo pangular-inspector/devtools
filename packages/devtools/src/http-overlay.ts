@@ -125,9 +125,7 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
       full,
     };
     const answer = (await my.rpc.call('push-http', full ? { ...report, payload } : report)) as
-      | { needPayload?: boolean }
-      | null
-      | undefined;
+      { needPayload?: boolean } | null | undefined;
     lastMeta = metaJson;
     lastSentAt = Date.now();
     lastCall = sentUpTo;

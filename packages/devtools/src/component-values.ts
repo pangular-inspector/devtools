@@ -41,8 +41,7 @@ export interface ComponentValueRequest {
 }
 
 export type ComponentValueResult =
-  | { ok: true; component: string; path: string[]; value: unknown }
-  | { ok?: false; error: string };
+  { ok: true; component: string; path: string[]; value: unknown } | { ok?: false; error: string };
 
 /** The key of an opened level in `ComponentDetail.expanded`. */
 export function valuePathKey(path: readonly string[], directive?: number): string {

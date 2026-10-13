@@ -52,8 +52,7 @@ export interface SetSsrOverrideArgs {
 }
 
 export type OverrideChange =
-  | { overrides: SsrOverride[]; override: SsrOverride }
-  | { error: string };
+  { overrides: SsrOverride[]; override: SsrOverride } | { error: string };
 
 function effectText(o: SsrOverride): string {
   if (o.kind === 'render-error') return `throws ${code(clip(redactText(o.message ?? ''), 120))}`;
@@ -385,7 +384,7 @@ export function ssrOverrideTools(deps: SsrOverrideToolDeps) {
     {
       id: 'pangular:set-ssr-override',
       description:
-        "Adds an SSR override, or replaces the one with `id`, the same way the panel's SSR overrides form does (development only). `kind` `render-error` throws `message` while the server renders (needs `providePangularHttp()`); `client-render` serves `index.csr.html` instead of rendering (needs `browserDistFolder` in `initPangularHub()`); `state-edit` sets the TransferState entry `key` to the JSON `value`, or removes the entry when `value` is left out (needs `ssrMiddleware`). `pattern` matches the page path and query. Applies from the next full page load; returns the saved list. Needs the HTTP write action (actions.http).",
+        "Adds an SSR override, or replaces the one with `id`, like the panel's SSR overrides form (development only). `kind` `render-error` throws `message` while the server renders (needs `providePangularHttp()`); `client-render` serves `index.csr.html` (needs `browserDistFolder` in `initPangularHub()`); `state-edit` sets TransferState `key` to the JSON `value`, or removes it without `value` (needs `ssrMiddleware`). `pattern` matches the page path and query. Applies from the next full page load; returns the saved list. Needs actions.http.",
       inputSchema: {
         type: 'object',
         properties: {

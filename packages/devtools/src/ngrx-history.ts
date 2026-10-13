@@ -28,8 +28,7 @@ export interface HistorySource {
 }
 
 export type HistoryRequest =
-  | { type: 'entry'; seq: number }
-  | { type: 'export'; storeId?: string; from?: number; to?: number };
+  { type: 'entry'; seq: number } | { type: 'export'; storeId?: string; from?: number; to?: number };
 
 /** Serializes raw states once per object, so states an entry did not replace are not walked twice. */
 function serializer() {
