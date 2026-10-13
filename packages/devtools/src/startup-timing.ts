@@ -106,7 +106,34 @@ export function slowestProviders(
     .slice(0, limit);
 }
 
+/**
+ * The last summary of each buffer, by what it depends on. Once recording is
+ * done the spans stop changing, so each push reuses it instead of grouping
+ * and sorting up to `MAX_PROVIDER_SPANS` spans again.
+ */
+const summaries = new WeakMap<StartupBuffer, { key: string; value: StartupTiming['providers'] }>();
+
 function providerSummary(
+  buffer: StartupBuffer | undefined,
+  version: string | undefined,
+  started: boolean,
+): StartupTiming['providers'] {
+  if (!buffer) return computeProviderSummary(buffer, version, started);
+  const key = JSON.stringify([
+    buffer.providers.length,
+    buffer.providerRecording,
+    buffer.providerNote ?? '',
+    version ?? '',
+    started,
+  ]);
+  const cached = summaries.get(buffer);
+  if (cached?.key === key) return cached.value;
+  const value = computeProviderSummary(buffer, version, started);
+  summaries.set(buffer, { key, value });
+  return value;
+}
+
+function computeProviderSummary(
   buffer: StartupBuffer | undefined,
   version: string | undefined,
   started: boolean,

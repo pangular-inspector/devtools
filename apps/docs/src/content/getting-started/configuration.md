@@ -228,11 +228,11 @@ The overlay reads the option from the server when it connects, so the default wo
 
 `inspectors.plugins: false` turns every [Pangular plugin](../guides/write-a-plugin.md) off: the **Plugins** tab, the page plugins, the server plugins' tools and state. `plugins` turns one plugin off, by its id, or only part of it:
 
-| Option                 | Default | What `false` turns off                                                                    |
-| ---------------------- | ------- | ----------------------------------------------------------------------------------------- |
-| `plugins.<id>`         | `true`  | The plugin: the page doesn't run it, and its tools and state are not registered.          |
-| `plugins.<id>.tools`   | `true`  | The plugin's agent tools and its shared state over HTTP MCP. Its view stays in the panel. |
-| `plugins.<id>.actions` | `true`  | The plugin's page actions and its tools that are not `read`.                              |
+| Option                 | Default | What `false` turns off                                                                                                                                |
+| ---------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plugins.<id>`         | `true`  | The plugin: the page doesn't run it, and its tools and state are not registered.                                                                      |
+| `plugins.<id>.tools`   | `true`  | The plugin's agent tools, its shared state over HTTP MCP, and the plugin in `list-plugins` and `inspect-plugin` answers. Its view stays in the panel. |
+| `plugins.<id>.actions` | `true`  | The plugin's page actions and its tools that are not `read`.                                                                                          |
 
 ```ts
 // src/server.ts

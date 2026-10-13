@@ -1257,6 +1257,19 @@ export function pluginToolId(pluginId: string, name: string): string {
   return `pangular:plugin:${pluginId}:${name}`;
 }
 
+/** The name MCP clients call a plugin tool by. */
+export function pluginMcpName(pluginId: string, name: string): string {
+  return `pangular_plugin_${pluginId}_${name}`;
+}
+
+/** MCP clients refuse tool names longer than this. */
+export const MAX_MCP_TOOL_NAME = 64;
+
+/** How long a page action may run by default, on the page and on the server. */
+export const PLUGIN_ACTION_TIMEOUT_MS = 10_000;
+/** The longest a page action may be given. */
+export const MAX_PLUGIN_ACTION_TIMEOUT_MS = 30_000;
+
 /**
  * Whether a plugin's agent tool is registered under `config`: its plugin and
  * the plugin's tools are on, and a tool that is not `read` also needs actions

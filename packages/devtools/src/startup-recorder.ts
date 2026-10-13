@@ -58,7 +58,11 @@ export interface StartupBuffer {
   providerRecording: ProviderRecording;
   /** Why provider timing is unavailable. */
   providerNote?: string;
-  /** Stops recording now (the overlay calls it once it read the app as stable). */
+  /**
+   * Stops recording now and puts back what the hook replaced. The hook calls
+   * it itself, one second after the first stable state or `MAX_RECORD_MS`
+   * after it started; nothing else needs to.
+   */
   stop?: () => void;
 }
 
@@ -246,8 +250,15 @@ export function installStartupRecorder(
   let graceTimer: unknown;
   let maxTimer: unknown;
   let rootTimer: unknown;
+  /** Puts back the `ng` and `enableProfiling` traps Angular never set off. */
+  let untrapNg: (() => void) | null = null;
+  let untrapProfiling: (() => void) | null = null;
 
   const stop = () => {
+    read(() => untrapProfiling?.(), undefined);
+    untrapProfiling = null;
+    read(() => untrapNg?.(), undefined);
+    untrapNg = null;
     clock.clearTimeout(graceTimer);
     clock.clearTimeout(maxTimer);
     clock.clearTimeout(rootTimer);
@@ -357,30 +368,40 @@ export function installStartupRecorder(
     }
     queueMicrotask(() => startProviders(enable));
     watchStable(ng);
+    clock.clearTimeout(maxTimer);
     maxTimer = clock.setTimeout(stop, MAX_RECORD_MS);
   };
 
   const trap = (ng: AnyRecord) => {
     let value: unknown;
-    read(
+    const get = () => value;
+    const plain = () =>
+      Object.defineProperty(ng, 'enableProfiling', {
+        value,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
+    const trapped = read(
       () =>
         Object.defineProperty(ng, 'enableProfiling', {
           configurable: true,
           enumerable: true,
-          get: () => value,
+          get,
           set: (fn: unknown) => {
             value = fn;
-            Object.defineProperty(ng, 'enableProfiling', {
-              value: fn,
-              writable: true,
-              configurable: true,
-              enumerable: true,
-            });
+            untrapProfiling = null;
+            plain();
             published(ng, fn);
           },
         }),
-      undefined,
+      null,
     );
+    if (!trapped) return;
+    // Before Angular 20 nothing sets it: `stop` makes it a plain property again.
+    untrapProfiling = () => {
+      if (Object.getOwnPropertyDescriptor(ng, 'enableProfiling')?.get === get) plain();
+    };
   };
 
   const current = target['ng'] as AnyRecord | undefined;
@@ -392,18 +413,26 @@ export function installStartupRecorder(
     queueMicrotask(() => watchStable(ng));
     return buffer;
   }
+  // Stops waiting when Angular never publishes `enableProfiling` (before 20,
+  // or no Angular at all); `published` restarts the timer when it does.
+  const waitForAngular = () => {
+    maxTimer = clock.setTimeout(stop, MAX_RECORD_MS);
+  };
   if (current && typeof current === 'object') {
     trap(current);
+    waitForAngular();
     return buffer;
   }
   // Angular creates `ng` with `ng ??= {}`, then adds its functions to it.
+  const getNg = () => undefined;
   const defined = read(
     () =>
       Object.defineProperty(target, 'ng', {
         configurable: true,
         enumerable: true,
-        get: () => undefined,
+        get: getNg,
         set: (ng: unknown) => {
+          untrapNg = null;
           Object.defineProperty(target, 'ng', {
             value: ng,
             writable: true,
@@ -418,6 +447,12 @@ export function installStartupRecorder(
   if (!defined) {
     buffer.providerRecording = 'unavailable';
     buffer.providerNote = 'The startup hook could not watch for Angular on this page.';
+    return buffer;
   }
+  // `ng` was not there before the hook, so `stop` removes the trap.
+  untrapNg = () => {
+    if (Object.getOwnPropertyDescriptor(target, 'ng')?.get === getNg) delete target['ng'];
+  };
+  waitForAngular();
   return buffer;
 }

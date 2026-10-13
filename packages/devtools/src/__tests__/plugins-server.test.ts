@@ -4,6 +4,7 @@ import { createPangular } from '../devframe.ts';
 import {
   AGENT_INSPECTOR,
   PAGE_AGENT_ENTRIES,
+  PLUGIN_ACTION_TIMEOUT_MS,
   RPC_INSPECTOR,
   SHARED_STATE_INSPECTOR,
   pangularConfigProblems,
@@ -226,6 +227,28 @@ describe('server plugins', () => {
     expect(serverPluginProblem({ id: 'x', version: '1', apiVersion: 2 })).toMatch(/plugin API 2/);
     expect(serverPluginProblem({ id: 'pangular', version: 1 })).toMatch(/version/);
   });
+
+  it('skips a plugin whose title or description is not a string', () => {
+    expect(serverPluginProblem({ id: 'x', version: '1', title: 3 })).toBe(
+      '`title` is not a string',
+    );
+    expect(serverPluginProblem({ id: 'x', version: '1', description: { text: 'a' } })).toBe(
+      '`description` is not a string',
+    );
+    expect(serverPluginProblem({ id: 'x', version: '1', title: 'X', description: 'Y' })).toBe(
+      undefined,
+    );
+  });
+
+  it('skips a plugin whose tool name would be longer than 64 characters over MCP', () => {
+    const tool = (name: string) => ({ name, description: 'A', handler: () => '' });
+    // `pangular_plugin_` + id + `_` + name: 17 characters around 47.
+    const id = 'a'.repeat(40);
+    expect(serverPluginProblem({ id, version: '1', tools: [tool('b'.repeat(7))] })).toBe(undefined);
+    expect(serverPluginProblem({ id, version: '1', tools: [tool('b'.repeat(8))] })).toMatch(
+      /pangular_plugin_a{40}_b{8} over MCP, which is longer than 64 characters/,
+    );
+  });
 });
 
 describe('the Plugins inspector on the server', () => {
@@ -293,6 +316,32 @@ describe('the Plugins inspector on the server', () => {
     expect(await ids({ plugins: { travel: false } })).toEqual([]);
   });
 
+  it('leaves a plugin with its tools off out of list-plugins and inspect-plugin', async () => {
+    const { call, invoke } = await boot({ plugins: { travel: { tools: false } } }, [
+      travelServerPlugin,
+    ]);
+    await call('push-plugins', report('tab1'));
+    const list = await invoke('list-plugins');
+    expect(list).not.toContain('travel');
+    expect(list).toMatch(/No page runs a Pangular plugin/);
+    const text = await invoke('inspect-plugin', { plugin: 'travel' });
+    expect(text).toMatch(/No page reports a plugin `travel`/);
+    expect(text).not.toContain('TRV-1041');
+  });
+
+  it('skips a server plugin with a bad title with a warning, and keeps the others', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { tools } = await boot({}, [
+      { id: 'broken', version: '1', title: 7 } as unknown as PangularServerPlugin,
+      travelServerPlugin,
+    ]);
+    expect(tools().filter((tool) => tool.id.startsWith('pangular:plugin:'))).toHaveLength(2);
+    expect(warn.mock.calls.map(([message]) => message).join('\n')).toContain(
+      'Skipping a server plugin: `title` is not a string.',
+    );
+    warn.mockRestore();
+  });
+
   it('registers nothing for plugins with the inspector off', async () => {
     const { tools, ctx } = await boot({ inspectors: { plugins: false } }, [travelServerPlugin]);
     const pluginTools = ['pangular:list-plugins', 'pangular:inspect-plugin'];
@@ -356,7 +405,13 @@ describe('the Plugins inspector on the server', () => {
       { method: string; args: [AnyRequest] },
     ];
     expect(method).toBe('pangular:plugin-action');
-    expect(args[0]).toMatchObject({ pageId: 'tab1', pluginId: 'travel', action: 'unsave-all' });
+    // The page gets the server's timeout, the page default when the tool sets none.
+    expect(args[0]).toMatchObject({
+      pageId: 'tab1',
+      pluginId: 'travel',
+      action: 'unsave-all',
+      timeoutMs: PLUGIN_ACTION_TIMEOUT_MS,
+    });
     // Another page can't answer for it.
     await call('plugin-action-result', {
       requestId: args[0].requestId,

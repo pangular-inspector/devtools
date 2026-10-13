@@ -278,15 +278,21 @@ export class StartupSection {
     this.destroyRef.onDestroy(() => this.unsubscribe?.());
   }
 
+  /** Counts loads, so an answer for an earlier `rpc` client is dropped. */
+  private loadId = 0;
+
   private async load(client: DevframeRpcClient) {
+    const id = ++this.loadId;
+    const current = () => !this.destroyRef.destroyed && id === this.loadId && this.rpc() === client;
     try {
       const shared = await client.scope('pangular').rpc.sharedState('startup');
-      if (this.destroyRef.destroyed) return;
+      if (!current()) return;
       const apply = (value: unknown) => this.pages.set(startupPages(value));
       apply(shared.value());
       this.unsubscribe?.();
       this.unsubscribe = shared.on('updated', apply);
     } catch {
+      if (!current()) return;
       // The Injectors tab shows its own load error; this section stays hidden.
       this.pages.set([]);
     }

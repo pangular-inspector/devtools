@@ -118,4 +118,33 @@ describe('the startup section', () => {
     expect(text(fixture)).toContain('at most 810 ms');
     expect(text(fixture)).toContain('@pangular-inspector/devtools/startup-hook');
   });
+
+  it('drops a late answer from the client it had before the rpc input changed', async () => {
+    let answerOld: (state: unknown) => void = () => {};
+    const slowRpc = {
+      call: () => Promise.resolve(null),
+      sharedState: () =>
+        new Promise((resolve) => {
+          answerOld = resolve;
+        }),
+    };
+    const oldClient = { scope: () => ({ rpc: slowRpc }) } as unknown as DevframeRpcClient;
+    const fixture = TestBed.createComponent(StartupSection);
+    fixture.componentRef.setInput('rpc', oldClient);
+    fixture.componentRef.setInput('pageId', null);
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient({ pages: { fresh: report('fresh', { angularVersion: '22.1.7' }) } }),
+    );
+    await settle(fixture);
+    answerOld({
+      value: () => ({ pages: { stale: report('stale', { angularVersion: '19.0.0' }) } }),
+      on: () => () => {},
+    });
+    await settle(fixture);
+    expect(text(fixture)).toContain('Angular 22.1.7');
+    expect(text(fixture)).not.toContain('19.0.0');
+  });
 });

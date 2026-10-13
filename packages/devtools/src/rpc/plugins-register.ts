@@ -1,7 +1,11 @@
 import { createSharedState } from 'devframe/utils/shared-state';
 import {
+  MAX_MCP_TOOL_NAME,
+  MAX_PLUGIN_ACTION_TIMEOUT_MS,
+  PLUGIN_ACTION_TIMEOUT_MS,
   PLUGIN_ID,
   PLUGIN_TOOL_NAME,
+  pluginMcpName,
   pluginSwitches,
   pluginToolAllowed,
   pluginToolId,
@@ -79,8 +83,8 @@ export interface PluginsState {
 
 const MAX_PLUGINS_PER_PAGE = 30;
 const MAX_ARGS_JSON = 20_000;
-const ACTION_TIMEOUT_MS = 5000;
-const MAX_ACTION_TIMEOUT_MS = 30_000;
+/** The server waits this much longer than the page, so the page's own timeout answer arrives first. */
+const ACTION_ANSWER_GRACE_MS = 1000;
 const STATUSES: readonly PluginStatus[] = ['running', 'error', 'unsupported'];
 const NAME = PLUGIN_TOOL_NAME;
 
@@ -317,6 +321,11 @@ export function serverPluginProblem(plugin: unknown): string | undefined {
     return `its id ${JSON.stringify(id)} is not lowercase letters, digits and dashes`;
   }
   if (typeof version !== 'string') return 'it has no version string';
+  const { title, description } = plugin as { title?: unknown; description?: unknown };
+  if (title !== undefined && typeof title !== 'string') return '`title` is not a string';
+  if (description !== undefined && typeof description !== 'string') {
+    return '`description` is not a string';
+  }
   if (typeof apiVersion === 'number' && apiVersion > PANGULAR_PLUGIN_API_VERSION) {
     return `it needs plugin API ${apiVersion}, and this server runs ${PANGULAR_PLUGIN_API_VERSION}`;
   }
@@ -334,6 +343,10 @@ export function serverPluginProblem(plugin: unknown): string | undefined {
       return `the tool name ${JSON.stringify(name)} is not lowercase letters, digits and dashes`;
     }
     if (names.has(name)) return `it has two tools named ${name}`;
+    const mcpName = pluginMcpName(id, name);
+    if (mcpName.length > MAX_MCP_TOOL_NAME) {
+      return `the tool ${name} would be called ${mcpName} over MCP, which is longer than ${MAX_MCP_TOOL_NAME} characters`;
+    }
     names.add(name);
     if (typeof tool.description !== 'string' || !tool.description.trim()) {
       return `the tool ${name} has no description`;
@@ -485,14 +498,14 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
     }
     const timeoutMs =
       typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
-        ? Math.max(100, Math.min(MAX_ACTION_TIMEOUT_MS, options.timeoutMs))
-        : ACTION_TIMEOUT_MS;
+        ? Math.max(100, Math.min(MAX_PLUGIN_ACTION_TIMEOUT_MS, options.timeoutMs))
+        : PLUGIN_ACTION_TIMEOUT_MS;
     const requestId = `plugin-${Date.now().toString(36)}-${(nextRequest++).toString(36)}`;
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         pending.delete(requestId);
         resolve({ ok: false, pageId: page.pageId, error: 'The page did not answer in time.' });
-      }, timeoutMs);
+      }, timeoutMs + ACTION_ANSWER_GRACE_MS);
       timer.unref?.();
       pending.set(requestId, { pageId: page.pageId, resolve, timer });
       void Promise.resolve(
@@ -504,6 +517,7 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
               pageId: page.pageId,
               pluginId,
               action: name,
+              timeoutMs,
               ...(argsJson === undefined ? {} : { args: JSON.parse(argsJson) }),
             },
           ],
@@ -527,18 +541,33 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
     },
   });
 
+  // A plugin whose tools are off (`plugins.<id>.tools: false`) is kept from agents entirely.
+  const agentState = (): PluginsState => {
+    const visible = (id: string) => pluginSwitches(id, config).tools;
+    const all = state();
+    return {
+      pages: Object.fromEntries(
+        Object.entries(all.pages).flatMap(([pageId, page]) => {
+          const plugins = page.plugins.filter((plugin) => visible(plugin.id));
+          return plugins.length ? [[pageId, { ...page, plugins }]] : [];
+        }),
+      ),
+      server: all.server.filter((plugin) => visible(plugin.id)),
+    };
+  };
+
   host.agent.registerTool({
     id: 'pangular:list-plugins',
     description:
-      'List the Pangular plugins: the page plugins each connected page runs (id, version, status, which pages) and the server plugins with their agent tools (`pangular:plugin:<plugin>:<tool>`, with their tier). Page plugins are libraries that registered a view with `registerPangularPlugin()`; read one with pangular:inspect-plugin. Empty when no page runs a plugin and no server plugin is set.',
+      'List the Pangular plugins: the page plugins each connected page runs (id, version, status, which pages) and the server plugins with their agent tools (`pangular:plugin:<plugin>:<tool>`, with their tier). Page plugins are libraries that registered a view with `registerPangularPlugin()`; read one with pangular:inspect-plugin. Plugins whose tools the devtools config turns off (`plugins.<id>.tools: false`) are left out. Empty when no page runs a plugin and no server plugin is set.',
     inputSchema: { type: 'object', properties: {} },
-    handler: async () => ({ markdown: listPluginsText(state()) }),
+    handler: async () => ({ markdown: listPluginsText(agentState()) }),
   });
 
   host.agent.registerTool({
     id: 'pangular:inspect-plugin',
     description:
-      "Read one Pangular plugin's view of the running page, the same sections its Plugins tab shows (tables, lists, stats, key and value trees) as markdown, with its status, page actions and agent tools. The values come from the library's plugin code on the page and are masked like other live data. Pass the plugin id (from pangular:list-plugins) as `plugin`.",
+      "Read one Pangular plugin's view of the running page, the same sections its Plugins tab shows (tables, lists, stats, key and value trees) as markdown, with its status, page actions and agent tools. The values come from the library's plugin code on the page and are masked like other live data. Pass the plugin id (from pangular:list-plugins) as `plugin`. A plugin whose tools the devtools config turns off (`plugins.<id>.tools: false`) reads as not reported.",
     inputSchema: {
       type: 'object',
       required: ['plugin'],
@@ -552,7 +581,7 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
       },
     },
     handler: async (args: AnyRecord) => ({
-      markdown: inspectPluginText(state(), {
+      markdown: inspectPluginText(agentState(), {
         plugin: args?.['plugin'],
         page: pageArgument(args),
         limit: args?.['limit'],

@@ -7,7 +7,13 @@
 // skipped, and a keepalive keeps the page from expiring on the server.
 
 import { keepaliveDue } from './change-detection.ts';
-import { pluginSwitches, type ResolvedPangularConfig } from './config.ts';
+import {
+  MAX_PLUGIN_ACTION_TIMEOUT_MS,
+  PLUGIN_ACTION_TIMEOUT_MS,
+  pluginSwitches,
+  type ResolvedPangularConfig,
+} from './config.ts';
+import { LEASED_PUSH_MS } from './page-lease.ts';
 import {
   PANGULAR_PLUGIN_API_VERSION,
   pangularPluginRegistry,
@@ -36,9 +42,7 @@ interface Rpc {
   };
 }
 
-/** How long a page action may run before the page answers with a timeout. */
-export const PLUGIN_ACTION_TIMEOUT_MS = 10_000;
-/** A `push` or `refresh` from a plugin is sent after this pause, so a burst sends once. */
+/** A `push` from a plugin is sent after this pause, so a burst sends once. */
 const SOON_MS = 50;
 
 /** One plugin in a page report. */
@@ -121,14 +125,41 @@ export function attachPlugins(
   let left = false;
   let stopped = false;
   let soon: ReturnType<typeof setTimeout> | undefined;
+  /** What the pending `soon` push asks for; a later request only adds to it. */
+  let soonForce = false;
+  let soonCollect = false;
+  /** Whether the pending `soon` push waits for the collect pacing rather than `SOON_MS`. */
+  let soonPaced = false;
+  /** When `collect` last ran (`now()`), for its pacing. */
+  let collectedAt = -Infinity;
   let queue = Promise.resolve();
 
-  const schedule = (force = false) => {
-    if (stopped || soon) return;
-    soon = setTimeout(() => {
-      soon = undefined;
-      void push(force).catch(() => {});
-    }, SOON_MS);
+  /**
+   * Sends the report soon. `force` sends it even when unchanged or while
+   * nobody watches; `collect` runs the plugins' `collect` first, at most once
+   * every `LEASED_PUSH_MS`, and only while someone watches (or for the very
+   * first report).
+   */
+  const schedule = (request: { force?: boolean; collect?: boolean } = {}) => {
+    if (stopped) return;
+    soonForce ||= !!request.force;
+    soonCollect ||= !!request.collect;
+    const paceMs = soonCollect && !soonForce ? collectedAt + LEASED_PUSH_MS - now() : 0;
+    const paced = paceMs > SOON_MS;
+    // A pending push that waits for the pacing is brought forward by a forced one.
+    if (soon && (soonPaced === paced || !soonPaced)) return;
+    clearTimeout(soon);
+    soonPaced = paced;
+    soon = setTimeout(
+      () => {
+        soon = undefined;
+        const force = soonForce;
+        const collect = soonCollect;
+        soonForce = soonCollect = soonPaced = false;
+        void enqueue(force, collect ? 'paced' : 'never').catch(() => {});
+      },
+      paced ? paceMs : SOON_MS,
+    );
   };
 
   const contextFor = (plugin: PangularPagePlugin): PangularPluginContext => ({
@@ -154,7 +185,7 @@ export function attachPlugins(
       }
       schedule();
     },
-    refresh: () => schedule(),
+    refresh: () => schedule({ collect: true }),
     serialize: (value: unknown, limits?: PluginSerializeLimits) => serialize(value, limits),
     redact: (text: string) => redactText(String(text)),
     isSecretName: (name: string) => isSecretName(name),
@@ -187,12 +218,29 @@ export function attachPlugins(
     }
   };
 
-  /** Starts new plugins and ends removed or replaced ones. */
+  /**
+   * Starts new plugins and ends removed or replaced ones. The registry is a
+   * global any script can write to, so each entry is checked and one that
+   * throws is skipped instead of stopping the overlay.
+   */
   const sync = () => {
     if (stopped) return;
-    const wanted = registry.plugins.filter(
-      (plugin) => pluginSwitches(plugin.id, options.config).enabled,
-    );
+    const list: unknown[] = Array.isArray(registry.plugins) ? registry.plugins : [];
+    const wanted: PangularPagePlugin[] = [];
+    const ids = new Set<string>();
+    for (const item of list) {
+      try {
+        if (!item || typeof item !== 'object') continue;
+        const plugin = item as PangularPagePlugin;
+        const id = plugin.id;
+        if (typeof id !== 'string' || ids.has(id)) continue;
+        if (!pluginSwitches(id, options.config).enabled) continue;
+        ids.add(id);
+        wanted.push(plugin);
+      } catch {
+        continue;
+      }
+    }
     for (const [id, entry] of running) {
       if (!wanted.includes(entry.plugin)) {
         end(entry);
@@ -200,14 +248,20 @@ export function attachPlugins(
       }
     }
     for (const plugin of wanted) {
-      if (running.get(plugin.id)?.plugin !== plugin) start(plugin);
+      if (running.get(plugin.id)?.plugin === plugin) continue;
+      try {
+        start(plugin);
+      } catch {
+        running.delete(plugin.id);
+      }
     }
-    schedule(true);
+    schedule({ force: true, collect: true });
   };
   registry.listeners.add(sync);
   sync();
 
   const collect = () => {
+    collectedAt = now();
     for (const entry of running.values()) {
       if (entry.status === 'unsupported' || !entry.plugin.collect) continue;
       try {
@@ -237,15 +291,31 @@ export function attachPlugins(
       status,
       ...(error ? { error } : {}),
       view,
-      actions: Object.keys(plugin.actions ?? {}).slice(0, 20),
+      // A plugin this overlay can't run offers no actions.
+      actions: status === 'unsupported' ? [] : Object.keys(plugin.actions ?? {}).slice(0, 20),
     })),
   });
 
-  const send = async (force: boolean) => {
+  /**
+   * Sends the report. `collectMode` says when the plugins' `collect` runs
+   * first: `forced` (a forced push of the overlay's, which collects even
+   * while nobody watches), `paced` (only while someone watches or for the
+   * first report, and at most once every `LEASED_PUSH_MS` unless `force`;
+   * a collect asked for sooner runs once the pause is over) or `never` (a view
+   * a plugin pushed).
+   */
+  const send = async (force: boolean, collectMode: 'forced' | 'paced' | 'never') => {
     if (stopped || left) return;
+    const watching = active();
     // An idle page only says it is there (`page-lease.ts`); a wake sends everything.
-    const idle = !force && !active();
-    if (!idle) collect();
+    const idle = !force && !watching;
+    if (
+      collectMode === 'forced' ||
+      (collectMode === 'paced' && (watching || collectedAt === -Infinity))
+    ) {
+      if (force || now() - collectedAt >= LEASED_PUSH_MS) collect();
+      else schedule({ collect: true });
+    }
     const next = report();
     if (!next.plugins.length) {
       // The last plugin was removed: the server drops the page instead of keeping an empty one.
@@ -270,11 +340,12 @@ export function attachPlugins(
     }
   };
 
-  const push = (force = false) => {
-    const run = queue.then(() => send(force));
+  const enqueue = (force: boolean, collectMode: 'forced' | 'paced' | 'never') => {
+    const run = queue.then(() => send(force, collectMode));
     queue = run.catch(() => {});
     return run;
   };
+  const push = (force = false) => enqueue(force, force ? 'forced' : 'paced');
 
   my.rpc.register({
     name: 'plugin-action',
@@ -286,6 +357,7 @@ export function attachPlugins(
       pluginId?: unknown;
       action?: unknown;
       args?: unknown;
+      timeoutMs?: unknown;
     }) => {
       if (stopped || !request || request.pageId !== pageId) return;
       if (typeof request.requestId !== 'string') return;
@@ -295,6 +367,12 @@ export function attachPlugins(
       const entry =
         typeof request.pluginId === 'string' ? running.get(request.pluginId) : undefined;
       if (!entry) return respond({ ok: false, error: 'This page does not run that plugin.' });
+      if (entry.status === 'unsupported') {
+        return respond({
+          ok: false,
+          error: `This version of Pangular Inspector can't run the ${entry.plugin.id} plugin, so it runs none of its actions.`,
+        });
+      }
       if (!pluginSwitches(entry.plugin.id, options.config).actions) {
         return respond({
           ok: false,
@@ -311,11 +389,16 @@ export function attachPlugins(
           error: `The ${entry.plugin.id} plugin has no action ${name}.`,
         });
       }
+      // The server sends how long it waits, so the page gives up first and says why.
+      const timeoutMs =
+        typeof request.timeoutMs === 'number' && Number.isFinite(request.timeoutMs)
+          ? Math.max(100, Math.min(MAX_PLUGIN_ACTION_TIMEOUT_MS, request.timeoutMs))
+          : PLUGIN_ACTION_TIMEOUT_MS;
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(
           () => reject(new Error('The action did not finish in time.')),
-          PLUGIN_ACTION_TIMEOUT_MS,
+          timeoutMs,
         );
       });
       Promise.race([Promise.resolve().then(() => action(request.args, entry.ctx)), timeout])
@@ -329,7 +412,7 @@ export function attachPlugins(
         )
         .finally(() => {
           clearTimeout(timer);
-          schedule(true);
+          schedule({ force: true, collect: true });
         });
     },
   });
@@ -348,7 +431,7 @@ export function attachPlugins(
     resume() {
       left = false;
       lastJson = '';
-      schedule(true);
+      schedule({ force: true, collect: true });
     },
     stop() {
       if (stopped) return;

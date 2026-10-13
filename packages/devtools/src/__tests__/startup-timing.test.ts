@@ -248,6 +248,37 @@ describe('installStartupRecorder', () => {
     expect(buffer.providerRecording).toBe('unavailable');
     expect(buffer.providerNote).toMatch(/Angular 20/);
   });
+
+  it('puts back a plain enableProfiling when Angular never sets it, and stops waiting by itself', () => {
+    const world = fakeWorld();
+    const buffer = installStartupRecorder(world.target, world.clock);
+    // Angular 19 publishes `ng` without enableProfiling.
+    world.target['ng'] ??= {};
+    const ng = world.target['ng'] as AnyRecord;
+    expect(Object.getOwnPropertyDescriptor(ng, 'enableProfiling')?.get).toBeTypeOf('function');
+    world.timers.find((timer) => timer.ms === MAX_RECORD_MS)!.fn();
+    expect(buffer.providerRecording).toBe('unavailable');
+    expect(Object.getOwnPropertyDescriptor(ng, 'enableProfiling')).toEqual({
+      value: undefined,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+    // A later assignment is a plain write: no recording starts.
+    const enable = () => () => {};
+    ng['enableProfiling'] = enable;
+    expect(ng['enableProfiling']).toBe(enable);
+    expect(buffer.ngAt).toBeUndefined();
+  });
+
+  it('removes its ng trap when no Angular ever loads', () => {
+    const world = fakeWorld();
+    const buffer = installStartupRecorder(world.target, world.clock);
+    expect(Object.getOwnPropertyDescriptor(world.target, 'ng')?.get).toBeTypeOf('function');
+    buffer.stop!();
+    expect('ng' in world.target).toBe(false);
+    expect(world.timers).toEqual([]);
+  });
 });
 
 describe('slowestProviders', () => {
@@ -320,6 +351,28 @@ describe('readStartupTiming', () => {
       hook: true,
       providers: { status: 'measured', count: 1, totalSelfMs: 3 },
     });
+  });
+
+  it('reuses the provider summary until the spans or the recording status change', () => {
+    root('22.1.7');
+    const buffer: StartupBuffer = {
+      version: 1,
+      hookAt: 1,
+      providers: [{ name: 'TripService', at: 60, ms: 3, selfMs: 3 }],
+      providerRecording: 'recording',
+    };
+    const read = () =>
+      readStartupTiming(0, undefined, { doc: document, performance: perf({}), buffer }).providers;
+    const first = read();
+    expect(read()).toBe(first);
+    buffer.providers.push({ name: 'Logger', at: 70, ms: 1, selfMs: 1 });
+    const second = read();
+    expect(second).not.toBe(first);
+    expect(second.count).toBe(2);
+    buffer.providerRecording = 'done';
+    const done = read();
+    expect(done.status).toBe('measured');
+    expect(read()).toBe(done);
   });
 
   it('says provider timing needs Angular 20 when an older Angular started under the hook', () => {

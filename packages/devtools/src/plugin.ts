@@ -55,9 +55,16 @@ export interface PangularPluginContext {
   readonly active: boolean;
   /** Angular's debug API (`window.ng`) in a development build, or `undefined`. */
   getNg(): Record<string, unknown> | undefined;
-  /** Sends a view now instead of waiting for the next `collect`. Unchanged views are skipped. */
+  /**
+   * Reports a view without waiting for the next `collect`. It goes out about
+   * 50 ms later, so a burst sends once; an unchanged view is skipped, and
+   * while nobody watches it goes out once someone does.
+   */
   push(view: PluginView): void;
-  /** Asks for a `collect` soon, such as after the plugin's store changed. */
+  /**
+   * Asks for a `collect`, such as after the plugin's store changed. It runs
+   * while someone watches, at most once a second.
+   */
   refresh(): void;
   /**
    * Makes a value safe to send: limits depth and size and masks secret-looking
@@ -132,9 +139,30 @@ function notify(registry: PangularPluginRegistry) {
 }
 
 /**
+ * The plugin with only the actions the server accepts: names of lowercase
+ * letters, digits and dashes. Warns about the others, which no button or tool
+ * could run. The plugin itself is left as it is.
+ */
+function withValidActions(plugin: PangularPagePlugin): PangularPagePlugin {
+  const actions = plugin.actions;
+  if (!actions || typeof actions !== 'object') return plugin;
+  const names = Object.keys(actions);
+  const bad = names.filter((name) => !NAME.test(name));
+  if (!bad.length) return plugin;
+  console.warn(
+    `[pangular] A plugin action name is lowercase letters, digits and dashes, starting with a letter. The ${plugin.id} plugin's ${bad.map((name) => JSON.stringify(name)).join(', ')} ${bad.length === 1 ? 'was' : 'were'} dropped.`,
+  );
+  const kept: Record<string, PangularPluginAction> = {};
+  for (const name of names) if (NAME.test(name)) kept[name] = actions[name]!;
+  // Inherits everything else, getters and methods included.
+  return Object.assign(Object.create(plugin) as PangularPagePlugin, { actions: kept });
+}
+
+/**
  * Registers a page plugin and returns a function that removes it. Registering
  * the same id again replaces the plugin, as a hot reload does. Throws for an
- * id that is not lowercase letters, digits and dashes.
+ * id that is not lowercase letters, digits and dashes, and warns about and
+ * drops an action whose name is not.
  */
 export function registerPangularPlugin(plugin: PangularPagePlugin): () => void {
   if (!plugin || typeof plugin.id !== 'string' || !NAME.test(plugin.id)) {
@@ -142,12 +170,13 @@ export function registerPangularPlugin(plugin: PangularPagePlugin): () => void {
       `[pangular] A plugin id is lowercase letters, digits and dashes, starting with a letter. Got ${JSON.stringify(plugin?.id)}.`,
     );
   }
+  const entry = withValidActions(plugin);
   const registry = pangularPluginRegistry();
-  registry.plugins = [...registry.plugins.filter((each) => each.id !== plugin.id), plugin];
+  registry.plugins = [...registry.plugins.filter((each) => each.id !== entry.id), entry];
   notify(registry);
   return () => {
-    if (!registry.plugins.includes(plugin)) return;
-    registry.plugins = registry.plugins.filter((each) => each !== plugin);
+    if (!registry.plugins.includes(entry)) return;
+    registry.plugins = registry.plugins.filter((each) => each !== entry);
     notify(registry);
   };
 }
@@ -198,7 +227,8 @@ export interface PangularServerPluginContext {
 export interface PangularPluginToolContext extends PangularServerPluginContext {
   /**
    * Runs one of the page plugin's `actions` on a page (`page`, or the newest)
-   * and waits for its answer, up to `timeoutMs` (default 5000).
+   * and waits for its answer, up to `timeoutMs` (default 10000, at most 30000).
+   * The page gives up after the same time and answers with a timeout.
    */
   runPageAction(
     name: string,
@@ -217,7 +247,9 @@ export interface PangularPluginTool {
   /**
    * Lowercase letters, digits and dashes. The tool's id is
    * `pangular:plugin:<plugin id>:<name>`, which MCP clients call as
-   * `pangular_plugin_<plugin id>_<name>`.
+   * `pangular_plugin_<plugin id>_<name>`. That name can be at most 64
+   * characters, so the plugin id and the tool name together at most 47; the
+   * server skips a plugin with a longer one.
    */
   name: string;
   description: string;

@@ -188,7 +188,7 @@ A page action changes the app, so the devtools treat it like the built-in [actio
 - The view lists the ones the panel shows as buttons in `actions`. `confirm` asks before running it.
 - `actions.plugins: false` or `plugins.<id>.actions: false` blocks it on the server and on the page.
 
-Action names are lowercase letters, digits and dashes. The server waits 5 seconds for the page's answer (`timeoutMs` in `runPageAction`, up to 30 seconds), and the page gives up on an action after 10 seconds.
+Action names are lowercase letters, digits and dashes. `registerPangularPlugin()` prints a `[pangular]` warning for any other name and drops that action. An action runs for up to 10 seconds by default. A server tool sets another limit with `timeoutMs` in `runPageAction`, up to 30 seconds. The page stops waiting after that time and answers with a timeout. A plugin that needs a later plugin API offers no actions.
 
 ## Add agent tools
 
@@ -240,6 +240,8 @@ const devtools = initPangularHub({
 
 The tools above register as `pangular:plugin:travel:bookings` and `pangular:plugin:travel:clear-saved`. MCP clients call them `pangular_plugin_travel_bookings` and `pangular_plugin_travel_clear-saved`. Built-in tools never start with `plugin`, so a plugin tool can't shadow one, and the server skips a second plugin with the same id.
 
+MCP clients take tool names of up to 64 characters. The plugin id and the tool name together can be at most 47 characters, so `pangular_plugin_<plugin id>_<tool>` fits. The server skips a plugin with a longer one and prints a `[pangular]` warning.
+
 | Tier                    | What it may do                                    | Dropped by                                                                |
 | ----------------------- | ------------------------------------------------- | ------------------------------------------------------------------------- |
 | `read` (the default)    | Read page reports and its own state.              | `plugins.<id>.tools: false`                                               |
@@ -251,7 +253,7 @@ A `read` tool that calls `runPageAction` gets a refusal instead. Every answer st
 
 ### registerPangularPlugin
 
-`registerPangularPlugin(plugin: PangularPagePlugin): () => void` adds a page plugin to a global registry and returns a function that removes it. It throws for an id that is not lowercase letters, digits and dashes, starting with a letter. The registry is shared by every copy of the entry point, so a library can bundle its own.
+`registerPangularPlugin(plugin: PangularPagePlugin): () => void` adds a page plugin to a global registry and returns a function that removes it. It throws for an id that is not lowercase letters, digits and dashes, starting with a letter. It prints a warning for an action name that isn't, and drops that action. The registry is shared by every copy of the entry point, so a library can bundle its own.
 
 | `PangularPagePlugin` field | Required | What it is                                                                               |
 | -------------------------- | -------- | ---------------------------------------------------------------------------------------- |
@@ -265,17 +267,17 @@ A `read` tool that calls `runPageAction` gets a refusal instead. Every answer st
 
 ### The page context
 
-| `PangularPluginContext` member | What it is                                                                                                      |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `pageId`                       | The id every report from this page carries.                                                                     |
-| `apiVersion`                   | The plugin API the overlay runs.                                                                                |
-| `active`                       | Whether a panel or an agent is watching. `collect` runs only while it is.                                       |
-| `getNg()`                      | Angular's debug API (`window.ng`) in a development build, or `undefined`.                                       |
-| `push(view)`                   | Sends a view now. An unchanged view is skipped.                                                                 |
-| `refresh()`                    | Asks for a `collect` soon.                                                                                      |
-| `serialize(value, limits?)`    | Limits depth and size and masks secret-looking names, JWTs and bearer tokens.                                   |
-| `redact(text)`                 | Masks credentials, JWTs, bearer tokens and secret `key=value` pairs in a text.                                  |
-| `isSecretName(name)`           | Whether a field name looks secret under the [redaction](../getting-started/configuration.md#redaction) options. |
+| `PangularPluginContext` member | What it is                                                                                                                                      |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pageId`                       | The id every report from this page carries.                                                                                                     |
+| `apiVersion`                   | The plugin API the overlay runs.                                                                                                                |
+| `active`                       | Whether a panel or an agent is watching. `collect` runs only while it is.                                                                       |
+| `getNg()`                      | Angular's debug API (`window.ng`) in a development build, or `undefined`.                                                                       |
+| `push(view)`                   | Sends a view about 50 ms later, so a burst sends once. An unchanged view is skipped. While nobody watches, the view goes out once someone does. |
+| `refresh()`                    | Asks for a `collect`. It runs while someone watches, at most once a second.                                                                     |
+| `serialize(value, limits?)`    | Limits depth and size and masks secret-looking names, JWTs and bearer tokens.                                                                   |
+| `redact(text)`                 | Masks credentials, JWTs, bearer tokens and secret `key=value` pairs in a text.                                                                  |
+| `isSecretName(name)`           | Whether a field name looks secret under the [redaction](../getting-started/configuration.md#redaction) options.                                 |
 
 ### definePangularServerPlugin
 
@@ -299,14 +301,14 @@ A `read` tool that calls `runPageAction` gets a refusal instead. Every answer st
 
 ## What the devtools take care of
 
-| Concern   | How                                                                                                                                                  |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Redaction | The page and the server run every view through `serialize()`, so `redaction.secretNames`, JWTs and bearer tokens are masked.                         |
-| Pages     | Each report carries the page id. The server keeps one entry per page, drops it 15 seconds after the last report, and forgets it when the tab closes. |
-| Cost      | `collect` runs at most once a second, only while someone watches. An unchanged report is skipped, and a keepalive keeps an idle page listed.         |
-| Size      | Up to 20 sections, 12 columns, 200 rows or items per section, and 2,000 characters per text. Unknown section kinds are dropped.                      |
-| Failures  | A plugin that throws shows as **Failed** with its message. The other plugins keep running.                                                           |
-| Switches  | `inspectors.plugins` and `plugins.<id>` turn plugins off. See [Plugins](../getting-started/configuration.md#plugins).                                |
+| Concern   | How                                                                                                                                                                                                                                                                                                                                                                               |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Redaction | The page and the server run every view through `serialize()`, so `redaction.secretNames`, JWTs and bearer tokens are masked.                                                                                                                                                                                                                                                      |
+| Pages     | Each report carries the page id. The server keeps one entry per page, drops it 15 seconds after the last report, and forgets it when the tab closes.                                                                                                                                                                                                                              |
+| Cost      | `collect` runs while someone watches, at most once a second for page updates and `refresh()`. It also runs right away for the first report, even while nobody watches, and when someone starts watching. While someone watches, a finished page action or a plugin registering runs it right away too. An unchanged report is skipped, and a keepalive keeps an idle page listed. |
+| Size      | Up to 20 sections, 12 columns, 200 rows or items per section, and 2,000 characters per text. Unknown section kinds are dropped.                                                                                                                                                                                                                                                   |
+| Failures  | A plugin that throws shows as **Failed** with its message. The other plugins keep running.                                                                                                                                                                                                                                                                                        |
+| Switches  | `inspectors.plugins` and `plugins.<id>` turn plugins off. See [Plugins](../getting-started/configuration.md#plugins).                                                                                                                                                                                                                                                             |
 
 Agents read plugin views with [`list-plugins` and `inspect-plugin`](../agents/tools.md#plugins).
 

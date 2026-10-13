@@ -700,7 +700,7 @@ These tools read the views that [Pangular plugins](../guides/write-a-plugin.md) 
 
 ### A plugin's own tools
 
-A server plugin adds tools named `plugin:<plugin id>:<tool>`, which your client calls as `pangular_plugin_<plugin id>_<tool>`. Built-in tools never start with `plugin`, so a plugin can't replace one. Each tool is `read` unless the plugin declares `action` or `destructive`, and its answer starts with a note that it comes from the plugin and the page. `agent.readOnly` and `actions.plugins: false` drop the tools that are not `read`, and `plugins.<id>.tools: false` drops all of one plugin's tools.
+A server plugin adds tools named `plugin:<plugin id>:<tool>`, which your client calls as `pangular_plugin_<plugin id>_<tool>`. Built-in tools never start with `plugin`, so a plugin can't replace one. Each tool is `read` unless the plugin declares `action` or `destructive`, and its answer starts with a note that it comes from the plugin and the page. `agent.readOnly` and `actions.plugins: false` drop the tools that are not `read`. `plugins.<id>.tools: false` drops all of one plugin's tools and leaves the plugin out of `list-plugins` and `inspect-plugin`. MCP clients take tool names of up to 64 characters, so the server skips a plugin whose `pangular_plugin_<plugin id>_<tool>` name is longer.
 
 ## Shared state
 

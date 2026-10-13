@@ -4,6 +4,7 @@ import { createPangular } from '../devframe.ts';
 import { resolvePangularConfig, type PangularConfig } from '../config.ts';
 import { registerHubDocks } from '../hub-docks.ts';
 import { FEED_PAGE_IDLE_MS, createHubFeed } from '../hub-messages.ts';
+import { definePangularServerPlugin, type PangularServerPlugin } from '../plugin.ts';
 import type { HydrationStats } from '../types.ts';
 
 interface Message {
@@ -387,7 +388,7 @@ describe('hub dock badges', () => {
 });
 
 describe('hub messages in the devframe', () => {
-  async function boot(options: PangularConfig = {}) {
+  async function boot(options: PangularConfig = {}, serverPlugins: PangularServerPlugin[] = []) {
     const host = {
       mountStatic: () => {},
       resolveOrigin: () => 'http://localhost',
@@ -396,7 +397,7 @@ describe('hub messages in the devframe', () => {
     const ctx = await createHostContext({ cwd: process.cwd(), mode: 'dev', host: host as never });
     const messages = fakeMessages();
     Object.assign(ctx, { messages });
-    await createPangular(options).setup(ctx as never);
+    await createPangular(options, { serverPlugins }).setup(ctx as never);
     const push = (name: string, payload: unknown) =>
       ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
     return { ctx, push, list: () => [...messages.entries.values()] };
@@ -415,6 +416,33 @@ describe('hub messages in the devframe', () => {
       "NG01203: No value accessor for form control name: 'age'",
       'Agent ran set-http-rule',
     ]);
+  });
+
+  it('posts a plugin tool by the tier the plugin declared', async () => {
+    const travel = definePangularServerPlugin({
+      id: 'travel',
+      version: '1.0.0',
+      tools: [
+        { name: 'bookings', description: 'Lists bookings.', handler: () => '2 bookings.' },
+        {
+          name: 'clear-saved',
+          description: 'Clears saved destinations.',
+          safety: 'action',
+          handler: () => 'Cleared 2 saved destinations.',
+        },
+      ],
+    });
+    const { ctx, list } = await boot({}, [travel]);
+    await ctx.agent.invoke('pangular:plugin:travel:bookings', {});
+    expect(list()).toEqual([]);
+    await ctx.agent.invoke('pangular:plugin:travel:clear-saved', { page: 'tab1' });
+    const [message] = list();
+    expect(message).toMatchObject({
+      message: 'Agent ran plugin:travel:clear-saved',
+      category: 'agent',
+      labels: ['pangular', 'page:tab1'],
+    });
+    expect(message!.description).toContain('Cleared 2 saved destinations.');
   });
 
   it('posts no agent write for tools that changed nothing', async () => {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolvePangularConfig } from '../config.ts';
 import { setRedaction } from '../forms-privacy.ts';
 import {
@@ -377,6 +377,171 @@ describe('the plugins collector', () => {
     collector.resume();
     await wait();
     expect(rpc.pushes()).toHaveLength(2);
+  });
+
+  it('offers no actions for a plugin it cannot run, and refuses to run one', async () => {
+    const target = {};
+    let ran = 0;
+    pangularPluginRegistry(target).plugins.push({
+      id: 'future',
+      version: '9',
+      apiVersion: PANGULAR_PLUGIN_API_VERSION + 1,
+      actions: { reset: () => void ran++ },
+    });
+    const { rpc, collector } = attach(target);
+    await collector.push(true);
+    expect(rpc.pushes()[0].plugins[0]).toMatchObject({ status: 'unsupported', actions: [] });
+    rpc.handlers.get('plugin-action')!({
+      requestId: 'r1',
+      pageId: 'tab1',
+      pluginId: 'future',
+      action: 'reset',
+    });
+    await wait();
+    expect(ran).toBe(0);
+    const answer = rpc.calls.find((call) => call.name === 'plugin-action-result')?.args[0] as {
+      result: { ok: boolean; error: string };
+    };
+    expect(answer.result).toEqual({
+      ok: false,
+      error:
+        "This version of Pangular Inspector can't run the future plugin, so it runs none of its actions.",
+    });
+  });
+
+  it('skips registry entries that are not plugins or that throw, and runs the rest', async () => {
+    const target = {};
+    const hostile = {
+      get id(): string {
+        throw new Error('no id');
+      },
+      version: '1',
+    };
+    pangularPluginRegistry(target).plugins.push(
+      null as unknown as PangularPagePlugin,
+      'travel' as unknown as PangularPagePlugin,
+      hostile as unknown as PangularPagePlugin,
+      { id: 7, version: '1' } as unknown as PangularPagePlugin,
+      travelPlugin(travelSource().source),
+    );
+    let attached: ReturnType<typeof attach> | undefined;
+    expect(() => {
+      attached = attach(target);
+    }).not.toThrow();
+    await attached!.collector.push(true);
+    expect(attached!.rpc.pushes()[0].plugins.map((plugin) => plugin.id)).toEqual(['travel']);
+  });
+
+  it('keeps a forced push that comes while a plugin push waits', async () => {
+    const target = {};
+    let ctx: PangularPluginContext | undefined;
+    const registry = pangularPluginRegistry(target);
+    registry.plugins.push({
+      id: 'pusher',
+      version: '1',
+      setup: (context) => {
+        ctx = context;
+      },
+    });
+    // Nobody watches and the keepalive is not due, so only a forced push is sent.
+    const { rpc } = attach(target, { active: () => false, now: () => 1000, tickMs: () => 0 });
+    await wait();
+    const before = rpc.pushes().length;
+    ctx!.push({ sections: [{ kind: 'text', title: 'Event', text: 'one' }] });
+    registry.plugins.push({ id: 'later', version: '1' });
+    for (const listener of registry.listeners) listener();
+    await wait();
+    expect(rpc.pushes()).toHaveLength(before + 1);
+    expect(
+      rpc
+        .pushes()
+        .at(-1)
+        ?.plugins.map((plugin) => plugin.id),
+    ).toEqual(['pusher', 'later']);
+  });
+
+  it('paces collects a plugin asks for to one a second', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    try {
+      const target = {};
+      let collects = 0;
+      let ctx: PangularPluginContext | undefined;
+      pangularPluginRegistry(target).plugins.push({
+        id: 'counter',
+        version: '1',
+        setup: (context) => {
+          ctx = context;
+        },
+        collect: () => {
+          collects++;
+          return { sections: [{ kind: 'text', title: 'Count', text: String(collects) }] };
+        },
+      });
+      const { collector } = attach(target, { now: () => Date.now() });
+      // The first report collects right away.
+      await vi.advanceTimersByTimeAsync(60);
+      expect(collects).toBe(1);
+      ctx!.refresh();
+      ctx!.refresh();
+      await collector.push();
+      await vi.advanceTimersByTimeAsync(500);
+      expect(collects).toBe(1);
+      await vi.advanceTimersByTimeAsync(600);
+      expect(collects).toBe(2);
+      // A forced push, as when a panel starts watching, does not wait.
+      await collector.push(true);
+      expect(collects).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives up on an action after the timeout the server sent', async () => {
+    const target = {};
+    pangularPluginRegistry(target).plugins.push({
+      id: 'slow',
+      version: '1',
+      actions: { wait: () => new Promise(() => {}) },
+    });
+    const { rpc } = attach(target);
+    rpc.handlers.get('plugin-action')!({
+      requestId: 'r1',
+      pageId: 'tab1',
+      pluginId: 'slow',
+      action: 'wait',
+      timeoutMs: 120,
+    });
+    await wait(250);
+    const answer = rpc.calls.find((call) => call.name === 'plugin-action-result')?.args[0] as {
+      result: { ok: boolean; error: string };
+    };
+    expect(answer.result).toEqual({
+      ok: false,
+      error: 'Error: The action did not finish in time.',
+    });
+  });
+
+  it('warns about and drops an action whose name the server would refuse', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const plugin: PangularPagePlugin = {
+        id: 'travel',
+        version: '1',
+        actions: { 'unsave-all': () => 1, 'Drop DB': () => 2 },
+      };
+      cleanups.push(registerPangularPlugin(plugin));
+      const [stored] = pangularPluginRegistry().plugins.filter((each) => each.id === 'travel');
+      expect(Object.keys(stored!.actions!)).toEqual(['unsave-all']);
+      expect(stored!.version).toBe('1');
+      expect(Object.keys(plugin.actions!)).toEqual(['unsave-all', 'Drop DB']);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^\[pangular\] A plugin action name is lowercase.*"Drop DB" was dropped/,
+        ),
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('cleans up each plugin when it stops', () => {

@@ -715,7 +715,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
         pushLeaks();
       }),
     plugins && paced(() => void plugins.push().catch(() => {})),
-    startup && (() => void startup.push().catch(() => {})),
+    startup && paced(() => void startup.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
   const pushAll = () => collectors.forEach((run) => run());
   pushAll();

@@ -7,6 +7,7 @@ import {
   agentAllowed,
   agentInspector,
   agentSafety,
+  type AgentSafety,
   type PangularInspector,
   type ResolvedPangularConfig,
 } from './config.ts';
@@ -52,7 +53,7 @@ export interface FeedNavigation {
   reason?: unknown;
 }
 
-type AgentTool = { id: string; handler: (args: any) => unknown };
+type AgentTool = { id: string; safety?: AgentSafety; handler: (args: any) => unknown };
 
 export interface HubFeed {
   /** Wraps an agent tool so each write it completes posts a message. */
@@ -287,9 +288,9 @@ export function createHubFeed(
     bump(dock, input.level);
   };
 
-  const agentWrite = (id: string, args: unknown, result: unknown) => {
+  const agentWrite = (id: string, safety: AgentSafety, args: unknown, result: unknown) => {
     const name = id.replace(/^pangular:/, '');
-    if (agentSafety(id, config) === 'read' || !agentAllowed({ id }, config)) return;
+    if (safety === 'read' || !agentAllowed({ id }, config)) return;
     // change-detection only writes when it starts, stops or clears a recording,
     // or turns a live view on or off.
     if (name === 'change-detection' && !cdWrites(args)) return;
@@ -317,13 +318,15 @@ export function createHubFeed(
 
   return {
     wrapTool: (tool) => {
-      if (!messages || agentSafety(tool.id, config) === 'read') return tool;
+      // A plugin tool declares its own tier; the built-in ones take it from AGENT_SAFETY.
+      const safety = tool.safety ?? agentSafety(tool.id, config);
+      if (!messages || safety === 'read') return tool;
       return {
         ...tool,
         handler: async (args: unknown) => {
           const result = await tool.handler(args);
           try {
-            agentWrite(tool.id, args, result);
+            agentWrite(tool.id, safety, args, result);
           } catch {
             // The feed never fails a tool call.
           }

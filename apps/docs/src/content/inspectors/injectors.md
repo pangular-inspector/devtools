@@ -119,18 +119,20 @@ Below the live tree, the **Startup** section shows how the shown page started, f
 | **Load event**             | The browser's navigation timing.                                                                           |
 | **Overlay started**        | When the overlay ran on the page.                                                                          |
 
-The first stable time is exact when the overlay or the startup hook watched it happen. If the overlay loads after the app is stable, as when `main.ts` imports it after `whenStable()`, the row reads **First stable, at the latest**: the app was stable by the time the overlay looked.
+The first stable time is exact when the overlay or the startup hook watched the app become stable. Sometimes the overlay loads after that, as when `main.ts` imports it after `whenStable()`. The overlay then checks an app that is already stable, so it knows only that the app became stable before this time. The row reads **First stable, at the latest**.
 
-**Slowest providers** lists the providers that took longest to construct, by own time (without the providers each one created while it ran), with total time and instance count. Components and directives show up in it too, since Angular creates them through injectors. Angular reports provider construction only through its own profiling (`ng.enableProfiling()`, Angular 20 or later, development builds), so this list needs the startup hook loaded before Angular, from the polyfills of your development build:
+**Slowest providers** lists the providers that took longest to construct, by own time (without the providers each one created while it ran), with total time and instance count. Components and directives show up in it too, since Angular creates them through injectors. Angular reports provider construction only through its own profiling (`ng.enableProfiling()`, Angular 20 or later, development builds), so this list needs the startup hook loaded before Angular, from the polyfills of your development build. A configuration's `polyfills` replaces the build target's list, so repeat the polyfills the target already has and add the hook after them:
 
 ```json
 // angular.json (or project.json), build target
 "configurations": {
   "development": {
-    "polyfills": ["@pangular-inspector/devtools/startup-hook"]
+    "polyfills": ["zone.js", "@pangular-inspector/devtools/startup-hook"]
   }
 }
 ```
+
+A zoneless app has no `zone.js` in its polyfills, so it lists only the hook (and any other polyfills it has).
 
 The hook turns Angular's profiling on right after `bootstrapApplication()` creates the platform and reads its provider entries until one second after the app is first stable, then turns it off. Providers created by environment initializers before that point are not timed. Angular's own track shows in the Chrome Performance panel while the hook records.
 
