@@ -473,6 +473,19 @@ See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
 The tree, the detail and component values work from Angular 12. Before 17.1 the detail leaves out signal values, since `ng.isSignal` is missing, and before 16.2 it lists no injected services. The **Defer blocks** list needs 19.1, the **&#64;for blocks** list 22.0 and change detection recording 20.0. In the **Leaks** section, effect counts need 20.1, tying subscriptions to instances needs 20.0, and telling detached views from destroyed ones needs 14.0 (before, every component that leaves the page counts as destroyed). On Angular 17.0 and later, where `@defer` and `@for` exist, the tab names the version each list needs and the version the page runs. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
 
+### On Angular Native and NativeScript
+
+The [Angular Native](../getting-started/angular-native.md) and [NativeScript](../getting-started/nativescript.md) overlays record change detection and report leaks too. A device has no DOM, so a few parts are missing there:
+
+| Part                                                              | On a device                                                                   |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Cycles, causes, zone.js dependence, inputs that break OnPush      | Recorded as in the browser.                                                   |
+| Checks that changed nothing                                       | Not counted: the recording tells them by watching DOM updates.                |
+| **Flash checks**, **Performance track** and **Angular profiling** | Hidden. The `change-detection` tool answers that the page has no DOM.         |
+| Effects, subscriptions and destroyed instances in **Leaks**       | Reported as in the browser. Subscription tracking stays on until you stop it. |
+| Detached views in **Leaks**                                       | Not told apart from destroyed ones.                                           |
+| **Pick component on page**, hydration and the console handles     | Hidden.                                                                       |
+
 ### Development builds only
 
 Live data reads `window.ng`. Production builds remove it, so the tab falls back to the source list.

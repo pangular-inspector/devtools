@@ -98,6 +98,10 @@ The overlay looks in environment injectors: the root injector and the injectors 
 
 A page reports up to 300 queries and 100 mutations, the most recently updated ones, and the tab says how many it left out. **Show all data** reads up to about 20,000 values of the data, and cuts deeper or longer parts.
 
+### On a device
+
+The [Angular Native](../getting-started/angular-native.md) and [NativeScript](../getting-started/nativescript.md) overlays find the `QueryClient` through the app's root injectors, so the tab works there as in the browser.
+
 ### Write actions
 
 **Invalidate**, **Refetch** and the `query-action` tool need [`actions.tanstackQuery`](../getting-started/configuration.md#actions). With it off, the panel disables them, says why, and the server refuses them. Turn the whole tab off with [`inspectors.tanstackQuery`](../getting-started/configuration.md#inspectors-and-agent-tools).

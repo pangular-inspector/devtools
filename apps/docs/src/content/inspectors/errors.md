@@ -135,6 +135,16 @@ The tab says how many groups or calls a page dropped.
 
 The overlay starts after the page claims its page id, so errors and console calls from before it connects are not in the list. The `ErrorHandler` is wrapped as soon as the app has bootstrapped. Until then, the tab counts the `ERROR` lines Angular's default handler logs, and says the handler isn't wrapped yet.
 
+### On Angular Native and NativeScript
+
+The [Angular Native](../getting-started/angular-native.md) and [NativeScript](../getting-started/nativescript.md) overlays report errors and the console too, with the owning component found through the app's own views. The NG0100 and missing provider explainers work there. A device has no hydration, so the hydration explainers don't apply.
+
+| Source                   | Angular Native                      | NativeScript |
+| ------------------------ | ----------------------------------- | ------------ |
+| Angular's `ErrorHandler` | Yes                                 | Yes          |
+| The console              | Yes                                 | Yes          |
+| Errors outside *Angular  | React Native's `ErrorUtils` handler | No           |
+
 ### It needs a development build
 
 Finding the `ErrorHandler` and the owning component uses Angular's debug APIs, which only development builds have.

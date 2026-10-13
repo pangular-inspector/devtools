@@ -206,7 +206,7 @@ Change detection cycles recorded with Angular's profiler: the slowest components
 
 Without `page`, it reads the page that is recording, and `record` goes to every connected page. A `page` that names no connected tab gets the list of connected tabs. A connected tab that has not recorded yet gets a hint to start a recording there. The answer starts with the change detection mode of the page it reports on: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. With `agent.readOnly`, the tool has no `record` argument and is marked read-only, so start the recording from the panel. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many. A recording lists at most 100 component classes and counts checks for up to 2000 instances. When it checked more, the answer says how many were left out.
 
-`flash`, `track` and `angularProfiling` go to the page in `page`, or to every connected page, and can be combined with `record`, but not with `export`. They are the **Live views** toggles of the panel; see [Watch checks live](../inspectors/components.md#watch-checks-live). Once a page reports them, the answer ends with a line that says which views are on. With `agent.readOnly`, the tool has none of these three arguments.
+`flash`, `track` and `angularProfiling` go to the page in `page`, or to every connected page, and can be combined with `record`, but not with `export`. An [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app has no live views: with its `page`, the tool says the page has no DOM, and `record` works there as on a browser page. They are the **Live views** toggles of the panel; see [Watch checks live](../inspectors/components.md#watch-checks-live). Once a page reports them, the answer ends with a line that says which views are on. With `agent.readOnly`, the tool has none of these three arguments.
 
 `export` only reads, so it stays available with `agent.readOnly`. The file is masked like other answers (JWTs, bearer tokens and secret names), has no instance check counts, and comes in a `json` code block to save as a `.json` file. An export over 100,000 characters is not returned, because cut JSON doesn't parse. The answer gives its size and the counts of cycles, timed spans, component classes, hook rows and output rows instead. Export it from the panel then, or clear the recording and record a shorter session. See [Export and import a recording](../inspectors/components.md#export-and-import-a-recording).
 
@@ -308,6 +308,8 @@ What the copy can't show:
 - A component larger than 2000 pixels on its longest side is scaled down to fit.
 
 The image needs an MCP client that shows image content. `agent.tools.components: false` hides the tool.
+
+An [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app has no DOM to copy. With its `page`, the tool says so without asking the app. Without `page`, the search skips those apps, and when only a device app reports, the answer says so.
 
 ### inspect-signals
 
@@ -809,6 +811,8 @@ Each finding has a severity, an area, the component, route or URL it is about, o
 The audit reuses each inspector's own checks: `diagnose-change-detection` hints and checks slower than 16 ms, `find-leaks`, `explain-error`, `hydration`, `lint-routes`, `lint-forms`, `list-http-calls` and `lint-pipes`. Change detection numbers need a recording from `change-detection`. Retention is not judged on a page whose Angular keeps DI debug data, the same as `find-leaks`. An area whose inspector is off, or whose agent tools are hidden with `agent.tools.<name>: false`, is left out, and **Coverage** says which. With the Components agent tools hidden, axe findings name no component or instance id.
 
 The axe pass loads axe-core into the page on demand and changes nothing in the app. It leaves out the overlay's own elements and frames, masks selectors, attributes and summaries, and leaves out text content. With `agent.readOnly`, the tool has no `axe` argument and is marked read-only, and it refuses `session: "clear"` and a `session: "before"` that would replace a baseline, so it never drops one the user took. Two audits that used the same axe pass don't compare accessibility, and a note says so. A reload of the tab drops its axe pass. A session is kept per page for 30 minutes after its last use, so it survives a reload of the tab. Comparing only works within one page id. See [Inspect, fix and verify](../guides/inspect-fix-verify.md) for the loop.
+
+On an [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app, the audit reads its change detection, leaks and errors, and sessions work as on a browser page. The app has no DOM, so `axe: true` answers that the pass did not run and why, and **Coverage** lists accessibility as off.
 
 ## Analog
 

@@ -235,6 +235,8 @@ These libraries look for the extension once, when the app starts, and the overla
 
 This sample assumes the base list is `["zone.js"]`. Leave `zone.js` out if your app doesn't use it. The hook starts on import, and does nothing when `ngDevMode` is off. Without it, the overlay installs the stand-in when it connects, so only stores that connect after that report.
 
+On a device, see [Other stores on a device](../getting-started/angular-native.md#other-stores-on-a-device) for Angular Native. The [NativeScript](../getting-started/nativescript.md#how-it-works) overlay installs the stand-in itself before the app starts.
+
 ### In the Store tab
 
 Each store shows its name (the `name` option it passed, or the library), **Redux DevTools** as its kind, the library, such as **NGXS**, and how many actions its log holds, `@@INIT` included. Select it for its **State** and its **Action log**. Each entry shows the action and a **State diff** against the state before it, with up to 50 changes, without the **Action**, **Diff** and **State** tabs of the NgRx log. The first entry of NGXS is `@@INIT`, with the initial state.

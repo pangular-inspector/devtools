@@ -1,6 +1,6 @@
 ---
 title: NativeScript
-description: Send live components, signals, injectors and NgRx stores from a NativeScript Angular app on a simulator or device to the devtools on your machine.
+description: Send live components, signals, injectors, stores, change detection, leaks and errors from a NativeScript Angular app on a simulator or device to the devtools on your machine.
 ---
 
 <ngmd-hero title="NativeScript" logo="https://cdn.simpleicons.org/nativescript/3C5AFD" gradient>
@@ -15,26 +15,36 @@ This page describes what the overlay shows and how it works. To add it to an app
 
 ## What it shows
 
-| Tab        | On NativeScript                                                                                                                                 |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Components | The component tree, paths and the detail panel. Pointing at a component in the panel outlines it on the device.                                 |
-| Signals    | The signal graph of the selected component, with its write history.                                                                             |
-| Injectors  | Element injectors and environment injectors with their providers.                                                                               |
-| NgRx       | Live `@ngrx/signals` and `@ngrx/store` state and the change log. The store list names the app `NativeScript (iOS)` or `NativeScript (Android)`. |
-| Pipes      | The pipes in use, with their instances and the components that use them.                                                                        |
+| Tab        | On NativeScript                                                                                                                                                                                                                                             |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Components | The component tree, paths and the detail panel. Pointing at a component in the panel outlines it on the device. **Change detection** records cycles with their causes and OnPush hints, and **Leaks** lists effects, subscriptions and destroyed instances. |
+| Signals    | The signal graph of the selected component, with its write history.                                                                                                                                                                                         |
+| Injectors  | Element injectors and environment injectors with their providers. **Show value** reads a created provider's value, and **Startup** shows the Angular version and when the app was first stable.                                                             |
+| Store      | Live `@ngrx/signals` and `@ngrx/store` state, the change log, sessions and restore, and NGXS stores. The store list names the app `NativeScript (iOS)` or `NativeScript (Android)`.                                                                         |
+| Queries    | The TanStack Query clients the app injected, with their queries and mutations.                                                                                                                                                                              |
+| Pipes      | The pipes in use, with their instances and the components that use them.                                                                                                                                                                                    |
+| Errors     | Errors from Angular's `ErrorHandler`, the console, and the NG0100 and missing provider explainers.                                                                                                                                                          |
+| Audit      | The findings of change detection, leaks and errors, and before and after sessions. axe has no DOM to check.                                                                                                                                                 |
+| Plugins    | The views of [page plugins](../guides/write-a-plugin.md) the app registers.                                                                                                                                                                                 |
 
-The source scans (routes, pipes, NgRx declarations) come from the server, so they work as with the [Standalone CLI](./cli.md). The Router, Forms, SSR & HTTP and change detection tabs show no live data for a NativeScript app, and there is no in-app popup.
+The source scans (routes, pipes, NgRx declarations) come from the server, so they work as with the [Standalone CLI](./cli.md). There is no in-app popup.
 
 The server's [configuration](./configuration.md) applies to the app: inspectors you turn off there are not collected, and `redaction.secretNames` masks values before they leave the device.
 
-### Hidden controls
+### What needs a browser
 
-Some controls only work with the [browser overlay](./overlay.md), so the panel hides them while the Components tab shows a NativeScript app:
+These features read or draw the DOM, or run in the browser, so a NativeScript app has none of them. The panel hides the picker and the live views for the app, **Run axe** says the app has no DOM, and the agent tools answer the same instead of asking another tab.
 
-| Control                    | Why it is hidden                                                  |
-| -------------------------- | ----------------------------------------------------------------- |
-| **Pick component on page** | Picking listens for a click on a DOM element.                     |
-| **Change detection** block | The NativeScript overlay does not record change detection cycles. |
+| Feature                                                           | Why it is missing                                                                                  |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Pick component on page**                                        | Picking listens for a click on a DOM element.                                                      |
+| **Flash checks**, **Performance track** and **Angular profiling** | They draw over DOM elements or into the browser's Performance panel.                               |
+| Checks that changed nothing                                       | The recording counts them by watching DOM updates.                                                 |
+| Detached views in **Leaks**                                       | Telling a detached view from a destroyed one asks Angular about a DOM element it never rendered.   |
+| Provider construction times in **Startup**                        | They need the startup hook, which loads before *Angular in a browser.                              |
+| Errors outside *Angular                                           | A NativeScript app has no `window` error events. Errors in *Angular code reach the `ErrorHandler`. |
+| axe, `screenshot-component`, hydration and the console handles    | They read or copy the DOM.                                                                         |
+| Router, Forms and SSR & HTTP tabs                                 | The NativeScript overlay does not collect them.                                                    |
 
 Hovering a row still outlines the component on the device.
 
@@ -82,7 +92,7 @@ The overlay marks its component reports with `platform: 'nativescript'`, the URL
 
 `10.0.2.2` is how the Android emulator reaches its host. A physical device needs your machine's LAN address as `baseURL`.
 
-`initNativeScriptOverlay()` returns a function that stops the overlay and tells the server to forget the app's component, signal, injector, NgRx and pipe reports.
+`initNativeScriptOverlay()` returns a function that stops the overlay and tells the server to forget every report the app sent.
 
 ## How it works
 
@@ -90,7 +100,9 @@ The overlay marks its component reports with `platform: 'nativescript'`, the URL
 - **Injector profiler**: *Angular wires the profiler that backs the provider lists only when a `window` global exists as the platform is created. The overlay defines `window` until *Angular publishes `ng.getComponent`, then removes it. If `window` or `ng` already exist, it leaves them alone.
 - **Web shims**: the devframe client reads `location` and `navigator`. The overlay defines them from `baseURL` when the runtime has none, and leaves them in place.
 - **Transport**: the overlay connects over a WebSocket only, since the NativeScript `fetch` has no streaming body.
-- **Reporting**: the app collects every `intervalMs` and sends a report when it changed. When a report has not changed for a while, the app asks the server whether it still holds it, and sends it again only if not. When the connection fails or drops, it logs one warning and tries again every `retryMs`. The app keeps one page id for as long as the overlay runs, so a reconnect does not show it as a new page.
+- **Store stand-in**: `initNativeScriptOverlay()` puts the [Redux DevTools stand-in](../inspectors/ngrx-store.md#other-stores) in place before the app starts, so NGXS stores report without the `store-hook` entry. A store library that looks for the extension on `window` finds nothing there, since a NativeScript app has no `window` once it started. When the server turns the `ngrx` inspector off, the overlay removes it again.
+- **Angular version**: change detection recording and **Startup** read the version from the `ng-version` value *Angular sets on the root view. When the view keeps none, the overlay tries Angular's profiler and gives it back when Angular has no way to share it (before 20.0).
+- **Reporting**: the app collects every `intervalMs` and sends a report when it changed. The **Leaks** scan walks the views again when the component tree changed, and at least every 30 seconds. When a report has not changed for a while, the app asks the server whether it still holds it, and sends it again only if not. When the connection fails or drops, it logs one warning and tries again every `retryMs`. The app keeps one page id for as long as the overlay runs, so a reconnect does not show it as a new page.
 - **Highlight**: when the panel or the `highlight` agent tool points at a component, the overlay sets a 2 px `#68b6ff` border on the first view under the host that draws something. It restores the previous border when the pointer leaves the row, after the duration the `highlight` tool asks for, or after two seconds.
 
 ## FAQ

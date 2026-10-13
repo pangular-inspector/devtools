@@ -182,14 +182,14 @@ bootstrapApplication(App, appConfig)
 
 A floating button appears on your page. It opens the devtools with one dock entry per tool:
 
-| Dock entry     | Shows                                                                                                          |
-| -------------- | -------------------------------------------------------------------------------------------------------------- |
-| Angular        | Dashboard, components, routes, signals, injectors, forms, pipes, and SSR & HTTP                                |
-| NgRx           | Store patterns from source, and live state and actions                                                         |
-| Analog         | File routes, server calls, render modes and lint (a notice in non-Analog apps)                                 |
-| Angular Native | Components, signals, injectors and store of a connected [Angular Native](./angular-native.md) app              |
-| NativeScript   | Setup steps for [NativeScript apps](../guides/nativescript.md)                                                 |
-| Capacitor      | Plugin calls of a connected [Capacitor app](../inspectors/capacitor.md), or setup steps when none is connected |
+| Dock entry     | Shows                                                                                                                      |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Angular        | Dashboard, components, routes, signals, injectors, forms, pipes, and SSR & HTTP                                            |
+| NgRx           | Store patterns from source, and live state and actions                                                                     |
+| Analog         | File routes, server calls, render modes and lint (a notice in non-Analog apps)                                             |
+| Angular Native | Components, signals, injectors, stores, queries, pipes and errors of a connected [Angular Native](./angular-native.md) app |
+| NativeScript   | Setup steps for [NativeScript apps](../guides/nativescript.md)                                                             |
+| Capacitor      | Plugin calls of a connected [Capacitor app](../inspectors/capacitor.md), or setup steps when none is connected             |
 
 [Popup and hub](./popup-and-hub.md) covers the panel, its dock modes and deep links.
 

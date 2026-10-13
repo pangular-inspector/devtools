@@ -131,6 +131,10 @@ Change detection numbers come from the current recording, and leak and error cou
 
 On Angular 16.2 and later in a development build, Angular's DI debug data keeps every destroyed component in memory, so the audit, like [find-leaks](./components.md#leaks), doesn't judge retention there. Open subscriptions after destroy still count.
 
+### On Angular Native and NativeScript
+
+An [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app reports change detection, leaks and errors, so its audit and its before and after sessions work as for a browser page. The app has no DOM, so **Run axe** and `axe: true` say so instead of running a pass, and **Coverage** lists accessibility as off with the reason.
+
 ### It needs a live page
 
 The audit reads what connected pages report. A [static report](../getting-started/cli.md#static-report) has no page, so the tab says so.

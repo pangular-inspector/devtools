@@ -140,6 +140,8 @@ The first stable time is exact when the overlay or the startup hook watched the 
 
 A zoneless app has no `zone.js` in its polyfills, so it lists only the hook (and any other polyfills it has).
 
+An [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app has no navigation or paint timing and loads no startup hook. Its **Startup** section shows the Angular version and the first stable state, and says why provider times are missing. **Show value** works there as in the browser.
+
 The hook turns Angular's profiling on right after `bootstrapApplication()` creates the platform and reads its provider entries until one second after the app is first stable, then turns it off. Providers created by environment initializers before that point are not timed. Angular's own track shows in the Chrome Performance panel while the hook records.
 
 ## Where the data comes from

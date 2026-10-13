@@ -149,15 +149,15 @@ The panel follows the color scheme of the hub, which follows your system unless 
 
 When the page's server mounts the hub (`/__devframes/`), the button opens the whole hub. The side rail holds every Pangular dock in one **Pangular** group. Pick the group to see its docks: **All tools** first, then one dock per tool. The group opens **All tools** the first time, then the dock you picked last.
 
-| Dock           | Shows                                                                                                                                        |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| All tools      | The full panel, with every tab in one tab bar (`/__devframes/pangular/`)                                                                     |
-| Angular        | Dashboard, Timeline, Audit, Components, Routes, Signals, Injectors, Forms, Pipes, SSR & HTTP, and Errors                                     |
-| NgRx           | The Store tab                                                                                                                                |
-| Analog         | The Analog tab, or a notice in apps that do not use Analog                                                                                   |
-| Angular Native | Components, Signals, Injectors and Store for a connected [Angular Native](./angular-native.md) app, or a setup notice when none is connected |
-| NativeScript   | Setup steps for [NativeScript apps](../guides/nativescript.md)                                                                               |
-| Capacitor      | Plugin calls of a connected [Capacitor app](../inspectors/capacitor.md), or setup steps when none is connected                               |
+| Dock           | Shows                                                                                                                                                                |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| All tools      | The full panel, with every tab in one tab bar (`/__devframes/pangular/`)                                                                                             |
+| Angular        | Dashboard, Timeline, Audit, Components, Routes, Signals, Injectors, Forms, Pipes, SSR & HTTP, and Errors                                                             |
+| NgRx           | The Store tab                                                                                                                                                        |
+| Analog         | The Analog tab, or a notice in apps that do not use Analog                                                                                                           |
+| Angular Native | Components, Signals, Injectors, Store, Queries, Pipes and Errors for a connected [Angular Native](./angular-native.md) app, or a setup notice when none is connected |
+| NativeScript   | Setup steps for [NativeScript apps](../guides/nativescript.md)                                                                                                       |
+| Capacitor      | Plugin calls of a connected [Capacitor app](../inspectors/capacitor.md), or setup steps when none is connected                                                       |
 
 ### The full panel
 
