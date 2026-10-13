@@ -2,12 +2,12 @@
 import '@angular/compiler';
 import * as core from '@angular/core';
 import { Component } from '@angular/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { setPostSignalSetFn } from '@angular/core/primitives/signals';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachChangeDetection, type CdReport } from '../cd-overlay.ts';
 import { findCdScheduler } from '../cd-diagnosis.ts';
 import { angularAtLeast, bootstrapRoot, STANDALONE, type BootedApp } from './angular-version.ts';
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const ngOf = () => (globalThis as { ng?: unknown }).ng;
 const supported = angularAtLeast('20.0');
 const signal = <T>(value: T, debugName: string) =>
@@ -78,6 +78,13 @@ Component({
     <app-counter></app-counter>`,
 })(Shell);
 
+/** Whether a signal write hook is set, such as the one a recording adds once its import resolves. */
+function hasSignalWriteHook(): boolean {
+  const hook = setPostSignalSetFn(null);
+  setPostSignalSetFn(hook);
+  return hook !== null;
+}
+
 function fakeRpc() {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const reports: CdReport[] = [];
@@ -110,13 +117,13 @@ describe.skipIf(!supported)('change detection diagnosis with a real app', () => 
     document.body.innerHTML = '<app-root></app-root>';
     app = await bootstrapRoot(Shell);
     app.appRef.tick();
-    await wait(20);
+    await app.appRef.whenStable();
     const { my, handlers, reports } = fakeRpc();
     const cd = attachChangeDetection(my, 'p1', ngOf, 50);
     stop = cd.stop;
     handlers.get('change-detection-record')!({ pageId: 'p1', on: true });
     // The signal write hook loads with a dynamic import.
-    await wait(20);
+    await vi.waitFor(() => expect(hasSignalWriteHook()).toBe(true), { timeout: 3000 });
     return {
       async report() {
         await cd.push(true);
@@ -135,7 +142,7 @@ describe.skipIf(!supported)('change detection diagnosis with a real app', () => 
   it('credits a click to its event, target and listener component, with the signal it wrote', async () => {
     const recording = await record();
     (document.querySelector('app-counter button') as HTMLButtonElement).click();
-    await wait(40);
+    await app!.appRef.whenStable();
     const report = await recording.report();
     const cycle = report.cycles.find((c) => c.cause?.kind === 'event');
     expect(cycle?.cause).toMatchObject({
@@ -154,8 +161,14 @@ describe.skipIf(!supported)('change detection diagnosis with a real app', () => 
     const counter = (ngOf() as { getComponent(el: Element): Counter }).getComponent(
       document.querySelector('app-counter')!,
     );
-    setTimeout(() => counter.bump(), 0);
-    await wait(60);
+    await new Promise<void>((resolve) =>
+      setTimeout(() => {
+        counter.bump();
+        resolve();
+      }, 0),
+    );
+    // The write schedules a tick, which Angular tracks as a pending task.
+    await app!.appRef.whenStable();
     const report = await recording.report();
     const cause = report.cycles.find((c) => c.cause?.signal === 'count')?.cause;
     expect(cause?.kind).toBe('signal');
@@ -168,7 +181,7 @@ describe.skipIf(!supported)('change detection diagnosis with a real app', () => 
     const recording = await record();
     for (let i = 0; i < 3; i++) {
       (document.getElementById('add') as HTMLButtonElement).click();
-      await wait(40);
+      await app!.appRef.whenStable();
     }
     const report = await recording.report();
     const diagnosis = report.diagnosis!;
