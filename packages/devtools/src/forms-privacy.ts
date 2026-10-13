@@ -118,8 +118,9 @@ const HARMLESS_AFTER_CARD = new Set([
 ]);
 
 const SECRET_AUTOCOMPLETE = /password|one-time-code|cc-/i;
-const MASK_MARKERS = '.sentry-mask, .rr-mask, [data-private], [data-pangular="mask"]';
-const UNMASK_MARKER = '[data-pangular="unmask"]';
+/** Elements whose content never leaves the page (also blacked out in component screenshots). */
+export const MASK_MARKERS = '.sentry-mask, .rr-mask, [data-private], [data-pangular="mask"]';
+export const UNMASK_MARKER = '[data-pangular="unmask"]';
 /** A JWT, including an unsigned (`alg: none`) one with an empty signature. */
 export const JWT = /eyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]*/g;
 const BEARER = /\bBearer\s+[\w.~+/=-]+/gi;

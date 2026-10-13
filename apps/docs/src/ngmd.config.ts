@@ -217,6 +217,8 @@ const config: NgmdConfig = {
         {label: 'MCP server', href: '/agents/mcp-server', status: 'updated'},
         {label: 'Tools', href: '/agents/tools'},
         {label: 'Resources', href: '/agents/resources'},
+        {label: 'Browser agents', href: '/agents/browser-agents', status: 'new'},
+        {label: 'Agent skills', href: '/agents/skills', status: 'new'},
       ],
     },
     {

@@ -526,7 +526,7 @@ describe('set-ssr-overrides and the tool output', () => {
       overrides: [{ id: 'o1', kind: 'render-error', applied: true, note: 'db down' }],
     })!;
     const text = explainSsrRequestText([r], [], [], {});
-    expect(text).toContain('### Overrides from the panel');
+    expect(text).toContain('### SSR overrides');
     expect(text).toContain('Render error: applied, `db down`');
   });
 });

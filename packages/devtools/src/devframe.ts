@@ -178,7 +178,9 @@ import { sanitizeHydration, sanitizePayload, type PayloadSummary } from './http-
 import { redactCall } from './http-redact.ts';
 import { redactMessage, redactUrl } from './router.ts';
 import { isSsrRequestId, ssrRegistry } from './ssr-registry.ts';
-import { sanitizeSsrOverrides } from './ssr-overrides.ts';
+import { sanitizeSsrOverrides, type SsrOverride } from './ssr-overrides.ts';
+import { ssrOverrideTools } from './rpc/ssr-override-tools.ts';
+import { createComponentScreenshots } from './rpc/component-screenshots.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import { listHttpCallsText } from './rpc/http-tools.ts';
 import {
@@ -256,6 +258,7 @@ import {
 export * from './config.ts';
 
 import { registerAuthTokens } from './auth-tokens.ts';
+import { registerBrowserTools, type BrowserToolHost } from './rpc/browser-tools.ts';
 import pkg from '../package.json' with { type: 'json' };
 import { INTEREST_TICK_MS, createPageInterest, leased } from './rpc/page-interest.ts';
 import { createReportDeltas, deltaPush } from './rpc/report-deltas.ts';
@@ -399,6 +402,12 @@ const pangular = defineDevframe({
       interest.forget(pageId);
       return true;
     };
+
+    // The `read` agent tools, for the page to register with browser agents.
+    registerBrowserTools(register, ctx as unknown as BrowserToolHost, {
+      enabled: config.agent.browserTools,
+      owns,
+    });
 
     register({
       name: 'claim-page',
@@ -1102,20 +1111,31 @@ const pangular = defineDevframe({
       },
     });
 
+    const saveSsrOverrides = (overrides: SsrOverride[]) => {
+      ssrRegistry().overrides = overrides;
+      httpState.mutate((draft) => {
+        draft.ssrOverrides = overrides;
+      });
+      return overrides;
+    };
     register({
       name: 'set-ssr-overrides',
       type: 'action',
       jsonSerializable: true,
       handler: (input: unknown) => {
         if (!config.actions.http) throw new Error(actionBlockedMessage('http'));
-        const overrides = sanitizeSsrOverrides(input);
-        ssrRegistry().overrides = overrides;
-        httpState.mutate((draft) => {
-          draft.ssrOverrides = overrides;
-        });
-        return overrides;
+        return saveSsrOverrides(sanitizeSsrOverrides(input));
       },
     });
+    // The panel's TransferState payload and SSR overrides, for agents.
+    for (const tool of ssrOverrideTools({
+      config,
+      overrides: () => ssrRegistry().overrides ?? [],
+      save: saveSsrOverrides,
+      payloads: () => httpPayloads,
+      pages: () => httpPages.values(),
+    }))
+      agent.registerTool(tool);
 
     const clearHttpCalls = () => {
       if (!config.actions.http) throw new Error(actionBlockedMessage('http'));
@@ -1917,6 +1937,21 @@ const pangular = defineDevframe({
       handler: (message: { pageId?: unknown; request?: unknown } | null) =>
         componentValues.request(message?.pageId, message?.request),
     });
+
+    // Images of one component, drawn by its page: the screenshot-component tool.
+    const componentScreenshots = createComponentScreenshots({
+      pages: () => componentPages.values(),
+      broadcast: (method, message) =>
+        void my.rpc.broadcast({ method, args: [message], optional: true }),
+      answersFor,
+    });
+    register({
+      name: 'component-screenshot-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: componentScreenshots.answer,
+    });
+    agent.registerTool(componentScreenshots.tool);
 
     registerConsoleGlobals({
       config,

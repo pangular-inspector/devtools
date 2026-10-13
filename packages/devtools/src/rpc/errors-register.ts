@@ -138,7 +138,7 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
   host.agent.registerTool({
     id: 'pangular:list-console',
     description:
-      'Console calls on the running page (log, info, warn, error and debug), newest first: when, level, the text of the arguments, and the Angular error code it mentions. Calls repeated in a row show once with a count. The page keeps its last 200 calls from when the overlay connected. Values are masked like other live values. Empty when no page is connected.',
+      'Console calls on the running page (log, info, warn, error and debug), newest first: when, level, the text of the arguments, and the Angular error code it mentions. Filter by `level`, `search` text and `since` (such as 5m, to see what one reproduction logged). Calls repeated in a row show once with a count. The page keeps its last 200 calls from when the overlay connected, and sends them while a panel or an agent watches. Values are masked like other live values. Empty when no page is connected.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -149,6 +149,11 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
           description: 'Only calls at this level.',
         },
         search: { type: 'string', description: 'Only calls whose text contains this, any case.' },
+        since: {
+          type: 'string',
+          description:
+            'Only calls made since then: a duration back from now (30s, 5m, 1h), an ISO date, or epoch milliseconds. A call repeated in a row counts from its last repeat.',
+        },
         limit: { type: 'integer', description: 'How many calls to list (1-200, default 50).' },
       },
     },
@@ -157,6 +162,7 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
         page: pageArgument(args),
         level: typeof args?.['level'] === 'string' ? args['level'] : undefined,
         search: typeof args?.['search'] === 'string' ? args['search'] : undefined,
+        since: args?.['since'],
         limit: args?.['limit'],
       }),
     }),

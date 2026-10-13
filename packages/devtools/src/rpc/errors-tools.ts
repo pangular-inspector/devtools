@@ -402,9 +402,30 @@ export function explainErrorText(
 }
 
 /** `list-console`: the page's console calls, newest first. */
+const DURATION_MS: Record<string, number> = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 };
+
+/**
+ * The time `since` names, in epoch milliseconds: a duration back from now
+ * (`30s`, `5m`, `1h`, `500ms`), an ISO date, or epoch milliseconds. A string
+ * that is none of these is the error to answer with.
+ */
+export function sinceTime(value: unknown, now = Date.now()): number | string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const text = value.trim();
+    const duration = /^(\d+(?:\.\d+)?)\s*(ms|s|m|h)$/i.exec(text);
+    if (duration) return now - Number(duration[1]) * DURATION_MS[duration[2]!.toLowerCase()]!;
+    if (/^\d+$/.test(text)) return Number(text);
+    const date = Date.parse(text);
+    if (!Number.isNaN(date)) return date;
+  }
+  return `\`since\` must be a duration such as \`30s\`, \`5m\` or \`1h\`, an ISO date, or epoch milliseconds.`;
+}
+
 export function listConsoleText(
   state: ErrorsState,
-  args: { page?: string; level?: string; search?: string; limit?: number } = {},
+  args: { page?: string; level?: string; search?: string; since?: unknown; limit?: number } = {},
   now = Date.now(),
 ): string {
   const picked = pickPage(state, args.page);
@@ -414,13 +435,16 @@ export function listConsoleText(
   if (args.level && !level) {
     return `Unknown level ${code(args.level)}. Use one of ${CONSOLE_LEVELS.map(code).join(', ')}.`;
   }
+  const since = sinceTime(args.since, now);
+  if (typeof since === 'string') return since;
   const search = args.search?.toLowerCase();
   const all = Object.values(page.console)
     .filter((entry) => !level || entry.level === level)
     .filter((entry) => !search || entry.text.toLowerCase().includes(search))
+    .filter((entry) => since === undefined || entry.at >= since)
     .sort((a, b) => b.id - a.id);
   if (!all.length) {
-    return `${note}Page ${code(page.pageId)} has no console calls${level ? ` at level ${code(level)}` : ''}${search ? ' matching the search' : ''}. The page keeps its last ${MAX_ENTRIES} calls, from when the overlay connected.`;
+    return `${note}Page ${code(page.pageId)} has no console calls${level ? ` at level ${code(level)}` : ''}${search ? ' matching the search' : ''}${since === undefined ? '' : ` since ${new Date(since).toISOString()}`}. The page keeps its last ${MAX_ENTRIES} calls, from when the overlay connected.`;
   }
   const limit = Math.min(Math.max(Math.floor(num(args.limit, 50)), 1), MAX_ENTRIES);
   const rows = all.slice(0, limit).map((entry) => {

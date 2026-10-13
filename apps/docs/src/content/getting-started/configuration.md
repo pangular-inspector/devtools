@@ -106,7 +106,11 @@ type PangularAction = 'forms' | 'router' | 'ngrx' | 'http' | 'analog' | 'compone
 
 interface PangularConfig {
   inspectors?: Partial<Record<PangularInspector, boolean>>;
-  agent?: {readOnly?: boolean; tools?: Partial<Record<PangularInspector, boolean>>};
+  agent?: {
+    readOnly?: boolean;
+    tools?: Partial<Record<PangularInspector, boolean>>;
+    browserTools?: boolean;
+  };
   actions?: boolean | Partial<Record<PangularAction, boolean>>;
   redaction?: {secretNames?: string[]; unmask?: string[]};
   limits?: {
@@ -130,6 +134,7 @@ interface PangularConfig {
 | `inspectors.<name>`  | `true`  | `false` removes the inspector: no tab or dock, no page collector, no RPC functions, and no agent tools or resources. Its actions are blocked too.                                                                                                                                                                                                                                              |
 | `agent.readOnly`     | `false` | `true` keeps only the agent tools in the `read` [safety tier](../agents/tools.md#action-tools). It drops `form-action`, `fill-form`, `navigate`, `dispatch-ngrx-action`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `record-pipes`, `track-subscriptions`, `analog-call-api` and `clear-recordings`. `change-detection` stays without its `record` argument. |
 | `agent.tools.<name>` | `true`  | `false` hides one inspector's agent tools and resources, and its [shared-state keys](../agents/resources.md#shared-state) over HTTP MCP. The tab stays.                                                                                                                                                                                                                                        |
+| `agent.browserTools` | `false` | `true` registers the `read` agent tools on the page for [browser agents](../agents/browser-agents.md) (WebMCP and Chrome DevTools for agents). Off by default, because any script on the development page could then call them.                                                                                                                                                                |
 
 `agent.tools` has the same keys as `inspectors`. An inspector that is off has no agent tools, whatever `agent.tools` says.
 
@@ -190,7 +195,7 @@ The component tree, injectors, change detection recording and forms cost the mos
 - After one full report, the page sends only what changed. If the server lost track (a restart, a lost message), it asks for the whole report again.
 - The page sends each of them at most once a second, also while you type in a form. Changes in between go out together in the next report, so the forms timeline keeps every event. A form action from the panel or an agent is sent at once.
 - The component tree is read again only when elements were added or removed, or every 4 seconds.
-- The page sends them only while someone watches: a panel is open (the popup, the hub or the Chrome extension), or an agent called a tool in the last `limits.idleAfterMs`. An idle page only says it is still open. The forms timeline keeps recording meanwhile. When a panel opens or an agent calls a tool, the page sends what changed meanwhile, and the agent's call waits up to 1.5 seconds for it. An agent call made during that wait waits for the same reports. A tab that closed or stopped reporting is not waited for.
+- The page sends them only while someone watches: a panel is open (the popup, the hub or the Chrome extension), or an agent called a tool in the last `limits.idleAfterMs`. An idle page only says it is still open. The forms timeline keeps recording meanwhile, and so do the errors and console calls of the [Errors](../inspectors/errors.md) tab, which the page sends on the same terms. When a panel opens or an agent calls a tool, the page sends what changed meanwhile, and the agent's call waits up to 1.5 seconds for it. An agent call made during that wait waits for the same reports. A tab that closed or stopped reporting is not waited for.
 
 In the panel, the component tree, the HTTP call table, and the NgRx change log and events render only the rows near view when they have more than 300. Rows out of view are not in the page, so the browser's find doesn't see them. Use the tab's search field to search every row.
 

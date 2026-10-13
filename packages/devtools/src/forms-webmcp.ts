@@ -201,7 +201,15 @@ export function requiredNow(root: AnyRecord): Map<string, boolean> {
   return out;
 }
 
-function modelContextOf(): AnyRecord | null {
+/** Names of the tools the overlay registers itself (`browser-tools.ts`); not the app's. */
+export const PANGULAR_TOOL_PREFIX = 'pangular_';
+
+function ownTool(name: unknown): boolean {
+  return typeof name === 'string' && name.startsWith(PANGULAR_TOOL_PREFIX);
+}
+
+/** `document.modelContext` (the WebMCP draft), or `navigator.modelContext` (earlier drafts). */
+export function modelContextOf(): AnyRecord | null {
   const doc = typeof document === 'undefined' ? undefined : (document as unknown as AnyRecord);
   const nav = typeof navigator === 'undefined' ? undefined : (navigator as unknown as AnyRecord);
   const context = read(() => doc?.['modelContext'] ?? nav?.['modelContext'], null);
@@ -303,6 +311,7 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
     const original = context['registerTool'] as (...args: unknown[]) => unknown;
     const own = Object.prototype.hasOwnProperty.call(context, 'registerTool');
     const patched = function (this: unknown, tool: AnyRecord, options?: AnyRecord) {
+      if (ownTool(read(() => tool['name'], undefined))) return original.call(this, tool, options);
       const record = add({
         name: String(read(() => tool['name'], '')).slice(0, 200),
         description: String(read(() => tool['description'], '') ?? '').slice(0, 500),
@@ -350,7 +359,8 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
       void Promise.resolve(read(() => list.call(source), undefined))
         .then((tools) => {
           if (!Array.isArray(tools)) return;
-          for (const tool of tools.slice(0, MAX_LIST)) {
+          const appTools = tools.filter((tool) => !ownTool(read(() => tool?.['name'], undefined)));
+          for (const tool of appTools.slice(0, MAX_LIST)) {
             const name = read(() => tool?.['name'], undefined);
             if (typeof name !== 'string' || records.some((r) => r.name === name)) continue;
             const schema = parseSchema(read(() => tool['inputSchema'], undefined));

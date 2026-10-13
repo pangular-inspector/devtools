@@ -33,6 +33,16 @@ const WORDS = [
   'Seventy-three',
   'Seventy-four',
   'Seventy-five',
+  'Seventy-six',
+  'Seventy-seven',
+  'Seventy-eight',
+  'Seventy-nine',
+  'Eighty',
+  'Eighty-one',
+  'Eighty-two',
+  'Eighty-three',
+  'Eighty-four',
+  'Eighty-five',
 ];
 
 it('states on the tools page how many tools the server registers', async () => {
