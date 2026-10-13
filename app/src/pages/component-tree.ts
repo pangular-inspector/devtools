@@ -814,7 +814,7 @@ function storedDirectiveHosts(): boolean {
           [pageId]="page()!.pageId"
           [rpc]="rpc()"
           [angular]="angularPage()"
-          (showComponent)="revealNode($event)"
+          (showComponent)="showLeakComponent($event)"
           (highlight)="highlight($event)"
         />
       }
@@ -1203,6 +1203,8 @@ function storedDirectiveHosts(): boolean {
     }
     .row {
       position: relative;
+      scroll-margin-top: var(--ct-toolbar-clearance, 72px);
+      scroll-margin-bottom: 8px;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -2436,6 +2438,11 @@ export class ComponentTree {
     if (this.index().map.has(id)) this.reveal(id);
   }
 
+  /** Shows a component a Leaks row names, and moves keyboard focus to its tree row. */
+  showLeakComponent(id: string) {
+    if (this.index().map.has(id)) this.reveal(id, true);
+  }
+
   /** Opens the tree to a node and selects it; `focus` also moves keyboard focus to its row. */
   reveal(id: string, focus = false) {
     const { parents } = this.index();
@@ -2453,8 +2460,16 @@ export class ComponentTree {
     afterNextRender(
       () => {
         const row = document.querySelector<HTMLElement>(`.row[data-id="${CSS.escape(id)}"]`);
+        // Keep the row clear of the sticky toolbar, whose height changes as it wraps.
+        const toolbar = this.host.nativeElement.querySelector<HTMLElement>('.toolbar');
+        if (toolbar) {
+          this.host.nativeElement.style.setProperty(
+            '--ct-toolbar-clearance',
+            `${toolbar.offsetHeight + 8}px`,
+          );
+        }
         row?.scrollIntoView({ block: 'nearest' });
-        if (focus) row?.focus();
+        if (focus) row?.focus({ preventScroll: true });
       },
       { injector: this.injector },
     );

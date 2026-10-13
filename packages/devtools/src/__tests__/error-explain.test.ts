@@ -4,6 +4,7 @@ import { elementId } from '../element-id.ts';
 import {
   WRITE_WINDOW_MS,
   createRecentWrites,
+  enrichExplain,
   explainError,
   formatLikeAngular,
   membersHolding,
@@ -12,6 +13,8 @@ import {
   parseMissingProvider,
   templateOf,
 } from '../error-explain.ts';
+import { serializeNamed } from '../serialize.ts';
+import { createSignalHistory } from '../signal-history.ts';
 import { attachErrors, ownerCandidates, type ErrorsDebugNg } from '../errors-collector.ts';
 import { HYDRATION_INFO_KEY } from '../hydration.ts';
 import type { ErrorsReport } from '../rpc/errors-tools.ts';
@@ -175,6 +178,51 @@ describe('membersHolding', () => {
 });
 
 describe('recent signal writes', () => {
+  it('keeps only writes to a signal the binding or a holding field names, when there are any', () => {
+    const writes = createRecentWrites();
+    writes.add('n1', 'count', { epoch: 1, value: '3', at: 1000, source: 'write' });
+    writes.add('n2', 'value', { epoch: 1, value: '3', at: 1100, source: 'write' });
+    expect(writes.matching(1200, '3', ['count']).map((w) => w.signal)).toEqual(['count']);
+    expect(writes.matching(1200, '3', ['total']).map((w) => w.signal)).toEqual(['value', 'count']);
+    expect(writes.matching(1200, '3').map((w) => w.signal)).toEqual(['value', 'count']);
+
+    const explain = enrichExplain(
+      { kind: 'expression-changed', binding: 'count', previous: '2', current: '3' },
+      { at: 1200, writes },
+    );
+    expect(explain.kind === 'expression-changed' && explain.writes?.map((w) => w.signal)).toEqual([
+      'count',
+    ]);
+  });
+
+  it('matches a Date or an object by the value as written, not its serialized copy', async () => {
+    const writes = createRecentWrites();
+    const history = createSignalHistory(
+      (value, name) => serializeNamed(name, value, { budget: 1000 }),
+      () => 1000,
+      undefined,
+      { onChange: (id, label, change, raw) => writes.add(id, label, change, raw) },
+    );
+    const when = new Date(Date.UTC(2026, 9, 13, 12));
+    class Trip {
+      constructor(readonly to: string) {}
+    }
+    const deep = { a: { b: { c: { d: { e: { f: 'deep' } } } } } };
+    history.onWrite({ debugName: 'departure', kind: 'signal', value: when, version: 1 });
+    history.onWrite({ debugName: 'trip', kind: 'signal', value: new Trip('Oslo'), version: 1 });
+    history.onWrite({ debugName: 'filters', kind: 'signal', value: deep, version: 1 });
+    history.onWrite({ debugName: 'password', kind: 'signal', value: { p: 'hunter2' }, version: 1 });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const signals = (current: string) => writes.matching(1000, current).map((w) => w.signal);
+    expect(signals(formatLikeAngular(when))).toEqual(['departure']);
+    expect(signals(formatLikeAngular(new Trip('Oslo')))).toEqual(['trip']);
+    expect(signals(formatLikeAngular(deep))).toEqual(['filters']);
+    // A secret-named signal keeps its masked value, so it is never matched.
+    expect(signals('{"p":"hunter2"}')).toEqual([]);
+  });
+
   it('matches writes of the current value in the window before the error, newest first', () => {
     const writes = createRecentWrites();
     writes.add('n1', 'title', { epoch: 1, value: 'Trips (3)', at: 1000, source: 'write' });

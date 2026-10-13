@@ -1,3 +1,4 @@
+import { UNNAMED_SIGNAL } from './cd-data.ts';
 import { PROFILER_EVENT } from './cd-recorder.ts';
 import { listenerName } from './cd-timing.ts';
 import type {
@@ -173,6 +174,33 @@ const nameOf = (instance: unknown): string => {
 };
 
 const cut = (value: string) => value.slice(0, MAX_TEXT);
+
+/**
+ * The component whose compiled template function `name` is: `HttpExample` for
+ * `HttpExample_For_3_Template_button_click_0_listener` or `App_Template`. The
+ * compiler names a view `<parent>_<suffix>_<slot>_Template`, the suffix being a
+ * control flow block or a lowercase tag such as `ng_template`.
+ */
+export function templateOwner(name: string): string | undefined {
+  const match =
+    /^(.+?)_(?:Template(?:_|$)|(?:For|ForEmpty|Conditional|Case|ProjectionFallback|Defer[A-Za-z]*|[a-z][a-z0-9_]*?)_\d+_)/.exec(
+      name.replace(/^_+/, ''),
+    );
+  return match ? match[1] : undefined;
+}
+
+/**
+ * Who a listener belongs to. Angular passes the view's context, which in an
+ * `@for`, `@if` or `<ng-template>` is a context object (`RepeaterContext`,
+ * `NgIfContext`), not a component; the listener's compiled name then gives the
+ * component. Undefined when neither does.
+ */
+function ownerName(instance: unknown, listener: string): string | undefined {
+  const ctor = ctorOf(instance);
+  const def = ctor ? read(() => ('ɵcmp' in ctor ? true : 'ɵdir' in ctor), false) : false;
+  if (def) return nameOf(instance);
+  return listener ? templateOwner(listener) : undefined;
+}
 
 function isScheduler(value: unknown): value is SchedulerLike {
   return (
@@ -415,7 +443,7 @@ export function createCdDiagnosis(options: CdDiagnosisOptions) {
 
   const onWrite = (node: RawSignalNode) => {
     if (!active || depth > 0 || !pending || pending.signal !== undefined) return;
-    pending.signal = cut(read(() => node.debugName, undefined) || '?');
+    pending.signal = cut(read(() => node.debugName, undefined) || UNNAMED_SIGNAL);
   };
 
   const causeOf = (): CdCause => {
@@ -425,8 +453,8 @@ export function createCdDiagnosis(options: CdDiagnosisOptions) {
     const p = pending;
     if (p) {
       const base = NOTIFY_KIND[p.source] ?? 'unknown';
-      const owner = p.owner !== undefined ? nameOf(p.owner) : undefined;
       const listener = p.listener !== undefined ? listenerName(p.listener) : '';
+      const owner = p.owner !== undefined ? ownerName(p.owner, listener) : undefined;
       const timer = !!p.task && TIMER_TASK.test(p.task);
       const kind: CdCauseKind = p.http
         ? 'http'
@@ -796,6 +824,7 @@ export function createCdDiagnosis(options: CdDiagnosisOptions) {
         components,
         ...(inputs.length ? { inputs } : {}),
         ...(zone.length ? { zone } : {}),
+        zoneJs: !!zoneApi(),
       };
     },
     /** Classes refreshed past the 1000 the diagnosis keeps totals for. */

@@ -66,7 +66,9 @@ export function cdDiagnosisText(
 
   const zone = diagnosis.zone ?? [];
   const zoneOnly = diagnosis.causes.zone ?? 0;
-  if (zone.length) {
+  if (diagnosis.zoneJs === false && !zone.length && !zoneOnly) {
+    parts.push('**zone.js**: the page does not load zone.js, so it runs zoneless.');
+  } else if (zone.length) {
     parts.push(
       `**Components that depend on zone.js**: they changed in ticks zone.js started with no signal write, markForCheck, event listener or input before them (${zoneOnly} such tick(s))\n${zone
         .slice(0, limit)

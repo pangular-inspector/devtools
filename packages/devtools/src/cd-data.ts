@@ -237,8 +237,12 @@ export function sanitizeCdDiagnosis(value: unknown): CdDiagnosis | undefined {
     components,
     ...(inputs.length ? { inputs } : {}),
     ...(zone.length ? { zone } : {}),
+    ...(typeof value['zoneJs'] === 'boolean' ? { zoneJs: value['zoneJs'] } : {}),
   };
 }
+
+/** What a cause holds for a signal written without a `debugName`. */
+export const UNNAMED_SIGNAL = '?';
 
 /** One line on what started a cycle, such as `click on button in Cart (add), wrote count`. */
 export function cdCauseText(reason: CdCause): string {
@@ -269,8 +273,13 @@ export function cdCauseText(reason: CdCause): string {
     default:
       parts.push(`${CD_CAUSE_LABEL[reason.kind]}${where}`);
   }
-  if (reason.signal) parts.push(`wrote signal ${reason.signal}`);
-  else if (reason.via && reason.via !== reason.kind)
+  if (reason.signal) {
+    parts.push(
+      reason.signal === UNNAMED_SIGNAL
+        ? 'wrote an unnamed signal'
+        : `wrote signal ${reason.signal}`,
+    );
+  } else if (reason.via && reason.via !== reason.kind)
     parts.push(`via ${CD_CAUSE_LABEL[reason.via]}`);
   if (reason.zone && reason.kind !== 'zone') parts.push('run by zone.js');
   if (reason.more) parts.push(`${reason.more} more notification${reason.more === 1 ? '' : 's'}`);

@@ -1384,6 +1384,8 @@ export interface CdDiagnosis {
   inputs?: CdInputStat[];
   /** Components that changed only in zone.js ticks, at most 50. */
   zone?: CdZoneStat[];
+  /** Whether the page loads zone.js (a `Zone` global); missing in recordings made before it was reported. */
+  zoneJs?: boolean;
 }
 
 /** What a {@link CdSpan} measures. */

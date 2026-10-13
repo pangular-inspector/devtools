@@ -241,7 +241,8 @@ export function membersHolding(component: unknown, current: string): string[] {
 interface RecentWrite {
   signal: string;
   at: number;
-  value: unknown;
+  /** The value as Angular prints it in NG0100, taken from the raw value written. */
+  text: string;
   stack?: string[];
 }
 
@@ -253,13 +254,18 @@ export function createRecentWrites(max = MAX_RECENT_WRITES) {
   const writes: RecentWrite[] = [];
   let heard = false;
   return {
-    /** Pass to the signal history as (part of) `onChange`. */
-    add(_id: string | undefined, label: string, change: SignalChange) {
+    /**
+     * Pass to the signal history as (part of) `onChange`. `raw` is the value as
+     * written; the serialized `change.value` stands in without it. A signal
+     * with a secret name keeps its masked value, so it is never printed or matched.
+     */
+    add(_id: string | undefined, label: string, change: SignalChange, raw?: { value: unknown }) {
       if (change.source !== 'write') return;
+      const value = raw && !isSecretName(label) ? raw.value : change.value;
       writes.push({
         signal: label,
         at: change.at,
-        value: change.value,
+        text: formatLikeAngular(value),
         ...(change.stack?.length ? { stack: change.stack } : {}),
       });
       if (writes.length > max) writes.splice(0, writes.length - max);
@@ -271,15 +277,18 @@ export function createRecentWrites(max = MAX_RECENT_WRITES) {
     get known() {
       return heard;
     },
-    /** Writes whose value prints like `current`, in the window before `at`, newest first. */
-    matching(at: number, current: string): ExplainWrite[] {
-      return writes
-        .filter(
-          (write) =>
-            write.at <= at + 50 &&
-            at - write.at <= WRITE_WINDOW_MS &&
-            formatLikeAngular(write.value) === current,
-        )
+    /**
+     * Writes whose value prints like `current`, in the window before `at`, newest
+     * first. When some were made to a signal named in `names` (the binding, the
+     * fields that hold the value), only those are kept: the others merely share the value.
+     */
+    matching(at: number, current: string, names: readonly string[] = []): ExplainWrite[] {
+      const found = writes.filter(
+        (write) =>
+          write.at <= at + 50 && at - write.at <= WRITE_WINDOW_MS && write.text === current,
+      );
+      const named = found.filter((write) => names.includes(write.signal));
+      return (named.length ? named : found)
         .reverse()
         .slice(0, 5)
         .map(({ signal, at: when, stack }) => ({ signal, at: when, ...(stack ? { stack } : {}) }));
@@ -319,7 +328,8 @@ export function enrichExplain(
     if (context.writes) {
       out.writesKnown = context.writes.known;
       if (!out.masked) {
-        const writes = context.writes.matching(context.at, explain.current);
+        const names = [...(out.binding ? [out.binding] : []), ...(out.members ?? [])];
+        const writes = context.writes.matching(context.at, explain.current, names);
         if (writes.length) out.writes = writes;
       }
     }

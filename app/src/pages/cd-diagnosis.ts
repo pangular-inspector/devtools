@@ -40,31 +40,33 @@ const SHOWN = 10;
               <p class="note">No cycle has a cause yet.</p>
             }
           </div>
-          <div>
-            <h4>Depends on zone.js</h4>
-            @if (zone().length) {
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">Component</th>
-                    <th scope="col" class="num">Zone-only ticks</th>
-                    <th scope="col">After</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (z of zone(); track z.name) {
+          @if (hasZone()) {
+            <div>
+              <h4>Depends on zone.js</h4>
+              @if (zone().length) {
+                <table>
+                  <thead>
                     <tr>
-                      <td class="mono">{{ z.name }}</td>
-                      <td class="num">{{ z.ticks }}</td>
-                      <td class="mono">{{ z.tasks?.join(', ') }}</td>
+                      <th scope="col">Component</th>
+                      <th scope="col" class="num">Zone-only ticks</th>
+                      <th scope="col">After</th>
                     </tr>
-                  }
-                </tbody>
-              </table>
-            } @else if (d.triggers) {
-              <p class="note">{{ zoneNote() }}</p>
-            }
-          </div>
+                  </thead>
+                  <tbody>
+                    @for (z of zone(); track z.name) {
+                      <tr>
+                        <td class="mono">{{ z.name }}</td>
+                        <td class="num">{{ z.ticks }}</td>
+                        <td class="mono">{{ z.tasks?.join(', ') }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              } @else if (d.triggers) {
+                <p class="note">{{ zoneNote() }}</p>
+              }
+            </div>
+          }
         </div>
         <h4>Wasted checks</h4>
         @if (!d.waste) {
@@ -209,11 +211,20 @@ export class CdDiagnosis {
     }));
   });
   readonly zone = computed(() => (this.diagnosis()?.zone ?? []).slice(0, SHOWN));
+  private readonly zoneTicks = computed(() => this.diagnosis()?.causes.zone ?? 0);
+  /**
+   * Shown when the page loads zone.js. Recordings made before `zoneJs` was
+   * reported fall back to whether zone.js started a tick or a component
+   * depends on it.
+   */
+  readonly hasZone = computed(() => {
+    const zoneJs = this.diagnosis()?.zoneJs;
+    return zoneJs ?? (this.zone().length > 0 || this.zoneTicks() > 0);
+  });
   readonly zoneNote = computed(() => {
-    const ticks = this.diagnosis()?.causes.zone ?? 0;
-    return ticks
-      ? `${ticks} ${ticks === 1 ? 'tick' : 'ticks'} came from zone.js alone, and no component changed in them.`
-      : 'No component changed in a tick only zone.js started.';
+    const ticks = this.zoneTicks();
+    if (!ticks) return 'No component changed in a tick only zone.js started.';
+    return `${ticks} ${ticks === 1 ? 'tick' : 'ticks'} came from zone.js alone, and no component changed in them.`;
   });
   readonly wasted = computed(() =>
     (this.diagnosis()?.components ?? []).filter((c) => c.unchanged > 0).slice(0, SHOWN),

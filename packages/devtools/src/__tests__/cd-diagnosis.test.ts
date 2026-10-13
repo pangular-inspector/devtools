@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { callerStack, createCdDiagnosis, findCdScheduler, NOTIFY } from '../cd-diagnosis.ts';
+import {
+  callerStack,
+  createCdDiagnosis,
+  findCdScheduler,
+  NOTIFY,
+  templateOwner,
+} from '../cd-diagnosis.ts';
 import { PROFILER_EVENT as E } from '../cd-recorder.ts';
 import type { RawSignalNode } from '../signal-history.ts';
 
@@ -148,6 +154,47 @@ describe('change detection diagnosis', () => {
       stack: ['Cart.add (src/app/cart.ts:12:5)'],
       more: 1,
     });
+  });
+
+  it('names the component, not the @for context, for a listener inside a block', () => {
+    const t = setup();
+    t.diagnosis.start();
+    class RepeaterContext {}
+    const listener = function HttpExample_For_3_Template_button_click_0_listener() {};
+    t.scheduler.notify(NOTIFY.Listener);
+    t.diagnosis.onEvent(E.OutputStart, new RepeaterContext(), listener, null);
+    const id = t.cycle();
+    expect(t.diagnosis.cycle(id).cause).toMatchObject({
+      component: 'HttpExample',
+      listener: 'HttpExample_For_3_Template_button_click_0_listener',
+    });
+
+    // Without a compiled listener name the context gives no owner at all.
+    t.scheduler.notify(NOTIFY.Listener);
+    t.diagnosis.onEvent(E.OutputStart, new RepeaterContext(), () => {}, null);
+    const next = t.cycle();
+    expect(t.diagnosis.cycle(next).cause?.component).toBeUndefined();
+  });
+
+  it('reads the component from compiled template function names', () => {
+    expect(templateOwner('App_Template')).toBe('App');
+    expect(templateOwner('App_Template_button_click_0_listener')).toBe('App');
+    expect(templateOwner('App_Conditional_2_Template_a_click_1_listener')).toBe('App');
+    expect(templateOwner('My_Card_ForEmpty_5_Template')).toBe('My_Card');
+    expect(templateOwner('List_ng_template_2_Template_li_click_0_listener')).toBe('List');
+    expect(templateOwner('_App_Template')).toBe('App');
+    expect(templateOwner('onClick')).toBeUndefined();
+  });
+
+  it('says whether the page loads zone.js', async () => {
+    const zoneless = setup({ global: { Zone: undefined } });
+    zoneless.diagnosis.start();
+    expect(zoneless.diagnosis.snapshot()?.zoneJs).toBe(false);
+    zoneless.diagnosis.stop();
+    const zoned = setup({ global: { Zone: { current: { get: () => false } } } });
+    zoned.diagnosis.start();
+    expect(zoned.diagnosis.snapshot()?.zoneJs).toBe(true);
+    zoned.diagnosis.stop();
   });
 
   it('names a template listener by its DOM event, target and owner', () => {

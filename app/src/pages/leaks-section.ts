@@ -25,6 +25,8 @@ export interface LeakDestroyed {
   destroyedAt: number;
   navigations: number;
   detached?: boolean;
+  /** Kept alive by Angular's development-mode DI debug data, so not counted as retained. */
+  devHeld?: boolean;
   subscriptions?: number;
 }
 
@@ -94,10 +96,11 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
           type="button"
           class="track"
           [attr.aria-pressed]="tracking()"
-          [disabled]="!pageId() || busy() || !report()"
+          [attr.aria-disabled]="busy() || null"
+          [disabled]="!pageId() || !report()"
           (click)="toggle()"
         >
-          {{ tracking() ? 'Stop tracking subscriptions' : 'Track subscriptions' }}
+          Track subscriptions
         </button>
         <p class="sr-only" role="status">{{ announcement() }}</p>
       </div>
@@ -152,6 +155,14 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
             {{ plural(recent().length, 'instance') }} destroyed recently and not collected yet:
             <span class="mono">{{ names(recent()) }}</span
             >. Navigate a few times to see whether they stay.
+          </p>
+        }
+        @if (devHeld().length) {
+          <p class="note">
+            Not counted: the last destroyed instance of a class with none left on the page, which
+            Angular's development-mode DI debug data can keep alive:
+            <span class="mono">{{ names(devHeld()) }}</span
+            >.
           </p>
         }
         @if (detached().length) {
@@ -285,6 +296,9 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
     .track[aria-pressed='true'] {
       @include m.tint(accent);
     }
+    .track[aria-disabled='true'] {
+      cursor: progress;
+    }
     .track:focus-visible {
       @include m.focus-ring;
     }
@@ -410,17 +424,20 @@ export class LeaksSection {
     const retained: LeakDestroyed[] = [];
     const recent: LeakDestroyed[] = [];
     const detached: LeakDestroyed[] = [];
-    if (!page) return { retained, recent, detached };
+    const devHeld: LeakDestroyed[] = [];
+    if (!page) return { retained, recent, detached, devHeld };
     for (const item of page.destroyed) {
       if (item.detached) detached.push(item);
+      else if (item.devHeld) devHeld.push(item);
       else if (this.isRetained(page, item)) retained.push(item);
       else recent.push(item);
     }
-    return { retained, recent, detached };
+    return { retained, recent, detached, devHeld };
   });
   protected readonly retained = computed(() => this.split().retained);
   protected readonly recent = computed(() => this.split().recent);
   protected readonly detached = computed(() => this.split().detached);
+  protected readonly devHeld = computed(() => this.split().devHeld);
 
   private ageMs(page: LeaksPage, item: LeakDestroyed): number {
     return Math.max(0, this.now()() - page.reportedAt + (page.at - item.destroyedAt));

@@ -52,6 +52,13 @@ export interface LeakDestroyed {
    * as a `RouteReuseStrategy` or a portal does on purpose.
    */
   detached?: boolean;
+  /**
+   * The latest destroyed instance of a class with none left on the page, in a
+   * development build: Angular's DI debug data keeps the last instance of each
+   * class alive, so this one alone is no sign of a leak. Never set on a
+   * detached view or in a production build.
+   */
+  devHeld?: boolean;
   /** Subscriptions it made that are still open. */
   subscriptions?: number;
 }
@@ -160,6 +167,7 @@ function toDestroyed(value: unknown): LeakDestroyed | null {
     destroyedAt: num(value['destroyedAt']),
     navigations: count(value['navigations']),
     ...(value['detached'] === true ? { detached: true } : {}),
+    ...(value['devHeld'] === true && value['detached'] !== true ? { devHeld: true } : {}),
     ...(subscriptions ? { subscriptions } : {}),
   };
 }
@@ -237,6 +245,7 @@ export function destroyedAge(page: LeaksPageView, item: LeakDestroyed, now = Dat
 export function isRetained(page: LeaksPageView, item: LeakDestroyed, now = Date.now()): boolean {
   return (
     !item.detached &&
+    !item.devHeld &&
     item.navigations >= RETAINED_AFTER_NAVIGATIONS &&
     destroyedAge(page, item, now) >= RETAINED_AFTER_MS
   );
@@ -313,7 +322,10 @@ export function findLeaksText(
 
   const destroyed = page.destroyed.filter((item) => match(item.name));
   const retained = destroyed.filter((item) => isRetained(page, item, now));
-  const recent = destroyed.filter((item) => !item.detached && !isRetained(page, item, now));
+  const recent = destroyed.filter(
+    (item) => !item.detached && !item.devHeld && !isRetained(page, item, now),
+  );
+  const devHeld = destroyed.filter((item) => item.devHeld);
   const detached = destroyed.filter((item) => item.detached);
   out.push(
     `## Still retained\n\n${page.navigations} navigations on this page so far. ${page.totals.collected} destroyed instances were garbage collected since the overlay started. Garbage collection runs when the browser decides, so an instance listed here is not proof of a leak: it is still in memory after at least ${RETAINED_AFTER_NAVIGATIONS} navigations and ${RETAINED_AFTER_MS / 1000} seconds. Take a heap snapshot in the Chrome DevTools Memory panel, search for the class, and read its retainers to see what holds it.`,
@@ -335,6 +347,16 @@ export function findLeaksText(
         .slice(0, 10)
         .map((item) => code(item.name))
         .join(', ')}. Navigate a few times and ask again.`,
+    );
+  }
+  if (devHeld.length) {
+    out.push(
+      `Not counted as retained: the last destroyed instance of ${plural(devHeld.length, 'class', 'classes')} with none left on the page, ${devHeld
+        .slice(0, 10)
+        .map((item) => code(item.name))
+        .join(
+          ', ',
+        )}. In a development build Angular's DI debug data (the records behind \`ng.ɵgetInjectorProviders\`) keeps the last instance of each class alive, so one instance proves nothing. A second destroyed instance of the same class that stays is listed above.`,
     );
   }
   if (detached.length) {

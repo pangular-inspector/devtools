@@ -207,6 +207,39 @@ describe('the Errors tab explainers', () => {
       "@Injectable({ providedIn: 'root' })",
     );
     expect(host(fixture).querySelector('.summary code')?.textContent).toBe('TripApi');
+    // No stray space between a code span and the text after it.
+    expect(host(fixture).querySelector('.summary')?.textContent?.trim()).toBe(
+      'No injector Angular asks provides TripApi, so it throws NG0201.',
+    );
+    // Only the summary is announced; the steps sit outside the live region.
+    const live = host(fixture).querySelector('[aria-live="polite"]')!;
+    expect(live.querySelector('.summary')).not.toBeNull();
+    expect(live.querySelector('ol.steps')).toBeNull();
+  });
+
+  it('keeps Explain lookup enabled while it loads and ignores more clicks', async () => {
+    let resolve!: (value: unknown) => void;
+    const call = vi.fn<RpcCall>((name) =>
+      name === 'explain-injection' ? new Promise((r) => (resolve = r)) : Promise.resolve(null),
+    );
+    const fixture = await mount(
+      [group({ code: 'NG0201', explain: { kind: 'missing-provider', token: 'TripApi' } })],
+      { call },
+    );
+    const button = [...host(fixture).querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Explain lookup',
+    )!;
+    button.focus();
+    button.click();
+    fixture.detectChanges();
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(button);
+    button.click();
+    expect(call.mock.calls.filter(([name]) => name === 'explain-injection')).toHaveLength(1);
+    resolve({ error: 'No injector data available.' });
+    await settle(fixture);
+    expect(button.hasAttribute('aria-disabled')).toBe(false);
   });
 
   it('shows why the lookup failed, and hides the button without the Injectors tab', async () => {

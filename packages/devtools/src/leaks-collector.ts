@@ -97,11 +97,27 @@ export interface LeaksOptions {
   dirty?: DomDirty | null;
   /** Navigation events, the page's window by default. */
   target?: Pick<Window, 'addEventListener' | 'removeEventListener'> | null;
+  /**
+   * Whether a panel or an agent is looking (`page-lease.ts`). While idle the
+   * collector keeps its live and destroyed bookkeeping but skips the effect
+   * count and the report, and only re-sends the last report as a keepalive.
+   */
+  active?: () => boolean;
+  /** Whether the app is a development build (`ngDevMode`), whose DI debug data holds instances. */
+  devMode?: () => boolean;
 }
 
 export interface LeaksCollector {
-  /** Scans when the page changed, then pushes when the report changed or a keepalive is due. */
+  /**
+   * Scans when the page changed, then pushes when the report changed or a
+   * keepalive is due. On an idle page (see `active`) only the bookkeeping runs.
+   */
   push(force?: boolean): Promise<void>;
+  /**
+   * Notes which components are live or destroyed when the page changed, without
+   * reading signal graphs or building a report; cheap enough to run on every refresh.
+   */
+  track(): void;
   /** Turns subscription tracking on or off. */
   setTracking(on: boolean): Promise<{ ok: boolean; message: string }>;
   /** Walks the page now, for tests and forced pushes. */
@@ -233,6 +249,10 @@ export function attachLeaks(
 ): LeaksCollector {
   const now = options.now ?? Date.now;
   const tickMs = options.tickMs ?? (() => 0);
+  const active = options.active ?? (() => true);
+  const devMode =
+    options.devMode ??
+    (() => read(() => !!(globalThis as { ngDevMode?: unknown }).ngDevMode, false));
   const hasDocument = typeof document !== 'undefined';
   const tree = options.tree ?? (() => domTree());
   const route =
@@ -287,6 +307,8 @@ export function attachLeaks(
   let nullInjector: { for: unknown; value: unknown } | null = null;
   let effectsSupported = false;
   let uniqueEffects = 0;
+  let effectsDue = false;
+  let lastPayload: LeaksReport | null = null;
 
   const registry = weak.FinalizationRegistry
     ? new weak.FinalizationRegistry<string>((id) => {
@@ -380,7 +402,8 @@ export function attachLeaks(
     return out;
   };
 
-  const scan = () => {
+  /** The cheap part of a scan: which instances are live, destroyed or detached. */
+  const trackInstances = () => {
     const ng = getNg();
     checkNavigation();
     if (!ng || typeof ng.getComponent !== 'function' || !weak.WeakRef) return;
@@ -436,8 +459,22 @@ export function attachLeaks(
       entry.navigation = navigations;
       lastDestroyed.set(entry.name, entry.destroyedAt);
     }
-    countEffects(ng);
+    effectsDue = true;
     pruneTracked();
+  };
+
+  /** Reads the signal graph again after a walk, only when someone looks at the result. */
+  const refreshEffects = () => {
+    if (!effectsDue) return;
+    const ng = getNg();
+    if (!ng) return;
+    effectsDue = false;
+    countEffects(ng);
+  };
+
+  const scan = () => {
+    trackInstances();
+    refreshEffects();
   };
 
   const countEffects = (ng: LeaksDebugNg) => {
@@ -618,9 +655,14 @@ export function attachLeaks(
     }
     if (tracking === 'on') return { ok: true, message: 'Already tracking subscriptions.' };
     if (starting) return starting;
-    const attempt = (async () => {
+    // Declared first, so the attempt can tell whether it is still the latest one.
+    let attempt!: Promise<{ ok: boolean; message: string }>;
+    attempt = (async () => {
       const rxjs = await loadRxjs().catch(() => null);
-      if (!starting || stopped) return { ok: false, message: 'Tracking was turned off.' };
+      // A later on/off while RxJS loads replaces `starting`; only the latest attempt may wrap.
+      if (starting !== attempt || stopped)
+        return { ok: false, message: 'Tracking was turned off.' };
+      if (restoreSubscribe) return { ok: true, message: 'Already tracking subscriptions.' };
       const proto = read(() => rxjs?.Observable?.prototype ?? null, null);
       const restore = proto ? wrapSubscribe(proto) : null;
       if (!restore) {
@@ -717,6 +759,21 @@ export function attachLeaks(
       )
       .slice(0, MAX_LEAK_COMPONENTS);
 
+    // In a development build Angular's DI debug data (the injector profiler's records behind
+    // `ng.ɵgetInjectorProviders`) keeps the last instance of a class alive, so the latest
+    // destroyed instance of a class with none on the page proves nothing. A second one does.
+    const devHeld = new Set<string>();
+    if (devMode()) {
+      const latest = new Map<string, Destroyed>();
+      for (const entry of destroyed.values()) {
+        if (entry.detached || liveClasses.has(entry.name) || entry.ref.deref() === undefined) {
+          continue;
+        }
+        const held = latest.get(entry.name);
+        if (!held || entry.destroyedAt >= held.destroyedAt) latest.set(entry.name, entry);
+      }
+      for (const entry of latest.values()) devHeld.add(entry.id);
+    }
     const gone: LeakDestroyed[] = [...destroyed.values()]
       .filter((entry) => entry.ref.deref() !== undefined)
       .slice(0, MAX_LEAK_DESTROYED)
@@ -729,6 +786,7 @@ export function attachLeaks(
           destroyedAt: entry.destroyedAt,
           navigations: navigations - entry.navigation,
           ...(entry.detached ? { detached: true } : {}),
+          ...(devHeld.has(entry.id) ? { devHeld: true } : {}),
           ...(subs ? { subscriptions: subs } : {}),
         };
       });
@@ -760,17 +818,9 @@ export function attachLeaks(
     };
   };
 
-  let scanDue = dirty ? dirty.cached(() => scan()) : null;
+  let scanDue = dirty ? dirty.cached(() => trackInstances()) : null;
   let queue = Promise.resolve();
-  const pushOnce = async (force: boolean) => {
-    if (left || stopped) return;
-    checkNavigation();
-    if (force || !scanDue) scan();
-    else scanDue();
-    const payload = report();
-    const key = JSON.stringify({ ...payload, at: 0 });
-    if (!force && key === lastKey && !keepaliveDue(sentAt, tickMs(), now())) return;
-    lastKey = key;
+  const send = async (payload: LeaksReport) => {
     sentAt = now();
     try {
       const answer = (await my.rpc.call('push-leaks', payload)) as { known?: boolean } | undefined;
@@ -778,6 +828,26 @@ export function attachLeaks(
     } catch {
       lastKey = '';
     }
+  };
+  const pushOnce = async (force: boolean) => {
+    if (left || stopped) return;
+    checkNavigation();
+    // The bookkeeping runs either way, so a component that lives only while idle is still seen.
+    if (force || !scanDue) trackInstances();
+    else scanDue();
+    if (force || active()) {
+      refreshEffects();
+    } else if (lastPayload) {
+      // Nobody looks: the last report keeps the page from expiring. The first one still goes out.
+      if (keepaliveDue(sentAt, tickMs(), now())) await send(lastPayload);
+      return;
+    }
+    const payload = report();
+    const key = JSON.stringify({ ...payload, at: 0 });
+    if (!force && key === lastKey && !keepaliveDue(sentAt, tickMs(), now())) return;
+    lastKey = key;
+    lastPayload = payload;
+    await send(payload);
   };
   const push = (force = false) => (queue = queue.then(() => pushOnce(force)));
 
@@ -811,6 +881,12 @@ export function attachLeaks(
 
   return {
     push,
+    track() {
+      if (left || stopped) return;
+      checkNavigation();
+      if (scanDue) scanDue();
+      else trackInstances();
+    },
     setTracking,
     scan,
     report,

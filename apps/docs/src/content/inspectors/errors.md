@@ -47,13 +47,15 @@ For `ExpressionChangedAfterItHasBeenCheckedError`, the box shows:
 | **Current**  | The value of the second check.                                                                                                                               |
 | **Held by**  | The fields of the component that hold the current value now, signals included. Getters and `computed` signals don't run.                                     |
 
-**Written by** lists the named signals written with the current value in the 2 seconds before the error. With write stacks on (see [Signals](./signals.md)), each one shows the app frames that wrote it. Without a match, the box says where to look instead. The overlay hears signal writes only while the Signals inspector is on, on Angular 17.0 or later, and only for signals with a `debugName`.
+**Written by** lists the named signals written with the current value in the 2 seconds before the error. Values are compared the way Angular prints them, from the value as it was written, so dates and objects match too. When some of those signals are named like the binding or a field under **Held by**, only those are listed. With write stacks on (see [Signals](./signals.md)), each one shows the app frames that wrote it. Without a match, the box says where to look instead. The overlay hears signal writes only while the Signals inspector is on, on Angular 17.0 or later, and only for signals with a `debugName`.
 
 When the binding or a field that holds the value has a secret-looking name, both values show as `[redacted]`.
 
 #### Server vs client DOM (NG0500 to NG0503)
 
 For a hydration mismatch, the box shows Angular's first sentence and a line diff of the server HTML Angular expected (`−`) and the client DOM it found (`+`). Angular marks the node it means with `<-- AT THIS LOCATION`. The diff comes from the error message. When the message has no DOM, it comes from what Angular recorded on the component host instead, the same data as the [Hydration](./components.md#hydration) section. When Angular suspects a browser extension or a third-party script, the box says so.
+
+Hydration errors are raised once, while the app hydrates. The page catches them only if the overlay is already running when hydration finishes. If the app imports the overlay itself after bootstrap, such as after `whenStable()`, the hydration errors of that page load are not in the list. Read them in the browser console instead, or start the overlay before the app bootstraps. See [Capture starts with the overlay](#capture-starts-with-the-overlay).
 
 #### Missing provider (NG0201)
 

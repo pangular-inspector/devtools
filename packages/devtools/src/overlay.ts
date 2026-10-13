@@ -356,9 +356,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     (value, name) => graphValue(name, value),
     {
       stacks: signalWatch.stacks,
-      onChange: (id, label, change) => {
+      onChange: (id, label, change, raw) => {
         signalWatch.onChange(id, label, change);
-        if (on.errors) recentWrites.add(id, label, change);
+        if (on.errors) recentWrites.add(id, label, change, raw);
       },
     },
   );
@@ -458,6 +458,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
         on.injectors && pushInjectorTree(true),
         on.components && cd?.push(false, true),
         forms?.push(true),
+        leaks?.push(true),
       ]),
   });
   own(lease.stop);
@@ -493,7 +494,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   const errors = on.errors
     ? attachErrors(my, pageId, getNg, { tickMs, writes: recentWrites })
     : null;
-  const leaks = on.components ? attachLeaks(my, pageId, getNg, { tickMs }) : null;
+  const leaks = on.components
+    ? attachLeaks(my, pageId, getNg, { tickMs, active: () => lease.active })
+    : null;
   const angularInfo = attachAngularInfo(my, pageId, getNg, { tickMs });
   const consoleGlobals = attachConsoleGlobals(my, pageId, {
     getNg,
@@ -680,6 +683,8 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     own(run.cancel);
     return run;
   };
+  // Leak bookkeeping runs on every refresh so short-lived components are seen; the report is paced.
+  const pushLeaks = leaks && paced(() => void leaks.push().catch(() => {}));
   const collectors = [
     () => void angularInfo.push(),
     on.components && paced(() => void pushTree().catch(() => {})),
@@ -692,7 +697,12 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     http && (() => void http.push().catch(() => {})),
     cd && paced(() => void cd.push().catch(() => {})),
     errors && (() => void errors.push().catch(() => {})),
-    leaks && (() => void leaks.push().catch(() => {})),
+    leaks &&
+      pushLeaks &&
+      (() => {
+        leaks.track();
+        pushLeaks();
+      }),
   ].filter((collect) => typeof collect === 'function');
   const pushAll = () => collectors.forEach((run) => run());
   pushAll();

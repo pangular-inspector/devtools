@@ -188,7 +188,7 @@ const STEP_TONE: Record<InjectionStep['status'], string> = {
             <button
               type="button"
               class="small"
-              [disabled]="loading()"
+              [attr.aria-disabled]="loading() || null"
               (click)="explainLookup(p.token)"
             >
               {{ lookup() ? 'Explain lookup again' : 'Explain lookup' }}
@@ -208,7 +208,7 @@ const STEP_TONE: Record<InjectionStep['status'], string> = {
                   @if (part.code) {
                     <code>{{ part.text }}</code>
                   } @else {
-                    {{ part.text }}
+                    <span>{{ part.text }}</span>
                   }
                 }
               </p>
@@ -218,45 +218,46 @@ const STEP_TONE: Record<InjectionStep['status'], string> = {
                   @if (part.code) {
                     <code>{{ part.text }}</code>
                   } @else {
-                    {{ part.text }}
+                    <span>{{ part.text }}</span>
                   }
-                }
-              </p>
-              <ol class="steps" aria-label="Injectors Angular asks, in order">
-                @for (step of l.steps; track step.id + $index) {
-                  <li>
-                    <span class="step-name">
-                      <code>{{ step.name }}</code>
-                      @if (step.component) {
-                        <code class="muted">{{ step.component }}</code>
-                      }
-                    </span>
-                    <span class="chip" [attr.data-tone]="stepTone[step.status]">{{
-                      stepLabel[step.status]
-                    }}</span>
-                    <span class="reason">
-                      @for (part of segments(step.reason); track $index) {
-                        @if (part.code) {
-                          <code>{{ part.text }}</code>
-                        } @else {
-                          {{ part.text }}
-                        }
-                      }
-                    </span>
-                  </li>
-                }
-              </ol>
-              <p class="note">
-                Read from the injector tree the page reported, assuming no <code>self</code>,
-                <code>skipSelf</code>, <code>host</code> or <code>optional</code>. Agents can pass
-                those to <code>explain-injection</code>.
-                @if (l.approximate) {
-                  This Angular version has no resolution path, so the path follows the rendered
-                  tree.
                 }
               </p>
             }
           </div>
+          @if (!loading() && !lookupError() && lookup(); as l) {
+            <ol class="steps" aria-label="Injectors Angular asks, in order">
+              @for (step of l.steps; track step.id + $index) {
+                <li>
+                  <span class="step-name">
+                    <code>{{ step.name }}</code>
+                    @if (step.component) {
+                      <code class="muted">{{ step.component }}</code>
+                    }
+                  </span>
+                  <span class="chip" [attr.data-tone]="stepTone[step.status]">{{
+                    stepLabel[step.status]
+                  }}</span>
+                  <span class="reason">
+                    @for (part of segments(step.reason); track $index) {
+                      @if (part.code) {
+                        <code>{{ part.text }}</code>
+                      } @else {
+                        <span>{{ part.text }}</span>
+                      }
+                    }
+                  </span>
+                </li>
+              }
+            </ol>
+            <p class="note">
+              Read from the injector tree the page reported, assuming no <code>self</code>,
+              <code>skipSelf</code>, <code>host</code> or <code>optional</code>. Agents can pass
+              those to <code>explain-injection</code>.
+              @if (l.approximate) {
+                This Angular version has no resolution path, so the path follows the rendered tree.
+              }
+            </p>
+          }
         }
       }
     }
@@ -376,7 +377,7 @@ const STEP_TONE: Record<InjectionStep['status'], string> = {
     .small:hover {
       background: var(--surface-3);
     }
-    .small:disabled {
+    .small[aria-disabled='true'] {
       cursor: progress;
     }
     .small:focus-visible {
@@ -461,7 +462,7 @@ export class ErrorExplainView {
   async explainLookup(token: string) {
     const client = this.rpc();
     const owner = this.owner();
-    if (!client || !owner) return;
+    if (!client || !owner || this.loading()) return;
     this.loading.set(true);
     this.lookupError.set(null);
     try {

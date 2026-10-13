@@ -123,6 +123,52 @@ describe('CdDiagnosis', () => {
   });
 });
 
+describe('CdDiagnosis and the zoneJs flag', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  async function zoneSection(zoneJs: boolean) {
+    const fixture = TestBed.createComponent(CdDiagnosis);
+    fixture.componentRef.setInput(
+      'page',
+      page({ diagnosis: { ...diagnosis, causes: { signal: 4 }, zone: [], zoneJs } }),
+    );
+    await fixture.whenStable();
+    const h4 = [...(fixture.nativeElement as HTMLElement).querySelectorAll('h4')].find(
+      (h) => h.textContent?.trim() === 'Depends on zone.js',
+    );
+    return h4?.parentElement ?? null;
+  }
+
+  it('shows the zone.js block on a zone.js page even when zone.js started no tick', async () => {
+    expect((await zoneSection(true))?.textContent).toContain(
+      'No component changed in a tick only zone.js started.',
+    );
+  });
+
+  it('hides it on a zoneless page', async () => {
+    expect(await zoneSection(false)).toBeNull();
+  });
+});
+
+describe('CdDiagnosis on a zoneless page', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('hides the zone.js block when no tick came from zone.js', async () => {
+    const fixture = TestBed.createComponent(CdDiagnosis);
+    fixture.componentRef.setInput(
+      'page',
+      page({ diagnosis: { ...diagnosis, causes: { signal: 4, event: 2 }, zone: [] } }),
+    );
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    const headings = [...host.querySelectorAll('h4')].map((h) => text(h));
+    expect(headings).toContain('What started the cycles');
+    expect(headings).not.toContain('Depends on zone.js');
+    expect(host.textContent).not.toContain('zone.js started');
+    fixture.destroy();
+  });
+});
+
 describe('CdRecording latest cycles', () => {
   it('names what started a cycle and how many checks changed nothing', async () => {
     const fixture = TestBed.createComponent(CdRecording);

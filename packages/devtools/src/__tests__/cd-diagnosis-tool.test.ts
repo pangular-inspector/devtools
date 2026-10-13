@@ -134,6 +134,16 @@ describe('change detection diagnosis data', () => {
     expect(clean.inputs).toHaveLength(50);
     expect(clean.inputs![0]).toEqual({ name: 'C0', input: 'x', inPlace: 1, sameContents: 0 });
     expect(clean.zone).toEqual([{ name: 'Z', ticks: 1, tasks: ['a', 'b', 'c'] }]);
+    expect(clean.zoneJs).toBeUndefined();
+    expect(sanitizeCdDiagnosis({ zoneJs: false })!.zoneJs).toBe(false);
+    expect(sanitizeCdDiagnosis({ zoneJs: 'no' })!.zoneJs).toBeUndefined();
+  });
+
+  it('keeps whether the page loads zone.js through an export and an import', () => {
+    const recording = sanitizeCdRecording(report('p1'), 10)!;
+    const withZone = { ...recording, diagnosis: { ...recording.diagnosis!, zoneJs: false } };
+    const imported = parseCdImport(JSON.stringify({ recording: withZone }), 10);
+    expect(imported.ok && imported.recording.diagnosis?.zoneJs).toBe(false);
   });
 
   it('keeps the diagnosis through an export and an import, and names the cause in a trace', () => {
@@ -166,6 +176,8 @@ describe('change detection diagnosis data', () => {
     expect(cdCauseText({ kind: 'tick', component: 'Poller' })).toBe(
       'ApplicationRef.tick() in Poller',
     );
+    expect(cdCauseText({ kind: 'signal', signal: '?' })).toMatch(/wrote an unnamed signal$/);
+    expect(cdCauseText({ kind: 'signal', signal: 'count' })).toMatch(/wrote signal count$/);
   });
 
   it('suggests OnPush by version, notes classes already OnPush, and flags inputs and zone.js', () => {
@@ -245,6 +257,10 @@ describe('diagnose-change-detection tool', () => {
       ({ pages: { p1: { ...report('p1'), reportedAt: 1, ...page } } }) as unknown as CdState;
     expect(cdDiagnosisText(state({ supported: false }))).toContain('needs Angular 20 or later');
     expect(cdDiagnosisText(state({ diagnosis: undefined }))).toContain('reported no diagnosis');
+    const zoneless = { ...diagnosis, zone: undefined, causes: { event: 1 }, zoneJs: false };
+    expect(cdDiagnosisText(state({ diagnosis: zoneless }))).toContain(
+      'does not load zone.js, so it runs zoneless',
+    );
     expect(
       cdDiagnosisText(state({ supported: false }), {}, () => ({
         version: '19.2.0',

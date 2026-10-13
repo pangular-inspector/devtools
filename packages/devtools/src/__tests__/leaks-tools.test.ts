@@ -125,6 +125,50 @@ describe('isRetained', () => {
     expect(isRetained(page, page.destroyed[1]!)).toBe(false);
     expect(isRetained(page, { ...page.destroyed[0]!, detached: true })).toBe(false);
     expect(isRetained(page, { ...page.destroyed[0]!, navigations: 1 })).toBe(false);
+    expect(isRetained(page, { ...page.destroyed[0]!, devHeld: true })).toBe(false);
+  });
+
+  it('keeps devHeld through the sanitizer, but never on a detached view', () => {
+    const base = report().destroyed[0]!;
+    const sane = toLeaksReport(
+      report({
+        destroyed: [
+          { ...base, devHeld: true },
+          { ...base, id: 'c11', detached: true, devHeld: true },
+          { ...base, id: 'c12', devHeld: 'yes' as never },
+        ],
+      }),
+    )!;
+    expect(sane.destroyed.map((item) => item.devHeld)).toEqual([true, undefined, undefined]);
+  });
+
+  it('names the instance dev-mode DI debug data may hold apart, and still lists a second one', () => {
+    const old = Date.now() - RETAINED_AFTER_MS - 5000;
+    const page = {
+      ...report({
+        destroyed: [
+          { id: 'a1', name: 'About', route: '/about', destroyedAt: old, navigations: 4 },
+          {
+            id: 'a2',
+            name: 'About',
+            route: '/about',
+            destroyedAt: old + 1,
+            navigations: 3,
+            devHeld: true,
+          },
+          { id: 'h1', name: 'Home', route: '/', destroyedAt: old, navigations: 3, devHeld: true },
+        ],
+        subscriptions: [],
+      }),
+      reportedAt: Date.now(),
+    };
+    const text = findLeaksText({ pages: { tab1: page } });
+    expect(text).toMatch(/\| `About` \| `a1` \|/);
+    expect(text).not.toMatch(/\| `About` \| `a2` \|/);
+    expect(text).not.toMatch(/\| `Home` \|/);
+    expect(text).toMatch(/Not counted as retained: .*2 classes.*`About`, `Home`/);
+    expect(text).toMatch(/DI debug data/);
+    expect(text).not.toMatch(/destroyed recently/);
   });
 });
 

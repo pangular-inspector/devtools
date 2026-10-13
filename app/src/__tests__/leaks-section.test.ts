@@ -86,6 +86,25 @@ describe('LeaksSection', () => {
     expect(host().querySelectorAll('h3')).toHaveLength(3);
   });
 
+  it('names instances DI debug data keeps alive apart, without counting them as retained', async () => {
+    await show(
+      page({
+        destroyed: [
+          {
+            id: 'c12',
+            name: 'PipesExample',
+            route: '/pipes',
+            destroyedAt: NOW - 60_000,
+            navigations: 5,
+            devHeld: true,
+          },
+        ],
+      }),
+    );
+    expect(host().querySelectorAll('.rows')[0]?.textContent ?? '').not.toContain('PipesExample');
+    expect(text()).toContain('DI debug data can keep alive: PipesExample');
+  });
+
   it('lists live effects, with the shared note, and selects or highlights a component', async () => {
     await show(page());
     const shown: string[] = [];
@@ -133,11 +152,30 @@ describe('LeaksSection', () => {
     );
     expect(text()).toMatch(/TripCard\s*2 open\s*instance destroyed\s*TripCard\.ngOnInit/);
     expect(text()).toContain('takeUntilDestroyed()');
-    const stop = button('Stop tracking subscriptions');
+    const stop = button('Track subscriptions');
+    expect(stop.textContent!.trim()).toBe('Track subscriptions');
     expect(stop.getAttribute('aria-pressed')).toBe('true');
     stop.click();
     await fixture.whenStable();
     expect(rpcCall).toHaveBeenLastCalledWith('request-leak-tracking', { pageId: 'p1', on: false });
+  });
+
+  it('keeps the track button enabled and focused while busy, and ignores clicks then', async () => {
+    let resolve!: (value: unknown) => void;
+    rpcCall.mockImplementation(() => new Promise((r) => (resolve = r)));
+    await show(page());
+    const track = button('Track subscriptions');
+    track.focus();
+    track.click();
+    fixture.detectChanges();
+    expect(track.disabled).toBe(false);
+    expect(track.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(track);
+    track.click();
+    expect(rpcCall).toHaveBeenCalledTimes(1);
+    resolve({ pages: 1 });
+    await fixture.whenStable();
+    expect(track.hasAttribute('aria-disabled')).toBe(false);
   });
 
   it('shows the unavailable states', async () => {

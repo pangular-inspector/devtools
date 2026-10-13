@@ -251,11 +251,13 @@ Below **Change detection**, the **Leaks** section looks for components that stay
 | **Open subscriptions after destroy** | RxJS subscriptions a component made that are still open after it went away, with the class, the count and the line that made them. Only while **Track subscriptions** is on.                                             |
 | **Live effects and subscriptions**   | Components on the page that hold live effects or tracked open subscriptions. Hover or focus a row to highlight the component in the page, and click it to select it in the tree.                                         |
 
-A line above the lists counts the navigations, the retained instances and the destroyed instances the browser has collected. Instances destroyed fewer than 2 navigations or 10 seconds ago are named under **Still retained**, and instances that left the page without being destroyed (detached views, such as a `RouteReuseStrategy` cache) are named apart.
+A line above the lists counts the navigations, the retained instances and the destroyed instances the browser has collected. Instances destroyed fewer than 2 navigations or 10 seconds ago are left out of **Still retained** and named in a separate note, as destroyed recently and not collected yet. Instances that left the page without being destroyed (detached views, such as a `RouteReuseStrategy` cache) are named in a note of their own.
 
 <ngmd-alert severity="important" label="A hint, not a verdict">
   The browser collects garbage when it decides, so an instance in <strong>Still retained</strong> is not proof of a leak. Take a heap snapshot in the Chrome DevTools <strong>Memory</strong> panel, search for the class name and read its <strong>Retainers</strong> to see what holds it.
 </ngmd-alert>
+
+In a development build, Angular's DI debug data (the records behind `ng.ɵgetInjectorProviders`) keeps the last instance of each component class alive. One destroyed instance of a class with none left on the page is therefore no sign of a leak on its own. The section and the `find-leaks` agent tool name that instance in a separate note and don't count it as retained. A second destroyed instance of the same class that stays is the stronger hint.
 
 #### How destroyed components are found
 

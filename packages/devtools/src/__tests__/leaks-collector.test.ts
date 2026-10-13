@@ -406,6 +406,30 @@ describe('attachLeaks: subscriptions', () => {
     expect(Object.prototype.hasOwnProperty.call(rx.Observable.prototype, 'subscribe')).toBe(true);
   });
 
+  it('wraps subscribe once when tracking goes on, off and on again while RxJS loads', async () => {
+    const rx = fakeRxjs();
+    let release!: () => void;
+    const loaded = new Promise<void>((resolve) => (release = resolve));
+    const h = harness(() => fakeNg(new Map()), {
+      loadRxjs: async () => {
+        await loaded;
+        return rx.module as never;
+      },
+    });
+    const first = h.collector.setTracking(true);
+    await h.collector.setTracking(false);
+    const second = h.collector.setTracking(true);
+    release();
+    expect(await first).toMatchObject({ ok: false });
+    expect(await second).toMatchObject({ ok: true });
+    expect(rx.Observable.prototype.subscribe).not.toBe(rx.original);
+
+    await h.collector.setTracking(false);
+    expect(rx.Observable.prototype.subscribe).toBe(rx.original);
+    h.collector.stop();
+    expect(rx.Observable.prototype.subscribe).toBe(rx.original);
+  });
+
   it('leaves a wrapper someone added after it in place, and goes quiet', async () => {
     const rx = fakeRxjs();
     page(0);
@@ -596,6 +620,83 @@ describe('attachLeaks: pushes', () => {
     h.collector.resume();
     await h.collector.push();
     expect(h.reports).toHaveLength(3);
+  });
+});
+
+describe('attachLeaks: development builds', () => {
+  it('marks only the latest destroyed instance of a class with none left as held by DI debug data', async () => {
+    const { root, components, cards } = page(3);
+    const ng = fakeNg(components);
+    let now = 1000;
+    let devMode = true;
+    const h = harness(() => ng, { now: () => now, devMode: () => devMode });
+    await h.collector.push();
+    // Two cards go, one stays: the class is still on the page, so neither is excused.
+    cards[0]!.remove();
+    await h.collector.push(true);
+    now += 10;
+    cards[1]!.remove();
+    await h.collector.push(true);
+    expect(h.reports.at(-1)!.destroyed.filter((d) => d.devHeld)).toEqual([]);
+
+    // The last card goes too: only the latest destroyed card is excused.
+    now += 10;
+    cards[2]!.remove();
+    await h.collector.push(true);
+    const held = h.reports
+      .at(-1)!
+      .destroyed.filter((d) => d.devHeld)
+      .map((d) => d.id);
+    expect(held).toEqual([elementId(cards[2]!)]);
+    expect(h.reports.at(-1)!.destroyed).toHaveLength(3);
+
+    // A production build excuses nothing.
+    devMode = false;
+    await h.collector.push(true);
+    expect(h.reports.at(-1)!.destroyed.some((d) => d.devHeld)).toBe(false);
+    expect(root.isConnected).toBe(true);
+  });
+});
+
+describe('attachLeaks: idle pages', () => {
+  it('keeps its bookkeeping but reads no signal graph and sends no new report while nobody looks', async () => {
+    let now = 1000;
+    let active = false;
+    const { components, cards } = page(2);
+    let graphReads = 0;
+    const ng = fakeNg(components, {
+      ɵgetSignalGraph: () => {
+        graphReads++;
+        return { nodes: [{ id: 'e1', kind: 'effect' }] };
+      },
+    });
+    const h = harness(() => ng, { now: () => now, tickMs: () => 3000, active: () => active });
+
+    // The first report still goes out, so the page is listed, but without the graph.
+    await h.collector.push();
+    expect(h.reports).toHaveLength(1);
+    expect(graphReads).toBe(0);
+
+    // A component that comes and goes while idle is still seen once someone looks.
+    cards[1]!.remove();
+    h.collector.track();
+    await h.collector.push();
+    expect(h.reports).toHaveLength(1);
+    expect(graphReads).toBe(0);
+
+    // A keepalive re-sends the last report as it was.
+    now += 6000;
+    await h.collector.push();
+    expect(h.reports).toHaveLength(2);
+    expect(h.reports[1]).toEqual(h.reports[0]);
+    expect(graphReads).toBe(0);
+
+    active = true;
+    await h.collector.push();
+    expect(graphReads).toBeGreaterThan(0);
+    const report = h.reports.at(-1)!;
+    expect(report.support.effects).toBe(true);
+    expect(report.destroyed.map((d) => d.id)).toContain(elementId(cards[1]!));
   });
 });
 
