@@ -235,4 +235,19 @@ describe('nodeSnippet', () => {
     expect(snippet).not.toContain(JWT);
     expect(snippet).not.toContain('Ada');
   });
+
+  it('replaces free-text attribute values, which can hold personal data', () => {
+    const el = document.createElement('img');
+    el.setAttribute('alt', 'Photo of Ada Lovelace');
+    el.setAttribute('title', 'Ada');
+    el.setAttribute('aria-label', 'Ada Lovelace');
+    el.setAttribute('name', 'ada-avatar');
+    el.setAttribute('role', 'img');
+    const snippet = nodeSnippet(el);
+    expect(snippet).not.toContain('Ada');
+    expect(snippet).not.toContain('ada-avatar');
+    expect(snippet).toContain('alt="[redacted]"');
+    expect(snippet).toContain('aria-label="[redacted]"');
+    expect(snippet).toContain('role="img"');
+  });
 });

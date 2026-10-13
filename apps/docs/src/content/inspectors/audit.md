@@ -74,7 +74,7 @@ A number shows only when its area could be read. **Not checked** lists the areas
 - Leaves out the overlay's own elements: the popup, the change detection flash layer, the hydration outline and the highlight box.
 - Skips frames, and reports violations only.
 - Reads the DOM and changes nothing in the app.
-- Masks selectors, attributes and axe's summaries, and leaves out text content and `value` attributes.
+- Masks selectors, attributes and axe's summaries, and leaves out text content and `value` attributes. `alt`, `title`, `aria-label` and `name` values are always replaced, since they can hold personal text.
 - Names the component whose template holds each element, when the Components inspector is on.
 
 The tab keeps the last pass of each page, and the status line says when it ran. A reload of the page drops its pass, since the elements it names are gone. A page whose overlay has no axe pass, or that takes more than 45 seconds, gets an error that says so.

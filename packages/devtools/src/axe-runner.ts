@@ -2,6 +2,7 @@ import { blockOwnerOf, type BlockOwnerDebugNg } from './block-owner.ts';
 import { elementId } from './element-id.ts';
 import { POPUP_ROOT_ID } from './panel-frame.ts';
 import { redactUrl } from './router.ts';
+import { REDACTED } from './forms-privacy.ts';
 import { redactText } from './serialize.ts';
 import { clip } from './text.ts';
 
@@ -46,6 +47,13 @@ const SNIPPET_ATTRIBUTES = [
   'aria-hidden',
   'aria-expanded',
 ];
+
+/**
+ * Attributes that hold text people read, so they can hold personal data
+ * (`aria-label="Ada Lovelace"`) that pattern masking misses. Their values are
+ * always replaced; the rest identify the element and are masked by pattern.
+ */
+const FREE_TEXT_ATTRIBUTES = new Set(['alt', 'title', 'aria-label', 'name']);
 
 export type AxeImpact = 'critical' | 'serious' | 'moderate' | 'minor';
 
@@ -177,7 +185,11 @@ export function nodeSnippet(el: Element): string {
   for (const name of SNIPPET_ATTRIBUTES) {
     const value = el.getAttribute(name);
     if (value === null) continue;
-    const masked = name === 'href' || name === 'src' ? redactUrl(value) : redactText(value);
+    const masked = FREE_TEXT_ATTRIBUTES.has(name)
+      ? REDACTED
+      : name === 'href' || name === 'src'
+        ? redactUrl(value)
+        : redactText(value);
     attributes.push(value === '' ? name : `${name}="${clip(masked, MAX_ATTRIBUTE)}"`);
   }
   return clip(`<${tag}${attributes.length ? ` ${attributes.join(' ')}` : ''}>`, MAX_HTML);
