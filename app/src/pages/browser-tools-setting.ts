@@ -285,6 +285,7 @@ export class BrowserToolsSetting {
 
   private async load(client: DevframeRpcClient) {
     this.attached = client;
+    this.pending = null;
     this.status.set('loading');
     this.error.set('');
     this.unsubscribe?.();

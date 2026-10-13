@@ -9,7 +9,7 @@ description: The overlay registers the read-only agent tools on the page through
 
 # Browser agents
 
-It is off by default, because any script on the page could then call the tools. Turn it on in one of two ways:
+The browser agent tools are off by default, because any script on the page could then call them. Turn it on in one of two ways:
 
 | Where                                                                                                            | How long it lasts                                                                                                 |
 | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
