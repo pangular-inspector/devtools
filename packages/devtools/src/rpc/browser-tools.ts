@@ -14,6 +14,52 @@ import { setCallerPageReader } from './page-scope.ts';
 
 export const LIST_BROWSER_TOOLS = 'list-browser-tools';
 export const CALL_BROWSER_TOOL = 'call-browser-tool';
+/** The panel's Settings switch: turns the page tools on or off while the server runs. */
+export const SET_BROWSER_TOOLS = 'set-browser-tools';
+/** Broadcast to the pages after the switch changes, so they register or unregister. */
+export const BROWSER_TOOLS_CHANGED = 'browser-tools-changed';
+/** The shared-state key the panel reads the switch from. */
+export const BROWSER_TOOLS_STATE = 'browser-tools';
+
+/** What the panel shows: the switch, and where `agent.browserTools` started it. */
+export interface BrowserToolsSwitchState {
+  enabled: boolean;
+  /** `agent.browserTools` from the devtools config, the value after a restart. */
+  config: boolean;
+}
+
+export interface BrowserToolsSwitch {
+  enabled(): boolean;
+  state(): BrowserToolsSwitchState;
+  /** Sets the switch from a panel message; refuses anything but a boolean `enabled`. */
+  set(message: unknown): BrowserToolsSwitchState | { error: string };
+}
+
+/**
+ * The page tools switch. `agent.browserTools` sets where it starts; the
+ * panel's Settings changes it for every page until the server restarts.
+ * `onChange` runs only when the value changes.
+ */
+export function createBrowserToolsSwitch(
+  config: boolean,
+  onChange: (state: BrowserToolsSwitchState) => void = () => {},
+): BrowserToolsSwitch {
+  let enabled = config;
+  const state = () => ({ enabled, config });
+  return {
+    enabled: () => enabled,
+    state,
+    set(message) {
+      const next = isRecord(message) ? message['enabled'] : undefined;
+      if (typeof next !== 'boolean') return { error: 'Send {enabled: true} or {enabled: false}.' };
+      if (next !== enabled) {
+        enabled = next;
+        onChange(state());
+      }
+      return state();
+    },
+  };
+}
 
 /** What the page registers: the MCP name, so a tool has one name everywhere. */
 export interface BrowserTool {
@@ -194,10 +240,17 @@ export function scopedArgs(
 }
 
 export interface BrowserToolOptions {
-  /** `agent.browserTools`: off answers no tools and refuses calls. */
-  enabled: boolean;
+  /**
+   * `agent.browserTools`, or the switch that starts from it: off answers no
+   * tools and refuses calls.
+   */
+  enabled: boolean | (() => boolean);
   /** Whether the calling connection owns `pageId` (the shared owner check). */
   owns: (pageId: unknown) => pageId is string;
+}
+
+function isOn(options: BrowserToolOptions): boolean {
+  return typeof options.enabled === 'function' ? options.enabled() : options.enabled;
 }
 
 export async function callBrowserTool(
@@ -205,8 +258,11 @@ export async function callBrowserTool(
   message: unknown,
   options: BrowserToolOptions,
 ): Promise<BrowserToolAnswer> {
-  if (!options.enabled) {
-    return { text: 'Browser tools are turned off (agent.browserTools).', isError: true };
+  if (!isOn(options)) {
+    return {
+      text: 'Browser tools are turned off (agent.browserTools, or Browser agent tools in the panel Settings).',
+      isError: true,
+    };
   }
   const request = isRecord(message) ? message : {};
   const pageId = request['pageId'];
@@ -239,18 +295,30 @@ type Register = (definition: {
   handler: (...args: any[]) => unknown;
 }) => void;
 
-/** Registers `list-browser-tools` and `call-browser-tool` (shared RPC functions, not agent tools). */
+/**
+ * Registers `list-browser-tools` and `call-browser-tool`, and with a switch
+ * `set-browser-tools` for the panel (shared RPC functions, not agent tools).
+ */
 export function registerBrowserTools(
   register: Register,
   host: BrowserToolHost,
-  options: BrowserToolOptions,
+  options: BrowserToolOptions & { switch?: BrowserToolsSwitch },
 ) {
   register({
     name: LIST_BROWSER_TOOLS,
     type: 'query',
     jsonSerializable: true,
-    handler: () => (options.enabled ? browserTools(host) : []),
+    handler: () => (isOn(options) ? browserTools(host) : []),
   });
+  const toggle = options.switch;
+  if (toggle) {
+    register({
+      name: SET_BROWSER_TOOLS,
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: unknown) => toggle.set(message),
+    });
+  }
   register({
     name: CALL_BROWSER_TOOL,
     type: 'action',

@@ -277,7 +277,13 @@ export {
 } from './plugin.ts';
 
 import { registerAuthTokens } from './auth-tokens.ts';
-import { registerBrowserTools, type BrowserToolHost } from './rpc/browser-tools.ts';
+import {
+  BROWSER_TOOLS_CHANGED,
+  BROWSER_TOOLS_STATE,
+  createBrowserToolsSwitch,
+  registerBrowserTools,
+  type BrowserToolHost,
+} from './rpc/browser-tools.ts';
 import pkg from '../package.json' with { type: 'json' };
 import { INTEREST_TICK_MS, createPageInterest, leased } from './rpc/page-interest.ts';
 import { createReportDeltas, deltaPush } from './rpc/report-deltas.ts';
@@ -427,9 +433,24 @@ const pangular = defineDevframe({
     };
 
     // The `read` agent tools, for the page to register with browser agents.
+    // `agent.browserTools` sets where the switch starts; the panel's Settings
+    // flips it for every page until the server restarts.
+    const browserToolsState = await my.rpc.sharedState(BROWSER_TOOLS_STATE, {
+      initialValue: { enabled: config.agent.browserTools, config: config.agent.browserTools },
+    });
+    const browserToolsSwitch = createBrowserToolsSwitch(config.agent.browserTools, (state) => {
+      browserToolsState.mutate((draft) => {
+        draft.enabled = state.enabled;
+        draft.config = state.config;
+      });
+      void my.rpc
+        .broadcast({ method: BROWSER_TOOLS_CHANGED, args: [state], optional: true })
+        ?.catch?.(() => {});
+    });
     registerBrowserTools(register, ctx as unknown as BrowserToolHost, {
-      enabled: config.agent.browserTools,
+      enabled: browserToolsSwitch.enabled,
       owns,
+      switch: browserToolsSwitch,
     });
 
     let onPageClaimed = (_pageId: string) => {};

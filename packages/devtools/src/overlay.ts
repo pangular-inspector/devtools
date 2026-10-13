@@ -534,7 +534,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   // The component owning each element is component data: only with that inspector on.
   const axe = attachAxe(my, pageId, axeOwnerNg(on.components, getNg));
   const angularInfo = attachAngularInfo(my, pageId, getNg, { tickMs });
-  const browserTools = devtoolsConfig.agent.browserTools ? attachBrowserTools(my, pageId) : null;
+  // Always attached: the panel's Settings can turn the tools on after the page
+  // connects, and the server lists none while they are off.
+  const browserTools = attachBrowserTools(my, pageId);
   const consoleGlobals = attachConsoleGlobals(my, pageId, {
     getNg,
     inspectors: on,
@@ -975,7 +977,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     plugins?.leave();
     startup?.leave();
     angularInfo.leave();
-    browserTools?.leave();
+    browserTools.leave();
   };
   addEventListener('pagehide', leave);
   const resendConfig = () => {
@@ -986,7 +988,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     leaks?.resume();
     plugins?.resume();
     startup?.resume();
-    browserTools?.resume();
+    browserTools.resume();
     void lease.refresh();
     left = false;
     onVisibility();
@@ -1011,7 +1013,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     leaks?.stop();
     plugins?.stop();
     startup?.stop();
-    browserTools?.stop();
+    browserTools.stop();
     axe.stop();
     cd?.stop();
     hydrationOverlay?.stop();

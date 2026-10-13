@@ -5,6 +5,7 @@ import { resolvePangularConfig } from '../../config.ts';
 import {
   browserTools,
   callBrowserTool,
+  createBrowserToolsSwitch,
   redactAnswer,
   scopedArgs,
   type BrowserTool,
@@ -114,6 +115,67 @@ describe('list-browser-tools', () => {
     expect(await names()).toEqual([]);
     const answer = await rpc('call-browser-tool', { pageId: 'p1', name: 'pangular_list-errors' });
     expect(answer).toEqual({ text: expect.stringMatching(/agent\.browserTools/), isError: true });
+  });
+});
+
+describe('set-browser-tools', () => {
+  it('turns the page tools on and off while the server runs, starting from the config', async () => {
+    const { ctx, rpc, names } = await boot({ agent: { browserTools: false } });
+    const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
+    const state = await ctx.rpc.sharedState.get('pangular:browser-tools' as never);
+    expect(state.value()).toEqual({ enabled: false, config: false });
+    expect(await names()).toEqual([]);
+
+    expect(await rpc('set-browser-tools', { enabled: true })).toEqual({
+      enabled: true,
+      config: false,
+    });
+    expect(state.value()).toEqual({ enabled: true, config: false });
+    expect(await names()).toContain('pangular_inspect-component');
+    const answer = await rpc('call-browser-tool', { pageId: 'p1', name: 'pangular_list-errors' });
+    expect(answer.isError).toBeUndefined();
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: expect.stringMatching(/browser-tools-changed$/),
+        args: [{ enabled: true, config: false }],
+      }),
+    );
+
+    await rpc('set-browser-tools', { enabled: false });
+    expect(state.value()).toEqual({ enabled: false, config: false });
+    expect(await names()).toEqual([]);
+    const refused = await rpc('call-browser-tool', { pageId: 'p1', name: 'pangular_list-errors' });
+    expect(refused).toEqual({ text: expect.stringMatching(/turned off/), isError: true });
+  });
+
+  it('can turn off tools the config turned on', async () => {
+    const { ctx, rpc, names } = await boot({ agent: { browserTools: true } });
+    const state = await ctx.rpc.sharedState.get('pangular:browser-tools' as never);
+    expect(state.value()).toEqual({ enabled: true, config: true });
+    await rpc('set-browser-tools', { enabled: false });
+    expect(await names()).toEqual([]);
+    expect(state.value()).toEqual({ enabled: false, config: true });
+  });
+
+  it('refuses anything but a boolean and tells the pages only about a change', () => {
+    const onChange = vi.fn();
+    const toggle = createBrowserToolsSwitch(false, onChange);
+    for (const message of [null, 'on', { enabled: 'true' }, { enabled: 1 }, []]) {
+      expect(toggle.set(message)).toEqual({ error: expect.stringMatching(/enabled/) });
+    }
+    expect(toggle.set({ enabled: false })).toEqual({ enabled: false, config: false });
+    expect(onChange).not.toHaveBeenCalled();
+    toggle.set({ enabled: true });
+    toggle.set({ enabled: true });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith({ enabled: true, config: false });
+    expect(toggle.enabled()).toBe(true);
+  });
+
+  it('is not an agent tool', async () => {
+    const { ctx } = await boot();
+    const ids = ctx.agent.list().tools.map((tool) => tool.id);
+    expect(ids.some((id) => id.includes('browser-tools'))).toBe(false);
   });
 });
 
