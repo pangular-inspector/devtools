@@ -19,19 +19,19 @@ Agents get the same list from the `audit` tool. See [Agent tools](#agent-tools).
 
 Each row is one finding:
 
-| Part           | What it shows                                                                                                       |
-| -------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Severity       | **error**, **warning** or **info**.                                                                                 |
-| Area           | The inspector it comes from, or **Accessibility** for the axe pass.                                                 |
-| Subject        | The component class, route, form, URL or pipe it is about.                                                          |
-| Count          | How many times or places it occurs, as **3×**.                                                                      |
-| Why            | One line on why it is a problem. Values are masked like other live data.                                            |
-| Rule           | The check's id, such as `onpush-candidate`, `wildcard-not-last` or `image-alt`.                                     |
-| Agent tool     | The tool that explains the finding in detail, with its arguments, such as `explain-error { id: "e1" }`.             |
-| Show component | For errors and hydration mismatches, opens the [Components](./components.md) tab on the component.                  |
-| Show in page   | For other findings that map to an element, such as an axe violation, scrolls the page to it and draws a box around. |
+| Part           | What it shows                                                                                                                                                                   |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Severity       | **error**, **warning** or **info**.                                                                                                                                             |
+| Area           | The inspector it comes from, or **Accessibility** for the axe pass.                                                                                                             |
+| Subject        | The component class, route, form, URL or pipe it is about.                                                                                                                      |
+| Count          | How many times or places it occurs, as **3×**.                                                                                                                                  |
+| Why            | One line on why it is a problem. Values are masked like other live data.                                                                                                        |
+| Rule           | The check's id, such as `onpush-candidate`, `wildcard-not-last` or `image-alt`.                                                                                                 |
+| Agent tool     | The tool that explains the finding in detail, with its arguments, such as `explain-error { id: "e1" }`.                                                                         |
+| Show component | For errors and hydration mismatches, opens the [Components](./components.md) tab on the component. Only with the Components inspector on.                                       |
+| Show in page   | For other findings that map to an element, such as an axe violation, scrolls the page to it and draws a box around. Only with the Components inspector on, which draws the box. |
 
-Errors come first, then warnings, then info. Within a severity, accessibility comes first, then errors, hydration, change detection, leaks, router, forms, HTTP and pipes, and then the finding that occurs most often. Filter by text, **Area** or **Severity**, and press `Escape` to clear the search. Hovering a row with an element outlines that element in the app.
+Errors come first, then warnings, then info. Within a severity, accessibility comes first, then errors, hydration, change detection, leaks, router, forms, HTTP and pipes, and then the finding that occurs most often. Filter by text, **Area** or **Severity**, and press `Escape` to clear the search. Hovering a row with an element outlines that element in the app, when the Components inspector is on.
 
 ### Where the findings come from
 
@@ -75,9 +75,9 @@ A number shows only when its area could be read. **Not checked** lists the areas
 - Skips frames, and reports violations only.
 - Reads the DOM and changes nothing in the app.
 - Masks selectors, attributes and axe's summaries, and leaves out text content and `value` attributes.
-- Names the component whose template holds each element.
+- Names the component whose template holds each element, when the Components inspector is on.
 
-The tab keeps the last pass of each page, and the status line says when it ran. A page whose overlay has no axe pass, or that takes more than 60 seconds, gets an error that says so.
+The tab keeps the last pass of each page, and the status line says when it ran. A reload of the page drops its pass, since the elements it names are gone. A page whose overlay has no axe pass, or that takes more than 45 seconds, gets an error that says so.
 
 ### Before and after
 
@@ -93,7 +93,7 @@ The tab keeps the last pass of each page, and the status line says when it ran. 
   </ngmd-step>
 </ngmd-workflow>
 
-The comparison shows each number before and after, with the change marked **better** or **worse** (lower is better for every number). Under it, **Resolved** lists findings the after audit no longer has, **New** the ones only it has, and **Changed count** the findings whose count moved. When only one of the two audits ran axe, accessibility findings are left out of the comparison, and a note says so. Taking another baseline drops the after audit. **Clear** drops both.
+The comparison shows each number before and after, with the change marked **better** or **worse** (lower is better for every number). Under it, **Resolved** lists findings the after audit no longer has, **New** the ones only it has, and **Changed count** the findings whose count moved. When only one of the two audits ran axe, or both used the same axe pass, accessibility findings are left out of the comparison, and a note says so. Run axe again after the change. A baseline an agent took compares with an after audit you take here, and the other way round. Taking another baseline drops the after audit. **Clear** drops both.
 
 ### Pages
 
@@ -105,7 +105,7 @@ When several tabs report, **Page** picks the one to audit. The panel of a tab st
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pangular:audit` | The ranked findings with the tool to call for each, the key numbers and what could not be checked. `axe: true` runs a fresh axe pass first. `session` takes a baseline (`before`), compares (`after`) or `clear`s it. |
 
-The tool is an `action` tool because of `axe`. With `agent.readOnly`, it has no `axe` argument, reads the last pass the panel ran, and is marked read-only. An area whose agent tools are hidden with `agent.tools.<name>: false` is left out of the agent's answer, and the panel still shows it. See [Tools](../agents/tools.md#audit) and [Inspect, fix and verify](../guides/inspect-fix-verify.md).
+The tool is an `action` tool because of `axe`. With `agent.readOnly`, it has no `axe` argument, reads the last pass the panel ran, and is marked read-only. It can then take a baseline only for a page that has none, and compare with it: `session: "clear"`, and `session: "before"` over an existing baseline, are refused, so the agent never drops a baseline you took. An area whose agent tools are hidden with `agent.tools.<name>: false` is left out of the agent's answer, and **Coverage** says its agent tools are off. The panel still shows it. With the Components inspector's agent tools off, the axe findings name no component and no instance id. See [Tools](../agents/tools.md#audit) and [Inspect, fix and verify](../guides/inspect-fix-verify.md).
 
 ## Limits and gotchas
 

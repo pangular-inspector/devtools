@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { OVERLAY_HOST_IDS, attachAxe, nodeSnippet, type AxeLike } from '../axe-runner.ts';
+import {
+  OVERLAY_HOST_IDS,
+  attachAxe,
+  axeOwnerNg,
+  nodeSnippet,
+  type AxeLike,
+} from '../axe-runner.ts';
 import type { BlockOwnerDebugNg } from '../block-owner.ts';
 
 const JWT = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
@@ -69,6 +75,30 @@ afterEach(() => {
 });
 
 describe('attachAxe', () => {
+  it('names element owners only with the Components inspector on', async () => {
+    const { ng } = page();
+    const axe = fakeAxe(() => [document.getElementById('hero')!]);
+    const owners = async (componentsOn: boolean) => {
+      const channel = rpc();
+      attachAxe(
+        channel.my,
+        'tab1',
+        axeOwnerNg(componentsOn, () => ng),
+        {
+          loadAxe: async () => ({ default: axe }),
+        },
+      );
+      channel.emit('axe-run', { requestId: 'a1', pageId: 'tab1' });
+      await vi.waitFor(() => expect(channel.calls).toHaveLength(1));
+      return channel.calls[0]!.message.result.report.violations[0].nodes[0];
+    };
+    expect((await owners(true)).owner).toMatchObject({ name: 'TripCard' });
+    const hidden = await owners(false);
+    expect(hidden.owner).toBeUndefined();
+    // The element id is the overlay's own WeakMap id, kept for the panel.
+    expect(hidden.elementId).toEqual(expect.any(String));
+  });
+
   it('loads axe-core only when its own page asks for a pass', async () => {
     const { ng } = page();
     const axe = fakeAxe(() => [document.getElementById('hero')!]);

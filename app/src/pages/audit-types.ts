@@ -73,7 +73,8 @@ export const METRICS: readonly { key: string; label: string; unit?: string }[] =
 
 export interface AuditSource {
   area: AuditArea;
-  state: 'ok' | 'empty' | 'off';
+  /** `hidden` only reaches agents; the panel sees every area that is on. */
+  state: 'ok' | 'empty' | 'off' | 'hidden';
   note?: string;
 }
 
@@ -94,6 +95,7 @@ export interface AuditSnapshot {
   findings: AuditFinding[];
   metrics: AuditMetrics;
   axe: boolean;
+  axeAt?: number;
 }
 
 export interface MetricChange {

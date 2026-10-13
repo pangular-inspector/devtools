@@ -95,7 +95,7 @@ The answer adds a **Before and after** section:
 | New         | Findings only the after audit has. Look at these before you call the change done.                           |
 | Still there | Findings in both. When a count moved, it lists those findings, otherwise the first five.                    |
 
-When only one of the two audits ran axe, accessibility findings are not compared, and a note says so. Call `audit` with `session: "after"` again after another fix: it compares with the same baseline. Call it with `session: "before"` to start over from the current state, or `session: "clear"` to drop the baseline.
+When only one of the two audits ran axe, or both used the same pass, accessibility findings are not compared, and a note says so. A reload drops the page's last axe pass, so pass `axe: true` again after the change. Call `audit` with `session: "after"` again after another fix: it compares with the same baseline. Call it with `session: "before"` to start over from the current state, or `session: "clear"` to drop the baseline.
 
 ## Show the user
 

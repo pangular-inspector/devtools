@@ -1,7 +1,7 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { DevframeRpcClient } from 'devframe/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuditInspector } from '../pages/audit-inspector';
+import { AUDIT_REFRESH_DELAY_MS, AuditInspector } from '../pages/audit-inspector';
 import type { AuditFinding, AuditResponse } from '../pages/audit-types';
 
 const NOW = Date.UTC(2026, 9, 13, 10, 0, 0);
@@ -232,13 +232,30 @@ describe('AuditInspector', () => {
     });
   });
 
-  it('reads the audit again when a session or axe pass changes elsewhere', async () => {
+  it('reads the audit again once for a burst of session or axe pass changes', async () => {
     start();
     await settle();
     expect(listeners).toHaveLength(1);
+    // An axe pass starting, its result and its end arrive together.
+    listeners[0]!();
+    listeners[0]!();
     listeners[0]!();
     await settle();
+    expect(calls.filter((c) => c.name === 'get-audit')).toHaveLength(1);
+    await new Promise((resolve) => setTimeout(resolve, AUDIT_REFRESH_DELAY_MS + 20));
+    await settle();
     expect(calls.filter((c) => c.name === 'get-audit')).toHaveLength(2);
+  });
+
+  it('offers no Show component, Show in page nor outline with the Components inspector off', async () => {
+    start();
+    fixture.componentRef.setInput('canShowComponent', false);
+    await settle();
+    expect(button('Show component')).toBeUndefined();
+    expect(button('Show in page')).toBeUndefined();
+    host().querySelector<HTMLElement>('.finding')!.dispatchEvent(new Event('mouseenter'));
+    await settle();
+    expect(calls.some((c) => c.name === 'request-page-highlight')).toBe(false);
   });
 
   it('says what to do without a page, after an error, and in a static report', async () => {

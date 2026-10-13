@@ -71,8 +71,12 @@ function sourcesText(report: AuditReport): string {
   return lines.length ? `**Coverage**\n${lines.join('\n')}` : '';
 }
 
-/** The nodes of each axe rule, for `area: "accessibility"`. */
-export function axeDetailText(report: AxeReport, limit: number): string {
+/**
+ * The nodes of each axe rule, for `area: "accessibility"`. Without `owners`
+ * (the agent can't see the Components inspector), pass a report without
+ * owners and the hint to the component tools is left out.
+ */
+export function axeDetailText(report: AxeReport, limit: number, owners = true): string {
   if (!report.violations.length) {
     return `**axe pass** (${report.ms} ms${report.version ? `, axe-core ${report.version}` : ''}): no violations in the app.`;
   }
@@ -89,7 +93,10 @@ export function axeDetailText(report: AxeReport, limit: number): string {
         : '';
     return `- **${code(violation.id)}** ${violation.impact ?? ''} (${violation.count}): ${cell(violation.help)}${violation.helpUrl ? ` [Rule](${violation.helpUrl})` : ''}${violation.tags.length ? ` ${violation.tags.map(code).join(' ')}` : ''}\n${nodes}${more}`;
   });
-  return `**axe pass** (${report.ms} ms${report.version ? `, axe-core ${report.version}` : ''}), rules by elements affected. Selectors and attributes are masked, and text content is left out. Pass an instance id to pangular:inspect-component, or an element to pangular:highlight.\n\n${sections.join('\n')}`;
+  const hint = owners
+    ? ' Pass an instance id to pangular:inspect-component, or an element to pangular:highlight.'
+    : '';
+  return `**axe pass** (${report.ms} ms${report.version ? `, axe-core ${report.version}` : ''}), rules by elements affected. Selectors and attributes are masked, and text content is left out.${hint}\n\n${sections.join('\n')}`;
 }
 
 export interface AuditTextArgs {
@@ -99,6 +106,8 @@ export interface AuditTextArgs {
   /** Other pages the caller could pick, for a note. */
   otherPages?: number;
   axe?: AxeReport;
+  /** Whether the axe elements may name their components (the agent sees the Components inspector). */
+  axeOwners?: boolean;
   session?: AuditSession;
   /** What the call did to the session. */
   sessionNote?: string;
@@ -161,7 +170,9 @@ export function auditText(report: AuditReport, args: AuditTextArgs): string {
   }
   if (args.sessionNote) parts.push(args.sessionNote);
   parts.push(shown.length ? findingRows(shown, args.limit) : 'No finding.');
-  if (args.area === 'accessibility' && args.axe) parts.push(axeDetailText(args.axe, args.limit));
+  if (args.area === 'accessibility' && args.axe) {
+    parts.push(axeDetailText(args.axe, args.limit, args.axeOwners ?? true));
+  }
   parts.push(metricsText(report.metrics));
   const coverage = sourcesText(report);
   if (coverage) parts.push(coverage);

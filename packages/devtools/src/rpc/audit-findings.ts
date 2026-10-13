@@ -154,8 +154,11 @@ export const METRIC_ORDER: (keyof AuditMetrics)[] = [
 /** Whether the audit could read an area, and why not. */
 export interface AuditSource {
   area: AuditArea;
-  /** `ok`: read; `empty`: on, with nothing to read yet; `off`: its inspector is off. */
-  state: 'ok' | 'empty' | 'off';
+  /**
+   * `ok`: read; `empty`: on, with nothing to read yet; `off`: its inspector is
+   * off; `hidden`: on, but the agent's tools for it are off (`agent.tools`).
+   */
+  state: 'ok' | 'empty' | 'off' | 'hidden';
   note?: string;
 }
 

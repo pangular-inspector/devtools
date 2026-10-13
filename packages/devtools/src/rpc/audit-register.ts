@@ -1,6 +1,7 @@
 import { createSharedState } from 'devframe/utils/shared-state';
 import type { PangularInspector } from '../config.ts';
 import type { ComponentPage, HttpState } from '../types.ts';
+import { withoutAxeOwners, withoutOwnerSubjects } from './audit-audience.ts';
 import { createAxeRequests } from './audit-axe.ts';
 import {
   AUDIT_AREAS,
@@ -95,6 +96,11 @@ export interface AuditHost {
   agentSees(inspector: PangularInspector): boolean;
   /** Whether the agent may run axe on the page: off in `agent.readOnly`. */
   agentAxe: boolean;
+  /**
+   * `agent.readOnly`: the agent may read the audit and compare with a
+   * baseline, but not drop or replace the baseline the user took.
+   */
+  agentReadOnly?: boolean;
   timeoutMs?: number;
 }
 
@@ -102,6 +108,11 @@ export interface AuditRegistration {
   /** The audit as the panel or an agent sees it, for tests. */
   audit(pageId: string, audience?: 'panel' | 'agent'): AuditReport;
   sessions: ReturnType<typeof createAuditSessions>;
+  /**
+   * A page loaded again (it claimed its page id): its last axe pass names
+   * elements that are gone, so it is dropped. The baseline stays.
+   */
+  pageLoaded(pageId: string): void;
   stop(): void;
 }
 
@@ -109,6 +120,19 @@ const MARKS = ['before', 'after', 'clear'] as const;
 type SessionAction = (typeof MARKS)[number];
 
 const SEVERITIES: readonly AuditSeverity[] = ['error', 'warning', 'info'];
+
+/** The source each area reads, to tell an area that is off from one hidden from the agent. */
+const AREA_SOURCE: Record<AuditArea, keyof AuditSources | undefined> = {
+  accessibility: undefined,
+  'change-detection': 'cd',
+  leaks: 'leaks',
+  hydration: 'components',
+  errors: 'errors',
+  router: 'router',
+  forms: 'forms',
+  http: 'http',
+  pipes: 'pipes',
+};
 
 /**
  * The audit, shared by every inspector: the `audit` shared state (sessions
@@ -171,13 +195,15 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
     return [...seen.values()];
   };
 
-  const audit = (pageId: string, audience: 'panel' | 'agent' = 'panel') => {
-    const page = pageList().find((entry) => entry.pageId === pageId);
-    return buildAudit(inputsFor(pageId, audience), pageId, page ?? {});
-  };
+  /** Whether axe elements may name their components: the agent sees them with the Components inspector. */
+  const ownersFor = (audience: 'panel' | 'agent') =>
+    audience === 'panel' || host.agentSees('components');
 
-  /** Drops the areas an agent can't see from a snapshot the panel took. */
-  const forAudience = (snapshot: AuditSnapshot, audience: 'panel' | 'agent'): AuditSnapshot => {
+  /** Drops the areas an agent can't see, and the axe owners when it can't see components. */
+  const forAudience = <T extends { findings: AuditSnapshot['findings']; metrics: AuditMetrics }>(
+    snapshot: T,
+    audience: 'panel' | 'agent',
+  ): T => {
     if (audience === 'panel') return snapshot;
     const metrics = Object.fromEntries(
       Object.entries(snapshot.metrics).filter(([key]) => {
@@ -185,7 +211,8 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
         return !area || visible(area, audience);
       }),
     ) as unknown as AuditMetrics;
-    const findings = snapshot.findings.filter((finding) => visible(finding.area, audience));
+    const shown = snapshot.findings.filter((finding) => visible(finding.area, audience));
+    const findings = ownersFor(audience) ? shown : withoutOwnerSubjects(shown);
     const count = (severity: AuditSeverity) =>
       findings.filter((finding) => finding.severity === severity).length;
     return {
@@ -200,13 +227,33 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
     };
   };
 
+  const audit = (pageId: string, audience: 'panel' | 'agent' = 'panel'): AuditReport => {
+    const page = pageList().find((entry) => entry.pageId === pageId);
+    const report = buildAudit(inputsFor(pageId, audience), pageId, page ?? {});
+    if (audience === 'panel') return report;
+    // Name the areas that are on but hidden from the agent apart from the ones that are off.
+    const sources = report.sources.map((source) => {
+      const inspector = AREA_INSPECTOR[source.area];
+      const from = AREA_SOURCE[source.area];
+      return source.state === 'off' && inspector && from && host.sources[from]
+        ? {
+            area: source.area,
+            state: 'hidden' as const,
+            note: `its agent tools are off (\`agent.tools.${inspector}\`).`,
+          }
+        : source;
+    });
+    return { ...forAudience(report, audience), sources };
+  };
+
   const diffOf = (session: AuditSession | undefined, audience: 'panel' | 'agent') =>
     session?.before && session.after
       ? diffAudits(forAudience(session.before, audience), forAudience(session.after, audience))
       : undefined;
 
-  const mark = (pageId: string, action: AuditMark, report: AuditReport) =>
-    sessions.mark(pageId, action, snapshotOf(report));
+  /** Saves the full audit, so a baseline the agent took compares with an after audit of the panel. */
+  const mark = (pageId: string, action: AuditMark) =>
+    sessions.mark(pageId, action, snapshotOf(audit(pageId, 'panel')));
 
   /** The page a call names, else the most recent; an error text when it names none that reports. */
   const resolvePage = (asked: unknown): { pageId: string; others: number } | { error: string } => {
@@ -225,6 +272,11 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       };
     }
     return { pageId: latest.pageId, others: pages.length - 1 };
+  };
+
+  const agentAxeReport = (pageId: string) => {
+    const report = sessions.get(pageId)?.axe;
+    return report && !ownersFor('agent') ? withoutAxeOwners(report) : report;
   };
 
   const timer = setInterval(() => sessions.expire(), EXPIRE_EVERY_MS);
@@ -265,7 +317,7 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       const pages = pageList().map(({ pageId, url, title }) => ({ pageId, url, title }));
       const page = resolvePage(message?.pageId);
       if ('error' in page) return { pages, report: null };
-      const session = sessions.get(page.pageId);
+      const session = sessions.use(page.pageId);
       return {
         pages,
         report: audit(page.pageId),
@@ -297,7 +349,7 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       if (action === 'after' && !sessions.get(page.pageId)?.before) {
         return { ok: false, error: 'Take a baseline first.' };
       }
-      mark(page.pageId, action as AuditMark, audit(page.pageId));
+      mark(page.pageId, action as AuditMark);
       return { ok: true };
     },
   });
@@ -318,7 +370,11 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       host.agentAxe
         ? '`axe: true` runs a fresh axe pass first. '
         : 'The agent is read-only, so it uses the last axe pass the panel ran. '
-    }Measure a change with \`session\`: \`before\` saves this audit as the page's baseline, \`after\` takes the audit again and compares: findings resolved, new and still there, and each number before and after. Sessions are kept per page for 30 minutes after their last use and survive a reload of the tab. \`clear\` drops the page's session. An area whose inspector is off, or whose agent tools are off, is left out and named under Coverage.`,
+    }Measure a change with \`session\`: \`before\` saves this audit as the page's baseline, \`after\` takes the audit again and compares: findings resolved, new and still there, and each number before and after. Sessions are kept per page for 30 minutes after their last use and survive a reload of the tab. \`clear\` drops the page's session.${
+      host.agentReadOnly
+        ? ' The agent is read-only, so it can take a baseline only when the page has none, and cannot clear one.'
+        : ''
+    } An area whose inspector is off, or whose agent tools are off, is left out and named under Coverage.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -355,6 +411,13 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       if (session !== undefined && !MARKS.includes(session)) {
         return { markdown: 'Pass `session`: `before`, `after` or `clear`.' };
       }
+      sessions.use(pageId);
+      const kept = sessions.get(pageId)?.before;
+      if (host.agentReadOnly && (session === 'clear' || (session === 'before' && kept))) {
+        return {
+          markdown: `The agent is read-only (\`agent.readOnly\`), so it can't ${session === 'clear' ? 'drop' : 'replace'} the audit session of page ${code(pageId)}, which the user may have taken.${kept ? ' Call with `session: "after"` to compare with the baseline.' : ''} Clear it in the panel's Audit tab.`,
+        };
+      }
       if (session === 'clear') {
         return {
           markdown: sessions.clear(pageId)
@@ -378,7 +441,7 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       let sessionNote = axeNote;
       let diff: AuditDiff | undefined;
       if (session === 'before' || session === 'after') {
-        const saved = mark(pageId, session, report);
+        const saved = mark(pageId, session);
         if (session === 'before') {
           sessionNote =
             `${axeNote} Saved this audit as the baseline of page ${code(pageId)}. Make your change, reload or use the app the same way (record change detection again if you compare its numbers), then call with \`session: "after"\`.`.trim();
@@ -400,7 +463,8 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
           severity,
           limit,
           otherPages: page.others,
-          axe: sessions.get(pageId)?.axe,
+          axe: agentAxeReport(pageId),
+          axeOwners: ownersFor('agent'),
           session: sessions.get(pageId),
           sessionNote,
           diff,
@@ -412,6 +476,7 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
   return {
     audit,
     sessions,
+    pageLoaded: (pageId) => void sessions.dropAxe(pageId),
     stop: () => clearInterval(timer),
   };
 }

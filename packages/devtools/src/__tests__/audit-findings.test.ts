@@ -424,6 +424,20 @@ describe('diffAudits', () => {
     expect(diff.resolved).toEqual([]);
     expect(diff.notes.join(' ')).toContain('Only the before audit ran axe');
   });
+
+  it('does not compare accessibility when both sides reuse one axe pass', () => {
+    const a11y = f('x', 'accessibility');
+    const before = { ...snapshot([a11y], { axeViolations: 1 }), axeAt: NOW };
+    const same = diffAudits(before, { ...before, at: NOW + 10 });
+    expect(same.resolved).toEqual([]);
+    expect(same.remaining).toEqual([]);
+    expect(same.metrics.map((m) => m.metric)).not.toContain('axeViolations');
+    expect(same.notes.join(' ')).toContain('Both audits used the same axe pass');
+
+    const fresh = diffAudits(before, { ...snapshot([], { axeViolations: 0 }), axeAt: NOW + 5 });
+    expect(keys(fresh.resolved)).toEqual(['x']);
+    expect(fresh.notes).toEqual([]);
+  });
 });
 
 describe('createAuditSessions', () => {
@@ -441,7 +455,7 @@ describe('createAuditSessions', () => {
     expect(sessions.get('tab1')).toBeUndefined();
     expect(sessions.get('tab2')).toBeDefined();
     expect(changes).toBeGreaterThanOrEqual(5);
-    expect(sessions.summary().pages['tab2']).toMatchObject({ before: { at: NOW, findings: 0 } });
+    expect(sessions.summary().pages['tab2']).toEqual({ before: NOW });
   });
 
   it('keeps at most maxPages, dropping the least recently used', () => {
@@ -462,9 +476,35 @@ describe('createAuditSessions', () => {
     expect(sessions.summary().pages['tab1']).toBeUndefined();
   });
 
-  it('snapshots an audit with whether axe ran', () => {
+  it('snapshots an audit with whether axe ran and when', () => {
     const report = buildAudit({ axe: axe() }, 'tab1', { url: '/trips' }, NOW);
-    expect(snapshotOf(report)).toMatchObject({ axe: true, url: '/trips', at: NOW });
+    expect(snapshotOf(report)).toMatchObject({ axe: true, axeAt: NOW, url: '/trips', at: NOW });
+  });
+
+  it('keeps a session alive while it is read, without telling clients', () => {
+    let changes = 0;
+    const sessions = createAuditSessions({ ttlMs: 1000, onChange: () => changes++ });
+    sessions.mark('tab1', 'before', snapshot([], {}), 0);
+    changes = 0;
+    expect(sessions.use('tab1', 900)).toBeDefined();
+    expect(sessions.use('tab2', 900)).toBeUndefined();
+    expect(sessions.get('tab2')).toBeUndefined();
+    sessions.expire(1500);
+    expect(sessions.get('tab1')).toBeDefined();
+    expect(changes).toBe(0);
+    sessions.expire(2000);
+    expect(sessions.get('tab1')).toBeUndefined();
+  });
+
+  it('drops the axe pass of a page that loaded again and keeps its baseline', () => {
+    const sessions = createAuditSessions();
+    sessions.mark('tab1', 'before', snapshot([], {}));
+    expect(sessions.dropAxe('tab1')).toBe(false);
+    sessions.setAxe('tab1', axe());
+    expect(sessions.summary().pages['tab1']).toEqual({ before: NOW, axe: NOW });
+    expect(sessions.dropAxe('tab1')).toBe(true);
+    expect(sessions.get('tab1')?.axe).toBeUndefined();
+    expect(sessions.get('tab1')?.before).toBeDefined();
   });
 });
 

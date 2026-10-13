@@ -4,7 +4,7 @@ import { createPangular } from '../devframe.ts';
 import type { PangularConfig } from '../config.ts';
 import { agentSafety, resolvePangularConfig } from '../config.ts';
 import type { AxeReport } from '../axe-runner.ts';
-import { createAxeRequests } from '../rpc/audit-axe.ts';
+import { AXE_TIMEOUT_MS, createAxeRequests } from '../rpc/audit-axe.ts';
 import type { ErrorsReport } from '../rpc/errors-tools.ts';
 
 const JWT = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
@@ -234,7 +234,8 @@ describe('the audit agent tool', () => {
     await call('push-errors', errors('tab1'));
     const text = await audit();
     expect(text).not.toContain('TripList');
-    expect(text).toContain('Errors: its inspector is turned off.');
+    expect(text).toContain('Errors: its agent tools are off (`agent.tools.errors`).');
+    expect(text).not.toContain('Errors: its inspector is turned off.');
     const panel = await call('get-audit', { pageId: 'tab1' });
     expect(panel.report.findings).toEqual([
       expect.objectContaining({ area: 'errors', subject: 'TripList' }),
@@ -257,9 +258,114 @@ describe('the audit agent tool', () => {
         'errors',
       ].map((key) => [key, false]),
     );
-    const { tool, call } = await boot({ inspectors });
+    const { ctx, tool, call, audit } = await boot({ inspectors });
     expect(tool()).toBeDefined();
     expect(await call('get-audit', {})).toEqual({ pages: [], report: null });
+    // A page the overlay claimed is listed, so axe still runs on it.
+    const host = ctx.rpc as unknown as { getCurrentRpcSession: () => unknown };
+    host.getCurrentRpcSession = () => ({ meta: { id: 1 } });
+    await call('claim-page', { pageId: 'tab1', key: 'k'.repeat(32) });
+    host.getCurrentRpcSession = () => undefined;
+    expect((await call('get-audit', {})).pages).toEqual([
+      expect.objectContaining({ pageId: 'tab1' }),
+    ]);
+    answerAxe(ctx, call, () => axeReport());
+    expect(await audit({ axe: true })).toContain('axe rules broken 1');
+  });
+
+  it('audits a page that only the Errors inspector reports', async () => {
+    const inspectors = Object.fromEntries(
+      ['components', 'injectors', 'signals', 'ngrx', 'forms', 'router', 'pipes', 'http'].map(
+        (key) => [key, false],
+      ),
+    );
+    const { call, audit } = await boot({ inspectors });
+    await call('push-errors', errors('tab1'));
+    const text = await audit();
+    expect(text).toContain('Audit of page `tab1`');
+    expect(text).toContain('`TripList`');
+    expect((await call('get-audit', {})).pages).toEqual([
+      expect.objectContaining({ pageId: 'tab1' }),
+    ]);
+  });
+
+  it('does not compare accessibility when the before and after audits reuse one axe pass', async () => {
+    const { ctx, call, audit } = await boot();
+    await call('push-component-tree', tree('tab1'));
+    answerAxe(ctx, call, () => axeReport(2));
+    await audit({ session: 'before', axe: true });
+    const after = await audit({ session: 'after' });
+    expect(after).toContain('Both audits used the same axe pass');
+    expect(after).not.toContain('| axe rules broken |');
+    expect(after).toMatch(/\*\*Still there\*\* \(0\)/);
+  });
+
+  it('drops the axe pass, not the baseline, when the page loads again', async () => {
+    const { ctx, call, audit } = await boot();
+    await call('push-component-tree', tree('tab1'));
+    answerAxe(ctx, call, () => axeReport());
+    await audit({ session: 'before', axe: true });
+    expect((await call('get-audit', { pageId: 'tab1' })).axe).not.toBeNull();
+    await call('claim-page', { pageId: 'tab1', key: 'k'.repeat(32) });
+    const result = await call('get-audit', { pageId: 'tab1' });
+    expect(result.axe).toBeNull();
+    expect(result.session.before).toMatchObject({ axe: true, axeAt: expect.any(Number) });
+    expect(await audit({ session: 'after' })).toContain('Only the before audit ran axe');
+  });
+
+  it('keeps the full baseline an agent took, so the panel after audit does not see hidden areas as new', async () => {
+    const { call, audit } = await boot({
+      agent: { tools: { errors: false } },
+      inspectors: { pipes: false },
+    });
+    await call('push-component-tree', tree('tab1'));
+    await call('push-errors', errors('tab1'));
+    await audit({ session: 'before' });
+    expect(await call('audit-session', { pageId: 'tab1', action: 'after' })).toEqual({ ok: true });
+    const { session } = await call('get-audit', { pageId: 'tab1' });
+    expect(session.before.findings).toEqual([expect.objectContaining({ area: 'errors' })]);
+    expect(session.diff.added).toEqual([]);
+    expect(session.diff.remaining).toEqual([expect.objectContaining({ area: 'errors' })]);
+    // The agent's comparison still leaves the hidden area out.
+    const after = await audit({ session: 'after' });
+    expect(after).not.toContain('TripList');
+    expect(after).not.toContain('Error occurrences');
+  });
+
+  it('keeps component owners out of the axe answer when the agent cannot see components', async () => {
+    const { ctx, call, audit } = await boot({
+      agent: { tools: { components: false } },
+      inspectors: { pipes: false },
+    });
+    await call('push-component-tree', tree('tab1'));
+    answerAxe(ctx, call, () => axeReport(2));
+    await audit({ session: 'before', axe: true });
+    const text = await audit({ area: 'accessibility', axe: true, session: 'after' });
+    expect(text).toContain('`image-alt` Images must have alternative text');
+    expect(text).not.toContain('TripPhoto');
+    expect(text).not.toContain('c1-3');
+    expect(text).not.toContain('inspect-component');
+    const panel = await call('get-audit', { pageId: 'tab1' });
+    expect(panel.report.findings).toContainEqual(
+      expect.objectContaining({ area: 'accessibility', subject: 'TripPhoto' }),
+    );
+  });
+
+  it('refuses to drop or replace the baseline in read-only mode', async () => {
+    const { call, audit } = await boot({ agent: { readOnly: true }, inspectors: { pipes: false } });
+    await call('push-component-tree', tree('tab1'));
+    await call('push-errors', errors('tab1'));
+    expect(await audit({ session: 'before' })).toContain('Saved this audit as the baseline');
+    const taken = (await call('get-audit', { pageId: 'tab1' })).session.before.at;
+    expect(await audit({ session: 'before' })).toContain("can't replace the audit session");
+    expect(await audit({ session: 'clear' })).toContain("can't drop the audit session");
+    expect((await call('get-audit', { pageId: 'tab1' })).session.before.at).toBe(taken);
+    expect(await audit({ session: 'after' })).toContain('## Before and after');
+  });
+
+  it('stops waiting for axe before the client gives up on the call', () => {
+    // devframe's client times an RPC call out after 60 s.
+    expect(AXE_TIMEOUT_MS).toBeLessThan(60_000);
   });
 });
 
@@ -287,10 +393,11 @@ describe('the audit RPC functions for the panel', () => {
         sharedState: { get: (key: string) => Promise<{ value: () => any }> };
       }
     ).sharedState.get('pangular:audit');
-    expect(shared.value().pages['tab1']).toMatchObject({
-      before: { findings: 2 },
-      after: { findings: 1 },
-      axe: { violations: 1 },
+    // Times only: a count would tell other clients what hidden areas hold.
+    expect(shared.value().pages['tab1']).toEqual({
+      before: expect.any(Number),
+      after: expect.any(Number),
+      axe: expect.any(Number),
     });
     expect(await call('audit-session', { pageId: 'tab1', action: 'nope' })).toMatchObject({
       ok: false,

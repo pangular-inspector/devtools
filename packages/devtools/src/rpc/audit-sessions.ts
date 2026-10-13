@@ -11,7 +11,7 @@ import {
   type AuditReport,
 } from './audit-findings.ts';
 
-/** How long a session lives after its last change. Long enough to edit code and rebuild. */
+/** How long a session lives after its last use. Long enough to edit code and rebuild. */
 export const AUDIT_SESSION_TTL_MS = 30 * 60_000;
 /** Pages that keep a session or an axe pass at once; the least recently used goes first. */
 export const MAX_AUDIT_PAGES = 10;
@@ -26,6 +26,8 @@ export interface AuditSnapshot {
   metrics: AuditMetrics;
   /** Whether an axe pass was part of it, so accessibility numbers compare like with like. */
   axe: boolean;
+  /** When that axe pass ran, on the page clock, so two audits that reuse one pass are not compared. */
+  axeAt?: number;
 }
 
 export interface MetricChange {
@@ -55,21 +57,24 @@ export interface AuditSession {
   after?: AuditSnapshot;
   /** The page's last axe pass. */
   axe?: AxeReport;
-  /** Server clock of the last change. */
+  /** Server clock of the last use: a change, or a read by the panel or an agent. */
   updatedAt: number;
 }
 
-/** The `audit` shared state: a small summary per page, so the panel knows when to fetch again. */
+/**
+ * The `audit` shared state: when each page's session and axe pass last
+ * changed, so the panel knows when to fetch again. Times and flags only:
+ * every client can read it, and counts would tell what hidden areas hold.
+ */
 export interface AuditSharedState {
   pages: Record<
     string,
     {
-      before?: { at: number; findings: number };
-      after?: { at: number; findings: number };
-      axe?: { at: number; violations: number };
+      before?: number;
+      after?: number;
+      axe?: number;
       /** An axe pass is running on the page. */
       running?: boolean;
-      updatedAt: number;
     }
   >;
 }
@@ -81,6 +86,7 @@ export function snapshotOf(report: AuditReport): AuditSnapshot {
     findings: report.findings,
     metrics: report.metrics,
     axe: report.axeAt !== undefined,
+    ...(report.axeAt !== undefined ? { axeAt: report.axeAt } : {}),
   };
 }
 
@@ -88,9 +94,12 @@ export function snapshotOf(report: AuditReport): AuditSnapshot {
 export function diffAudits(before: AuditSnapshot, after: AuditSnapshot): AuditDiff {
   const beforeByKey = new Map(before.findings.map((finding) => [finding.key, finding]));
   const afterKeys = new Set(after.findings.map((finding) => finding.key));
-  // An axe pass on one side only would read as every violation fixed or added.
-  const comparable = (finding: AuditFinding) =>
-    finding.area !== 'accessibility' || (before.axe && after.axe);
+  // An axe pass on one side only would read as every violation fixed or added,
+  // and one pass reused by both says nothing about the change.
+  const samePass =
+    before.axe && after.axe && before.axeAt !== undefined && before.axeAt === after.axeAt;
+  const axeComparable = before.axe && after.axe && !samePass;
+  const comparable = (finding: AuditFinding) => finding.area !== 'accessibility' || axeComparable;
   const resolved = before.findings.filter(
     (finding) => !afterKeys.has(finding.key) && comparable(finding),
   );
@@ -98,7 +107,7 @@ export function diffAudits(before: AuditSnapshot, after: AuditSnapshot): AuditDi
     (finding) => !beforeByKey.has(finding.key) && comparable(finding),
   );
   const remaining = after.findings
-    .filter((finding) => beforeByKey.has(finding.key))
+    .filter((finding) => beforeByKey.has(finding.key) && comparable(finding))
     .map((finding) => {
       const countBefore = beforeByKey.get(finding.key)?.count;
       return countBefore === undefined ? finding : { ...finding, countBefore };
@@ -108,6 +117,7 @@ export function diffAudits(before: AuditSnapshot, after: AuditSnapshot): AuditDi
     const was = before.metrics[metric];
     const now = after.metrics[metric];
     if (was === undefined && now === undefined) continue;
+    if (samePass && (metric === 'axeViolations' || metric === 'axeNodes')) continue;
     metrics.push({
       metric,
       ...(was === undefined ? {} : { before: was }),
@@ -121,6 +131,10 @@ export function diffAudits(before: AuditSnapshot, after: AuditSnapshot): AuditDi
   if (before.axe !== after.axe) {
     notes.push(
       `Only the ${before.axe ? 'before' : 'after'} audit ran axe, so accessibility findings are not compared. Run axe for both to compare them.`,
+    );
+  } else if (samePass) {
+    notes.push(
+      'Both audits used the same axe pass, so accessibility findings are not compared. Run axe again after the change.',
     );
   }
   if (before.url && after.url && before.url !== after.url) {
@@ -154,6 +168,13 @@ export function createAuditSessions(
 
   return {
     get: (pageId: string): AuditSession | undefined => sessions.get(pageId),
+    /**
+     * Marks a page's session as used by a read, so it lives on while the
+     * panel or an agent keeps reading it. Changes nothing a client sees.
+     */
+    use(pageId: string, now = Date.now()): AuditSession | undefined {
+      return sessions.has(pageId) ? touch(pageId, now) : undefined;
+    },
     mark(pageId: string, mark: AuditMark, snapshot: AuditSnapshot, now = Date.now()) {
       const session = touch(pageId, now);
       session[mark] = snapshot;
@@ -165,6 +186,17 @@ export function createAuditSessions(
     setAxe(pageId: string, report: AxeReport, now = Date.now()) {
       touch(pageId, now).axe = report;
       changed();
+    },
+    /**
+     * Drops the page's axe pass when the page loads again: its element ids
+     * name elements that are gone. The baseline stays.
+     */
+    dropAxe(pageId: string): boolean {
+      const session = sessions.get(pageId);
+      if (!session?.axe) return false;
+      delete session.axe;
+      changed();
+      return true;
     },
     setRunning(pageId: string, on: boolean) {
       if (on === running.has(pageId)) return;
@@ -191,20 +223,13 @@ export function createAuditSessions(
       const pages: AuditSharedState['pages'] = {};
       for (const session of sessions.values()) {
         pages[session.pageId] = {
-          updatedAt: session.updatedAt,
-          ...(session.before
-            ? { before: { at: session.before.at, findings: session.before.findings.length } }
-            : {}),
-          ...(session.after
-            ? { after: { at: session.after.at, findings: session.after.findings.length } }
-            : {}),
-          ...(session.axe
-            ? { axe: { at: session.axe.at, violations: session.axe.violations.length } }
-            : {}),
+          ...(session.before ? { before: session.before.at } : {}),
+          ...(session.after ? { after: session.after.at } : {}),
+          ...(session.axe ? { axe: session.axe.at } : {}),
         };
       }
       for (const pageId of running) {
-        pages[pageId] = { ...(pages[pageId] ?? { updatedAt: Date.now() }), running: true };
+        pages[pageId] = { ...pages[pageId], running: true };
       }
       return { pages };
     },

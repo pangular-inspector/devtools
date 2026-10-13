@@ -15,8 +15,12 @@ import { redactUrl } from '../router.ts';
 import { redactText } from '../serialize.ts';
 import { clip } from '../text.ts';
 
-/** How long a pass may take before the server stops waiting. axe on a large page takes seconds. */
-export const AXE_TIMEOUT_MS = 60_000;
+/**
+ * How long a pass may take before the server stops waiting. axe on a large
+ * page takes seconds. Shorter than devframe's own RPC timeout (60 s), so the
+ * panel gets this error, which says what to check, instead of a generic one.
+ */
+export const AXE_TIMEOUT_MS = 45_000;
 
 const IMPACTS: readonly AxeImpact[] = ['critical', 'serious', 'moderate', 'minor'];
 

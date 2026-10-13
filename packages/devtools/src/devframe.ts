@@ -32,6 +32,7 @@ import { registerInjectionExplain } from './rpc/injection-explain.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
+import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
 import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
 import { createPageOwners } from './rpc/page-owners.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
@@ -401,6 +402,7 @@ const pangular = defineDevframe({
       return true;
     };
 
+    let onPageClaimed = (_pageId: string) => {};
     register({
       name: 'claim-page',
       type: 'action',
@@ -408,7 +410,10 @@ const pangular = defineDevframe({
       handler: (message: { pageId?: unknown; key?: unknown } | null) => {
         const pageId = message?.pageId;
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return { ok: false };
-        return { ok: owners.claim(pageId, message?.key) };
+        const ok = owners.claim(pageId, message?.key);
+        // The overlay claims once per load: what the audit holds of the old document is stale.
+        if (ok) onPageClaimed(pageId);
+        return { ok };
       },
     });
 
@@ -3944,15 +3949,25 @@ const pangular = defineDevframe({
       });
     });
 
-    await registerAudit({
+    const audit = await registerAudit({
       my,
       register,
       agent,
       answersFor,
       agentSees: (inspector) => config.agent.tools[inspector],
       agentAxe: !config.agent.readOnly,
+      agentReadOnly: config.agent.readOnly,
+      // Every page the overlay claimed, so axe works with any set of inspectors on.
       pages: () =>
-        withPageUrls([...componentPages.values(), ...httpPages.values(), ...routerPages.values()]),
+        withPageUrls([
+          ...owners.live(),
+          ...componentPages.values(),
+          ...httpPages.values(),
+          ...routerPages.values(),
+          ...formPages.values(),
+          ...(errorsInspector?.pages() ?? []),
+          ...(leaksInspector?.pages() ?? []),
+        ]),
       sources: {
         ...(on.components
           ? {
@@ -3965,9 +3980,10 @@ const pangular = defineDevframe({
         ...(on.router ? { router: () => routerState.value() as RouterState } : {}),
         ...(on.forms ? { forms: () => formsState.value() as FormsState } : {}),
         ...(on.http ? { http: () => httpState.value() as HttpState } : {}),
-        ...(on.pipes ? { pipes: () => lintPipes(ctx.cwd) } : {}),
+        ...(on.pipes ? { pipes: cachedPipeLint(() => lintPipes(ctx.cwd)) } : {}),
       },
     });
+    onPageClaimed = audit.pageLoaded;
 
     if (on.analog) {
       await registerAnalog(my as never, { cwd: ctx.cwd, agent } as never, {

@@ -192,6 +192,18 @@ function axeOf(module: unknown): AxeLike | null {
 }
 
 /**
+ * The debug API the axe pass names element owners with: `getNg` with the
+ * Components inspector on, nothing otherwise, since the owner (class name
+ * and instance id) is component data that inspector gates.
+ */
+export function axeOwnerNg(
+  componentsOn: boolean,
+  getNg: () => BlockOwnerDebugNg | undefined,
+): () => BlockOwnerDebugNg | undefined {
+  return componentsOn ? getNg : () => undefined;
+}
+
+/**
  * Runs axe-core over the app when the server asks (`axe-run`), never on its
  * own, and answers with `axe-result`. axe-core is loaded on the first request
  * through a dynamic import, so pages that never run a pass don't download it.

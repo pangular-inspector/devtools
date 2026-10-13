@@ -34,6 +34,12 @@ const SEVERITY_TONE = { error: 'danger', warning: 'warn', info: 'accent' } as co
 const SEVERITY_RANK = { error: 0, warning: 1, info: 2 } as const;
 /** Areas whose findings point at a component host the Components tab can select. */
 const COMPONENT_AREAS: readonly AuditArea[] = ['errors', 'hydration'];
+/**
+ * How long the panel waits after a change to the `audit` shared state before
+ * reading the audit again, so a burst (an axe pass starting, its result, it
+ * ending) costs one read.
+ */
+export const AUDIT_REFRESH_DELAY_MS = 150;
 
 @Component({
   selector: 'app-audit-inspector',
@@ -187,8 +193,9 @@ const COMPONENT_AREAS: readonly AuditArea[] = ['errors', 'hydration'];
                   <span class="muted"
                     >Agent tool <code>{{ toolCall(finding) }}</code></span
                   >
-                  @if (finding.elementId) {
-                    @if (canShowComponent() && isComponentArea(finding.area)) {
+                  <!-- Both open or outline the element through the Components inspector. -->
+                  @if (finding.elementId && canShowComponent()) {
+                    @if (isComponentArea(finding.area)) {
                       <button
                         type="button"
                         class="link"
@@ -518,7 +525,10 @@ const COMPONENT_AREAS: readonly AuditArea[] = ['errors', 'hydration'];
 })
 export class AuditInspector {
   readonly rpc = input<DevframeRpcClient | null>(null);
-  /** Whether the Components tab is on, so "Show component" has somewhere to go. */
+  /**
+   * Whether the Components inspector is on: "Show component" opens its tab, and
+   * "Show in page" and hover outlines go through its `request-page-highlight`.
+   */
   readonly canShowComponent = input(true);
   readonly showComponent = output<ComponentFocus>();
 
@@ -527,6 +537,7 @@ export class AuditInspector {
   private unsubscribe?: () => void;
   private seq = 0;
   private highlighted = false;
+  private queued?: ReturnType<typeof setTimeout>;
 
   protected readonly time = time;
   protected readonly toolCall = toolCall;
@@ -629,6 +640,7 @@ export class AuditInspector {
     });
     this.destroyRef.onDestroy(() => {
       this.unsubscribe?.();
+      clearTimeout(this.queued);
       this.highlight(null);
     });
   }
@@ -710,7 +722,7 @@ export class AuditInspector {
 
   highlight(finding: AuditFinding | null, reveal = false) {
     const client = this.rpc();
-    if (!client) return;
+    if (!client || !this.canShowComponent()) return;
     const pageId = this.pageId();
     const target =
       finding?.elementId && pageId
@@ -722,6 +734,16 @@ export class AuditInspector {
     void rpcCall(client, 'request-page-highlight', target).catch(() => {});
   }
 
+  /** One read for a burst of shared state changes; none while an action here reads it when done. */
+  private refreshSoon() {
+    if (this.queued !== undefined) return;
+    this.queued = setTimeout(() => {
+      this.queued = undefined;
+      if (this.destroyRef.destroyed || this.axeRunning() || this.busy()) return;
+      void this.refresh();
+    }, AUDIT_REFRESH_DELAY_MS);
+  }
+
   private async subscribe(client: DevframeRpcClient) {
     await this.refresh();
     try {
@@ -729,7 +751,7 @@ export class AuditInspector {
       const state = await client.scope('pangular').rpc.sharedState('audit');
       if (this.destroyRef.destroyed) return;
       this.unsubscribe?.();
-      this.unsubscribe = state.on('updated', () => void this.refresh());
+      this.unsubscribe = state.on('updated', () => this.refreshSoon());
     } catch {
       // Without the shared state the Refresh button still works.
     }

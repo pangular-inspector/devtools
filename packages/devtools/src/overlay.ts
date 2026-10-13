@@ -9,7 +9,7 @@ import { attachHttp } from './http-overlay.ts';
 import { attachCapacitor } from './capacitor-overlay.ts';
 import { attachErrors } from './errors-collector.ts';
 import { attachLeaks } from './leaks-collector.ts';
-import { attachAxe } from './axe-runner.ts';
+import { attachAxe, axeOwnerNg } from './axe-runner.ts';
 import { createRecentWrites } from './error-explain.ts';
 import { allowClientRules, httpRegistry } from './http-rules.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
@@ -499,7 +499,8 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     ? attachLeaks(my, pageId, getNg, { tickMs, active: () => lease.active })
     : null;
   // Runs axe-core only when the panel or an agent asks; it loads axe-core then.
-  const axe = attachAxe(my, pageId, getNg);
+  // The component owning each element is component data: only with that inspector on.
+  const axe = attachAxe(my, pageId, axeOwnerNg(on.components, getNg));
   const angularInfo = attachAngularInfo(my, pageId, getNg, { tickMs });
   const consoleGlobals = attachConsoleGlobals(my, pageId, {
     getNg,
