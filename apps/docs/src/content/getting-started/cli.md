@@ -13,11 +13,12 @@ The package installs a `pangular` binary. Run it from the root of your Angular w
 
 ## Commands
 
-| Command | What it does                                        |
-| ------- | --------------------------------------------------- |
-| `dev`   | Starts a local server with the devtools UI.         |
-| `build` | Writes a static copy of the devtools with the scan. |
-| `mcp`   | Starts an MCP server over stdio for coding agents.  |
+| Command  | What it does                                                       |
+| -------- | ------------------------------------------------------------------ |
+| `dev`    | Starts a local server with the devtools UI.                        |
+| `build`  | Writes a static copy of the devtools with the scan.                |
+| `mcp`    | Starts an MCP server over stdio for coding agents.                 |
+| `skills` | Lists or installs the bundled [agent skills](../agents/skills.md). |
 
 `pangular --version` prints the package version. An unknown command or flag prints one error line and exits with code 1. `pangular --help` lists the commands and flags.
 
@@ -201,11 +202,21 @@ npx @pangular-inspector/devtools mcp --print-config --port 4000 --base /__devfra
 
 The stdio server has no page connected, so it registers only the tools that read your source files. The tools that need a page, such as `highlight`, `navigate`, `form-action` and the forms and router tools, are left out. For live data, point your agent at the HTTP endpoint of a running app instead. On a hub it lives at `/__devframes/__mcp`.
 
+## Agent skills
+
+`pangular skills install` copies the [agent skills](../agents/skills.md) the package ships into your agent's skill folder, `.claude/skills` by default. It never replaces a skill that you changed unless you pass `--force`, and `--dry-run` prints what would change without writing.
+
+```bash
+pangular skills install --agent agents --dry-run
+```
+
+`--agent` takes `claude`, `agents` or `github`. See [Install them](../agents/skills.md#install-them) for every flag.
+
 ## FAQ
 
 <ngmd-accordion>
   <ngmd-accordion-item title="Do I need to run my app first?" open>
-    No. All three commands read your source files. Only live data needs a running app with the overlay loaded.
+    No. <code>dev</code>, <code>build</code> and <code>mcp</code> read your source files. Only live data needs a running app with the overlay loaded.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Which directory should I run it from?">
     The root of your Angular workspace. The scan starts from the current directory, or from the folder you pass with <code>--root</code>.

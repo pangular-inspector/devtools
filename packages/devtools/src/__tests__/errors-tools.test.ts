@@ -4,6 +4,7 @@ import pangular, { createPangular } from '../devframe.ts';
 import {
   explainErrorText,
   mergeErrorsReport,
+  sinceTime,
   staleErrorPages,
   toErrorsReport,
   type ErrorGroup,
@@ -198,6 +199,35 @@ describe('errors agent tools', () => {
     expect(await invoke('list-console', { level: 'warn' })).not.toContain('Loaded trips');
     expect(await invoke('list-console', { search: 'loaded' })).toContain('Loaded trips');
     expect(await invoke('list-console', { level: 'loud' })).toMatch(/Unknown level/);
+  });
+
+  it('list-console keeps the calls made since a duration, a date or epoch milliseconds', async () => {
+    const { call, invoke } = await boot();
+    await call('push-errors', report());
+    const recent = await invoke('list-console', { since: '2s' });
+    expect(recent).toContain('NG0913');
+    expect(recent).not.toContain('Loaded trips');
+    expect(await invoke('list-console', { since: '1m' })).toContain('Loaded trips');
+    const iso = new Date(Date.now() - 2_000).toISOString();
+    expect(await invoke('list-console', { since: iso })).not.toContain('Loaded trips');
+    expect(await invoke('list-console', { since: String(Date.now() + 60_000) })).toMatch(
+      /has no console calls since \d{4}-/,
+    );
+    expect(await invoke('list-console', { since: 'yesterday-ish' })).toMatch(
+      /^`since` must be a duration/,
+    );
+    expect(sinceTime(5_000, 10_000)).toBe(5_000);
+    expect(sinceTime('500ms', 10_000)).toBe(9_500);
+    expect(sinceTime('1.5h', 10_000_000)).toBe(10_000_000 - 5_400_000);
+    expect(sinceTime('', 1)).toBeUndefined();
+    // Finite, but past what a Date holds: an error, never a toISOString() throw.
+    for (const since of ['999999999999999999999', 9e15, -9e15, '3000000000000h', 1e300]) {
+      expect(sinceTime(since, 10_000)).toMatch(/^`since` is out of range/);
+    }
+    expect(sinceTime(8.64e15, 0)).toBe(8.64e15);
+    expect(await invoke('list-console', { since: '999999999999999999999' })).toMatch(
+      /^`since` is out of range/,
+    );
   });
 
   it('are read tools that disappear with the errors inspector', async () => {

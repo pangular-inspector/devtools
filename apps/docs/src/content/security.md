@@ -278,6 +278,8 @@ Component inputs, signal values, NgRx state, and pipe inputs, outputs and async 
 
 The **Components** tab and the `set-component-property` and `set-signal` tools never write a value you could not see: a name on the path that looks secret, or a value that shows `[redacted]` anywhere, is refused. Write a field next to a secret instead of the object that holds it. See [Editing values](./inspectors/components.md#editing-values).
 
+The `screenshot-component` tool sends pixels, not values, so the page masks the copy it draws: password fields, fields where any of `formControlName`, `ng-reflect-name`, `name` or `id` looks secret or whose `autocomplete` does, other elements named that way (such as a custom form control, drawn as a block with the inputs inside it), and elements marked `data-private`, `.sentry-mask`, `.rr-mask` or `data-pangular="mask"` are blanked, and JWTs, bearer tokens and secret `key=value` pairs in text are masked. Text that looks harmless, such as an email address or a name, is drawn as it is. See [screenshot-component](./agents/tools.md#screenshot-component).
+
 These values are read without running code on the page. A getter shows as `[Getter]` instead of its value, and a value that throws when it is read shows as `[Unreadable]`. An object seen again inside itself shows as `[Circular]`. An error shows as `Name: message`, and an error with a `cause` shows one level of the cause next to its message.
 
 ### Analog

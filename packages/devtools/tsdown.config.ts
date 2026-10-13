@@ -13,6 +13,8 @@ export default defineConfig({
     'overlay-manual': 'src/overlay.ts',
     'capacitor-hook': 'src/capacitor-hook.ts',
     'store-hook': 'src/store-hook.ts',
+    'startup-hook': 'src/startup-hook.ts',
+    plugin: 'src/plugin.ts',
     'overlay-nativescript': 'src/overlay-nativescript.ts',
     'overlay-angular-native': 'src/overlay-angular-native.ts',
     vite: 'src/vite.ts',

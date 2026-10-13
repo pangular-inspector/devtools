@@ -1,12 +1,19 @@
 // The activity lease, on the server: pages send their component tree,
-// injectors, change detection and forms only while someone watches. A panel
-// watches while it is connected and subscribed to one of those shared states;
-// an agent watches for `leaseMs` after each tool call. The server tells pages
-// when that changes (`page-interest-changed`), and an agent call that finds
-// the pages idle wakes them and waits briefly for their fresh reports.
+// injectors, change detection, forms and errors only while someone watches. A
+// panel watches while it is connected and subscribed to one of those shared
+// states; an agent watches for `leaseMs` after each tool call. The server
+// tells pages when that changes (`page-interest-changed`), and an agent call
+// that finds the pages idle wakes them and waits briefly for their fresh
+// reports.
 
 /** Shared states whose subscribers keep pages pushing. */
-export const WATCHED_STATES = ['component-tree', 'injector-tree', 'change-detection', 'forms'];
+export const WATCHED_STATES = [
+  'component-tree',
+  'injector-tree',
+  'change-detection',
+  'forms',
+  'errors',
+];
 /** How long an agent call waits for idle pages to send fresh reports. */
 export const WAKE_WAIT_MS = 1500;
 /** How often the server looks for panels that came or went. */

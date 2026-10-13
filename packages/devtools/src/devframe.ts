@@ -28,11 +28,16 @@ import { registerErrors } from './rpc/errors-register.ts';
 import { registerLeaks } from './rpc/leaks-register.ts';
 import { registerReduxStores } from './rpc/redux-stores-register.ts';
 import { registerTanstackQuery } from './rpc/query-register.ts';
+import { registerPlugins } from './rpc/plugins-register.ts';
+import { registerStartup } from './rpc/startup-register.ts';
+import type { PangularServerPlugin } from './plugin.ts';
+import { registerAudit } from './rpc/audit-register.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { registerInjectionExplain } from './rpc/injection-explain.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
+import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
 import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
 import { createPageOwners } from './rpc/page-owners.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
@@ -182,7 +187,9 @@ import { sanitizeHydration, sanitizePayload, type PayloadSummary } from './http-
 import { redactCall } from './http-redact.ts';
 import { redactMessage, redactUrl } from './router.ts';
 import { isSsrRequestId, ssrRegistry } from './ssr-registry.ts';
-import { sanitizeSsrOverrides } from './ssr-overrides.ts';
+import { sanitizeSsrOverrides, type SsrOverride } from './ssr-overrides.ts';
+import { ssrOverrideTools } from './rpc/ssr-override-tools.ts';
+import { createComponentScreenshots } from './rpc/component-screenshots.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import { listHttpCallsText } from './rpc/http-tools.ts';
 import { httpWaterfallText, type HttpWaterfallArgs } from './rpc/http-waterfall.ts';
@@ -259,8 +266,18 @@ import {
 } from './config.ts';
 
 export * from './config.ts';
+export {
+  definePangularServerPlugin,
+  type PangularPluginPage,
+  type PangularPluginTool,
+  type PangularPluginToolContext,
+  type PangularServerPlugin,
+  type PangularServerPluginContext,
+  type PluginActionResult,
+} from './plugin.ts';
 
 import { registerAuthTokens } from './auth-tokens.ts';
+import { registerBrowserTools, type BrowserToolHost } from './rpc/browser-tools.ts';
 import pkg from '../package.json' with { type: 'json' };
 import { INTEREST_TICK_MS, createPageInterest, leased } from './rpc/page-interest.ts';
 import { createReportDeltas, deltaPush } from './rpc/report-deltas.ts';
@@ -291,7 +308,11 @@ const clientAssets: RemoteAssets = {
   resolveFrom: import.meta.url,
 };
 
-type SetupInfo = DevframeSetupInfo & { config?: ResolvedPangularConfig; pageTools?: boolean };
+type SetupInfo = DevframeSetupInfo & {
+  config?: ResolvedPangularConfig;
+  pageTools?: boolean;
+  serverPlugins?: readonly PangularServerPlugin[];
+};
 
 const pangular = defineDevframe({
   id: 'pangular',
@@ -405,6 +426,13 @@ const pangular = defineDevframe({
       return true;
     };
 
+    // The `read` agent tools, for the page to register with browser agents.
+    registerBrowserTools(register, ctx as unknown as BrowserToolHost, {
+      enabled: config.agent.browserTools,
+      owns,
+    });
+
+    let onPageClaimed = (_pageId: string) => {};
     register({
       name: 'claim-page',
       type: 'action',
@@ -412,7 +440,10 @@ const pangular = defineDevframe({
       handler: (message: { pageId?: unknown; key?: unknown } | null) => {
         const pageId = message?.pageId;
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return { ok: false };
-        return { ok: owners.claim(pageId, message?.key) };
+        const ok = owners.claim(pageId, message?.key);
+        // The overlay claims once per load: what the audit holds of the old document is stale.
+        if (ok) onPageClaimed(pageId);
+        return { ok };
       },
     });
 
@@ -760,6 +791,40 @@ const pangular = defineDevframe({
           owns,
           mayForget,
           ttl: liveTtl,
+        })
+      : null;
+    const startupInspector = on.injectors
+      ? await registerStartup({
+          my,
+          rpcHost: ctx.rpc,
+          register,
+          agent,
+          owns,
+          mayForget,
+          ttl: liveTtl,
+        })
+      : null;
+    // A plugin tool's tier comes from the plugin; `pluginToolAllowed` checks it against the config.
+    const pluginsInspector = on.plugins
+      ? await registerPlugins({
+          my,
+          rpcHost: ctx.rpc,
+          config,
+          register,
+          agent,
+          registerPluginTool: (tool, safety) =>
+            ctx.agent.registerTool(
+              feed.wrapTool({
+                ...(tool as Parameters<typeof ctx.agent.registerTool>[0]),
+                safety,
+                handler: leased(() => interest, tool['handler']),
+              }),
+            ),
+          pageTools,
+          owns,
+          mayForget,
+          ttl: liveTtl,
+          serverPlugins: info?.serverPlugins,
         })
       : null;
 
@@ -1134,20 +1199,31 @@ const pangular = defineDevframe({
       },
     });
 
+    const saveSsrOverrides = (overrides: SsrOverride[]) => {
+      ssrRegistry().overrides = overrides;
+      httpState.mutate((draft) => {
+        draft.ssrOverrides = overrides;
+      });
+      return overrides;
+    };
     register({
       name: 'set-ssr-overrides',
       type: 'action',
       jsonSerializable: true,
       handler: (input: unknown) => {
         if (!config.actions.http) throw new Error(actionBlockedMessage('http'));
-        const overrides = sanitizeSsrOverrides(input);
-        ssrRegistry().overrides = overrides;
-        httpState.mutate((draft) => {
-          draft.ssrOverrides = overrides;
-        });
-        return overrides;
+        return saveSsrOverrides(sanitizeSsrOverrides(input));
       },
     });
+    // The panel's TransferState payload and SSR overrides, for agents.
+    for (const tool of ssrOverrideTools({
+      config,
+      overrides: () => ssrRegistry().overrides ?? [],
+      save: saveSsrOverrides,
+      payloads: () => httpPayloads,
+      pages: () => httpPages.values(),
+    }))
+      agent.registerTool(tool);
 
     const clearHttpCalls = () => {
       if (!config.actions.http) throw new Error(actionBlockedMessage('http'));
@@ -1223,6 +1299,8 @@ const pangular = defineDevframe({
       leaksInspector?.expire();
       reduxStores?.expire();
       tanstackQuery?.expire();
+      startupInspector?.expire();
+      pluginsInspector?.expire();
       componentDeltas.prune((id) => componentPages.has(id));
       injectorDeltas.prune((id) => injectorPages.has(id));
       cdDeltas.prune((id) => cdPages.has(id));
@@ -1240,6 +1318,7 @@ const pangular = defineDevframe({
     registry.dispose = () => {
       clearInterval(expiry);
       clearInterval(interestTick);
+      pluginsInspector?.dispose();
       interest.stop();
       clearTimeout(flushTimer);
       registry.record = undefined;
@@ -1979,6 +2058,21 @@ const pangular = defineDevframe({
       handler: (message: { pageId?: unknown; request?: unknown } | null) =>
         componentValues.request(message?.pageId, message?.request),
     });
+
+    // Images of one component, drawn by its page: the screenshot-component tool.
+    const componentScreenshots = createComponentScreenshots({
+      pages: () => componentPages.values(),
+      broadcast: (method, message) =>
+        void my.rpc.broadcast({ method, args: [message], optional: true }),
+      answersFor,
+    });
+    register({
+      name: 'component-screenshot-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: componentScreenshots.answer,
+    });
+    agent.registerTool(componentScreenshots.tool);
 
     registerConsoleGlobals({
       config,
@@ -3988,6 +4082,8 @@ const pangular = defineDevframe({
             http: withUrl(httpPages.values()),
             capacitor: withUrl(capacitorPages.values()),
             errors: withUrl(errorsInspector?.pages() ?? []),
+            startup: withUrl(startupInspector?.pages() ?? []),
+            plugins: withUrl(pluginsInspector?.pages() ?? []),
             analog: withUrl(on.analog ? analogPages() : []),
           },
           visibility.list(),
@@ -4054,6 +4150,42 @@ const pangular = defineDevframe({
       });
     });
 
+    const audit = await registerAudit({
+      my,
+      register,
+      agent,
+      answersFor,
+      agentSees: (inspector) => config.agent.tools[inspector],
+      agentAxe: !config.agent.readOnly,
+      agentReadOnly: config.agent.readOnly,
+      // Every page the overlay claimed, so axe works with any set of inspectors on.
+      pages: () =>
+        withPageUrls([
+          ...owners.live(),
+          ...componentPages.values(),
+          ...httpPages.values(),
+          ...routerPages.values(),
+          ...formPages.values(),
+          ...(errorsInspector?.pages() ?? []),
+          ...(leaksInspector?.pages() ?? []),
+        ]),
+      sources: {
+        ...(on.components
+          ? {
+              cd: () => cdState.value() as CdState,
+              components: (pageId: string) => componentPages.get(pageId) ?? null,
+            }
+          : {}),
+        ...(leaksInspector ? { leaks: leaksInspector.state } : {}),
+        ...(errorsInspector ? { errors: errorsInspector.state } : {}),
+        ...(on.router ? { router: () => routerState.value() as RouterState } : {}),
+        ...(on.forms ? { forms: () => formsState.value() as FormsState } : {}),
+        ...(on.http ? { http: () => httpState.value() as HttpState } : {}),
+        ...(on.pipes ? { pipes: cachedPipeLint(() => lintPipes(ctx.cwd)) } : {}),
+      },
+    });
+    onPageClaimed = audit.pageLoaded;
+
     if (on.analog) {
       await registerAnalog(my as never, { cwd: ctx.cwd, agent } as never, {
         blockCalls: config.actions.analog ? undefined : actionBlockedMessage('analog'),
@@ -4090,6 +4222,8 @@ export interface PangularHostOptions {
    * Server-only: they never go into the published config.
    */
   authTokens?: string[];
+  /** Server plugins: agent tools and shared state of Pangular plugins (`plugin.ts`). */
+  serverPlugins?: readonly PangularServerPlugin[];
 }
 
 export function createPangular(options: PangularConfig = {}, host: PangularHostOptions = {}) {
@@ -4099,7 +4233,12 @@ export function createPangular(options: PangularConfig = {}, host: PangularHostO
   return defineDevframe({
     ...pangular,
     setup: (ctx, info) => {
-      const withConfig: SetupInfo = { ...info, config, pageTools: host.pageTools };
+      const withConfig: SetupInfo = {
+        ...info,
+        config,
+        pageTools: host.pageTools,
+        serverPlugins: host.serverPlugins,
+      };
       if (host.authTokens?.length && !registerAuthTokens(ctx, host.authTokens)) {
         console.warn(
           '[pangular] The pairing tokens could not be registered, so clients need the one-time code.',

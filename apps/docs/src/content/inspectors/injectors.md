@@ -111,6 +111,37 @@ Without a live tree, the tab lists DI found in your source files, in four groups
 
 If the devtools server does not answer, the tab says **Couldn't load DI data** with a **Retry** button instead of an empty list. If only the live tree fails, the source list stays and a **Couldn't load the live injector tree** message with **Retry** sits above it.
 
+### Startup timing
+
+Below the live tree, the **Startup** section shows how the shown page started, from navigation start, and how long Angular took from its start to the app's first stable state.
+
+| Milestone                  | Where it comes from                                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **DOM content loaded**     | The browser's navigation timing.                                                                           |
+| **First contentful paint** | The browser's paint timing.                                                                                |
+| **Angular started**        | When Angular published `ng`, with the startup hook. Without it, Angular's first `mark_feature_usage` mark. |
+| **Root component created** | Angular's profiler, with the startup hook on Angular 20 or later.                                          |
+| **First stable**           | The first time `ApplicationRef.isStable` was `true`.                                                       |
+| **Load event**             | The browser's navigation timing.                                                                           |
+| **Overlay started**        | When the overlay ran on the page.                                                                          |
+
+The first stable time is exact when the overlay or the startup hook watched the app become stable. Sometimes the overlay loads after that, as when `main.ts` imports it after `whenStable()`. The overlay then checks an app that is already stable, so it knows only that the app became stable before this time. The row reads **First stable, at the latest**.
+
+**Slowest providers** lists the providers that took longest to construct, by own time (without the providers each one created while it ran), with total time and instance count. Components and directives show up in it too, since Angular creates them through injectors. Angular reports provider construction only through its own profiling (`ng.enableProfiling()`, Angular 20 or later, development builds), so this list needs the startup hook loaded before Angular, from the polyfills of your development build. A configuration's `polyfills` replaces the build target's list, so repeat the polyfills the target already has and add the hook after them:
+
+```json
+// angular.json (or project.json), build target
+"configurations": {
+  "development": {
+    "polyfills": ["zone.js", "@pangular-inspector/devtools/startup-hook"]
+  }
+}
+```
+
+A zoneless app has no `zone.js` in its polyfills, so it lists only the hook (and any other polyfills it has).
+
+The hook turns Angular's profiling on right after `bootstrapApplication()` creates the platform and reads its provider entries until one second after the app is first stable, then turns it off. Providers created by environment initializers before that point are not timed. Angular's own track shows in the Chrome Performance panel while the hook records.
+
 ## Where the data comes from
 
 <ngmd-card-grid columns="2">
@@ -191,6 +222,7 @@ If the selected injector leaves the page because its component or directive was 
 | `pangular:explain-injection`   | tool     | The lookup of one token from a component, element or environment injector, step by step, with `self`, `skipSelf`, `host` and `optional`. Says at each injector whether it provides the token and why the lookup stops. See [Explain a lookup with flags](#explain-a-lookup-with-flags).                                                                                        |
 | `pangular:inspect-providers`   | tool     | The injector tree a page reported, with what components and created services inject. `selector` narrows it to matching element or environment injectors (`Root`, `Platform`, `Route: admin`) or a component instance id, `token` to where a token is provided and injected. `componentId` and `framework` mark the owning component and Angular's own injectors and providers. |
 | `pangular:read-provider-value` | tool     | The current value of a provider an injector already created, by `token` and optional `injector`, with `path` to read deeper. See [Peek at a provider value](#peek-at-a-provider-value).                                                                                                                                                                                        |
+| `pangular:startup-timing`      | tool     | How the page started: milestones from navigation start to the first stable state, and the slowest providers to construct with own and total time. See [Startup timing](#startup-timing).                                                                                                                                                                                       |
 | `pangular:injector-tree`       | resource | The live tree last reported by a page.                                                                                                                                                                                                                                                                                                                                         |
 
 See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).

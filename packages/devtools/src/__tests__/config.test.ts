@@ -63,6 +63,7 @@ describe('resolvePangularConfig', () => {
       analog: true,
       components: true,
       tanstackQuery: true,
+      plugins: true,
     });
   });
 
@@ -83,6 +84,7 @@ describe('resolvePangularConfig', () => {
       analog: true,
       components: true,
       tanstackQuery: true,
+      plugins: true,
     });
   });
 
@@ -95,6 +97,7 @@ describe('resolvePangularConfig', () => {
       analog: false,
       components: false,
       tanstackQuery: false,
+      plugins: false,
     });
     expect(resolvePangularConfig({ actions: { router: false } }).actions).toEqual({
       forms: true,
@@ -104,6 +107,7 @@ describe('resolvePangularConfig', () => {
       analog: true,
       components: true,
       tanstackQuery: true,
+      plugins: true,
     });
   });
 
@@ -257,6 +261,7 @@ describe('agent tool and RPC registration', () => {
     expect(actionTools.sort()).toEqual(
       [
         'analog-call-api',
+        'audit',
         'change-detection',
         'clear-recordings',
         'dispatch-ngrx-action',
@@ -267,10 +272,12 @@ describe('agent tool and RPC registration', () => {
         'query-action',
         'record-pipes',
         'remove-http-rule',
+        'remove-ssr-override',
         'restore-ngrx-state',
         'set-component-property',
         'set-http-rule',
         'set-signal',
+        'set-ssr-override',
         'track-subscriptions',
         'watch-signal',
       ].sort(),
@@ -369,6 +376,7 @@ describe('agent tool and RPC registration', () => {
     expect(forms.actionTools.sort()).toEqual(
       [
         'analog-call-api',
+        'audit',
         'change-detection',
         'clear-recordings',
         'dispatch-ngrx-action',
@@ -377,10 +385,12 @@ describe('agent tool and RPC registration', () => {
         'query-action',
         'record-pipes',
         'remove-http-rule',
+        'remove-ssr-override',
         'restore-ngrx-state',
         'set-component-property',
         'set-http-rule',
         'set-signal',
+        'set-ssr-override',
         'track-subscriptions',
         'watch-signal',
       ].sort(),
@@ -403,7 +413,12 @@ describe('agent tool and RPC registration', () => {
     const http = await boot({ actions: { http: false } });
     expect(http.actionTools).not.toContain('set-http-rule');
     expect(http.actionTools).not.toContain('remove-http-rule');
+    expect(http.actionTools).not.toContain('set-ssr-override');
+    expect(http.actionTools).not.toContain('remove-ssr-override');
     expect(http.tools).toContain('list-http-rules');
+    expect(http.tools).toEqual(
+      expect.arrayContaining(['list-ssr-overrides', 'inspect-transfer-state']),
+    );
     const components = await boot({ actions: { components: false } });
     expect(components.actionTools).not.toContain('set-component-property');
     expect(components.actionTools).not.toContain('set-signal');

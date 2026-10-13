@@ -8,6 +8,7 @@ import type { InitHubOptions } from '@devframes/hub/initiate';
 import type { WsOriginRegistry } from 'devframe/rpc/transports/ws-server';
 import { isAllowedOrigin } from 'devframe/utils/origin';
 import { createPangular } from './devframe.ts';
+import type { PangularServerPlugin } from './plugin.ts';
 import { withMessagesPanel } from './hub-messages-panel.ts';
 import { hubTerminals, terminalsEnabled, withTerminals } from './hub-terminals.ts';
 import {
@@ -59,6 +60,8 @@ export type PangularHubOptions = Partial<Omit<InitHubOptions, 'devframes' | 'ui'
      * without `allowLan`.
      */
     terminals?: boolean;
+    /** Pangular plugins' server sides: their agent tools and shared state. */
+    serverPlugins?: readonly PangularServerPlugin[];
   };
 
 function hubUiClientDir(): string | undefined {
@@ -178,7 +181,13 @@ export function startPangularHub(
   options: Omit<PangularHubOptions, 'enabled' | 'allowLan'> = {},
   gate?: HubOriginPolicy,
 ): PangularHub {
-  const { browserDistFolder, auth: authOption, terminals: terminalsOn, ...hubOptions } = options;
+  const {
+    browserDistFolder,
+    auth: authOption,
+    terminals: terminalsOn,
+    serverPlugins,
+    ...hubOptions
+  } = options;
   const { config, rest: picked } = pickPangularConfig(hubOptions);
   // Behind a gate, a shared `server` is attached through the gated `attach`
   // below, so its upgrades pass the same checks as `handleUpgrade`.
@@ -201,7 +210,7 @@ export function startPangularHub(
     ...(auth === undefined ? {} : { auth }),
     allowedOrigins: hubAllowedOrigins(rest.allowedOrigins),
     mcp: pangularMcp(hubMcpFor({ ...rest, auth }), resolvePangularConfig(config)),
-    devframes: [createPangular(config, { authTokens })],
+    devframes: [createPangular(config, { authTokens, serverPlugins })],
     ui: hubUi(),
     ...(gate || sharedServer === undefined ? {} : { server: sharedServer }),
   });

@@ -65,6 +65,8 @@ For `NullInjectorError` and NG0201, the box shows the token, Angular's dependenc
 
 Click **Console** to see the page's `console.log`, `info`, `warn`, `error` and `debug` calls, newest first. Pick a level in **Console level**, or search the text. A call repeated in a row shows once with a count. A call that mentions an Angular code gets a code chip too.
 
+The page keeps capturing while nobody watches, and sends its errors and console calls only while a panel is open or an agent called a tool in the last `limits.idleAfterMs`. An agent call to an idle page gets what the page captured meanwhile. See [Performance](../getting-started/configuration.md#performance).
+
 ### Pages
 
 When several tabs report, **Page** picks one, or **All pages** to see them together. The panel of a tab starts on that tab.
@@ -105,7 +107,7 @@ A `RuntimeError` carries its code, and other errors carry it in the message. The
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `pangular:list-errors`       | The error groups, with count, code link, owning component and source.                                                                                                                            |
 | `pangular:explain-error`     | One error by `id`, or an Angular `code`: the message, the owning component, the stack, the reference page and cause, and the explainer of an NG0100, a hydration mismatch or a missing provider. |
-| `pangular:list-console`      | The console calls, by `level` or `search`.                                                                                                                                                       |
+| `pangular:list-console`      | The console calls, by `level`, `search` or `since`.                                                                                                                                              |
 | `pangular:explain-injection` | Walks the lookup of a token from a component, with `self`, `skipSelf`, `host` and `optional`. Belongs to the [Injectors](./injectors.md#agent-tools) inspector.                                  |
 
 The known causes come from Angular's error reference, in a sentence or two. For a code without a reference page, `explain-error` says so. See [Tools](../agents/tools.md#errors).

@@ -28,6 +28,7 @@ import { ProviderValue } from './di-provider-value';
 import type { ComponentFocus } from '../types/component-focus.types';
 import type { InjectorFocus } from '../types/injector-focus.types';
 import { storeFlag, storedFlag } from '../view-prefs';
+import { StartupSection } from './startup-section';
 
 interface ProviderInfo {
   token: string;
@@ -123,7 +124,15 @@ function isTree(value: unknown): value is InjectorNode[] {
 
 @Component({
   selector: 'app-di-inspector',
-  imports: [AngularUnavailable, NgTemplateOutlet, ProviderValue, Select, SourceLink, StoreGlobal],
+  imports: [
+    AngularUnavailable,
+    NgTemplateOutlet,
+    ProviderValue,
+    Select,
+    SourceLink,
+    StartupSection,
+    StoreGlobal,
+  ],
   template: `
     <p class="sr-only" role="status">{{ announcement() }}</p>
     <ng-template #loadError let-compact="compact">
@@ -562,6 +571,7 @@ function isTree(value: unknown): value is InjectorNode[] {
           </section>
         }
       </div>
+      <app-startup-section [rpc]="rpc()" [pageId]="shownPageId()" />
     } @else if (!loaded()) {
       <div class="state" role="status">
         <span class="spinner" aria-hidden="true"></span>

@@ -284,8 +284,8 @@ export function explainSsrRequestText(
   if (r.overrides?.length) {
     lines.push(
       '',
-      '### Overrides from the panel',
-      'This response was changed on purpose, so it is not what the app would send on its own.',
+      '### SSR overrides',
+      'This response was changed on purpose by an SSR override from the panel or an agent (`list-ssr-overrides`), so it is not what the app would send on its own.',
       ...r.overrides.map(
         (o) =>
           `- ${OVERRIDE_LABEL[o.kind]}: ${o.applied ? 'applied' : 'not applied'}${o.note ? `, ${code(o.note)}` : ''}`,

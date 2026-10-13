@@ -5,6 +5,7 @@ import { provideClientHydration, withIncrementalHydration } from '@angular/platf
 import { provideHttpClient, withFetch } from '@angular/common/http';
 import { provideExperimentalWebMcpForms } from '@angular/forms/signals';
 import { providePangularHttp, withPangular } from '@pangular-inspector/devtools/http';
+import { provideTravelPangularPlugin } from './devtools/travel-plugin.provider';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -14,5 +15,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withFetch(), withPangular()),
     providePangularHttp(),
     provideExperimentalWebMcpForms(),
+    // An example Pangular plugin: the TravelStore in the panel's Plugins tab.
+    provideTravelPangularPlugin(),
   ],
 };

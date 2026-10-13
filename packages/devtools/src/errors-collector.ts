@@ -65,6 +65,12 @@ export interface ErrorsOptions {
   now?: () => number;
   /** Recent named signal writes, for the NG0100 explainer (`error-explain.ts`). */
   writes?: RecentWrites;
+  /**
+   * Whether a panel or an agent watches (`page-lease.ts`). While it is false
+   * the page keeps capturing but only sends keepalives; the next push after
+   * it turns true sends everything captured meanwhile.
+   */
+  active?: () => boolean;
 }
 
 interface Group extends ErrorGroup {
@@ -451,7 +457,8 @@ export function attachErrors(
     handlerRoot = null;
   };
 
-  const report = (): ErrorsReport => {
+  /** Finds owners and explainer details for new groups while what they read is still fresh. */
+  const enrich = () => {
     for (const group of changedGroups) {
       if (group.owner || !group.candidates.length) continue;
       const owner = ownerByName(group.candidates);
@@ -477,6 +484,10 @@ export function attachErrors(
       );
       delete group.explainAt;
     }
+  };
+
+  const report = (): ErrorsReport => {
+    enrich();
     const all = full;
     const errors = [...(all ? groups.values() : changedGroups)].map(
       ({ key: _key, candidates: _candidates, explainAt: _explainAt, ...group }) => ({
@@ -501,9 +512,32 @@ export function attachErrors(
     };
   };
 
+  /** Says the page is still there without sending what changed, for an idle page. */
+  const keepalive = async () => {
+    enrich();
+    if (!keepaliveDue(sentAt, tickMs(), now())) return;
+    sentAt = now();
+    const answer = (await my.rpc.call('push-errors', {
+      pageId,
+      full: false,
+      url: redactUrl(read(() => location.pathname + location.search, '')),
+      title: redactMessage(read(() => document.title, '')),
+      handler: handler ? 'wrapped' : 'none',
+      errors: [],
+      removed: [],
+      console: [],
+      dropped: { errors: droppedErrors, console: droppedConsole },
+    } satisfies ErrorsReport)) as { known?: boolean } | undefined;
+    if (answer?.known === false) {
+      full = true;
+      schedulePush();
+    }
+  };
+
   const pushOnce = async () => {
     if (left || stopped) return;
     wrapHandler();
+    if (!full && options.active && !options.active()) return keepalive();
     const nothing = !full && !changedGroups.size && !changedEntries.size && !removedIds.length;
     if (nothing && !keepaliveDue(sentAt, tickMs(), now())) return;
     const payload = report();

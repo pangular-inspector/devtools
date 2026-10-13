@@ -7,6 +7,7 @@ import {
 import express from 'express';
 import { join } from 'node:path';
 import { initPangularHub } from '@pangular-inspector/devtools/hub';
+import { travelServerPlugin } from './app/devtools/travel-plugin.server';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
@@ -20,6 +21,8 @@ const devtools = initPangularHub({
   auth,
   // Lets an SSR override serve index.csr.html to force a Client render.
   browserDistFolder,
+  // The example plugin's agent tools (src/app/devtools/travel-plugin.ts).
+  serverPlugins: [travelServerPlugin],
 });
 if (devtools.enabled) {
   app.use(devtools.nodeMiddleware);

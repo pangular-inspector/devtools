@@ -17,6 +17,7 @@ import {
 } from '../ngrx-shared.ts';
 import { untrusted } from './forms-tools.ts';
 import type { NgrxPageRecord } from './ngrx-tools.ts';
+import { callerPage } from './page-scope.ts';
 import { pageArgument, unknownPageText } from './pages.ts';
 
 /**
@@ -189,9 +190,19 @@ export function createNgrxHistory(deps: Deps) {
     return typeof test === 'string' ? { error: test } : { ok: true, test };
   };
 
+  const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
+
+  /**
+   * Imported sessions are kept for the whole server, so a page tool call
+   * (see `callerPage()`) reads its own page only and never an imported one.
+   */
+  const sessionArgument = (args: Record<string, unknown>) => {
+    const session = text(args?.['session']);
+    return session && callerPage() !== undefined ? null : session;
+  };
+
   const entryOf = (pageId: string | undefined, seq: number) =>
     (pageId ? deps.page(pageId) : deps.pages()[0])?.log.find((entry) => entry.seq === seq);
-  const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
 
   /** The NgRx history agent tools; `restore-ngrx-state` is the one action among them. */
   const tools = [
@@ -205,7 +216,8 @@ export function createNgrxHistory(deps: Deps) {
           return { markdown: 'Pass `seq`, a log entry number.' };
         }
         const page = pageArgument(args);
-        const session = text(args['session']);
+        const session = sessionArgument(args);
+        if (session === null) return { markdown: PAGE_TOOL_SESSION_TEXT };
         const answer = await history({ pageId: page, session, request: { type: 'entry', seq } });
         const where = session ? `in session \`${session}\`` : page ? `on page \`${page}\`` : '';
         return {
@@ -243,20 +255,24 @@ export function createNgrxHistory(deps: Deps) {
       id: 'pangular:generate-ngrx-test',
       description: GENERATE_NGRX_TEST_DESCRIPTION,
       inputSchema: NGRX_HISTORY_SCHEMAS.test,
-      handler: async (args: Record<string, unknown>) => ({
-        markdown: testText(
-          await history({
-            pageId: pageArgument(args),
-            session: text(args?.['session']),
-            request: {
-              type: 'test',
-              storeId: args?.['storeId'],
-              from: args?.['from'],
-              to: args?.['to'],
-            },
-          }),
-        ),
-      }),
+      handler: async (args: Record<string, unknown>) => {
+        const session = sessionArgument(args);
+        if (session === null) return { markdown: PAGE_TOOL_SESSION_TEXT };
+        return {
+          markdown: testText(
+            await history({
+              pageId: pageArgument(args),
+              session,
+              request: {
+                type: 'test',
+                storeId: args?.['storeId'],
+                from: args?.['from'],
+                to: args?.['to'],
+              },
+            }),
+          ),
+        };
+      },
     },
     {
       id: 'pangular:restore-ngrx-state',
@@ -374,6 +390,10 @@ export function testText(answer: HistoryAnswer): string {
     `A ${TEST_FRAMEWORK} spec that replays the range: the state before it, the recorded actions or method calls in order, and the state after it as the expectation. Save it as \`${test.file}\` next to the code it tests and point the import there.${test.notes.length ? `\n\n${test.notes.map((note) => `- ${note}`).join('\n')}` : ''}\n\n\`\`\`ts\n${test.code}\`\`\``,
   );
 }
+
+/** The answer when a page tool passes `session`: imported sessions are read over MCP only. */
+export const PAGE_TOOL_SESSION_TEXT =
+  'Imported NgRx sessions are read over MCP only. From the page, leave `session` out to read the live page.';
 
 const PAGE = {
   type: 'string',

@@ -1,6 +1,7 @@
 import { redactMessage, redactUrl } from '../router.ts';
 import { clip } from '../text.ts';
 import { code, untrusted } from './forms-tools.ts';
+import { callerPage } from './page-scope.ts';
 import { PAGE_TTL_MS } from './page-ttl.ts';
 import { shortAngularVersion } from '../config.ts';
 
@@ -37,6 +38,8 @@ export function choosePageText(pages: readonly ReportingPage[], what: string) {
 
 /** The answer to a `page` argument that names no page reporting this data. */
 export function unknownPageText(pageId: string, pages: readonly ReportingPage[], what: string) {
+  // A page tool answers for its own page only, so it names no other tab.
+  if (callerPage() !== undefined) return `This page is not reporting ${what} right now.`;
   const others = pages.length
     ? `Pages that report ${what}: ${pageList(pages)}. Pass one of these ids as \`page\`, or leave \`page\` out for the most recent.`
     : `No page reports ${what} right now.`;
