@@ -1,6 +1,7 @@
 import { isRedactedKey, REDACTED } from './forms-privacy.ts';
 import { redactText } from './serialize.ts';
 import { clip, overflowKey } from './text.ts';
+import type { NgrxEntryDetail, NgrxSession } from './ngrx-session.ts';
 
 export interface NgrxSignalStoreInfo {
   id: string;
@@ -162,7 +163,10 @@ export type NgrxRequest =
   | { type: 'restore'; seq: number }
   | { type: 'latest' }
   | { type: 'dispatch'; action: string; payload?: Record<string, unknown> }
-  | { type: 'dispatch-again'; seq: number };
+  | { type: 'dispatch-again'; seq: number }
+  // Read-only: the State and Diff of one entry, and a session export (`ngrx-history.ts`).
+  | { type: 'entry'; seq: number }
+  | { type: 'export'; storeId?: string; from?: number; to?: number };
 
 export interface NgrxRequestResult {
   ok?: boolean;
@@ -170,6 +174,10 @@ export interface NgrxRequestResult {
   error?: string;
   entry?: NgrxLogEntry;
   paused?: boolean;
+  /** `entry` requests: the state before and after it, and their diff. */
+  detail?: NgrxEntryDetail;
+  /** `export` requests: the session. */
+  session?: NgrxSession;
 }
 
 export const MAX_ACTION_TYPE = 200;

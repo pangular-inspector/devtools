@@ -82,7 +82,8 @@ export type NgrxActionOrigin = 'dispatch' | 'effect' | 'reactive';
 
 export interface NgrxLogEntry {
   seq: number;
-  source: 'signal-store' | 'store' | 'event';
+  /** `redux`: an action of a store that reports through the Redux DevTools API (`redux-stores.ts`). */
+  source: 'signal-store' | 'store' | 'event' | 'redux';
   storeId: string;
   type: string;
   args?: unknown[];
@@ -146,10 +147,12 @@ export interface NgrxState {
 export interface LiveStore {
   id: string;
   label: string;
-  kind: 'signal-store' | 'signal-state' | 'store';
+  kind: 'signal-store' | 'signal-state' | 'store' | 'redux';
   scope: string;
   signal?: NgrxSignalStoreInfo;
   classic?: NgrxClassicStoreInfo;
+  /** A store that reports through the Redux DevTools API, such as NGXS, Elf or MiniRx. */
+  redux?: { id: string; name: string; library: string; state: unknown; actions: number };
 }
 
 /** The page a change log belongs to, as the panel last saw it. */

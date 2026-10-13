@@ -25,6 +25,7 @@ const TAB_INSPECTOR: Partial<Record<Tab, PangularInspector>> = {
   signals: 'signals',
   injectors: 'injectors',
   store: 'ngrx',
+  queries: 'tanstackQuery',
   forms: 'forms',
   pipes: 'pipes',
   network: 'http',

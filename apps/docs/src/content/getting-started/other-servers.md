@@ -1,10 +1,10 @@
 ---
 title: Hono, h3 and Fastify
-description: Mount the devtools hub in an Angular SSR server built on Hono, h3 or Fastify.
+description: Mount the devtools hub and trace SSR renders in an Angular SSR server built on Hono, h3, Nitro or Fastify.
 ---
 
 <ngmd-hero title="Hono, h3 and Fastify" gradient>
-  Mount the devtools hub in an Angular SSR server that runs on Hono, h3 or Fastify instead of Express.
+  Mount the devtools hub and trace SSR renders in an Angular SSR server that runs on Hono, h3, Nitro or Fastify instead of Express.
 </ngmd-hero>
 
 # Hono, h3 and Fastify
@@ -91,6 +91,109 @@ export const reqHandler = createNodeRequestHandler(async (req, res) => {
 
 The hook runs before Fastify parses the body, so the MCP endpoint at `<base>__mcp` still receives the raw request.
 
+## Trace SSR renders
+
+The **SSR requests** table in [SSR & HTTP](../inspectors/ssr-http.md#ssr-requests) needs each page render traced. The Express hub's `ssrMiddleware` wraps a Node response. For a web-standard handler, `@pangular-inspector/devtools/ssr` has `withPangularSsr()`, which wraps any `(request: Request) => Promise<Response>` and records the same data:
+
+- The request gets an id in the `x-pangular-ssr-id` header, so `withPangular()` tags each server call with it.
+- The response gets a `Server-Timing` header with the id and the render, fetch, guard and resolver times, so the overlay links the page to its render.
+- The render is recorded once the body has been sent, with its status, render mode, size and kept headers.
+- SSR overrides from the panel apply: render errors, forced Client renders and TransferState edits.
+
+It traces `GET` and `HEAD` requests that accept `text/html` and whose answer is HTML or a redirect. A `null` or `undefined` answer, as `AngularAppEngine.handle()` gives for a URL with no route, passes through untraced. The wrapper records into the devtools server in the same process, the hub or the Vite plugin. While there is none, or the `http` inspector is off, it calls your handler directly.
+
+### Trace on Hono
+
+Wrap the Angular engine where the Hono app renders pages:
+
+```ts {3,8,11}
+// src/server.ts
+import {AngularAppEngine, createRequestHandler} from '@angular/ssr';
+import {withPangularSsr} from '@pangular-inspector/devtools/ssr';
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
+import {Hono} from 'hono';
+
+const angularApp = new AngularAppEngine();
+const render = withPangularSsr((request: Request) => angularApp.handle(request));
+const devtools = initPangularHub({ws: false});
+const app = new Hono();
+
+app.all(`${devtools.base}*`, (c) => devtools.handler(c.req.raw));
+app.get('*', async (c) => (await render(c.req.raw)) ?? c.notFound());
+
+export const reqHandler = createRequestHandler(app.fetch);
+```
+
+Pass a function that calls `angularApp.handle(request)`, not `angularApp.handle` itself, so the method keeps its `this`.
+
+### Trace on h3
+
+With h3 v2, the event carries the web request as `event.req`:
+
+```ts
+// src/server.ts
+import {AngularAppEngine, createRequestHandler} from '@angular/ssr';
+import {withPangularSsr} from '@pangular-inspector/devtools/ssr';
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
+import {H3} from 'h3';
+
+const angularApp = new AngularAppEngine();
+const render = withPangularSsr((request: Request) => angularApp.handle(request));
+const devtools = initPangularHub({ws: false});
+const app = new H3();
+
+app.all(`${devtools.base}**`, (event) => devtools.handler(event.req));
+app.get('**', async (event) => (await render(event.req)) ?? undefined);
+
+export const reqHandler = createRequestHandler(app.fetch);
+```
+
+With h3 v1, as in Nitro, turn the event into a web request with `toWebRequest(event)`:
+
+```ts
+// server/routes/[...].ts
+import {AngularAppEngine} from '@angular/ssr';
+import {withPangularSsr} from '@pangular-inspector/devtools/ssr';
+import {defineEventHandler, toWebRequest} from 'h3';
+
+const angularApp = new AngularAppEngine();
+const render = withPangularSsr((request: Request) => angularApp.handle(request));
+
+export default defineEventHandler(
+  async (event) => (await render(toWebRequest(event))) ?? undefined,
+);
+```
+
+### Wrap the whole app
+
+`withPangularSsr()` also wraps a whole app's `fetch`, such as `createRequestHandler(withPangularSsr(app.fetch))`. API answers are not HTML, so they are not recorded. The hub base (`/__devframes/`) is never traced.
+
+### Trace on Fastify
+
+On Node, `pangularSsrMiddleware()` from the same entry point is the tracer behind the hub's `ssrMiddleware`. Run it in an `onRequest` hook after the hub hook:
+
+```ts
+// src/server.ts
+import {pangularSsrMiddleware} from '@pangular-inspector/devtools/ssr';
+
+const traceSsr = pangularSsrMiddleware();
+
+app.addHook('onRequest', (request, reply, done) => {
+  traceSsr(request.raw, reply.raw, done);
+});
+```
+
+### Options
+
+| Option              | Default | What it does                                                                                                                    |
+| ------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `skip`              | `[]`    | Path prefixes that are never traced. The hub base is always skipped.                                                            |
+| `browserDistFolder` | none    | The browser build folder that holds `index.csr.html`. **Force Client render** in the SSR overrides needs it to serve the shell. |
+
+### Compression
+
+If a compression middleware encodes the body before `withPangularSsr()` sees it, the render mode can't be read and **Edit TransferState** can't apply. Wrap the handler inside any compression, so the wrapper sees the HTML.
+
 ## Pick a transport
 
 A web handler never sees WebSocket upgrades, and neither does a server that `ng serve` drives through `reqHandler`. Pick one of these:
@@ -148,6 +251,7 @@ The hub is off when `NODE_ENV` is `production`. `handler` then answers 404, `att
 ## Where to next
 
 <ngmd-pill-row>
+  <ngmd-pill href="/inspectors/ssr-http" title="SSR & HTTP"></ngmd-pill>
   <ngmd-pill href="/getting-started/express" title="Angular CLI and Express"></ngmd-pill>
   <ngmd-pill href="/getting-started/configuration" title="Configuration"></ngmd-pill>
   <ngmd-pill href="/getting-started/overlay" title="Browser overlay"></ngmd-pill>

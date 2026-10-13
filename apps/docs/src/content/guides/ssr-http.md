@@ -123,7 +123,7 @@ app.use(devtools.ssrMiddleware);
 export const reqHandler = createNodeRequestHandler(app);
 ```
 
-`ssrMiddleware` is optional. It traces each server render for the **SSR requests** table and adds a `Server-Timing` header to the response. Put it before the Angular handler, and after `compression()` if you use it. With `providePangularHttp()` in the app config, each request also shows the router's guard and resolver times.
+`ssrMiddleware` is optional. It traces each server render for the **SSR requests** table and adds a `Server-Timing` header to the response. Put it before the Angular handler, and after `compression()` if you use it. With `providePangularHttp()` in the app config, each request also shows the router's guard and resolver times. On Hono, h3, Nitro or Fastify, use the tracers in `@pangular-inspector/devtools/ssr` instead. See [Trace SSR renders](../getting-started/other-servers.md#trace-ssr-renders).
 
 This is adapted from the demo app's `src/server.ts`. It keeps the one-time code and the origin check on, which are the defaults. See [Angular CLI and Express](../getting-started/express.md) for every option.
 

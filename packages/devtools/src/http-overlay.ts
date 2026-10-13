@@ -1,6 +1,7 @@
 import { keepaliveDue } from './change-detection.ts';
 import { appIdOf, scanHydration } from './http-hydration.ts';
 import { decodePayload, type PayloadSummary } from './http-payload.ts';
+import { withCapturedHeaders } from './http-headers.ts';
 import { redactCall } from './http-redact.ts';
 import { httpRegistry, sanitizeRules, storeRules, type HttpCall } from './http-rules.ts';
 import { redactMessage, redactUrl } from './router.ts';
@@ -117,7 +118,12 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
       if (ping?.known === false) payloadSent = false;
       return;
     }
-    const report: HttpReport = { ...meta, calls: calls.map(redactCall), full };
+    // Headers are read here, once per call, and masked before they leave the page.
+    const report: HttpReport = {
+      ...meta,
+      calls: calls.map((call) => redactCall(withCapturedHeaders(call))),
+      full,
+    };
     const answer = (await my.rpc.call('push-http', full ? { ...report, payload } : report)) as
       { needPayload?: boolean } | null | undefined;
     lastMeta = metaJson;

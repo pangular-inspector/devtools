@@ -32,6 +32,10 @@ _Avoid_: bridge call, native call (for both kinds)
 The early part of the Capacitor collector (`capacitor-collector.ts`), loaded through `@pangular-inspector/devtools/capacitor-hook` before `@capacitor/core`. It wraps the native bridge and `registerPlugin` so plugin calls are logged from app start, and the overlay picks up its buffer when it connects.
 _Avoid_: interceptor, patch, monkey patch
 
+**Store hook**:
+The stand-in for the Redux DevTools extension's page API (`window.__REDUX_DEVTOOLS_EXTENSION__`, in `redux-devtools-hook.ts`), loaded early through `@pangular-inspector/devtools/store-hook` or installed by the overlay. NGXS, Elf and MiniRx connect to it through their own devtools integrations, so they show in the store inspector. It passes every call on to the real extension when there is one.
+_Avoid_: fake extension, Redux shim, devtools mock
+
 **Host tree**:
 The tree Angular rendered into, as the component, injector, signal graph and NgRx collectors walk it: roots, children, parent and a tag for each host (`HostTree` in `host-tree.ts`). In the browser it is the DOM, through `domTree()`; a platform without a DOM describes its own views.
 _Avoid_: view tree, render tree, DOM (when the code does not depend on it)
@@ -41,7 +45,7 @@ A report a collector sends to the server over RPC, such as `push-component-tree`
 _Avoid_: sync, upload, post
 
 **Inspector**:
-One area the devtools can look at: `components`, `injectors`, `signals`, `ngrx`, `forms`, `router`, `pipes`, `http`, `analog` and `capacitor` (`PANGULAR_INSPECTORS` in `config.ts`). An inspector owns a collector, its RPC functions, its agent tools and its view in the panel, and `inspectors` in the config turns all of them off together.
+One area the devtools can look at: `components`, `injectors`, `signals`, `ngrx`, `tanstackQuery`, `forms`, `router`, `pipes`, `http`, `analog`, `capacitor` and `errors` (`PANGULAR_INSPECTORS` in `config.ts`). An inspector owns a collector, its RPC functions, its agent tools and its view in the panel, and `inspectors` in the config turns all of them off together.
 _Avoid_: plugin, module, feature
 
 **Devframe**:

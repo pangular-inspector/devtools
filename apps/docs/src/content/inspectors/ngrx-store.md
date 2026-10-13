@@ -1,6 +1,6 @@
 ---
 title: NgRx Store
-description: Live NgRx signal stores and @ngrx/store state, with entities, dispatched events, change logs, diffs, restore and dispatch.
+description: Live NgRx signal stores and @ngrx/store state, with entities, dispatched events, change logs, diffs, restore and dispatch, plus NGXS, Elf and MiniRx stores.
 ---
 
 <ngmd-hero title="NgRx Store" logo="https://cdn.simpleicons.org/ngrx/BA2BD2" gradient>
@@ -9,7 +9,7 @@ description: Live NgRx signal stores and @ngrx/store state, with entities, dispa
 
 # NgRx Store
 
-The Store tab shows your *NgRx state live. It covers `@ngrx/signals` stores (`signalStore` and `signalState`) and the classic `@ngrx/store`. With the hub mounted, it lives in the **NgRx** dock.
+The Store tab shows your *NgRx state live. It covers `@ngrx/signals` stores (`signalStore` and `signalState`) and the classic `@ngrx/store`. NGXS, Elf and MiniRx stores show up in the same list through their Redux DevTools integration (see [Other stores](#other-stores)). With the hub mounted, it lives in the **NgRx** dock.
 
 The tab has two sections. **Live stores** reads the running page. **Source declarations** lists what your files declare.
 
@@ -51,9 +51,29 @@ Signal stores get a **Change log**. The classic Store gets an **Action log**. Ea
 | `effect`   | An NgRx effect. Effects send their actions through `Store.next`.              |
 | `reactive` | `store.dispatch(() => action)`, which dispatches again when a signal changes. |
 
-Open an entry to see its arguments, or the action and its **Origin** for the classic Store, and a **State diff** with the value before and after each change. The diff lists up to 50 changes. When there were more, a line under it says how many are not shown, for example **12 more changes not shown**, and the entry's change count includes them. The overlay counts up to 1000 more, so a larger change reads **1000+ more changes not shown**. A method-call entry also shows its **Duration**, in milliseconds. An entry caused by a dispatched event shows the event under **Caused by event**. An action entry also has **Dispatch again**. **Copy** next to **State diff** copies that entry's diff in the same format as **State**, one object per change with its `path`, `op`, `before` and `after`. An entry that changed nothing has no diff to copy.
+Open an entry to see its time, **Origin** and **Duration**, and three tabs. **Action** shows the action, or the method's arguments and the event that caused it. **Diff** shows the **State diff** with the value before and after each change. **State** reads the whole state of the store right after the entry, or right before it, from the page; see [Read any past state](#read-any-past-state). The diff lists up to 50 changes. When there were more, a line under it says how many are not shown, for example **12 more changes not shown**, and the entry's change count includes them. The overlay counts up to 1000 more, so a larger change reads **1000+ more changes not shown**. A method-call entry also shows its **Duration**, in milliseconds. An entry caused by a dispatched event shows the event under **Caused by event**. An action entry also has **Dispatch again**. **Copy** next to **State diff** copies that entry's diff in the same format as **State**, one object per change with its `path`, `op`, `before` and `after`. An entry that changed nothing has no diff to copy.
 
 Entry numbers start at 1 again when the app reloads. So when the app reloads, or the selected page closes and the tab shows another one, the open entry closes and a pending **Restore** confirmation is cancelled.
+
+### Read any past state
+
+The **State** tab of an entry asks the page for the state of the store around that entry and shows it with **After #N** and **Before #N**, with **Copy**. The page keeps the states of every entry still in the log. NgRx state is immutable, so consecutive states share everything an entry did not change, and keeping them costs what changed. Values are redacted like the rest of the tab. When the log entry lists only 50 changes, **Show all changes** on the **Diff** tab reads up to 500 of them.
+
+Reading a state changes nothing in the app, so it works with [`actions.ngrx`](../getting-started/configuration.md#actions) off.
+
+### Session
+
+Under the log, **Session** works on a range of the selected NgRx store's entries, picked with **From** and **To**:
+
+| Control            | What it does                                                                                                                                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Export session** | Saves the range as a JSON file: the state before the first entry, then each action or method call with the changes it made.                                                                                        |
+| **Import session** | Reads an exported file back. Its entries show under **Imported** with the same **Action**, **Diff** and **State** tabs, and **Generate test** works on the whole session. The app does not change.                 |
+| **Generate test**  | Writes a Vitest spec that starts from the state before the range, replays its actions or method calls, and expects the state after it. **Copy** and **Download** save it. Notes above the code say what to adjust. |
+
+An `@ngrx/store` range becomes a reducer spec: for one feature reducer when only one top-level key changed, or through `combineReducers` otherwise. A signal store range becomes a spec that injects the store with `TestBed`, sets the start state with `unprotected()` from `@ngrx/signals/testing`, calls the recorded methods and checks `getState()`. A `patchState` write outside a method is replayed as a `patchState` call with what it changed. Point the import at your reducer or store, since the devtools cannot tell its file.
+
+The server checks an imported file before it reads it: the format and version, at most 1000 entries and 4,000,000 characters, and change paths that cannot reach a prototype. It keeps at most 5 imported sessions, each for an hour after its last use.
 
 ### Events
 
@@ -149,6 +169,22 @@ The overlay finds stores through Angular's debug API, so the live section needs 
   </ngmd-tab>
 </ngmd-tabs>
 
+### Turn a bug into a test
+
+<ngmd-workflow>
+  <ngmd-step title="Reproduce it">
+    Use the app until the state goes wrong, with the store selected.
+  </ngmd-step>
+  <ngmd-step title="Pick the range">
+    In <strong>Session</strong>, set <strong>From</strong> to the last good entry and <strong>To</strong> to the one that broke the state. Check them on the <strong>State</strong> tab of each entry.
+  </ngmd-step>
+  <ngmd-step title="Generate the test">
+    Click <strong>Generate test</strong>, then <strong>Download</strong>. Save the spec next to your reducer or store, point its import there, and fix the expected state to what it should be.
+  </ngmd-step>
+</ngmd-workflow>
+
+To share the bug instead, **Export session** and send the file. Anyone can **Import session** it to read the same entries and states.
+
 ### Replay an action
 
 <ngmd-workflow>
@@ -162,6 +198,59 @@ The overlay finds stores through Angular's debug API, so the live section needs 
 
 To try another payload, type the action in **Dispatch an action** instead.
 
+## Other stores
+
+NGXS, Elf and MiniRx each ship an integration for the Redux DevTools browser extension. The overlay stands in for that extension, so these stores report to the Store tab too: their name, their state and every action they send, with a state diff per action.
+
+| Library | Its devtools integration                                                                                    |
+| ------- | ----------------------------------------------------------------------------------------------------------- |
+| NGXS    | `withNgxsReduxDevtoolsPlugin()` from `@ngxs/devtools-plugin` (or `NgxsReduxDevtoolsPluginModule.forRoot()`) |
+| Elf     | `devTools()` from `@ngneat/elf-devtools`                                                                    |
+| MiniRx  | `new ReduxDevtoolsExtension()` in the store's `extensions`                                                  |
+
+Any other library that calls `window.__REDUX_DEVTOOLS_EXTENSION__.connect()` reports the same way, with the library shown as **Redux DevTools**.
+
+### Set it up
+
+These libraries look for the extension once, when the app starts, and the overlay usually connects later. Load `@pangular-inspector/devtools/store-hook` before your app, from the polyfills of your development configuration. A configuration's `polyfills` replace the list in the build's `options`, so copy that list and add the hook to it:
+
+```json
+// angular.json (excerpt)
+{
+  "projects": {
+    "my-app": {
+      "architect": {
+        "build": {
+          "configurations": {
+            "development": {
+              "polyfills": ["zone.js", "@pangular-inspector/devtools/store-hook"]
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+This sample assumes the base list is `["zone.js"]`. Leave `zone.js` out if your app doesn't use it. The hook starts on import, and does nothing when `ngDevMode` is off. Without it, the overlay installs the stand-in when it connects, so only stores that connect after that report.
+
+### In the Store tab
+
+Each store shows its name (the `name` option it passed, or the library), **Redux DevTools** as its kind and the library, such as **NGXS**. Select it for its **State** and its **Action log**. Each entry shows the action and a **State diff** against the state before it, with up to 50 changes, without the **Action**, **Diff** and **State** tabs of the NgRx log. The first entry of NGXS is `@@INIT`, with the initial state.
+
+The tab only reads these stores. It has no **Restore**, **Dispatch again**, **Store as global** or **Session** for them, since the page keeps only their latest state.
+
+### With the Redux DevTools extension installed
+
+The extension keeps working. The overlay passes every call on to it, and returns the extension's answers to the store, so jumps and imports in the extension still reach the app. The overlay itself never sends anything back to the store.
+
+`@ngrx/store-devtools` connects through the same API. The overlay passes it on to the extension when one is installed and does not list it again, since the classic Store already shows in the tab.
+
+### Turn it off
+
+The stand-in is part of the NgRx inspector. With [`inspectors.ngrx`](../getting-started/configuration.md#inspectors-and-agent-tools) set to `false`, the overlay removes it again when it connects and puts back the extension, if there was one. The log keeps the last [`limits.changeLog`](../getting-started/configuration.md#limits) actions per page.
+
 ## Agent tools
 
 | Tool or resource                | Kind     | What it does                                                                                                                      |
@@ -171,8 +260,14 @@ To try another payload, type the action in **Dispatch an action** instead.
 | `pangular:ngrx-store`           | resource | The live stores per page, with state, computeds, methods, references and the change log. Classic Store actions carry an `origin`. |
 | `pangular:inspect-signal-store` | tool     | The live state of one store, or a summary of every store discovered so far.                                                       |
 | `pangular:signal-store-history` | tool     | The live change log, oldest first: state diffs, classic `@ngrx/store` actions and `@ngrx/signals/events` events.                  |
+| `pangular:inspect-ngrx-entry`   | tool     | The State, Diff and Action of one past entry, from the page or an imported session.                                               |
+| `pangular:export-ngrx-session`  | tool     | A range of one store's log as session JSON.                                                                                       |
+| `pangular:import-ngrx-session`  | tool     | Reads an exported session back, for the two tools above and below.                                                                |
+| `pangular:generate-ngrx-test`   | tool     | A Vitest spec from a range of entries, live or imported.                                                                          |
+| `pangular:restore-ngrx-state`   | tool     | Restores the state after an entry, or sends Store DevTools back to the latest state. An action tool.                              |
+| `pangular:inspect-redux-stores` | tool     | The NGXS, Elf, MiniRx and other Redux DevTools stores of a page, or one of them with its state and latest actions.                |
 
-No tool can restore a state. See [Dispatch an action](../agents/tools.md#dispatch-an-action) and [Resources](../agents/resources.md).
+See [NgRx tools](../agents/tools.md#inspect-ngrx-entry), [Restore a state](../agents/tools.md#restore-a-state) and [Resources](../agents/resources.md).
 
 ## Limits and gotchas
 
@@ -206,11 +301,15 @@ The copy buttons use the browser clipboard. If the panel cannot write to it, for
 
 ### Write actions
 
-Restore, **Back to latest**, **Dispatch** and **Dispatch again** need [`actions.ngrx`](../getting-started/configuration.md#actions). With it off, the panel disables them and the server refuses them.
+Restore, **Back to latest**, **Dispatch** and **Dispatch again** need [`actions.ngrx`](../getting-started/configuration.md#actions). With it off, the panel disables them, the server refuses them, and the `dispatch-ngrx-action` and `restore-ngrx-state` tools are dropped. The **State** tab, **Session** and their tools only read, so they keep working.
 
 ### Log size
 
-The log keeps the last 200 entries. Set the count with [`limits.changeLog`](../getting-started/configuration.md#limits). Once older entries are dropped, the log says how many. The overlay logs a method call that changes nothing at most once per second.
+The log keeps the last 200 entries, and the page keeps the states of the same entries for the **State** tab and **Export session**. Set the count with [`limits.changeLog`](../getting-started/configuration.md#limits). Once older entries are dropped, the log says how many. The overlay logs a method call that changes nothing at most once per second.
+
+### Past states assume immutable state
+
+The page keeps a reference to each state an entry produced. NgRx reducers and `patchState` return new objects, so those references stay as they were. An app that mutates its state objects in place changes the kept states too, and the **State** tab then shows the newer values. Exported states are serialized like the rest of the tab, so very deep or large values are cut and marked, and a generated test notes them.
 
 ### The selected entity is a convention, not an API
 

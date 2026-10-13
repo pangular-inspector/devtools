@@ -7,6 +7,7 @@ export type Tab =
   | 'signals'
   | 'injectors'
   | 'store'
+  | 'queries'
   | 'forms'
   | 'network'
   | 'analog'

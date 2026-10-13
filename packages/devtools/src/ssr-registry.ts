@@ -9,7 +9,7 @@ export interface AppliedOverride {
   note?: string;
 }
 
-/** Request header that carries the SSR request id from `ssrMiddleware` into the render. */
+/** Request header that carries the SSR request id from `ssrMiddleware` or `withPangularSsr` into the render. */
 export const SSR_REQUEST_HEADER = 'x-pangular-ssr-id';
 
 /** Server-Timing metric whose description is the SSR request id. */
@@ -47,6 +47,8 @@ export interface SsrRequest {
 }
 
 export interface ActiveRequest {
+  /** The page path and query being rendered. */
+  url?: string;
   fetches: number;
   fetchMs: number;
   navigations?: SsrNavigation[];
@@ -74,6 +76,17 @@ export function ssrRegistry(): SsrRegistry {
 /** The id when `ssrMiddleware` is still handling that request, so a forged header is ignored. */
 export function activeSsrRequest(id: string | null | undefined): string | undefined {
   return id && ssrRegistry().active.has(id) ? id : undefined;
+}
+
+/**
+ * The one request being traced, when exactly one is in flight. A render that
+ * gets no Angular `REQUEST` (Analog provides its own token) is linked through
+ * it, since with two renders in flight a call can't be told apart.
+ */
+export function soleActiveSsrRequest(): string | undefined {
+  const { active } = ssrRegistry();
+  if (active.size !== 1) return undefined;
+  return active.keys().next().value;
 }
 
 export function noteSsrFetch(id: string, durationMs: number) {

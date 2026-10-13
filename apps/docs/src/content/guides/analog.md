@@ -138,6 +138,22 @@ export const appConfig: ApplicationConfig = {
 
 `providePangularHttp()` and `withPangular()` do nothing in production builds. See [Set up SSR & HTTP](./ssr-http.md) for the interceptor order.
 
+## Trace server renders
+
+To fill the **SSR requests** table in the **SSR & HTTP** tab, add a Nitro server middleware that traces each page render. Analog runs files in `src/server/middleware` before it renders the page, on the dev server too:
+
+```ts
+// src/server/middleware/pangular-ssr.ts
+import {pangularSsrEventHandler} from '@pangular-inspector/devtools/ssr';
+import {defineEventHandler} from 'h3';
+
+export default defineEventHandler(pangularSsrEventHandler());
+```
+
+It wraps the Node response of each HTML request, adds the `Server-Timing` header that links the page to its render, and records the render with its render mode. Analog marks its renders `ssr-analog`, which the tab shows as **Server**. It does nothing while the Vite plugin is not running, so it is safe in a production build.
+
+Analog gives the render its own `REQUEST` token, not the one from `@angular/core`, so `withPangular()` can't read the request id from a header. It links a server call to the traced render while that render is the only one in flight. With two renders at once, the calls show in the timeline without a link to their request.
+
 ## Try the demo
 
 The repository has an Analog demo in `examples/analog`. It has file routes with route groups, `.server.ts` loads, API routes under `src/server/routes/api/v1`, markdown content, prerendered pages and a client-only `/dashboard`.

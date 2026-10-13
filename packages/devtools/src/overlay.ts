@@ -12,7 +12,11 @@ import { attachLeaks } from './leaks-collector.ts';
 import { createRecentWrites } from './error-explain.ts';
 import { allowClientRules, httpRegistry } from './http-rules.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
+import { attachReduxStores } from './redux-stores-collector.ts';
+import { uninstallReduxDevtoolsHook } from './redux-devtools-hook.ts';
+import { attachTanstackQuery } from './query-collector.ts';
 import { collectInjectorTree } from './injector-tree.ts';
+import { registerProviderValues } from './provider-values.ts';
 import {
   clearNavigations,
   droppedNavigations,
@@ -450,6 +454,8 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     });
   const treeChannel = channel('push-component-tree', 'ping-component-tree', COMPONENT_TREE_SHAPE);
   const injectorChannel = channel('push-injector-tree', 'ping-injector-tree', INJECTOR_TREE_SHAPE);
+  // Reads the value of a provider the injectors already created, for the Injectors view.
+  if (on.injectors) registerProviderValues(my.rpc, pageId, getNg);
   // Wakes up with a push of every leased report when a panel or an agent looks again.
   const lease = createPageLease(my, pageId, {
     wake: () =>
@@ -491,6 +497,14 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs, () => lease.active)
     : null;
   const ngrx = on.ngrx ? attachNgrx(my, pageId, getNg, limits.changeLog) : null;
+  // NGXS, Elf and MiniRx report through their Redux DevTools integration.
+  if (!on.ngrx) uninstallReduxDevtoolsHook();
+  const otherStores = on.ngrx ? attachReduxStores(my, pageId, { maxLog: limits.changeLog }) : null;
+  const queries = on.tanstackQuery
+    ? attachTanstackQuery(my, pageId, getNg, {
+        allowWrites: devtoolsConfig.actions.tanstackQuery,
+      })
+    : null;
   const errors = on.errors
     ? attachErrors(my, pageId, getNg, { tickMs, writes: recentWrites })
     : null;
@@ -691,6 +705,8 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     on.signals && (() => void pushSignalGraph().catch(() => {})),
     on.injectors && paced(() => void pushInjectorTree().catch(() => {})),
     ngrx && (() => void ngrx.push()),
+    otherStores && (() => void otherStores.push()),
+    queries && (() => void queries.push()),
     forms && paced(() => void forms.sync()),
     pipes?.push,
     on.router && (() => void pushRouter()),
@@ -916,6 +932,8 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     capacitor?.leave();
     forget('analog', 'forget-analog-page');
     ngrx?.leave();
+    otherStores?.leave();
+    queries?.leave();
     errors?.leave();
     leaks?.leave();
     angularInfo.leave();
@@ -945,6 +963,8 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     pipes?.stop();
     capacitor?.stop();
     ngrx?.stop();
+    otherStores?.stop();
+    queries?.stop();
     errors?.stop();
     leaks?.stop();
     cd?.stop();

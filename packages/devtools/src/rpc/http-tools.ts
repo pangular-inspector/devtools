@@ -13,6 +13,8 @@ export interface ListHttpCallsArgs {
   failed?: boolean;
   limit?: number;
   preview?: boolean;
+  /** Adds each shown call's redacted request and response headers. */
+  headers?: boolean;
 }
 
 const DEFAULT_LIMIT = 30;
@@ -49,9 +51,34 @@ function flags(call: HttpCall): string {
   return out.join(', ') || 'none';
 }
 
-function status(call: HttpCall): string {
+/** The status cell: the code, `cancelled`, or `ERR` for no response. */
+export function callStatus(call: HttpCall): string {
   if (call.cancelled) return 'cancelled';
   return call.status ? String(call.status) : 'ERR';
+}
+
+function headerLines(title: string, headers: Record<string, string> | undefined): string[] {
+  if (!headers || !Object.keys(headers).length) return [`- ${title}: none recorded`];
+  return [
+    `- ${title}:`,
+    ...Object.entries(headers).map(
+      ([name, value]) => `  - ${code(name)}: ${code(value.replace(/\s+/g, ' '))}`,
+    ),
+  ];
+}
+
+/** Request and response headers of each call, already redacted. */
+export function headersText(calls: readonly HttpCall[]): string[] {
+  const lines: string[] = [];
+  for (const call of calls) {
+    lines.push(
+      '',
+      `${call.method} ${code(call.url)} (${callStatus(call)})`,
+      ...headerLines('Request headers', call.requestHeaders),
+      ...headerLines('Response headers', call.responseHeaders),
+    );
+  }
+  return lines;
 }
 
 function age(at: number, now: number): string {
@@ -143,7 +170,7 @@ export function listHttpCallsText(
       ...(showPage ? [pageId ? code(pageId) : 'server'] : []),
       side,
       `${call.method} ${code(call.url)}`,
-      status(call),
+      callStatus(call),
       `${call.durationMs} ms`,
       flags(call),
     ];
@@ -166,9 +193,16 @@ export function listHttpCallsText(
       lines.push('No call above recorded a response preview.');
     } else {
       for (const { call } of previews) {
-        lines.push('', `${call.method} ${code(call.url)} (${status(call)})`, fenced(call.preview!));
+        lines.push(
+          '',
+          `${call.method} ${code(call.url)} (${callStatus(call)})`,
+          fenced(call.preview!),
+        );
       }
     }
+  }
+  if (args.headers) {
+    lines.push('', '### Headers', ...headersText(shown.map(({ call }) => call)));
   }
   return capped(lines.join('\n'));
 }

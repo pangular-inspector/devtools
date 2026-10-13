@@ -137,7 +137,7 @@ function entryIndex(key: string, size: number): number | null {
   return index < size ? index : null;
 }
 
-type Step = { value: unknown } | { error: string };
+export type Step = { value: unknown } | { error: string };
 
 /** The value of one input or property, as the detail shows it: signals unwrapped, resources as a snapshot. */
 function rootValue<H extends object>(
@@ -188,8 +188,11 @@ function rootValue<H extends object>(
   return { value: resource ?? unwrap(ng, raw) };
 }
 
-/** One step down from `current`, through own data properties and entry indexes only. */
-function child(current: unknown, key: string, at: string): Step {
+/**
+ * One step down from `current`, through own data properties and entry indexes
+ * only. Shared with the provider value reader (`provider-values.ts`).
+ */
+export function child(current: unknown, key: string, at: string): Step {
   if (!current || typeof current !== 'object') {
     return { error: `\`${at}\` holds no object to open.` };
   }

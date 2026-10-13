@@ -21,6 +21,7 @@ import { RouteInspector } from './pages/route-inspector';
 import { SignalInspector } from './pages/signal-inspector';
 import { DiInspector } from './pages/di-inspector';
 import { StoreInspector } from './pages/store-inspector';
+import { QueryInspector } from './pages/query-inspector';
 import { FormsInspector } from './pages/forms-inspector';
 import { PipesInspector } from './pages/pipes-inspector';
 import type { Tab, Tabs } from './types/tab.types';
@@ -205,6 +206,7 @@ function readView(): View | null {
     SignalInspector,
     DiInspector,
     StoreInspector,
+    QueryInspector,
     FormsInspector,
     PipesInspector,
     AnalogInspector,
@@ -535,6 +537,9 @@ function readView(): View | null {
             }
             @case ('store') {
               <app-store-inspector [rpc]="rpc()" />
+            }
+            @case ('queries') {
+              <app-query-inspector [rpc]="rpc()" />
             }
             @case ('network') {
               <app-network-inspector [rpc]="rpc()" />

@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Seventy-five tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Eighty-six tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -53,11 +53,11 @@ The URL comes from the HTTP or router report. A page that sends neither (no rout
 
 Gives the user a link that opens the panel on one tab with one item selected, and switches the panels that are open to it. Reads: page. Use it to point the user at what you found.
 
-| Argument | Required | What it is                                                                                                                                                                                           |
-| -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `components`, `routes`, `signals`, `injectors`, `store`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog` or `capacitor`. Only tabs that are on count. |
-| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, a form id on `forms`. Other tabs ignore it.                               |
-| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                     |
+| Argument | Required | What it is                                                                                                                                                                                                      |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `components`, `routes`, `signals`, `injectors`, `store`, `queries`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog` or `capacitor`. Only tabs that are on count. |
+| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, a form id on `forms`. Other tabs ignore it.                                          |
+| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                                |
 
 The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#tab=components&id=12&page=k3x9`, when the hub serves the panel and a page has reported its address. Otherwise it is the hash to add to the panel's address. Each panel that is open and not in a background tab opens the link at once. The tool is `read`: it changes what the panel shows, not the app. See [Deep links](../getting-started/popup-and-hub.md#deep-links).
 
@@ -65,14 +65,14 @@ The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#t
 
 Every tool has one of three safety tiers. The server sends the tier to your client as the tool's read-only and destructive hints.
 
-| Tier          | What the tool can do                                                                                              | Tools                                                                                                                                                                                                                                  |
-| ------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                        | Every other tool, and every resource                                                                                                                                                                                                   |
-| `action`      | Changes the running page, the server's fault rules or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `change-detection` and `hydration` |
-| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                                                                                                               |
+| Tier          | What the tool can do                                                                                              | Tools                                                                                                                                                                                                                                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                        | Every other tool, and every resource                                                                                                                                                                                                                                         |
+| `action`      | Changes the running page, the server's fault rules or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `restore-ngrx-state`, `query-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `change-detection` and `hydration` |
+| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                                                                                                                                                     |
 
 <ngmd-alert severity="important">
-  The fifteen <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
+  The seventeen <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
 When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, and `hydration` only when it turns the overlay on or off. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
@@ -347,6 +347,20 @@ An element injector that belongs to a component carries `componentId`, the insta
 
 Without `selector` or `token`, the answer is the whole tree and says which change detection mode the page runs. The answer stays within 20,000 characters and its JSON always parses. A larger tree shows element injectors as an outline (id, name, type, component, and provider and dependency counts), and when that is still too long it leaves out the deepest injectors and says how many. The environment injectors are always there, as an outline when they are large, and without their deepest injectors when even that outline is too long. A `selector` or `token` answer that is too long keeps whole entries and says how many it shows. `selector` and `token` take at most 500 characters each. When the page reported only part of its injector tree (it keeps at most 2000 element injectors and 2500 in all, and leaves out injectors nested more than 1000 levels deep), the answer says so.
 
+### read-provider-value
+
+The current value of a service or other provider that an injector on the page already created: its own fields, with signals and resources unwrapped and marked `signal` or `resource`, and methods left out. Each value shows its first level, and a nested object, array, Map or Set reads `{"$collapsed": type, "size": n}`. Nothing is created: an environment injector answers only for a value it already holds, and an element injector only for a token a component or directive on the page injected. Otherwise the answer says it was not created yet. Getters never run, and secret-looking names are redacted. Reads: page.
+
+| Argument   | Required | Value                                                                                                                                                                     |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `token`    | yes      | A class name like `CartStore` or an `InjectionToken` description like `API_URL`.                                                                                          |
+| `injector` | no       | An injector id, `Root`, `Platform`, `Route: admin`, a tag or a component class name. Defaults to the first injector that provides the token, environment injectors first. |
+| `path`     | no       | A member, then keys or indexes, like `items` or `cart.items[0]`. Without it, the answer lists the members.                                                                |
+| `depth`    | no       | With `path`, the levels to read below it, 1 to 5.                                                                                                                         |
+| `limit`    | no       | The most entries per object or list, 1 to 1000. Defaults to 30.                                                                                                           |
+
+A value without members, such as a string or an array from `useValue`, is shown whole. See [Peek at a provider value](../inspectors/injectors.md#peek-at-a-provider-value).
+
 ### explain-injection
 
 How Angular resolves one token for one component, element or environment injector: each injector on the lookup path in order, whether it provides the token and why the lookup stops. It reads the injector tree the page reported, so nothing is created or injected. See [Explain a lookup with flags](../inspectors/injectors.md#explain-a-lookup-with-flags). Reads: page.
@@ -364,7 +378,7 @@ The answer is a table of steps: **provides it**, **not provided**, **hidden** (a
 
 ## NgRx
 
-Two tools read the live `@ngrx/signals` and `@ngrx/store` state a page reported. Reads: page.
+These tools read the live `@ngrx/signals` and `@ngrx/store` state a page reported, and the sessions you export and import. `inspect-redux-stores` reads the other stores. Reads: page, or an imported session.
 
 ### inspect-signal-store
 
@@ -384,6 +398,56 @@ The change log for a page's stores, oldest first: `@ngrx/signals` state diffs (m
 | `page`    | no       | The tab to read. Defaults to every connected page.                                                                                                               |
 | `storeId` | no       | Only that store's entries. Without it, every store, action and event.                                                                                            |
 | `since`   | no       | A `seq` from a previous call. Returns only entries after it. Requires `page` when more than one page is connected, since each page has its own sequence numbers. |
+
+### inspect-ngrx-entry
+
+The State, Diff and Action of one past entry: the full redacted state of its store right after it, every change from the state before it (up to 500), and the action, method arguments, origin and causing event. The page keeps the raw states of the entries in its log, so any entry still in the log can be read. Events have no state of their own.
+
+| Argument  | Required | Value                                                                       |
+| --------- | -------- | --------------------------------------------------------------------------- |
+| `seq`     | yes      | The entry number, from `signal-store-history` or the NgRx Store page.       |
+| `page`    | no       | The tab to read. Defaults to the most recent page that reports NgRx.        |
+| `session` | no       | The id `import-ngrx-session` returned, to read an imported session instead. |
+
+### export-ngrx-session
+
+A session of one store as JSON: the redacted state before the first entry, then each action or method call with the state changes it made. Save it as a `.json` file to import it later, here or on the NgRx Store page. The answer carries the JSON when it fits in 60,000 characters; otherwise it says to export a shorter range.
+
+| Argument  | Required | Value                                                                                                                    |
+| --------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `storeId` | no       | `store` for `@ngrx/store`, or a signal store id like `ngrx-1`. Defaults to `@ngrx/store`, or the one store with entries. |
+| `from`    | no       | The first entry number to include.                                                                                       |
+| `to`      | no       | The last entry number to include.                                                                                        |
+| `page`    | no       | The tab to read.                                                                                                         |
+
+### import-ngrx-session
+
+Reads back a session that `export-ngrx-session` or the NgRx Store page exported, and answers with its id and entries. The server checks it first: the format and version, at most 1000 entries and 4,000,000 characters, and change paths that cannot reach a prototype. Nothing in the app changes. The server keeps at most 5 sessions, each for an hour after its last use.
+
+| Argument  | Required | Value                               |
+| --------- | -------- | ----------------------------------- |
+| `session` | yes      | The exported session, as JSON text. |
+
+### generate-ngrx-test
+
+A Vitest spec that replays a range of entries: the state before the range, the recorded actions or method calls in order, and the state after the range as the expectation. An `@ngrx/store` range becomes a reducer spec, for one feature reducer when only one top-level key changed, or through `combineReducers` otherwise. A signal store range becomes a spec that injects the store with `TestBed`, sets the start state with `unprotected()` and checks `getState()`. The answer says which imports to point and which recorded values were cut or redacted. Jest runs the spec too once you drop the `vitest` import.
+
+| Argument  | Required | Value                                                |
+| --------- | -------- | ---------------------------------------------------- |
+| `storeId` | no       | The store, as for `export-ngrx-session`.             |
+| `from`    | no       | The first entry number to replay.                    |
+| `to`      | no       | The last entry number to replay.                     |
+| `page`    | no       | The tab to read.                                     |
+| `session` | no       | An imported session id, to generate from it instead. |
+
+### inspect-redux-stores
+
+Stores that report through the Redux DevTools extension API, such as NGXS, Elf and MiniRx (see [Other stores](../inspectors/ngrx-store.md#other-stores)). Without `store`, a table of the page's stores with their id, library and action count. With `store`, or when the page has one store, its last state and its latest actions, newest first, each with the action and a state diff of up to 50 changes. It never restores a state.
+
+| Argument | Required | Value                                           |
+| -------- | -------- | ----------------------------------------------- |
+| `store`  | no       | A store id, such as `r1`, or its name.          |
+| `limit`  | no       | How many actions to list, 1 to 200. Default 20. |
 
 ## Router
 
@@ -455,6 +519,40 @@ If a `canMatch` guard or the navigation error handler redirects a `probe`, the p
 | `seq`     | The number of an action in the log, to dispatch that action again. Use it instead of `type`.  |
 
 Without `page`, the tool uses the one page that has an `@ngrx/store` Store. If more than one page has a Store, it dispatches nothing and lists those pages with their URLs, so you can call it again with `page`. While a restore holds Store DevTools on a past state, the action is logged but does not change the state, and the answer says so. Set [`actions.ngrx`](../getting-started/configuration.md#actions) to `false` to drop the tool. Read the live state and log with the [`ngrx-store` resource](./resources.md#ngrx-store).
+
+### Restore a state <ngmd-badge variant="alpha">Action</ngmd-badge>
+
+`restore-ngrx-state` restores a past state in the running app, in development only, the way **Restore this state** does on the [NgRx Store](../inspectors/ngrx-store.md#restore-an-earlier-state) page. A signal store gets every state key set back to its value right after the entry. `@ngrx/store` jumps Store DevTools to the state after that action, which needs `provideStoreDevtools()`, and stays paused there until you go back. The log gets a `Restore #N` entry. Reads: page.
+
+| Argument | Value                                                                          |
+| -------- | ------------------------------------------------------------------------------ |
+| `seq`    | The number of a restorable entry in the log.                                   |
+| `latest` | `true` sends Store DevTools back to the latest state. Use it instead of `seq`. |
+
+Without `page`, the tool uses the one page that reports NgRx state. With several, it restores nothing and lists them. Set [`actions.ngrx`](../getting-started/configuration.md#actions) to `false` to drop the tool.
+
+## TanStack Query
+
+These tools read the `QueryClient` the app provides, through the page. See [TanStack Query](../inspectors/tanstack-query.md). Reads: page.
+
+| Tool            | What it answers                                                                                                                                                                                                 | Arguments                   |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `list-queries`  | The clients, then the queries and mutations: id, key, status, fetch status, freshness (`fresh`, `stale` or `invalidated`), when the data was last updated, observers and the error.                             | `status`, `search`, `limit` |
+| `inspect-query` | One query or mutation by `id`, or the query whose key contains `key`: its status, freshness, `staleTime`, `gcTime`, observers and failures, then its data (and a mutation's variables), read from the page now. | `id`, `key`                 |
+
+`status` is one of `pending`, `error`, `success`, `idle`, `fetching` or `paused`, and matches a status or a fetch status. `search` keeps keys that contain the text, ignoring case. `limit` sets the rows per table, 1 to 300 (default 50). Keys, errors and data are masked like other live values.
+
+### Invalidate or refetch a query <ngmd-badge variant="alpha">Action</ngmd-badge>
+
+`query-action` calls the app's own `QueryClient` for one query. `invalidate` marks it stale through `invalidateQueries()`, and a query with an active observer refetches at once. `refetch` fetches it again through `refetchQueries()`. Both run the query function, so the app sends its request again.
+
+| Argument | Required | Value                                               |
+| -------- | -------- | --------------------------------------------------- |
+| `action` | yes      | `invalidate` or `refetch`.                          |
+| `id`     | no       | A query id from `list-queries`, such as `q3`.       |
+| `key`    | no       | Text the query key contains, when there is no `id`. |
+
+Without `page`, the tool refuses when more than one tab reports TanStack Query. Set [`actions.tanstackQuery`](../getting-started/configuration.md#actions) to `false` to drop the tool.
 
 ## Forms
 
@@ -567,17 +665,20 @@ The **Live** line tells these cases apart:
 
 ## SSR & HTTP
 
-These tools read the HttpClient calls that `withPangular()` recorded and the SSR requests that `ssrMiddleware` traced in your server. See [SSR & HTTP](../inspectors/ssr-http.md). Reads: page.
+These tools read the HttpClient calls that `withPangular()` recorded and the SSR requests that `ssrMiddleware` or `withPangularSsr()` traced in your server. See [SSR & HTTP](../inspectors/ssr-http.md). Reads: page.
 
-| Tool                  | What it answers                                                                                                                                                                                                                        | Arguments                           |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`                             |
-| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url`                         |
-| `list-http-calls`     | The app's HttpClient calls, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, transfer cache hit and the matched rule.                                                      | `url`, `failed`, `limit`, `preview` |
+| Tool                  | What it answers                                                                                                                                                                                                                        | Arguments                                      |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`                                        |
+| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url`                                    |
+| `list-http-calls`     | The app's HttpClient calls, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, transfer cache hit and the matched rule.                                                      | `url`, `failed`, `limit`, `preview`, `headers` |
+| `http-waterfall`      | One tab's client calls as a waterfall, grouped by navigation, newest first: each call's start offset in its navigation, duration, status and a text bar.                                                                               | `limit`, `headers`                             |
 
 `explain-ssr-request` picks the request by `id`, else the newest one for `url`, else the newest one.
 
-`list-http-calls` lists every tab and the server when you leave out `page`. With `page`, it lists that tab and the server calls of the SSR request that served it. `url` keeps calls whose URL contains the text. `failed` keeps calls with a status of 400 or more, no response, an error, or a cancel. `limit` defaults to 30 (at most 200). `preview` adds each call's response preview. Secrets in URLs, errors and previews are masked, and `url` matches the masked URL.
+`list-http-calls` lists every tab and the server when you leave out `page`. With `page`, it lists that tab and the server calls of the SSR request that served it. `url` keeps calls whose URL contains the text. `failed` keeps calls with a status of 400 or more, no response, an error, or a cancel. `limit` defaults to 30 (at most 200). `preview` adds each call's response preview. `headers` adds each call's request and response headers. Secrets in URLs, errors, previews and headers are masked, and `url` matches the masked URL.
+
+`http-waterfall` reads the tab `page` names, or the most recent tab. A new navigation starts each time the page URL a call was made on changes. `limit` sets how many navigations it shows, 5 by default (at most 50). `headers` adds each call's headers. `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` are always masked, as are names that look secret or match `redaction.secretNames`, and JWTs and bearer tokens in any value.
 
 ### Fault rules <ngmd-badge variant="alpha">Action</ngmd-badge>
 

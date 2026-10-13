@@ -7,11 +7,20 @@ function isBelow(key: string, parent: string): boolean {
   return key.length > parent.length && key.startsWith(`${parent.slice(0, -1)},`);
 }
 
-interface ValueAnswer {
+export interface ValueAnswer {
   ok?: boolean;
   value?: unknown;
   error?: string;
 }
+
+/** Sends one read; the default asks for a component value, the Injectors view for a provider's. */
+export type ValueSender = (request: {
+  path: readonly string[];
+  limit?: number;
+  depth?: number;
+  watch?: boolean;
+  forget?: boolean;
+}) => Promise<ValueAnswer>;
 
 export interface ValueTarget {
   rpc: DevframeRpcClient | null;
@@ -34,6 +43,8 @@ export class ValueStore {
   readonly errors = signal<ReadonlyMap<string, string>>(new Map());
   private readonly limits = new Map<string, number>();
   private generation = 0;
+
+  constructor(private readonly sender?: ValueSender) {}
 
   /** Follows the selected component; another instance or page starts over. */
   follow(target: ValueTarget, expanded: Record<string, unknown> | undefined) {
@@ -112,6 +123,15 @@ export class ValueStore {
   }
 
   private async send(request: Record<string, unknown>): Promise<ValueAnswer> {
+    if (this.sender) {
+      if (request['forget']) return { ok: true };
+      const { directive: _directive, watch: _watch, ...rest } = request;
+      try {
+        return await this.sender(rest as Parameters<ValueSender>[0]);
+      } catch {
+        return { error: 'The devtools server did not answer. Try again.' };
+      }
+    }
     const { rpc, pageId, componentId } = this.target;
     if (!rpc || !pageId || !componentId) return { error: 'No live page to read from.' };
     const { directive, ...rest } = request;

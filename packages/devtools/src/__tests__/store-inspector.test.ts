@@ -8,13 +8,54 @@ async function mount() {
   const { TestBed } = await import('@angular/core/testing');
   const { BrowserTestingModule, platformBrowserTesting } =
     await import('@angular/platform-browser/testing');
-  const { ViewChild } = await import('@angular/core');
+  const { Input, Output, ViewChild } = await import('@angular/core');
   const { StoreInspector } = await import('../../../../app/src/pages/store-inspector.ts');
+  const { EntryTabs } = await import('../../../../app/src/pages/store-entry-tabs.ts');
+  const { StoreSession } = await import('../../../../app/src/pages/store-session.ts');
+  const { Select } = await import('../../../../app/src/ui/select.ts');
   (StoreInspector as unknown as { propDecorators: unknown }).propDecorators = Object.fromEntries(
     ['stateTree', 'latestButton', 'cancelButton', 'restoreButton'].map((name) => [
       name,
       [{ type: ViewChild, args: [name, { isSignal: true }] }],
     ]),
+  );
+  // JIT sees signal inputs only through the metadata the AOT compiler would write.
+  const signalInputs = (type: unknown, names: string[], required: string[] = []) => {
+    (type as { propDecorators: unknown }).propDecorators = Object.fromEntries(
+      names.map((name) => [
+        name,
+        [
+          {
+            type: Input,
+            args: [{ isSignal: true, alias: name, required: required.includes(name) }],
+          },
+        ],
+      ]),
+    );
+  };
+  signalInputs(
+    EntryTabs,
+    ['seq', 'diffTruncated', 'idPrefix', 'loader', 'loadDiff'],
+    ['seq', 'idPrefix', 'loader'],
+  );
+  signalInputs(StoreSession, ['rpc', 'pageId', 'storeId', 'entries']);
+  signalInputs(
+    Select,
+    [
+      'options',
+      'value',
+      'placeholder',
+      'ariaLabel',
+      'labelledBy',
+      'describedBy',
+      'disabled',
+      'emptyText',
+    ],
+    ['options'],
+  );
+  // `value` is a model(): an input plus a `valueChange` output on the same property.
+  (Select as unknown as { propDecorators: Record<string, unknown[]> }).propDecorators['value'].push(
+    { type: Output, args: ['valueChange'] },
   );
   if (!testBedReady) {
     TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());

@@ -207,7 +207,7 @@ function age(at: number, now: number): string {
 }
 
 const NO_REQUESTS =
-  'No SSR requests recorded. Add `app.use(devtools.ssrMiddleware)` before the Angular request handler in `server.ts`, then load a page. Prerendered pages served as static files are not traced.';
+  'No SSR requests recorded. Add `app.use(devtools.ssrMiddleware)` before the Angular request handler in `server.ts`, or wrap a web-standard handler with `withPangularSsr()` from `@pangular-inspector/devtools/ssr`, then load a page. Prerendered pages served as static files are not traced.';
 
 export function listSsrRequestsText(
   requests: SsrRequest[],
@@ -278,7 +278,7 @@ export function explainSsrRequestText(
   if (r.compressedBeforeTrace) {
     const encoding = r.headers['content-encoding'] ?? 'unknown encoding';
     lines.push(
-      `- The body was already compressed (${code(encoding)}) when \`ssrMiddleware\` saw it, so the render mode can't be read and TransferState edits can't apply. In \`server.ts\`, mount \`ssrMiddleware\` after \`compression()\`.`,
+      `- The body was already compressed (${code(encoding)}) when \`ssrMiddleware\` saw it, so the render mode can't be read and TransferState edits can't apply. In \`server.ts\`, mount \`ssrMiddleware\` after \`compression()\`, or wrap the handler with \`withPangularSsr()\` inside any compression.`,
     );
   }
   if (r.overrides?.length) {

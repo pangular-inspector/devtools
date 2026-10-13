@@ -3,6 +3,7 @@ export const PANGULAR_INSPECTORS = [
   'injectors',
   'signals',
   'ngrx',
+  'tanstackQuery',
   'forms',
   'router',
   'pipes',
@@ -44,6 +45,7 @@ export const PANGULAR_ACTIONS = [
   'http',
   'analog',
   'components',
+  'tanstackQuery',
 ] as const;
 
 export type PangularAction = (typeof PANGULAR_ACTIONS)[number];
@@ -328,6 +330,7 @@ export const PANEL_TABS = [
   { id: 'signals', label: 'Signals', inspector: 'signals' },
   { id: 'injectors', label: 'Injectors', inspector: 'injectors' },
   { id: 'store', label: 'Store', inspector: 'ngrx' },
+  { id: 'queries', label: 'Queries', inspector: 'tanstackQuery' },
   { id: 'forms', label: 'Forms', inspector: 'forms' },
   { id: 'pipes', label: 'Pipes', inspector: 'pipes' },
   { id: 'network', label: 'SSR & HTTP', inspector: 'http' },
@@ -761,10 +764,11 @@ export const ROUTER_WRITE_ACTIONS: readonly string[] = ['navigate', 'abort', 're
 export const ACTION_TOOLS: Record<PangularAction, readonly string[]> = {
   forms: ['form-action', 'fill-form'],
   router: ['navigate', 'clear-recordings'],
-  ngrx: ['dispatch-ngrx-action'],
+  ngrx: ['dispatch-ngrx-action', 'restore-ngrx-state'],
   http: ['set-http-rule', 'remove-http-rule', 'clear-recordings'],
   analog: ['analog-call-api', 'clear-recordings'],
   components: ['set-component-property', 'set-signal'],
+  tanstackQuery: ['query-action'],
 };
 
 /**
@@ -792,6 +796,7 @@ export const AGENT_SAFETY: Record<string, Exclude<AgentSafety, 'read'>> = {
   'fill-form': 'action',
   navigate: 'action',
   'dispatch-ngrx-action': 'action',
+  'restore-ngrx-state': 'action',
   'set-http-rule': 'action',
   'remove-http-rule': 'action',
   'record-pipes': 'action',
@@ -803,6 +808,7 @@ export const AGENT_SAFETY: Record<string, Exclude<AgentSafety, 'read'>> = {
   'analog-call-api': 'destructive',
   'set-component-property': 'action',
   'set-signal': 'action',
+  'query-action': 'action',
 };
 
 /**
@@ -827,6 +833,7 @@ export function actionBlockedMessage(action: PangularAction): string {
     http: 'Changing HTTP mock rules and clearing HTTP calls',
     analog: 'Calling API routes and clearing server calls',
     components: 'Editing component properties and signals',
+    tanstackQuery: 'Invalidating and refetching TanStack queries',
   }[action];
   return `${what} is turned off in the devtools config (actions.${action}).`;
 }
@@ -900,6 +907,16 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'forget-ngrx-page': 'ngrx',
   'ngrx-action-result': 'ngrx',
   'request-ngrx-action': 'ngrx',
+  'request-ngrx-history': 'ngrx',
+  'import-ngrx-session': 'ngrx',
+  'request-provider-value': 'injectors',
+  'provider-value-result': 'injectors',
+  'push-redux-stores': 'ngrx',
+  'forget-redux-stores-page': 'ngrx',
+  'push-tanstack-query': 'tanstackQuery',
+  'forget-tanstack-query-page': 'tanstackQuery',
+  'request-tanstack-query': 'tanstackQuery',
+  'tanstack-query-result': 'tanstackQuery',
   'push-forms': 'forms',
   'ping-forms': 'forms',
   'forget-forms-page': 'forms',
@@ -970,10 +987,20 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'injector-tree': 'injectors',
   'inspect-providers': 'injectors',
   'explain-injection': 'injectors',
+  'read-provider-value': 'injectors',
   'ngrx-store': 'ngrx',
   'dispatch-ngrx-action': 'ngrx',
   'inspect-signal-store': 'ngrx',
   'signal-store-history': 'ngrx',
+  'inspect-ngrx-entry': 'ngrx',
+  'export-ngrx-session': 'ngrx',
+  'import-ngrx-session': 'ngrx',
+  'generate-ngrx-test': 'ngrx',
+  'restore-ngrx-state': 'ngrx',
+  'inspect-redux-stores': 'ngrx',
+  'list-queries': 'tanstackQuery',
+  'inspect-query': 'tanstackQuery',
+  'query-action': 'tanstackQuery',
   forms: 'forms',
   'inspect-forms': 'forms',
   'explain-form-invalid': 'forms',
@@ -1003,6 +1030,7 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'list-ssr-requests': 'http',
   'explain-ssr-request': 'http',
   'list-http-calls': 'http',
+  'http-waterfall': 'http',
   'list-http-rules': 'http',
   'set-http-rule': 'http',
   'remove-http-rule': 'http',
@@ -1027,6 +1055,8 @@ export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
   'signal-graph': 'signals',
   'injector-tree': 'injectors',
   'ngrx-store': 'ngrx',
+  'redux-stores': 'ngrx',
+  'tanstack-query': 'tanstackQuery',
   forms: 'forms',
   router: 'router',
   routes: 'router',
@@ -1082,10 +1112,17 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'injector-tree',
   'inspect-providers',
   'explain-injection',
+  'read-provider-value',
   'ngrx-store',
   'dispatch-ngrx-action',
   'inspect-signal-store',
   'signal-store-history',
+  'export-ngrx-session',
+  'restore-ngrx-state',
+  'inspect-redux-stores',
+  'list-queries',
+  'inspect-query',
+  'query-action',
   'forms',
   'inspect-forms',
   'explain-form-invalid',
@@ -1115,6 +1152,7 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'list-ssr-requests',
   'explain-ssr-request',
   'list-http-calls',
+  'http-waterfall',
   'list-http-rules',
   'set-http-rule',
   'remove-http-rule',
@@ -1173,6 +1211,7 @@ const INSPECTOR_LABEL: Record<PangularInspector, string> = {
   injectors: 'Injectors',
   signals: 'Signals',
   ngrx: 'NgRx',
+  tanstackQuery: 'TanStack Query',
   forms: 'Forms',
   router: 'Router',
   pipes: 'Pipes',
@@ -1189,6 +1228,7 @@ const ACTION_LABEL: Record<PangularAction, string> = {
   http: 'HTTP mocking',
   analog: 'Analog API calls',
   components: 'Component edits',
+  tanstackQuery: 'TanStack Query invalidate and refetch',
 };
 
 const LIMIT_LABEL: Record<PangularLimit, (value: number) => string> = {

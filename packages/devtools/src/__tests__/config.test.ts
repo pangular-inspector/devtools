@@ -62,6 +62,7 @@ describe('resolvePangularConfig', () => {
       http: true,
       analog: true,
       components: true,
+      tanstackQuery: true,
     });
   });
 
@@ -81,6 +82,7 @@ describe('resolvePangularConfig', () => {
       http: true,
       analog: true,
       components: true,
+      tanstackQuery: true,
     });
   });
 
@@ -92,6 +94,7 @@ describe('resolvePangularConfig', () => {
       http: false,
       analog: false,
       components: false,
+      tanstackQuery: false,
     });
     expect(resolvePangularConfig({ actions: { router: false } }).actions).toEqual({
       forms: true,
@@ -100,6 +103,7 @@ describe('resolvePangularConfig', () => {
       http: true,
       analog: true,
       components: true,
+      tanstackQuery: true,
     });
   });
 
@@ -260,8 +264,10 @@ describe('agent tool and RPC registration', () => {
         'form-action',
         'hydration',
         'navigate',
+        'query-action',
         'record-pipes',
         'remove-http-rule',
+        'restore-ngrx-state',
         'set-component-property',
         'set-http-rule',
         'set-signal',
@@ -368,8 +374,10 @@ describe('agent tool and RPC registration', () => {
         'dispatch-ngrx-action',
         'hydration',
         'navigate',
+        'query-action',
         'record-pipes',
         'remove-http-rule',
+        'restore-ngrx-state',
         'set-component-property',
         'set-http-rule',
         'set-signal',
@@ -387,6 +395,10 @@ describe('agent tool and RPC registration', () => {
     expect(analog.tools).toContain('analog-lint');
     const ngrx = await boot({ actions: { ngrx: false } });
     expect(ngrx.actionTools).not.toContain('dispatch-ngrx-action');
+    expect(ngrx.actionTools).not.toContain('restore-ngrx-state');
+    expect(ngrx.tools).toEqual(
+      expect.arrayContaining(['inspect-ngrx-entry', 'export-ngrx-session', 'generate-ngrx-test']),
+    );
     expect(ngrx.tools).toContain('get-ngrx-store');
     const http = await boot({ actions: { http: false } });
     expect(http.actionTools).not.toContain('set-http-rule');
@@ -396,6 +408,9 @@ describe('agent tool and RPC registration', () => {
     expect(components.actionTools).not.toContain('set-component-property');
     expect(components.actionTools).not.toContain('set-signal');
     expect(components.tools).toContain('inspect-component');
+    const queries = await boot({ actions: { tanstackQuery: false } });
+    expect(queries.actionTools).not.toContain('query-action');
+    expect(queries.tools).toEqual(expect.arrayContaining(['list-queries', 'inspect-query']));
   });
 
   it('leaves out the RPC functions, tools and resources of a disabled inspector', async () => {

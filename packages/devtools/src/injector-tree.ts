@@ -569,7 +569,7 @@ export function collectInjectorTree<H extends object = Element>(
 
 /**
  * The live value of one provider the injector tree listed, for "Store as
- * global" and "Log to console" (`mode` words the errors). `index` is the provider's place in the injector's `providers`, and
+ * global", "Log to console" and the provider value reader (`mode` words the errors). `index` is the provider's place in the injector's `providers`, and
  * `token` must still match there. Nothing is created: an environment injector
  * gives only a value it already holds, and an element injector only a token
  * that some component or directive on the page injected (Angular creates
@@ -580,10 +580,10 @@ export function providerValue<H extends object = Element>(
   injectorId: string,
   token: string,
   index: number,
-  mode: 'store' | 'log' = 'store',
+  mode: 'store' | 'log' | 'read' = 'store',
 ): { value: unknown } | { error: string } {
-  const doing = mode === 'log' ? 'logging' : 'storing';
-  const verb = mode === 'log' ? 'Log' : 'Store';
+  const doing = { store: 'storing', log: 'logging', read: 'reading' }[mode];
+  const verb = { store: 'Store', log: 'Log', read: 'Read' }[mode];
   const key = byId.get(injectorId)?.deref();
   if (!ng || !key) return { error: 'This injector is no longer on the page.' };
   const element = elementEntries.has(key);

@@ -94,6 +94,7 @@ type PangularInspector =
   | 'injectors'
   | 'signals'
   | 'ngrx'
+  | 'tanstackQuery'
   | 'forms'
   | 'router'
   | 'pipes'
@@ -102,7 +103,8 @@ type PangularInspector =
   | 'capacitor'
   | 'errors';
 
-type PangularAction = 'forms' | 'router' | 'ngrx' | 'http' | 'analog' | 'components';
+type PangularAction =
+  'forms' | 'router' | 'ngrx' | 'http' | 'analog' | 'components' | 'tanstackQuery';
 
 interface PangularConfig {
   inspectors?: Partial<Record<PangularInspector, boolean>>;
@@ -125,11 +127,11 @@ interface PangularConfig {
 
 ### Inspectors and agent tools
 
-| Option               | Default | What it does                                                                                                                                                                                                                                                                                                                                                                                   |
-| -------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `inspectors.<name>`  | `true`  | `false` removes the inspector: no tab or dock, no page collector, no RPC functions, and no agent tools or resources. Its actions are blocked too.                                                                                                                                                                                                                                              |
-| `agent.readOnly`     | `false` | `true` keeps only the agent tools in the `read` [safety tier](../agents/tools.md#action-tools). It drops `form-action`, `fill-form`, `navigate`, `dispatch-ngrx-action`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `record-pipes`, `track-subscriptions`, `analog-call-api` and `clear-recordings`. `change-detection` stays without its `record` argument. |
-| `agent.tools.<name>` | `true`  | `false` hides one inspector's agent tools and resources, and its [shared-state keys](../agents/resources.md#shared-state) over HTTP MCP. The tab stays.                                                                                                                                                                                                                                        |
+| Option               | Default | What it does                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inspectors.<name>`  | `true`  | `false` removes the inspector: no tab or dock, no page collector, no RPC functions, and no agent tools or resources. Its actions are blocked too.                                                                                                                                                                                                                                                              |
+| `agent.readOnly`     | `false` | `true` keeps only the agent tools in the `read` [safety tier](../agents/tools.md#action-tools). It drops `form-action`, `fill-form`, `navigate`, `dispatch-ngrx-action`, `query-action`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `record-pipes`, `track-subscriptions`, `analog-call-api` and `clear-recordings`. `change-detection` stays without its `record` argument. |
+| `agent.tools.<name>` | `true`  | `false` hides one inspector's agent tools and resources, and its [shared-state keys](../agents/resources.md#shared-state) over HTTP MCP. The tab stays.                                                                                                                                                                                                                                                        |
 
 `agent.tools` has the same keys as `inspectors`. An inspector that is off has no agent tools, whatever `agent.tools` says.
 
@@ -139,15 +141,16 @@ If you open a tab that is turned off, the panel says so, shows the option that t
 
 Actions are the writes that the panel and agents make to your app or the server.
 
-| Option               | Default | What `false` blocks                                                                                                                                                                                                |
-| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `actions.forms`      | `true`  | Form writes: set value, fill, mark touched, untouched, dirty or pristine, touch all, revalidate, reset, enable, disable, submit and restore. Drops `form-action` and `fill-form`.                                  |
-| `actions.router`     | `true`  | Navigate, abort, replay and probe, and clearing the navigations list. Drops router clearing in `clear-recordings`. The `navigate` agent tool stays for `instrument` and `resolve-lazy` and refuses the other four. |
-| `actions.ngrx`       | `true`  | Restoring NgRx state from the change log and dispatching `@ngrx/store` actions. Drops the `dispatch-ngrx-action` agent tool.                                                                                       |
-| `actions.http`       | `true`  | Editing fault injection rules and SSR overrides, and clearing the HTTP timeline. Drops the `set-http-rule` and `remove-http-rule` agent tools and HTTP clearing in `clear-recordings`.                             |
-| `actions.analog`     | `true`  | The Analog request playground and clearing server calls. Drops the `analog-call-api` agent tool and Analog clearing in `clear-recordings`.                                                                         |
-| `actions.components` | `true`  | Editing component inputs, properties and writable signals from the **Components** tab. Drops the `set-component-property` and `set-signal` agent tools.                                                            |
-| `actions`            | `true`  | All of the above.                                                                                                                                                                                                  |
+| Option                  | Default | What `false` blocks                                                                                                                                                                                                |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `actions.forms`         | `true`  | Form writes: set value, fill, mark touched, untouched, dirty or pristine, touch all, revalidate, reset, enable, disable, submit and restore. Drops `form-action` and `fill-form`.                                  |
+| `actions.router`        | `true`  | Navigate, abort, replay and probe, and clearing the navigations list. Drops router clearing in `clear-recordings`. The `navigate` agent tool stays for `instrument` and `resolve-lazy` and refuses the other four. |
+| `actions.ngrx`          | `true`  | Restoring NgRx state from the change log and dispatching `@ngrx/store` actions. Drops the `dispatch-ngrx-action` agent tool.                                                                                       |
+| `actions.http`          | `true`  | Editing fault injection rules and SSR overrides, and clearing the HTTP timeline. Drops the `set-http-rule` and `remove-http-rule` agent tools and HTTP clearing in `clear-recordings`.                             |
+| `actions.analog`        | `true`  | The Analog request playground and clearing server calls. Drops the `analog-call-api` agent tool and Analog clearing in `clear-recordings`.                                                                         |
+| `actions.components`    | `true`  | Editing component inputs, properties and writable signals from the **Components** tab. Drops the `set-component-property` and `set-signal` agent tools.                                                            |
+| `actions.tanstackQuery` | `true`  | Invalidating and refetching a query from the **Queries** tab. Drops the `query-action` agent tool.                                                                                                                 |
+| `actions`               | `true`  | All of the above.                                                                                                                                                                                                  |
 
 Pass `actions: false` to block every action, or an object to block some. Keys you leave out of the object stay on.
 
@@ -168,16 +171,16 @@ Forms, the router, component inputs, signals, NgRx, pipes, Analog previews, SSR 
 
 Values outside the bounds are clamped to the nearest one.
 
-| Option                  | Default | Bounds      | What it sets                                                                                           |
-| ----------------------- | ------- | ----------- | ------------------------------------------------------------------------------------------------------ |
-| `limits.refreshMs`      | `3000`  | 500 to 8000 | Fallback poll interval, in ms, used before the app bootstraps.                                         |
-| `limits.navigations`    | `50`    | 5 to 500    | Navigations kept per page.                                                                             |
-| `limits.formTimeline`   | `200`   | 10 to 2000  | Form timeline events kept.                                                                             |
-| `limits.httpCalls`      | `200`   | 10 to 2000  | HTTP calls kept per page and on the server.                                                            |
-| `limits.changeLog`      | `200`   | 10 to 2000  | NgRx change log entries kept per page.                                                                 |
-| `limits.cdCycles`       | `200`   | 10 to 2000  | Change detection cycles kept per page while recording.                                                 |
-| `limits.capacitorCalls` | `200`   | 10 to 2000  | [Capacitor](../inspectors/capacitor.md) plugin calls kept per page and on the server.                  |
-| `limits.idleAfterMs`    | `60000` | 0 to 600000 | How long pages keep sending after an agent's last call while no panel is open. `0` keeps them sending. |
+| Option                  | Default | Bounds      | What it sets                                                                                                                       |
+| ----------------------- | ------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `limits.refreshMs`      | `3000`  | 500 to 8000 | Fallback poll interval, in ms, used before the app bootstraps.                                                                     |
+| `limits.navigations`    | `50`    | 5 to 500    | Navigations kept per page.                                                                                                         |
+| `limits.formTimeline`   | `200`   | 10 to 2000  | Form timeline events kept.                                                                                                         |
+| `limits.httpCalls`      | `200`   | 10 to 2000  | HTTP calls kept per page and on the server.                                                                                        |
+| `limits.changeLog`      | `200`   | 10 to 2000  | NgRx change log entries kept per page, and the actions kept per page for [other stores](../inspectors/ngrx-store.md#other-stores). |
+| `limits.cdCycles`       | `200`   | 10 to 2000  | Change detection cycles kept per page while recording.                                                                             |
+| `limits.capacitorCalls` | `200`   | 10 to 2000  | [Capacitor](../inspectors/capacitor.md) plugin calls kept per page and on the server.                                              |
+| `limits.idleAfterMs`    | `60000` | 0 to 600000 | How long pages keep sending after an agent's last call while no panel is open. `0` keeps them sending.                             |
 
 When a timeline reaches its limit, the oldest entries are dropped. The timeline then shows a note above the list, such as "Showing the latest 200 HTTP calls. 12 older entries were dropped." with the limit to raise. This applies to the **SSR & HTTP** timeline, the router navigation timeline, the forms timeline, the NgRx change log, the change detection recording and the Capacitor plugin calls. The `explain-navigation`, `form-history` and `change-detection` agent tools add the same note, and the `pangular:ngrx-store` resource reports a `dropped` count per page.
 

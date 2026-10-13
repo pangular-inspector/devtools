@@ -147,6 +147,8 @@ const NOTHING_DONE = [
   // success such as "No longer paused".
   /^No (?:@ngrx|Analog|Capacitor|Content|HTTP|HttpClient|NgRx|SSR|ServerRoute|build|calls?|change|checks|components?|connected|content|devtools|element|error|field|file|forms?|history|injector|invalid|markdown|matching|navigations?|page|pages|part|pick|pipe|plugins?|prerender|problems|recent|recordings|route|routes|routed|router|rules?|server|signal|snapshot|store|submit|timed)\b/,
   /^Not dispatched\b/,
+  /^Not done\b/,
+  /^No query\b/,
   /^Refused\b/,
   /^error: /,
   /^Page `[^`]*` (?:reports|has) no\b/,
