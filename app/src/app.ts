@@ -31,6 +31,7 @@ import { NetworkInspector } from './pages/network-inspector';
 import { ComingSoon, type ComingSoonInfo } from './pages/coming-soon';
 import { CapacitorInspector } from './pages/capacitor-inspector';
 import { ErrorsInspector } from './pages/errors-inspector';
+import { AuditInspector } from './pages/audit-inspector';
 import { Timeline } from './pages/timeline';
 import { capacitorPages } from './pages/capacitor-types';
 import { TabIcon } from './pages/tab-icon';
@@ -211,6 +212,7 @@ function readView(): View | null {
     NetworkInspector,
     CapacitorInspector,
     ErrorsInspector,
+    AuditInspector,
     Timeline,
     ComingSoon,
     TabIcon,
@@ -505,6 +507,13 @@ function readView(): View | null {
             }
             @case ('timeline') {
               <app-timeline [rpc]="rpc()" (open)="openLink($event)" />
+            }
+            @case ('audit') {
+              <app-audit-inspector
+                [rpc]="rpc()"
+                [canShowComponent]="config().inspectors.components"
+                (showComponent)="showComponent($event)"
+              />
             }
             @case ('components') {
               <app-component-tree

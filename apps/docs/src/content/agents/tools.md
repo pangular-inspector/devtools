@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Seventy-five tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Seventy-six tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -53,11 +53,11 @@ The URL comes from the HTTP or router report. A page that sends neither (no rout
 
 Gives the user a link that opens the panel on one tab with one item selected, and switches the panels that are open to it. Reads: page. Use it to point the user at what you found.
 
-| Argument | Required | What it is                                                                                                                                                                                           |
-| -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `components`, `routes`, `signals`, `injectors`, `store`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog` or `capacitor`. Only tabs that are on count. |
-| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, a form id on `forms`. Other tabs ignore it.                               |
-| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                     |
+| Argument | Required | What it is                                                                                                                                                                                                    |
+| -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `audit`, `components`, `routes`, `signals`, `injectors`, `store`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog` or `capacitor`. Only tabs that are on count. |
+| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, a form id on `forms`. Other tabs ignore it.                                        |
+| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                              |
 
 The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#tab=components&id=12&page=k3x9`, when the hub serves the panel and a page has reported its address. Otherwise it is the hash to add to the panel's address. Each panel that is open and not in a background tab opens the link at once. The tool is `read`: it changes what the panel shows, not the app. See [Deep links](../getting-started/popup-and-hub.md#deep-links).
 
@@ -65,21 +65,21 @@ The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#t
 
 Every tool has one of three safety tiers. The server sends the tier to your client as the tool's read-only and destructive hints.
 
-| Tier          | What the tool can do                                                                                              | Tools                                                                                                                                                                                                                                  |
-| ------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                        | Every other tool, and every resource                                                                                                                                                                                                   |
-| `action`      | Changes the running page, the server's fault rules or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `change-detection` and `hydration` |
-| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                                                                                                               |
+| Tier          | What the tool can do                                                                                              | Tools                                                                                                                                                                                                                                           |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                        | Every other tool, and every resource                                                                                                                                                                                                            |
+| `action`      | Changes the running page, the server's fault rules or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `change-detection`, `hydration` and `audit` |
+| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                                                                                                                        |
 
 <ngmd-alert severity="important">
-  The fifteen <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
+  The sixteen <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
-When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, and `hydration` only when it turns the overlay on or off. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
+When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, `hydration` only when it turns the overlay on or off, and `audit` only when it runs axe. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
 
 ### Turn tools off
 
-The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record`, `flash`, `track` and `angularProfiling` arguments, so it reads a recording the panel started. `hydration` stays as a `read` tool without its `overlay` argument. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
+The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record`, `flash`, `track` and `angularProfiling` arguments, so it reads a recording the panel started. `hydration` stays as a `read` tool without its `overlay` argument, and `audit` without its `axe` argument, so it reads the last axe pass the panel ran. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ## Source scan
 
@@ -629,6 +629,26 @@ These tools read what a page captured: errors from Angular's `ErrorHandler`, unc
 The explainers are the ones the [Errors](../inspectors/errors.md#explainers) tab shows. For NG0100: the binding, the template function, the previous and current value, the component fields that hold the new value, and the named signals written with it just before the check, with the code that wrote them when write stacks are on. For NG0500 to NG0503: a diff of the server HTML Angular expected and the client DOM it found. For NG0201 and `NullInjectorError`: the token and Angular's dependency path, to pass to `explain-injection`.
 
 `code` accepts `NG0100`, `ng100` or `NG01203`. `explain-error` says so when Angular's error reference has no page for a code, and gives no known cause then. Pass the owner's instance id to `inspect-component` for its inputs and state. `list-errors` takes `limit` up to 100 (default 30), and `list-console` up to 200 (default 50). Messages, stacks and console text are masked like other live values.
+
+## Audit
+
+### audit <ngmd-badge variant="alpha">Action</ngmd-badge>
+
+One ranked list of what is wrong on the page, gathered from the other inspectors, with an axe pass over the app on request. See [Audit](../inspectors/audit.md). Reads: page.
+
+Each finding has a severity, an area, the component, route or URL it is about, one line on why, and the tool to call for detail, with its arguments. The answer also lists key numbers (mean and slowest change detection cycle, wasted checks, retained components, open subscriptions after destroy, errors, axe violations and failed HTTP calls) and the areas it could not read, under **Coverage**.
+
+| Argument   | Required | Value                                                                                                                                                                        |
+| ---------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `axe`      | no       | `true` runs axe-core over the app first. Without it, the audit uses the last axe pass on the page.                                                                           |
+| `session`  | no       | `before` saves this audit as the page's baseline. `after` audits again and compares with the baseline. `clear` drops the baseline.                                           |
+| `area`     | no       | `accessibility`, `errors`, `hydration`, `change-detection`, `leaks`, `router`, `forms`, `http` or `pipes`. `accessibility` also lists the elements that break each axe rule. |
+| `severity` | no       | `error`, `warning` or `info`: only findings at that severity or above.                                                                                                       |
+| `limit`    | no       | Rows to list, 1 to 200. Default 30.                                                                                                                                          |
+
+The audit reuses each inspector's own checks: `diagnose-change-detection` hints and checks slower than 16 ms, `find-leaks`, `explain-error`, `hydration`, `lint-routes`, `lint-forms`, `list-http-calls` and `lint-pipes`. Change detection numbers need a recording from `change-detection`. Retention is not judged on a page whose Angular keeps DI debug data, the same as `find-leaks`. An area whose inspector is off, or whose agent tools are hidden with `agent.tools.<name>: false`, is left out.
+
+The axe pass loads axe-core into the page on demand and changes nothing in the app. It leaves out the overlay's own elements and frames, masks selectors, attributes and summaries, and leaves out text content. With `agent.readOnly`, the tool has no `axe` argument and is marked read-only. A session is kept per page for 30 minutes after its last use, so it survives a reload of the tab. Comparing only works within one page id. See [Inspect, fix and verify](../guides/inspect-fix-verify.md) for the loop.
 
 ## Analog
 

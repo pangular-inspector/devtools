@@ -96,6 +96,7 @@ This table covers the data that has no resource of its own.
 | `pangular:pipe-usage`       | Live pipe instances and recorded calls                                  |
 | `pangular:errors`           | Error groups and console calls, by page id                              |
 | `pangular:leaks`            | Leak hints: retained instances, open subscriptions, effects, by page id |
+| `pangular:audit`            | Audit sessions and axe passes: when each was taken, by page id          |
 | `pangular:analog`           | Analog page data and the server call log                                |
 | `pangular:routes`           | Declared but not filled. Use `get-routes` or `list-routes` instead.     |
 

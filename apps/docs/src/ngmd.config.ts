@@ -209,6 +209,7 @@ const config: NgmdConfig = {
         {label: 'Analog', href: '/inspectors/analog', status: 'new'},
         {label: 'Capacitor', href: '/inspectors/capacitor', status: 'new'},
         {label: 'Errors', href: '/inspectors/errors', status: 'new'},
+        {label: 'Audit', href: '/inspectors/audit', status: 'new'},
       ],
     },
     {
@@ -228,6 +229,7 @@ const config: NgmdConfig = {
         {label: 'Set up NativeScript', href: '/guides/nativescript'},
         {label: 'Set up Angular Native', href: '/guides/angular-native'},
         {label: 'Set up Capacitor', href: '/guides/capacitor', status: 'new'},
+        {label: 'Inspect, fix and verify', href: '/guides/inspect-fix-verify', status: 'new'},
       ],
     },
     {

@@ -26,6 +26,7 @@ import {
 import { registerConsoleGlobals } from './rpc/console-globals.ts';
 import { registerErrors } from './rpc/errors-register.ts';
 import { registerLeaks } from './rpc/leaks-register.ts';
+import { registerAudit } from './rpc/audit-register.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { registerInjectionExplain } from './rpc/injection-explain.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
@@ -3941,6 +3942,31 @@ const pangular = defineDevframe({
         args: [message],
         optional: true,
       });
+    });
+
+    await registerAudit({
+      my,
+      register,
+      agent,
+      answersFor,
+      agentSees: (inspector) => config.agent.tools[inspector],
+      agentAxe: !config.agent.readOnly,
+      pages: () =>
+        withPageUrls([...componentPages.values(), ...httpPages.values(), ...routerPages.values()]),
+      sources: {
+        ...(on.components
+          ? {
+              cd: () => cdState.value() as CdState,
+              components: (pageId: string) => componentPages.get(pageId) ?? null,
+            }
+          : {}),
+        ...(leaksInspector ? { leaks: leaksInspector.state } : {}),
+        ...(errorsInspector ? { errors: errorsInspector.state } : {}),
+        ...(on.router ? { router: () => routerState.value() as RouterState } : {}),
+        ...(on.forms ? { forms: () => formsState.value() as FormsState } : {}),
+        ...(on.http ? { http: () => httpState.value() as HttpState } : {}),
+        ...(on.pipes ? { pipes: () => lintPipes(ctx.cwd) } : {}),
+      },
     });
 
     if (on.analog) {

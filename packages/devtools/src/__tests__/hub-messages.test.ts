@@ -149,6 +149,15 @@ describe('hub messages', () => {
     expect(list().map((m) => m.message)).toEqual(['Agent ran change-detection']);
   });
 
+  it('posts an audit call only when it runs axe in the page', async () => {
+    const { feed, list } = setup();
+    const audit = run(feed, 'pangular:audit');
+    await audit.handler({ session: 'before' });
+    expect(list()).toEqual([]);
+    await audit.handler({ axe: true });
+    expect(list().map((m) => m.message)).toEqual(['Agent ran audit']);
+  });
+
   it('describes a write by its first meaningful line, past the untrusted-data notice and the JSON fence', async () => {
     const { feed, list } = setup();
     await run(

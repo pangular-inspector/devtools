@@ -9,6 +9,8 @@ const angular = Number(require('@angular/core/package.json').version.split('.')[
 const pageSide = [
   'analog-scan',
   'angular-real-app',
+  'axe-runner',
+  'axe-runner-real',
   'cd-recorder',
   'cd-recorder-real',
   'change-detection',

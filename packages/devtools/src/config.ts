@@ -322,6 +322,7 @@ export function hotkeyLabel(hotkey: string, mac: boolean): string {
 export const PANEL_TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'timeline', label: 'Timeline' },
+  { id: 'audit', label: 'Audit' },
   { id: 'analog', label: 'Analog', inspector: 'analog' },
   { id: 'components', label: 'Components', inspector: 'components' },
   { id: 'routes', label: 'Routes', inspector: 'router' },
@@ -803,14 +804,16 @@ export const AGENT_SAFETY: Record<string, Exclude<AgentSafety, 'read'>> = {
   'analog-call-api': 'destructive',
   'set-component-property': 'action',
   'set-signal': 'action',
+  // Only with `axe`, which loads and runs axe-core in the page.
+  audit: 'action',
 };
 
 /**
  * Tools that `agent.readOnly` keeps as `read` tools, with the arguments that
- * act refused: `change-detection` still answers, but without `record`, and
- * `hydration` without `overlay`.
+ * act refused: `change-detection` still answers, but without `record`,
+ * `hydration` without `overlay`, and `audit` without `axe`.
  */
-export const READ_ONLY_VARIANTS: readonly string[] = ['change-detection', 'hydration'];
+export const READ_ONLY_VARIANTS: readonly string[] = ['change-detection', 'hydration', 'audit'];
 
 /** The tier an agent tool or resource is registered with under `config`. Resources are `read`. */
 export function agentSafety(id: string, config: ResolvedPangularConfig): AgentSafety {
@@ -854,6 +857,13 @@ export const SHARED_RPC: readonly string[] = [
   // handler checks that the inspector of each request is on.
   'request-console-global',
   'console-global-result',
+  // The audit reads every inspector that is on (and, for agents, whose agent
+  // tools are on), so it stays with any of them; the axe pass belongs to none.
+  'audit',
+  'get-audit',
+  'audit-session',
+  'request-axe-run',
+  'axe-result',
 ];
 
 /**
@@ -1039,7 +1049,7 @@ export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
 };
 
 /** Shared-state keys that belong to no inspector, without the `pangular:` prefix. */
-export const SHARED_STATE_KEYS: readonly string[] = ['page-visibility', 'page-angular'];
+export const SHARED_STATE_KEYS: readonly string[] = ['page-visibility', 'page-angular', 'audit'];
 
 /**
  * Whether MCP clients may read a shared-state key. A `pangular:` key in
@@ -1123,6 +1133,7 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'list-errors',
   'explain-error',
   'list-console',
+  'audit',
 ];
 
 export function isPageAgentEntry(id: string): boolean {

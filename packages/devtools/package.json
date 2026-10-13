@@ -132,6 +132,7 @@
     "@devframes/plugin-terminals": "^1.2.3",
     "@devframes/plugin-terminals--assets": "^1.2.3",
     "@valibot/to-json-schema": "^1.8.0",
+    "axe-core": "^4.13.0",
     "cac": "^7.0.0",
     "devframe": "^1.2.3",
     "h3": "^1.15.11",

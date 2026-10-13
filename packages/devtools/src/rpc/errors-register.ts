@@ -38,6 +38,8 @@ export interface ErrorsRegistration {
   pages(): { pageId: string; reportedAt: number; url?: string; title?: string }[];
   /** Drops pages that stopped reporting; call it from the shared expiry interval. */
   expire(now?: number): void;
+  /** What every page reported, for the audit. */
+  state(): ErrorsState;
 }
 
 /**
@@ -170,6 +172,7 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
         url: page.url,
         title: page.title,
       })),
+    state,
     expire: (now = Date.now()) => drop(staleErrorPages(state(), now, host.ttl)),
   };
 }

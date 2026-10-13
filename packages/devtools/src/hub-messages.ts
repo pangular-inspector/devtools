@@ -300,6 +300,8 @@ export function createHubFeed(
     ) {
       return;
     }
+    // audit only runs something in the page when it runs axe.
+    if (name === 'audit' && (args as { axe?: unknown } | null)?.axe !== true) return;
     if (changedNothing(result)) return;
     const page = pageOf(args);
     post(
