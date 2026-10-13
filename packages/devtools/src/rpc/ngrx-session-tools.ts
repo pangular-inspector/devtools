@@ -215,9 +215,10 @@ export function createNgrxHistory(deps: Deps) {
         if (typeof seq !== 'number' || !Number.isInteger(seq)) {
           return { markdown: 'Pass `seq`, a log entry number.' };
         }
-        const page = pageArgument(args);
         const session = sessionArgument(args);
         if (session === null) return { markdown: PAGE_TOOL_SESSION_TEXT };
+        // Picked once, so the state and the action shown come from the same page.
+        const page = pageArgument(args) ?? (session ? undefined : deps.pages()[0]?.pageId);
         const answer = await history({ pageId: page, session, request: { type: 'entry', seq } });
         const where = session ? `in session \`${session}\`` : page ? `on page \`${page}\`` : '';
         return {
