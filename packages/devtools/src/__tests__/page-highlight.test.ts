@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// Loaded with the file, not inside a test: its module graph takes seconds to
+// transform, which would count against that test's timeout.
+import { initOverlay } from '../overlay.ts';
 import {
   clearHighlight,
   HIGHLIGHT_SAFETY_MS,
@@ -118,9 +121,10 @@ describe('page highlight', () => {
 
   it('keeps a panel highlight until a clear arrives, and an agent highlight clears itself', async () => {
     vi.stubGlobal('BroadcastChannel', undefined);
-    const { initOverlay } = await import('../overlay.ts');
     const stop = await initOverlay();
-    vi.useFakeTimers();
+    // Only the clear timers are under test. A faked requestAnimationFrame would
+    // replay the box's follow loop every 16 ms over the minute advanced below.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       document.body.innerHTML = '<app-card class="card"></app-card>';
       place(document.querySelector('app-card')!, { x: 1, y: 2, width: 3, height: 4 });
@@ -148,7 +152,6 @@ describe('page highlight', () => {
 
   it('accepts an SVG element from the highlight-in-page request', async () => {
     vi.stubGlobal('BroadcastChannel', undefined);
-    const { initOverlay } = await import('../overlay.ts');
     const stop = await initOverlay();
     try {
       document.body.innerHTML = '<svg><g class="bar"></g></svg>';
