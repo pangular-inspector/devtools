@@ -79,7 +79,7 @@ For environment injectors, **Injected by its services** lists what the services 
 
 ### Peek at a provider value
 
-Each live provider row has a **Show value** button. It reads the provider's current value from the page and lists it like the properties of a component: its own fields, with signals and resources unwrapped (marked **signal** or **resource**), and methods left out. An object, array, Map or Set opens one level at a time, and each level is read from the page when you open it. A value without fields, such as a string or an array from `useValue`, shows whole. **Refresh** reads it again, since the list does not follow the app on its own.
+Each live provider row has a **Show value** button. It reads the provider's current value from the page and lists it like the properties of a component: its own fields, with signals and resources unwrapped (marked **signal** or **resource**), and methods left out. An object, array, Map or Set opens one level at a time, and each level is read from the page when you open it. A value without fields, such as a string or an array from `useValue`, shows whole. **Refresh** reads it again, since the list does not follow the app on its own. When several providers share a token, as `multi` providers do, their buttons and values are named with their position, such as **(2 of 2)**.
 
 Reading never creates a provider, with the same rules as **Store as global** below. A provider the app has not created yet says **… has not been created yet** instead. Getters never run, and secret-looking names and values are shown as `[redacted]`. See [what the devtools redact](../security.md).
 

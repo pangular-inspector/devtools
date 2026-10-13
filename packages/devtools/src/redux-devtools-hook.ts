@@ -136,7 +136,9 @@ export function installReduxDevtoolsHook(
       ? descriptor.value
       : attempt(() => descriptor.get?.call(target), undefined)
     : undefined;
-  const realOf = () => (real && typeof real === 'object' ? (real as AnyRecord) : null);
+  // The real extension is a function (the store enhancer) with `connect`, `send` and the rest on it.
+  const realOf = () =>
+    real && (typeof real === 'object' || typeof real === 'function') ? (real as AnyRecord) : null;
 
   // Connections live on across installs, so a store keeps its id after the overlay restarts.
   const connections: ReduxConnection[] = existing?.connections ?? [];
@@ -228,17 +230,27 @@ export function installReduxDevtoolsHook(
     // The extension's top-level send (used by @ngrx/store-devtools for full updates).
     send: (...args: unknown[]) => attempt(() => realOf()?.['send']?.(...args), undefined),
   };
-  const stand = new Proxy(overrides, {
-    get(own, key) {
-      if (key in own) return own[key as string];
+  // A function target keeps the stand-in callable (`ext && ext()` in `createStore`)
+  // and `typeof` 'function', like the real extension. An arrow function has no
+  // non-configurable `prototype`, so the traps below are free to answer.
+  const callable = (() => undefined) as unknown as AnyRecord;
+  const stand = new Proxy(callable, {
+    apply(_fn, thisArg, args: unknown[]) {
+      const upstream = realOf();
+      if (typeof upstream === 'function') return Reflect.apply(upstream, thisArg, args);
+      // No extension: an enhancer that leaves the store as it is.
+      return (nextCreator: unknown) => nextCreator;
+    },
+    get(_fn, key) {
+      if (Object.hasOwn(overrides, key)) return overrides[key as string];
       const upstream = realOf();
       if (!upstream) return undefined;
       const value = attempt(() => Reflect.get(upstream, key), undefined);
       return typeof value === 'function' ? value.bind(upstream) : value;
     },
-    has(own, key) {
+    has(_fn, key) {
       const upstream = realOf();
-      return key in own || (!!upstream && attempt(() => key in upstream, false));
+      return Object.hasOwn(overrides, key) || (!!upstream && attempt(() => key in upstream, false));
     },
   });
 

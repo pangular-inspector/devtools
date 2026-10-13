@@ -35,7 +35,7 @@ let nextId = 0;
         class="toggle"
         [attr.aria-expanded]="open()"
         [attr.aria-controls]="open() ? regionId : null"
-        [attr.aria-label]="(open() ? 'Hide the value of ' : 'Show the value of ') + token()"
+        [attr.aria-label]="(open() ? 'Hide the value of ' : 'Show the value of ') + name()"
         (click)="toggle()"
       >
         <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
@@ -45,7 +45,7 @@ let nextId = 0;
         <button
           type="button"
           class="link"
-          [attr.aria-label]="'Read the value of ' + token() + ' again'"
+          [attr.aria-label]="'Read the value of ' + name() + ' again'"
           (click)="load()"
         >
           Refresh
@@ -53,7 +53,7 @@ let nextId = 0;
       }
     </div>
     @if (open()) {
-      <div class="value" [id]="regionId" role="region" [attr.aria-label]="'Value of ' + token()">
+      <div class="value" [id]="regionId" role="region" [attr.aria-label]="'Value of ' + name()">
         @if (loading()) {
           <p class="muted" role="status">Reading from the page…</p>
         } @else if (error()) {
@@ -205,6 +205,12 @@ export class ProviderValue {
   readonly token = input.required<string>();
   /** The provider's index in its injector's `providers`. */
   readonly index = input.required<number>();
+  /** Tells apart providers of one token (multi providers), such as `(2 of 2)`. */
+  readonly position = input('');
+  /** The token, with its position when it repeats, for unique labels and region names. */
+  protected readonly name = computed(() =>
+    this.position() ? `${this.token()} ${this.position()}` : this.token(),
+  );
 
   protected readonly regionId = `provider-value-${++nextId}`;
   protected readonly whole = WHOLE_VALUE;

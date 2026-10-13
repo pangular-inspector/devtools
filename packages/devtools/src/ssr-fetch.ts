@@ -237,6 +237,8 @@ function traceFinisher(trace: SsrTrace, method: string, url: string) {
         return out;
       }
       const headers = new Headers(response.headers);
+      // A Response dropped unread never ends its trace: the sweep ends it as aborted.
+      trace.active.abandon = () => end(response.status, headers, true);
       return timedResponse(
         response,
         tracedBody(body, count, (aborted) => end(response.status, headers, aborted)),

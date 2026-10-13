@@ -349,7 +349,7 @@ export function createQueryCollector<H extends object = Element>(
       const mutation = request.id.startsWith('m');
       const key = mutation
         ? read(() => item['options']?.['mutationKey'], undefined)
-        : item['queryKey'];
+        : read(() => item['queryKey'], undefined);
       const detail: QueryDetail = {
         id: request.id,
         kind: mutation ? 'mutation' : 'query',
@@ -365,7 +365,12 @@ export function createQueryCollector<H extends object = Element>(
       return { ok: true, detail };
     }
     const predicate = (query: unknown) => query === item;
-    const label = keyText(serialize(item['queryKey'], KEY));
+    const label = keyText(
+      serialize(
+        read(() => item['queryKey'], undefined),
+        KEY,
+      ),
+    );
     if (request.type === 'invalidate') {
       void read(() => client['invalidateQueries']({ predicate }), undefined)?.catch?.(() => {});
       return {
@@ -466,7 +471,8 @@ export function attachTanstackQuery<H extends object = Element>(
     jsonSerializable: true,
     handler: (message: { requestId?: unknown; pageId?: unknown; request?: unknown } | null) => {
       if (!message || typeof message.requestId !== 'string') return;
-      if (message.pageId && message.pageId !== pageId) return;
+      // The server always names the page; a request without one is for no page.
+      if (message.pageId !== pageId) return;
       let result: QueryRequestResult;
       try {
         result = collector.run(message.request, options.allowWrites);

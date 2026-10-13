@@ -1,4 +1,15 @@
-import { Component, computed, input, linkedSignal, signal } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  computed,
+  ElementRef,
+  Injector,
+  inject,
+  input,
+  linkedSignal,
+  signal,
+  viewChild,
+} from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { rpcCall } from '../rpc';
 import { Select, type SelectOption } from '../ui/select';
@@ -80,23 +91,33 @@ function download(text: string, fileName: string, type: string) {
         <p class="muted">No recorded changes on this store yet, so there is nothing to export.</p>
       }
       <div class="actions">
+        <!-- aria-disabled while busy keeps focus on the button; the handlers ignore the click. -->
         <button
           type="button"
           class="btn"
-          [disabled]="!canExport() || busy()"
+          [disabled]="!canExport()"
+          [attr.aria-disabled]="busy() ? 'true' : null"
           (click)="exportLive()"
         >
           Export session
         </button>
         <button
+          #generateLive
           type="button"
           class="btn"
-          [disabled]="!canExport() || busy()"
+          [disabled]="!canExport()"
+          [attr.aria-disabled]="busy() ? 'true' : null"
           (click)="generate(null)"
         >
           Generate test
         </button>
-        <button type="button" class="btn" [disabled]="busy()" (click)="file.click()">
+        <button
+          #importButton
+          type="button"
+          class="btn"
+          [attr.aria-disabled]="busy() ? 'true' : null"
+          (click)="pickFile(file)"
+        >
           Import session
         </button>
         <input
@@ -116,11 +137,13 @@ function download(text: string, fileName: string, type: string) {
       @if (test(); as t) {
         <div class="test" role="region" aria-labelledby="ngrx-test-heading">
           <div class="head">
-            <h5 id="ngrx-test-heading">Generated test ({{ t.framework }})</h5>
+            <h5 #testHeading id="ngrx-test-heading" tabindex="-1">
+              Generated test ({{ t.framework }})
+            </h5>
             <div class="actions">
               <button type="button" class="btn" (click)="copyTest()">Copy</button>
               <button type="button" class="btn" (click)="downloadTest()">Download</button>
-              <button type="button" class="btn" (click)="test.set(null)">Close</button>
+              <button type="button" class="btn" (click)="closeTest()">Close</button>
             </div>
           </div>
           @if (t.notes.length) {
@@ -144,7 +167,13 @@ function download(text: string, fileName: string, type: string) {
               <span class="pill">{{ session.entries.length }}</span>
             </h5>
             <div class="actions">
-              <button type="button" class="btn" [disabled]="busy()" (click)="generate(session.id)">
+              <button
+                #generateImported
+                type="button"
+                class="btn"
+                [attr.aria-disabled]="busy() ? 'true' : null"
+                (click)="generate(session.id)"
+              >
                 Generate test
               </button>
               <button type="button" class="btn" (click)="closeImported()">Close</button>
@@ -265,9 +294,13 @@ function download(text: string, fileName: string, type: string) {
     .btn:focus-visible {
       @include m.focus-ring;
     }
-    .btn:disabled {
+    .btn:disabled,
+    .btn[aria-disabled='true'] {
       cursor: not-allowed;
       opacity: 0.6;
+    }
+    h5[tabindex='-1']:focus-visible {
+      @include m.focus-ring;
     }
     .session-message {
       min-height: 1em;
@@ -408,6 +441,13 @@ export class StoreSession {
     },
   });
 
+  private readonly injector = inject(Injector);
+  private readonly generateLive = viewChild<ElementRef<HTMLButtonElement>>('generateLive');
+  private readonly generateImported = viewChild<ElementRef<HTMLButtonElement>>('generateImported');
+  private readonly importButton = viewChild<ElementRef<HTMLButtonElement>>('importButton');
+  private readonly testHeading = viewChild<ElementRef<HTMLElement>>('testHeading');
+  /** Which Generate test button made the shown test, so Close can return focus to it. */
+  private testFrom: 'live' | 'imported' = 'live';
   readonly busy = signal(false);
   readonly message = signal('');
   readonly error = signal('');
@@ -453,7 +493,12 @@ export class StoreSession {
       : Promise.resolve({ error: 'No session is imported.' });
   };
 
+  /** Focuses an element once the view has rendered the current state. */
+  private focusAfterRender(target: () => ElementRef<HTMLElement> | undefined) {
+    afterNextRender(() => target()?.nativeElement.focus(), { injector: this.injector });
+  }
   async exportLive() {
+    if (this.busy() || !this.canExport()) return;
     this.busy.set(true);
     this.error.set('');
     this.message.set('');
@@ -476,6 +521,7 @@ export class StoreSession {
 
   /** A spec from the live range, or from the whole imported session when `session` is set. */
   async generate(session: string | null) {
+    if (this.busy() || (!session && !this.canExport())) return;
     this.busy.set(true);
     this.error.set('');
     this.message.set('');
@@ -490,9 +536,14 @@ export class StoreSession {
       return;
     }
     this.test.set(answer.test);
+    this.testFrom = session ? 'imported' : 'live';
     this.message.set(`Generated ${answer.test.file}.`);
+    this.focusAfterRender(() => this.testHeading());
   }
 
+  pickFile(input: HTMLInputElement) {
+    if (!this.busy()) input.click();
+  }
   async read(input: HTMLInputElement) {
     const file = input.files?.[0];
     input.value = '';
@@ -527,6 +578,20 @@ export class StoreSession {
   closeImported() {
     this.imported.set(null);
     this.importedSeq.set(null);
+    if (this.testFrom === 'imported') this.testFrom = 'live';
+    this.focusAfterRender(() => this.importButton());
+  }
+  /** Closes the test and returns focus to the Generate test button that made it. */
+  closeTest() {
+    this.test.set(null);
+    const from = this.testFrom;
+    this.focusAfterRender(() => {
+      const live = this.generateLive();
+      const imported = this.generateImported();
+      if (from === 'imported' && imported) return imported;
+      // A disabled button can't take focus; Import session always can.
+      return live && !live.nativeElement.disabled ? live : this.importButton();
+    });
   }
 
   async copyTest() {

@@ -154,6 +154,14 @@ describe('provider value reader', () => {
     });
   });
 
+  it('refuses a $value path under a secret token, like the members list redacts it', () => {
+    const { read } = page();
+    const refused = { error: '`API_KEY` is redacted, so its value is not read.' };
+    expect(read('API_KEY', [WHOLE_VALUE])).toEqual(refused);
+    expect(read('API_KEY', [WHOLE_VALUE, 'length'])).toEqual(refused);
+    expect(JSON.stringify(read('API_KEY', [WHOLE_VALUE]))).not.toContain('sk-123');
+  });
+
   it('refuses a provider whose token moved since the tree was reported', () => {
     const { ng, envId, index } = page();
     expect(

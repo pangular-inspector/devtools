@@ -149,6 +149,43 @@ describe('Entry tabs', () => {
     expect(tab(fixture, 'diff').getAttribute('aria-selected')).toBe('true');
     expect(panel(fixture, 'diff').textContent).not.toContain('All changes');
   });
+
+  it('ties loading to the latest read, so an older answer neither clears nor sticks it', async () => {
+    const fixture = await mount();
+    const host = fixture.componentInstance;
+    const pending = new Map<number, (answer: EntryDetailAnswer) => void>();
+    host.loader.mockImplementation(
+      (seq: number) => new Promise<EntryDetailAnswer>((resolve) => pending.set(seq, resolve)),
+    );
+    const answer = (seq: number): EntryDetailAnswer => ({
+      ok: true,
+      detail: { seq, storeId: 'store', before: {}, after: { at: seq }, diff: [] },
+    });
+    const status = () => panel(fixture, 'state').querySelector('[role="status"]');
+
+    tab(fixture, 'state').click();
+    await settle(fixture);
+    expect(status()?.textContent).toContain('Reading the state');
+
+    // Another entry while #2 is still being read: it starts idle and reads its own state.
+    host.seq.set(5);
+    host.truncated.set(1);
+    await settle(fixture);
+    expect(button(fixture, 'Show all changes').disabled).toBe(false);
+    tab(fixture, 'state').click();
+    await settle(fixture);
+    expect(host.loader).toHaveBeenLastCalledWith(5);
+
+    // The answer for #2 arrives first: #5 is still loading.
+    pending.get(2)!(answer(2));
+    await settle(fixture);
+    expect(status()?.textContent).toContain('Reading the state');
+
+    pending.get(5)!(answer(5));
+    await settle(fixture);
+    expect(status()).toBeNull();
+    expect(panel(fixture, 'state').querySelector('pre')?.textContent).toContain('at: 5');
+  });
 });
 
 function entry(seq: number, type: string): NgrxLogEntry {
@@ -199,6 +236,45 @@ describe('Store session tools', () => {
     expect(region.querySelector('h5')?.textContent).toContain('Generated test (Vitest)');
     expect(region.querySelector('pre')?.textContent).toContain("describe('cart'");
     expect(region.textContent).toContain('Point the import at it.');
+  });
+
+  it('keeps focus on the buttons while busy, moves it to the test and back on Close', async () => {
+    let answer: (value: unknown) => void = () => {};
+    const call = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const fixture = await mount(call);
+    const generate = button(fixture, 'Generate test');
+    generate.focus();
+    generate.click();
+    await settle(fixture);
+    // Busy: still focusable, marked aria-disabled, and a second click asks nothing.
+    expect(generate.disabled).toBe(false);
+    expect(generate.getAttribute('aria-disabled')).toBe('true');
+    expect(button(fixture, 'Export session').getAttribute('aria-disabled')).toBe('true');
+    expect(button(fixture, 'Import session').getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(generate);
+    generate.click();
+    button(fixture, 'Export session').click();
+    expect(call).toHaveBeenCalledTimes(1);
+
+    answer({
+      ok: true,
+      test: { framework: 'Vitest', file: 'a.spec.ts', code: 'x', notes: [] },
+    });
+    await settle(fixture);
+    expect(generate.hasAttribute('aria-disabled')).toBe(false);
+    const heading = el(fixture).querySelector<HTMLElement>('#ngrx-test-heading')!;
+    expect(heading.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement).toBe(heading);
+
+    button(fixture, 'Close').click();
+    await settle(fixture);
+    expect(el(fixture).querySelector('#ngrx-test-heading')).toBeNull();
+    expect(document.activeElement).toBe(button(fixture, 'Generate test'));
   });
 
   it('exports the session as a file', async () => {
@@ -318,6 +394,14 @@ describe('Provider value', () => {
     expect(region.getAttribute('aria-label')).toBe('Value of CartService');
     expect(region.textContent).toContain('count');
     expect(region.textContent).toContain('signal');
+
+    // A repeated token (multi providers) names its position on the toggle and the region.
+    fixture.componentRef.setInput('position', '(2 of 2)');
+    await settle(fixture);
+    expect(region.getAttribute('aria-label')).toBe('Value of CartService (2 of 2)');
+    expect(toggle.getAttribute('aria-label')).toBe('Hide the value of CartService (2 of 2)');
+    fixture.componentRef.setInput('position', '');
+    await settle(fixture);
 
     button(fixture, /^items: Array \(1 item\)$/).click();
     await settle(fixture);

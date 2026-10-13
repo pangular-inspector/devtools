@@ -84,7 +84,8 @@ describe('other stores in the store inspector', () => {
     });
     expect(storeButton(fixture, 'Store')).toBeDefined();
     const other = storeButton(fixture, 'NGXS')!;
-    expect(other.textContent).toMatch(/Redux DevTools · NGXS · 2\s+changes/);
+    // Its log holds what the library sent, @@INIT included: actions, not changes.
+    expect(other.textContent).toMatch(/Redux DevTools · NGXS · 2 actions/);
     other.click();
     await settle(fixture);
     const root = fixture.nativeElement as HTMLElement;
@@ -105,6 +106,8 @@ describe('other stores in the store inspector', () => {
     expect(root.querySelector('app-entry-tabs')).toBeNull();
     expect(root.querySelector('[role="tab"]')).toBeNull();
     expect(root.querySelector('.kv pre.code')?.textContent).toContain('[Trips] Book');
+    // The Action row sits apart from Time, as the NgRx entry tabs do.
+    expect(root.querySelector('dl.kv.redux-action dt')?.textContent).toBe('Action');
     expect(text(fixture)).toContain('reads but does not write to');
     expect(text(fixture)).not.toContain('Restore this state');
     expect(text(fixture)).not.toContain('Dispatch again');

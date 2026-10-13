@@ -605,7 +605,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               Waterfall
             </button>
           </div>
-          <span class="total">{{ visibleCalls().length }} of {{ timeline().length }}</span>
+          <span class="total">{{ countText() }}</span>
           <span class="sr-only" role="status">{{ filterStatus() }}</span>
         </div>
         @if (visibleCalls().length && timelineView() === 'waterfall') {
@@ -2303,14 +2303,22 @@ export class NetworkInspector {
    * The count, announced only when a filter changes. The visible count also changes with every
    * call the app makes, which would make a screen reader talk while the user uses the app.
    */
+  /** What the view shows out of every call: the waterfall shows only client calls. */
+  readonly countText = computed(() => {
+    const total = this.timeline().length;
+    if (this.timelineView() !== 'waterfall') return `${this.visibleCalls().length} of ${total}`;
+    const client = this.waterfallCalls().length;
+    return `${client} client ${client === 1 ? 'call' : 'calls'} of ${total}`;
+  });
   readonly filterStatus = computed(() => {
     this.callQuery();
     this.sideFilter();
     this.failedOnly();
+    this.timelineView();
     // A filter change that keeps the same counts still gets announced: the text flips a
     // trailing no-break space so the live region sees a change.
     this.filterFlip = !this.filterFlip;
-    const text = untracked(() => `${this.visibleCalls().length} of ${this.timeline().length}`);
+    const text = untracked(() => this.countText());
     return this.filterFlip ? `${text}\u00a0` : text;
   });
   private filterFlip = true;

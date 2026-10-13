@@ -152,7 +152,7 @@ export default defineEventHandler(pangularSsrEventHandler());
 
 It wraps the Node response of each HTML request, adds the `Server-Timing` header that links the page to its render, and records the render with its render mode. Analog marks its renders `ssr-analog`, which the tab shows as **Server**. It does nothing while the Vite plugin is not running, so it is safe in a production build.
 
-Analog gives the render its own `REQUEST` token, not the one from `@angular/core`, so `withPangular()` can't read the request id from a header. It links a server call to the traced render while that render is the only one in flight. With two renders at once, the calls show in the timeline without a link to their request.
+Analog gives the render its own `REQUEST` token, not the one from `@angular/core`, so `withPangular()` can't read the request id from a header. It links a server call to a traced render only while that render is the only traced request in flight. With two traced renders at once, the calls show in the timeline without a link to their request. A render the middleware does not trace (a request that does not accept `text/html`, such as `curl` without an `Accept` header, or a path in `skip`) is not in flight for the tracer, so its calls are linked to the one traced render that runs at the same time. A trace whose response is never read is dropped after 5 minutes.
 
 ## Try the demo
 

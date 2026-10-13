@@ -17,14 +17,20 @@ import {
 } from 'h3';
 import { Hono } from 'hono';
 import { of } from 'rxjs';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import pangular from '../devframe.ts';
 import { pangularHttpInterceptor } from '../http.ts';
 import { httpRegistry } from '../http-rules.ts';
 import { pangularSsrEventHandler, withPangularSsr } from '../ssr.ts';
 import { renderModeOf } from '../ssr-trace.ts';
 import type { SsrOverride } from '../ssr-overrides.ts';
-import { SSR_REQUEST_HEADER, ssrRegistry, type SsrRequest } from '../ssr-registry.ts';
+import {
+  ACTIVE_SSR_TTL_MS,
+  SSR_REQUEST_HEADER,
+  soleActiveSsrRequest,
+  ssrRegistry,
+  type SsrRequest,
+} from '../ssr-registry.ts';
 import type { HttpState } from '../types.ts';
 
 const HTML = '<html><body><app-root ng-version="22.1.0" ng-server-context="ssr"></app-root>';
@@ -154,6 +160,32 @@ describe('withPangularSsr', () => {
     await reader.read();
     await reader.cancel();
     expect(recorded[0]).toMatchObject({ aborted: true, bytes: HTML.length });
+  });
+
+  it('expires a trace whose Response was dropped unread, and records it as aborted', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(1_000_000);
+      const dropped = await withPangularSsr(async () => html(HTML))(page('/dropped'));
+      expect(dropped).toBeTruthy();
+      expect(ssrRegistry().active.size).toBe(1);
+      expect(recorded).toEqual([]);
+
+      // Still in flight before the TTL.
+      vi.setSystemTime(1_000_000 + ACTIVE_SSR_TTL_MS);
+      expect(soleActiveSsrRequest()).toBeDefined();
+
+      vi.setSystemTime(1_000_000 + ACTIVE_SSR_TTL_MS + 1);
+      const next = await withPangularSsr(async () => html(null, { status: 302 }))(page('/next'));
+      expect(next!.status).toBe(302);
+      expect(recorded.map((r) => [r.url, r.aborted ?? false])).toEqual([
+        ['/dropped', true],
+        ['/next', false],
+      ]);
+      expect(ssrRegistry().active.size).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('serves index.csr.html for a forced Client render without calling the handler', async () => {
@@ -324,6 +356,23 @@ describe('server calls without an Angular REQUEST', () => {
     ssrRegistry().active.set('abc123', { fetches: 0, fetchMs: 0, url: '/blog' });
     expect(run()).toMatchObject({ requestId: 'abc123', pageUrl: '/blog' });
     expect(ssrRegistry().active.get('abc123')!.fetches).toBe(1);
+  });
+
+  it('drops a trace in flight past its TTL before linking', () => {
+    ssrRegistry().active.set('stale', {
+      fetches: 0,
+      fetchMs: 0,
+      url: '/old',
+      startedAt: Date.now() - ACTIVE_SSR_TTL_MS - 1,
+    });
+    ssrRegistry().active.set('abc123', {
+      fetches: 0,
+      fetchMs: 0,
+      url: '/blog',
+      startedAt: Date.now(),
+    });
+    expect(run()).toMatchObject({ requestId: 'abc123', pageUrl: '/blog' });
+    expect(ssrRegistry().active.has('stale')).toBe(false);
   });
 
   it('links nothing while two requests are in flight', () => {

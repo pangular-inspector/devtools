@@ -32,16 +32,22 @@ function fakeExtension() {
     unsubscribe: vi.fn(),
     error: vi.fn(),
   };
+  const enhancer = vi.fn((next: unknown) => next);
   return {
     sent,
     unsubscribe,
     connection,
-    extension: {
-      connect: vi.fn(() => connection),
-      disconnect: vi.fn(),
-      send: vi.fn(),
-      open: vi.fn(),
-    },
+    // Like the real extension: the store enhancer, with the page API on it.
+    enhancer,
+    extension: Object.assign(
+      vi.fn((..._args: unknown[]) => enhancer),
+      {
+        connect: vi.fn(() => connection),
+        disconnect: vi.fn(),
+        send: vi.fn(),
+        open: vi.fn(),
+      },
+    ),
   };
 }
 
@@ -109,6 +115,35 @@ describe('the Redux DevTools stand-in', () => {
     expect(silent.connections).toEqual([]);
   });
 
+  it('is callable like the real extension and forwards the call with its this and arguments', () => {
+    const real = fakeExtension();
+    const target: Target = { [REDUX_EXTENSION_KEY]: real.extension };
+    installReduxDevtoolsHook(target);
+    const ext = target[REDUX_EXTENSION_KEY];
+    expect(typeof ext).toBe('function');
+    const self = { app: true };
+    const options = { name: 'Redux app' };
+    expect(ext.call(self, options)).toBe(real.enhancer);
+    expect(real.extension).toHaveBeenCalledWith(options);
+    expect(real.extension.mock.contexts[0]).toBe(self);
+    // `createStore(reducer, ext && ext())` gets the extension's enhancer.
+    const createStore = (enhancer: (next: unknown) => unknown) => enhancer('createStore');
+    expect(createStore(ext && ext())).toBe('createStore');
+    expect(real.enhancer).toHaveBeenCalledWith('createStore');
+  });
+
+  it('returns an identity enhancer when there is no real extension', () => {
+    const target: Target = {};
+    installReduxDevtoolsHook(target);
+    const ext = target[REDUX_EXTENSION_KEY];
+    expect(typeof ext).toBe('function');
+    const enhancer = ext({ name: 'x' });
+    const next = () => 'store';
+    expect(enhancer(next)).toBe(next);
+    expect('connect' in ext).toBe(true);
+    expect('open' in ext).toBe(false);
+  });
+
   it('forwards to an extension that arrives after the stand-in', () => {
     const target: Target = {};
     installReduxDevtoolsHook(target);
@@ -116,6 +151,7 @@ describe('the Redux DevTools stand-in', () => {
     target[REDUX_EXTENSION_KEY] = real.extension;
     target[REDUX_EXTENSION_KEY].connect({ name: 'Late' }).send({ type: 'a' }, { a: 1 });
     expect(real.sent).toEqual([['send', { type: 'a' }, { a: 1 }]]);
+    expect(target[REDUX_EXTENSION_KEY]()).toBe(real.enhancer);
   });
 
   it('puts the real extension back when it is removed, and drops what it held', () => {

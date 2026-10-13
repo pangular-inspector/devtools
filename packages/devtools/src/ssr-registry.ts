@@ -53,6 +53,31 @@ export interface ActiveRequest {
   fetchMs: number;
   navigations?: SsrNavigation[];
   overrides?: AppliedOverride[];
+  /** When the trace began, in ms since the epoch, so a trace that never ends can expire. */
+  startedAt?: number;
+  /** Ends the trace as aborted when it expires, such as a Response whose body nobody read. */
+  abandon?: () => void;
+}
+
+/** How long a trace may stay in flight before {@link sweepActiveSsrRequests} drops it. */
+export const ACTIVE_SSR_TTL_MS = 5 * 60_000;
+
+/**
+ * Drops traces in flight for longer than {@link ACTIVE_SSR_TTL_MS}: a response
+ * that was dropped unread never ends its trace, and would otherwise stay in
+ * `active` for the server's life (and keep {@link soleActiveSsrRequest} from linking).
+ */
+export function sweepActiveSsrRequests(now = Date.now()): void {
+  const { active } = ssrRegistry();
+  for (const [id, request] of active) {
+    if (request.startedAt === undefined || now - request.startedAt <= ACTIVE_SSR_TTL_MS) continue;
+    active.delete(id);
+    try {
+      request.abandon?.();
+    } catch {
+      // The trace is gone either way.
+    }
+  }
 }
 
 export interface SsrRegistry {
@@ -84,6 +109,7 @@ export function activeSsrRequest(id: string | null | undefined): string | undefi
  * it, since with two renders in flight a call can't be told apart.
  */
 export function soleActiveSsrRequest(): string | undefined {
+  sweepActiveSsrRequests();
   const { active } = ssrRegistry();
   if (active.size !== 1) return undefined;
   return active.keys().next().value;

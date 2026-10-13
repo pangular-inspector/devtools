@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { createHostContext } from 'devframe/node';
+import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import pangular, { createPangular } from '../devframe.ts';
 import { domTree } from '../host-tree.ts';
@@ -11,6 +12,7 @@ import {
   MAX_SESSION_ENTRIES,
   parseSession,
   patchesBetween,
+  patchProblem,
   SESSION_FORMAT,
   sessionEntryDetail,
   sessionJson,
@@ -166,6 +168,120 @@ describe('ngrx session import checks', () => {
     );
     expect(parseSession(proto)).toMatch(/__proto__/);
     expect(({} as Record<string, unknown>)['admin']).toBeUndefined();
+  });
+
+  it('refuses changes that would grow a list without bound', () => {
+    const base = session({ initialState: { items: [1] } });
+    const hostile = (path: (string | number)[], value: unknown) =>
+      parseSession({
+        ...base,
+        entries: [
+          {
+            seq: 1,
+            type: 'x',
+            timestamp: 1,
+            source: 'store',
+            changes: [{ op: 'set', path, value }],
+          },
+        ],
+      });
+    expect(hostile(['items', 'length'], 4294967295)).toMatch(
+      /Entry 1: a change uses the key `length` on a list/,
+    );
+    expect(hostile(['items', 999_999], 1)).toMatch(/the index 999999 on a list of 1 items/);
+    expect(hostile(['items', 999_999, 'a'], 1)).toMatch(/the index 999999/);
+    // Appending at the end and replacing an index still work.
+    expect(hostile(['items', 1], 2)).toMatchObject({ entries: [{ seq: 1 }] });
+    expect(hostile(['items', 0], 2)).toMatchObject({ entries: [{ seq: 1 }] });
+    // Checked against the state each change applies to, not only the first one.
+    const grown = parseSession({
+      ...base,
+      entries: [
+        {
+          seq: 1,
+          type: 'x',
+          timestamp: 1,
+          source: 'store',
+          changes: [
+            { op: 'set', path: ['items'], value: [1, 2, 3] },
+            { op: 'set', path: ['items', 3], value: 4 },
+          ],
+        },
+        {
+          seq: 2,
+          type: 'y',
+          timestamp: 2,
+          source: 'store',
+          changes: [{ op: 'set', path: ['items', 9], value: 0 }],
+        },
+      ],
+    });
+    expect(grown).toMatch(/Entry 2: a change uses the index 9 on a list of 4 items/);
+    // applyPatches skips such a change for callers that did not parse.
+    const patch = { op: 'set' as const, path: ['items', 'length'], value: 4294967295 };
+    expect(patchProblem({ items: [1] }, patch)).toMatch(/`length`/);
+    expect(applyPatches({ items: [1] }, [patch])).toEqual({ items: [1] });
+  });
+});
+
+/** The identifiers a generated spec runs, ignoring comments and strings. */
+function identifiers(code: string): Set<string> {
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, ts.LanguageVariant.Standard, code);
+  const out = new Set<string>();
+  for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
+    if (token === ts.SyntaxKind.Identifier) out.add(scanner.getTokenText());
+  }
+  return out;
+}
+
+describe('ngrx generated tests from a hostile session', () => {
+  it('writes a recorded RegExp as new RegExp(source, flags), never as code', () => {
+    const run = (value: unknown) =>
+      new Function(`return ${toCode({ '@type': 'RegExp', value })};`)();
+    const fine = run('/a\\/b+/gi') as RegExp;
+    expect(fine).toBeInstanceOf(RegExp);
+    expect(fine.source).toBe('a\\/b+');
+    expect(fine.flags).toBe('gi');
+    const g = globalThis as Record<string, unknown>;
+    const escaped = run('/x/; globalThis.pwned = 1; //') as RegExp;
+    expect(escaped.source).toBe('x\\/; globalThis.pwned = 1; \\/');
+    expect(g['pwned']).toBeUndefined();
+    expect(toCode({ '@type': 'RegExp', value: '(globalThis.pwned = 1)' })).toBe(
+      'undefined /* a RegExp that could not be read */',
+    );
+    expect(toCode({ '@type': 'RegExp', value: '/x/gg' })).toMatch(/^undefined /);
+    expect(toCode({ '@type': 'RegExp', value: '/x/g;pwned()' })).toMatch(/^undefined /);
+    expect(toCode({ '@type': 'RegExp', value: 42 })).toMatch(/^undefined /);
+  });
+
+  it('keeps line separators in a type or URL inside their comment', () => {
+    const hostile = session({ page: { url: 'https://x.test/\u2029pwnedUrl()' } });
+    hostile.entries[0].type = '[Cart] Add\u2028pwnedType()';
+    const test = generateTest(hostile);
+    if (typeof test === 'string') throw new Error(test);
+    expect(test.code).not.toMatch(/[\u2028\u2029]/);
+    const ids = identifiers(test.code);
+    expect(ids.has('pwnedType')).toBe(false);
+    expect(ids.has('pwnedUrl')).toBe(false);
+  });
+
+  it('writes the describe title as a string literal', () => {
+    const feature = "x\\'); globalThis.pwned = 1; ('";
+    const hostile = session({ initialState: { [feature]: { n: 0 } } });
+    hostile.entries = [
+      {
+        seq: 1,
+        type: 'inc',
+        timestamp: 1,
+        source: 'store',
+        action: { type: 'inc' },
+        changes: [{ op: 'set', path: [feature, 'n'], value: 1 }],
+      },
+    ];
+    const test = generateTest(hostile);
+    if (typeof test === 'string') throw new Error(test);
+    expect(test.code).toContain(`describe(${JSON.stringify(`${feature} (entry #1)`)}, () => {`);
+    expect(identifiers(test.code).has('pwned')).toBe(false);
   });
 });
 

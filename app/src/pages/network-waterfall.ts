@@ -22,6 +22,8 @@ interface Row {
   left: number;
   width: number;
   tone: 'ok' | 'bad' | 'cache' | 'neutral';
+  /** The status shown in the row, so the outcome doesn't rest on the bar colour alone. */
+  status: string;
   label: string;
 }
 
@@ -77,7 +79,15 @@ export function groupCalls(calls: readonly WaterfallCall[]): Group[] {
     }
     const offsetMs = call.at - current.startedAt;
     current.spanMs = Math.max(current.spanMs, offsetMs + Math.max(call.durationMs, 0));
-    current.rows.push({ call, offsetMs, left: 0, width: 0, tone: toneOf(call), label: '' });
+    current.rows.push({
+      call,
+      offsetMs,
+      left: 0,
+      width: 0,
+      tone: toneOf(call),
+      status: statusText(call) + (call.cacheHit && !call.cancelled ? ' cache' : ''),
+      label: '',
+    });
   }
   for (const group of groups) {
     const span = Math.max(group.spanMs, 1);
@@ -147,7 +157,10 @@ export function groupCalls(calls: readonly WaterfallCall[]): Group[] {
                       ></span>
                     </span>
                     <span class="time" aria-hidden="true"
-                      >+{{ row.offsetMs }} · {{ row.call.durationMs }} ms</span
+                      ><span [class]="'status status-' + row.tone">{{ row.status }}</span> · +{{
+                        row.offsetMs
+                      }}
+                      ms · {{ row.call.durationMs }} ms</span
                     >
                   </button>
                 </li>
@@ -293,6 +306,19 @@ export function groupCalls(calls: readonly WaterfallCall[]): Group[] {
     }
     .neutral {
       background: var(--text-3);
+    }
+    .status {
+      padding: 0 4px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      background: none;
+      color: var(--text-2);
+    }
+    .status-bad {
+      @include m.tint(danger);
+    }
+    .status-cache {
+      @include m.tint(ok);
     }
     .time {
       color: var(--text-2);

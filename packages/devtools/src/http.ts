@@ -186,7 +186,10 @@ function devMode(): boolean {
 
 /**
  * The traced request of a render that has no Angular `REQUEST`, such as an
- * Analog page, when it is the only one in flight.
+ * Analog page, when it is the only one in flight. A render the tracer skipped
+ * (no `Accept: text/html`, a `skip` path) is not in flight, so one running at
+ * the same time as a single traced render is linked to it: the known limit,
+ * documented in the Analog guide.
  */
 function untaggedServerRequest(): { requestId?: string; pageUrl?: string } {
   const requestId = soleActiveSsrRequest();

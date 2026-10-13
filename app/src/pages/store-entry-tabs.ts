@@ -359,7 +359,8 @@ export class EntryTabs {
     computation: () => null,
   });
   readonly error = linkedSignal<number, string>({ source: this.seq, computation: () => '' });
-  readonly loading = signal(false);
+  /** Whether a read for the current entry is in flight; a new entry starts idle. */
+  readonly loading = linkedSignal<number, boolean>({ source: this.seq, computation: () => false });
   readonly showBefore = signal(false);
   readonly copied = signal('');
 
@@ -389,8 +390,12 @@ export class EntryTabs {
     if (tab === 'state' && !this.detail() && !this.loading()) void this.load();
   }
 
+  /** The latest read; an older answer (another entry, or a retry since) is dropped. */
+  private request = 0;
+
   async load() {
     const seq = this.seq();
+    const request = ++this.request;
     this.loading.set(true);
     this.error.set('');
     let answer: EntryDetailAnswer;
@@ -399,7 +404,7 @@ export class EntryTabs {
     } catch {
       answer = { error: 'The devtools server did not answer. Try again.' };
     }
-    if (seq !== this.seq()) return;
+    if (request !== this.request || seq !== this.seq()) return;
     this.loading.set(false);
     if (answer.ok && answer.detail) this.detail.set(answer.detail);
     else this.error.set(answer.error ?? 'The page sent no state for this entry.');

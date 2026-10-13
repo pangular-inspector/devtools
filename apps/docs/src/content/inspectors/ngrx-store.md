@@ -237,7 +237,7 @@ This sample assumes the base list is `["zone.js"]`. Leave `zone.js` out if your 
 
 ### In the Store tab
 
-Each store shows its name (the `name` option it passed, or the library), **Redux DevTools** as its kind and the library, such as **NGXS**. Select it for its **State** and its **Action log**. Each entry shows the action and a **State diff** against the state before it, with up to 50 changes, without the **Action**, **Diff** and **State** tabs of the NgRx log. The first entry of NGXS is `@@INIT`, with the initial state.
+Each store shows its name (the `name` option it passed, or the library), **Redux DevTools** as its kind, the library, such as **NGXS**, and how many actions its log holds, `@@INIT` included. Select it for its **State** and its **Action log**. Each entry shows the action and a **State diff** against the state before it, with up to 50 changes, without the **Action**, **Diff** and **State** tabs of the NgRx log. The first entry of NGXS is `@@INIT`, with the initial state.
 
 The tab only reads these stores. It has no **Restore**, **Dispatch again**, **Store as global** or **Session** for them, since the page keeps only their latest state.
 

@@ -199,6 +199,25 @@ describe('the TanStack Query collector', () => {
     expect(collector.run({ type: 'drop', id: trips.id }, true).error).toMatch(/Unknown/);
   });
 
+  it('answers a request when a query key getter throws', async () => {
+    const queryClient = client();
+    const { ng, tree } = page(queryClient);
+    await queryClient.fetchQuery({ queryKey: ['trips'], queryFn: async () => [1] });
+    const collector = createQueryCollector(() => ng, { tree });
+    const [trips] = collector.collect().queries;
+    const query = queryClient.getQueryCache().find({ queryKey: ['trips'] })!;
+    Object.defineProperty(query, 'queryKey', {
+      configurable: true,
+      get() {
+        throw new Error('hostile key');
+      },
+    });
+    const detail = collector.run({ type: 'detail', id: trips.id }, false);
+    expect(detail).toMatchObject({ ok: true, detail: { kind: 'query', data: [1] } });
+    expect(detail.detail).not.toHaveProperty('key');
+    expect(() => collector.run({ type: 'invalidate', id: trips.id }, true)).not.toThrow();
+  });
+
   it('caps the queries it reports and keeps the newest', async () => {
     const queryClient = client();
     const { ng, tree } = page(queryClient);
@@ -270,6 +289,12 @@ describe('attachTanstackQuery', () => {
     expect(my.rpc.call).not.toHaveBeenCalledWith(
       'tanstack-query-result',
       expect.objectContaining({ requestId: 'r2' }),
+    );
+    // A request that names no page is for no page, not for every page.
+    handlers['tanstack-query-request']({ requestId: 'r3', request: { type: 'detail', id: 'q1' } });
+    expect(my.rpc.call).not.toHaveBeenCalledWith(
+      'tanstack-query-result',
+      expect.objectContaining({ requestId: 'r3' }),
     );
 
     queries.leave();

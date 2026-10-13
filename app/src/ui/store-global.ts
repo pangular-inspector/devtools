@@ -60,8 +60,34 @@ interface StoreResult {
       gap: 8px;
       min-width: 0;
     }
+    /* The panel's .btn: theme tokens and the control height. */
+    .store {
+      height: var(--control-h);
+      padding: 0 14px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 150ms var(--ease);
+    }
+    .store:hover:not(:disabled) {
+      background: var(--surface-3);
+    }
+    .store:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
     .store:focus-visible {
       @include m.focus-ring;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .store {
+        transition: none;
+      }
     }
     .status {
       color: var(--text-2);

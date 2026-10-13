@@ -197,7 +197,8 @@ describe('ssrMiddleware overrides', () => {
     expect(recorded[0].overrides).toEqual([
       expect.objectContaining({
         applied: false,
-        note: expect.stringContaining('browserDistFolder'),
+        // The hub and the standalone tracers share this middleware, so the hint names neither.
+        note: 'no index.csr.html: pass browserDistFolder to the SSR options',
       }),
     ]);
   });

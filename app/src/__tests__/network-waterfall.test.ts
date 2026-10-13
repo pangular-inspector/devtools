@@ -53,6 +53,17 @@ describe('groupCalls', () => {
     ])[0].rows.map((r) => r.tone);
     expect(tones).toEqual(['bad', 'neutral', 'cache', 'bad']);
   });
+
+  it('names each outcome in text, not only by bar colour', () => {
+    const statuses = groupCalls([
+      call({ id: 'a', status: 503 }),
+      call({ id: 'b', status: 0, cancelled: true, at: 1001 }),
+      call({ id: 'c', cacheHit: true, at: 1002 }),
+      call({ id: 'd', status: 0, at: 1003 }),
+      call({ id: 'e', at: 1004 }),
+    ])[0].rows.map((r) => r.status);
+    expect(statuses).toEqual(['503', 'cancelled', '200 cache', 'ERR', '200']);
+  });
 });
 
 describe('NetworkInspector waterfall and headers', () => {
@@ -110,6 +121,17 @@ describe('NetworkInspector waterfall and headers', () => {
     ]);
     // One Tab stop for the whole waterfall.
     expect(waterfallRows().filter((b) => b.tabIndex === 0)).toHaveLength(1);
+    // The status shows in each row, and the count says what the waterfall shows.
+    expect(
+      waterfallRows().map((b) =>
+        b.querySelector('.time')!.textContent!.replace(/\s+/g, ' ').trim(),
+      ),
+    ).toEqual(['200 · +0 ms · 100 ms', '200 · +0 ms · 100 ms', '500 · +40 ms · 20 ms']);
+    expect(waterfallRows()[2].querySelector('.status-bad')).not.toBeNull();
+    expect(host().querySelector('.total')!.textContent).toBe('3 client calls of 4');
+    viewButton('Table').click();
+    await fixture.whenStable();
+    expect(host().querySelector('.total')!.textContent).toBe('4 of 4');
   });
 
   it('opens a waterfall row in the preview with its redacted headers', async () => {

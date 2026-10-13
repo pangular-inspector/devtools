@@ -8,6 +8,7 @@ import {
   SSR_TIMING_NAME,
   noteOverride,
   ssrRegistry,
+  sweepActiveSsrRequests,
   type ActiveRequest,
   type SsrRenderMode,
   type SsrRequest,
@@ -90,9 +91,11 @@ export interface SsrTrace {
 export function beginSsrTrace(url: string, id = newSsrRequestId()): SsrTrace | undefined {
   const registry = ssrRegistry();
   if (!registry.record) return undefined;
-  const active: ActiveRequest = { fetches: 0, fetchMs: 0, url };
+  const at = Date.now();
+  sweepActiveSsrRequests(at);
+  const active: ActiveRequest = { fetches: 0, fetchMs: 0, url, startedAt: at };
   registry.active.set(id, active);
-  return { id, at: Date.now(), active };
+  return { id, at, active };
 }
 
 /** The `Server-Timing` entries for a render that took `renderMs`. */

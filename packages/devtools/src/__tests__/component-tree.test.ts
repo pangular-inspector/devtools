@@ -6,6 +6,7 @@ import {
   componentHostOf,
   componentHosts,
   hostPath,
+  resourceOf,
   type ComponentDebugNg,
 } from '../component-tree.ts';
 import { LOCKED } from '../component-edit.ts';
@@ -480,6 +481,30 @@ describe('component properties', () => {
         locked: LOCKED.resource,
       },
     ]);
+  });
+
+  it('never runs a getter to tell whether a value is a resource', () => {
+    const { ng } = fakeNg(new Map());
+    const getter = vi.fn(() => signalOf('resolved'));
+    const lookAlike = Object.defineProperties(
+      { hasValue: () => true },
+      {
+        value: { get: getter, enumerable: true },
+        status: { get: getter, enumerable: true },
+      },
+    );
+    expect(resourceOf(ng, lookAlike)).toBeNull();
+    expect(getter).not.toHaveBeenCalled();
+    // A resource-shaped value with hasValue on its prototype, as Angular's ResourceImpl has it.
+    class Shaped {
+      value = signalOf(3);
+      status = signalOf('resolved');
+      error = signalOf(undefined);
+      hasValue() {
+        return true;
+      }
+    }
+    expect(resourceOf(ng, new Shaped())).toEqual({ status: 'resolved', value: 3 });
   });
 
   it('caps the number of properties and sends one level of each value', () => {

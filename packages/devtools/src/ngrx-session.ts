@@ -141,12 +141,37 @@ function copyOf(value: unknown): Record<PatchKey, unknown> | unknown[] {
 }
 
 /**
+ * Why `patch` can't be applied to `state`, or null when it can. A list only
+ * takes whole-number indexes up to its length: a string key (`length`) or an
+ * index far past the end would make the copies below grow without bound.
+ */
+export function patchProblem(state: unknown, patch: NgrxPatch): string | null {
+  let node = state;
+  for (const key of patch.path) {
+    if (Array.isArray(node)) {
+      if (typeof key !== 'number') {
+        return `a change uses the key \`${String(key).slice(0, 50)}\` on a list, which only takes indexes`;
+      }
+      if (key > node.length) {
+        return `a change uses the index ${key} on a list of ${node.length} items`;
+      }
+      node = node[key];
+    } else {
+      node = isPlain(node) ? node[key] : undefined;
+    }
+  }
+  return null;
+}
+
+/**
  * `state` with the patches applied, without changing it: each patch copies
  * only the containers on its path, so states share everything they did not change.
+ * A patch {@link patchProblem} refuses is skipped.
  */
 export function applyPatches(state: unknown, patches: readonly NgrxPatch[]): unknown {
   let root = state;
   for (const patch of patches) {
+    if (patchProblem(root, patch)) continue;
     if (!patch.path.length) {
       root = patch.op === 'set' ? patch.value : undefined;
       continue;
@@ -293,6 +318,7 @@ export function parseSession(input: unknown): NgrxSession | string {
   }
   const entries: NgrxSessionEntry[] = [];
   let last = -Infinity;
+  let state = s['initialState'];
   for (const [i, item] of list.entries()) {
     const e = item as Record<string, unknown> | null;
     const where = `Entry ${i + 1}`;
@@ -310,6 +336,10 @@ export function parseSession(input: unknown): NgrxSession | string {
     for (const change of e['changes']) {
       const patch = checkPatch(change);
       if (typeof patch === 'string') return `${where}: ${patch}.`;
+      // Checked against the state it applies to, so it can't grow a list without bound.
+      const problem = patchProblem(state, patch);
+      if (problem) return `${where}: ${problem}.`;
+      state = applyPatches(state, [patch]);
       changes.push(patch);
     }
     const entry: NgrxSessionEntry = {
@@ -402,15 +432,39 @@ export function hasLossyMarkers(value: unknown, depth = 0): boolean {
   return false;
 }
 
+/** A string literal; U+2028 and U+2029 are escaped too, for tools older than ES2019. */
+function literal(text: string): string {
+  return JSON.stringify(text)
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
 function keyCode(key: string): string {
-  return IDENTIFIER.test(key) ? key : JSON.stringify(key);
+  return IDENTIFIER.test(key) ? key : literal(key);
+}
+
+const REGEXP_SOURCE = /^\/([\s\S]+)\/([dgimsuvy]*)$/;
+
+/**
+ * A recorded RegExp as `new RegExp("source", "flags")`. The recorded text comes
+ * from the page or an imported file, so it is never pasted into the code as is:
+ * anything that isn't `/source/flags` with known, unrepeated flags becomes `undefined`.
+ */
+function regExpCode(value: unknown): string {
+  const match = typeof value === 'string' ? REGEXP_SOURCE.exec(value) : null;
+  const flags = match?.[2] ?? '';
+  if (!match || new Set(flags).size !== flags.length) {
+    return 'undefined /* a RegExp that could not be read */';
+  }
+  return `new RegExp(${literal(match[1])}, ${literal(flags)})`;
 }
 
 /** Source code for a serialized value, turning the serializer's markers back into values. */
 export function toCode(value: unknown, indent = ''): string {
   const inner = `${indent}  `;
   if (value === null) return 'null';
-  if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
+  if (typeof value === 'string') return literal(value);
+  if (typeof value === 'boolean') return String(value);
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NaN';
   if (Array.isArray(value)) {
     if (!value.length) return '[]';
@@ -428,7 +482,7 @@ export function toCode(value: unknown, indent = ''): string {
       case 'Date':
         return `new Date(${JSON.stringify(String(v['value']))})`;
       case 'RegExp':
-        return String(v['value']);
+        return regExpCode(v['value']);
       case 'Map': {
         const entries = Array.isArray(v['entries']) ? v['entries'] : [];
         return `new Map(${toCode(entries, indent)})`;
@@ -479,8 +533,9 @@ function changedFeatures(entries: NgrxSessionEntry[]): Set<string> | null {
   return keys;
 }
 
+/** Text for a `//` comment: every line terminator (CR, LF, U+2028, U+2029) would end it. */
 function comment(text: string): string {
-  return text.replace(/\*\//g, '* /').replace(/[\r\n]+/g, ' ');
+  return text.replace(/\*\//g, '* /').replace(/[\r\n\u2028\u2029]+/g, ' ');
 }
 
 export interface GeneratedTest {
@@ -572,7 +627,7 @@ function reducerTest(
 import { describe, expect, it } from 'vitest';
 ${imports.join('\n')}
 
-describe('${comment(feature ?? 'root state').replace(/'/g, "\\'")} (${range})', () => {
+describe(${literal(`${feature ?? 'root state'} (${range})`)}, () => {
   it('reduces the recorded actions to the recorded state', () => {
     const initialState = ${toCode(initial, '    ')};
     const actions = [

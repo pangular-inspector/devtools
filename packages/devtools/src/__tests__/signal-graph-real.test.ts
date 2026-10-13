@@ -17,6 +17,7 @@ import { httpResource, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { afterEach, describe, expect, it } from 'vitest';
+import { resourceOf } from '../component-tree.ts';
 import { collectSignalGraph, type SignalDebugNg } from '../signal-graph.ts';
 import { angularAtLeast, STANDALONE } from './angular-version.ts';
 
@@ -126,6 +127,20 @@ describe.skipIf(!angularAtLeast('20.1.0'))('collectSignalGraph with a real app',
       value: { code: 'CDG' },
       statusCode: 200,
     });
+
+    // resourceOf reads these real resources through descriptors, without running getters.
+    const page = (ng as unknown as { getComponent: (el: Element) => TripPage }).getComponent(
+      document.querySelector('app-root')!,
+    );
+    expect(resourceOf(ng as never, page.weather)).toEqual({
+      status: 'resolved',
+      value: 'Sunny in Paris',
+    });
+    expect(resourceOf(ng as never, page.airport)).toMatchObject({
+      status: 'resolved',
+      value: { code: 'CDG' },
+    });
+    expect(resourceOf(ng as never, page.forecast)).toMatchObject({ status: 'error' });
 
     const internals = new Set(graph.resources!.flatMap((r) => r.nodeIds));
     const outside = graph.nodes.filter((n) => !internals.has(n.id)).map((n) => n.label);

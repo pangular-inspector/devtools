@@ -8,7 +8,7 @@ import {
   type Step,
 } from './component-values.ts';
 import { className, providerValue, type DebugNg } from './injector-tree.ts';
-import { isSecretName, serialize, serializeNamed, VALUE_LEVEL } from './serialize.ts';
+import { isSecretName, REDACTED, serialize, serializeNamed, VALUE_LEVEL } from './serialize.ts';
 
 /**
  * Peeks at the value of a provider an injector already created, for the
@@ -201,10 +201,18 @@ function descriptorOf(instance: object, name: string): PropertyDescriptor | unde
 /** The member at the start of a path, unwrapped like the members list shows it. */
 function memberValue<H extends object>(
   ng: ProviderDebugNg<H>,
+  token: string,
   instance: unknown,
   name: string,
 ): Step {
-  if (name === WHOLE_VALUE && !hasMembers(instance)) return { value: instance };
+  if (name === WHOLE_VALUE && !hasMembers(instance)) {
+    // The same policy as the `$value` member the members list shows: a value
+    // whose token name looks secret is redacted, so nothing under it is read.
+    if (isSecretName(token) && serializeNamed(token, instance, VALUE_LEVEL) === REDACTED) {
+      return { error: `\`${token}\` is redacted, so its value is not read.` };
+    }
+    return { value: instance };
+  }
   if (!hasMembers(instance)) return { error: `The value has no member \`${name}\`.` };
   if (isSecretName(name)) return { error: `\`${name}\` is redacted, so it is not read.` };
   if (isInternal(name)) return { error: `\`${name}\` is internal to Angular.` };
@@ -257,7 +265,7 @@ export function readProviderValue<H extends object = Element>(
     };
   }
   const [first, ...rest] = request.path;
-  let step = memberValue(ng, instance, first);
+  let step = memberValue(ng, request.token, instance, first);
   const ancestors: object[] = instance && typeof instance === 'object' ? [instance] : [];
   for (let i = 0; i < rest.length && !('error' in step); i++) {
     if (step.value && typeof step.value === 'object') ancestors.push(step.value);

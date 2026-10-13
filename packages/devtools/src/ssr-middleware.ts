@@ -247,7 +247,7 @@ export function createSsrMiddleware(options: SsrMiddlewareOptions = {}) {
         trace,
         forceClient,
         readShell(options.browserDistFolder),
-        'no index.csr.html: pass browserDistFolder to initPangularHub',
+        'no index.csr.html: pass browserDistFolder to the SSR options',
       );
     if (shell) {
       res.statusCode = 200;

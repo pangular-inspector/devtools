@@ -218,8 +218,7 @@ const CLASSIC_KINDS = new Set([
                     <span class="store-name">{{ item.label }}</span>
                   </span>
                   <span class="store-meta">
-                    {{ kindLabel(item.kind) }} · {{ item.scope }} · {{ changeCount(item.id) }}
-                    {{ changeCount(item.id) === 1 ? 'change' : 'changes' }}
+                    {{ kindLabel(item.kind) }} · {{ item.scope }} · {{ countText(item) }}
                   </span>
                 </button>
               </li>
@@ -731,7 +730,7 @@ const CLASSIC_KINDS = new Set([
         </ng-template>
         @if (selected.source === 'redux') {
           @if (selected.action !== undefined) {
-            <dl class="kv">
+            <dl class="kv redux-action">
               <ng-container
                 [ngTemplateOutlet]="actionRowsTpl"
                 [ngTemplateOutletContext]="{ selected }"
@@ -1353,6 +1352,10 @@ const CLASSIC_KINDS = new Set([
       grid-template-columns: max-content minmax(0, 1fr);
       gap: 6px 14px;
       margin: 0;
+    }
+    /* The same gap the NgRx entry tabs keep below Time. */
+    .kv.redux-action {
+      margin-top: 10px;
     }
     .kv dt {
       font-family: var(--font-mono);
@@ -2322,6 +2325,16 @@ export class StoreInspector {
     this.filter.set('');
     this.kind.set(null);
     this.filterInput()?.nativeElement.focus();
+  }
+
+  /**
+   * The row's log count. A Redux DevTools store logs what its library sent,
+   * `@@INIT` included, so its entries are actions, not changes.
+   */
+  countText(item: LiveStore): string {
+    const n = this.changeCount(item.id);
+    const noun = item.redux ? (n === 1 ? 'action' : 'actions') : n === 1 ? 'change' : 'changes';
+    return `${n} ${noun}`;
   }
 
   changeCount(id: string): number {

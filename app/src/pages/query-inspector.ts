@@ -12,6 +12,7 @@ import {
   viewChild,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { injectAngularPages } from '../angular-pages';
 import { actionAllowed, actionBlockedMessage } from '../devtools-config';
 import { hostPageId } from '../page-id';
 import { rpcCall as call } from '../rpc';
@@ -67,10 +68,18 @@ const FILTERS: SelectOption[] = [
     } @else if (!pages().length) {
       <div class="state empty-card" role="status">
         <p class="state-title">No page reports a QueryClient yet.</p>
-        <p>
-          Open the app with the overlay loaded. The tab reads the <code>QueryClient</code> that
-          <code>provideTanStackQuery()</code> registers, once something in the app injects it.
-        </p>
+        @if (connected()) {
+          <p>
+            The connected page has no <code>QueryClient</code>. Add
+            <code>provideTanStackQuery(new QueryClient())</code> to the app's providers. The tab
+            reads it once something in the app injects it, such as <code>injectQuery()</code>.
+          </p>
+        } @else {
+          <p>
+            Open the app with the overlay loaded. The tab reads the <code>QueryClient</code> that
+            <code>provideTanStackQuery()</code> registers, once something in the app injects it.
+          </p>
+        }
       </div>
     } @else {
       <p class="intro">
@@ -695,6 +704,9 @@ const FILTERS: SelectOption[] = [
 })
 export class QueryInspector {
   readonly rpc = input<DevframeRpcClient | null>(null);
+  /** Pages that report to the devtools, so the empty state can tell "no page" from "no client". */
+  private readonly angularPages = injectAngularPages(() => this.rpc());
+  readonly connected = computed(() => Object.keys(this.angularPages()).length > 0);
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly hostPageId = hostPageId();

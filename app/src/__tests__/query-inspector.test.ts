@@ -131,6 +131,32 @@ describe('QueryInspector', () => {
   it('says how to get data when no page reports a QueryClient', async () => {
     const { fixture } = await mount({ pages: {} });
     expect(root(fixture).textContent).toContain('No page reports a QueryClient yet.');
+    expect(root(fixture).textContent).toContain('Open the app with the overlay loaded');
+  });
+
+  it('says the connected page has no QueryClient, and how to add one', async () => {
+    const rpc = {
+      call: () => Promise.resolve({ ok: true }),
+      callEvent: () => Promise.resolve(),
+      sharedState: (name: string) =>
+        Promise.resolve({
+          value: () =>
+            name === 'page-angular'
+              ? { pages: { p1: { pageId: 'p1', reportedAt: 1, version: '22.0.0' } } }
+              : { pages: {} },
+          on: () => () => {},
+        }),
+    };
+    const fixture = TestBed.createComponent(QueryInspector);
+    fixture.componentRef.setInput('rpc', {
+      connectionMeta: {},
+      scope: () => ({ rpc }),
+    } as unknown as DevframeRpcClient);
+    await settle(fixture);
+    const text = root(fixture).textContent!.replace(/\s+/g, ' ');
+    expect(text).toContain('The connected page has no QueryClient.');
+    expect(text).toContain('provideTanStackQuery(new QueryClient())');
+    expect(text).not.toContain('Open the app with the overlay loaded');
   });
 
   it('lists queries with status and freshness, and filters them', async () => {
