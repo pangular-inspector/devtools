@@ -121,4 +121,15 @@ describe('tools that need a DOM on a native page', () => {
       on: true,
     });
   });
+  it('says no page can show live views when every reporting page is native and page is omitted', async () => {
+    const { push, tool, sent } = await boot();
+    await push('push-component-tree', tree('an1', 'angular-native'));
+    const answer = await tool('change-detection', { flash: true });
+    expect(answer).toContain('Every page that reports is an Angular Native or NativeScript app');
+    expect(sent.some((s) => s.method.endsWith('change-detection-options'))).toBe(false);
+
+    await push('push-component-tree', tree('web1'));
+    await tool('change-detection', { flash: true });
+    expect(sent.some((s) => s.method.endsWith('change-detection-options'))).toBe(true);
+  });
 });

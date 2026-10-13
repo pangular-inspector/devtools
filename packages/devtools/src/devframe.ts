@@ -232,6 +232,7 @@ import {
   listPagesText,
   pageArgument,
   choosePageText,
+  nativeAppName,
   needsDomText,
   pageDetails,
   summarizePages,
@@ -3070,14 +3071,15 @@ const pangular = defineDevframe({
           };
         }
         // The live views draw on a DOM or into the browser's Performance panel.
-        const noViews =
-          args?.page && cdViewsAsked(args)
-            ? needsDomText(
-                args.page,
-                componentPages.get(args.page)?.platform,
-                'the flash overlay, the Performance panel track and Angular profiling',
-              )
-            : undefined;
+        const liveViews = 'the flash overlay, the Performance panel track and Angular profiling';
+        const reporting = [...componentPages.values()];
+        const noViews = !cdViewsAsked(args)
+          ? undefined
+          : args?.page
+            ? needsDomText(args.page, componentPages.get(args.page)?.platform, liveViews)
+            : reporting.length > 0 && reporting.every((page) => nativeAppName(page.platform))
+              ? `Every page that reports is an Angular Native or NativeScript app, which renders native views and has no DOM, so ${liveViews} need a page in a browser. pangular:list-pages lists each page's platform.`
+              : undefined;
         // A native page skips the live views, but a `record` in the same call still runs.
         const views = noViews
           ? `${noViews} Recording with \`record\` works there.`
