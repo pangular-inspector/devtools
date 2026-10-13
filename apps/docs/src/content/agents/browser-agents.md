@@ -24,7 +24,7 @@ Each call goes from the page to the devtools server, which runs the same handler
 
 Only tools in the `read` [safety tier](./tools.md#action-tools). Action and destructive tools, such as `navigate`, `fill-form` or `clear-recordings`, never reach the page.
 
-Of the `read` tools, the page registers the ones that answer for one page (they take `page` or `pageId`) and the ones that read your source, such as `get-routes`, `get-components` and `build-meta`. These stay with the [MCP server](./mcp-server.md):
+Of the `read` tools, the page registers two kinds. The first answer for one page and take `page` or `pageId`. The second read your source, such as `get-routes`, `get-components` and `build-meta`. The following tools stay with the [MCP server](./mcp-server.md) only:
 
 | Tool                                                                                                       | Why it stays off the page                                                               |
 | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
