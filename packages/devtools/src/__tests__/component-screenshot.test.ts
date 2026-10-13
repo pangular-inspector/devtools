@@ -132,6 +132,55 @@ describe('snapshotElement', () => {
     expect('svg' in snapshot && snapshot.svg).toContain('shown-on-purpose');
   });
 
+  it('masks a field when any of its control name, name or id is secret', async () => {
+    giveSize();
+    document.body.innerHTML = `<app-pay>
+      <input id="card-cvc" name="q" />
+      <input id="v" formcontrolname="value" name="password" />
+      <input id="plain" name="q" />
+    </app-pay>`;
+    (document.getElementById('card-cvc') as HTMLInputElement).value = '123-cvc-secret';
+    (document.getElementById('v') as HTMLInputElement).value = 'hunter22';
+    (document.getElementById('plain') as HTMLInputElement).value = 'search text';
+    const snapshot = await snapshotElement(document.querySelector('app-pay')!, JSDOM);
+    if ('error' in snapshot) throw new Error(snapshot.error);
+    expect(snapshot.svg).not.toContain('123-cvc-secret');
+    expect(snapshot.svg).not.toContain('hunter22');
+    expect(snapshot.svg).toContain('search text');
+    expect(snapshot.masked).toBe(2);
+  });
+
+  it('draws a custom form control with a secret name as a placeholder, inner inputs included', async () => {
+    giveSize();
+    customElements.define(
+      'pin-input',
+      class extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' }).innerHTML = '<span>shadow-9876</span>';
+        }
+      },
+    );
+    document.body.innerHTML = `<app-account>
+      <app-secret-field formcontrolname="apiToken"><span>sk-live-shown</span><input id="inner" /></app-secret-field>
+      <pin-input name="pin"></pin-input>
+      <app-field ng-reflect-name="password"><input id="inner2" /></app-field>
+      <app-field id="nickname"><span>Ada</span></app-field>
+      <div data-pangular="unmask"><app-field name="token"><span>token-on-purpose</span></app-field></div>
+    </app-account>`;
+    (document.getElementById('inner') as HTMLInputElement).value = 'inner-secret';
+    (document.getElementById('inner2') as HTMLInputElement).value = 'inner-secret-2';
+    const snapshot = await snapshotElement(document.querySelector('app-account')!, JSDOM);
+    if ('error' in snapshot) throw new Error(snapshot.error);
+    for (const secret of ['sk-live-shown', 'inner-secret', 'shadow-9876', 'inner-secret-2']) {
+      expect(snapshot.svg).not.toContain(secret);
+    }
+    expect(snapshot.svg).not.toContain('<app-secret-field');
+    expect(snapshot.svg).toContain('Ada');
+    expect(snapshot.svg).toContain('token-on-purpose');
+    expect(snapshot.masked).toBe(3);
+  });
+
   it('inlines readable images and greys out the rest', async () => {
     giveSize();
     document.body.innerHTML =

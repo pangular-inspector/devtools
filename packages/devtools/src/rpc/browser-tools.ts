@@ -1,7 +1,9 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { argsToJsonSchema, stringifyForMcp } from 'devframe/internal';
 import { toAgentToolName } from 'devframe/utils/agent-tool-name';
 import { redactJsonText } from '../json-text-redact.ts';
 import { isSecretName, redactText } from '../serialize.ts';
+import { setCallerPageReader } from './page-scope.ts';
 
 /**
  * The `read` agent tools a page registers for browser agents (WebMCP and
@@ -48,6 +50,55 @@ export interface BrowserToolHost {
 
 const MAX_TEXT = 100_000;
 
+/** The calling page during a page tool call; tool answers read it through `callerPage()`. */
+const callerScope = new AsyncLocalStorage<string>();
+setCallerPageReader(() => callerScope.getStore());
+
+/**
+ * Page tools answer for the page that calls them, so a tool reaches the page
+ * only when it is scoped to one page or reads the workspace source.
+ *
+ * - A tool with a `page` or `pageId` argument is listed, and the call always
+ *   gets the calling page's id (see {@link scopedArgs}).
+ * - A tool without one is listed only when it is in {@link SOURCE_TOOLS}:
+ *   these read the workspace (source scans, build metadata), never a page.
+ *   Any other tool without a page scope, such as `list-pages`,
+ *   `list-ssr-requests`, `explain-ssr-request`, `list-ssr-overrides`,
+ *   `list-http-rules` and `analog-server-calls`, answers about every tab or
+ *   the whole server, so it stays MCP only. A new tool is left out until it
+ *   is added here.
+ * - {@link MCP_ONLY_TOOLS} are page scoped but stay off the page too.
+ */
+const SOURCE_TOOLS: ReadonlySet<string> = new Set([
+  'pangular:get-routes',
+  'pangular:get-components',
+  'pangular:get-pipes',
+  'pangular:get-signals',
+  'pangular:get-providers',
+  'pangular:get-ngrx-store',
+  'pangular:build-meta',
+  'pangular:lint-pipes',
+  'pangular:analog-routes',
+  'pangular:analog-explain-url',
+  'pangular:analog-server-functions',
+  'pangular:analog-api-routes',
+  'pangular:analog-render-modes',
+  'pangular:analog-prerender-plan',
+  'pangular:analog-content',
+]);
+
+/**
+ * Page scoped tools that stay MCP only: `screenshot-component` cannot hand
+ * the image back through a page tool and runs a full capture, `highlight`
+ * draws on the page and changes the selection in open panels, and
+ * `open-in-panel` switches open panels.
+ */
+const MCP_ONLY_TOOLS: ReadonlySet<string> = new Set([
+  'pangular:screenshot-component',
+  'pangular:highlight',
+  'pangular:open-in-panel',
+]);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
@@ -68,16 +119,26 @@ function schemaOf(tool: ListedTool, host: BrowserToolHost): Record<string, unkno
   return isRecord(schema) ? schema : { type: 'object', properties: {} };
 }
 
+function pageScoped(schema: Record<string, unknown>): boolean {
+  const properties = schema['properties'];
+  return isRecord(properties) && ('page' in properties || 'pageId' in properties);
+}
+
 /**
  * The Pangular tools that only read, as the server registered them under the
  * config: `inspectors`, `agent.tools` and `agent.readOnly` already decided
  * which exist, and `action` and `destructive` tools never reach the page.
+ * Of those, only the ones scoped to one page or to the source (see
+ * {@link SOURCE_TOOLS}).
  */
 export function browserTools(host: BrowserToolHost): BrowserTool[] {
   const out: BrowserTool[] = [];
   const seen = new Set<string>();
   for (const tool of host.agent.list().tools) {
     if (!tool.id.startsWith('pangular:') || tool.safety !== 'read') continue;
+    if (MCP_ONLY_TOOLS.has(tool.id)) continue;
+    const inputSchema = schemaOf(tool, host);
+    if (!SOURCE_TOOLS.has(tool.id) && !pageScoped(inputSchema)) continue;
     const name = toAgentToolName(tool.id);
     if (seen.has(name)) continue;
     seen.add(name);
@@ -85,7 +146,7 @@ export function browserTools(host: BrowserToolHost): BrowserTool[] {
       name,
       ...(tool.title && tool.title !== tool.id ? { title: tool.title } : {}),
       description: tool.description,
-      inputSchema: schemaOf(tool, host),
+      inputSchema,
     });
   }
   return out;
@@ -106,7 +167,8 @@ function textOf(result: unknown): string {
 
 /**
  * The arguments for a call from a page: a tool that takes `page` (or
- * `pageId`) answers for the calling page unless the agent named another one.
+ * `pageId`) always answers for the calling page. A page or page id the
+ * caller passed is replaced, so a page tool never reads another tab.
  */
 export function scopedArgs(
   tool: BrowserTool,
@@ -114,12 +176,11 @@ export function scopedArgs(
   pageId: string,
 ): Record<string, unknown> {
   const out = isRecord(args) ? { ...args } : {};
+  delete out['page'];
+  delete out['pageId'];
   const properties = isRecord(tool.inputSchema['properties']) ? tool.inputSchema['properties'] : {};
-  if ('page' in properties) {
-    if (out['page'] === undefined && out['pageId'] === undefined) out['page'] = pageId;
-  } else if ('pageId' in properties && out['pageId'] === undefined) {
-    out['pageId'] = pageId;
-  }
+  if ('page' in properties) out['page'] = pageId;
+  if ('pageId' in properties) out['pageId'] = pageId;
   return out;
 }
 
@@ -147,13 +208,14 @@ export async function callBrowserTool(
   const tool = browserTools(host).find((entry) => entry.name === name);
   if (!tool) {
     return {
-      text: `No read-only devtools tool named ${JSON.stringify(String(name)).slice(0, 140)}.`,
+      text: `No devtools page tool named ${JSON.stringify(String(name)).slice(0, 140)}.`,
       isError: true,
     };
   }
   const id = host.agent.list().tools.find((entry) => toAgentToolName(entry.id) === tool.name)!.id;
   try {
-    const result = await host.agent.invoke(id, scopedArgs(tool, request['args'], pageId));
+    const args = scopedArgs(tool, request['args'], pageId);
+    const result = await callerScope.run(pageId, () => host.agent.invoke(id, args));
     return { text: redactAnswer(textOf(result)) };
   } catch (error) {
     const reason = (error as Error)?.message ?? String(error);

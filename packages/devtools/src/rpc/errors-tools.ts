@@ -404,6 +404,9 @@ export function explainErrorText(
 /** `list-console`: the page's console calls, newest first. */
 const DURATION_MS: Record<string, number> = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 };
 
+/** The largest time a JavaScript Date holds, in epoch milliseconds. */
+const MAX_DATE_MS = 8.64e15;
+
 /**
  * The time `since` names, in epoch milliseconds: a duration back from now
  * (`30s`, `5m`, `1h`, `500ms`), an ISO date, or epoch milliseconds. A string
@@ -411,16 +414,26 @@ const DURATION_MS: Record<string, number> = { ms: 1, s: 1000, m: 60_000, h: 3_60
  */
 export function sinceTime(value: unknown, now = Date.now()): number | string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
+  let at: number | undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) at = value;
+  else if (typeof value === 'string') {
     const text = value.trim();
     const duration = /^(\d+(?:\.\d+)?)\s*(ms|s|m|h)$/i.exec(text);
-    if (duration) return now - Number(duration[1]) * DURATION_MS[duration[2]!.toLowerCase()]!;
-    if (/^\d+$/.test(text)) return Number(text);
-    const date = Date.parse(text);
-    if (!Number.isNaN(date)) return date;
+    if (duration) at = now - Number(duration[1]) * DURATION_MS[duration[2]!.toLowerCase()]!;
+    else if (/^\d+$/.test(text)) at = Number(text);
+    else {
+      const date = Date.parse(text);
+      if (!Number.isNaN(date)) at = date;
+    }
   }
-  return `\`since\` must be a duration such as \`30s\`, \`5m\` or \`1h\`, an ISO date, or epoch milliseconds.`;
+  if (at === undefined) {
+    return `\`since\` must be a duration such as \`30s\`, \`5m\` or \`1h\`, an ISO date, or epoch milliseconds.`;
+  }
+  // A Date holds ±8.64e15 ms; past that, toISOString() throws.
+  if (!(Math.abs(at) <= MAX_DATE_MS)) {
+    return `\`since\` is out of range: it must name a time within ±${MAX_DATE_MS} epoch milliseconds (a duration back from now, an ISO date, or epoch milliseconds).`;
+  }
+  return at;
 }
 
 export function listConsoleText(

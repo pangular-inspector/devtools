@@ -40,8 +40,8 @@ describe('list-browser-tools', () => {
     const list = await names();
     expect(list).toEqual(
       expect.arrayContaining([
-        'pangular_list-pages',
         'pangular_inspect-component',
+        'pangular_list-components',
         'pangular_explain-form-invalid',
         'pangular_get-routes',
         'pangular_list-errors',
@@ -58,6 +58,27 @@ describe('list-browser-tools', () => {
       'pangular_analog-call-api',
     ]) {
       expect(list).not.toContain(action);
+    }
+    // Tools that answer about every tab or the whole server, and the page
+    // scoped ones that stay MCP only, are not page tools.
+    for (const crossPage of [
+      'pangular_list-pages',
+      'pangular_list-ssr-requests',
+      'pangular_explain-ssr-request',
+      'pangular_list-ssr-overrides',
+      'pangular_list-http-rules',
+      'pangular_analog-server-calls',
+      'pangular_screenshot-component',
+      'pangular_highlight',
+      'pangular_open-in-panel',
+    ]) {
+      expect(list).not.toContain(crossPage);
+    }
+    // Every listed tool is scoped to one page, or reads the workspace source.
+    for (const tool of tools) {
+      const properties = tool.inputSchema['properties'] as Record<string, unknown>;
+      if ('page' in properties || 'pageId' in properties) continue;
+      expect(tool.name).toMatch(/^pangular_(get-|build-meta|lint-pipes|analog-)/);
     }
     expect(list.every((name) => /^pangular_[\w.-]{1,119}$/.test(name))).toBe(true);
     expect(new Set(list).size).toBe(list.length);
@@ -91,7 +112,7 @@ describe('list-browser-tools', () => {
   it('is empty, and calls are refused, with agent.browserTools off', async () => {
     const { rpc, names } = await boot({ agent: { browserTools: false } });
     expect(await names()).toEqual([]);
-    const answer = await rpc('call-browser-tool', { pageId: 'p1', name: 'pangular_list-pages' });
+    const answer = await rpc('call-browser-tool', { pageId: 'p1', name: 'pangular_list-errors' });
     expect(answer).toEqual({ text: expect.stringMatching(/agent\.browserTools/), isError: true });
   });
 });
@@ -101,18 +122,60 @@ describe('call-browser-tool', () => {
     const { rpc } = await boot();
     const answer = await rpc('call-browser-tool', {
       pageId: 'p1',
-      name: 'pangular_list-pages',
+      name: 'pangular_list-errors',
       args: {},
     });
     expect(answer.isError).toBeUndefined();
     expect(typeof answer.text).toBe('string');
   });
 
+  it('answers for the calling page only, even when the call names another page', async () => {
+    const { rpc } = await boot();
+    const tree = (name: string, tag: string) => [{ id: 'c1', name, tag, children: [] }];
+    await rpc('push-component-tree', {
+      pageId: 'p1',
+      roots: tree('MineRoot', 'mine-root'),
+      count: 1,
+      detail: null,
+    });
+    await rpc('push-component-tree', {
+      pageId: 'p2',
+      roots: tree('TheirsRoot', 'theirs-root'),
+      count: 1,
+      detail: null,
+    });
+    for (const args of [{ page: 'p2' }, { pageId: 'p2' }, { page: 'p2', pageId: 'p2' }, {}]) {
+      const answer = await rpc('call-browser-tool', {
+        pageId: 'p1',
+        name: 'pangular_list-components',
+        args,
+      });
+      expect(answer.isError).toBeUndefined();
+      expect(answer.text).toContain('MineRoot');
+      expect(answer.text).not.toContain('TheirsRoot');
+      expect(answer.text).not.toContain('p2');
+    }
+    // A page with no tree yet is told so, without the tabs that have one.
+    const empty = await rpc('call-browser-tool', {
+      pageId: 'p3',
+      name: 'pangular_list-components',
+      args: { page: 'p2' },
+    });
+    expect(empty.text).toMatch(/This page is not reporting a component tree/);
+    expect(empty.text).not.toMatch(/p1|p2|TheirsRoot/);
+    // `list-pages` names every tab, so a page can't call it.
+    const pages = await rpc('call-browser-tool', { pageId: 'p1', name: 'pangular_list-pages' });
+    expect(pages).toEqual({ text: expect.stringMatching(/No devtools page tool/), isError: true });
+  });
+
   it('refuses an action tool and an unknown name', async () => {
     const { rpc } = await boot();
     for (const name of ['pangular_navigate', 'pangular_nope', 'devframe_state_read']) {
       const answer = await rpc('call-browser-tool', { pageId: 'p1', name, args: { url: '/' } });
-      expect(answer).toEqual({ text: expect.stringMatching(/No read-only/), isError: true });
+      expect(answer).toEqual({
+        text: expect.stringMatching(/No devtools page tool/),
+        isError: true,
+      });
     }
   });
 
@@ -179,24 +242,30 @@ describe('browser tool helpers', () => {
     inputSchema: { type: 'object', properties },
   });
 
-  it('fills page, else pageId, and keeps a page the agent named', () => {
+  it('always answers for the calling page, replacing a page the agent named', () => {
     expect(scopedArgs(tool({ page: {} }), {}, 'p1')).toEqual({ page: 'p1' });
     expect(scopedArgs(tool({ page: {}, pageId: {} }), { pageId: 'p2' }, 'p1')).toEqual({
-      pageId: 'p2',
+      page: 'p1',
+      pageId: 'p1',
     });
-    expect(scopedArgs(tool({ page: {} }), { page: 'p3' }, 'p1')).toEqual({ page: 'p3' });
+    expect(scopedArgs(tool({ page: {} }), { page: 'p3', pageId: 'p4' }, 'p1')).toEqual({
+      page: 'p1',
+    });
+    expect(scopedArgs(tool({ pageId: {} }), { page: 'p3' }, 'p1')).toEqual({ pageId: 'p1' });
     expect(scopedArgs(tool({ pageId: {} }), undefined, 'p1')).toEqual({ pageId: 'p1' });
-    expect(scopedArgs(tool({}), { a: 1 }, 'p1')).toEqual({ a: 1 });
+    expect(scopedArgs(tool({}), { a: 1, page: 'p2' }, 'p1')).toEqual({ a: 1 });
     expect(scopedArgs(tool({}), 'junk', 'p1')).toEqual({});
   });
 
   it('describes RPC-backed tools from their argument schemas and skips other devframes', () => {
     const host = fakeHost(async () => null);
     const names = browserTools(host).map((entry) => entry.name);
+    // `list-pages` has no page scope and reads no source, and
+    // `screenshot-component` is page scoped but MCP only.
     expect(names).toEqual([
       'pangular_inspect-component',
       'pangular_get-routes',
-      'pangular_list-errors',
+      'pangular_get-components',
     ]);
     expect(browserTools(host)[1].inputSchema).toEqual({ type: 'object', properties: {} });
   });
@@ -233,11 +302,25 @@ function fakeHost(invoke: (id: string, args: unknown) => Promise<unknown>) {
       safety: 'read' as const,
     },
     {
-      id: 'pangular:list-errors',
+      id: 'pangular:get-components',
       kind: 'tool' as const,
-      description: 'Errors.',
+      description: 'Components in source.',
       safety: 'read' as const,
       inputSchema: 'not a schema',
+    },
+    {
+      id: 'pangular:list-pages',
+      kind: 'tool' as const,
+      description: 'Every tab.',
+      safety: 'read' as const,
+      inputSchema: { type: 'object', properties: {} },
+    },
+    {
+      id: 'pangular:screenshot-component',
+      kind: 'tool' as const,
+      description: 'An image.',
+      safety: 'read' as const,
+      inputSchema: { type: 'object', properties: { selector: {}, page: {} } },
     },
     { id: 'other:read', kind: 'tool' as const, description: 'Other.', safety: 'read' as const },
   ];

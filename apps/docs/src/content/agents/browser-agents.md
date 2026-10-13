@@ -24,6 +24,16 @@ Each call goes from the page to the devtools server, which runs the same handler
 
 Only tools in the `read` [safety tier](./tools.md#action-tools). Action and destructive tools, such as `navigate`, `fill-form` or `clear-recordings`, never reach the page.
 
+Of the `read` tools, the page registers the ones that answer for one page (they take `page` or `pageId`) and the ones that read your source, such as `get-routes`, `get-components` and `build-meta`. These stay with the [MCP server](./mcp-server.md):
+
+| Tool                                                                                                       | Why it stays off the page                                                               |
+| ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `list-pages`                                                                                               | It lists every tab that reports.                                                        |
+| `list-ssr-requests`, `explain-ssr-request`, `list-ssr-overrides`, `list-http-rules`, `analog-server-calls` | They answer about the whole server, for every tab.                                      |
+| `screenshot-component`                                                                                     | A page tool answers with text, not an image, and the capture draws the whole component. |
+| `highlight`                                                                                                | It draws on the page and changes the selection in open panels.                          |
+| `open-in-panel`                                                                                            | It switches the panels that are open.                                                   |
+
 The config decides the rest, as for MCP clients:
 
 | Option               | Effect on the page tools                                                                                |
@@ -37,7 +47,7 @@ See [Configuration](../getting-started/configuration.md#inspectors-and-agent-too
 
 ## How the tools answer
 
-- A tool that takes `page` or `pageId` answers for the page that registered it, unless the agent names another page.
+- A tool that takes `page` or `pageId` always answers for the page that registered it. A `page` or `pageId` the agent passes is replaced with that page's id, so a page never reads another tab. When the page has not reported that data, the answer says so without naming other tabs.
 - The answer is the markdown or JSON an MCP client gets. Secret names, JWTs and bearer tokens are masked, as in every answer. See [Redaction](../security.md).
 - Answers over 100,000 characters are cut, with a note to narrow the call.
 - A WebMCP call resolves to `{content: [{type: 'text', text}]}`. A refused or failed call rejects with the reason.
@@ -70,7 +80,7 @@ The WebMCP registration carries the `readOnlyHint`, `untrustedContentHint` and `
 Without WebMCP, the page only listens for `devtoolstooldiscovery`. It writes nothing to your app's DOM. The [Forms](../inspectors/forms.md) tab leaves these tools out of its WebMCP list, which shows the tools of your app.
 
 <ngmd-callout type="warning" title="Any script on the page can call them">
-  In-page agents and other scripts can list WebMCP tools and run them. The tools only read, but they read the server's view of your app, including the source scan. Leave <code>agent.browserTools</code> off if your development page loads scripts you don't trust.
+  In-page agents and other scripts can list WebMCP tools and run them. The tools don't change your app's data, but they read the server's view of your page, including the source scan, and <code>inspect-component</code> selects the instance it reads in open panels. Leave <code>agent.browserTools</code> off if your development page loads scripts you don't trust.
 </ngmd-callout>
 
 ## Where to next

@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPangularCli } from '../cli.ts';
@@ -132,6 +139,47 @@ describe('installSkills', () => {
     expect(forced.results[0].status).toBe('replaced');
     expect(readFileSync(join(skill, 'SKILL.md'), 'utf8')).toMatch(/^---\nname: alpha/);
     expect(readFileSync(join(skill, 'notes.md'), 'utf8')).toBe('mine');
+  });
+
+  it('never writes through a symbolic link at the destination, even with force', () => {
+    const from = source();
+    const outside = fixtureDir('pangular-skills-outside-');
+    const victim = join(outside, 'victim.txt');
+    writeFileSync(victim, 'keep me');
+
+    // A planted SKILL.md link to a file outside the skill folder.
+    const cwd = fixtureDir('pangular-skills-');
+    const skills = join(cwd, '.claude/skills');
+    mkdirSync(join(skills, 'alpha'), { recursive: true });
+    symlinkSync(victim, join(skills, 'alpha', 'SKILL.md'));
+    expect(() => installSkills({ cwd, source: from, skills: ['alpha'], force: true })).toThrow(
+      /symbolic link .*SKILL\.md/,
+    );
+    expect(readFileSync(victim, 'utf8')).toBe('keep me');
+    // Nothing of the refused skill was written, not even its other files.
+    expect(existsSync(join(skills, 'alpha', 'references'))).toBe(false);
+
+    // A planted skill folder link, existing or dangling.
+    for (const linked of [outside, join(outside, 'missing')]) {
+      const project = fixtureDir('pangular-skills-');
+      const into = join(project, '.claude/skills');
+      mkdirSync(into, { recursive: true });
+      symlinkSync(linked, join(into, 'alpha'), 'dir');
+      expect(() =>
+        installSkills({ cwd: project, source: from, skills: ['alpha'], force: true }),
+      ).toThrow(/symbolic link .*alpha/);
+      expect(readdirSync(outside).sort()).toEqual(['victim.txt']);
+    }
+
+    // A linked folder inside the skill.
+    const nested = fixtureDir('pangular-skills-');
+    const alpha = join(nested, '.claude/skills/alpha');
+    mkdirSync(alpha, { recursive: true });
+    symlinkSync(outside, join(alpha, 'references'), 'dir');
+    expect(() => installSkills({ cwd: nested, source: from, force: true })).toThrow(
+      /symbolic link .*references/,
+    );
+    expect(readdirSync(outside).sort()).toEqual(['victim.txt']);
   });
 
   it('installs only the named skills and refuses unknown ones', () => {

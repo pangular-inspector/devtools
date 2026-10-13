@@ -220,6 +220,14 @@ describe('errors agent tools', () => {
     expect(sinceTime('500ms', 10_000)).toBe(9_500);
     expect(sinceTime('1.5h', 10_000_000)).toBe(10_000_000 - 5_400_000);
     expect(sinceTime('', 1)).toBeUndefined();
+    // Finite, but past what a Date holds: an error, never a toISOString() throw.
+    for (const since of ['999999999999999999999', 9e15, -9e15, '3000000000000h', 1e300]) {
+      expect(sinceTime(since, 10_000)).toMatch(/^`since` is out of range/);
+    }
+    expect(sinceTime(8.64e15, 0)).toBe(8.64e15);
+    expect(await invoke('list-console', { since: '999999999999999999999' })).toMatch(
+      /^`since` is out of range/,
+    );
   });
 
   it('are read tools that disappear with the errors inspector', async () => {

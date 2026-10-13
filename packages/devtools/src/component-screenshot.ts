@@ -291,20 +291,37 @@ function placeholder(walk: Walk, el: Element, style: CSSStyleDeclaration, label 
   return block;
 }
 
-/** The key a field's value is masked by: its control name, `name` or `id`. */
-function fieldKey(el: Element): string {
-  return (
-    el.getAttribute('formcontrolname') ??
-    el.getAttribute('ng-reflect-name') ??
-    el.getAttribute('name') ??
-    el.id ??
-    ''
+/** The attributes that name a field: its control name, `name` and `id`. */
+const FIELD_KEY_ATTRIBUTES = ['formcontrolname', 'ng-reflect-name', 'name', 'id'] as const;
+
+/** Every key a field's value can be masked by, in {@link FIELD_KEY_ATTRIBUTES} order. */
+function fieldKeys(el: Element): string[] {
+  return FIELD_KEY_ATTRIBUTES.map((name) => el.getAttribute(name)).filter(
+    (key): key is string => !!key,
   );
 }
 
+/** A native field (input, textarea, select) is masked when any of its keys, or the element, says so. */
 function isMaskedField(el: Element): boolean {
-  return redactReason(fieldKey(el), el) !== null;
+  const keys = fieldKeys(el);
+  if (!keys.length) return redactReason('', el) !== null;
+  return keys.some((key) => redactReason(key, el) !== null);
 }
+
+/**
+ * Any other element named like a secret field, such as a custom form control
+ * `<app-pin formControlName="pin">` or `<my-secret name="password">`. It is
+ * drawn as a placeholder, so the value it renders and the unnamed inputs
+ * inside it never reach the image. Only the names decide here: a wrapper
+ * around a password input keeps its other content.
+ */
+function isSecretHost(el: Element): boolean {
+  if (closest(el, UNMASK_MARKER)) return false;
+  return fieldKeys(el).some((key) => redactReason(key) !== null);
+}
+
+/** Fields whose value {@link copyFieldState} masks in place. */
+const VALUE_FIELDS = new Set(['input', 'textarea', 'option']);
 
 /** HTML attributes the picture depends on; styles carry everything else. */
 const HTML_ATTRIBUTES = new Set([
@@ -448,7 +465,7 @@ function copyNode(
     return placeholder(walk, el, style, `<${tag}>`);
   }
   const html = el.namespaceURI === XHTML || !el.namespaceURI;
-  if (tag === 'select' && isMaskedField(el)) {
+  if (tag === 'select' ? isMaskedField(el) : !VALUE_FIELDS.has(tag) && isSecretHost(el)) {
     walk.masked++;
     return placeholder(walk, el, style);
   }

@@ -292,11 +292,12 @@ An image of one component's host element as the page renders it now. The answer 
 | Argument   | Required | Value                                                                                                         |
 | ---------- | -------- | ------------------------------------------------------------------------------------------------------------- |
 | `selector` | yes      | An instance id from the `component-tree` resource (like `c12`), a class name, a host tag or any CSS selector. |
+| `page`     | no       | The page id, from `list-pages`. Defaults to the most recent page.                                             |
 | `pageId`   | no       | Same as `page`.                                                                                               |
 
 The page draws a copy of the element, not the screen: it copies the element's DOM with every computed style written inline into an SVG, and draws that on a canvas that is never added to the page. Nothing in the app changes, no app code runs, and a component scrolled out of view or behind a dialog is drawn all the same. A class name or tag that matches several instances captures the first and lists the ids of all of them. A CSS selector captures the first element it matches on the most recent page, or on `page`.
 
-The copy masks what the [redaction](../security.md) masks in form values: password fields, fields whose name, `formControlName` or `id` looks secret (plus `redaction.secretNames`), and fields with a secret `autocomplete`. Elements marked `data-private`, `.sentry-mask`, `.rr-mask` or `data-pangular="mask"` become grey blocks, and `data-pangular="unmask"` keeps a field. JWTs, bearer tokens and secret `key=value` pairs in text are masked too.
+The copy masks what the [redaction](../security.md) masks in form values: password fields, fields where any of `formControlName`, `ng-reflect-name`, `name` or `id` looks secret (plus `redaction.secretNames`), and fields with a secret `autocomplete`. Any other element named that way, such as a custom form control `<app-pin formControlName="pin">`, becomes a grey block with everything inside it, its inputs included. Elements marked `data-private`, `.sentry-mask`, `.rr-mask` or `data-pangular="mask"` become grey blocks, and `data-pangular="unmask"` keeps a field. JWTs, bearer tokens and secret `key=value` pairs in text are masked too.
 
 What the copy can't show:
 

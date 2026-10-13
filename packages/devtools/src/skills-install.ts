@@ -1,6 +1,16 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  type Stats,
+} from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CAC } from 'cac';
 
@@ -110,6 +120,53 @@ function sameFile(a: string, b: string): boolean {
   return existsSync(b) && statSync(b).isFile() && readFileSync(a).equals(readFileSync(b));
 }
 
+function lstatOrNull(path: string): Stats | null {
+  try {
+    return lstatSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+function inside(root: string, path: string): boolean {
+  const rel = relative(root, path);
+  return !!rel && !rel.startsWith('..') && !isAbsolute(rel);
+}
+
+/**
+ * Throws when writing `file` could leave `target` (the chosen skill folder)
+ * through a symbolic link: the skill folder, a folder inside it or the file
+ * itself must not be one. `copyFileSync` and `mkdirSync` follow links, so a
+ * planted `SKILL.md` link would otherwise overwrite the file it points to.
+ * `target` itself may be a link; writes stay inside where it resolves.
+ */
+function assertSafeWrite(target: string, file: string): void {
+  if (!inside(target, file)) {
+    throw new Error(`[pangular] Refusing to write ${file}: it is outside ${target}.`);
+  }
+  let path = target;
+  for (const part of relative(target, file).split(sep)) {
+    path = join(path, part);
+    const stat = lstatOrNull(path);
+    if (!stat) return;
+    if (stat.isSymbolicLink()) {
+      throw new Error(
+        `[pangular] Refusing to write through the symbolic link ${path}. Remove it and run the command again.`,
+      );
+    }
+  }
+}
+
+/** Throws when the folder `file` is written into resolves outside `target`. */
+function assertResolvedInside(target: string, file: string): void {
+  const root = realpathSync(target);
+  const folder = realpathSync(dirname(file));
+  if (folder !== root && !inside(root, folder)) {
+    throw new Error(`[pangular] Refusing to write ${file}: it resolves outside ${target}.`);
+  }
+}
+
 /**
  * Copies the bundled skills into the agent's skill folder. A skill folder
  * that already exists and differs is left alone unless `force` is set, and
@@ -146,9 +203,14 @@ export function installSkills(options: SkillsInstallOptions): SkillsInstallResul
       ...(status === 'skipped' || status === 'replaced' ? { changed } : {}),
     });
     if (options.dryRun || status === 'unchanged' || status === 'skipped') continue;
+    // Check every file before writing any, so a refused skill is left as it was.
+    for (const file of changed) assertSafeWrite(target, join(into, file));
     for (const file of changed) {
-      mkdirSync(dirname(join(into, file)), { recursive: true });
-      copyFileSync(join(skill.dir, file), join(into, file));
+      const to = join(into, file);
+      mkdirSync(dirname(to), { recursive: true });
+      assertSafeWrite(target, to);
+      assertResolvedInside(target, to);
+      copyFileSync(join(skill.dir, file), to);
     }
   }
   return { target, dryRun: !!options.dryRun, results };
