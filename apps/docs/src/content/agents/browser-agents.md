@@ -9,7 +9,12 @@ description: The overlay registers the read-only agent tools on the page through
 
 # Browser agents
 
-Turn it on with `agent: { browserTools: true }` in your [config](../getting-started/configuration.md#inspectors-and-agent-tools). It is off by default, because any script on the page could then call the tools.
+The browser agent tools are off by default, because any script on the page could then call them. Turn it on in one of two ways:
+
+| Where                                                                                                            | How long it lasts                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| The **Browser agent tools** switch in the panel's [Settings](../getting-started/settings.md#browser-agents)      | Until the dev server restarts. It applies to every connected page right away, with no reload.                     |
+| `agent: { browserTools: true }` in your [config](../getting-started/configuration.md#inspectors-and-agent-tools) | Every time the server starts. The config sets where the switch starts, so the switch can also turn the tools off. |
 
 When it is on and the overlay connects, it registers the `read` [agent tools](./tools.md) on the page in two ways:
 
@@ -40,12 +45,12 @@ On the page, `inspect-ngrx-entry` and `generate-ngrx-test` read the live page on
 
 The config decides the rest, as for MCP clients:
 
-| Option               | Effect on the page tools                                                                                |
-| -------------------- | ------------------------------------------------------------------------------------------------------- |
-| `inspectors.<name>`  | An inspector that is off has no tools on the page.                                                      |
-| `agent.tools.<name>` | `false` leaves that inspector's tools off the page.                                                     |
-| `agent.readOnly`     | `change-detection`, `hydration` and `audit` join as `read` tools, without the arguments that act.       |
-| `agent.browserTools` | Off by default: nothing is registered on the page. `true` turns it on. The MCP server keeps every tool. |
+| Option               | Effect on the page tools                                                                                                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inspectors.<name>`  | An inspector that is off has no tools on the page.                                                                                                                                           |
+| `agent.tools.<name>` | `false` leaves that inspector's tools off the page.                                                                                                                                          |
+| `agent.readOnly`     | `change-detection`, `hydration` and `audit` join as `read` tools, without the arguments that act.                                                                                            |
+| `agent.browserTools` | Off by default: nothing is registered on the page. `true` turns it on. The **Browser agent tools** switch in Settings changes it until the server restarts. The MCP server keeps every tool. |
 
 See [Configuration](../getting-started/configuration.md#inspectors-and-agent-tools).
 
@@ -74,17 +79,18 @@ The WebMCP registration carries the `readOnlyHint`, `untrustedContentHint` and `
 
 ## When the page registers them
 
-| Event                                           | What happens                                         |
-| ----------------------------------------------- | ---------------------------------------------------- |
-| The overlay connects                            | It asks the server for the tools and registers them. |
-| `pagehide`                                      | It unregisters them.                                 |
-| The page comes back from the back/forward cache | It registers them again.                             |
-| `disposeOverlay()` or a second `initOverlay()`  | It unregisters them.                                 |
+| Event                                           | What happens                                                                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| The overlay connects                            | It asks the server for the tools and registers them. While they are off, the server lists none and nothing is registered. |
+| The **Browser agent tools** switch changes      | The server tells every connected page, which registers or unregisters the tools without a reload.                         |
+| `pagehide`                                      | It unregisters them.                                                                                                      |
+| The page comes back from the back/forward cache | It registers them again.                                                                                                  |
+| `disposeOverlay()` or a second `initOverlay()`  | It unregisters them.                                                                                                      |
 
 Without WebMCP, the page only listens for `devtoolstooldiscovery`. It writes nothing to your app's DOM. The [Forms](../inspectors/forms.md) tab leaves these tools out of its WebMCP list, which shows the tools of your app.
 
 <ngmd-callout type="warning" title="Any script on the page can call them">
-  In-page agents and other scripts can list WebMCP tools and run them. The tools don't change your app's data, but they read the server's view of your page, including the source scan, and <code>inspect-component</code> selects the instance it reads in open panels. Leave <code>agent.browserTools</code> off if your development page loads scripts you don't trust.
+  In-page agents and other scripts can list WebMCP tools and run them. The tools don't change your app's data, but they read the server's view of your page, including the source scan, and <code>inspect-component</code> selects the instance it reads in open panels. Leave <code>agent.browserTools</code> and the <strong>Browser agent tools</strong> switch off if your development page loads scripts you don't trust.
 </ngmd-callout>
 
 ## Where to next

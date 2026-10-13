@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  CHANGED_EVENT,
   DISCOVERY_EVENT,
   TOOL_GROUP,
   attachBrowserTools,
@@ -217,6 +218,65 @@ describe('browser tools on the page', () => {
     await tick();
     expect(tools.size).toBe(0);
     expect(discover()).toEqual([]);
+  });
+
+  it('registers or unregisters without a reload when the panel switch changes', async () => {
+    const { tools } = fakeContext();
+    let listed: unknown = [];
+    const handlers = new Map<string, (message: unknown) => void>();
+    const my = {
+      rpc: {
+        call: vi.fn(async (name: string) => {
+          if (name === 'list-browser-tools') return listed;
+          throw new Error(`unexpected ${name}`);
+        }),
+        register: (definition: { name: string; handler: (message: unknown) => void }) =>
+          void handlers.set(definition.name, definition.handler),
+      },
+    };
+    attach(my);
+    await tick();
+    expect(tools.size).toBe(0);
+    expect(discover()).toEqual([]);
+
+    listed = LISTED;
+    handlers.get(CHANGED_EVENT)!({ enabled: true, config: false });
+    await tick();
+    expect([...tools.keys()]).toEqual(['pangular_inspect-component', 'pangular_get-routes']);
+    expect(discover()).toHaveLength(1);
+
+    listed = [];
+    handlers.get(CHANGED_EVENT)!({ enabled: false, config: false });
+    await tick();
+    expect(tools.size).toBe(0);
+    expect(discover()).toEqual([]);
+  });
+
+  it('ignores the switch while the page is away or after it stopped', async () => {
+    const { tools } = fakeContext();
+    const handlers = new Map<string, (message: unknown) => void>();
+    const my = {
+      rpc: {
+        call: vi.fn(async () => LISTED),
+        register: (definition: { name: string; handler: (message: unknown) => void }) =>
+          void handlers.set(definition.name, definition.handler),
+      },
+    };
+    const handle = attach(my);
+    await tick();
+    handle.leave();
+    handlers.get(CHANGED_EVENT)!({ enabled: true });
+    await tick();
+    expect(tools.size).toBe(0);
+    handle.resume();
+    await tick();
+    expect(tools.size).toBe(2);
+    handle.stop();
+    handlers.get(CHANGED_EVENT)!({ enabled: true });
+    handle.resume();
+    await tick();
+    expect(tools.size).toBe(0);
+    expect(my.rpc.call).toHaveBeenCalledTimes(2);
   });
 
   it('stays out of the Forms inspector WebMCP list', async () => {

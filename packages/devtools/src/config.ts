@@ -170,7 +170,9 @@ export interface PangularConfig {
      * Register the `read` agent tools on the page for browser agents, through
      * WebMCP (`document.modelContext`) and Chrome DevTools for agents
      * (`devtoolstooldiscovery`). Off by default, since any script on the page could
-     * then call them; `true` turns them on.
+     * then call them; `true` turns them on. This is where the switch starts:
+     * **Browser agent tools** in the panel's Settings changes it for every
+     * page until the server restarts.
      */
     browserTools?: boolean;
   };
@@ -970,9 +972,11 @@ export const SHARED_RPC: readonly string[] = [
   'list-pages',
   // Opens any tab, so it stays with every inspector off; it lists only the tabs that are on.
   'open-in-panel',
-  // The page registers the `read` agent tools for browser agents (agent.browserTools).
+  // The page registers the `read` agent tools for browser agents (agent.browserTools),
+  // and the panel's Settings turns them on or off while the server runs.
   'list-browser-tools',
   'call-browser-tool',
+  'set-browser-tools',
   'open-in-editor',
   'hub-dock-seen',
   // Store as global spans the components, injectors and NgRx inspectors; the
@@ -1211,7 +1215,13 @@ export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
 };
 
 /** Shared-state keys that belong to no inspector, without the `pangular:` prefix. */
-export const SHARED_STATE_KEYS: readonly string[] = ['page-visibility', 'page-angular', 'audit'];
+export const SHARED_STATE_KEYS: readonly string[] = [
+  'page-visibility',
+  'page-angular',
+  'audit',
+  // Whether the page registers the browser agent tools (agent.browserTools and the panel switch).
+  'browser-tools',
+];
 
 /**
  * Whether MCP clients may read a shared-state key. A `pangular:` key in

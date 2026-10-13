@@ -1,3 +1,4 @@
+import type { SsrContextStorage } from './ssr-context.ts';
 import type { SsrNavigation } from './ssr-navigation.ts';
 import type { SsrOverride, SsrOverrideKind } from './ssr-overrides.ts';
 
@@ -72,8 +73,8 @@ export function touchSsrRequest(request: ActiveRequest | undefined, now = Date.n
 /**
  * Drops traces with no progress for longer than {@link ACTIVE_SSR_TTL_MS}: a
  * response that was dropped unread never ends its trace, and would otherwise
- * stay in `active` for the server's life (and keep {@link soleActiveSsrRequest}
- * from linking). A response that keeps streaming chunks stays.
+ * stay in `active` for the server's life. A response that keeps streaming
+ * chunks stays.
  */
 export function sweepActiveSsrRequests(now = Date.now()): void {
   const { active } = ssrRegistry();
@@ -95,6 +96,8 @@ export interface SsrRegistry {
   record?: (request: SsrRequest) => void;
   /** Set by the devframe server while the http inspector and `actions.http` are on. */
   overrides?: SsrOverride[];
+  /** Which traced request the running code belongs to, shared by every copy of the package (`ssr-context.ts`). */
+  context?: SsrContextStorage;
 }
 
 export function noteOverride(id: string, applied: AppliedOverride) {
@@ -112,18 +115,6 @@ export function ssrRegistry(): SsrRegistry {
 /** The id when `ssrMiddleware` is still handling that request, so a forged header is ignored. */
 export function activeSsrRequest(id: string | null | undefined): string | undefined {
   return id && ssrRegistry().active.has(id) ? id : undefined;
-}
-
-/**
- * The one request being traced, when exactly one is in flight. A render that
- * gets no Angular `REQUEST` (Analog provides its own token) is linked through
- * it, since with two renders in flight a call can't be told apart.
- */
-export function soleActiveSsrRequest(): string | undefined {
-  sweepActiveSsrRequests();
-  const { active } = ssrRegistry();
-  if (active.size !== 1) return undefined;
-  return active.keys().next().value;
 }
 
 export function noteSsrFetch(id: string, durationMs: number) {

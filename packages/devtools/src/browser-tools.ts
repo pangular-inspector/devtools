@@ -9,7 +9,10 @@ import { modelContextOf } from './forms-webmcp.ts';
  *   `window` that answers with one tool group.
  *
  * Each call goes to the server (`call-browser-tool`), which runs the same
- * handler an MCP client gets and masks secrets in the answer. The tools
+ * handler an MCP client gets and masks secrets in the answer. The server
+ * lists no tools while `agent.browserTools` (or the panel's switch) is off,
+ * and says `browser-tools-changed` when the switch moves, so the page asks
+ * again then. The tools
  * answer for this page unless the agent names another one. Nothing is
  * written to the app's DOM.
  */
@@ -31,8 +34,19 @@ export interface PageTool {
   inputSchema: Record<string, unknown>;
 }
 
+/** Broadcast by the server when the panel's Settings turns the tools on or off. */
+export const CHANGED_EVENT = 'browser-tools-changed';
+
 interface PageRpc {
-  rpc: { call(name: string, ...args: unknown[]): Promise<unknown> };
+  rpc: {
+    call(name: string, ...args: unknown[]): Promise<unknown>;
+    register?(definition: {
+      name: string;
+      type: 'event';
+      jsonSerializable: true;
+      handler: (message: unknown) => void;
+    }): unknown;
+  };
 }
 
 export interface BrowserToolsHandle {
@@ -171,18 +185,42 @@ export function attachBrowserTools(
     listening = true;
   }
 
+  let away = false;
+  let stopped = false;
   const leave = () => {
     generation++;
     unregister();
   };
+  const restart = () => {
+    leave();
+    void start();
+  };
+
+  // The server lists no tools while the switch is off, so asking again
+  // registers or unregisters them without a reload.
+  my.rpc.register?.({
+    name: CHANGED_EVENT,
+    type: 'event',
+    jsonSerializable: true,
+    handler: () => {
+      if (!away && !stopped) restart();
+    },
+  });
 
   void start();
   return {
-    leave,
-    resume: () => {
+    leave: () => {
+      away = true;
       leave();
-      void start();
     },
-    stop: leave,
+    resume: () => {
+      if (stopped) return;
+      away = false;
+      restart();
+    },
+    stop: () => {
+      stopped = true;
+      leave();
+    },
   };
 }

@@ -126,6 +126,7 @@ describe('Settings page', () => {
       'Theme',
       'Tabs',
       'Popup on the page',
+      'Browser agents',
       'Keyboard shortcuts',
     ]);
     expect(root.querySelector('h1, h3')).toBeNull();
@@ -145,7 +146,7 @@ describe('Settings page', () => {
       'forms',
     ]);
     expect(document.activeElement).toBe(button('Move Signals up'));
-    expect(root.querySelector('[role="status"]')?.textContent).toContain(
+    expect(root.querySelector(':scope > [role="status"]')?.textContent).toContain(
       'Signals moved to position 2 of 4.',
     );
     // At the top, focus moves to the other arrow instead of a disabled one.

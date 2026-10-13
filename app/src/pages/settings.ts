@@ -18,6 +18,8 @@ import {
   type TabLayout,
   type ThemePreference,
 } from '../shell-prefs';
+import type { DevframeRpcClient } from 'devframe/client';
+import { BrowserToolsSetting } from './browser-tools-setting';
 import { TabIcon } from './tab-icon';
 
 export interface SettingsTab {
@@ -31,14 +33,18 @@ const THEMES: { value: ThemePreference; label: string; hint: string }[] = [
   { value: 'dark', label: 'Dark', hint: 'Always dark' },
 ];
 
-/** Per-viewer settings: theme, tab bar layout and the popup's passive mode. */
+/**
+ * Per-viewer settings (theme, tab bar layout and the popup's passive mode),
+ * and the dev server's browser agent tools switch.
+ */
 @Component({
   selector: 'app-settings',
-  imports: [TabIcon],
+  imports: [BrowserToolsSetting, TabIcon],
   template: `
     <p class="intro">
       Settings for this panel in this browser. They are saved in the browser's local storage, so
-      every panel on this address uses them.
+      every panel on this address uses them. Browser agents is the exception: the dev server keeps
+      it for every page and panel.
     </p>
 
     <section class="card" aria-labelledby="settings-theme">
@@ -153,6 +159,10 @@ const THEMES: { value: ThemePreference; label: string; hint: string }[] = [
           the button always shows.
         }
       </p>
+    </section>
+
+    <section class="card" aria-labelledby="settings-browser-agents">
+      <app-browser-tools-setting [rpc]="rpc()" />
     </section>
 
     <section class="card" aria-labelledby="settings-keys">
@@ -430,6 +440,8 @@ export class Settings {
   /** The popup shortcut as the platform writes it, or `false` when it is off. */
   readonly hotkey = input<string | false>(false);
   readonly paletteShortcut = input('Ctrl+K');
+  /** The devtools server connection, for the settings it keeps (browser agent tools). */
+  readonly rpc = input<DevframeRpcClient | null>(null);
 
   protected readonly themes = THEMES;
   protected readonly announcement = signal('');
