@@ -477,14 +477,14 @@ The tree, the detail and component values work from Angular 12. Before 17.1 the 
 
 The [Angular Native](../getting-started/angular-native.md) and [NativeScript](../getting-started/nativescript.md) overlays record change detection and report leaks too. A device has no DOM, so a few parts are missing there:
 
-| Part                                                              | On a device                                                                   |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Cycles, causes, zone.js dependence, inputs that break OnPush      | Recorded as in the browser.                                                   |
-| Checks that changed nothing                                       | Not counted: the recording tells them by watching DOM updates.                |
-| **Flash checks**, **Performance track** and **Angular profiling** | Hidden. The `change-detection` tool answers that the page has no DOM.         |
-| Effects, subscriptions and destroyed instances in **Leaks**       | Reported as in the browser. Subscription tracking stays on until you stop it. |
-| Detached views in **Leaks**                                       | Not told apart from destroyed ones.                                           |
-| **Pick component on page**, hydration and the console handles     | Hidden.                                                                       |
+| Part                                                              | On a device                                                                                                                               |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Cycles, causes, zone.js dependence, inputs that break OnPush      | Recorded as in the browser, when the root host carries the Angular version.                                                               |
+| Checks that changed nothing                                       | Not counted: the recording tells them by watching DOM updates.                                                                            |
+| **Flash checks**, **Performance track** and **Angular profiling** | Hidden. The `change-detection` tool answers that the page has no DOM.                                                                     |
+| Effects and subscriptions in **Leaks**                            | Reported as in the browser. Routes and navigations come from the app's Router, and subscription tracking stays on until you stop it.      |
+| Destroyed and retained instances in **Leaks**                     | Not listed. A development build keeps every destroyed instance in Angular's DI debug data, and a device can't tell a detached view apart. |
+| **Pick component on page**, hydration and the console handles     | Hidden.                                                                                                                                   |
 
 ### Development builds only
 

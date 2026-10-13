@@ -139,11 +139,11 @@ The overlay starts after the page claims its page id, so errors and console call
 
 The [Angular Native](../getting-started/angular-native.md) and [NativeScript](../getting-started/nativescript.md) overlays report errors and the console too, with the owning component found through the app's own views. The NG0100 and missing provider explainers work there. A device has no hydration, so the hydration explainers don't apply.
 
-| Source                   | Angular Native                      | NativeScript |
-| ------------------------ | ----------------------------------- | ------------ |
-| Angular's `ErrorHandler` | Yes                                 | Yes          |
-| The console              | Yes                                 | Yes          |
-| Errors outside *Angular  | React Native's `ErrorUtils` handler | No           |
+| Source                   | Angular Native                      | NativeScript                                                  |
+| ------------------------ | ----------------------------------- | ------------------------------------------------------------- |
+| Angular's `ErrorHandler` | Yes                                 | Yes                                                           |
+| The console              | Yes                                 | Yes                                                           |
+| Errors outside *Angular  | React Native's `ErrorUtils` handler | The `Application` `uncaughtError` and `discardedError` events |
 
 ### It needs a development build
 

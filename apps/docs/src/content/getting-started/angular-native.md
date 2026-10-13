@@ -15,17 +15,17 @@ This page describes what the overlay shows and how it works. To add it to an app
 
 ## What it shows
 
-| Tab        | On Angular Native                                                                                                                                                                                                                                           |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Components | The component tree, paths and the detail panel. Pointing at a component in the panel outlines it on the device. **Change detection** records cycles with their causes and OnPush hints, and **Leaks** lists effects, subscriptions and destroyed instances. |
-| Signals    | The signal graph of the selected component, or of the first component with signals. There is no routed component to pick.                                                                                                                                   |
-| Injectors  | Element injectors, including `<ng-container>` anchors, and environment injectors with their providers. **Show value** reads a created provider's value, and **Startup** shows the Angular version and when the app was first stable.                        |
-| Store      | Live `@ngrx/signals` and `@ngrx/store` state, the change log, sessions and restore, and NGXS, Elf and MiniRx stores. See [Other stores on a device](#other-stores-on-a-device).                                                                             |
-| Queries    | The TanStack Query clients the app injected, with their queries and mutations.                                                                                                                                                                              |
-| Pipes      | The pipes in use, with their instances and the components that use them. Recording pipe calls works as in the browser.                                                                                                                                      |
-| Errors     | Errors from Angular's `ErrorHandler` and React Native's global error handler, the console, and the NG0100 and missing provider explainers.                                                                                                                  |
-| Audit      | The findings of change detection, leaks and errors, and before and after sessions. axe has no DOM to check.                                                                                                                                                 |
-| Plugins    | The views of [page plugins](../guides/write-a-plugin.md) the app registers.                                                                                                                                                                                 |
+| Tab        | On Angular Native                                                                                                                                                                                                                                                                      |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Components | The component tree, paths and the detail panel. Pointing at a component in the panel outlines it on the device. **Change detection** records cycles with their causes and OnPush hints, and **Leaks** lists effects and subscriptions, with navigations counted from the app's Router. |
+| Signals    | The signal graph of the selected component, or of the first component with signals. There is no routed component to pick.                                                                                                                                                              |
+| Injectors  | Element injectors, including `<ng-container>` anchors, and environment injectors with their providers. **Show value** reads a created provider's value, and **Startup** shows the Angular version and when the app was first stable.                                                   |
+| Store      | Live `@ngrx/signals` and `@ngrx/store` state, the change log, sessions and restore, and NGXS, Elf and MiniRx stores. See [Other stores on a device](#other-stores-on-a-device).                                                                                                        |
+| Queries    | The TanStack Query clients the app injected, with their queries and mutations.                                                                                                                                                                                                         |
+| Pipes      | The pipes in use, with their instances and the components that use them. Recording pipe calls works as in the browser.                                                                                                                                                                 |
+| Errors     | Errors from Angular's `ErrorHandler` and React Native's global error handler, the console, and the NG0100 and missing provider explainers.                                                                                                                                             |
+| Audit      | The findings of change detection, leaks and errors, and before and after sessions. axe has no DOM to check.                                                                                                                                                                            |
+| Plugins    | The views of [page plugins](../guides/write-a-plugin.md) the app registers.                                                                                                                                                                                                            |
 
 The source scans (routes, pipes, NgRx declarations) come from the server, so they work as with the [Standalone CLI](./cli.md). There is no in-app popup.
 
@@ -33,15 +33,15 @@ The source scans (routes, pipes, NgRx declarations) come from the server, so the
 
 These features read or draw the DOM, or run in the browser, so an Angular Native app has none of them. The panel hides the picker and the live views for the app, **Run axe** says the app has no DOM, and the agent tools answer the same instead of asking another tab.
 
-| Feature                                                           | Why it is missing                                                                                |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| **Pick component on page**                                        | Picking listens for a click on a DOM element.                                                    |
-| **Flash checks**, **Performance track** and **Angular profiling** | They draw over DOM elements or into the browser's Performance panel.                             |
-| Checks that changed nothing                                       | The recording counts them by watching DOM updates.                                               |
-| Detached views in **Leaks**                                       | Telling a detached view from a destroyed one asks Angular about a DOM element it never rendered. |
-| Provider construction times in **Startup**                        | They need the startup hook, which loads before *Angular in a browser.                            |
-| axe, `screenshot-component`, hydration and the console handles    | They read or copy the DOM.                                                                       |
-| Router, Forms and SSR & HTTP tabs                                 | The Angular Native overlay does not collect them.                                                |
+| Feature                                                           | Why it is missing                                                                                                                                                                 |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Pick component on page**                                        | Picking listens for a click on a DOM element.                                                                                                                                     |
+| **Flash checks**, **Performance track** and **Angular profiling** | They draw over DOM elements or into the browser's Performance panel.                                                                                                              |
+| Checks that changed nothing                                       | The recording counts them by watching DOM updates.                                                                                                                                |
+| Destroyed and retained instances in **Leaks**                     | A development build keeps every destroyed instance in Angular's DI debug data, so only a detached view would show a leak, and telling one apart asks Angular about a DOM element. |
+| Provider construction times in **Startup**                        | They need the startup hook, which loads before *Angular in a browser.                                                                                                             |
+| axe, `screenshot-component`, hydration and the console handles    | They read or copy the DOM.                                                                                                                                                        |
+| Router, Forms and SSR & HTTP tabs                                 | The Angular Native overlay does not collect them.                                                                                                                                 |
 
 The controls stay for browser pages. Hovering a row still outlines the component on the device.
 
@@ -97,7 +97,7 @@ The hook does nothing when `ngDevMode` is off. Without it, only stores created a
 
 - **Host tree**: the overlay walks the engine nodes under `app.engine.root` with the same collectors as the browser overlay. Text runs are skipped, and the anchors of `@if`, `@for` and `<ng-container>` show as `ng-container`.
 - **Reporting**: the app polls every `intervalMs`, sends a report only when it changed (with a keepalive), and reconnects after `retryMs` when the server restarts or the socket drops. It keeps one page id until the overlay stops. The **Leaks** scan walks the tree again when the component tree changed, and at least every 30 seconds.
-- **Angular version**: change detection recording and **Startup** read the version from the `ng-version` value *Angular sets on the root host. When the renderer keeps none, the overlay tries Angular's profiler and gives it back when Angular has no way to share it (before 20.0).
+- **Angular version**: change detection recording and **Startup** read the version from the `ng-version` value *Angular sets on the root host. When the renderer keeps none, recording stays off and the **Change detection** section says the page has no profiler, as in a browser, since taking Angular's profiler without knowing the version could evict another one for good.
 - **Errors**: the overlay wraps the app's `ErrorHandler`, listens to the console, and hears React Native's global error handler (`ErrorUtils`), which it calls on with every error and puts back when the overlay stops.
 - **Highlight**: when the panel or the `highlight` agent tool points at a component, the overlay sets `outlineWidth`, `outlineStyle` and `outlineColor` in the view's inline style, and restores the previous values when the panel clears it.
 
