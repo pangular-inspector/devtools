@@ -31,7 +31,7 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`. It contain
 
 ## Supported Angular versions
 
-The peer range covers Angular 20 and later, and CI tests it (see [Tested versions](#tested-versions)). The overlay doesn't look at the version to decide what to read. It checks each debug API on the page and sends what it finds with the page's Angular version, so each tab shows the data that version provides.
+The peer range covers Angular 20 and later, and CI tests it (see [Tested versions](#tested-versions)). The overlay checks each debug API on the page and sends what it finds with the page's Angular version, so each tab shows the data that version provides. Only the profiler also looks at the version: the overlay uses `ɵsetProfiler` from Angular 20.0, because before that it holds a single profiler.
 
 When a tab needs a debug API the page doesn't have, it says which Angular version the feature needs and which one the page runs, for example "The live signal graph needs Angular 20.1 or later; this page runs Angular 15.2." The agent tools answer **Unsupported on this Angular version** with the same sentence, and `list-pages` shows each page's Angular version next to its platform.
 

@@ -74,6 +74,6 @@ The `@angular/core` and `@angular/router` packages of these versions were packed
 
 ## Not covered yet
 
-- Nothing here was run against a real app on these versions; CI does that in the follow-up (issue #386, step 5). The fake `ng` objects in `packages/devtools/src/__tests__/ng-shapes.ts` follow the key lists above.
+- The inventory comes from the packed bundles. CI runs the page-side tests against real Angular 20, 21 and 22 apps, but not yet against 12 to 19; that is the follow-up (issue #386, step 5). The fake `ng` objects in `packages/devtools/src/__tests__/ng-shapes.ts` follow the key lists above.
 - The overlay imports `@angular/core/primitives/signals` dynamically for the write hook. That entry exists from 17.0, so a bundler that resolves dynamic imports at build time (webpack in `@angular-devkit/build-angular`) may fail to build an Angular 12 to 16 app with the overlay. Setup on older builders is issue #386, step 6.
 - `package.json` still declares `@angular/core >=20` and `@angular/common >=20` as peers. The floor moves once CI tests the older versions.
