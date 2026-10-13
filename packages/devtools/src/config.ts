@@ -1192,6 +1192,11 @@ export function sharedStateExposed(key: string, config: ResolvedPangularConfig):
   if (!key.startsWith('pangular:')) return true;
   const name = agentName(key);
   if (SHARED_STATE_KEYS.includes(name)) return true;
+  // Every page plugin's view, in one key: shown only while no plugin has its
+  // tools turned off, since a key can't be filtered per plugin.
+  if (name === 'plugins' && config.agent.tools.plugins) {
+    return Object.keys(config.plugins ?? {}).every((id) => pluginSwitches(id, config).tools);
+  }
   // A server plugin's own state, `plugin.<id>`.
   const plugin = /^plugin\.(.+)$/.exec(name)?.[1];
   if (plugin !== undefined) return pluginSwitches(plugin, config).tools;

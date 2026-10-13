@@ -163,6 +163,21 @@ describe('plugin config', () => {
     const off = resolvePangularConfig({ plugins: { travel: { tools: false } } });
     expect(sharedStateExposed('pangular:plugin.travel', off)).toBe(false);
     expect(sharedStateExposed('pangular:plugin.query', off)).toBe(true);
+    // The aggregate key holds every plugin's view, so it hides with any plugin's tools.
+    expect(sharedStateExposed('pangular:plugins', off)).toBe(false);
+    expect(sharedStateExposed('pangular:plugins', resolvePangularConfig({}))).toBe(true);
+    expect(
+      sharedStateExposed(
+        'pangular:plugins',
+        resolvePangularConfig({ plugins: { travel: { actions: false } } }),
+      ),
+    ).toBe(true);
+    expect(
+      sharedStateExposed(
+        'pangular:plugins',
+        resolvePangularConfig({ agent: { tools: { plugins: false } } }),
+      ),
+    ).toBe(false);
   });
 });
 
