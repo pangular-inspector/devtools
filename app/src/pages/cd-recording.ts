@@ -71,11 +71,14 @@ const SHOWN_CYCLES = 30;
         often each instance was checked. Times come from a development build. While it records, the
         page also wraps Angular's scheduler, adds a signal write hook and watches DOM updates; all
         of it stops with the recording.
+        @if (native()) {
+          An app on a device has no DOM, so checks that changed nothing are not counted there.
+        }
       </p>
       @if (page()?.supported === false) {
         <app-angular-unavailable [page]="angularPage()" capability="profiler" missing compact />
       }
-      @if (!imported()) {
+      @if (!imported() && !native()) {
         <div class="views" role="group" aria-labelledby="cd-views-label">
           <span id="cd-views-label" class="views-label">Live views</span>
           <button
@@ -412,6 +415,8 @@ export class CdRecording {
   readonly livePage = input<CdPage | null>(null, { alias: 'page' });
   readonly pageId = input<string | null>(null);
   readonly rpc = input<DevframeRpcClient | null>(null);
+  /** An app on a device: the live views draw on a DOM page, so they are left out. */
+  readonly native = input(false);
   private readonly angularPages = injectAngularPages(() => this.rpc());
   /** This page's Angular version, for the unavailable notes. */
   readonly angularPage = computed(() => angularPageFor(this.angularPages(), this.pageId()));

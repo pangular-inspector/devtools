@@ -100,17 +100,26 @@ describe('browser-only controls', () => {
   });
 
   it.each(['angular-native', 'nativescript'])(
-    'hides them for a %s page and keeps the tree',
+    'hides the picker and the live views for a %s page, and keeps recording and the tree',
     async (platform) => {
       const fixture = await render(platform);
       const host = fixture.nativeElement as HTMLElement;
       expect(buttons(fixture)).not.toContain('Pick component on page');
-      expect(buttons(fixture)).not.toContain('Record');
-      expect(host.querySelector('#cd-heading')).toBeNull();
+      expect(buttons(fixture)).toContain('Record');
+      expect(host.querySelector('#cd-heading')).not.toBeNull();
+      expect(buttons(fixture)).not.toContain('Flash checks');
+      expect(buttons(fixture)).not.toContain('Performance track');
+      expect(host.textContent).toContain('An app on a device has no DOM');
       expect(host.textContent).toContain('App');
       expect(host.querySelector('input[type="search"]')).not.toBeNull();
     },
   );
+
+  it('shows the live views for a browser page', async () => {
+    const fixture = await render();
+    expect(buttons(fixture)).toContain('Flash checks');
+    expect(buttons(fixture)).toContain('Performance track');
+  });
 
   it('cancels a pick on its own page when the dropdown shows another page', async () => {
     const { client, calls } = liveClient({ p1: page('p1'), p2: page('p2') });

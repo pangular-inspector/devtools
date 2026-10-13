@@ -113,7 +113,15 @@ describe('Angular Native view', () => {
 
     report({ web1: browser, an42: native });
     await settle(fixture);
-    expect(tabNames(fixture)).toEqual(['Components', 'Signals', 'Injectors', 'Store', 'Pipes']);
+    expect(tabNames(fixture)).toEqual([
+      'Components',
+      'Signals',
+      'Injectors',
+      'Store',
+      'Queries',
+      'Pipes',
+      'Errors',
+    ]);
     expect(host(fixture).querySelector('nav button.active')?.textContent).toContain('Components');
     expect(host(fixture).textContent).not.toContain('No Angular Native app is connected');
     expect(hostPageId()).toBe('an42');

@@ -803,11 +803,12 @@ function storedDirectiveHosts(): boolean {
         (showOwner)="showForOwner($event)"
         (highlight)="highlight($event)"
       />
-      @if (!staticReport() && !native()) {
+      @if (!staticReport()) {
         <app-cd-recording
           [page]="cdPage()"
           [pageId]="page()!.pageId"
           [rpc]="rpc()"
+          [native]="native()"
           (showComponent)="showCdComponent($event)"
         />
         <app-leaks-section

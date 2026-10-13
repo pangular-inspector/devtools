@@ -107,7 +107,7 @@ const TAB_VIEW: Partial<Record<Tab, View>> = {
   capacitor: 'capacitor',
 };
 const VIEW_TABS: Partial<Record<View, Tab[]>> = {
-  'angular-native': ['components', 'signals', 'injectors', 'store', 'pipes'],
+  'angular-native': ['components', 'signals', 'injectors', 'store', 'queries', 'pipes', 'errors'],
 };
 
 const NATIVESCRIPT_SETUP: ComingSoonInfo = {
