@@ -16,7 +16,11 @@ import { elementById } from './element-id.ts';
 import { setRedaction } from './forms-privacy.ts';
 import { hostBySelector } from './host-tree.ts';
 import { collectInjectorTree } from './injector-tree.ts';
-import { attachNativeDiagnostics } from './native-diagnostics.ts';
+import {
+  applicationErrorsTarget,
+  attachNativeDiagnostics,
+  nativeDebugApi,
+} from './native-diagnostics.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
 import { installReduxDevtoolsHook, uninstallReduxDevtoolsHook } from './redux-devtools-hook.ts';
 import { HIGHLIGHT_SAFETY_MS } from './page-highlight.ts';
@@ -211,6 +215,7 @@ async function startSession(
     config,
     tickMs: () => tickMs,
     describe: () => ({ url: '/', title }),
+    errorTarget: applicationErrorsTarget(Application),
   });
 
   const pingKnows = async (name: string) => {
@@ -446,26 +451,7 @@ async function startSession(
 }
 
 function angularDebugApi(): DebugNg | undefined {
-  const ng = (globalThis as { ng?: DebugNg }).ng;
-  if (typeof ng?.getComponent !== 'function') return undefined;
-  const getDirectives = ng.getDirectives;
-  if (!getDirectives) return ng;
-  return { ...ng, getDirectives: (host) => withTextGlobal(() => getDirectives(host)) };
-}
-
-/**
- * Angular's `getDirectives()` starts with `node instanceof Text`, a DOM global
- * a NativeScript runtime lacks, so a stand-in exists for the length of the call.
- */
-function withTextGlobal<T>(fn: () => T): T {
-  const g = globalThis as Record<string, unknown>;
-  if ('Text' in g) return fn();
-  g['Text'] = class Text {};
-  try {
-    return fn();
-  } finally {
-    delete g['Text'];
-  }
+  return nativeDebugApi<DebugNg>();
 }
 
 let flashed: {

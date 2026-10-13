@@ -19,8 +19,51 @@ import { attachPlugins } from './plugins-collector.ts';
 import { registerProviderValues, type ProviderDebugNg } from './provider-values.ts';
 import { attachTanstackQuery, type QueryDebugNg } from './query-collector.ts';
 import { attachReduxStores } from './redux-stores-collector.ts';
+import { findRouter, type RouterDebugApi } from './router.ts';
 import type { SignalChange } from './types.ts';
 import { attachStartup } from './startup-timing.ts';
+
+const debugApis = new WeakMap<object, object>();
+
+/**
+ * The `ng` global for a platform without a DOM, as one object per real
+ * `ng`: collectors and the profiler hub key their state by it, so a fresh
+ * wrapper on every call would register Angular's profiler again each time.
+ * The wrapper inherits every util from the real `ng`, including ones Angular
+ * or the router publish later, and only wraps `getDirectives`, which starts
+ * with `node instanceof Text`, a DOM global these runtimes lack.
+ */
+export function nativeDebugApi<T extends object>(): T | undefined {
+  const ng = (globalThis as { ng?: Record<string, unknown> }).ng;
+  if (!ng || typeof ng['getComponent'] !== 'function') return undefined;
+  const known = debugApis.get(ng);
+  if (known) return known as T;
+  const wrapper = Object.create(ng, {
+    getDirectives: {
+      configurable: true,
+      enumerable: true,
+      value: (host: unknown) => {
+        const getDirectives = ng['getDirectives'];
+        if (typeof getDirectives !== 'function') return [];
+        return withTextGlobal(() => (getDirectives as (host: unknown) => unknown[])(host));
+      },
+    },
+  }) as T;
+  debugApis.set(ng, wrapper);
+  return wrapper;
+}
+
+/** A stand-in `Text` global for the length of a call, when the runtime has none. */
+function withTextGlobal<T>(fn: () => T): T {
+  const g = globalThis as Record<string, unknown>;
+  if ('Text' in g) return fn();
+  g['Text'] = class Text {};
+  try {
+    return fn();
+  } finally {
+    delete g['Text'];
+  }
+}
 
 /** A leak scan walks the app at least this often while its component tree stays the same. */
 export const NATIVE_SCAN_HEARTBEAT_MS = 30_000;
@@ -133,6 +176,82 @@ export function createTreeDirty(
   };
 }
 
+/** How long a page without a Router found waits before it looks for one again. */
+const ROUTER_RETRY_MS = 5000;
+/** Angular's `EventType.NavigationEnd`, checked in `@angular/router/fesm2022/_router-chunk.mjs`. */
+const NAVIGATION_END = 1;
+
+type EventsTarget = Pick<Window, 'addEventListener' | 'removeEventListener'>;
+
+/**
+ * The app's Angular Router, for the leak hints: its `url` names the route a
+ * component lived on, and each `NavigationEnd` counts a navigation, which a
+ * page on a device has no `location` or `popstate` for. The Router is looked
+ * up through the root injectors, as the browser overlay's router inspector
+ * does, and its events are listened to only until `stop()`.
+ */
+export function createRouterWatch(
+  getNg: () => object | undefined,
+  roots: () => object[],
+  now: () => number = Date.now,
+) {
+  let router: Record<string, unknown> | null = null;
+  let subscription: { unsubscribe?: () => void } | null = null;
+  let triedAt = -Infinity;
+  let stopped = false;
+  const listeners = new Set<() => void>();
+  const find = () => {
+    if (router || stopped || now() - triedAt < ROUTER_RETRY_MS) return router;
+    triedAt = now();
+    const ng = getNg();
+    if (!ng) return null;
+    router = read(() => findRouter(ng as RouterDebugApi, roots() as Element[]), null);
+    const events = router ? read(() => router!['events'], null) : null;
+    if (events && typeof (events as { subscribe?: unknown }).subscribe === 'function') {
+      subscription = read(
+        () =>
+          (
+            events as { subscribe(fn: (event: unknown) => void): { unsubscribe?: () => void } }
+          ).subscribe((event) => {
+            if (read(() => (event as { type?: unknown })?.type, undefined) !== NAVIGATION_END) {
+              return;
+            }
+            for (const listener of [...listeners]) read(listener, undefined);
+          }),
+        null,
+      );
+    }
+    return router;
+  };
+  const target = {
+    addEventListener(type: string, listener: unknown) {
+      if (type === 'popstate' && typeof listener === 'function') {
+        listeners.add(listener as () => void);
+      }
+    },
+    removeEventListener(_type: string, listener: unknown) {
+      listeners.delete(listener as () => void);
+    },
+  } as unknown as EventsTarget;
+  return {
+    /** The Router's URL, or `/` while the app has none. */
+    route(): string {
+      const found = find();
+      const url = found ? read(() => found['url'], undefined) : undefined;
+      return typeof url === 'string' && url ? url : '/';
+    },
+    /** Navigation events for the leaks collector: `popstate` stands for each `NavigationEnd`. */
+    target,
+    stop() {
+      stopped = true;
+      read(() => subscription?.unsubscribe?.(), undefined);
+      subscription = null;
+      router = null;
+      listeners.clear();
+    },
+  };
+}
+
 interface ErrorUtilsLike {
   getGlobalHandler?: () => ((error: unknown, isFatal?: boolean) => void) | undefined;
   setGlobalHandler?: (handler: (error: unknown, isFatal?: boolean) => void) => void;
@@ -172,8 +291,10 @@ export function errorUtilsTarget(
     read(() => utils.setGlobalHandler!(installed!), undefined);
   };
   const uninstall = () => {
-    if (installed && read(() => utils.getGlobalHandler!(), undefined) === installed && previous) {
-      read(() => utils.setGlobalHandler!(previous!), undefined);
+    // Only while ours is the active handler, so a handler set after ours stays.
+    if (installed && read(() => utils.getGlobalHandler!(), undefined) === installed) {
+      const restore = previous ?? (() => {});
+      read(() => utils.setGlobalHandler!(restore), undefined);
     }
     installed = null;
     previous = undefined;
@@ -192,6 +313,43 @@ export function errorUtilsTarget(
   } as Pick<Window, 'addEventListener' | 'removeEventListener'>;
 }
 
+interface ApplicationEventsLike {
+  on?: (event: string, callback: (args: unknown) => void) => void;
+  off?: (event: string, callback: (args: unknown) => void) => void;
+}
+
+/** NativeScript's error events: thrown and not caught, and dropped while one was handled. */
+const NATIVESCRIPT_ERROR_EVENTS = ['uncaughtError', 'discardedError'] as const;
+
+/**
+ * NativeScript's `Application` error events as the `error` events of an
+ * event target, for the errors collector. `uncaughtError` and
+ * `discardedError` carry the error in `args.error`. Undefined when
+ * `Application` has no `on` and `off`.
+ */
+export function applicationErrorsTarget(app: ApplicationEventsLike | undefined) {
+  if (typeof app?.on !== 'function' || typeof app.off !== 'function') return undefined;
+  const callbacks = new Map<unknown, (args: unknown) => void>();
+  return {
+    addEventListener(type: string, listener: unknown) {
+      if (type !== 'error' || typeof listener !== 'function' || callbacks.has(listener)) return;
+      const callback = (args: unknown) => {
+        const error = read(() => (args as { error?: unknown })?.error, undefined);
+        const message = read(() => String((error as { message?: unknown })?.message ?? ''), '');
+        (listener as (event: Event) => void)({ error, message } as unknown as Event);
+      };
+      callbacks.set(listener, callback);
+      for (const name of NATIVESCRIPT_ERROR_EVENTS) read(() => app.on!(name, callback), undefined);
+    },
+    removeEventListener(type: string, listener: unknown) {
+      const callback = callbacks.get(listener);
+      if (type !== 'error' || !callback) return;
+      callbacks.delete(listener);
+      for (const name of NATIVESCRIPT_ERROR_EVENTS) read(() => app.off!(name, callback), undefined);
+    },
+  } as unknown as EventsTarget;
+}
+
 /**
  * Starts the diagnosis collectors the config turns on for one native page.
  * Each one pushes with `pageId`, skips unchanged reports and sends a
@@ -208,7 +366,7 @@ export function attachNativeDiagnostics<H extends object>(
   const version = () => hostAngularVersion(read(() => tree.roots()[0], undefined));
   const profilerGate = (): ProfilerGate => {
     const major = Number.parseInt(version() ?? '', 10);
-    return { major: Number.isFinite(major) ? major : 0, alone: true };
+    return { major: Number.isFinite(major) ? major : 0 };
   };
   const hostId = (host: unknown) =>
     host && read(() => tree.isHost(host), false) ? elementId(host as object) : null;
@@ -222,17 +380,18 @@ export function attachNativeDiagnostics<H extends object>(
         hostId,
       })
     : null;
-  const leaks = on.components
+  const routerWatch = on.components ? createRouterWatch(getNg, () => tree.roots()) : null;
+  const leaks = routerWatch
     ? attachLeaks(my, pageId, getNg as () => LeaksDebugNg<H> | undefined, {
         tickMs,
         tree: () => tree,
-        route: () => describe().url,
+        route: routerWatch.route,
         title: () => describe().title,
         angularMajor: () => profilerGate().major,
         addProfiler: (listener) => addProfilerListener(getNg(), listener, profilerGate()),
         // Kept in memory: an app on a device has no session storage and no reload.
         storage: null,
-        target: null,
+        target: routerWatch.target,
         dirty,
         // Angular reads only DOM nodes as unknown hosts, so detached views can't be told apart.
         probe: null,
@@ -318,6 +477,7 @@ export function attachNativeDiagnostics<H extends object>(
     stop() {
       cd?.stop();
       leaks?.stop();
+      routerWatch?.stop();
       errors?.stop();
       startup?.stop();
       queries?.stop();

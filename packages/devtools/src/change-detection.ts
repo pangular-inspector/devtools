@@ -66,15 +66,13 @@ interface ProfilerHub {
 const hubs = new WeakMap<object, ProfilerHub>();
 
 /**
- * How a platform without a DOM says whether the profiler slot can be shared.
- * `major` is the Angular major it read, 0 when unknown. `alone`: no other
- * profiler can hold the slot (an app on a device has no Angular DevTools
- * extension), so with an unknown version the slot is tried, and given back
- * at once when Angular returns no remover (before 20.0).
+ * The Angular major a platform without a DOM read another way, 0 when
+ * unknown. As in the browser, an unknown version leaves the profiler alone:
+ * before 20.0 taking the one slot would evict whatever profiler holds it,
+ * with no way to give it back.
  */
 export interface ProfilerGate {
   major: number;
-  alone?: boolean;
 }
 
 /**
@@ -92,8 +90,7 @@ export function addProfilerListener(
   const setProfiler = (ng as ProfilerApi | undefined)?.ɵsetProfiler;
   if (!ng || typeof setProfiler !== 'function') return null;
   const gate: ProfilerGate = 'major' in where ? where : { major: angularMajor(where) };
-  const tryUnknown = gate.alone === true && gate.major === 0;
-  if (gate.major < 20 && !tryUnknown) return null;
+  if (gate.major < 20) return null;
   let hub = hubs.get(ng as object);
   if (!hub) {
     const listeners = new Set<Profiler>();
@@ -112,18 +109,7 @@ export function addProfilerListener(
     } catch {
       return null;
     }
-    if (typeof remove !== 'function') {
-      // An Angular before 20 took the profiler into its one slot. Only a
-      // caller that is alone gets here, so clearing the slot evicts nobody.
-      if (tryUnknown) {
-        try {
-          setProfiler(null);
-        } catch {
-          // The slot keeps a dispatcher with no listeners, which does nothing.
-        }
-      }
-      return null;
-    }
+    if (typeof remove !== 'function') return null;
     hub = { listeners, remove: remove as () => void };
     hubs.set(ng as object, hub);
   }

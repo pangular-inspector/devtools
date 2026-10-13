@@ -6,10 +6,13 @@ import { resolvePangularConfig } from '../config.ts';
 import { elementId } from '../element-id.ts';
 import {
   NATIVE_STARTUP_NOTE,
+  applicationErrorsTarget,
   attachNativeDiagnostics,
+  createRouterWatch,
   createTreeDirty,
   errorUtilsTarget,
   hostAngularVersion,
+  nativeDebugApi,
 } from '../native-diagnostics.ts';
 import { angularNativeTree, type AngularNativeNode } from '../overlay-angular-native-views.ts';
 import { registerPangularPlugin } from '../plugin.ts';
@@ -188,22 +191,77 @@ describe('hostAngularVersion', () => {
   });
 });
 
-describe('the profiler gate without a DOM', () => {
-  it('tries the slot on an app of unknown version and gives it back without a remover', () => {
-    const setProfiler = vi.fn(() => undefined);
-    const ng = { ɵsetProfiler: setProfiler };
-    expect(addProfilerListener(ng, () => {}, { major: 0, alone: true })).toBeNull();
-    expect(setProfiler).toHaveBeenCalledTimes(2);
-    expect(setProfiler).toHaveBeenLastCalledWith(null);
+describe('nativeDebugApi', () => {
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>)['ng'];
   });
 
-  it('leaves the slot alone when it may be shared or Angular is older than 20', () => {
+  it('gives one wrapper per ng, so the profiler is registered once', () => {
+    const setProfiler = vi.fn(() => () => {});
+    const ng: Record<string, unknown> = {
+      getComponent: () => null,
+      getDirectives: () => [new (globalThis as unknown as { Text: new () => object }).Text()],
+      ɵsetProfiler: setProfiler,
+    };
+    (globalThis as Record<string, unknown>)['ng'] = ng;
+    const first = nativeDebugApi<Record<string, unknown>>();
+    expect(nativeDebugApi()).toBe(first);
+    const removeA = addProfilerListener(nativeDebugApi(), () => {}, { major: 22 });
+    const removeB = addProfilerListener(nativeDebugApi(), () => {}, { major: 22 });
+    expect(setProfiler).toHaveBeenCalledTimes(1);
+    removeA?.();
+    removeB?.();
+    // Utils Angular or the router publish later are read through it too.
+    ng['ɵgetRouterInstance'] = () => 'router';
+    expect((first!['ɵgetRouterInstance'] as () => string)()).toBe('router');
+    // `getDirectives` runs with a stand-in `Text`, removed again after the call.
+    expect((first!['getDirectives'] as (host: unknown) => unknown[])({})).toHaveLength(1);
+    expect('Text' in globalThis).toBe(false);
+    (globalThis as Record<string, unknown>)['ng'] = { ...ng };
+    expect(nativeDebugApi()).not.toBe(first);
+  });
+});
+
+describe('the profiler gate without a DOM', () => {
+  it('uses the profiler from Angular 20 on, with the version the root host gave', () => {
+    const setProfiler = vi.fn(() => () => {});
+    expect(
+      addProfilerListener({ ɵsetProfiler: setProfiler }, () => {}, { major: 22 }),
+    ).not.toBeNull();
+    expect(setProfiler).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the slot alone when the version is unknown or older than 20', () => {
     const setProfiler = vi.fn(() => () => {});
     expect(addProfilerListener({ ɵsetProfiler: setProfiler }, () => {}, { major: 0 })).toBeNull();
-    expect(
-      addProfilerListener({ ɵsetProfiler: setProfiler }, () => {}, { major: 19, alone: true }),
-    ).toBeNull();
+    expect(addProfilerListener({ ɵsetProfiler: setProfiler }, () => {}, { major: 19 })).toBeNull();
     expect(setProfiler).not.toHaveBeenCalled();
+  });
+
+  it('reports recording unsupported on an app whose root host has no version', async () => {
+    const f = fixture();
+    delete f.root.props['ng-version'];
+    const { diagnostics, handlers, sent } = attach(f);
+    handlers.get('change-detection-record')!({ pageId: 'n1', on: true });
+    await diagnostics.collectors[0]!();
+    expect(f.ng.ɵsetProfiler).not.toHaveBeenCalled();
+    expect(sent('push-change-detection').at(-1)).toMatchObject({ supported: false });
+    await pushAll(diagnostics);
+    // The page's capabilities say the same, so the panel names why recording is off.
+    expect(sent('report-page-angular').at(-1)).toMatchObject({
+      capabilities: { profiler: false },
+    });
+    expect(sent('report-page-angular').at(-1)).not.toHaveProperty('version');
+  });
+
+  it('reports the profiler capability the recording uses when the version is known', async () => {
+    const f = fixture();
+    const { diagnostics, sent } = attach(f);
+    await pushAll(diagnostics);
+    expect(sent('report-page-angular').at(-1)).toMatchObject({
+      version: '22.1.0',
+      capabilities: { profiler: true },
+    });
   });
 });
 
@@ -227,6 +285,15 @@ describe('native diagnostics', () => {
     expect(report['hosts']).toEqual({ [elementId(f.first)]: 1 });
     expect(report['options']).toBeUndefined();
     expect(report['diagnosis']).toMatchObject({ triggers: true, waste: false, major: 22 });
+  });
+
+  it('sends nothing when asked for live views it does not have', async () => {
+    const f = fixture();
+    const { handlers, sent } = attach(f);
+    handlers.get('change-detection-options')!({ flash: true });
+    handlers.get('change-detection-options')!({ pageId: 'n1', track: true });
+    await Promise.resolve();
+    expect(sent('push-change-detection')).toEqual([]);
   });
 
   it('ignores change detection requests for another page', () => {
@@ -434,6 +501,70 @@ describe('stores, queries and plugins on a native page', () => {
   });
 });
 
+/** A Router as `ng.ɵgetRouterInstance` returns it, with a hand-driven `events` stream. */
+function fakeRouter(url: string) {
+  const subscribers = new Set<(event: unknown) => void>();
+  const router = {
+    url,
+    routerState: {},
+    navigateByUrl: () => Promise.resolve(true),
+    events: {
+      subscribe(fn: (event: unknown) => void) {
+        subscribers.add(fn);
+        return { unsubscribe: () => subscribers.delete(fn) };
+      },
+    },
+    /** Moves to `next` and emits the events Angular would, NavigationEnd last. */
+    navigate(next: string) {
+      for (const fn of [...subscribers]) fn({ type: 0, url: next });
+      router.url = next;
+      for (const fn of [...subscribers]) fn({ type: 1, url: next });
+    },
+    subscribers,
+  };
+  return router;
+}
+
+describe('navigations on a device', () => {
+  it('names routes from the Router and counts each NavigationEnd', async () => {
+    const f = fixture();
+    const router = fakeRouter('/trips');
+    Object.assign(f.ng, { ɵgetRouterInstance: () => router });
+    const { diagnostics, sent } = attach(f);
+    await pushAll(diagnostics);
+    expect(sent('push-leaks').at(-1)).toMatchObject({ url: '/trips', navigations: 0 });
+
+    // Two navigations between pushes still count twice.
+    router.navigate('/trips/7');
+    router.navigate('/trips');
+    await pushAll(diagnostics);
+    expect(sent('push-leaks').at(-1)).toMatchObject({ url: '/trips', navigations: 2 });
+
+    diagnostics.stop();
+    expect(router.subscribers.size).toBe(0);
+  });
+
+  it('reports / while the app has no Router, and looks again later', () => {
+    let now = 0;
+    let router: ReturnType<typeof fakeRouter> | null = null;
+    const ng = {
+      getInjector: () => ({}),
+      ɵgetRouterInstance: () => router,
+    };
+    const watch = createRouterWatch(
+      () => ng,
+      () => [{}],
+      () => now,
+    );
+    expect(watch.route()).toBe('/');
+    router = fakeRouter('/home');
+    expect(watch.route()).toBe('/');
+    now = 6000;
+    expect(watch.route()).toBe('/home');
+    watch.stop();
+  });
+});
+
 describe('createTreeDirty', () => {
   it('reads again when bumped, forced or past the heartbeat', () => {
     let now = 0;
@@ -449,6 +580,33 @@ describe('createTreeDirty', () => {
     now = 1500;
     cached();
     expect(read).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('applicationErrorsTarget', () => {
+  it("hears NativeScript's uncaught and discarded errors, and stops on removal", () => {
+    const handlers = new Map<string, Set<(args: unknown) => void>>();
+    const app = {
+      on: (event: string, fn: (args: unknown) => void) =>
+        void (handlers.get(event) ?? handlers.set(event, new Set()).get(event)!).add(fn),
+      off: (event: string, fn: (args: unknown) => void) => void handlers.get(event)?.delete(fn),
+    };
+    const target = applicationErrorsTarget(app)!;
+    const heard: unknown[] = [];
+    const listener = (event: Event) => heard.push((event as ErrorEvent).error);
+    target.addEventListener('error', listener);
+    const crash = new Error('crash');
+    const dropped = new Error('dropped');
+    for (const fn of handlers.get('uncaughtError')!) fn({ error: crash });
+    for (const fn of handlers.get('discardedError')!) fn({ error: dropped });
+    expect(heard).toEqual([crash, dropped]);
+    target.removeEventListener('error', listener);
+    expect(handlers.get('uncaughtError')!.size + handlers.get('discardedError')!.size).toBe(0);
+  });
+
+  it('is undefined without Application events', () => {
+    expect(applicationErrorsTarget(undefined)).toBeUndefined();
+    expect(applicationErrorsTarget({})).toBeUndefined();
   });
 });
 
@@ -472,6 +630,45 @@ describe('errorUtilsTarget', () => {
     expect(appHandler).toHaveBeenCalledWith(boom, true);
     target.removeEventListener('error', listener);
     expect(current).toBe(appHandler);
+  });
+
+  it('takes its wrapper off when there was no handler before, so sessions never stack', () => {
+    let current: ((error: unknown, isFatal?: boolean) => void) | undefined;
+    const utils = {
+      getGlobalHandler: () => current,
+      setGlobalHandler: (next: (error: unknown, isFatal?: boolean) => void) => {
+        current = next;
+      },
+    };
+    const wrappers: unknown[] = [];
+    for (let session = 0; session < 2; session++) {
+      const target = errorUtilsTarget(utils)!;
+      const listener = () => {};
+      target.addEventListener('error', listener);
+      wrappers.push(current);
+      target.removeEventListener('error', listener);
+      expect(wrappers).not.toContain(current);
+    }
+    // The second session wrapped no leftover wrapper of the first.
+    expect(wrappers[1]).not.toBe(wrappers[0]);
+    expect(() => current!(new Error('after'), false)).not.toThrow();
+  });
+
+  it('leaves a handler the app set after its own in place', () => {
+    let current: ((error: unknown, isFatal?: boolean) => void) | undefined;
+    const utils = {
+      getGlobalHandler: () => current,
+      setGlobalHandler: (next: (error: unknown, isFatal?: boolean) => void) => {
+        current = next;
+      },
+    };
+    const target = errorUtilsTarget(utils)!;
+    const listener = () => {};
+    target.addEventListener('error', listener);
+    const later = vi.fn();
+    current = later;
+    target.removeEventListener('error', listener);
+    expect(current).toBe(later);
   });
 
   it('is undefined without ErrorUtils', () => {
