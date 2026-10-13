@@ -480,6 +480,7 @@ function readView(): View | null {
           (passiveChange)="setPassive($event)"
           [hotkey]="popupHotkey()"
           [paletteShortcut]="paletteShortcut"
+          [rpc]="rpc()"
         />
       } @else if (connectionFailed()) {
         <div class="connection-error" role="alert">

@@ -386,6 +386,10 @@ try {
       await check(page, `${colorScheme} ${label}`);
     }
 
+    await page.locator('header button[aria-label="Settings"]').click();
+    await page.locator('#settings-browser-agents').waitFor();
+    await check(page, `${colorScheme} Settings`);
+
     for (const view of VIEWS) {
       await page.goto(`${base}?view=${view}`);
       await page.locator('.status.connected').waitFor();
