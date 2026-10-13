@@ -172,7 +172,7 @@ The output is static files. Open it offline or host it on any static file server
 
 ### Start it over stdio
 
-`mcp` starts an \*MCP server over stdio for coding agents:
+`mcp` starts an *MCP server over stdio for coding agents:
 
 ```bash
 npx @pangular-inspector/devtools mcp

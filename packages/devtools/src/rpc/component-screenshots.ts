@@ -138,7 +138,7 @@ export function createComponentScreenshots(deps: Deps) {
   const tool = {
     id: 'pangular:screenshot-component',
     description:
-      'An image (PNG, or JPEG when large) of one component\'s host element as rendered now, as an MCP image block. Pass `selector`: an instance id, class name, host tag or CSS selector; without `page` it searches every page, newest first. The page draws a copy from computed styles, so it works off screen and never changes the app; it is not a pixel copy. Password and secret-looking fields, `data-private`, `.sentry-mask`, `.rr-mask` and `data-pangular="mask"` elements, and tokens in text are masked. Cross-origin images without CORS, iframes and web fonts are not drawn. At most 2000 px.',
+      'An image (PNG, or JPEG when large) of one component\'s host element as rendered now. Pass `selector`: an instance id, class name, host tag or CSS selector. Without `page`, ids, class names and tags are searched on every page, newest first; a CSS selector uses the newest page. The page draws a copy from computed styles, so it works off screen and never changes the app. Password and secret fields, `data-private`, `.sentry-mask`, `.rr-mask` and `data-pangular="mask"` elements, and tokens in text are masked. Cross-origin images without CORS, iframes and web fonts are not drawn. At most 2000 px.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -150,7 +150,7 @@ export function createComponentScreenshots(deps: Deps) {
         page: {
           type: 'string',
           description:
-            'Page id, when more than one tab reports (see pangular:list-pages). Searches every page without it, newest first.',
+            'Page id, when more than one tab reports (see pangular:list-pages). Without it, ids, class names and tags are searched on every page, newest first; a CSS selector uses the newest page.',
         },
         pageId: { type: 'string', description: 'Same as `page`.' },
       },

@@ -289,11 +289,11 @@ While on, the overlay wraps `Observable.prototype.subscribe` and records which c
 
 An image of one component's host element as the page renders it now. The answer is an MCP image content block (PNG, or JPEG when the PNG is large) with a short note: the size in CSS pixels, what was masked and what could not be drawn. Reads: page.
 
-| Argument   | Required | Value                                                                                                         |
-| ---------- | -------- | ------------------------------------------------------------------------------------------------------------- |
-| `selector` | yes      | An instance id from the `component-tree` resource (like `c12`), a class name, a host tag or any CSS selector. |
-| `page`     | no       | The page id, from `list-pages`. Without it, every page is searched, newest first.                             |
-| `pageId`   | no       | Same as `page`.                                                                                               |
+| Argument   | Required | Value                                                                                                                                                         |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `selector` | yes      | An instance id from the `component-tree` resource (like `c12`), a class name, a host tag or any CSS selector.                                                 |
+| `page`     | no       | The page id, from `list-pages`. Without it, ids, class names and tags are searched on every page, newest first, and a CSS selector uses the most recent page. |
+| `pageId`   | no       | Same as `page`.                                                                                                                                               |
 
 The page draws a copy of the element, not the screen: it copies the element's DOM with every computed style written inline into an SVG, and draws that on a canvas that is never added to the page. Nothing in the app changes, no app code runs, and a component scrolled out of view or behind a dialog is drawn all the same. A class name or tag that matches several instances captures the first and lists the ids of all of them. A CSS selector captures the first element it matches on the most recent page, or on `page`.
 
@@ -812,7 +812,7 @@ The axe pass loads axe-core into the page on demand and changes nothing in the a
 
 ## Analog
 
-These tools cover \*Analog apps. Most read your source. Some also read what the Vite plugin recorded.
+These tools cover *Analog apps. Most read your source. Some also read what the Vite plugin recorded.
 
 ### Routes and files
 

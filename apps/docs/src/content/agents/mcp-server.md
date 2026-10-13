@@ -9,7 +9,7 @@ description: Connect a coding agent to the devtools over stdio or HTTP, in Claud
 
 # MCP server
 
-The devtools expose their inspectors to coding agents as \*MCP tools and resources. An agent can list your routes, read the live component tree, explain why a form is invalid, or navigate the app.
+The devtools expose their inspectors to coding agents as *MCP tools and resources. An agent can list your routes, read the live component tree, explain why a form is invalid, or navigate the app.
 
 There are two ways to connect. Pick one based on the data your agent needs.
 

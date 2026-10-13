@@ -9,7 +9,7 @@ description: Mount the devtools hub and trace SSR renders in an Angular SSR serv
 
 # Hono, h3 and Fastify
 
-\*Angular SSR runs on Hono and h3 through [`createRequestHandler`](https://angular.dev/api/ssr/createRequestHandler), and on Fastify through [`createNodeRequestHandler`](https://angular.dev/api/ssr/node/createNodeRequestHandler). The devtools hub mounts in each of them. The browser part is the same as for Express: load the overlay as shown in [Angular CLI and Express](./express.md#load-the-overlay).
+*Angular SSR runs on Hono and h3 through [`createRequestHandler`](https://angular.dev/api/ssr/createRequestHandler), and on Fastify through [`createNodeRequestHandler`](https://angular.dev/api/ssr/node/createNodeRequestHandler). The devtools hub mounts in each of them. The browser part is the same as for Express: load the overlay as shown in [Angular CLI and Express](./express.md#load-the-overlay).
 
 ## Two ways to mount the hub
 
