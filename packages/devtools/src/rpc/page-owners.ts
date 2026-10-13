@@ -31,6 +31,11 @@ export interface PageOwners {
   forget(pageId: string): boolean;
   /** Whether `pageId` reported or pinged within its expiry on a connection that is still open. */
   alive(pageId: string, now?: number): boolean;
+  /**
+   * The pages that are alive, with when their owner was last seen: every
+   * page the overlay claimed, whichever inspectors are on.
+   */
+  live(now?: number): { pageId: string; reportedAt: number }[];
   /** Drops owners that have been quiet for long, so the map does not grow. */
   expire(now?: number): void;
 }
@@ -98,6 +103,11 @@ export function createPageOwners(host: unknown, ttl: PageTtl): PageOwners {
     alive(pageId, now = Date.now()) {
       const owner = owners.get(pageId);
       return !!owner && !gone(pageId, owner, now);
+    },
+    live(now = Date.now()) {
+      return [...owners]
+        .filter(([pageId, owner]) => !gone(pageId, owner, now))
+        .map(([pageId, owner]) => ({ pageId, reportedAt: owner.seenAt }));
     },
     expire(now = Date.now()) {
       for (const [pageId, owner] of owners) {

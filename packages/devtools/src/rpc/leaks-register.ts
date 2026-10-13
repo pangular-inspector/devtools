@@ -38,6 +38,8 @@ export interface LeaksRegistration {
   pages(): { pageId: string; reportedAt: number; url?: string; title?: string }[];
   /** Drops pages that stopped reporting; call it from the shared expiry interval. */
   expire(now?: number): void;
+  /** What every page reported, for the audit. */
+  state(): LeaksState;
 }
 
 /**
@@ -181,6 +183,7 @@ export async function registerLeaks(host: LeaksHost): Promise<LeaksRegistration>
         url: page.url,
         title: page.title,
       })),
+    state,
     expire: (now = Date.now()) => drop(staleLeakPages(state(), now, host.ttl)),
   };
 }

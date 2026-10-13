@@ -5,6 +5,7 @@ import type { LinkInfo, OutletInfo } from '../router-links.ts';
 import type { PreloadRecord } from '../router-actions.ts';
 import { fixedTtl, type PageTtl } from './page-ttl.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
+import { callerPage } from './page-scope.ts';
 import { unknownPageText } from './pages.ts';
 import { droppedNote } from '../timeline-limits.ts';
 import { RESOURCE_UNTRUSTED, withUntrustedNotice } from './resource-text.ts';
@@ -424,7 +425,8 @@ export function pickPage(state: RouterState, pageId?: string): RouterPage | unde
 
 export function otherPages(state: RouterState, page: RouterPage): string {
   const others = state.pages.filter((p) => p !== page);
-  if (!others.length) return '';
+  // A page tool answers for its own page only, so it names no other tab.
+  if (!others.length || callerPage() !== undefined) return '';
   const list = others.map((p) => `${code(p.pageId)} (${code(p.snapshot?.url ?? '?')})`).join(', ');
   return `\n\n${others.length} other page(s) report too: ${list}. Pass \`page\` to see one.`;
 }

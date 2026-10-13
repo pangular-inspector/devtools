@@ -27,6 +27,10 @@ import { Component, input } from '@angular/core';
           <circle cx="14" cy="12" r="2" />
           <path d="M18 7v10" />
         }
+        @case ('audit') {
+          <path d="M9 11l2 2 4-4" />
+          <path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6l-8-3Z" />
+        }
         @case ('components') {
           <path d="M12 2 3 7l9 5 9-5-9-5Z" />
           <path d="m3 12 9 5 9-5" />

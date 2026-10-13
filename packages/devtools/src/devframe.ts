@@ -29,11 +29,13 @@ import { registerLeaks } from './rpc/leaks-register.ts';
 import { registerPlugins } from './rpc/plugins-register.ts';
 import { registerStartup } from './rpc/startup-register.ts';
 import type { PangularServerPlugin } from './plugin.ts';
+import { registerAudit } from './rpc/audit-register.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { registerInjectionExplain } from './rpc/injection-explain.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
+import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
 import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
 import { createPageOwners } from './rpc/page-owners.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
@@ -181,7 +183,9 @@ import { sanitizeHydration, sanitizePayload, type PayloadSummary } from './http-
 import { redactCall } from './http-redact.ts';
 import { redactMessage, redactUrl } from './router.ts';
 import { isSsrRequestId, ssrRegistry } from './ssr-registry.ts';
-import { sanitizeSsrOverrides } from './ssr-overrides.ts';
+import { sanitizeSsrOverrides, type SsrOverride } from './ssr-overrides.ts';
+import { ssrOverrideTools } from './rpc/ssr-override-tools.ts';
+import { createComponentScreenshots } from './rpc/component-screenshots.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import { listHttpCallsText } from './rpc/http-tools.ts';
 import {
@@ -268,6 +272,7 @@ export {
 } from './plugin.ts';
 
 import { registerAuthTokens } from './auth-tokens.ts';
+import { registerBrowserTools, type BrowserToolHost } from './rpc/browser-tools.ts';
 import pkg from '../package.json' with { type: 'json' };
 import { INTEREST_TICK_MS, createPageInterest, leased } from './rpc/page-interest.ts';
 import { createReportDeltas, deltaPush } from './rpc/report-deltas.ts';
@@ -416,6 +421,13 @@ const pangular = defineDevframe({
       return true;
     };
 
+    // The `read` agent tools, for the page to register with browser agents.
+    registerBrowserTools(register, ctx as unknown as BrowserToolHost, {
+      enabled: config.agent.browserTools,
+      owns,
+    });
+
+    let onPageClaimed = (_pageId: string) => {};
     register({
       name: 'claim-page',
       type: 'action',
@@ -423,7 +435,10 @@ const pangular = defineDevframe({
       handler: (message: { pageId?: unknown; key?: unknown } | null) => {
         const pageId = message?.pageId;
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return { ok: false };
-        return { ok: owners.claim(pageId, message?.key) };
+        const ok = owners.claim(pageId, message?.key);
+        // The overlay claims once per load: what the audit holds of the old document is stale.
+        if (ok) onPageClaimed(pageId);
+        return { ok };
       },
     });
 
@@ -1152,20 +1167,31 @@ const pangular = defineDevframe({
       },
     });
 
+    const saveSsrOverrides = (overrides: SsrOverride[]) => {
+      ssrRegistry().overrides = overrides;
+      httpState.mutate((draft) => {
+        draft.ssrOverrides = overrides;
+      });
+      return overrides;
+    };
     register({
       name: 'set-ssr-overrides',
       type: 'action',
       jsonSerializable: true,
       handler: (input: unknown) => {
         if (!config.actions.http) throw new Error(actionBlockedMessage('http'));
-        const overrides = sanitizeSsrOverrides(input);
-        ssrRegistry().overrides = overrides;
-        httpState.mutate((draft) => {
-          draft.ssrOverrides = overrides;
-        });
-        return overrides;
+        return saveSsrOverrides(sanitizeSsrOverrides(input));
       },
     });
+    // The panel's TransferState payload and SSR overrides, for agents.
+    for (const tool of ssrOverrideTools({
+      config,
+      overrides: () => ssrRegistry().overrides ?? [],
+      save: saveSsrOverrides,
+      payloads: () => httpPayloads,
+      pages: () => httpPages.values(),
+    }))
+      agent.registerTool(tool);
 
     const clearHttpCalls = () => {
       if (!config.actions.http) throw new Error(actionBlockedMessage('http'));
@@ -1970,6 +1996,21 @@ const pangular = defineDevframe({
       handler: (message: { pageId?: unknown; request?: unknown } | null) =>
         componentValues.request(message?.pageId, message?.request),
     });
+
+    // Images of one component, drawn by its page: the screenshot-component tool.
+    const componentScreenshots = createComponentScreenshots({
+      pages: () => componentPages.values(),
+      broadcast: (method, message) =>
+        void my.rpc.broadcast({ method, args: [message], optional: true }),
+      answersFor,
+    });
+    register({
+      name: 'component-screenshot-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: componentScreenshots.answer,
+    });
+    agent.registerTool(componentScreenshots.tool);
 
     registerConsoleGlobals({
       config,
@@ -3997,6 +4038,42 @@ const pangular = defineDevframe({
         optional: true,
       });
     });
+
+    const audit = await registerAudit({
+      my,
+      register,
+      agent,
+      answersFor,
+      agentSees: (inspector) => config.agent.tools[inspector],
+      agentAxe: !config.agent.readOnly,
+      agentReadOnly: config.agent.readOnly,
+      // Every page the overlay claimed, so axe works with any set of inspectors on.
+      pages: () =>
+        withPageUrls([
+          ...owners.live(),
+          ...componentPages.values(),
+          ...httpPages.values(),
+          ...routerPages.values(),
+          ...formPages.values(),
+          ...(errorsInspector?.pages() ?? []),
+          ...(leaksInspector?.pages() ?? []),
+        ]),
+      sources: {
+        ...(on.components
+          ? {
+              cd: () => cdState.value() as CdState,
+              components: (pageId: string) => componentPages.get(pageId) ?? null,
+            }
+          : {}),
+        ...(leaksInspector ? { leaks: leaksInspector.state } : {}),
+        ...(errorsInspector ? { errors: errorsInspector.state } : {}),
+        ...(on.router ? { router: () => routerState.value() as RouterState } : {}),
+        ...(on.forms ? { forms: () => formsState.value() as FormsState } : {}),
+        ...(on.http ? { http: () => httpState.value() as HttpState } : {}),
+        ...(on.pipes ? { pipes: cachedPipeLint(() => lintPipes(ctx.cwd)) } : {}),
+      },
+    });
+    onPageClaimed = audit.pageLoaded;
 
     if (on.analog) {
       await registerAnalog(my as never, { cwd: ctx.cwd, agent } as never, {

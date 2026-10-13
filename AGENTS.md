@@ -14,17 +14,17 @@ Pangular Inspector inspects a running Angular app and serves what it finds to a 
 
 ### Commands
 
-| Command                | What it runs                                            |
-| ---------------------- | ------------------------------------------------------- |
-| `pnpm test:devtools`   | Package tests                                           |
-| `pnpm test:panel`      | Panel tests                                             |
-| `pnpm test:axe`        | Builds a static report and runs axe on every panel view |
-| `pnpm typecheck`       | TypeScript and template checks for every project        |
-| `pnpm format:check`    | Prettier, including the docs markdown                   |
-| `pnpm skills:check`    | Checks the skills and roles in `.claude`                |
-| `pnpm docs:build`      | Builds the docs site with its link guards               |
-| `pnpm extension:build` | Rebuilds `extension/ui` from `app`                      |
-| `pnpm commit:check`    | Checks the commit messages on the branch                |
+| Command                | What it runs                                                              |
+| ---------------------- | ------------------------------------------------------------------------- |
+| `pnpm test:devtools`   | Package tests                                                             |
+| `pnpm test:panel`      | Panel tests                                                               |
+| `pnpm test:axe`        | Builds a static report and runs axe on every panel view                   |
+| `pnpm typecheck`       | TypeScript and template checks for every project                          |
+| `pnpm format:check`    | Prettier, including the docs markdown                                     |
+| `pnpm skills:check`    | Checks the skills and roles in `.claude` and the skills the package ships |
+| `pnpm docs:build`      | Builds the docs site with its link guards                                 |
+| `pnpm extension:build` | Rebuilds `extension/ui` from `app`                                        |
+| `pnpm commit:check`    | Checks the commit messages on the branch                                  |
 
 The words this project uses for its own concepts (overlay, collector, hub, devframe, agent tool and so on) are defined in `docs/CONTEXT.md`. Use them the same way in code, docs and issues.
 

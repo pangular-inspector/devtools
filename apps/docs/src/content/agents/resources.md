@@ -99,6 +99,7 @@ This table covers the data that has no resource of its own.
 | `pangular:startup`          | Startup timing: milestones and the slowest providers, by page id        |
 | `pangular:plugins`          | Plugin views by page id, and the server plugins with their tools        |
 | `pangular:plugin.<id>`      | A server plugin's own state, hidden with that plugin's tools            |
+| `pangular:audit`            | Audit sessions and axe passes: when each was taken, by page id          |
 | `pangular:analog`           | Analog page data and the server call log                                |
 | `pangular:routes`           | Declared but not filled. Use `get-routes` or `list-routes` instead.     |
 

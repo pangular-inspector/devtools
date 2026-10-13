@@ -164,6 +164,13 @@ export interface PangularConfig {
     readOnly?: boolean;
     /** Hide one inspector's agent tools and resources while keeping its tab. */
     tools?: Partial<Record<PangularInspector, boolean>>;
+    /**
+     * Register the `read` agent tools on the page for browser agents, through
+     * WebMCP (`document.modelContext`) and Chrome DevTools for agents
+     * (`devtoolstooldiscovery`). Off by default, since any script on the page could
+     * then call them; `true` turns them on.
+     */
+    browserTools?: boolean;
   };
   /** Allow or block writes from the panel and the agent. `false` blocks them all. */
   actions?: boolean | Partial<Record<PangularAction, boolean>>;
@@ -241,7 +248,7 @@ export const PLUGIN_ID = /^[a-z][a-z0-9-]{0,39}$/;
 
 export interface ResolvedPangularConfig {
   inspectors: Record<PangularInspector, boolean>;
-  agent: { readOnly: boolean; tools: Record<PangularInspector, boolean> };
+  agent: { readOnly: boolean; tools: Record<PangularInspector, boolean>; browserTools: boolean };
   actions: Record<PangularAction, boolean>;
   redaction: { secretNames: string[]; unmask: string[] };
   limits: Record<PangularLimit, number>;
@@ -362,6 +369,7 @@ export function hotkeyLabel(hotkey: string, mac: boolean): string {
 export const PANEL_TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'timeline', label: 'Timeline' },
+  { id: 'audit', label: 'Audit' },
   { id: 'analog', label: 'Analog', inspector: 'analog' },
   { id: 'components', label: 'Components', inspector: 'components' },
   { id: 'routes', label: 'Routes', inspector: 'router' },
@@ -590,6 +598,7 @@ export function resolvePangularConfig(config?: unknown): ResolvedPangularConfig 
     agent: {
       readOnly: flag(agent['readOnly'], false),
       tools: flags(PANGULAR_INSPECTORS, (key) => inspectors[key] && flag(toolInput[key], true)),
+      browserTools: flag(agent['browserTools'], false),
     },
     actions: flags(
       PANGULAR_ACTIONS,
@@ -711,8 +720,9 @@ export function pangularConfigProblems(config: unknown): string[] {
   if (config === undefined || config === null) return problems;
   const input = object('', config, CONFIG_KEYS);
   booleans('inspectors', input['inspectors'], PANGULAR_INSPECTORS, 'on');
-  const agent = object('agent', input['agent'], ['readOnly', 'tools']);
+  const agent = object('agent', input['agent'], ['readOnly', 'tools', 'browserTools']);
   boolean('agent.readOnly', agent['readOnly'], 'off');
+  boolean('agent.browserTools', agent['browserTools'], 'off');
   booleans('agent.tools', agent['tools'], PANGULAR_INSPECTORS, 'on');
   const actions = input['actions'];
   if (typeof actions !== 'boolean') {
@@ -854,7 +864,13 @@ export const ACTION_TOOLS: Record<PangularAction, readonly string[]> = {
   forms: ['form-action', 'fill-form'],
   router: ['navigate', 'clear-recordings'],
   ngrx: ['dispatch-ngrx-action'],
-  http: ['set-http-rule', 'remove-http-rule', 'clear-recordings'],
+  http: [
+    'set-http-rule',
+    'remove-http-rule',
+    'set-ssr-override',
+    'remove-ssr-override',
+    'clear-recordings',
+  ],
   analog: ['analog-call-api', 'clear-recordings'],
   components: ['set-component-property', 'set-signal'],
   // Plugin tools are checked by `pluginToolAllowed`: their names come from the plugins.
@@ -888,6 +904,8 @@ export const AGENT_SAFETY: Record<string, Exclude<AgentSafety, 'read'>> = {
   'dispatch-ngrx-action': 'action',
   'set-http-rule': 'action',
   'remove-http-rule': 'action',
+  'set-ssr-override': 'action',
+  'remove-ssr-override': 'action',
   'record-pipes': 'action',
   'track-subscriptions': 'action',
   'watch-signal': 'action',
@@ -897,14 +915,16 @@ export const AGENT_SAFETY: Record<string, Exclude<AgentSafety, 'read'>> = {
   'analog-call-api': 'destructive',
   'set-component-property': 'action',
   'set-signal': 'action',
+  // Only with `axe`, which loads and runs axe-core in the page.
+  audit: 'action',
 };
 
 /**
  * Tools that `agent.readOnly` keeps as `read` tools, with the arguments that
- * act refused: `change-detection` still answers, but without `record`, and
- * `hydration` without `overlay`.
+ * act refused: `change-detection` still answers, but without `record`,
+ * `hydration` without `overlay`, and `audit` without `axe`.
  */
-export const READ_ONLY_VARIANTS: readonly string[] = ['change-detection', 'hydration'];
+export const READ_ONLY_VARIANTS: readonly string[] = ['change-detection', 'hydration', 'audit'];
 
 /** The tier an agent tool or resource is registered with under `config`. Resources are `read`. */
 export function agentSafety(id: string, config: ResolvedPangularConfig): AgentSafety {
@@ -918,7 +938,7 @@ export function actionBlockedMessage(action: PangularAction): string {
     forms: 'Writing to forms',
     router: 'Navigating and clearing navigations',
     ngrx: 'Restoring NgRx state and dispatching actions',
-    http: 'Changing HTTP mock rules and clearing HTTP calls',
+    http: 'Changing HTTP mock rules and SSR overrides, and clearing HTTP calls',
     analog: 'Calling API routes and clearing server calls',
     components: 'Editing component properties and signals',
     plugins: 'Running plugin actions',
@@ -943,12 +963,22 @@ export const SHARED_RPC: readonly string[] = [
   'list-pages',
   // Opens any tab, so it stays with every inspector off; it lists only the tabs that are on.
   'open-in-panel',
+  // The page registers the `read` agent tools for browser agents (agent.browserTools).
+  'list-browser-tools',
+  'call-browser-tool',
   'open-in-editor',
   'hub-dock-seen',
   // Store as global spans the components, injectors and NgRx inspectors; the
   // handler checks that the inspector of each request is on.
   'request-console-global',
   'console-global-result',
+  // The audit reads every inspector that is on (and, for agents, whose agent
+  // tools are on), so it stays with any of them; the axe pass belongs to none.
+  'audit',
+  'get-audit',
+  'audit-session',
+  'request-axe-run',
+  'axe-result',
 ];
 
 /**
@@ -970,6 +1000,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'cancel-component-pick': 'components',
   'component-pick-result': 'components',
   'request-page-highlight': 'components',
+  'component-screenshot-result': 'components',
   'request-component-edit': 'components',
   'component-edit-result': 'components',
   'request-hydration-overlay': 'components',
@@ -1065,6 +1096,7 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'set-signal': 'components',
   'find-leaks': 'components',
   'track-subscriptions': 'components',
+  'screenshot-component': 'components',
   'signal-graph': 'signals',
   'inspect-signals': 'signals',
   'watch-signal': 'signals',
@@ -1108,6 +1140,10 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'list-http-rules': 'http',
   'set-http-rule': 'http',
   'remove-http-rule': 'http',
+  'inspect-transfer-state': 'http',
+  'list-ssr-overrides': 'http',
+  'set-ssr-override': 'http',
+  'remove-ssr-override': 'http',
   'clear-recordings': 'http',
   'list-capacitor-calls': 'capacitor',
   'list-capacitor-plugins': 'capacitor',
@@ -1145,7 +1181,7 @@ export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
 };
 
 /** Shared-state keys that belong to no inspector, without the `pangular:` prefix. */
-export const SHARED_STATE_KEYS: readonly string[] = ['page-visibility', 'page-angular'];
+export const SHARED_STATE_KEYS: readonly string[] = ['page-visibility', 'page-angular', 'audit'];
 
 /**
  * Whether MCP clients may read a shared-state key. A `pangular:` key in
@@ -1185,6 +1221,7 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'set-signal',
   'find-leaks',
   'track-subscriptions',
+  'screenshot-component',
   'signal-graph',
   'inspect-signals',
   'watch-signal',
@@ -1228,6 +1265,10 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'list-http-rules',
   'set-http-rule',
   'remove-http-rule',
+  'inspect-transfer-state',
+  'list-ssr-overrides',
+  'set-ssr-override',
+  'remove-ssr-override',
   'list-capacitor-calls',
   'list-capacitor-plugins',
   'list-errors',
@@ -1235,6 +1276,7 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'list-console',
   'list-plugins',
   'inspect-plugin',
+  'audit',
 ];
 
 export function isPageAgentEntry(id: string): boolean {

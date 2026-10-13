@@ -209,6 +209,7 @@ const config: NgmdConfig = {
         {label: 'Analog', href: '/inspectors/analog', status: 'new'},
         {label: 'Capacitor', href: '/inspectors/capacitor', status: 'new'},
         {label: 'Errors', href: '/inspectors/errors', status: 'new'},
+        {label: 'Audit', href: '/inspectors/audit', status: 'new'},
       ],
     },
     {
@@ -217,6 +218,8 @@ const config: NgmdConfig = {
         {label: 'MCP server', href: '/agents/mcp-server', status: 'updated'},
         {label: 'Tools', href: '/agents/tools'},
         {label: 'Resources', href: '/agents/resources'},
+        {label: 'Browser agents', href: '/agents/browser-agents', status: 'new'},
+        {label: 'Agent skills', href: '/agents/skills', status: 'new'},
       ],
     },
     {
@@ -229,6 +232,7 @@ const config: NgmdConfig = {
         {label: 'Set up Angular Native', href: '/guides/angular-native'},
         {label: 'Set up Capacitor', href: '/guides/capacitor', status: 'new'},
         {label: 'Write a plugin', href: '/guides/write-a-plugin', status: 'new'},
+        {label: 'Inspect, fix and verify', href: '/guides/inspect-fix-verify', status: 'new'},
       ],
     },
     {
