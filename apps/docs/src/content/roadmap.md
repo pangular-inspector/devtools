@@ -57,7 +57,7 @@ Tracked in [#342](https://github.com/pangular-inspector/devtools/issues/342). Io
 
 ## Phase 4: deeper diagnosis
 
-Tracked in [#343](https://github.com/pangular-inspector/devtools/issues/343). Every item below is available now. The phase stays open until a third-party library ships its own Pangular tab.
+Tracked in [#343](https://github.com/pangular-inspector/devtools/issues/343). Every item below is available. The phase stays open until a third-party library ships its own Pangular tab.
 
 | Item                        | What it does                                                                                                       | Read more                                                                                                                                  |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
