@@ -84,6 +84,49 @@ describe('page interest', () => {
     expect(answered).toBe(true);
   });
 
+  it('makes an agent call that comes in during a wake wait for it too', async () => {
+    const { interest, sent } = setup();
+    interest.tick();
+    interest.handle({ pageId: 'p1' });
+    let first = false;
+    let second = false;
+    void interest.touch().then(() => (first = true));
+    void interest.touch().then(() => (second = true));
+    await Promise.resolve();
+    // The second call doesn't read the stored reports before the page answered.
+    expect(second).toBe(false);
+    expect(sent.filter((m) => (m as { wake?: boolean }).wake)).toHaveLength(1);
+    interest.handle({ pageId: 'p1', synced: true });
+    await vi.waitFor(() => expect(first && second).toBe(true));
+    // Once it settled, a call with the pages awake answers at once.
+    await interest.touch();
+  });
+
+  it('does not wait for a page the server forgot or expired', async () => {
+    vi.useFakeTimers();
+    const { interest } = setup();
+    interest.tick();
+    interest.handle({ pageId: 'gone' });
+    interest.handle({ pageId: 'closed' });
+    interest.handle({ pageId: 'p1' });
+    interest.forget('gone');
+    interest.prune((pageId) => pageId !== 'closed');
+    let answered = false;
+    void interest.touch().then(() => (answered = true));
+    interest.handle({ pageId: 'p1', synced: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(answered).toBe(true);
+  });
+
+  it('stops waiting for a page that leaves during a wake', async () => {
+    const { interest } = setup();
+    interest.tick();
+    interest.handle({ pageId: 'p1' });
+    const touched = interest.touch();
+    interest.forget('p1');
+    await touched;
+  });
+
   it('answers the agent after a short wait when a page does not wake', async () => {
     vi.useFakeTimers();
     const { interest } = setup();

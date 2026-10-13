@@ -45,6 +45,10 @@ export interface PageInterest {
   touch(): Promise<void>;
   /** The `page-interest` RPC: a page asks, or says it sent its reports after a wake. */
   handle(message: unknown): { watching: boolean };
+  /** The server forgot or expired this page, so a wake no longer waits for it. */
+  forget(pageId: string): void;
+  /** Forgets every page `keep` turns down (the expiry interval passes the pages it still holds). */
+  prune(keep: (pageId: string) => boolean): void;
   /** Looks for panels that came or went; call it about once a second. */
   tick(): void;
   stop(): void;
@@ -72,6 +76,8 @@ export function createPageInterest(options: PageInterestOptions): PageInterest {
   let agentAt = -Infinity;
   let last: boolean | null = null;
   let waiters: { pending: Set<string>; done: () => void }[] = [];
+  // The wake in flight: an agent call that comes in meanwhile waits for it too.
+  let waking: Promise<void> | null = null;
 
   const watching = () =>
     options.leaseMs <= 0 || panelWatching(options.rpcHost) || now() - agentAt < options.leaseMs;
@@ -90,19 +96,32 @@ export function createPageInterest(options: PageInterestOptions): PageInterest {
       .map(([pageId]) => pageId);
   };
 
+  // The page answered, or is gone: a waiting agent call stops waiting for it.
+  const settle = (pageId: string) => {
+    for (const waiter of [...waiters]) {
+      waiter.pending.delete(pageId);
+      if (!waiter.pending.size) waiter.done();
+    }
+  };
+
   return {
     watching,
-    async touch() {
-      if (options.leaseMs <= 0) return;
+    touch() {
+      if (options.leaseMs <= 0) return Promise.resolve();
+      // Another call is already waking the pages: its reports aren't in yet.
+      if (waking) {
+        agentAt = now();
+        return waking;
+      }
       const was = watching();
       agentAt = now();
-      if (was) return;
+      if (was) return Promise.resolve();
       const expected = livePages();
       if (!expected.length) {
         announce();
-        return;
+        return Promise.resolve();
       }
-      await new Promise<void>((resolve) => {
+      const wake = new Promise<void>((resolve) => {
         const waiter = {
           pending: new Set(expected),
           done: () => {
@@ -115,7 +134,11 @@ export function createPageInterest(options: PageInterestOptions): PageInterest {
         (timer as { unref?: () => void }).unref?.();
         waiters.push(waiter);
         announce(true);
+      }).finally(() => {
+        if (waking === wake) waking = null;
       });
+      waking = wake;
+      return wake;
     },
     handle(message) {
       const raw = (message && typeof message === 'object' ? message : {}) as {
@@ -128,14 +151,20 @@ export function createPageInterest(options: PageInterestOptions): PageInterest {
           : undefined;
       if (pageId) {
         pages.set(pageId, now());
-        if (raw.synced === true) {
-          for (const waiter of [...waiters]) {
-            waiter.pending.delete(pageId);
-            if (!waiter.pending.size) waiter.done();
-          }
-        }
+        if (raw.synced === true) settle(pageId);
       }
       return { watching: watching() };
+    },
+    forget(pageId) {
+      pages.delete(pageId);
+      settle(pageId);
+    },
+    prune(keep) {
+      for (const pageId of [...pages.keys()]) {
+        if (keep(pageId)) continue;
+        pages.delete(pageId);
+        settle(pageId);
+      }
     },
     tick() {
       for (const [pageId, seen] of pages) if (now() - seen > PAGE_SEEN_MS * 5) pages.delete(pageId);

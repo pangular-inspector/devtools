@@ -3,6 +3,7 @@ import {
   Injector,
   afterNextRender,
   computed,
+  effect,
   inject,
   signal,
   type Signal,
@@ -73,18 +74,24 @@ export class VirtualWindow {
       const count = options.count();
       if (!this.enabled()) return { start: 0, end: count };
       const height = this.rowHeight();
-      const top = Math.max(0, this.visibleTop());
-      const start = Math.max(0, Math.min(count, Math.floor(top / height) - OVERSCAN));
-      const end = Math.min(
-        count,
-        Math.max(start, Math.ceil((top + this.viewport()) / height) + OVERSCAN),
-      );
+      const viewport = this.viewport();
+      // A list that just got shorter can leave the last scroll position past
+      // its end; the window then shows the last rows instead of none.
+      const top = Math.max(0, Math.min(this.visibleTop(), count * height - viewport));
+      const start = Math.max(0, Math.min(count - 1, Math.floor(top / height) - OVERSCAN));
+      const end = Math.min(count, Math.max(start, Math.ceil((top + viewport) / height) + OVERSCAN));
       return { start, end };
     });
     this.padTop = computed(() => (this.enabled() ? this.range().start * this.rowHeight() : 0));
     this.padBottom = computed(() =>
       this.enabled() ? (options.count() - this.range().end) * this.rowHeight() : 0,
     );
+    // When the row count changes the browser may move the scroll position
+    // (a shorter list can't scroll as far) without a scroll event: read it again.
+    effect(() => {
+      options.count();
+      afterNextRender(() => this.update(), { injector: this.injector });
+    });
     inject(DestroyRef).onDestroy(() => this.detach?.());
   }
 

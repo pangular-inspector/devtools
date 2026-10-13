@@ -42,6 +42,7 @@ import { FORMLESS_FORM_ACTIONS } from './config.ts';
 import { tapConsole } from './console-tap.ts';
 import { createDeltaChannel } from './delta-channel.ts';
 import { FORMS_SHAPE } from './push-delta.ts';
+import { LEASED_PUSH_MS } from './page-lease.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -114,8 +115,18 @@ function afterPaint(fn: () => void) {
 }
 
 export interface FormsCollector {
-  /** Reads the forms and sends what changed; `wake` sends even when the page is idle. */
+  /**
+   * Reads the forms and sends what changed at once; `wake` sends even when the
+   * page is idle.
+   */
   push(wake?: boolean): Promise<void>;
+  /**
+   * Reads the forms and sends what changed, at most once a second (`LEASED_PUSH_MS`)
+   * with the reports in between batched into the next one, so no event is lost.
+   */
+  sync(): Promise<void>;
+  /** The page left: the next report goes in full, such as after the back/forward cache. */
+  leave(): void;
   stop(): void;
 }
 
@@ -140,6 +151,7 @@ export function attachForms(
     call: (name, ...args) => my.rpc.call(name, ...args),
     pageId,
     push: 'push-forms',
+    ping: 'ping-forms',
     shape: FORMS_SHAPE,
     keepaliveMs: HEARTBEAT_MS,
   });
@@ -197,6 +209,10 @@ export function attachForms(
   let devtoolsSincePush = false;
   let userTimer: ReturnType<typeof setTimeout> | undefined;
   let pushTimer: ReturnType<typeof setTimeout> | undefined;
+  // Sends are paced like the other leased reports; reads go on, so the timeline misses nothing.
+  let sentAt = -Infinity;
+  let sendTimer: ReturnType<typeof setTimeout> | undefined;
+  let pendingReport: Record<string, unknown> | null = null;
   let submittingForm: string | null = null;
   let instrumentation: Instrumentation | null = null;
   let renders: RenderCounter | null = null;
@@ -407,7 +423,28 @@ export function attachForms(
     for (const child of node.children ?? []) stampPending(formId, child, now);
   }
 
-  async function pushForms(wake = false) {
+  /** Sends `report` now, or once a second has passed since the last send when `paced`. */
+  async function deliver(report: Record<string, unknown>, paced: boolean) {
+    const wait = sentAt + LEASED_PUSH_MS - Date.now();
+    if (paced && wait > 0) {
+      pendingReport = report;
+      sendTimer ??= setTimeout(() => {
+        sendTimer = undefined;
+        const next = pendingReport;
+        pendingReport = null;
+        // A page that went idle meanwhile only keeps itself alive, on its next read.
+        if (next && (!options.active || options.active())) void deliver(next, false);
+      }, wait);
+      return;
+    }
+    clearTimeout(sendTimer);
+    sendTimer = undefined;
+    pendingReport = null;
+    sentAt = Date.now();
+    await channel.send(report);
+  }
+
+  async function pushForms(wake = false, paced = false) {
     try {
       const ng = getNg();
       if (!ng?.getDirectives) return;
@@ -481,7 +518,7 @@ export function attachForms(
         ...(droppedEvents ? { dropped: droppedEvents } : {}),
       };
       if (!wake && options.active && !options.active()) await channel.keepalive(() => report);
-      else await channel.send(report);
+      else await deliver(report, paced && !wake);
     } catch {
       return;
     }
@@ -491,7 +528,7 @@ export function attachForms(
     if (pushTimer) return;
     pushTimer = setTimeout(() => {
       pushTimer = undefined;
-      void pushForms();
+      void pushForms(false, true);
     }, PUSH_DELAY_MS);
   }
 
@@ -761,11 +798,21 @@ export function attachForms(
 
   return {
     push: (wake = false) => pushForms(wake),
+    sync: () => pushForms(false, true),
+    leave() {
+      clearTimeout(pushTimer);
+      pushTimer = undefined;
+      clearTimeout(sendTimer);
+      sendTimer = undefined;
+      pendingReport = null;
+      channel.resync();
+    },
     stop() {
       observer?.disconnect();
       webMcp.stop();
       probeEveryTime(false);
       clearTimeout(pushTimer);
+      clearTimeout(sendTimer);
       clearTimeout(userTimer);
       for (const type of USER_EVENTS) document.removeEventListener(type, onUserEvent, true);
       removeEventListener('unhandledrejection', onRejection);

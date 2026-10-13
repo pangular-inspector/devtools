@@ -29,6 +29,8 @@ export interface PageOwners {
   write(pageId: string): boolean;
   /** Whether the current RPC call may forget `pageId`; when it may, the page is released. */
   forget(pageId: string): boolean;
+  /** Whether `pageId` reported or pinged within its expiry on a connection that is still open. */
+  alive(pageId: string, now?: number): boolean;
   /** Drops owners that have been quiet for long, so the map does not grow. */
   expire(now?: number): void;
 }
@@ -92,6 +94,10 @@ export function createPageOwners(host: unknown, ttl: PageTtl): PageOwners {
       owners.delete(pageId);
       sessions.unbind(pageId);
       return true;
+    },
+    alive(pageId, now = Date.now()) {
+      const owner = owners.get(pageId);
+      return !!owner && !gone(pageId, owner, now);
     },
     expire(now = Date.now()) {
       for (const [pageId, owner] of owners) {

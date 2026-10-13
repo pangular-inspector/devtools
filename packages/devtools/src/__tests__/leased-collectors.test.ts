@@ -138,3 +138,84 @@ describe('leased collectors', () => {
     expect(events.some((e) => e.type === 'value' && e.detail?.includes('ada@'))).toBe(true);
   });
 });
+
+describe('forms pushes', () => {
+  async function attachLogin(active: () => boolean = () => true) {
+    const fixture = TestBed.createComponent(Login);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const remote = server('push-forms', FORMS_SHAPE);
+    const forms = attachForms(
+      remote.my,
+      'pg',
+      () => (globalThis as { ng?: unknown }).ng,
+      { show: () => {}, clear: () => {} },
+      200,
+      { active },
+    );
+    stops.push(forms.stop);
+    return { fixture, forms, ...remote };
+  }
+
+  it('send typing at most once a second and keep every event', async () => {
+    const { fixture, forms, pushes, stored } = await attachLogin();
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    await forms.push();
+    expect(pushes()).toHaveLength(1);
+    const email = fixture.componentInstance.form.controls.email;
+    const edits = [() => email.setValue('ada'), () => email.disable(), () => email.enable()];
+    for (const edit of edits) {
+      edit();
+      await vi.advanceTimersByTimeAsync(200);
+    }
+    // Three changes in 600 ms: read each time, sent once the second is up.
+    expect(pushes()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(pushes()).toHaveLength(2);
+    const events = (stored.at(-1)!['events'] as { type: string; detail?: string }[]).map(
+      (e) => `${e.type} ${e.detail}`,
+    );
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^value .*ada/),
+        expect.stringMatching(/^status .*DISABLED$/),
+        expect.stringMatching(/^status DISABLED.*VALID$/),
+      ]),
+    );
+    // A wake or a page action still goes out at once.
+    email.setValue('ada@');
+    await forms.push(true);
+    expect(pushes()).toHaveLength(3);
+  });
+
+  it('only ping the server from an idle page, and send the delta on a wake', async () => {
+    let active = true;
+    const { fixture, forms, pushes, sent, stored } = await attachLogin(() => active);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    await forms.push();
+    active = false;
+    fixture.componentInstance.form.controls.email.setValue('ada@example.com');
+    vi.advanceTimersByTime(6000);
+    await forms.push();
+    expect(pushes()).toHaveLength(1);
+    expect(sent.at(-1)).toMatchObject({ name: 'ping-forms', arg: 'pg' });
+
+    await forms.push(true);
+    expect(pushes()).toHaveLength(2);
+    expect(pushes()[1]!.arg).not.toHaveProperty('forms');
+    const events = stored.at(-1)!['events'] as { type: string; detail?: string }[];
+    expect(events.some((e) => e.type === 'value' && e.detail?.includes('ada@'))).toBe(true);
+  });
+
+  it('send the report in full again after the page left', async () => {
+    const { forms, pushes } = await attachLogin();
+    await forms.push();
+    expect(pushes()[0]!.arg.delta).toMatchObject({ full: true });
+    forms.leave();
+    await forms.push();
+    expect(pushes()).toHaveLength(2);
+    expect(pushes()[1]!.arg).toHaveProperty('forms');
+    expect(pushes()[1]!.arg.delta).toMatchObject({ full: true });
+  });
+});

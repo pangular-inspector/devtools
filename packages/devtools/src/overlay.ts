@@ -669,7 +669,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     on.signals && (() => void pushSignalGraph().catch(() => {})),
     on.injectors && paced(() => void pushInjectorTree().catch(() => {})),
     ngrx && (() => void ngrx.push()),
-    forms && paced(() => forms.push()),
+    forms && paced(() => void forms.sync()),
     pipes?.push,
     on.router && (() => void pushRouter()),
     http && (() => void http.push().catch(() => {})),
@@ -872,6 +872,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     clearInterval(stillHidden);
     reportVisibility(false);
     pipes?.pause();
+    forms?.leave();
     forget('forms', 'forget-forms-page');
     forget('router', 'forget-router-page');
     forget('pipes', 'forget-pipes-page');

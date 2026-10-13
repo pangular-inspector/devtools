@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const calls: { name: string; arg: unknown }[] = [];
 const handlers = new Map<string, (message: unknown) => unknown>();
 let watching = true;
+let formsOn = false;
 
 vi.mock('devframe/client', () => ({
   connectDevframe: async () => ({
@@ -20,7 +21,7 @@ vi.mock('devframe/client', () => ({
             signals: false,
             http: false,
             errors: false,
-            forms: false,
+            forms: formsOn,
             pipes: false,
           },
         },
@@ -32,7 +33,11 @@ vi.mock('devframe/client', () => ({
           calls.push({ name, arg: JSON.parse(JSON.stringify(arg ?? null)) });
           if (name === 'page-interest') return { watching };
           if (name.startsWith('ping-')) return { known: true };
-          if (name === 'push-component-tree' || name === 'push-injector-tree') {
+          if (
+            name === 'push-component-tree' ||
+            name === 'push-injector-tree' ||
+            name === 'push-forms'
+          ) {
             return { delta: true };
           }
           return undefined;
@@ -66,6 +71,7 @@ describe.sequential('overlay activity lease and deltas', () => {
     calls.length = 0;
     handlers.clear();
     watching = true;
+    formsOn = false;
     vi.stubGlobal('BroadcastChannel', undefined);
     document.body.innerHTML = '<app-root ng-version="22.0.0"><app-item></app-item></app-root>';
     (window as unknown as { ng: unknown }).ng = { getComponent, getDirectives: () => [] };
@@ -127,5 +133,18 @@ describe.sequential('overlay activity lease and deltas', () => {
     await vi.advanceTimersByTimeAsync(10);
     expect(sent('push-component-tree')).toHaveLength(1);
     expect(sent('page-interest').at(-1)!.arg).toMatchObject({ synced: true });
+  });
+
+  it('sends the forms report in full again after a back/forward cache restore', async () => {
+    formsOn = true;
+    await start();
+    expect(sent('push-forms')).toHaveLength(1);
+    expect(sent('push-forms')[0]!.arg).toMatchObject({ delta: { full: true } });
+    window.dispatchEvent(new Event('pagehide'));
+    expect(sent('forget-forms-page')).toHaveLength(1);
+    window.dispatchEvent(new Event('pageshow'));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(sent('push-forms')).toHaveLength(2);
+    expect(sent('push-forms')[1]!.arg).toMatchObject({ forms: [], delta: { full: true } });
   });
 });

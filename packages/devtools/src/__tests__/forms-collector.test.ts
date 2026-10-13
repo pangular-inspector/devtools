@@ -16,6 +16,7 @@ import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachForms, setupErrorOf } from '../forms-collector.ts';
 import type { FormEvent } from '../forms.ts';
+import { LEASED_PUSH_MS } from '../page-lease.ts';
 
 try {
   TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -457,7 +458,8 @@ describe('forms collector', () => {
       const answer = await tools.get('sign_up')!.execute({ name: 'Ada', age: 30 });
       expect(answer).toMatchObject({ content: [{ text: 'Form submitted successfully.' }] });
       fixture.detectChanges();
-      await tick();
+      // Reports the page schedules itself go out at most once a second.
+      await tick(LEASED_PUSH_MS + 100);
       const last = h.reports().at(-1);
       expect(last.forms[0].webMcp.calls).toEqual([
         expect.objectContaining({ outcome: 'submitted', fields: ['name', 'age'] }),

@@ -883,6 +883,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'ngrx-action-result': 'ngrx',
   'request-ngrx-action': 'ngrx',
   'push-forms': 'forms',
+  'ping-forms': 'forms',
   'forget-forms-page': 'forms',
   'request-form-highlight': 'forms',
   'form-action-result': 'forms',

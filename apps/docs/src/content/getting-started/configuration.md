@@ -188,9 +188,9 @@ On Angular 20 and later, the page reports about 250 ms after Angular runs change
 The component tree, injectors, change detection recording and forms cost the most to read and send on a large app, so the page keeps them cheap:
 
 - After one full report, the page sends only what changed. If the server lost track (a restart, a lost message), it asks for the whole report again.
-- The page sends each of them at most once a second.
+- The page sends each of them at most once a second, also while you type in a form. Changes in between go out together in the next report, so the forms timeline keeps every event. A form action from the panel or an agent is sent at once.
 - The component tree is read again only when elements were added or removed, or every 4 seconds.
-- The page sends them only while someone watches: a panel is open (the popup, the hub or the Chrome extension), or an agent called a tool in the last `limits.idleAfterMs`. An idle page only says it is still open. The forms timeline keeps recording meanwhile. When a panel opens or an agent calls a tool, the page sends everything again, and the agent's call waits up to 1.5 seconds for it.
+- The page sends them only while someone watches: a panel is open (the popup, the hub or the Chrome extension), or an agent called a tool in the last `limits.idleAfterMs`. An idle page only says it is still open. The forms timeline keeps recording meanwhile. When a panel opens or an agent calls a tool, the page sends what changed meanwhile, and the agent's call waits up to 1.5 seconds for it. An agent call made during that wait waits for the same reports. A tab that closed or stopped reporting is not waited for.
 
 In the panel, the component tree, the HTTP call table, and the NgRx change log and events render only the rows near view when they have more than 300. Rows out of view are not in the page, so the browser's find doesn't see them. Use the tab's search field to search every row.
 

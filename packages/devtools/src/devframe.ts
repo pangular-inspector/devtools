@@ -361,8 +361,6 @@ const pangular = defineDevframe({
     const owners = createPageOwners(ctx.rpc, liveTtl);
     const owns = (pageId: unknown): pageId is string =>
       typeof pageId === 'string' && owners.write(pageId);
-    const mayForget = (pageId: unknown): pageId is string =>
-      typeof pageId === 'string' && owners.forget(pageId);
     // A request is settled only by the page it was sent to, from the connection
     // that owns that page, so another client can't answer for it.
     const answersFor = (target: string | undefined, pageId: unknown) =>
@@ -386,6 +384,12 @@ const pangular = defineDevframe({
     });
     const interestTick = setInterval(() => interest.tick(), INTEREST_TICK_MS);
     interestTick.unref?.();
+    // A page that left is not waited for when an agent wakes the pages.
+    const mayForget = (pageId: unknown): pageId is string => {
+      if (typeof pageId !== 'string' || !owners.forget(pageId)) return false;
+      interest.forget(pageId);
+      return true;
+    };
 
     register({
       name: 'claim-page',
@@ -1139,6 +1143,13 @@ const pangular = defineDevframe({
       injectorDeltas.prune((id) => injectorPages.has(id));
       cdDeltas.prune((id) => cdPages.has(id));
       formDeltas.prune((id) => formPages.has(id));
+      // A page that stopped reporting (a closed browser that never said
+      // goodbye) is gone, so a wake doesn't wait for it. Forms are left out:
+      // their reports outlive the page to keep the timeline.
+      interest.prune(
+        (id) =>
+          owners.alive(id) || componentPages.has(id) || injectorPages.has(id) || cdPages.has(id),
+      );
     }, 5000);
     expiry.unref?.();
     registry.owner = ctx;
@@ -1437,6 +1448,18 @@ const pangular = defineDevframe({
           message += ` Skipped: ${skipped.join(', ')}.`;
         }
         return { markdown: message };
+      },
+    });
+
+    register({
+      name: 'ping-forms',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (pageId: unknown) => {
+        const page = owns(pageId) ? formPages.get(pageId) : undefined;
+        if (!page) return { known: false };
+        page.reportedAt = Date.now();
+        return { known: true };
       },
     });
 
