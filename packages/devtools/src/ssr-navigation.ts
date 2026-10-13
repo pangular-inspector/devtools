@@ -6,7 +6,7 @@ import {
   type NavigationRecord,
   type RouterDebugApi,
 } from './router.ts';
-import { ssrRegistry } from './ssr-registry.ts';
+import { ssrRegistry, touchSsrRequest } from './ssr-registry.ts';
 
 const MAX_NAVIGATIONS = 5;
 
@@ -52,6 +52,7 @@ export function watchSsrNavigations(requestId: string, injector: unknown): () =>
         if (!applyRouterEvent(navigations, event, Date.now(), router)) return;
         navigations.splice(0, navigations.length - MAX_NAVIGATIONS);
         active.navigations = navigations.map(toSsrNavigation);
+        touchSsrRequest(active);
       }) as { unsubscribe(): void } | undefined,
     undefined,
   );

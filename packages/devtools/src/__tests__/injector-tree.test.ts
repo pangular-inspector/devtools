@@ -147,6 +147,28 @@ describe('collectInjectorTree', () => {
     ]);
   });
 
+  it('names where a host lookup stops: the host of the component whose template declares the element', () => {
+    const { ng, root, card } = fakeNg();
+    const app = ng.getComponent(root);
+    const withOwners = {
+      ...ng,
+      // Each call returns a new App, so the owner is matched by its host instead.
+      getOwningComponent: (el: Element) => (el === card ? app : null),
+      getHostElement: (component: unknown) => (component === app ? root : null),
+    };
+    const report = collectInjectorTree(withOwners);
+    const [rootNode] = report.roots;
+    expect(rootNode!.children[0]!.injector.host).toBe(rootNode!.injector.id);
+    // The root component is declared by no template.
+    expect(rootNode!.injector).not.toHaveProperty('host');
+  });
+
+  it('leaves the host out when the page has no getOwningComponent', () => {
+    const { ng } = fakeNg();
+    const card = collectInjectorTree(ng).roots[0].children[0];
+    expect(card.injector).not.toHaveProperty('host');
+  });
+
   it('keeps ids stable between collections and gives each element a selector', () => {
     const { ng, card } = fakeNg();
     const first = collectInjectorTree(ng).roots[0].children[0].injector;

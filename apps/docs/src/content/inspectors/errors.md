@@ -28,12 +28,44 @@ Each row is one message with:
 | Time               | When the page last hit it.                                                                                                                          |
 | **Show component** | Opens the [Components](./components.md) tab with the owning component selected.                                                                     |
 | **Stack**          | The stack of the first occurrence, collapsed until you open it.                                                                                     |
+| Explainer          | For NG0100, hydration mismatches and missing providers, what the page read about the error. See [Explainers](#explainers).                          |
 
 The list is newest first. Search by message, code or component name, and press `Escape` to clear the search.
+
+### Explainers
+
+Three kinds of Angular error get a box under the message with what the overlay read about them.
+
+#### What changed (NG0100)
+
+For `ExpressionChangedAfterItHasBeenCheckedError`, the box shows:
+
+| Row          | What it shows                                                                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Binding**  | The property Angular names, such as `title`, and the compiled template function on the stack, such as `TripList_Template`. A text interpolation has no name. |
+| **Previous** | The value of the first check, as Angular prints it.                                                                                                          |
+| **Current**  | The value of the second check.                                                                                                                               |
+| **Held by**  | The fields of the component that hold the current value now, signals included. Getters and `computed` signals don't run.                                     |
+
+**Written by** lists the named signals written with the current value in the 2 seconds before the error. Values are compared the way Angular prints them, from the value as it was written, so dates and objects match too. When some of those signals are named like the binding or a field under **Held by**, only those are listed. With write stacks on (see [Signals](./signals.md)), each one shows the app frames that wrote it. Without a match, the box says where to look instead. The overlay hears signal writes only while the Signals inspector is on, on Angular 17.0 or later, and only for signals with a `debugName`.
+
+When the binding or a field that holds the value has a secret-looking name, both values show as `[redacted]`.
+
+#### Server vs client DOM (NG0500 to NG0503)
+
+For a hydration mismatch, the box shows Angular's first sentence and a line diff of the server HTML Angular expected (`−`) and the client DOM it found (`+`). Angular marks the node it means with `<-- AT THIS LOCATION`. The diff comes from the error message. When the message has no DOM, it comes from what Angular recorded on the component host instead, the same data as the [Hydration](./components.md#hydration) section. When Angular suspects a browser extension or a third-party script, the box says so.
+
+Hydration errors are raised once, while the app hydrates. The page catches them only if the overlay is already running when hydration finishes. If the app imports the overlay itself after bootstrap, such as after `whenStable()`, the hydration errors of that page load are not in the list. Read them in the browser console instead, or start the overlay before the app bootstraps. See [Capture starts with the overlay](#capture-starts-with-the-overlay).
+
+#### Missing provider (NG0201)
+
+For `NullInjectorError` and NG0201, the box shows the token, Angular's dependency path and the source injector. **Explain lookup** walks the lookup of that token from the component that asked for it: each injector Angular asks, in order, whether it provides the token, and why the lookup stops. It reads the tree the [Injectors](./injectors.md) tab shows, so it needs that tab on, and it assumes no `self`, `skipSelf`, `host` or `optional` flag. The `explain-injection` agent tool takes those flags.
 
 ### Console
 
 Click **Console** to see the page's `console.log`, `info`, `warn`, `error` and `debug` calls, newest first. Pick a level in **Console level**, or search the text. A call repeated in a row shows once with a count. A call that mentions an Angular code gets a code chip too.
+
+The page keeps capturing while nobody watches, and sends its errors and console calls only while a panel is open or an agent called a tool in the last `limits.idleAfterMs`. An agent call to an idle page gets what the page captured meanwhile. See [Performance](../getting-started/configuration.md#performance).
 
 ### Pages
 
@@ -71,11 +103,12 @@ A `RuntimeError` carries its code, and other errors carry it in the message. The
 
 ## Agent tools
 
-| Tool                     | What it does                                                                                                         |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `pangular:list-errors`   | The error groups, with count, code link, owning component and source.                                                |
-| `pangular:explain-error` | One error by `id`, or an Angular `code`: the message, the owning component, the stack, the reference page and cause. |
-| `pangular:list-console`  | The console calls, by `level` or `search`.                                                                           |
+| Tool                         | What it does                                                                                                                                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pangular:list-errors`       | The error groups, with count, code link, owning component and source.                                                                                                                            |
+| `pangular:explain-error`     | One error by `id`, or an Angular `code`: the message, the owning component, the stack, the reference page and cause, and the explainer of an NG0100, a hydration mismatch or a missing provider. |
+| `pangular:list-console`      | The console calls, by `level`, `search` or `since`.                                                                                                                                              |
+| `pangular:explain-injection` | Walks the lookup of a token from a component, with `self`, `skipSelf`, `host` and `optional`. Belongs to the [Injectors](./injectors.md#agent-tools) inspector.                                  |
 
 The known causes come from Angular's error reference, in a sentence or two. For a code without a reference page, `explain-error` says so. See [Tools](../agents/tools.md#errors).
 
@@ -92,6 +125,8 @@ The known causes come from Angular's error reference, in a sentence or two. For 
 | Error groups          | 100. The least recent one goes first. |
 | Console calls         | 200. The oldest one goes first.       |
 | Message, console text | 500 characters.                       |
+| Explainer values      | 200 characters each.                  |
+| Explainer DOM         | 3,000 characters and 80 lines a side. |
 | Stack                 | 40 lines and 4,000 characters.        |
 
 The tab says how many groups or calls a page dropped.

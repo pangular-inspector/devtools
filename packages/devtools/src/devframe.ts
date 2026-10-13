@@ -25,10 +25,19 @@ import {
 } from './rpc/hydration-tools.ts';
 import { registerConsoleGlobals } from './rpc/console-globals.ts';
 import { registerErrors } from './rpc/errors-register.ts';
+import { registerLeaks } from './rpc/leaks-register.ts';
+import { registerReduxStores } from './rpc/redux-stores-register.ts';
+import { registerTanstackQuery } from './rpc/query-register.ts';
+import { registerPlugins } from './rpc/plugins-register.ts';
+import { registerStartup } from './rpc/startup-register.ts';
+import type { PangularServerPlugin } from './plugin.ts';
+import { registerAudit } from './rpc/audit-register.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
+import { registerInjectionExplain } from './rpc/injection-explain.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
+import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
 import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
 import { createPageOwners } from './rpc/page-owners.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
@@ -47,6 +56,8 @@ import {
 import { injectorMatches, isEnvironmentRequest, signalOwner } from './signal-graph.ts';
 import { getProviders } from './rpc/get-providers.ts';
 import { getNgrxStore, scanNgrxStore } from './rpc/get-ngrx-store.ts';
+import { createNgrxHistory } from './rpc/ngrx-session-tools.ts';
+import { createProviderValues } from './rpc/provider-values.ts';
 import {
   dispatchResultText,
   expireNgrxPages,
@@ -176,9 +187,12 @@ import { sanitizeHydration, sanitizePayload, type PayloadSummary } from './http-
 import { redactCall } from './http-redact.ts';
 import { redactMessage, redactUrl } from './router.ts';
 import { isSsrRequestId, ssrRegistry } from './ssr-registry.ts';
-import { sanitizeSsrOverrides } from './ssr-overrides.ts';
+import { sanitizeSsrOverrides, type SsrOverride } from './ssr-overrides.ts';
+import { ssrOverrideTools } from './rpc/ssr-override-tools.ts';
+import { createComponentScreenshots } from './rpc/component-screenshots.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import { listHttpCallsText } from './rpc/http-tools.ts';
+import { httpWaterfallText, type HttpWaterfallArgs } from './rpc/http-waterfall.ts';
 import {
   httpRulesText,
   removeHttpRule,
@@ -200,6 +214,7 @@ import {
   type CdState,
 } from './rpc/cd-tools.ts';
 import { cdExportText } from './rpc/cd-export-tools.ts';
+import { cdDiagnosisText } from './rpc/cd-diagnosis-tools.ts';
 import { toCdOptionsRequest } from './cd-data.ts';
 import type { HttpPage, HttpPayloadState, HttpReport, HttpState } from './types.ts';
 
@@ -251,8 +266,18 @@ import {
 } from './config.ts';
 
 export * from './config.ts';
+export {
+  definePangularServerPlugin,
+  type PangularPluginPage,
+  type PangularPluginTool,
+  type PangularPluginToolContext,
+  type PangularServerPlugin,
+  type PangularServerPluginContext,
+  type PluginActionResult,
+} from './plugin.ts';
 
 import { registerAuthTokens } from './auth-tokens.ts';
+import { registerBrowserTools, type BrowserToolHost } from './rpc/browser-tools.ts';
 import pkg from '../package.json' with { type: 'json' };
 import { INTEREST_TICK_MS, createPageInterest, leased } from './rpc/page-interest.ts';
 import { createReportDeltas, deltaPush } from './rpc/report-deltas.ts';
@@ -283,7 +308,11 @@ const clientAssets: RemoteAssets = {
   resolveFrom: import.meta.url,
 };
 
-type SetupInfo = DevframeSetupInfo & { config?: ResolvedPangularConfig; pageTools?: boolean };
+type SetupInfo = DevframeSetupInfo & {
+  config?: ResolvedPangularConfig;
+  pageTools?: boolean;
+  serverPlugins?: readonly PangularServerPlugin[];
+};
 
 const pangular = defineDevframe({
   id: 'pangular',
@@ -397,6 +426,13 @@ const pangular = defineDevframe({
       return true;
     };
 
+    // The `read` agent tools, for the page to register with browser agents.
+    registerBrowserTools(register, ctx as unknown as BrowserToolHost, {
+      enabled: config.agent.browserTools,
+      owns,
+    });
+
+    let onPageClaimed = (_pageId: string) => {};
     register({
       name: 'claim-page',
       type: 'action',
@@ -404,7 +440,10 @@ const pangular = defineDevframe({
       handler: (message: { pageId?: unknown; key?: unknown } | null) => {
         const pageId = message?.pageId;
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return { ok: false };
-        return { ok: owners.claim(pageId, message?.key) };
+        const ok = owners.claim(pageId, message?.key);
+        // The overlay claims once per load: what the audit holds of the old document is stale.
+        if (ok) onPageClaimed(pageId);
+        return { ok };
       },
     });
 
@@ -741,6 +780,78 @@ const pangular = defineDevframe({
           owns,
           mayForget,
           ttl: liveTtl,
+        })
+      : null;
+    const leaksInspector = on.components
+      ? await registerLeaks({
+          my,
+          rpcHost: ctx.rpc,
+          register,
+          agent,
+          owns,
+          mayForget,
+          ttl: liveTtl,
+        })
+      : null;
+    const startupInspector = on.injectors
+      ? await registerStartup({
+          my,
+          rpcHost: ctx.rpc,
+          register,
+          agent,
+          owns,
+          mayForget,
+          ttl: liveTtl,
+        })
+      : null;
+    // A plugin tool's tier comes from the plugin; `pluginToolAllowed` checks it against the config.
+    const pluginsInspector = on.plugins
+      ? await registerPlugins({
+          my,
+          rpcHost: ctx.rpc,
+          config,
+          register,
+          agent,
+          registerPluginTool: (tool, safety) =>
+            ctx.agent.registerTool(
+              feed.wrapTool({
+                ...(tool as Parameters<typeof ctx.agent.registerTool>[0]),
+                safety,
+                handler: leased(() => interest, tool['handler']),
+              }),
+            ),
+          pageTools,
+          owns,
+          mayForget,
+          ttl: liveTtl,
+          serverPlugins: info?.serverPlugins,
+        })
+      : null;
+
+    const reduxStores = on.ngrx
+      ? await registerReduxStores({
+          my,
+          rpcHost: ctx.rpc,
+          register,
+          agent,
+          owns,
+          mayForget,
+          ttl: liveTtl,
+          maxLog: limits.changeLog,
+        })
+      : null;
+    const tanstackQuery = on.tanstackQuery
+      ? await registerTanstackQuery({
+          my,
+          rpcHost: ctx.rpc,
+          register,
+          agent,
+          owns,
+          mayForget,
+          answersFor,
+          ttl: liveTtl,
+          writes: config.actions.tanstackQuery,
+          blocked: actionBlockedMessage('tanstackQuery'),
         })
       : null;
 
@@ -1088,20 +1199,31 @@ const pangular = defineDevframe({
       },
     });
 
+    const saveSsrOverrides = (overrides: SsrOverride[]) => {
+      ssrRegistry().overrides = overrides;
+      httpState.mutate((draft) => {
+        draft.ssrOverrides = overrides;
+      });
+      return overrides;
+    };
     register({
       name: 'set-ssr-overrides',
       type: 'action',
       jsonSerializable: true,
       handler: (input: unknown) => {
         if (!config.actions.http) throw new Error(actionBlockedMessage('http'));
-        const overrides = sanitizeSsrOverrides(input);
-        ssrRegistry().overrides = overrides;
-        httpState.mutate((draft) => {
-          draft.ssrOverrides = overrides;
-        });
-        return overrides;
+        return saveSsrOverrides(sanitizeSsrOverrides(input));
       },
     });
+    // The panel's TransferState payload and SSR overrides, for agents.
+    for (const tool of ssrOverrideTools({
+      config,
+      overrides: () => ssrRegistry().overrides ?? [],
+      save: saveSsrOverrides,
+      payloads: () => httpPayloads,
+      pages: () => httpPages.values(),
+    }))
+      agent.registerTool(tool);
 
     const clearHttpCalls = () => {
       if (!config.actions.http) throw new Error(actionBlockedMessage('http'));
@@ -1174,6 +1296,11 @@ const pangular = defineDevframe({
       if (expireNgrxPages(ngrxPages, Date.now(), liveTtl)) applyNgrx();
       if (expireCapacitorPages(capacitorPages, Date.now(), liveTtl)) applyCapacitor();
       errorsInspector?.expire();
+      leaksInspector?.expire();
+      reduxStores?.expire();
+      tanstackQuery?.expire();
+      startupInspector?.expire();
+      pluginsInspector?.expire();
       componentDeltas.prune((id) => componentPages.has(id));
       injectorDeltas.prune((id) => injectorPages.has(id));
       cdDeltas.prune((id) => cdPages.has(id));
@@ -1191,6 +1318,7 @@ const pangular = defineDevframe({
     registry.dispose = () => {
       clearInterval(expiry);
       clearInterval(interestTick);
+      pluginsInspector?.dispose();
       interest.stop();
       clearTimeout(flushTimer);
       registry.record = undefined;
@@ -1202,7 +1330,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:list-ssr-requests',
       description:
-        'Recent document requests that the Angular SSR server answered, traced by `devtools.ssrMiddleware`: id, URL, status, render mode read from the HTML (Server, Prerender, Client), render time, how many server HttpClient calls the render made, and whether a connected page reported loading that response. Empty when the middleware is not installed.',
+        'Recent document requests that the Angular SSR server answered, traced by `devtools.ssrMiddleware` or `withPangularSsr()`: id, URL, status, render mode read from the HTML (Server, Prerender, Client), render time, how many server HttpClient calls the render made, and whether a connected page reported loading that response. Empty when neither is installed.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1240,7 +1368,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:list-http-calls',
       description:
-        "The app's HttpClient calls recorded by `withPangular()`, newest first: side (SSR or client), method, URL, status, duration and flags (mocked or faulted by a rule, cancelled, transfer cache hit or skip, the matched rule). Without `page` it lists every reporting tab and the server; with `page` only that tab and the server render that served it. Secrets in URLs, errors and previews are masked. Empty when no page uses the interceptor.",
+        "The app's HttpClient calls recorded by `withPangular()`, newest first: side (SSR or client), method, URL, status, duration and flags (mocked or faulted by a rule, cancelled, transfer cache hit or skip, the matched rule). Without `page` it lists every reporting tab and the server; with `page` only that tab and the server render that served it. Secrets in URLs, errors, previews and headers are masked; `headers` adds each call's request and response headers. Empty when no page uses the interceptor.",
       inputSchema: {
         type: 'object',
         properties: {
@@ -1256,6 +1384,10 @@ const pangular = defineDevframe({
             type: 'boolean',
             description: 'Add the masked response preview of each listed call.',
           },
+          headers: {
+            type: 'boolean',
+            description: 'Add the masked request and response headers of each listed call.',
+          },
         },
       },
       handler: async (args: {
@@ -1264,8 +1396,32 @@ const pangular = defineDevframe({
         failed?: boolean;
         limit?: number;
         preview?: boolean;
+        headers?: boolean;
       }) => ({
         markdown: listHttpCallsText(httpSnapshot(), { ...args, page: pageArgument(args) }),
+      }),
+    });
+
+    agent.registerTool({
+      id: 'pangular:http-waterfall',
+      description:
+        "One page's client HttpClient calls as a waterfall, grouped by navigation (a new group each time the page URL changes), newest navigation first: each call's start offset in its navigation, duration, status and a text bar. With `headers`, each call's request headers (as they reached `withPangular()`) and the response headers the app could read; `Authorization`, cookies, secret-looking names, JWTs and bearer tokens are masked. Empty when no page uses the interceptor.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: PAGE_ARGUMENT,
+          limit: {
+            type: 'integer',
+            description: 'How many navigations to show, newest first (1-50, default 5).',
+          },
+          headers: {
+            type: 'boolean',
+            description: 'Add the masked request and response headers of each call.',
+          },
+        },
+      },
+      handler: async (args: HttpWaterfallArgs & Record<string, unknown>) => ({
+        markdown: httpWaterfallText(httpSnapshot(), { ...args, page: pageArgument(args) }),
       }),
     });
 
@@ -1534,7 +1690,9 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: (
         selector:
-          string | { pageId?: unknown; id?: unknown; selector?: unknown; reveal?: unknown } | null,
+          | string
+          | { pageId?: unknown; id?: unknown; selector?: unknown; reveal?: unknown }
+          | null,
       ) => {
         const target =
           selector && typeof selector === 'object' && typeof selector.id === 'string'
@@ -1903,6 +2061,21 @@ const pangular = defineDevframe({
         componentValues.request(message?.pageId, message?.request),
     });
 
+    // Images of one component, drawn by its page: the screenshot-component tool.
+    const componentScreenshots = createComponentScreenshots({
+      pages: () => componentPages.values(),
+      broadcast: (method, message) =>
+        void my.rpc.broadcast({ method, args: [message], optional: true }),
+      answersFor,
+    });
+    register({
+      name: 'component-screenshot-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: componentScreenshots.answer,
+    });
+    agent.registerTool(componentScreenshots.tool);
+
     registerConsoleGlobals({
       config,
       register,
@@ -2177,6 +2350,28 @@ const pangular = defineDevframe({
       },
     });
 
+    // The value of a provider an injector already created: the Injectors view and read-provider-value.
+    const providerValues = createProviderValues({
+      pages: () => injectorPages.values(),
+      latest: () => latestInjectorPage(),
+      broadcast: (method, message) =>
+        void my.rpc.broadcast({ method, args: [message], optional: true }),
+      answersFor,
+    });
+    register({
+      name: 'provider-value-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: providerValues.answer,
+    });
+    register({
+      name: 'request-provider-value',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; request?: unknown } | null) =>
+        providerValues.request(message?.pageId, message?.request),
+    });
+
     register({
       name: 'push-ngrx-state',
       type: 'action',
@@ -2234,13 +2429,15 @@ const pangular = defineDevframe({
 
     const requestNgrxAction = (page: unknown, request: unknown) =>
       new Promise<NgrxRequestResult>((resolve) => {
-        if (!config.actions.ngrx) return resolve({ error: actionBlockedMessage('ngrx') });
+        const kind = (request as { type?: unknown } | null)?.type;
+        // Reading an entry's state or exporting a session changes nothing, so writes off allow it.
+        const reads = kind === 'entry' || kind === 'export';
+        if (!reads && !config.actions.ngrx) return resolve({ error: actionBlockedMessage('ngrx') });
         const all = ngrxStateOf(ngrxPages).pages;
         // A restore can target a signal store; every other request needs the classic Store.
-        const kind = (request as { type?: unknown } | null)?.type;
-        const pages = kind === 'restore' ? all : all.filter((p) => p.classic);
-        // Without a page, the request would reach every tab, or one the caller did not choose.
-        if (typeof page !== 'string' && pages.length !== 1) {
+        const pages = kind === 'restore' || reads ? all : all.filter((p) => p.classic);
+        // Without a page, a write would reach every tab, or one the caller did not choose.
+        if (typeof page !== 'string' && pages.length !== 1 && !(reads && pages.length)) {
           return resolve({
             error: pages.length
               ? choosePageText(withPageUrls(pages), 'NgRx state')
@@ -2278,6 +2475,26 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: (message: { pageId?: unknown; request?: unknown }) =>
         requestNgrxAction(message?.pageId, message?.request),
+    });
+
+    // Past entries, session export and import, and generated tests (rpc/ngrx-session-tools.ts).
+    const ngrxHistory = createNgrxHistory({
+      ask: (page, request) => requestNgrxAction(page, request),
+      page: (pageId) => ngrxPages.get(pageId),
+      pages: () => byRecency(ngrxPages.values()),
+    });
+    register({
+      name: 'request-ngrx-history',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: unknown) => ngrxHistory.history(message),
+    });
+    register({
+      name: 'import-ngrx-session',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { session?: unknown } | null) =>
+        ngrxHistory.importSession(message?.session),
     });
 
     // Agent resources
@@ -2869,6 +3086,37 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
+      id: 'pangular:diagnose-change-detection',
+      description:
+        'Why change detection ran and what it wasted, from the recording `pangular:change-detection` or the panel started (Angular 20+, development build). Lists what started each cycle (a DOM event with its type, target and listener component, a signal write with the signal name, an HTTP response, a timer, markForCheck, setInput, an effect, `ApplicationRef.tick()` from app code with its app frames, or a zone.js tick nothing in Angular asked for), the components that changed only in such zone.js ticks and so depend on zone.js, refreshed checks that changed nothing per component, inputs mutated in place or given an equal new reference (both break OnPush), and OnPush hints for components refreshed often that rarely change. While recording, the page wraps Angular\'s scheduler `notify`, adds a signal write hook and watches DOM updates; all three stop with the recording. Only reads. Empty until a recording ran: start one with `pangular:change-detection` and `record: "start"`.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: { type: 'string', description: 'Page id; defaults to the page that is recording.' },
+          limit: { type: 'number', description: 'Rows per list (default 10, max 50).' },
+        },
+      },
+      handler: async (args: { page?: string; limit?: number }) => {
+        const unknown =
+          args?.page &&
+          cdUnknownPageText(
+            args.page,
+            cdState.value() as CdState,
+            [...componentPages.values(), ...injectorPages.values()].filter(
+              (page) => !goneCdPages.has(page.pageId),
+            ),
+          );
+        if (unknown) return { markdown: unknown };
+        const cd = cdState.value() as CdState;
+        const zonePage = args?.page ?? pickCdPage(cd)?.pageId;
+        const injectors = zonePage ? injectorPages.get(zonePage) : latestInjectorPage();
+        const mode = injectors ? zoneModeText(injectors.zone, injectors.pageId) : '';
+        const text = cdDiagnosisText(cd, args ?? {}, angularPages.get);
+        return { markdown: [mode, text].filter(Boolean).join('\n\n') };
+      },
+    });
+
+    agent.registerTool({
       id: 'pangular:inspect-signals',
       description:
         'Get the reactive signal dependency graph from the running page: signal nodes (signal, computed, linkedSignal, effect), dependency edges, resources, and value history. Use `selector` to target a component (tag, class, id), `root` for root service effects, or a route path. Use `node` to inspect a single node with direct producers and consumers; `framework: false` excludes internal nodes; `history: false` omits history.',
@@ -3026,6 +3274,23 @@ const pangular = defineDevframe({
             ? `${reduced} The page reports a reduced tree: element injectors with their components and directives, and providers and environment injectors only where its Angular exposes them.\n\n${text}`
             : text,
         };
+      },
+    });
+
+    agent.registerTool(providerValues.tool);
+
+    registerInjectionExplain({
+      register,
+      agent,
+      page: (requested) => {
+        if (requested && !injectorPages.has(requested)) {
+          return {
+            error: unknownPageText(requested, [...injectorPages.values()], 'an injector tree'),
+          };
+        }
+        const page = requested ? injectorPages.get(requested) : latestInjectorPage();
+        const angular = angularPages.pick(page?.pageId ?? requested);
+        return { page, reduced: angular?.capabilities.injectorProviders === false };
       },
     });
 
@@ -3337,6 +3602,8 @@ const pangular = defineDevframe({
         return { markdown: dispatchResultText(await requestNgrxAction(target.pageId, request)) };
       },
     });
+
+    for (const tool of ngrxHistory.tools) agent.registerTool(tool);
 
     const noForms = `No forms have been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser, on a page that renders a form. The stdio server has no page attached and only ever reports this.`;
     const unknownFormPage = (args: unknown) => {
@@ -3808,13 +4075,16 @@ const pangular = defineDevframe({
             components: withUrl(componentPages.values()),
             signals: withUrl([...signalPages].map(([pageId, entry]) => ({ pageId, ...entry }))),
             injectors: withUrl(injectorPages.values()),
-            ngrx: withUrl(ngrxPages.values()),
+            ngrx: withUrl([...ngrxPages.values(), ...(reduxStores?.pages() ?? [])]),
+            tanstackQuery: withUrl(tanstackQuery?.pages() ?? []),
             forms: withUrl(formPages.values()),
             router: withUrl(routerPages.values()),
             pipes: withUrl(pipePages.values()),
             http: withUrl(httpPages.values()),
             capacitor: withUrl(capacitorPages.values()),
             errors: withUrl(errorsInspector?.pages() ?? []),
+            startup: withUrl(startupInspector?.pages() ?? []),
+            plugins: withUrl(pluginsInspector?.pages() ?? []),
             analog: withUrl(on.analog ? analogPages() : []),
           },
           visibility.list(),
@@ -3881,6 +4151,42 @@ const pangular = defineDevframe({
       });
     });
 
+    const audit = await registerAudit({
+      my,
+      register,
+      agent,
+      answersFor,
+      agentSees: (inspector) => config.agent.tools[inspector],
+      agentAxe: !config.agent.readOnly,
+      agentReadOnly: config.agent.readOnly,
+      // Every page the overlay claimed, so axe works with any set of inspectors on.
+      pages: () =>
+        withPageUrls([
+          ...owners.live(),
+          ...componentPages.values(),
+          ...httpPages.values(),
+          ...routerPages.values(),
+          ...formPages.values(),
+          ...(errorsInspector?.pages() ?? []),
+          ...(leaksInspector?.pages() ?? []),
+        ]),
+      sources: {
+        ...(on.components
+          ? {
+              cd: () => cdState.value() as CdState,
+              components: (pageId: string) => componentPages.get(pageId) ?? null,
+            }
+          : {}),
+        ...(leaksInspector ? { leaks: leaksInspector.state } : {}),
+        ...(errorsInspector ? { errors: errorsInspector.state } : {}),
+        ...(on.router ? { router: () => routerState.value() as RouterState } : {}),
+        ...(on.forms ? { forms: () => formsState.value() as FormsState } : {}),
+        ...(on.http ? { http: () => httpState.value() as HttpState } : {}),
+        ...(on.pipes ? { pipes: cachedPipeLint(() => lintPipes(ctx.cwd)) } : {}),
+      },
+    });
+    onPageClaimed = audit.pageLoaded;
+
     if (on.analog) {
       await registerAnalog(my as never, { cwd: ctx.cwd, agent } as never, {
         blockCalls: config.actions.analog ? undefined : actionBlockedMessage('analog'),
@@ -3917,6 +4223,8 @@ export interface PangularHostOptions {
    * Server-only: they never go into the published config.
    */
   authTokens?: string[];
+  /** Server plugins: agent tools and shared state of Pangular plugins (`plugin.ts`). */
+  serverPlugins?: readonly PangularServerPlugin[];
 }
 
 export function createPangular(options: PangularConfig = {}, host: PangularHostOptions = {}) {
@@ -3926,7 +4234,12 @@ export function createPangular(options: PangularConfig = {}, host: PangularHostO
   return defineDevframe({
     ...pangular,
     setup: (ctx, info) => {
-      const withConfig: SetupInfo = { ...info, config, pageTools: host.pageTools };
+      const withConfig: SetupInfo = {
+        ...info,
+        config,
+        pageTools: host.pageTools,
+        serverPlugins: host.serverPlugins,
+      };
       if (host.authTokens?.length && !registerAuthTokens(ctx, host.authTokens)) {
         console.warn(
           '[pangular] The pairing tokens could not be registered, so clients need the one-time code.',

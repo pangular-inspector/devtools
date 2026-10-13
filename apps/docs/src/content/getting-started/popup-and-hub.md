@@ -152,7 +152,7 @@ When the page's server mounts the hub (`/__devframes/`), the button opens the wh
 | Dock           | Shows                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | All tools      | The full panel, with every tab in one tab bar (`/__devframes/pangular/`)                                                                     |
-| Angular        | Dashboard, Timeline, Components, Routes, Signals, Injectors, Forms, Pipes, SSR & HTTP, and Errors                                            |
+| Angular        | Dashboard, Timeline, Audit, Components, Routes, Signals, Injectors, Forms, Pipes, SSR & HTTP, and Errors                                     |
 | NgRx           | The Store tab                                                                                                                                |
 | Analog         | The Analog tab, or a notice in apps that do not use Analog                                                                                   |
 | Angular Native | Components, Signals, Injectors and Store for a connected [Angular Native](./angular-native.md) app, or a setup notice when none is connected |
@@ -217,6 +217,7 @@ The URL hash selects a tab. Open `/__devframes/pangular/#tab=signals` to land on
 | ---------- | ----------------- |
 | Dashboard  | `#tab=dashboard`  |
 | Timeline   | `#tab=timeline`   |
+| Audit      | `#tab=audit`      |
 | Components | `#tab=components` |
 | Routes     | `#tab=routes`     |
 | Signals    | `#tab=signals`    |

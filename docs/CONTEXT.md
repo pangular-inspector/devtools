@@ -32,6 +32,10 @@ _Avoid_: bridge call, native call (for both kinds)
 The early part of the Capacitor collector (`capacitor-collector.ts`), loaded through `@pangular-inspector/devtools/capacitor-hook` before `@capacitor/core`. It wraps the native bridge and `registerPlugin` so plugin calls are logged from app start, and the overlay picks up its buffer when it connects.
 _Avoid_: interceptor, patch, monkey patch
 
+**Store hook**:
+The stand-in for the Redux DevTools extension's page API (`window.__REDUX_DEVTOOLS_EXTENSION__`, in `redux-devtools-hook.ts`), loaded early through `@pangular-inspector/devtools/store-hook` or installed by the overlay. NGXS, Elf and MiniRx connect to it through their own devtools integrations, so they show in the store inspector. It passes every call on to the real extension when there is one.
+_Avoid_: fake extension, Redux shim, devtools mock
+
 **Host tree**:
 The tree Angular rendered into, as the component, injector, signal graph and NgRx collectors walk it: roots, children, parent and a tag for each host (`HostTree` in `host-tree.ts`). In the browser it is the DOM, through `domTree()`; a platform without a DOM describes its own views.
 _Avoid_: view tree, render tree, DOM (when the code does not depend on it)
@@ -41,8 +45,12 @@ A report a collector sends to the server over RPC, such as `push-component-tree`
 _Avoid_: sync, upload, post
 
 **Inspector**:
-One area the devtools can look at: `components`, `injectors`, `signals`, `ngrx`, `forms`, `router`, `pipes`, `http`, `analog` and `capacitor` (`PANGULAR_INSPECTORS` in `config.ts`). An inspector owns a collector, its RPC functions, its agent tools and its view in the panel, and `inspectors` in the config turns all of them off together.
-_Avoid_: plugin, module, feature
+One area the devtools can look at: `components`, `injectors`, `signals`, `ngrx`, `tanstackQuery`, `forms`, `router`, `pipes`, `http`, `analog`, `capacitor`, `errors` and `plugins` (`PANGULAR_INSPECTORS` in `config.ts`). An inspector owns a collector, its RPC functions, its agent tools and its view in the panel, and `inspectors` in the config turns all of them off together.
+_Avoid_: plugin (a Pangular plugin is a library's own view), module, feature
+
+**Pangular plugin**:
+A library's own view in the panel and its own agent tools, through the public plugin API (`@pangular-inspector/devtools/plugin`). The page plugin, registered with `registerPangularPlugin()`, returns a declarative view (tables, lists, stats, trees) that the Plugins tab renders; the server plugin, passed as `serverPlugins`, adds tools named `pangular:plugin:<id>:<tool>` and the shared state `pangular:plugin.<id>`. The `plugins` inspector runs them, and `plugins.<id>` in the config turns one off.
+_Avoid_: extension (the Chrome extension), add-on, inspector
 
 **Devframe**:
 The framework the devtools are built on (`devframe`). One definition, `packages/devtools/src/devframe.ts`, declares the RPC functions, shared state and agent tools, and Devframe serves it as the embedded panel, the standalone CLI, the static report and the MCP server.

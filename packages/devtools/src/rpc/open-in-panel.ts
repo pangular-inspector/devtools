@@ -11,7 +11,7 @@ import {
 export const OPEN_IN_PANEL_EVENT = 'open-in-panel';
 
 export const OPEN_IN_PANEL_DESCRIPTION =
-  'Generates a link that opens the devtools panel on a specific tab, optionally focusing an item, and navigates open panels to it. Specify `tab` (e.g. dashboard, components, routes, signals, injectors, forms, network). Pass `id` to select items in components, injectors, or forms. Supports `page` across multiple tabs. Returns a markdown link (full URL in hub mode or hash fragment).';
+  'Gives the user a link that opens the devtools panel on one tab, optionally with one item selected, and switches open panels to it. `tab`: dashboard, components, routes, signals, injectors, store, queries, forms, pipes, network, errors, audit, analog or capacitor. `id` selects a component instance (components), the component whose injector to show (injectors) or a form id (forms). Pass `page` when more than one tab reports. Returns a markdown link: a full URL in hub mode, otherwise a hash.';
 
 export interface OpenInPanelArgs {
   tab?: unknown;

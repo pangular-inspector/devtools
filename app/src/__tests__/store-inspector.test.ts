@@ -411,14 +411,16 @@ describe('StoreInspector before the shared state arrives', () => {
     const rpc = {
       call: () => Promise.resolve([]),
       callEvent: () => Promise.resolve(),
-      sharedState: () =>
-        Promise.resolve({
-          value: () => value,
-          on: (_: string, listener: (next: unknown) => void) => {
-            push = listener;
-            return () => {};
-          },
-        }),
+      sharedState: (key: string) =>
+        key === 'ngrx-store'
+          ? Promise.resolve({
+              value: () => value,
+              on: (_: string, listener: (next: unknown) => void) => {
+                push = listener;
+                return () => {};
+              },
+            })
+          : Promise.reject(new Error('unknown state')),
     };
     const client = { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
     const fixture = TestBed.createComponent(StoreInspector);
@@ -428,12 +430,12 @@ describe('StoreInspector before the shared state arrives', () => {
 
     const status = (fixture.nativeElement as HTMLElement).querySelector('.empty[role="status"]');
     expect(status?.textContent).toContain('Loading…');
-    expect(text()).not.toContain('No page is reporting NgRx state yet.');
+    expect(text()).not.toContain('No page is reporting store state yet.');
 
     value = { pages: [] };
     push(value);
     await settle(fixture);
     expect(text()).not.toContain('Loading…');
-    expect(text()).toContain('No page is reporting NgRx state yet.');
+    expect(text()).toContain('No page is reporting store state yet.');
   });
 });

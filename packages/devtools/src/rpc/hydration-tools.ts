@@ -1,3 +1,4 @@
+import { diffDom, diffText } from '../dom-diff.ts';
 import type { ComponentPage, HydrationReport, LiveComponentNode } from '../types.ts';
 import { code, untrusted } from './forms-tools.ts';
 import { capped } from './router-tools.ts';
@@ -6,7 +7,7 @@ import { capped } from './router-tools.ts';
 export const HYDRATION_ROWS = 30;
 
 export const HYDRATION_DESCRIPTION =
-  'Live SSR hydration stats (Angular dev builds): counts of hydrated, skipped, mismatched, or client-created component hosts, and dehydrated `@defer` blocks. Lists host IDs (up to 30 each). Supports `page` filtering across tabs. Truncated at 20,000 chars.';
+  'Live SSR hydration stats (Angular dev builds): hydrated, skipped (`ngSkipHydration`), mismatched (with a diff of the server HTML Angular expected and the client DOM it found) and client-created component hosts, plus dehydrated `@defer` blocks, by instance id (up to 30 each). Says when a page was not rendered on the server or has no hydrated host. Each tab reports its own; `page` picks one. Truncated at 20,000 chars.';
 
 export const HYDRATION_OVERLAY_DESCRIPTION =
   ' `overlay: true|false` toggles visual outlines for hydrated (solid), skipped (dashed), mismatched (double), and dehydrated blocks (dotted).';
@@ -67,10 +68,17 @@ function pageSection(page: ComponentPage): string {
   if (report.mismatches.length) {
     lines.push('', 'Mismatched:');
     for (const mismatch of report.mismatches) {
-      lines.push(
-        `- ${code(mismatch.name)} ${code(`<${mismatch.tag}>`)} ${code(mismatch.id)}${mismatch.expected ? `: expected ${code(mismatch.expected)}` : ''}${mismatch.actual ? `, found ${code(mismatch.actual)}` : ''}`,
-      );
+      lines.push(`- ${code(mismatch.name)} ${code(`<${mismatch.tag}>`)} ${code(mismatch.id)}`);
+      if (mismatch.expected || mismatch.actual) {
+        // Server HTML Angular expected (-) against the client DOM it found (+).
+        const diff = diffText(diffDom(mismatch.expected, mismatch.actual)).replace(/```/g, "'''");
+        lines.push('', '  ```diff', ...diff.split('\n').map((line) => `  ${line}`), '  ```');
+      }
     }
+    lines.push(
+      '',
+      'In each diff, `-` lines are the server HTML Angular expected, `+` lines the client DOM it found, and `<-- AT THIS LOCATION` marks the node. pangular:explain-error shows the same diff for the NG05xx error.',
+    );
   }
   const client = hostsWith(page.roots, 'client');
   if (client.length) {

@@ -38,6 +38,7 @@ When a tab needs a debug API the page doesn't have, it says which Angular versio
 | Feature                                                | Needs Angular |
 | ------------------------------------------------------ | ------------- |
 | Live component tree, detail and values                 | 12.0          |
+| Telling detached components from destroyed ones        | 14.0          |
 | Injected services, providers and environment injectors | 16.2          |
 | Full injector tree with lookup paths                   | 17.0          |
 | Signal values in the component detail (`ng.isSignal`)  | 17.1          |
@@ -45,7 +46,8 @@ When a tab needs a debug API the page doesn't have, it says which Angular versio
 | The `@pangular-inspector/devtools/http` entry          | 19.0          |
 | **Defer blocks** list                                  | 19.1          |
 | Change detection recording and Angular profiling       | 20.0          |
-| Live signal graph                                      | 20.1          |
+| Subscriptions tied to component instances              | 20.0          |
+| Live signal graph and effect counts in **Leaks**       | 20.1          |
 | **&#64;for blocks** list                               | 22.0          |
 
 All of them need a development build, since production builds leave out `window.ng`.
@@ -129,19 +131,23 @@ MCP agent support (`@devframes/agentic`) and Devframe itself are included. You d
 
 ### Entry points
 
-| Import                                                | Use it for                                                                                                 |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `@pangular-inspector/devtools/hub`                    | `initPangularHub()`, the server middleware for an Express app.                                             |
-| `@pangular-inspector/devtools/vite`                   | The Vite plugin for a Vite-based Angular app, such as an Analog app.                                       |
-| `@pangular-inspector/devtools/overlay`                | The browser script that collects live data from your page.                                                 |
-| `@pangular-inspector/devtools/overlay-manual`         | The same script, started only when you call `initOverlay`. See [Set up Capacitor](../guides/capacitor.md). |
-| `@pangular-inspector/devtools/capacitor-hook`         | Logs Capacitor plugin calls from app start. See [Capacitor](../inspectors/capacitor.md#web-calls).         |
-| `@pangular-inspector/devtools/overlay-angular-native` | The overlay for an Angular Native app. See [Angular Native](./angular-native.md).                          |
-| `@pangular-inspector/devtools/overlay-nativescript`   | The overlay for a NativeScript Angular app. See [NativeScript](./nativescript.md).                         |
-| `@pangular-inspector/devtools/popup`                  | The floating button and panel on your page.                                                                |
-| `@pangular-inspector/devtools/http`                   | The HTTP interceptor and hydration hooks for the SSR & HTTP tab.                                           |
-| `@pangular-inspector/devtools/config`                 | The `PangularConfig` type and its defaults. See [Configuration](./configuration.md).                       |
-| `@pangular-inspector/devtools/devframe`               | The devframe definition and `initDevframe()`, for custom hosts.                                            |
+| Import                                                | Use it for                                                                                                            |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `@pangular-inspector/devtools/hub`                    | `initPangularHub()`, the server middleware for an Express app.                                                        |
+| `@pangular-inspector/devtools/vite`                   | The Vite plugin for a Vite-based Angular app, such as an Analog app.                                                  |
+| `@pangular-inspector/devtools/overlay`                | The browser script that collects live data from your page.                                                            |
+| `@pangular-inspector/devtools/overlay-manual`         | The same script, started only when you call `initOverlay`. See [Set up Capacitor](../guides/capacitor.md).            |
+| `@pangular-inspector/devtools/capacitor-hook`         | Logs Capacitor plugin calls from app start. See [Capacitor](../inspectors/capacitor.md#web-calls).                    |
+| `@pangular-inspector/devtools/store-hook`             | Lets NGXS, Elf and MiniRx stores report from app start. See [Other stores](../inspectors/ngrx-store.md#other-stores). |
+| `@pangular-inspector/devtools/startup-hook`           | Times provider construction at startup. See [Injectors](../inspectors/injectors.md#startup-timing).                   |
+| `@pangular-inspector/devtools/plugin`                 | The plugin API for a library's own tab and agent tools. See [Write a plugin](../guides/write-a-plugin.md).            |
+| `@pangular-inspector/devtools/overlay-angular-native` | The overlay for an Angular Native app. See [Angular Native](./angular-native.md).                                     |
+| `@pangular-inspector/devtools/overlay-nativescript`   | The overlay for a NativeScript Angular app. See [NativeScript](./nativescript.md).                                    |
+| `@pangular-inspector/devtools/popup`                  | The floating button and panel on your page.                                                                           |
+| `@pangular-inspector/devtools/http`                   | The HTTP interceptor and hydration hooks for the SSR & HTTP tab.                                                      |
+| `@pangular-inspector/devtools/ssr`                    | SSR tracing for web-standard handlers, Fastify and Analog. See [Hono, h3 and Fastify](./other-servers.md).            |
+| `@pangular-inspector/devtools/config`                 | The `PangularConfig` type and its defaults. See [Configuration](./configuration.md).                                  |
+| `@pangular-inspector/devtools/devframe`               | The devframe definition and `initDevframe()`, for custom hosts.                                                       |
 
 ### The CLI binary
 

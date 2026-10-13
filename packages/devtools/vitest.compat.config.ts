@@ -9,6 +9,8 @@ const angular = Number(require('@angular/core/package.json').version.split('.')[
 const pageSide = [
   'analog-scan',
   'angular-real-app',
+  'axe-runner',
+  'axe-runner-real',
   'cd-recorder',
   'cd-recorder-real',
   'change-detection',
@@ -27,6 +29,8 @@ const pageSide = [
   'http-server',
   'injector-tree',
   'injector-tree-real',
+  'leaks-collector',
+  'leaks-real',
   'ngrx-collector',
   'pipes-collector',
   'pipes-runtime',

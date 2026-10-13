@@ -138,6 +138,30 @@ export const appConfig: ApplicationConfig = {
 
 `providePangularHttp()` and `withPangular()` do nothing in production builds. See [Set up SSR & HTTP](./ssr-http.md) for the interceptor order.
 
+## Trace server renders
+
+To fill the **SSR requests** table in the **SSR & HTTP** tab, add a Nitro server middleware that traces each page render. Analog runs files in `src/server/middleware` before it renders the page, on the dev server too:
+
+```ts
+// src/server/middleware/pangular-ssr.ts
+import {pangularSsrEventHandler} from '@pangular-inspector/devtools/ssr';
+import {defineEventHandler} from 'h3';
+
+export default defineEventHandler(pangularSsrEventHandler());
+```
+
+It wraps the Node response of each HTML request, adds the `Server-Timing` header that links the page to its render, and records the render with its render mode. Analog marks its renders `ssr-analog`, which the tab shows as **Server**. It does nothing while the Vite plugin is not running, so it is safe in a production build.
+
+Analog gives the render its own `REQUEST` token, not the one from `@angular/core`, so `withPangular()` can't read the request id from a header. Instead, the tracer links each server call to the only traced request in flight.
+
+If two traced renders run at once, the tracer can't tell their calls apart. The calls show in the timeline without a link to their request.
+
+The tracer skips a request that does not accept `text/html`, such as `curl` without an `Accept` header. It also skips a path in `skip`. A render it skips is not in flight for the tracer.
+
+If an untraced render runs alongside one traced render, the tracer links the untraced render's calls to the traced one.
+
+The tracer drops a traced request after five minutes without activity, such as a response nobody reads. A response that keeps sending chunks stays in flight.
+
 ## Try the demo
 
 The repository has an Analog demo in `examples/analog`. It has file routes with route groups, `.server.ts` loads, API routes under `src/server/routes/api/v1`, markdown content, prerendered pages and a client-only `/dashboard`.

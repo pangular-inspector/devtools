@@ -29,6 +29,8 @@ import { LimitNote } from '../ui/limit-note';
 import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
 import { VirtualWindow } from '../ui/virtual-window';
+import { HttpHeadersView } from './http-headers';
+import { NetworkWaterfall } from './network-waterfall';
 
 type HttpSide = 'client' | 'server';
 
@@ -64,6 +66,8 @@ interface HttpCall {
   at: number;
   error?: string;
   preview?: string;
+  requestHeaders?: Record<string, string>;
+  responseHeaders?: Record<string, string>;
 }
 
 interface SsrNavigation {
@@ -290,7 +294,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
 
 @Component({
   selector: 'app-network-inspector',
-  imports: [JsonPipe, LimitNote, RovingList, Select],
+  imports: [JsonPipe, HttpHeadersView, LimitNote, NetworkWaterfall, RovingList, Select],
   template: `
     @if (loading()) {
       <div class="state" role="status">
@@ -533,7 +537,8 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             <p>No SSR requests traced.</p>
             <p class="muted small">
               Add <code>app.use(devtools.ssrMiddleware)</code> before the Angular handler in
-              <code>server.ts</code>, then load a server rendered page.
+              <code>server.ts</code>, or wrap a web-standard handler with
+              <code>withPangularSsr()</code>, then load a server rendered page.
             </p>
           </div>
         }
@@ -584,10 +589,32 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             />
             Failed only
           </label>
-          <span class="total">{{ visibleCalls().length }} of {{ timeline().length }}</span>
+          <div class="view-toggle" role="group" aria-label="Timeline view">
+            <button
+              type="button"
+              [attr.aria-pressed]="timelineView() === 'table'"
+              (click)="timelineView.set('table')"
+            >
+              Table
+            </button>
+            <button
+              type="button"
+              [attr.aria-pressed]="timelineView() === 'waterfall'"
+              (click)="timelineView.set('waterfall')"
+            >
+              Waterfall
+            </button>
+          </div>
+          <span class="total">{{ countText() }}</span>
           <span class="sr-only" role="status">{{ filterStatus() }}</span>
         </div>
-        @if (visibleCalls().length) {
+        @if (visibleCalls().length && timelineView() === 'waterfall') {
+          <app-network-waterfall
+            [calls]="waterfallCalls()"
+            [selectedId]="selectedCall()?.id ?? null"
+            (open)="openCall($event)"
+          />
+        } @else if (visibleCalls().length) {
           @if (callWindow.enabled()) {
             <p class="muted small window-note">
               Rows render as you scroll, so the browser's find only sees the ones near view; the
@@ -762,7 +789,13 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               role="region"
               [attr.aria-label]="detail.error ? 'Response error' : 'Response body'"
               [class.error]="!!detail.error && !detail.cancelled"
-              >{{ detail.error ?? previewText(detail) ?? '(no body)' }}</pre>
+              >{{ detail.error ?? previewText(detail) ?? '(no body)' }}</pre
+            >
+            <app-http-headers
+              [callId]="detail.id"
+              [request]="detail.requestHeaders"
+              [response]="detail.responseHeaders"
+            />
           </div>
         }
       </section>
@@ -1812,6 +1845,30 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       border-color: color-mix(in srgb, var(--danger) 30%, transparent);
       color: var(--danger);
     }
+    .view-toggle {
+      display: inline-flex;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .view-toggle button {
+      height: calc(var(--control-h) - 2px);
+      padding: 0 10px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--text-2);
+    }
+    .view-toggle button + button {
+      border-left: 1px solid var(--border-strong);
+    }
+    .view-toggle button[aria-pressed='true'] {
+      background: var(--accent-soft);
+      color: var(--text-strong);
+    }
+    .view-toggle button:focus-visible {
+      @include m.focus-ring(-2px);
+    }
     .preview {
       @include m.enter(0.2s);
       margin-top: 16px;
@@ -2205,6 +2262,9 @@ export class NetworkInspector {
   );
 
   readonly callQuery = signal('');
+  /** The timeline as a table of every call, or a waterfall of the client calls by navigation. */
+  readonly timelineView = signal<'table' | 'waterfall'>('table');
+  readonly waterfallCalls = computed(() => this.visibleCalls().filter((c) => c.side === 'client'));
   readonly sideFilter = signal<HttpSide | 'all' | null>('all');
   readonly failedOnly = signal(false);
   readonly sideOptions: SelectOption<HttpSide | 'all'>[] = [
@@ -2244,14 +2304,22 @@ export class NetworkInspector {
    * The count, announced only when a filter changes. The visible count also changes with every
    * call the app makes, which would make a screen reader talk while the user uses the app.
    */
+  /** What the view shows out of every call: the waterfall shows only client calls. */
+  readonly countText = computed(() => {
+    const total = this.timeline().length;
+    if (this.timelineView() !== 'waterfall') return `${this.visibleCalls().length} of ${total}`;
+    const client = this.waterfallCalls().length;
+    return `${client} client ${client === 1 ? 'call' : 'calls'} of ${total}`;
+  });
   readonly filterStatus = computed(() => {
     this.callQuery();
     this.sideFilter();
     this.failedOnly();
+    this.timelineView();
     // A filter change that keeps the same counts still gets announced: the text flips a
     // trailing no-break space so the live region sees a change.
     this.filterFlip = !this.filterFlip;
-    const text = untracked(() => `${this.visibleCalls().length} of ${this.timeline().length}`);
+    const text = untracked(() => this.countText());
     return this.filterFlip ? `${text}\u00a0` : text;
   });
   private filterFlip = true;

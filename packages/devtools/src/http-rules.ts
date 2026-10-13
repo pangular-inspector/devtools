@@ -1,4 +1,5 @@
 import { CACHE_SKIP_TEXT, isHttpRuleStatus, type CacheSkip } from './config.ts';
+import { sanitizeHeaders, type HeaderRecord } from './http-headers.ts';
 import { urlGlobMatch } from './url-glob.ts';
 
 export type HttpSide = 'client' | 'server';
@@ -45,6 +46,10 @@ export interface HttpCall {
   at: number;
   error?: string;
   preview?: string;
+  /** The request headers when the call reached `withPangular()`, redacted before they leave the page. */
+  requestHeaders?: HeaderRecord;
+  /** The response headers the app could read, redacted before they leave the page. */
+  responseHeaders?: HeaderRecord;
 }
 
 export interface HttpRegistry {
@@ -143,6 +148,15 @@ const str = (value: unknown, max: number) =>
 const num = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
+function headerFields(request: unknown, response: unknown) {
+  const requestHeaders = sanitizeHeaders(request);
+  const responseHeaders = sanitizeHeaders(response);
+  return {
+    ...(requestHeaders ? { requestHeaders } : {}),
+    ...(responseHeaders ? { responseHeaders } : {}),
+  };
+}
+
 /** Validates calls reported over RPC; drops anything malformed. */
 export function sanitizeCalls(input: unknown, max = MAX_CALLS): HttpCall[] {
   if (!Array.isArray(input)) return [];
@@ -177,6 +191,7 @@ export function sanitizeCalls(input: unknown, max = MAX_CALLS): HttpCall[] {
       at: num(c.at) ?? 0,
       error: str(c.error, 500),
       preview: str(c.preview, 2001),
+      ...headerFields(c.requestHeaders, c.responseHeaders),
     });
   }
   return calls;

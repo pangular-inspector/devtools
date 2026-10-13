@@ -201,7 +201,8 @@ const config: NgmdConfig = {
         {label: 'Components', href: '/inspectors/components'},
         {label: 'Injectors', href: '/inspectors/injectors', status: 'updated'},
         {label: 'Signals', href: '/inspectors/signals'},
-        {label: 'NgRx Store', href: '/inspectors/ngrx-store'},
+        {label: 'NgRx Store', href: '/inspectors/ngrx-store', status: 'updated'},
+        {label: 'TanStack Query', href: '/inspectors/tanstack-query', status: 'new'},
         {label: 'Forms', href: '/inspectors/forms', status: 'new'},
         {label: 'Router', href: '/inspectors/router', status: 'new'},
         {label: 'Pipes', href: '/inspectors/pipes', status: 'new'},
@@ -209,6 +210,7 @@ const config: NgmdConfig = {
         {label: 'Analog', href: '/inspectors/analog', status: 'new'},
         {label: 'Capacitor', href: '/inspectors/capacitor', status: 'new'},
         {label: 'Errors', href: '/inspectors/errors', status: 'new'},
+        {label: 'Audit', href: '/inspectors/audit', status: 'new'},
       ],
     },
     {
@@ -217,6 +219,8 @@ const config: NgmdConfig = {
         {label: 'MCP server', href: '/agents/mcp-server', status: 'updated'},
         {label: 'Tools', href: '/agents/tools'},
         {label: 'Resources', href: '/agents/resources'},
+        {label: 'Browser agents', href: '/agents/browser-agents', status: 'new'},
+        {label: 'Agent skills', href: '/agents/skills', status: 'new'},
       ],
     },
     {
@@ -228,6 +232,8 @@ const config: NgmdConfig = {
         {label: 'Set up NativeScript', href: '/guides/nativescript'},
         {label: 'Set up Angular Native', href: '/guides/angular-native'},
         {label: 'Set up Capacitor', href: '/guides/capacitor', status: 'new'},
+        {label: 'Write a plugin', href: '/guides/write-a-plugin', status: 'new'},
+        {label: 'Inspect, fix and verify', href: '/guides/inspect-fix-verify', status: 'new'},
       ],
     },
     {

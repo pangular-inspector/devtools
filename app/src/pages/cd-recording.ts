@@ -7,7 +7,10 @@ import { rpcCall as call } from '../rpc';
 import { LimitNote } from '../ui/limit-note';
 import { AngularUnavailable } from '../ui/angular-unavailable';
 import { angularPageFor, injectAngularPages } from '../angular-pages';
+import { cdCauseText } from '@pangular-inspector/devtools/cd-data';
+import type { CdCause } from '@pangular-inspector/devtools/config';
 import { aggregateComponents, cyclesInRange, type CdRange } from './cd-chart-data';
+import { CdDiagnosis } from './cd-diagnosis';
 import { CdCycleChart } from './cd-cycle-chart';
 import { CdFlameGraph } from './cd-flame-graph';
 import { CdTiming } from './cd-timing';
@@ -28,6 +31,7 @@ const SHOWN_CYCLES = 30;
     AngularUnavailable,
     LimitNote,
     CdTiming,
+    CdDiagnosis,
     CdTransfer,
     CdCycleChart,
     CdFlameGraph,
@@ -63,8 +67,10 @@ const SHOWN_CYCLES = 30;
       }
       <p class="hint">
         Records each change detection cycle with Angular's profiler: how long it took, how many
-        components it checked and the output that ran before it. Tree rows show how often each
-        instance was checked. Times come from a development build.
+        components it checked, what started it and which checks changed nothing. Tree rows show how
+        often each instance was checked. Times come from a development build. While it records, the
+        page also wraps Angular's scheduler, adds a signal write hook and watches DOM updates; all
+        of it stops with the recording.
       </p>
       @if (page()?.supported === false) {
         <app-angular-unavailable [page]="angularPage()" capability="profiler" missing compact />
@@ -200,10 +206,17 @@ const SHOWN_CYCLES = 30;
                     {{ cycle.passes }}
                     {{ cycle.passes === 1 ? 'pass' : 'passes' }}
                   </span>
-                  @if (cycle.trigger) {
+                  @if (cycle.cause; as cause) {
+                    <span class="trigger"
+                      >from <span class="mono">{{ causeText(cause) }}</span></span
+                    >
+                  } @else if (cycle.trigger) {
                     <span class="trigger"
                       >after <span class="mono">{{ cycle.trigger }}</span></span
                     >
+                  }
+                  @if (cycle.unchanged) {
+                    <span class="timing">{{ cycle.unchanged }} changed nothing</span>
                   }
                   @if (cycle.hookMs) {
                     <span class="timing">hooks {{ ms(cycle.hookMs) }}</span>
@@ -222,6 +235,7 @@ const SHOWN_CYCLES = 30;
           </div>
         </div>
         <app-cd-timing [page]="page()" />
+        <app-cd-diagnosis [page]="page()" />
       } @else if (recording()) {
         <p class="empty">Use the app. Cycles show up here as Angular runs change detection.</p>
       }
@@ -486,6 +500,10 @@ export class CdRecording {
 
   protected clock(at: number): string {
     return time(at);
+  }
+
+  protected causeText(cause: CdCause): string {
+    return cdCauseText(cause);
   }
 
   async toggle() {

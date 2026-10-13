@@ -110,7 +110,9 @@ describe('hydration tool', () => {
     expect(text).toContain('Page `p1` (`http://localhost:4000/trips`): hydrated from server HTML.');
     expect(text).toContain('| Skipped (ngSkipHydration) | 1 |');
     expect(text).toContain('Skipped: `TripMap` `<app-map>` `c3`');
-    expect(text).toContain('- `Price` `<app-price>` `c5`: expected `<div>`, found `<span>`');
+    expect(text).toContain('- `Price` `<app-price>` `c5`');
+    // The server HTML Angular expected against the client DOM it found, as a diff.
+    expect(text).toContain('  ```diff\n  - <div>\n  + <span>\n  ```');
     expect(text).toContain(
       'Created on the client (after hydration, or inside a skipped host): `Toast`',
     );

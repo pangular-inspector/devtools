@@ -25,12 +25,14 @@ const TAB_INSPECTOR: Partial<Record<Tab, PangularInspector>> = {
   signals: 'signals',
   injectors: 'injectors',
   store: 'ngrx',
+  queries: 'tanstackQuery',
   forms: 'forms',
   pipes: 'pipes',
   network: 'http',
   analog: 'analog',
   capacitor: 'capacitor',
   errors: 'errors',
+  plugins: 'plugins',
 };
 
 /** The `inspectors` key that turns a tab on or off, if any. */

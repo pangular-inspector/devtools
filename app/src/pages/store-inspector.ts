@@ -23,6 +23,8 @@ import { LimitNote } from '../ui/limit-note';
 import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
 import { VirtualWindow } from '../ui/virtual-window';
+import { EntryTabs, type EntryDetailAnswer } from './store-entry-tabs';
+import { StoreSession } from './store-session';
 import {
   changeCountText,
   moreChangesText,
@@ -39,6 +41,7 @@ import {
 } from './store-types';
 import { SourceLink } from '../ui/source-link';
 import { StoreGlobal } from '../ui/store-global';
+import { reduxLiveStores, reduxLog, reduxPagesOf, type ReduxStoresPage } from './redux-stores';
 
 const KIND_COLORS: Record<string, string> = {
   action: '#f59e0b',
@@ -52,6 +55,7 @@ const KIND_COLORS: Record<string, string> = {
   'signal-method': '#fb7185',
   store: '#a78bfa',
   event: 'var(--warn)',
+  redux: '#38bdf8',
 };
 
 const KIND_LABELS: Record<string, string> = {
@@ -61,6 +65,7 @@ const KIND_LABELS: Record<string, string> = {
   'store-setup': 'store setup',
   store: '@ngrx/store',
   event: 'event',
+  redux: 'Redux DevTools',
 };
 
 const ORIGIN_TEXT: Record<NgrxActionOrigin, string> = {
@@ -107,6 +112,8 @@ const CLASSIC_KINDS = new Set([
     NgTemplateOutlet,
     SourceLink,
     StoreGlobal,
+    EntryTabs,
+    StoreSession,
   ],
   template: `
     <div class="toolbar">
@@ -119,7 +126,7 @@ const CLASSIC_KINDS = new Set([
         (input)="filter.set($any($event.target).value)"
         (keydown.escape)="filter.set('')"
       />
-      @if (pages().length > 1) {
+      @if (allPages().length > 1) {
         <span class="visually-hidden" id="ngrx-page-label">Page</span>
         <app-select
           class="page-select"
@@ -155,7 +162,7 @@ const CLASSIC_KINDS = new Set([
         </div>
       } @else if (!page()) {
         <div class="empty">
-          <p class="empty-title">No page is reporting NgRx state yet.</p>
+          <p class="empty-title">No page is reporting store state yet.</p>
           <p class="hint">
             Open the app in a browser. Stores show up here as soon as the page creates them.
           </p>
@@ -179,11 +186,14 @@ const CLASSIC_KINDS = new Set([
               of the providers of the running app.
             </p>
           } @else {
-            <p class="empty-title">This page has no NgRx store.</p>
+            <p class="empty-title">This page has no store.</p>
             <p class="hint">
               Stores from <code>&#64;ngrx/signals</code> (<code>signalStore</code>,
               <code>signalState</code>) and <code>&#64;ngrx/store</code> are listed here once the
-              app creates them.
+              app creates them. NGXS, Elf and MiniRx stores show up through their Redux DevTools
+              integration when the app loads
+              <code>&#64;pangular-inspector/devtools/store-hook</code>
+              first.
             </p>
           }
         </div>
@@ -208,8 +218,7 @@ const CLASSIC_KINDS = new Set([
                     <span class="store-name">{{ item.label }}</span>
                   </span>
                   <span class="store-meta">
-                    {{ kindLabel(item.kind) }} · {{ item.scope }} · {{ changeCount(item.id) }}
-                    {{ changeCount(item.id) === 1 ? 'change' : 'changes' }}
+                    {{ kindLabel(item.kind) }} · {{ item.scope }} · {{ countText(item) }}
                   </span>
                 </button>
               </li>
@@ -224,7 +233,11 @@ const CLASSIC_KINDS = new Set([
                 <h3>{{ current.label }}</h3>
                 <div class="chips">
                   <span class="chip">{{ kindLabel(current.kind) }}</span>
-                  <span class="chip">scope: {{ current.scope }}</span>
+                  @if (current.redux; as other) {
+                    <span class="chip">{{ other.library }}</span>
+                  } @else {
+                    <span class="chip">scope: {{ current.scope }}</span>
+                  }
                   @if (current.signal?.declaredIn; as file) {
                     <app-source-link class="chip mono" [file]="file" />
                   }
@@ -272,12 +285,14 @@ const CLASSIC_KINDS = new Set([
                   <div class="fact-head">
                     <h4 id="ngrx-state-heading">State</h4>
                     <div class="state-actions">
-                      <app-store-global
-                        [rpc]="rpc()"
-                        [pageId]="page()?.pageId"
-                        [target]="{ kind: 'ngrx', storeId: current.id }"
-                        [label]="current.label + ' state'"
-                      />
+                      @if (!current.redux) {
+                        <app-store-global
+                          [rpc]="rpc()"
+                          [pageId]="page()?.pageId"
+                          [target]="{ kind: 'ngrx', storeId: current.id }"
+                          [label]="current.label + ' state'"
+                        />
+                      }
                       <button
                         type="button"
                         class="btn copy"
@@ -381,11 +396,11 @@ const CLASSIC_KINDS = new Set([
 
               <section class="log" aria-labelledby="ngrx-log-heading">
                 <h4 id="ngrx-log-heading">
-                  {{ current.classic ? 'Action log' : 'Change log' }}
+                  {{ current.classic || current.redux ? 'Action log' : 'Change log' }}
                   <span class="pill">{{ storeLog().length }}</span>
                 </h4>
                 <app-limit-note
-                  [dropped]="page()?.dropped ?? 0"
+                  [dropped]="(current.redux ? reduxPage()?.dropped : page()?.dropped) ?? 0"
                   [max]="maxLog()"
                   what="changes on this page"
                   limit="changeLog"
@@ -400,7 +415,7 @@ const CLASSIC_KINDS = new Set([
                     [style.padding-bottom.px]="
                       logWindow.enabled() ? 2 + logWindow.padBottom() : null
                     "
-                    [attr.aria-label]="current.classic ? 'Actions' : 'Changes'"
+                    [attr.aria-label]="current.classic || current.redux ? 'Actions' : 'Changes'"
                   >
                     @for (shown of shownLog(); track shown.entry.seq) {
                       @let entry = shown.entry;
@@ -447,7 +462,7 @@ const CLASSIC_KINDS = new Set([
                       <li class="muted pad">
                         @if (filter()) {
                           No entries match this filter.
-                        } @else if (current.classic) {
+                        } @else if (current.classic || current.redux) {
                           No actions dispatched since the page connected.
                         } @else {
                           No state changes yet. Method calls and patchState writes that change the
@@ -471,6 +486,15 @@ const CLASSIC_KINDS = new Set([
                   }
                 </div>
               </section>
+
+              @if (!current.redux) {
+                <app-store-session
+                  [rpc]="rpc()"
+                  [pageId]="page()?.pageId ?? null"
+                  [storeId]="current.id"
+                  [entries]="sessionEntries()"
+                />
+              }
 
               @if (current.classic) {
                 <section class="dispatch" aria-labelledby="ngrx-dispatch-heading">
@@ -626,6 +650,14 @@ const CLASSIC_KINDS = new Set([
             <dt>Duration</dt>
             <dd>{{ formatDuration(selected.durationMs) }}</dd>
           }
+          @if (selected.source === 'event') {
+            <ng-container
+              [ngTemplateOutlet]="actionRowsTpl"
+              [ngTemplateOutletContext]="{ selected }"
+            />
+          }
+        </dl>
+        <ng-template #actionRowsTpl let-selected="selected">
           @if (selected.action !== undefined) {
             <dt>Action</dt>
             <dd>
@@ -653,8 +685,8 @@ const CLASSIC_KINDS = new Set([
               }
             </dd>
           }
-        </dl>
-        @if (selected.source !== 'event') {
+        </ng-template>
+        <ng-template #diffTpl let-selected="selected">
           <div class="sub-head">
             <div class="sub" role="heading" [attr.aria-level]="headingLevel + 1">State diff</div>
             @if (selected.diff.length) {
@@ -695,6 +727,44 @@ const CLASSIC_KINDS = new Set([
           } @else {
             <p class="muted">The state did not change.</p>
           }
+        </ng-template>
+        @if (selected.source === 'redux') {
+          @if (selected.action !== undefined) {
+            <dl class="kv redux-action">
+              <ng-container
+                [ngTemplateOutlet]="actionRowsTpl"
+                [ngTemplateOutletContext]="{ selected }"
+              />
+            </dl>
+          }
+          <ng-container [ngTemplateOutlet]="diffTpl" [ngTemplateOutletContext]="{ selected }" />
+        } @else if (selected.source !== 'event') {
+          <app-entry-tabs
+            [idPrefix]="idPrefix + '-' + selected.seq"
+            [seq]="selected.seq"
+            [diffTruncated]="selected.diffTruncated"
+            [loader]="loadEntry"
+          >
+            <div tab-action>
+              @if (
+                selected.action !== undefined || selected.args?.length || selected.causedByEvent
+              ) {
+                <dl class="kv">
+                  <ng-container
+                    [ngTemplateOutlet]="actionRowsTpl"
+                    [ngTemplateOutletContext]="{ selected }"
+                  />
+                </dl>
+              } @else {
+                <p class="muted">
+                  No action or arguments: a restore, or a patchState write outside a method.
+                </p>
+              }
+            </div>
+            <div tab-diff>
+              <ng-container [ngTemplateOutlet]="diffTpl" [ngTemplateOutletContext]="{ selected }" />
+            </div>
+          </app-entry-tabs>
         }
 
         @if (selected.restorable && confirmSeq() === selected.seq) {
@@ -767,6 +837,12 @@ const CLASSIC_KINDS = new Set([
           @if (!canRestore()) {
             <p [id]="idPrefix + '-writes-off'" class="hint small">{{ restoreOff }}</p>
           }
+        }
+        @if (selected.source === 'redux') {
+          <p class="hint small">
+            This store reports through its Redux DevTools integration, which the panel reads but
+            does not write to, so its state cannot be restored from here.
+          </p>
         }
         @if (!selected.restorable && selected.source === 'store') {
           <p class="hint small">
@@ -1277,6 +1353,10 @@ const CLASSIC_KINDS = new Set([
       gap: 6px 14px;
       margin: 0;
     }
+    /* The same gap the NgRx entry tabs keep below Time. */
+    .kv.redux-action {
+      margin-top: 10px;
+    }
     .kv dt {
       font-family: var(--font-mono);
       font-size: 12px;
@@ -1745,6 +1825,25 @@ export class StoreInspector {
   readonly sourceEntries = signal<NgrxStoreEntry[]>([]);
   readonly sourceLoaded = signal(false);
   readonly pages = signal<NgrxPage[]>([]);
+  /** Pages with stores that report through the Redux DevTools API (`redux-stores` shared state). */
+  readonly reduxPages = signal<ReduxStoresPage[]>([]);
+  /** The NgRx pages, plus pages that only report other stores. */
+  readonly allPages = computed<NgrxPage[]>(() => {
+    const ngrx = this.pages();
+    const known = new Set(ngrx.map((p) => p.pageId));
+    const others = this.reduxPages()
+      .filter((p) => !known.has(p.pageId))
+      .map((p) => ({
+        pageId: p.pageId,
+        url: p.url,
+        title: p.title,
+        stores: [],
+        classic: null,
+        log: [],
+        reportedAt: p.reportedAt,
+      }));
+    return [...ngrx, ...others];
+  });
   readonly failed = signal(false);
   /** Whether the shared state has arrived, so the empty message doesn't show first. */
   readonly stateLoaded = signal(false);
@@ -1771,9 +1870,10 @@ export class StoreInspector {
 
   private readonly destroyRef = inject(DestroyRef);
   private unsubscribe: (() => void) | null = null;
+  private unsubscribeOthers: (() => void) | null = null;
 
   readonly page = computed<NgrxPage | null>(() => {
-    const pages = this.pages();
+    const pages = this.allPages();
     return (
       pages.find((p) => p.pageId === this.selectedPageId()) ??
       pages.find((p) => p.pageId === this.hostPageId) ??
@@ -1782,8 +1882,18 @@ export class StoreInspector {
     );
   });
 
+  /** The other stores of the shown page. */
+  readonly reduxPage = computed(
+    () => this.reduxPages().find((p) => p.pageId === this.page()?.pageId) ?? null,
+  );
+
   private readonly logKey = computed<NgrxLogKey>(() => {
     const page = this.page();
+    const store = this.store();
+    // Another store's log has its own seq, so it is its own session.
+    if (store?.redux) {
+      return { pageId: `${page?.pageId}/${store.id}`, log: reduxLog(this.reduxPage(), store.id) };
+    }
     return { pageId: page?.pageId ?? null, log: page?.log ?? [] };
   });
 
@@ -1816,7 +1926,7 @@ export class StoreInspector {
   });
 
   readonly pageOptions = computed<SelectOption[]>(() =>
-    this.pages().map((p) => ({ value: p.pageId, label: p.title || p.url, hint: p.url })),
+    this.allPages().map((p) => ({ value: p.pageId, label: p.title || p.url, hint: p.url })),
   );
 
   readonly liveStores = computed<LiveStore[]>(() => {
@@ -1838,6 +1948,7 @@ export class StoreInspector {
         classic: page.classic,
       });
     }
+    stores.push(...reduxLiveStores(this.reduxPage()));
     return stores;
   });
 
@@ -1849,9 +1960,7 @@ export class StoreInspector {
         s.label.toLowerCase().includes(f) ||
         s.kind.includes(f) ||
         (s.signal?.stateKeys ?? []).some((k) => k.toLowerCase().includes(f)) ||
-        (this.page()?.log ?? []).some(
-          (e) => e.storeId === s.id && e.type.toLowerCase().includes(f),
-        ),
+        this.logOf(s).some((e) => e.type.toLowerCase().includes(f)),
     );
   });
 
@@ -1863,7 +1972,9 @@ export class StoreInspector {
   readonly stateText = computed(() => {
     const store = this.store();
     if (!store) return '';
-    return pretty(store.signal ? store.signal.state : store.classic?.state);
+    return pretty(
+      store.signal ? store.signal.state : store.redux ? store.redux.state : store.classic?.state,
+    );
   });
 
   readonly computedEntries = computed(() =>
@@ -1875,14 +1986,36 @@ export class StoreInspector {
   );
 
   readonly storeLog = computed<NgrxLogEntry[]>(() => {
-    const id = this.store()?.id;
+    const store = this.store();
     const f = this.filter().trim().toLowerCase();
-    return (this.page()?.log ?? [])
-      .filter(
-        (e) => e.storeId === id && (!f || e.type.toLowerCase().includes(f) || this.storeMatches(f)),
-      )
+    return (store ? this.logOf(store) : [])
+      .filter((e) => !f || e.type.toLowerCase().includes(f) || this.storeMatches(f))
       .reverse();
   });
+
+  /** The selected store's state changes, oldest first, for the session tools. */
+  readonly sessionEntries = computed<NgrxLogEntry[]>(() => {
+    const store = this.store();
+    // Sessions and generated tests are NgRx only: other stores have no past states to read.
+    if (!store || store.redux) return [];
+    return (this.page()?.log ?? []).filter((e) => e.storeId === store.id && e.source !== 'event');
+  });
+
+  /** Reads the State and full Diff of a past entry from the shown page. */
+  protected readonly loadEntry = async (seq: number): Promise<EntryDetailAnswer> => {
+    const pageId = this.page()?.pageId;
+    if (!pageId) return { error: 'No live page to read from.' };
+    return ((await call(this.rpc(), 'request-ngrx-history', {
+      pageId,
+      request: { type: 'entry', seq },
+    })) ?? { error: 'The devtools server is not connected.' }) as EntryDetailAnswer;
+  };
+
+  /** A store's log entries, oldest first. */
+  private logOf(store: LiveStore): NgrxLogEntry[] {
+    if (store.redux) return reduxLog(this.reduxPage(), store.id);
+    return (this.page()?.log ?? []).filter((e) => e.storeId === store.id);
+  }
 
   readonly hasEvents = computed(() => (this.page()?.log ?? []).some((e) => e.source === 'event'));
 
@@ -2000,7 +2133,10 @@ export class StoreInspector {
       this.focusEventSeq.set(null);
       detail.nativeElement.focus();
     });
-    this.destroyRef.onDestroy(() => this.unsubscribe?.());
+    this.destroyRef.onDestroy(() => {
+      this.unsubscribe?.();
+      this.unsubscribeOthers?.();
+    });
   }
 
   private storeMatches(f: string): boolean {
@@ -2028,6 +2164,17 @@ export class StoreInspector {
       this.unsubscribe = state.on('updated', apply);
     } catch {
       this.failed.set(true);
+    }
+    // Other stores are an addition: a server without them leaves the NgRx view as it is.
+    try {
+      const others = await client.scope('pangular').rpc.sharedState('redux-stores');
+      if (this.destroyRef.destroyed) return;
+      const applyOthers = (value: unknown) => this.reduxPages.set(reduxPagesOf(value));
+      applyOthers(others.value());
+      this.unsubscribeOthers?.();
+      this.unsubscribeOthers = others.on('updated', applyOthers);
+    } catch {
+      this.reduxPages.set([]);
     }
   }
 
@@ -2180,8 +2327,19 @@ export class StoreInspector {
     this.filterInput()?.nativeElement.focus();
   }
 
+  /**
+   * The row's log count. A Redux DevTools store logs what its library sent,
+   * `@@INIT` included, so its entries are actions, not changes.
+   */
+  countText(item: LiveStore): string {
+    const n = this.changeCount(item.id);
+    const noun = item.redux ? (n === 1 ? 'action' : 'actions') : n === 1 ? 'change' : 'changes';
+    return `${n} ${noun}`;
+  }
+
   changeCount(id: string): number {
-    return (this.page()?.log ?? []).filter((e) => e.storeId === id).length;
+    const store = this.liveStores().find((s) => s.id === id);
+    return store ? this.logOf(store).length : 0;
   }
 
   entityIds(ids: (string | number)[]): (string | number)[] {

@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Seventy-one tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Ninety-five tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -15,7 +15,7 @@ This page lists every tool the [MCP server](./mcp-server.md) exposes. Each group
 
 ### Names
 
-Tool ids use a colon, as `pangular:get-routes`. MCP clients see them with an underscore, as `pangular_get-routes`. The tables below drop the `pangular:` prefix.
+Tool ids use a colon, as `pangular:get-routes`. MCP clients see them with an underscore, as `pangular_get-routes`. The tables below drop the `pangular:` prefix. The `read` tools are also registered on the page under the same names, for [browser agents](./browser-agents.md).
 
 ### Source and live tools
 
@@ -41,7 +41,7 @@ If `page` names a tab that doesn't report that data, the tool answers `No page <
 
 ### Older Angular versions
 
-When the page's Angular lacks the debug API a tool needs, the tool answers **Unsupported on this Angular version** with the version the feature needs and the version the page runs, instead of an empty list. `inspect-signals`, `watch-signal`, `defer-blocks`, `for-blocks` and `change-detection` answer this way. `inspect-providers` puts the same note before a reduced tree. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
+When the page's Angular lacks the debug API a tool needs, the tool answers **Unsupported on this Angular version** with the version the feature needs and the version the page runs, instead of an empty list. `inspect-signals`, `watch-signal`, `defer-blocks`, `for-blocks`, `change-detection` and `diagnose-change-detection` answer this way. `inspect-providers` puts the same note before a reduced tree. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
 
 ### list-pages
 
@@ -53,11 +53,11 @@ The URL comes from the HTTP or router report. A page that sends neither (no rout
 
 Gives the user a link that opens the panel on one tab with one item selected, and switches the panels that are open to it. Reads: page. Use it to point the user at what you found.
 
-| Argument | Required | What it is                                                                                                                                                                                           |
-| -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `components`, `routes`, `signals`, `injectors`, `store`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog` or `capacitor`. Only tabs that are on count. |
-| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, a form id on `forms`. Other tabs ignore it.                               |
-| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                     |
+| Argument | Required | What it is                                                                                                                                                                                                                          |
+| -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `audit`, `components`, `routes`, `signals`, `injectors`, `store`, `queries`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog`, `capacitor` or `plugins`. Only tabs that are on count. |
+| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, a form id on `forms`. Other tabs ignore it.                                                              |
+| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                                                    |
 
 The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#tab=components&id=12&page=k3x9`, when the hub serves the panel and a page has reported its address. Otherwise it is the hash to add to the panel's address. Each panel that is open and not in a background tab opens the link at once. The tool is `read`: it changes what the panel shows, not the app. See [Deep links](../getting-started/popup-and-hub.md#deep-links).
 
@@ -65,21 +65,21 @@ The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#t
 
 Every tool has one of three safety tiers. The server sends the tier to your client as the tool's read-only and destructive hints.
 
-| Tier          | What the tool can do                                                                                              | Tools                                                                                                                                                                                                           |
-| ------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                        | Every other tool, and every resource                                                                                                                                                                            |
-| `action`      | Changes the running page, the server's fault rules or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `change-detection` and `hydration` |
-| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                                                                                        |
+| Tier          | What the tool can do                                                                                                                 | Tools                                                                                                                                                                                                                                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                                           | Every other tool, and every resource                                                                                                                                                                                                                                                                                             |
+| `action`      | Changes the running page, the server's fault rules and SSR overrides, or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `restore-ngrx-state`, `query-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `change-detection`, `hydration` and `audit` |
+| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                                         | `clear-recordings` and `analog-call-api`                                                                                                                                                                                                                                                                                         |
 
 <ngmd-alert severity="important">
-  The fourteen <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
+  The twenty <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
-When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, and `hydration` only when it turns the overlay on or off. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
+When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, `hydration` only when it turns the overlay on or off, and `audit` only when it runs axe. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
 
 ### Turn tools off
 
-The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record`, `flash`, `track` and `angularProfiling` arguments, so it reads a recording the panel started. `hydration` stays as a `read` tool without its `overlay` argument. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
+The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record`, `flash`, `track` and `angularProfiling` arguments, so it reads a recording the panel started. `hydration` stays as a `read` tool without its `overlay` argument, and `audit` without its `axe` argument, so it reads the last axe pass the panel ran. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. A [plugin's own tools](#plugins) follow the same switches, with the tier the plugin declares. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ## Source scan
 
@@ -182,7 +182,7 @@ Each page lists at most 50 blocks, with a note on how many more are not shown, a
 
 ### hydration <ngmd-badge variant="alpha">Action</ngmd-badge>
 
-Hydration of each page that was rendered on the server: how many component hosts were hydrated, skipped with `ngSkipHydration`, mismatched or created on the client, and how many `@defer` blocks are still dehydrated. It names the skipped and client-created hosts and the dehydrated blocks, at most 30 of each, and each mismatch with what Angular expected and what it found. Reads: page.
+Hydration of each page that was rendered on the server: how many component hosts were hydrated, skipped with `ngSkipHydration`, mismatched or created on the client, and how many `@defer` blocks are still dehydrated. It names the skipped and client-created hosts and the dehydrated blocks, at most 30 of each, and each mismatch with a line diff of the server HTML Angular expected (`-`) and the client DOM it found (`+`). Reads: page.
 
 | Argument  | Required | Value                                                                                                                       |
 | --------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -210,6 +210,28 @@ Without `page`, it reads the page that is recording, and `record` goes to every 
 
 `export` only reads, so it stays available with `agent.readOnly`. The file is masked like other answers (JWTs, bearer tokens and secret names), has no instance check counts, and comes in a `json` code block to save as a `.json` file. An export over 100,000 characters is not returned, because cut JSON doesn't parse. The answer gives its size and the counts of cycles, timed spans, component classes, hook rows and output rows instead. Export it from the panel then, or clear the recording and record a shorter session. See [Export and import a recording](../inspectors/components.md#export-and-import-a-recording).
 
+Each cycle line also names what started the cycle and how many of its refreshed checks changed nothing, when the page reports them. See [diagnose-change-detection](#diagnose-change-detection).
+
+### diagnose-change-detection
+
+Why change detection ran and what it wasted, from the recording that `change-detection` or the panel started. Reads: page. Needs Angular 20 or later.
+
+| Argument | Required | Value                                  |
+| -------- | -------- | -------------------------------------- |
+| `limit`  | no       | Rows per list. Default 10, at most 50. |
+
+Without `page`, it reads the page that is recording, like `change-detection`. The answer starts with the page's change detection mode, then has these parts:
+
+| Part                                  | What it lists                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **What started the cycles**           | Cycles per cause, then the latest causes: a DOM event with its type, target and listener component, a signal write with the signal's `debugName`, an HTTP response, a timer, `markForCheck`, `setInput`, an effect, a view change, `ApplicationRef.tick()` from app code, or a zone.js tick that nothing in Angular asked for. Causes from app code carry its first app frames. |
+| **Components that depend on zone.js** | Components that changed in ticks only zone.js started, with the zone.js tasks behind them, such as `setTimeout`. Without zone.js these components would not update.                                                                                                                                                                                                             |
+| **Wasted checks**                     | Per component class, the refreshed checks where nothing it renders changed, and its change detection strategy.                                                                                                                                                                                                                                                                  |
+| **Inputs that break OnPush**          | Inputs mutated in place (same reference, other contents) and inputs given a new reference with the same contents, with the component that set them.                                                                                                                                                                                                                             |
+| **Hints**                             | OnPush for a class refreshed at least 10 times that changed something in under 20% of them, or a note that it is already OnPush, plus a line per input and per zone.js dependent above.                                                                                                                                                                                         |
+
+It only reads, so it stays with `agent.readOnly`. With no recording yet, it says to start one with `change-detection`. See [Why it ran and what it wasted](../inspectors/components.md#why-it-ran-and-what-it-wasted) for how the page finds causes and wasted checks.
+
 ### Edit a component <ngmd-badge variant="alpha">Action</ngmd-badge>
 
 `set-component-property` and `set-signal` write a JSON value to one live component instance, in development only, and answer with the value it now holds, redacted like the component detail. Reads: page.
@@ -234,6 +256,58 @@ Both tools refuse, and write nothing, when:
 - a class name or tag matches several instances, or more than one tab reports components and `page` is missing
 
 A parent binding sets a bound input again the next time its own value changes. Only signals held as component properties can be set; the signals that `inspect-signals` lists elsewhere cannot. Set [`actions.components`](../getting-started/configuration.md#actions) to `false` to drop both tools.
+
+### find-leaks
+
+Leak hints for one page, in three parts. Reads: page.
+
+| Part                                 | What it lists                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Still retained**                   | Component instances destroyed but still in memory after at least 2 navigations and 10 seconds: class, instance id, the route they lived on, age, navigations since and open subscriptions. When the page has `ng.ɵgetInjectorProviders` (a development build of Angular 16.2 or later), Angular's DI debug data keeps every destroyed component in memory, so this part lists no instances and says so, pointing to the Chrome Memory panel. Detached views are named apart. |
+| **Open subscriptions after destroy** | Subscriptions still open after the component that made them went away, grouped by class, instance and call site, with why each is flagged. Only while subscription tracking is on.                                                                                                                                                                                                                                                                                           |
+| **Live effects and subscriptions**   | Components with live effects (from `ng.ɵgetSignalGraph`, Angular 20.1 and later) or tracked open subscriptions, with instance ids for `inspect-component`.                                                                                                                                                                                                                                                                                                                   |
+
+| Argument    | Required | Value                                                    |
+| ----------- | -------- | -------------------------------------------------------- |
+| `component` | no       | Only classes whose name contains this text, in any case. |
+| `limit`     | no       | Rows per table, 1 to 200. Defaults to 20.                |
+
+Garbage collection runs when the browser decides, so the answer says "still retained" and points to the retainers in the Chrome Memory panel rather than calling it a leak. It also says what the page can't report: no `WeakRef` or debug API, no signal graph, or tracking off. Routes and call sites are masked like other live values. See [Leaks](../inspectors/components.md#leaks).
+
+### Track subscriptions <ngmd-badge variant="alpha">Action</ngmd-badge>
+
+`track-subscriptions` starts or stops subscription tracking on a page, the same switch as **Track subscriptions** in the Components panel. Reads: page.
+
+| Argument | Required | Value                                                                                      |
+| -------- | -------- | ------------------------------------------------------------------------------------------ |
+| `action` | yes      | `start` or `stop`.                                                                         |
+| `page`   | no       | The tab to track. Defaults to the most recent page for `start`, and every page for `stop`. |
+
+While on, the overlay wraps `Observable.prototype.subscribe` and records which component made each subscription. `stop` puts `subscribe` back. Subscriptions made before tracking started are not seen, so reload the tab or go to the screen again after `start`, then call `find-leaks`. Tracking patches the page, so `track-subscriptions` is an `action` tool and `agent.readOnly` drops it. No action covers it, so `actions` leaves it in place. `agent.tools.components: false` hides both tools.
+
+### screenshot-component
+
+An image of one component's host element as the page renders it now. The answer is an MCP image content block (PNG, or JPEG when the PNG is large) with a short note: the size in CSS pixels, what was masked and what could not be drawn. Reads: page.
+
+| Argument   | Required | Value                                                                                                         |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| `selector` | yes      | An instance id from the `component-tree` resource (like `c12`), a class name, a host tag or any CSS selector. |
+| `page`     | no       | The page id, from `list-pages`. Defaults to the most recent page.                                             |
+| `pageId`   | no       | Same as `page`.                                                                                               |
+
+The page draws a copy of the element, not the screen: it copies the element's DOM with every computed style written inline into an SVG, and draws that on a canvas that is never added to the page. Nothing in the app changes, no app code runs, and a component scrolled out of view or behind a dialog is drawn all the same. A class name or tag that matches several instances captures the first and lists the ids of all of them. A CSS selector captures the first element it matches on the most recent page, or on `page`.
+
+The copy masks what the [redaction](../security.md) masks in form values: password fields, fields where any of `formControlName`, `ng-reflect-name`, `name` or `id` looks secret (plus `redaction.secretNames`), and fields with a secret `autocomplete`. Any other element named that way, such as a custom form control `<app-pin formControlName="pin">`, becomes a grey block with everything inside it, its inputs included. Elements marked `data-private`, `.sentry-mask`, `.rr-mask` or `data-pangular="mask"` become grey blocks, and `data-pangular="unmask"` keeps a field. JWTs, bearer tokens and secret `key=value` pairs in text are masked too.
+
+What the copy can't show:
+
+- Images, canvases and videos the page can't read, such as an image from another origin without CORS, are grey boxes. Background images from another origin are left out.
+- Iframes are grey boxes with their tag.
+- Web fonts don't load inside the copy, so text uses a fallback font and can wrap differently.
+- Scroll positions inside the component, `::before` and `::after` content other than plain text, and elements past the first 3000 are left out.
+- A component larger than 2000 pixels on its longest side is scaled down to fit.
+
+The image needs an MCP client that shows image content. `agent.tools.components: false` hides the tool.
 
 ### inspect-signals
 
@@ -297,9 +371,48 @@ An element injector that belongs to a component carries `componentId`, the insta
 
 Without `selector` or `token`, the answer is the whole tree and says which change detection mode the page runs. The answer stays within 20,000 characters and its JSON always parses. A larger tree shows element injectors as an outline (id, name, type, component, and provider and dependency counts), and when that is still too long it leaves out the deepest injectors and says how many. The environment injectors are always there, as an outline when they are large, and without their deepest injectors when even that outline is too long. A `selector` or `token` answer that is too long keeps whole entries and says how many it shows. `selector` and `token` take at most 500 characters each. When the page reported only part of its injector tree (it keeps at most 2000 element injectors and 2500 in all, and leaves out injectors nested more than 1000 levels deep), the answer says so.
 
+### read-provider-value
+
+The current value of a service or other provider that an injector on the page already created: its own fields, with signals and resources unwrapped and marked `signal` or `resource`, and methods left out. Each value shows its first level, and a nested object, array, Map or Set reads `{"$collapsed": type, "size": n}`. Nothing is created: an environment injector answers only for a value it already holds, and an element injector only for a token a component or directive on the page injected. Otherwise the answer says it was not created yet. Getters never run, and secret-looking names are redacted. Reads: page.
+
+| Argument   | Required | Value                                                                                                                                                                     |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `token`    | yes      | A class name like `CartStore` or an `InjectionToken` description like `API_URL`.                                                                                          |
+| `injector` | no       | An injector id, `Root`, `Platform`, `Route: admin`, a tag or a component class name. Defaults to the first injector that provides the token, environment injectors first. |
+| `path`     | no       | A member, then keys or indexes, like `items` or `cart.items[0]`. Without it, the answer lists the members.                                                                |
+| `depth`    | no       | With `path`, the levels to read below it, 1 to 5.                                                                                                                         |
+| `limit`    | no       | The most entries per object or list, 1 to 1000. Defaults to 30.                                                                                                           |
+
+A value without members, such as a string or an array from `useValue`, is shown whole. See [Peek at a provider value](../inspectors/injectors.md#peek-at-a-provider-value).
+
+### explain-injection
+
+How Angular resolves one token for one component, element or environment injector: each injector on the lookup path in order, whether it provides the token and why the lookup stops. It reads the injector tree the page reported, so nothing is created or injected. See [Explain a lookup with flags](../inspectors/injectors.md#explain-a-lookup-with-flags). Reads: page.
+
+| Argument   | Required | Value                                                                                                                                                                                                 |
+| ---------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `selector` | yes      | Where the injection happens: a component or directive class name, a tag, a component instance id like `c12` (an error's owner id works), an injector id, or an environment injector name like `Root`. |
+| `token`    | yes      | The token as the Injectors tab names it: a class name like `HttpClient` or an `InjectionToken` description like `API_URL`.                                                                            |
+| `self`     | no       | `true` asks only the first injector.                                                                                                                                                                  |
+| `skipSelf` | no       | `true` starts at the parent injector.                                                                                                                                                                 |
+| `host`     | no       | `true` stops at the host element of the component that declares the start, where only its `viewProviders` and the component count.                                                                    |
+| `optional` | no       | `true` ends in `null` instead of NG0201.                                                                                                                                                              |
+
+The answer is a table of steps: **provides it**, **not provided**, **hidden** (a `viewProviders` entry the lookup can't see), **skipped**, **not asked** or **unknown**. A `providedIn: 'root'` service counts as provided once something on the page got it. When a selector matches several injectors, the answer uses the first and lists the others. Before Angular 16.2 the path is rebuilt from the rendered tree and providers are unknown, and the answer says so. `selector` and `token` take at most 500 characters each.
+
+### startup-timing
+
+How the running app started, from navigation start: DOM content loaded, first contentful paint, when Angular started, when the root component was created, when the app was first stable, and the slowest providers to construct. Reads: page. See [Startup timing](../inspectors/injectors.md#startup-timing).
+
+| Argument | Required | Value                                   |
+| -------- | -------- | --------------------------------------- |
+| `limit`  | no       | Providers to list, 1 to 50. Default 10. |
+
+When the overlay or the startup hook saw the app become stable, the time is exact. Otherwise the answer says the app was stable at or before the time the overlay looked. Provider times need the `startup-hook` entry on Angular 20 or later in a development build; without it the answer says how to add it.
+
 ## NgRx
 
-Two tools read the live `@ngrx/signals` and `@ngrx/store` state a page reported. Reads: page.
+These tools read the live `@ngrx/signals` and `@ngrx/store` state a page reported, and the sessions you export and import. `inspect-redux-stores` reads the other stores. Reads: page, or an imported session.
 
 ### inspect-signal-store
 
@@ -319,6 +432,56 @@ The change log for a page's stores, oldest first: `@ngrx/signals` state diffs (m
 | `page`    | no       | The tab to read. Defaults to every connected page.                                                                                                               |
 | `storeId` | no       | Only that store's entries. Without it, every store, action and event.                                                                                            |
 | `since`   | no       | A `seq` from a previous call. Returns only entries after it. Requires `page` when more than one page is connected, since each page has its own sequence numbers. |
+
+### inspect-ngrx-entry
+
+The State, Diff and Action of one past entry: the full redacted state of its store right after it, every change from the state before it (up to 500), and the action, method arguments, origin and causing event. The page keeps the raw states of the entries in its log, so any entry still in the log can be read. Events have no state of their own.
+
+| Argument  | Required | Value                                                                       |
+| --------- | -------- | --------------------------------------------------------------------------- |
+| `seq`     | yes      | The entry number, from `signal-store-history` or the NgRx Store page.       |
+| `page`    | no       | The tab to read. Defaults to the most recent page that reports NgRx.        |
+| `session` | no       | The id `import-ngrx-session` returned, to read an imported session instead. |
+
+### export-ngrx-session
+
+A session of one store as JSON: the redacted state before the first entry, then each action or method call with the state changes it made. Save it as a `.json` file to import it later, here or on the NgRx Store page. The answer carries the JSON when it fits in 60,000 characters; otherwise it says to export a shorter range.
+
+| Argument  | Required | Value                                                                                                                    |
+| --------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `storeId` | no       | `store` for `@ngrx/store`, or a signal store id like `ngrx-1`. Defaults to `@ngrx/store`, or the one store with entries. |
+| `from`    | no       | The first entry number to include.                                                                                       |
+| `to`      | no       | The last entry number to include.                                                                                        |
+| `page`    | no       | The tab to read.                                                                                                         |
+
+### import-ngrx-session
+
+Reads back a session that `export-ngrx-session` or the NgRx Store page exported, and answers with its id and entries. The server checks it first: the format and version, at most 1000 entries and 4,000,000 characters, and change paths that cannot reach a prototype. Nothing in the app changes. The server keeps at most 5 sessions, each for an hour after its last use.
+
+| Argument  | Required | Value                               |
+| --------- | -------- | ----------------------------------- |
+| `session` | yes      | The exported session, as JSON text. |
+
+### generate-ngrx-test
+
+A Vitest spec that replays a range of entries: the state before the range, the recorded actions or method calls in order, and the state after the range as the expectation. An `@ngrx/store` range becomes a reducer spec, for one feature reducer when only one top-level key changed, or through `combineReducers` otherwise. A signal store range becomes a spec that injects the store with `TestBed`, sets the start state with `unprotected()` and checks `getState()`. The answer says which imports to point and which recorded values were cut or redacted. Jest runs the spec too once you drop the `vitest` import.
+
+| Argument  | Required | Value                                                |
+| --------- | -------- | ---------------------------------------------------- |
+| `storeId` | no       | The store, as for `export-ngrx-session`.             |
+| `from`    | no       | The first entry number to replay.                    |
+| `to`      | no       | The last entry number to replay.                     |
+| `page`    | no       | The tab to read.                                     |
+| `session` | no       | An imported session id, to generate from it instead. |
+
+### inspect-redux-stores
+
+Stores that report through the Redux DevTools extension API, such as NGXS, Elf and MiniRx (see [Other stores](../inspectors/ngrx-store.md#other-stores)). Without `store`, a table of the page's stores with their id, library and action count. With `store`, or when the page has one store, its last state and its latest actions, newest first, each with the action and a state diff of up to 50 changes. It never restores a state.
+
+| Argument | Required | Value                                           |
+| -------- | -------- | ----------------------------------------------- |
+| `store`  | no       | A store id, such as `r1`, or its name.          |
+| `limit`  | no       | How many actions to list, 1 to 200. Default 20. |
 
 ## Router
 
@@ -390,6 +553,40 @@ If a `canMatch` guard or the navigation error handler redirects a `probe`, the p
 | `seq`     | The number of an action in the log, to dispatch that action again. Use it instead of `type`.  |
 
 Without `page`, the tool uses the one page that has an `@ngrx/store` Store. If more than one page has a Store, it dispatches nothing and lists those pages with their URLs, so you can call it again with `page`. While a restore holds Store DevTools on a past state, the action is logged but does not change the state, and the answer says so. Set [`actions.ngrx`](../getting-started/configuration.md#actions) to `false` to drop the tool. Read the live state and log with the [`ngrx-store` resource](./resources.md#ngrx-store).
+
+### Restore a state <ngmd-badge variant="alpha">Action</ngmd-badge>
+
+`restore-ngrx-state` restores a past state in the running app, in development only, the way **Restore this state** does on the [NgRx Store](../inspectors/ngrx-store.md#restore-an-earlier-state) page. A signal store gets every state key set back to its value right after the entry. `@ngrx/store` jumps Store DevTools to the state after that action, which needs `provideStoreDevtools()`, and stays paused there until you go back. The log gets a `Restore #N` entry. Reads: page.
+
+| Argument | Value                                                                          |
+| -------- | ------------------------------------------------------------------------------ |
+| `seq`    | The number of a restorable entry in the log.                                   |
+| `latest` | `true` sends Store DevTools back to the latest state. Use it instead of `seq`. |
+
+Without `page`, the tool uses the one page that reports NgRx state. With several, it restores nothing and lists them. Set [`actions.ngrx`](../getting-started/configuration.md#actions) to `false` to drop the tool.
+
+## TanStack Query
+
+These tools read the `QueryClient` the app provides, through the page. See [TanStack Query](../inspectors/tanstack-query.md). Reads: page.
+
+| Tool            | What it answers                                                                                                                                                                                                 | Arguments                   |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `list-queries`  | The clients, then the queries and mutations: id, key, status, fetch status, freshness (`fresh`, `stale` or `invalidated`), when the data was last updated, observers and the error.                             | `status`, `search`, `limit` |
+| `inspect-query` | One query or mutation by `id`, or the query whose key contains `key`: its status, freshness, `staleTime`, `gcTime`, observers and failures, then its data (and a mutation's variables), read from the page now. | `id`, `key`                 |
+
+`status` is one of `pending`, `error`, `success`, `idle`, `fetching` or `paused`, and matches a status or a fetch status. `search` keeps keys that contain the text, ignoring case. `limit` sets the rows per table, 1 to 300 (default 50). Keys, errors and data are masked like other live values.
+
+### Invalidate or refetch a query <ngmd-badge variant="alpha">Action</ngmd-badge>
+
+`query-action` calls the app's own `QueryClient` for one query. `invalidate` marks it stale through `invalidateQueries()`, and a query with an active observer refetches at once. `refetch` fetches it again through `refetchQueries()`. Both run the query function, so the app sends its request again.
+
+| Argument | Required | Value                                               |
+| -------- | -------- | --------------------------------------------------- |
+| `action` | yes      | `invalidate` or `refetch`.                          |
+| `id`     | no       | A query id from `list-queries`, such as `q3`.       |
+| `key`    | no       | Text the query key contains, when there is no `id`. |
+
+Without `page`, the tool refuses when more than one tab reports TanStack Query. Set [`actions.tanstackQuery`](../getting-started/configuration.md#actions) to `false` to drop the tool.
 
 ## Forms
 
@@ -502,17 +699,20 @@ The **Live** line tells these cases apart:
 
 ## SSR & HTTP
 
-These tools read the HttpClient calls that `withPangular()` recorded and the SSR requests that `ssrMiddleware` traced in your server. See [SSR & HTTP](../inspectors/ssr-http.md). Reads: page.
+These tools read the HttpClient calls that `withPangular()` recorded and the SSR requests that `ssrMiddleware` or `withPangularSsr()` traced in your server. See [SSR & HTTP](../inspectors/ssr-http.md). Reads: page.
 
-| Tool                  | What it answers                                                                                                                                                                                                                        | Arguments                           |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`                             |
-| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url`                         |
-| `list-http-calls`     | The app's HttpClient calls, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, transfer cache hit and the matched rule.                                                      | `url`, `failed`, `limit`, `preview` |
+| Tool                  | What it answers                                                                                                                                                                                                                        | Arguments                                      |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`                                        |
+| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url`                                    |
+| `list-http-calls`     | The app's HttpClient calls, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, transfer cache hit and the matched rule.                                                      | `url`, `failed`, `limit`, `preview`, `headers` |
+| `http-waterfall`      | One tab's client calls as a waterfall, grouped by navigation, newest first: each call's start offset in its navigation, duration, status and a text bar.                                                                               | `limit`, `headers`                             |
 
 `explain-ssr-request` picks the request by `id`, else the newest one for `url`, else the newest one.
 
-`list-http-calls` lists every tab and the server when you leave out `page`. With `page`, it lists that tab and the server calls of the SSR request that served it. `url` keeps calls whose URL contains the text. `failed` keeps calls with a status of 400 or more, no response, an error, or a cancel. `limit` defaults to 30 (at most 200). `preview` adds each call's response preview. Secrets in URLs, errors and previews are masked, and `url` matches the masked URL.
+`list-http-calls` lists every tab and the server when you leave out `page`. With `page`, it lists that tab and the server calls of the SSR request that served it. `url` keeps calls whose URL contains the text. `failed` keeps calls with a status of 400 or more, no response, an error, or a cancel. `limit` defaults to 30 (at most 200). `preview` adds each call's response preview. `headers` adds each call's request and response headers. Secrets in URLs, errors, previews and headers are masked, and `url` matches the masked URL.
+
+`http-waterfall` reads the tab `page` names, or the most recent tab. A new navigation starts each time the page URL a call was made on changes. `limit` sets how many navigations it shows, 5 by default (at most 50). `headers` adds each call's headers. `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` are always masked, as are names that look secret or match `redaction.secretNames`, and JWTs and bearer tokens in any value.
 
 ### Fault rules <ngmd-badge variant="alpha">Action</ngmd-badge>
 
@@ -527,6 +727,31 @@ These tools read and change the rules of [Fault injection](../inspectors/ssr-htt
 `set-http-rule` checks its input the way the panel's form does. `pattern` is a substring or a glob where `*` matches anything, up to 500 characters. A leading `^` anchors it at the start of the URL path. `target` is `client`, `server` or `both` (the default). `status` is one of the statuses the panel lists. `delayMs` runs from 0 to 10000. `body` is JSON text or a JSON value, up to 100,000 characters. A rule needs a `status`, a `delayMs` or a `body`, and there can be at most 50 rules. A rule that breaks one of these is refused with the reason, and nothing changes. A rule that applies to SSR takes effect on the next page load. Patterns and bodies in the answers are masked like recorded calls.
 
 With [`actions.http`](../getting-started/configuration.md#actions) set to `false`, `set-http-rule` and `remove-http-rule` are dropped, and `list-http-rules` says that no rule applies.
+
+### TransferState and SSR overrides <ngmd-badge variant="alpha">Action</ngmd-badge>
+
+These tools read the [TransferState payload](../inspectors/ssr-http.md#transferstate-payload) a page was served with, and read and change the [SSR overrides](../inspectors/ssr-http.md#ssr-overrides), the same overrides the panel shows. Overrides live on the devtools server and apply to every page load that matches, so the override tools take no `page`. Reads: page.
+
+| Tool                     | What it does                                                                                                                                        | Arguments                                                                           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `inspect-transfer-state` | Lists the TransferState keys of a page with their kind (HTTP transfer cache, app state, hydration data, Analog) and size, or shows one key's value. | `page`, `key`, `search`, `limit`                                                    |
+| `list-ssr-overrides`     | Lists the overrides: id, on or off, kind, page pattern and effect.                                                                                  | none                                                                                |
+| `set-ssr-override`       | Adds an override, or replaces the one with `id`, and returns the saved overrides.                                                                   | `kind` (required), `pattern` (required), `id`, `message`, `key`, `value`, `enabled` |
+| `remove-ssr-override`    | Removes the override with `id` and returns the overrides left.                                                                                      | `id` (required)                                                                     |
+
+`kind` is one of these:
+
+| `kind`          | What it does                                                                                  | Arguments it takes |
+| --------------- | --------------------------------------------------------------------------------------------- | ------------------ |
+| `render-error`  | Throws `message` (default `Simulated render error`) while the server renders a matching page. | `message`          |
+| `client-render` | Serves `index.csr.html` instead of rendering.                                                 | none               |
+| `state-edit`    | Sets the TransferState entry `key` to `value`, or removes the entry when `value` is left out. | `key`, `value`     |
+
+`set-ssr-override` checks its input the way the panel's form does. `pattern` matches the page path and query like a fault rule's, up to 500 characters. `message` is up to 300 characters. `key` is up to 200 characters, with no spaces at either end, and a key with a masked part is refused because it can never match. `value` is JSON text or a JSON value, up to 100,000 characters. There can be at most 20 overrides. An override applies from the next full page load. Patterns, messages and values in the answers are masked like recorded calls.
+
+`inspect-transfer-state` reads the most recent page that reported a payload unless `page` names another. `search` keeps keys and cached URLs that contain the text, and `limit` defaults to 50 (at most 500). The values are the masked and clipped copy the panel shows, so read them to find a key, and type the full value for `state-edit`. An HttpClient entry holds `b` (body), `s` (status), `st` (status text), `u` (URL) and `rt` (response type).
+
+With [`actions.http`](../getting-started/configuration.md#actions) set to `false`, `set-ssr-override` and `remove-ssr-override` are dropped, and `list-ssr-overrides` says that no override applies.
 
 ### Clear recordings <ngmd-badge variant="alpha">Destructive</ngmd-badge>
 
@@ -555,17 +780,39 @@ These tools read what a Capacitor app reported: its platform, its plugins and th
 
 These tools read what a page captured: errors from Angular's `ErrorHandler`, uncaught errors, unhandled promise rejections and console calls. See [Errors](../inspectors/errors.md). Reads: page.
 
-| Tool            | What it answers                                                                                                                                                                                                                                 | Arguments                  |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| `list-errors`   | Error groups, most recent first: id, count, when last seen, the Angular error code linked to its reference page, the message, the owning component with its instance id, and the source (`handler`, `window` or `promise`).                     | `code`, `limit`            |
-| `explain-error` | One error by `id`: message, count, sources, the owning component, the stack of the first occurrence, and for an Angular code its reference page and a short known cause. With `code` instead, the reference entry and the errors that carry it. | `id`, `code`               |
-| `list-console`  | Console calls, newest first: when, level, the text of the arguments and the Angular code it mentions. Calls repeated in a row show once with a count.                                                                                           | `level`, `search`, `limit` |
+| Tool            | What it answers                                                                                                                                                                                                                                                                                                           | Arguments                           |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `list-errors`   | Error groups, most recent first: id, count, when last seen, the Angular error code linked to its reference page, the message, the owning component with its instance id, and the source (`handler`, `window` or `promise`).                                                                                               | `code`, `limit`                     |
+| `explain-error` | One error by `id`: message, count, sources, the owning component, the stack of the first occurrence, and for an Angular code its reference page and a short known cause. With `code` instead, the reference entry and the errors that carry it. An NG0100, a hydration mismatch or a missing provider adds its explainer. | `id`, `code`                        |
+| `list-console`  | Console calls, newest first: when, level, the text of the arguments and the Angular code it mentions. Calls repeated in a row show once with a count.                                                                                                                                                                     | `level`, `search`, `since`, `limit` |
 
-`code` accepts `NG0100`, `ng100` or `NG01203`. `explain-error` says so when Angular's error reference has no page for a code, and gives no known cause then. Pass the owner's instance id to `inspect-component` for its inputs and state. `list-errors` takes `limit` up to 100 (default 30), and `list-console` up to 200 (default 50). Messages, stacks and console text are masked like other live values.
+The explainers are the ones the [Errors](../inspectors/errors.md#explainers) tab shows. For NG0100: the binding, the template function, the previous and current value, the component fields that hold the new value, and the named signals written with it just before the check, with the code that wrote them when write stacks are on. For NG0500 to NG0503: a diff of the server HTML Angular expected and the client DOM it found. For NG0201 and `NullInjectorError`: the token and Angular's dependency path, to pass to `explain-injection`.
+
+`code` accepts `NG0100`, `ng100` or `NG01203`. `explain-error` says so when Angular's error reference has no page for a code, and gives no known cause then. Pass the owner's instance id to `inspect-component` for its inputs and state. `list-errors` takes `limit` up to 100 (default 30), and `list-console` up to 200 (default 50). `since` keeps the console calls made since a duration back from now (`30s`, `5m`, `1h`), an ISO date or epoch milliseconds, so you can read what one reproduction logged. A call repeated in a row counts from its last repeat. The page keeps its last 200 calls and sends them while a panel or an agent watches, so an agent call to an idle page gets what it logged meanwhile. Messages, stacks and console text are masked like other live values.
+
+## Audit
+
+### audit <ngmd-badge variant="alpha">Action</ngmd-badge>
+
+One ranked list of what is wrong on the page, gathered from the other inspectors, with an axe pass over the app on request. See [Audit](../inspectors/audit.md). Reads: page.
+
+Each finding has a severity, an area, the component, route or URL it is about, one line on why, and the tool to call for detail, with its arguments. The answer also lists key numbers (mean and slowest change detection cycle, wasted checks, retained components, open subscriptions after destroy, errors, axe violations and failed HTTP calls) and the areas it could not read, under **Coverage**.
+
+| Argument   | Required | Value                                                                                                                                                                        |
+| ---------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `axe`      | no       | `true` runs axe-core over the app first. Without it, the audit uses the last axe pass on the page.                                                                           |
+| `session`  | no       | `before` saves this audit as the page's baseline. `after` audits again and compares with the baseline. `clear` drops the baseline.                                           |
+| `area`     | no       | `accessibility`, `errors`, `hydration`, `change-detection`, `leaks`, `router`, `forms`, `http` or `pipes`. `accessibility` also lists the elements that break each axe rule. |
+| `severity` | no       | `error`, `warning` or `info`: only findings at that severity or above.                                                                                                       |
+| `limit`    | no       | Rows to list, 1 to 200. Default 30.                                                                                                                                          |
+
+The audit reuses each inspector's own checks: `diagnose-change-detection` hints and checks slower than 16 ms, `find-leaks`, `explain-error`, `hydration`, `lint-routes`, `lint-forms`, `list-http-calls` and `lint-pipes`. Change detection numbers need a recording from `change-detection`. Retention is not judged on a page whose Angular keeps DI debug data, the same as `find-leaks`. An area whose inspector is off, or whose agent tools are hidden with `agent.tools.<name>: false`, is left out, and **Coverage** says which. With the Components agent tools hidden, axe findings name no component or instance id.
+
+The axe pass loads axe-core into the page on demand and changes nothing in the app. It leaves out the overlay's own elements and frames, masks selectors, attributes and summaries, and leaves out text content. With `agent.readOnly`, the tool has no `axe` argument and is marked read-only, and it refuses `session: "clear"` and a `session: "before"` that would replace a baseline, so it never drops one the user took. Two audits that used the same axe pass don't compare accessibility, and a note says so. A reload of the tab drops its axe pass. A session is kept per page for 30 minutes after its last use, so it survives a reload of the tab. Comparing only works within one page id. See [Inspect, fix and verify](../guides/inspect-fix-verify.md) for the loop.
 
 ## Analog
 
-These tools cover *Analog apps. Most read your source. Some also read what the Vite plugin recorded.
+These tools cover \*Analog apps. Most read your source. Some also read what the Vite plugin recorded.
 
 ### Routes and files
 
@@ -611,6 +858,19 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 <ngmd-alert severity="helpful">
   <code>analog-server-calls</code> and <code>analog-call-api</code> need the <a href="../getting-started/vite.md">Vite plugin</a>. The plugin records the calls and knows the dev server address.
 </ngmd-alert>
+
+## Plugins
+
+These tools read the views that [Pangular plugins](../guides/write-a-plugin.md) report from the page. Both read the page.
+
+| Tool             | What it answers                                                                                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `list-plugins`   | The page plugins each page runs, with version, status and pages, and the server plugins with their tools and tiers. Takes no arguments.                                              |
+| `inspect-plugin` | One plugin's view of a page as markdown: its tables, lists, stats and trees, its status, page actions and tools. Takes `plugin` (required, the plugin id) and `limit` (rows, 1-200). |
+
+### A plugin's own tools
+
+A server plugin adds tools named `plugin:<plugin id>:<tool>`, which your client calls as `pangular_plugin_<plugin id>_<tool>`. Built-in tools never start with `plugin`, so a plugin can't replace one. Each tool is `read` unless the plugin declares `action` or `destructive`, and its answer starts with a note that it comes from the plugin and the page. `agent.readOnly` and `actions.plugins: false` drop the tools that are not `read`. `plugins.<id>.tools: false` drops all of one plugin's tools and leaves the plugin out of `list-plugins` and `inspect-plugin`. MCP clients take tool names of up to 64 characters, so the server skips a plugin whose `pangular_plugin_<plugin id>_<tool>` name is longer.
 
 ## Shared state
 

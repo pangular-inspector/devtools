@@ -1,5 +1,5 @@
 diff --git a/dist/mcp/index.mjs b/dist/mcp/index.mjs
-index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..85d3993f0d8355684f65d8a83387a009a116f499 100644
+index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..06c8b33540e4d130156ea1839ef85dc603bd032a 100644
 --- a/dist/mcp/index.mjs
 +++ b/dist/mcp/index.mjs
 @@ -26,10 +26,13 @@ function buildMcpServerFromContext(ctx, options) {
@@ -30,7 +30,42 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..85d3993f0d8355684f65d8a83387a009
  	};
  	let handle;
  	try {
-@@ -398,7 +402,8 @@ function createMcpFetchHandler(ctx, options) {
+@@ -165,6 +169,25 @@ async function readStateResult(ctx, filter, key) {
+ 		value: (await ctx.rpc.sharedState.get(key)).value()
+ 	};
+ }
++/**
++* A tool result that carries its own MCP content blocks (`mcpContent`), such
++* as an image next to its text, is sent as those blocks. Only `text` and
++* `image` blocks with string fields pass; anything else falls back to the
++* stringified result.
++*/
++function mcpContentOf(result) {
++	const blocks = result && typeof result === "object" ? result.mcpContent : void 0;
++	if (!Array.isArray(blocks) || !blocks.length) return void 0;
++	const valid = blocks.every((block) => block && (block.type === "text" && typeof block.text === "string" || block.type === "image" && typeof block.data === "string" && typeof block.mimeType === "string"));
++	return valid ? blocks.map((block) => block.type === "text" ? {
++		type: "text",
++		text: block.text
++	} : {
++		type: "image",
++		data: block.data,
++		mimeType: block.mimeType
++	}) : void 0;
++}
+ function registerToolHandlers(server, ctx, exposeSharedState) {
+ 	const stateFilter = sharedStateFilter(exposeSharedState);
+ 	const warnedCollisions = /* @__PURE__ */ new Set();
+@@ -216,6 +239,8 @@ function registerToolHandlers(server, ctx, exposeSharedState) {
+ 			}
+ 			const outputSchema = tool ? usableOutputSchema(tool.outputSchema ?? computeOutputSchema(tool, ctx)) : void 0;
+ 			const result = await ctx.agent.invoke(tool?.id ?? name, args ?? {});
++			const blocks = mcpContentOf(result);
++			if (blocks) return { content: blocks };
+ 			return {
+ 				content: [{
+ 					type: "text",
+@@ -398,7 +423,8 @@ function createMcpFetchHandler(ctx, options) {
  	const handler = createMcpHandler(() => buildMcpServerFromContext(ctx, {
  		serverName: options.serverName,
  		serverVersion: options.serverVersion,

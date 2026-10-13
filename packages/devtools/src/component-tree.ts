@@ -162,12 +162,39 @@ function readInputs<H extends object>(
     });
 }
 
+/**
+ * A data property of `target` or its prototypes, read from its descriptor so
+ * no getter runs; undefined for an accessor or a missing name.
+ */
+function dataField(target: object, name: string): unknown {
+  for (
+    let at: object | null = target;
+    at && at !== Object.prototype;
+    at = read<object | null>(() => Object.getPrototypeOf(at), null)
+  ) {
+    const found = read(() => Object.getOwnPropertyDescriptor(at, name), undefined);
+    if (found) return 'value' in found ? found.value : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * A snapshot of an Angular resource (`resource()`, `rxResource()`,
+ * `httpResource()`), or null for any other value. Angular keeps `value`,
+ * `status` and `error` as own signal fields and `hasValue` on the prototype;
+ * they are read through descriptors, so a getter on a look-alike never runs.
+ */
 export function resourceOf<H extends object>(
   ng: ComponentDebugNg<H>,
   value: unknown,
 ): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') return null;
-  const ref = value as Record<string, unknown>;
+  const ref = {
+    value: dataField(value, 'value'),
+    status: dataField(value, 'status'),
+    error: dataField(value, 'error'),
+    hasValue: dataField(value, 'hasValue'),
+  };
   const isSignal = (field: unknown) => read(() => !!ng.isSignal?.(field), false);
   if (
     !isSignal(ref['value']) ||

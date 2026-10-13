@@ -78,7 +78,12 @@ export interface SignalGraphComponent {
 }
 
 export type SignalResourceStatus =
-  'idle' | 'loading' | 'reloading' | 'resolved' | 'error' | 'local';
+  | 'idle'
+  | 'loading'
+  | 'reloading'
+  | 'resolved'
+  | 'error'
+  | 'local';
 
 export interface SignalResource {
   /** Stable id, also the key of the status history. */
@@ -312,6 +317,12 @@ export interface InjectorInfo {
   directives?: string[];
   selector?: string;
   path?: string[];
+  /**
+   * On an element injector: the id of the element injector where a `host`
+   * lookup from here stops, the host of the component whose template declares
+   * this element. Missing on a root component.
+   */
+  host?: string;
   /** Set by the server: one of Angular's own injectors (see `framework-tokens.ts`). */
   framework?: boolean;
 }

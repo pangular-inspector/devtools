@@ -1,8 +1,8 @@
 // The activity lease, on the page: the component tree, injectors, change
-// detection and forms are read and sent only while someone looks at them (a
-// panel is open, or an agent asked recently). The server says when that
-// changes; an idle page only keeps itself alive and sends everything again
-// when interest comes back.
+// detection and forms are read and sent, and captured errors and console calls
+// are sent, only while someone looks at them (a panel is open, or an agent
+// asked recently). The server says when that changes; an idle page only keeps
+// itself alive and sends everything again when interest comes back.
 
 interface Rpc {
   rpc: {
@@ -87,7 +87,8 @@ export function createPageLease(my: Rpc, pageId: string, options: PageLeaseOptio
   const refresh = async () => {
     try {
       const answer = (await my.rpc.call('page-interest', { pageId })) as
-        { watching?: unknown } | undefined;
+        | { watching?: unknown }
+        | undefined;
       set(answer?.watching ?? true);
     } catch {
       set(true);

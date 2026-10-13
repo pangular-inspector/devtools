@@ -9,14 +9,19 @@ export interface AppliedOverride {
   note?: string;
 }
 
-/** Request header that carries the SSR request id from `ssrMiddleware` into the render. */
+/** Request header that carries the SSR request id from `ssrMiddleware` or `withPangularSsr` into the render. */
 export const SSR_REQUEST_HEADER = 'x-pangular-ssr-id';
 
 /** Server-Timing metric whose description is the SSR request id. */
 export const SSR_TIMING_NAME = 'pangular';
 
 export type SsrRenderMode =
-  'server' | 'prerender' | 'client' | 'redirect' | 'not-rendered' | 'unknown';
+  | 'server'
+  | 'prerender'
+  | 'client'
+  | 'redirect'
+  | 'not-rendered'
+  | 'unknown';
 
 export interface SsrRequest {
   id: string;
@@ -47,10 +52,46 @@ export interface SsrRequest {
 }
 
 export interface ActiveRequest {
+  /** The page path and query being rendered. */
+  url?: string;
   fetches: number;
   fetchMs: number;
   navigations?: SsrNavigation[];
   overrides?: AppliedOverride[];
+  /** When the trace began, in ms since the epoch, so a trace that never ends can expire. */
+  startedAt?: number;
+  /** When the trace last made progress (a body chunk, a server call, a navigation), in ms since the epoch. */
+  lastActivityAt?: number;
+  /** Ends the trace as aborted when it expires, such as a Response whose body nobody read. */
+  abandon?: () => void;
+}
+
+/** How long a trace may stay in flight without progress before {@link sweepActiveSsrRequests} drops it. */
+export const ACTIVE_SSR_TTL_MS = 5 * 60_000;
+
+/** Marks a trace in flight as still making progress, so a long stream is not swept. */
+export function touchSsrRequest(request: ActiveRequest | undefined, now = Date.now()): void {
+  if (request) request.lastActivityAt = now;
+}
+
+/**
+ * Drops traces with no progress for longer than {@link ACTIVE_SSR_TTL_MS}: a
+ * response that was dropped unread never ends its trace, and would otherwise
+ * stay in `active` for the server's life (and keep {@link soleActiveSsrRequest}
+ * from linking). A response that keeps streaming chunks stays.
+ */
+export function sweepActiveSsrRequests(now = Date.now()): void {
+  const { active } = ssrRegistry();
+  for (const [id, request] of active) {
+    const last = request.lastActivityAt ?? request.startedAt;
+    if (last === undefined || now - last <= ACTIVE_SSR_TTL_MS) continue;
+    active.delete(id);
+    try {
+      request.abandon?.();
+    } catch {
+      // The trace is gone either way.
+    }
+  }
 }
 
 export interface SsrRegistry {
@@ -63,7 +104,9 @@ export interface SsrRegistry {
 
 export function noteOverride(id: string, applied: AppliedOverride) {
   const active = ssrRegistry().active.get(id);
-  if (active) (active.overrides ??= []).push(applied);
+  if (!active) return;
+  (active.overrides ??= []).push(applied);
+  touchSsrRequest(active);
 }
 
 export function ssrRegistry(): SsrRegistry {
@@ -76,11 +119,24 @@ export function activeSsrRequest(id: string | null | undefined): string | undefi
   return id && ssrRegistry().active.has(id) ? id : undefined;
 }
 
+/**
+ * The one request being traced, when exactly one is in flight. A render that
+ * gets no Angular `REQUEST` (Analog provides its own token) is linked through
+ * it, since with two renders in flight a call can't be told apart.
+ */
+export function soleActiveSsrRequest(): string | undefined {
+  sweepActiveSsrRequests();
+  const { active } = ssrRegistry();
+  if (active.size !== 1) return undefined;
+  return active.keys().next().value;
+}
+
 export function noteSsrFetch(id: string, durationMs: number) {
   const active = ssrRegistry().active.get(id);
   if (!active) return;
   active.fetches++;
   active.fetchMs += durationMs;
+  touchSsrRequest(active);
 }
 
 const ID_PATTERN = /^[a-z0-9]{1,40}$/;

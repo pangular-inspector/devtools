@@ -24,9 +24,11 @@ import { Select, type SelectOption } from '../ui/select';
 import { zoneLabel } from './dashboard';
 import { SourceLink } from '../ui/source-link';
 import { StoreGlobal } from '../ui/store-global';
+import { ProviderValue } from './di-provider-value';
 import type { ComponentFocus } from '../types/component-focus.types';
 import type { InjectorFocus } from '../types/injector-focus.types';
 import { storeFlag, storedFlag } from '../view-prefs';
+import { StartupSection } from './startup-section';
 
 interface ProviderInfo {
   token: string;
@@ -122,7 +124,15 @@ function isTree(value: unknown): value is InjectorNode[] {
 
 @Component({
   selector: 'app-di-inspector',
-  imports: [AngularUnavailable, NgTemplateOutlet, Select, SourceLink, StoreGlobal],
+  imports: [
+    AngularUnavailable,
+    NgTemplateOutlet,
+    ProviderValue,
+    Select,
+    SourceLink,
+    StartupSection,
+    StoreGlobal,
+  ],
   template: `
     <p class="sr-only" role="status">{{ announcement() }}</p>
     <ng-template #loadError let-compact="compact">
@@ -533,8 +543,16 @@ function isTree(value: unknown): value is InjectorNode[] {
                             token: p.token,
                             index: index,
                           }"
-                          [label]="p.token"
+                          [label]="p.token + positionSuffix(sel.providers, index)"
                           [canLog]="true"
+                        />
+                        <app-provider-value
+                          [rpc]="rpc()"
+                          [pageId]="shownPageId()"
+                          [injectorId]="sel.injector.id"
+                          [token]="p.token"
+                          [index]="index"
+                          [position]="tokenPosition(sel.providers, index)"
                         />
                       </li>
                     }
@@ -553,6 +571,7 @@ function isTree(value: unknown): value is InjectorNode[] {
           </section>
         }
       </div>
+      <app-startup-section [rpc]="rpc()" [pageId]="shownPageId()" />
     } @else if (!loaded()) {
       <div class="state" role="status">
         <span class="spinner" aria-hidden="true"></span>
@@ -1862,6 +1881,27 @@ export class DiInspector {
   }
 
   /** Whether a provider is left out of the lists while framework providers are hidden. */
+  /**
+   * `(2 of 3)` for a token that several shown providers share (multi
+   * providers), so their buttons and value regions get unique names; else ''.
+   */
+  tokenPosition(providers: readonly ProviderInfo[], index: number): string {
+    const token = providers[index]?.token;
+    let at = 0;
+    let count = 0;
+    providers.forEach((p, i) => {
+      if (p.token !== token || this.isHidden(p)) return;
+      count++;
+      if (i <= index) at++;
+    });
+    return count > 1 ? `(${at} of ${count})` : '';
+  }
+
+  positionSuffix(providers: readonly ProviderInfo[], index: number): string {
+    const position = this.tokenPosition(providers, index);
+    return position ? ` ${position}` : '';
+  }
+
   isHidden(provider: ProviderInfo): boolean {
     return this.hideFramework() && provider.framework === true;
   }

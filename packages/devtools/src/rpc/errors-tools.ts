@@ -3,6 +3,7 @@ import { ERROR_REFERENCE_URL, ngCodeInfo, ngCodeUrl, normalizeNgCode } from '../
 import { redactMessage, redactUrl } from '../router.ts';
 import { redactText } from '../serialize.ts';
 import { clip } from '../text.ts';
+import { explainSection, toErrorExplain, type ErrorExplain } from './error-explain-tools.ts';
 import { code, untrusted } from './forms-tools.ts';
 import { byRecency, unknownPageText } from './pages.ts';
 
@@ -34,6 +35,12 @@ export interface ErrorGroup {
   /** The stack of the first occurrence, masked and cut. */
   stack?: string;
   owner?: ErrorOwner;
+  /**
+   * What the page read about the error, for NG0100 (binding, values, signal
+   * writes), hydration mismatches (server and client DOM, with a diff) and
+   * missing providers (token and dependency path). See `error-explain-tools.ts`.
+   */
+  explain?: ErrorExplain;
 }
 
 export interface ConsoleEntry {
@@ -119,6 +126,7 @@ function toGroup(value: unknown): ErrorGroup | null {
   const owner = toOwner(value['owner']);
   const stack = text(value['stack'], MAX_STACK);
   const name = text(value['name'], 80);
+  const explain = toErrorExplain(value['explain']);
   return {
     id: clip(value['id'], MAX_ID),
     message: text(value['message'], MAX_MESSAGE),
@@ -132,6 +140,7 @@ function toGroup(value: unknown): ErrorGroup | null {
     ...(groupCode && ngCodeUrl(groupCode) ? { docUrl: ngCodeUrl(groupCode) } : {}),
     ...(stack ? { stack } : {}),
     ...(owner ? { owner } : {}),
+    ...(explain ? { explain } : {}),
   };
 }
 
@@ -382,6 +391,7 @@ export function explainErrorText(
         ? codeSection(group.code)
         : 'No Angular error code in this error, so it comes from app code or a library.',
     ];
+    if (group.explain) lines.push('', explainSection(group.explain, group.owner));
     if (group.stack) {
       const stack = group.stack.split('\n').slice(0, 15).join('\n').replace(/```/g, "'''");
       lines.push('', 'Stack (first occurrence):', '', '```text', stack, '```');
@@ -392,9 +402,43 @@ export function explainErrorText(
 }
 
 /** `list-console`: the page's console calls, newest first. */
+const DURATION_MS: Record<string, number> = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 };
+
+/** The largest time a JavaScript Date holds, in epoch milliseconds. */
+const MAX_DATE_MS = 8.64e15;
+
+/**
+ * The time `since` names, in epoch milliseconds: a duration back from now
+ * (`30s`, `5m`, `1h`, `500ms`), an ISO date, or epoch milliseconds. A string
+ * that is none of these is the error to answer with.
+ */
+export function sinceTime(value: unknown, now = Date.now()): number | string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  let at: number | undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) at = value;
+  else if (typeof value === 'string') {
+    const text = value.trim();
+    const duration = /^(\d+(?:\.\d+)?)\s*(ms|s|m|h)$/i.exec(text);
+    if (duration) at = now - Number(duration[1]) * DURATION_MS[duration[2]!.toLowerCase()]!;
+    else if (/^\d+$/.test(text)) at = Number(text);
+    else {
+      const date = Date.parse(text);
+      if (!Number.isNaN(date)) at = date;
+    }
+  }
+  if (at === undefined) {
+    return `\`since\` must be a duration such as \`30s\`, \`5m\` or \`1h\`, an ISO date, or epoch milliseconds.`;
+  }
+  // A Date holds ±8.64e15 ms; past that, toISOString() throws.
+  if (!(Math.abs(at) <= MAX_DATE_MS)) {
+    return `\`since\` is out of range: it must name a time within ±${MAX_DATE_MS} epoch milliseconds (a duration back from now, an ISO date, or epoch milliseconds).`;
+  }
+  return at;
+}
+
 export function listConsoleText(
   state: ErrorsState,
-  args: { page?: string; level?: string; search?: string; limit?: number } = {},
+  args: { page?: string; level?: string; search?: string; since?: unknown; limit?: number } = {},
   now = Date.now(),
 ): string {
   const picked = pickPage(state, args.page);
@@ -404,13 +448,16 @@ export function listConsoleText(
   if (args.level && !level) {
     return `Unknown level ${code(args.level)}. Use one of ${CONSOLE_LEVELS.map(code).join(', ')}.`;
   }
+  const since = sinceTime(args.since, now);
+  if (typeof since === 'string') return since;
   const search = args.search?.toLowerCase();
   const all = Object.values(page.console)
     .filter((entry) => !level || entry.level === level)
     .filter((entry) => !search || entry.text.toLowerCase().includes(search))
+    .filter((entry) => since === undefined || entry.at >= since)
     .sort((a, b) => b.id - a.id);
   if (!all.length) {
-    return `${note}Page ${code(page.pageId)} has no console calls${level ? ` at level ${code(level)}` : ''}${search ? ' matching the search' : ''}. The page keeps its last ${MAX_ENTRIES} calls, from when the overlay connected.`;
+    return `${note}Page ${code(page.pageId)} has no console calls${level ? ` at level ${code(level)}` : ''}${search ? ' matching the search' : ''}${since === undefined ? '' : ` since ${new Date(since).toISOString()}`}. The page keeps its last ${MAX_ENTRIES} calls, from when the overlay connected.`;
   }
   const limit = Math.min(Math.max(Math.floor(num(args.limit, 50)), 1), MAX_ENTRIES);
   const rows = all.slice(0, limit).map((entry) => {

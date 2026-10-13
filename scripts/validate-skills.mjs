@@ -54,11 +54,12 @@ function check(file, name, kind) {
   checkLinks(file, body);
 }
 
-const skills = join(root, '.claude/skills');
 const agents = join(root, '.claude/agents');
 let count = 0;
 
-if (existsSync(skills)) {
+// The contributor skills, and the user-facing ones the package ships (`pangular skills install`).
+for (const skills of [join(root, '.claude/skills'), join(root, 'packages/devtools/skills')]) {
+  if (!existsSync(skills)) continue;
   for (const name of readdirSync(skills)) {
     const dir = join(skills, name);
     if (!statSync(dir).isDirectory()) continue;

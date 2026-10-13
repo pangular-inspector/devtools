@@ -20,6 +20,7 @@ import {
   type NgrxUnrestorableUpdate,
 } from './ngrx-shared.ts';
 import { registeredPatchState, registeredWatchState } from './ngrx-register.ts';
+import { historyRequest, type HistorySource } from './ngrx-history.ts';
 
 /**
  * Angular's `untracked` (16.0+), read at runtime: a named import of it fails
@@ -106,9 +107,13 @@ type Snapshot = Record<PropertyKey, unknown>;
 
 type Method = (this: unknown, ...args: unknown[]) => unknown;
 
+/**
+ * What each log entry keeps for restores and the history (`ngrx-history.ts`):
+ * the raw states around it. NgRx state is immutable, so these share structure.
+ */
 type Saved =
-  | { kind: 'signal'; tracked: Tracked; after: Snapshot }
-  | { kind: 'classic'; action: unknown }
+  | { kind: 'signal'; tracked: Tracked; before: Snapshot; after: Snapshot }
+  | { kind: 'classic'; action: unknown; before: unknown; after: unknown }
   | { kind: 'event' };
 
 const MAX_LOG = 200;
@@ -377,7 +382,7 @@ export function createNgrxCollector<H extends object = Element>(
         ...(causedByEvent ? { causedByEvent } : {}),
         ...(durationMs !== undefined ? { durationMs } : {}),
       },
-      { kind: 'signal', tracked: t, after },
+      { kind: 'signal', tracked: t, before, after },
     );
   };
 
@@ -446,7 +451,7 @@ export function createNgrxCollector<H extends object = Element>(
         ...(causedByEvent ? { causedByEvent } : {}),
         ...(durationMs !== undefined ? { durationMs } : {}),
       },
-      { kind: 'signal', tracked: t, after },
+      { kind: 'signal', tracked: t, before, after },
     );
     if (call) call.fired = (call.fired ?? 0) + 1;
   };
@@ -715,7 +720,8 @@ export function createNgrxCollector<H extends object = Element>(
    * earlier, still-unresolved dispatch to this one. */
   const wrapDispatch = (d: AnyRecord): (() => void) | undefined => {
     const original = read(() => d['dispatch'], undefined) as
-      ((...args: unknown[]) => unknown) | undefined;
+      | ((...args: unknown[]) => unknown)
+      | undefined;
     if (typeof original !== 'function') return undefined;
     const own = Object.prototype.hasOwnProperty.call(d, 'dispatch');
     d['dispatch'] = function (this: unknown, ...args: unknown[]) {
@@ -810,6 +816,7 @@ export function createNgrxCollector<H extends object = Element>(
     }
     const origin =
       withAction && action && typeof action === 'object' ? c.origins.get(action) : undefined;
+    const before = c.lastRaw;
     c.last = next;
     c.lastRaw = raw;
     const held = c.devtools ? holds(c.devtools, action) : false;
@@ -830,7 +837,7 @@ export function createNgrxCollector<H extends object = Element>(
         restorable: held,
         ...(c.devtools && !held ? { unrestorable: 'not-recorded' as const } : {}),
       },
-      { kind: 'classic', action },
+      { kind: 'classic', action, before, after: raw },
     );
   };
 
@@ -1133,7 +1140,8 @@ export function createNgrxCollector<H extends object = Element>(
       const idsRaw = read(() => peek(t.source[idsKey]), undefined);
       if (!Array.isArray(idsRaw)) continue;
       const entityMapRaw = read(() => peek(t.source[key]), undefined) as
-        Record<PropertyKey, unknown> | undefined;
+        | Record<PropertyKey, unknown>
+        | undefined;
       const entitiesKey = collection ? `${collection}Entities` : 'entities';
       const entry: NonNullable<NgrxSignalStoreInfo['entities']>[number] = {
         ...(collection ? { collection } : {}),
@@ -1298,7 +1306,31 @@ export function createNgrxCollector<H extends object = Element>(
     return dispatch({ ...(raw as Record<string, unknown>) }, `#${at} again`);
   };
 
+  const history: HistorySource = {
+    entries: () => log,
+    states: (at) => {
+      const keep = saved.get(at);
+      const entry = log.find((e) => e.seq === at);
+      if (!keep || !entry || keep.kind === 'event') return null;
+      if (keep.kind === 'classic')
+        return { storeId: 'store', before: keep.before, after: keep.after };
+      const named = (snap: Snapshot) =>
+        Object.fromEntries(keep.tracked.stateKeys.map((k) => [String(k), snap[k]]));
+      return { storeId: entry.storeId, before: named(keep.before), after: named(keep.after) };
+    },
+    storeOf: (storeId) => {
+      if (storeId === 'store') return classic ? { kind: 'store', name: 'Store' } : null;
+      for (const t of tracked.values()) {
+        if (t.id === storeId) return { kind: t.kind, name: t.className };
+      }
+      return null;
+    },
+  };
+
   const run = (request: NgrxRequest): NgrxRequestResult => {
+    if (request?.type === 'entry' || request?.type === 'export') {
+      return historyRequest(history, request);
+    }
     if (request?.type === 'latest') return backToLatest();
     if (request?.type === 'dispatch') {
       const problem = dispatchProblem(request.action, request.payload);

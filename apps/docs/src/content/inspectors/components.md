@@ -158,7 +158,7 @@ The **Hydration** section shows how Angular hydrated a page that was rendered on
 
 Click a mismatch to select its component in the tree. **Outline on page** draws an outline on the page over each region: hydrated (solid), skipped (dashed), mismatched (double) and dehydrated `@defer` blocks (dotted), each with a label and a legend in the corner. Only the top of each hydrated region gets an outline, so nested components don't stack boxes. The outline is drawn in its own layer, ignores the pointer and changes nothing in the app. Click the button again to remove it.
 
-A page that was not rendered on the server shows that there is nothing to hydrate. A page with server HTML and no hydrated component says that client hydration is off. Hydration status comes from what Angular records in development builds, so a production build shows the same note. The [`hydration`](../agents/tools.md#hydration) tool returns the same data.
+A page that was not rendered on the server shows that there is nothing to hydrate. A page with server HTML and no hydrated component says that client hydration is off. Hydration status comes from what Angular records in development builds, so a production build shows the same note. The [`hydration`](../agents/tools.md#hydration) tool returns the same data, with a line diff of the server HTML and the client DOM for each mismatch. The NG05xx error itself shows the same diff in the [Errors](./errors.md#server-vs-client-dom-ng0500-to-ng0503) tab.
 
 ### For blocks
 
@@ -182,11 +182,12 @@ Below the tree and the defer blocks, the **Change detection** section records ch
 - **Spans in the picked cycles**: when the page reports timed spans, a flame graph of the picked cycles. Time runs left to right, cycle after cycle with the idle time between them left out, and a span nested in another sits one row lower. Each span is a component check (solid), a lifecycle hook (stripes), an `afterRender` callback (dots) or the output listener that triggered the cycle (lines, drawn before the cycle's start), with a key under the graph. Hover or focus a span to read its total and self time. The arrow keys move along a row, **Up** goes to the enclosing span and **Down** to the first nested one. **Enter** or a click on a component, hook or output selects that component in the tree. **Show the spans as a table** lists the same spans. The graph shows at most 30 cycles; pick a smaller range when more are picked.
 - **Self time by component**: a treemap of each component class's self time in the picked cycles, largest first. The recording has no parent links between components, so the cells are not nested. Click a cell, or press **Enter** on it, to select an instance of that class in the tree (the one checked most often).
 - **Slowest components**: each component class with its check count, its self time (its own template and hooks, children excluded) and its slowest single check.
-- **Latest cycles**, newest first: the start time, the duration, how many components Angular checked, how many sync passes it ran, the output listener that ran just before the cycle (an output that ended more than 50 ms before the cycle is not counted), the time in lifecycle hooks and in `afterRender` callbacks, and the slowest component in it.
+- **Latest cycles**, newest first: the start time, the duration, how many components Angular checked, how many sync passes it ran, what started the cycle (see [Why it ran and what it wasted](#why-it-ran-and-what-it-wasted)), how many refreshed checks changed nothing, the time in lifecycle hooks and in `afterRender` callbacks, and the slowest component in it. A recording without causes shows the output listener that ran just before the cycle instead (an output that ended more than 50 ms before the cycle is not counted).
 - **Lifecycle hooks**: time per class and hook (`ngOnChanges`, `ngOnInit`, `ngDoCheck`, `ngAfterContentChecked`, `ngAfterViewChecked` and the others Angular calls), with call count and slowest call. A hook's time is also part of the self time of the component whose view runs it.
 - **Output listeners**: time per class and listener, without the time of outputs the listener emitted, with call count and slowest call.
 - A line with how often Angular ran the `afterEveryRender` and `afterNextRender` callbacks, and how long they took.
 - Tree rows show how many times each instance was checked while recording.
+- **Why it ran and what it wasted**: what started the cycles, the components that depend on zone.js, wasted checks, inputs that break OnPush, and hints. See [Why it ran and what it wasted](#why-it-ran-and-what-it-wasted).
 
 **Lifecycle hooks** and **Output listeners** show their 10 slowest rows. A recording keeps the 100 slowest of each among the first 1000 it times, and a note says how many it left out.
 
@@ -195,6 +196,22 @@ Below the tree and the defer blocks, the **Change detection** section records ch
 Each cycle keeps its 40 longest timed spans, and the flame graph says how many shorter spans it left out. A recording without spans, such as a file saved by an older version, has no flame graph. The section says so and shows the treemap.
 
 Recording is off by default. While it is off, the page registers no profiler for it. The page keeps the last 200 cycles, set with [`limits.cdCycles`](../getting-started/configuration.md#limits). Recording needs Angular 20 or later. On older versions, the section says so. Times come from a development build, so they are higher than in production.
+
+#### Why it ran and what it wasted
+
+While a recording runs, the page also finds what started each cycle and which checks changed nothing. It wraps the `notify` method of Angular's change detection scheduler, adds a signal write hook and watches DOM updates with a `MutationObserver`. All three stop when the recording stops, and none of them changes what the app does.
+
+| Table                        | What it shows                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **What started the cycles**  | Cycles per cause. A cause is the first thing that told Angular to run after the previous cycle: a template listener (**Event**, with the DOM event type, its target and the listener's component), a signal a template reads (**Signal write**, with the signal's `debugName`), an effect, `markForCheck`, `setInput`, a view change, `ApplicationRef.tick()` from app code, or nothing at all (**zone.js only**). |
+| **Depends on zone.js**       | Components that changed in a tick zone.js started with no Angular notification before it, with the zone.js tasks behind those ticks. Such a component changes state in a callback that only a zone.js tick picks up, such as a field set in `setTimeout` or a promise without a signal or `markForCheck`.                                                                                                          |
+| **Wasted checks**            | Per component class, how often Angular ran its template and how often nothing it renders changed: no DOM update and no new input reference for a child. The development checkNoChanges pass and checks that only passed through to a child are left out. The strategy column is `OnPush` or `Eager`.                                                                                                               |
+| **Inputs that break OnPush** | Inputs changed in place (same object or array, other contents), which an OnPush child does not see, and inputs given a new reference with the same contents, which refresh it for nothing. Each row names the component whose template set the input.                                                                                                                                                              |
+| **Hints**                    | OnPush for a class refreshed at least 10 times that changed something in under 20% of them. On Angular 22, where OnPush is the default, the hint says to remove `ChangeDetectionStrategy.Eager`; on a class that is already OnPush it says what keeps marking it. Each input and zone.js dependent above gets a line too.                                                                                          |
+
+The latest cycles name each cause in one line, such as `click on button in Cart (add), wrote signal count`. Code that ran on an HTTP response counts as **HTTP response**, from the XHR `load` event or the frames of Angular's fetch backend. A timer counts as **Timer** only when zone.js is loaded and reports the task. Without zone.js, a write in a timer or a promise shows as a signal write or `markForCheck` with the app frames that did it.
+
+The first check of each instance in a recording is the baseline its inputs are compared with, so a change shows from its second check on. Causes need Angular's zoneless-capable scheduler (Angular 18 and later); recording itself needs 20.0. If the page has no scheduler the overlay can find, the section says so and still counts wasted checks.
 
 #### Pick a range of cycles
 
@@ -223,6 +240,44 @@ The **Live views** toggles below **Record** show change detection as it happens,
 | **Angular profiling** | Calls `ng.enableProfiling()`, so Angular adds its own track to the Performance panel. Angular has no way to turn it off, so it stays on until the page reloads and the toggle stays pressed. If the page has no `ng.enableProfiling`, such as a production build, the toggle does nothing and the section says so. |
 
 The flash boxes are drawn on a canvas in a shadow root that the overlay adds to the page. It doesn't take clicks, and the overlay never changes the app's own elements. The page measures the checked hosts once per animation frame and draws at most 150 boxes at a time.
+
+### Leaks
+
+Below **Change detection**, the **Leaks** section looks for components that stay in memory after they leave the page, and for what keeps them there. It has three lists:
+
+| List                                 | What it shows                                                                                                                                                                                                            |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Still retained**                   | Component instances that were destroyed but are still in memory after at least 2 navigations and 10 seconds: class, the route they lived on, how many navigations ago they went, their age and their open subscriptions. |
+| **Open subscriptions after destroy** | RxJS subscriptions a component made that are still open after it went away, with the class, the count and the line that made them. Only while **Track subscriptions** is on.                                             |
+| **Live effects and subscriptions**   | Components on the page that hold live effects or tracked open subscriptions. Hover or focus a row to highlight the component in the page, and click it to select it in the tree.                                         |
+
+A line above the lists counts the navigations, the retained instances and the destroyed instances the browser has collected. Instances destroyed fewer than 2 navigations or 10 seconds ago are left out of **Still retained** and named in a separate note, as destroyed recently and not collected yet. Instances that left the page without being destroyed (detached views, such as a `RouteReuseStrategy` cache) are named in a note of their own.
+
+<ngmd-alert severity="important" label="A hint, not a verdict">
+  The browser collects garbage when it decides, so an instance in <strong>Still retained</strong> is not proof of a leak. Take a heap snapshot in the Chrome DevTools <strong>Memory</strong> panel, search for the class name and read its <strong>Retainers</strong> to see what holds it.
+</ngmd-alert>
+
+#### Development builds of Angular 16.2 and later
+
+From Angular 16.2, a development build records DI debug data for its debug API (the injector profiler behind `ng.ɵgetInjectorProviders`). The records keep every value a component injected and, from 17.0, the view it injected from. That keeps every destroyed component in memory, and its children through its view, so a retained instance says nothing about your code. Production builds have no such data, but no debug API either.
+
+When the page has `ng.ɵgetInjectorProviders`, **Still retained** lists no instances. It shows a note instead: In a development build, Angular's DI debug data keeps every destroyed component in memory, so Pangular can't tell a leak from that. The `find-leaks` agent tool says the same. To check a component there, take a heap snapshot in the Chrome DevTools **Memory** panel after a few navigations, search for the class and look for a retainer other than Angular's DI debug records. **Open subscriptions after destroy**, detached views and **Live effects and subscriptions** work as usual, and an open subscription after destroy is still a real leak. On Angular 12 to 16.1, **Still retained** works as described above.
+
+#### How destroyed components are found
+
+The page walks the component tree when elements come or go, and every 30 seconds otherwise. A component whose host left the page counts as destroyed when Angular has dropped its view (`ng.getInjector` gives Angular's null injector for the host). If Angular still holds the view, the component counts as detached. The page holds each instance through a `WeakRef` only, and a `FinalizationRegistry` tells it when the browser collected one, so the devtools keep nothing alive themselves. The page tracks up to 500 destroyed instances, and the section lists the oldest 100.
+
+#### Effects
+
+The effect counts come from the signal graph Angular keeps for each component injector (`ng.ɵgetSignalGraph`). Angular files a component's effects under the template its host sits in, so components side by side in one template list each other's effects. Those show as **shared**. A routed component, or one inside its own `@if` or `@for` block, gets its own count.
+
+#### Track subscriptions
+
+Subscription tracking is off by default. **Track subscriptions** turns it on for the page: the overlay wraps `Observable.prototype.subscribe` of the app's RxJS and reads the call stack of each subscription to find the component class whose code made it. On Angular 20 and later, a subscription made in a lifecycle hook, the template or an event listener is tied to the instance through Angular's profiler. A subscription made in a constructor is tied to the class.
+
+A subscription is flagged when it is still open and either its instance was destroyed, or no instance of its class is left on the page and one was destroyed after it opened. Fix it with `takeUntilDestroyed()`, `DestroyRef.onDestroy` or the `async` pipe.
+
+**Stop tracking subscriptions** puts `subscribe` back. Subscriptions made before tracking started are not seen, so reload the page or go to the screen again after you start. Tracking stays on across a reload of the tab. The [`track-subscriptions`](../agents/tools.md#track-subscriptions) tool is the same switch.
 
 ### Source mode
 
@@ -347,6 +402,23 @@ To go the other way, select a component and click **Reveal in Elements** in its 
   </ngmd-step>
 </ngmd-workflow>
 
+### Find a component that stays in memory
+
+<ngmd-workflow>
+  <ngmd-step title="Track subscriptions">
+    In the <strong>Leaks</strong> section, click <strong>Track subscriptions</strong>, then reload the page so the first screen is tracked too.
+  </ngmd-step>
+  <ngmd-step title="Leave and come back">
+    Open the screen you suspect, then navigate away and around a few times.
+  </ngmd-step>
+  <ngmd-step title="Read the lists">
+    <strong>Open subscriptions after destroy</strong> shows the line that subscribed, which points at a missing teardown. On Angular 16.1 and earlier, an instance under <strong>Still retained</strong> with open subscriptions points there too.
+  </ngmd-step>
+  <ngmd-step title="Confirm in the Memory panel">
+    Take a heap snapshot in Chrome DevTools, search for the class and read its retainers.
+  </ngmd-step>
+</ngmd-workflow>
+
 ### Console handles
 
 When you select a component in the panel, the page sets `$ng0` in its console to that instance. The previous selections move to `$ng1` through `$ng4`, newest first, so the last five stay at hand. Selecting the same instance again keeps the order, and an earlier one moves back to `$ng0`. **Pick component on page** sets `$ng0` too. Selections made by an agent tool don't.
@@ -375,19 +447,23 @@ Press Escape in the filter box to clear it. When the filter matches nothing, **C
 
 ## Agent tools
 
-| Tool or resource                  | Kind     | What it does                                                                                                                                                                                                         |
-| --------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:get-components`         | tool     | Lists components and directives from source, with selector, kind, inputs, outputs, change detection, file and line.                                                                                                  |
-| `pangular:highlight`              | tool     | Highlights a component in the page and selects it. Takes an instance id, class name, host tag or CSS selector. Also retargets the Signals graph. Lists every instance a name matches.                                |
-| `pangular:inspect-component`      | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services. With `path`, reads one nested value instead, with `depth` and `limit`.                   |
-| `pangular:list-components`        | tool     | Returns the live tree of one page as an indented outline with routed, directive host and hydration markers. Takes a `filter` with the search syntax, a `depth` and `directiveHosts`.                                 |
-| `pangular:defer-blocks`           | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                                                 |
-| `pangular:for-blocks`             | tool     | Lists the `@for` blocks of each page with their item count, track kind and `@empty` block.                                                                                                                           |
-| `pangular:hydration`              | tool     | Returns the hydration status of each page rendered on the server, and turns the outline on the page on or off. An action when it turns the outline on or off.                                                        |
-| `pangular:change-detection`       | tool     | Starts, stops or clears a change detection recording, turns the live views on or off, and returns the slowest and most often checked components, hook, output and afterRender time, the latest cycles, or an export. |
-| `pangular:set-component-property` | tool     | Writes an input or property of one instance and runs change detection. An action.                                                                                                                                    |
-| `pangular:set-signal`             | tool     | Sets a writable signal that one instance holds as a property. An action.                                                                                                                                             |
-| `pangular:component-tree`         | resource | The live tree per page, with the detail of the selected instance and the defer blocks.                                                                                                                               |
+| Tool or resource                     | Kind     | What it does                                                                                                                                                                                                               |
+| ------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:get-components`            | tool     | Lists components and directives from source, with selector, kind, inputs, outputs, change detection, file and line.                                                                                                        |
+| `pangular:highlight`                 | tool     | Highlights a component in the page and selects it. Takes an instance id, class name, host tag or CSS selector. Also retargets the Signals graph. Lists every instance a name matches.                                      |
+| `pangular:inspect-component`         | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services. With `path`, reads one nested value instead, with `depth` and `limit`.                         |
+| `pangular:list-components`           | tool     | Returns the live tree of one page as an indented outline with routed, directive host and hydration markers. Takes a `filter` with the search syntax, a `depth` and `directiveHosts`.                                       |
+| `pangular:defer-blocks`              | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                                                       |
+| `pangular:for-blocks`                | tool     | Lists the `@for` blocks of each page with their item count, track kind and `@empty` block.                                                                                                                                 |
+| `pangular:hydration`                 | tool     | Returns the hydration status of each page rendered on the server, and turns the outline on the page on or off. Turning the outline on or off is an action.                                                                 |
+| `pangular:change-detection`          | tool     | Starts, stops or clears a change detection recording, turns the live views on or off, and returns the slowest and most often checked components, hook, output and afterRender time, the latest cycles, or an export.       |
+| `pangular:diagnose-change-detection` | tool     | What started the recorded cycles, components that depend on zone.js, wasted checks, inputs that break OnPush, and OnPush hints.                                                                                            |
+| `pangular:set-component-property`    | tool     | Writes an input or property of one instance and runs change detection. An action.                                                                                                                                          |
+| `pangular:set-signal`                | tool     | Sets a writable signal that one instance holds as a property. An action.                                                                                                                                                   |
+| `pangular:find-leaks`                | tool     | Lists retained destroyed instances, subscriptions still open after their component went away, and live effects and subscriptions per component.                                                                            |
+| `pangular:track-subscriptions`       | tool     | Starts or stops subscription tracking on a page, like **Track subscriptions**. An action.                                                                                                                                  |
+| `pangular:screenshot-component`      | tool     | Returns an image of one component's host element, drawn by the page from a copy of its DOM and computed styles, with secret fields and marked elements masked. Takes an instance id, class name, host tag or CSS selector. |
+| `pangular:component-tree`            | resource | The live tree per page, with the detail of the selected instance and the defer blocks.                                                                                                                                     |
 
 See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
@@ -395,7 +471,7 @@ See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
 ### On older Angular
 
-The tree, the detail and component values work from Angular 12. Before 17.1 the detail leaves out signal values, since `ng.isSignal` is missing, and before 16.2 it lists no injected services. The **Defer blocks** list needs 19.1, the **&#64;for blocks** list 22.0 and change detection recording 20.0. On Angular 17.0 and later, where `@defer` and `@for` exist, the tab names the version each list needs and the version the page runs. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
+The tree, the detail and component values work from Angular 12. Before 17.1 the detail leaves out signal values, since `ng.isSignal` is missing, and before 16.2 it lists no injected services. The **Defer blocks** list needs 19.1, the **&#64;for blocks** list 22.0 and change detection recording 20.0. In the **Leaks** section, effect counts need 20.1, tying subscriptions to instances needs 20.0, and telling detached views from destroyed ones needs 14.0 (before, every component that leaves the page counts as destroyed). On Angular 17.0 and later, where `@defer` and `@for` exist, the tab names the version each list needs and the version the page runs. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
 
 ### Development builds only
 
@@ -412,6 +488,10 @@ The page sends the first level of each input and property, with 30 keys or items
 ### Secrets are redacted
 
 The devtools replace inputs and properties with secret-looking names with `[redacted]`. They also redact JWTs and `Bearer` values inside strings. See [what the devtools redact](../security.md).
+
+### Selected components stay in memory
+
+The console handles `$ng0` to `$ng4`, a component stored as a global, and values you logged in the browser console keep their component in memory. A component you selected or logged can then show under **Still retained** (on Angular 16.1 and earlier). Select other components, or clear the console, before you judge the list.
 
 ### Instance ids change on reload
 

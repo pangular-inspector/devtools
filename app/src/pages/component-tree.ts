@@ -48,7 +48,9 @@ import { ValueStore } from './component-value-store';
 import { nestedMatches } from './component-value-state';
 import { StoreGlobal } from '../ui/store-global';
 import { ForBlocksSection, type ForBlock } from './for-blocks-section';
+import { LeaksSection, type LeaksPage } from './leaks-section';
 import { VirtualWindow } from '../ui/virtual-window';
+import { keepBelowSticky, stickyClearance } from '../ui/sticky-clearance';
 
 interface SourceComponent {
   selector: string;
@@ -201,6 +203,7 @@ function storedDirectiveHosts(): boolean {
     StoreGlobal,
     ForBlocksSection,
     HydrationSection,
+    LeaksSection,
     AngularUnavailable,
   ],
   host: { '(keydown.escape)': 'cancelPick()' },
@@ -807,6 +810,14 @@ function storedDirectiveHosts(): boolean {
           [rpc]="rpc()"
           (showComponent)="showCdComponent($event)"
         />
+        <app-leaks-section
+          [report]="leaksPage()"
+          [pageId]="page()!.pageId"
+          [rpc]="rpc()"
+          [angular]="angularPage()"
+          (showComponent)="showLeakComponent($event)"
+          (highlight)="highlight($event)"
+        />
       }
     } @else {
       @if (page()) {
@@ -1193,6 +1204,8 @@ function storedDirectiveHosts(): boolean {
     }
     .row {
       position: relative;
+      scroll-margin-top: var(--ct-toolbar-clearance, 72px);
+      scroll-margin-bottom: 8px;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -1787,6 +1800,13 @@ export class ComponentTree {
   });
   readonly cdHosts = computed(() => this.cdPage()?.hosts ?? {});
 
+  private readonly leaksPages = signal<Record<string, LeaksPage>>({});
+  /** The shown page's leak report, from the `leaks` shared state. */
+  readonly leaksPage = computed(() => {
+    const pageId = this.page()?.pageId;
+    return pageId ? (this.leaksPages()[pageId] ?? null) : null;
+  });
+
   /** The page's tree, without directive hosts when this viewer hid them. */
   private readonly visibleRoots = computed(() => {
     const roots = this.page()?.roots ?? [];
@@ -2129,6 +2149,18 @@ export class ComponentTree {
       this.cdPages.set({});
     }
     try {
+      const leaks = await my.rpc.sharedState('leaks');
+      if (this.destroyRef.destroyed) return;
+      const applyLeaks = (value: unknown) => {
+        const pages = (value as { pages?: Record<string, LeaksPage> } | null)?.pages;
+        this.leaksPages.set(pages && typeof pages === 'object' ? pages : {});
+      };
+      applyLeaks(leaks.value());
+      this.cleanups.push(leaks.on('updated', applyLeaks));
+    } catch {
+      this.leaksPages.set({});
+    }
+    try {
       const router = await my.rpc.sharedState('router');
       if (this.destroyRef.destroyed) return;
       const applyRouter = (value: unknown) => {
@@ -2407,6 +2439,11 @@ export class ComponentTree {
     if (this.index().map.has(id)) this.reveal(id);
   }
 
+  /** Shows a component a Leaks row names, and moves keyboard focus to its tree row. */
+  showLeakComponent(id: string) {
+    if (this.index().map.has(id)) this.reveal(id, true);
+  }
+
   /** Opens the tree to a node and selects it; `focus` also moves keyboard focus to its row. */
   reveal(id: string, focus = false) {
     const { parents } = this.index();
@@ -2424,11 +2461,33 @@ export class ComponentTree {
     afterNextRender(
       () => {
         const row = document.querySelector<HTMLElement>(`.row[data-id="${CSS.escape(id)}"]`);
+        this.clearToolbar();
         row?.scrollIntoView({ block: 'nearest' });
-        if (focus) row?.focus();
+        if (row) this.keepBelowToolbar(row);
+        if (focus) row?.focus({ preventScroll: true });
       },
       { injector: this.injector },
     );
+  }
+
+  /**
+   * Sets the rows' `scroll-margin-top` so a row scrolled into view sits below
+   * the sticky toolbar, whose height changes as it wraps and which sticks
+   * inside the scroller's padding.
+   */
+  private clearToolbar() {
+    const toolbar = this.host.nativeElement.querySelector<HTMLElement>('.toolbar');
+    if (!toolbar) return;
+    this.host.nativeElement.style.setProperty(
+      '--ct-toolbar-clearance',
+      `${stickyClearance(toolbar)}px`,
+    );
+  }
+
+  /** Moves a row the sticky toolbar covers back below it. */
+  private keepBelowToolbar(row: HTMLElement) {
+    const toolbar = this.host.nativeElement.querySelector<HTMLElement>('.toolbar');
+    if (toolbar) keepBelowSticky(row, toolbar);
   }
 
   toggle(id: string, event?: Event) {
@@ -2570,8 +2629,10 @@ export class ComponentTree {
       this.focusId.set(id);
       const focus = () => {
         const el = document.querySelector<HTMLElement>(`.row[data-id="${CSS.escape(id)}"]`);
-        el?.focus();
+        this.clearToolbar();
+        el?.focus({ preventScroll: true });
         el?.scrollIntoView({ block: 'nearest' });
+        if (el) this.keepBelowToolbar(el);
       };
       // A row outside the rendered window is brought in first.
       if (this.rowWindow.rendered(next)) queueMicrotask(focus);

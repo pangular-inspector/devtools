@@ -52,11 +52,13 @@ app.use(devtools.ssrMiddleware);
 
 If the server uses `compression()`, mount `ssrMiddleware` after it. Mounted the other way round, the body is already compressed when `ssrMiddleware` sees it, so the render mode can't be read and **Edit TransferState** can't apply. The request detail then says so.
 
+If your server takes web-standard handlers, as Hono, h3 and Nitro do, wrap the Angular handler with `withPangularSsr()` from `@pangular-inspector/devtools/ssr` instead. It records the same data. For Fastify and Analog, the same entry point has a Node tracer. See [Trace SSR renders](../getting-started/other-servers.md#trace-ssr-renders) and [Set up Analog](../guides/analog.md#trace-server-renders).
+
 ## What it shows
 
 ### SSR requests
 
-Each document request that `ssrMiddleware` traced, newest first. A request is traced when it is a `GET` or `HEAD` that accepts `text/html`, and the answer is HTML or a redirect. Each row shows:
+Each document request that `ssrMiddleware` or `withPangularSsr()` traced, newest first. A request is traced when it is a `GET` or `HEAD` that accepts `text/html`, and the answer is HTML or a redirect. Each row shows:
 
 | Column       | Value                                                                                                         |
 | ------------ | ------------------------------------------------------------------------------------------------------------- |
@@ -71,18 +73,20 @@ The request that served the selected page opens on its own. Click another row to
 
 The middleware gives each request an id. The id reaches the render in the `x-pangular-ssr-id` request header, so the interceptor tags each server call with it. It goes back to the browser in a `Server-Timing` header (`pangular;desc="<id>"`, `render;dur=...`, `fetch;dur=...`, and `guards;dur=...` and `resolve;dur=...` when the router ran them), so the overlay links the page to the render, and the browser's own Network panel shows the same times.
 
+A render without the `REQUEST` token from `@angular/core`, as in Analog, has no header to read. Its server calls are linked to the only traced request in flight. A render that is not traced can run alongside it, and its calls are still linked to that request. A traced request with no activity for five minutes no longer counts as in flight. See [Set up Analog](../guides/analog.md#trace-server-renders).
+
 #### Render modes
 
 The tab reads the render mode from the HTML first, then from the status:
 
-| Render mode      | When                                                                                                                                     |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Server**       | The HTML has `ng-server-context="ssr"`, whatever the status. A not-found page Angular rendered with status 404 counts as Server.         |
-| **Prerender**    | The HTML has `ng-server-context="ssg"`.                                                                                                  |
-| **Client**       | The engine sent the `index.csr.html` shell, an empty root element and the app's module script, for a `RenderMode.Client` route.          |
-| **Redirect**     | A 3xx with no page, from `redirectTo` in the routes or a guard that returned a `UrlTree` during the render.                              |
-| **Not rendered** | A status of 400 or more with no Angular markup. Angular gave up, for example because a guard rejected, and the server sent its own page. |
-| **Unknown**      | None of the above.                                                                                                                       |
+| Render mode      | When                                                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Server**       | The HTML has `ng-server-context="ssr"` (`ssr-analog` in Analog), whatever the status. A not-found page Angular rendered with status 404 counts as Server. |
+| **Prerender**    | The HTML has `ng-server-context="ssg"`.                                                                                                                   |
+| **Client**       | The engine sent the `index.csr.html` shell, an empty root element and the app's module script, for a `RenderMode.Client` route.                           |
+| **Redirect**     | A 3xx with no page, from `redirectTo` in the routes or a guard that returned a `UrlTree` during the render.                                               |
+| **Not rendered** | A status of 400 or more with no Angular markup. Angular gave up, for example because a guard rejected, and the server sent its own page.                  |
+| **Unknown**      | None of the above.                                                                                                                                        |
 
 A redirect or a rejected guard can still have run the router on the server. **Router during the render** shows what it did.
 
@@ -134,7 +138,9 @@ Above the table, these filters narrow the timeline. They combine, and the count 
 
 If nothing matches, **Clear filters** resets all three. While the filters hide the call that is open in the preview, the preview hides too, and it comes back when the call is visible again.
 
-Click a row for a response preview. The preview opens under the timeline and takes focus. A JSON body is indented by 2 spaces. Other text, and a body clipped at 2000 characters, shows as recorded. The preview is redacted before it reaches the panel, so masked values stay masked. **Copy** puts the shown preview on the clipboard. **Mock this request** fills in the [fault rule form](#fault-injection) from the call. **Close** or `Escape` returns focus to the row. A long timeline scrolls inside its own box. The timeline shows the page's client calls and the SSR calls made while rendering its first URL. **Clear timeline** empties it.
+**Table** and **Waterfall** above the timeline switch its view. **Table** lists every call. **Waterfall** shows the page's client calls grouped by navigation, newest first. A navigation starts each time the page URL a call was made on changes. Each row has the method and path, a bar that starts at the call's offset in its navigation and spans its duration, and the status, offset and duration, such as `503 · +10 ms · 8 ms`. The status reads `ERR` for a network error, `cancelled` for a cancelled call, and adds `cache` for a transfer cache hit; failed calls and cache hits get a tinted label. The bar is the accent color for a network call, green for a transfer cache hit, red for a failed call and gray for a cancelled one. The count above the view reads how many client calls the waterfall shows out of all calls, such as **3 client calls of 7**. The rows are one `Tab` stop, and the arrow keys, `Home` and `End` move between them. The filters apply to both views, and the waterfall leaves out SSR calls. Click a row to open the same preview as in the table.
+
+Click a row for a response preview. The preview opens under the timeline and takes focus. A JSON body is indented by 2 spaces. Other text, and a body clipped at 2000 characters, shows as recorded. The preview is redacted before it reaches the panel, so masked values stay masked. Under the body, **Request headers** and **Response headers** list the call's headers. Request headers are the ones the call had when it reached `withPangular()`, so headers that later interceptors add are not in the list. Response headers are the ones the app could read; a cross-origin response shows only the headers CORS exposes. `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` are always masked, whatever `redaction.unmask` says. Names that look secret or match `redaction.secretNames`, and JWTs and bearer tokens in any value, are masked too. The interceptor keeps only a reference to the headers Angular already built. The overlay reads and masks them when it sends the call, so a page without the devtools copies nothing. **Copy** puts the shown preview on the clipboard. **Mock this request** fills in the [fault rule form](#fault-injection) from the call. **Close** or `Escape` returns focus to the row. A long timeline scrolls inside its own box. The timeline shows the page's client calls and the SSR calls made while rendering its first URL. **Clear timeline** empties it.
 
 ### Fault injection
 
@@ -199,17 +205,17 @@ Open an entry to see its cache key, even when the row shows the request URL. **C
 
 ### What each part needs
 
-| Part                  | Needs                                                                                            |
-| --------------------- | ------------------------------------------------------------------------------------------------ |
-| SSR requests          | `ssrMiddleware`, plus `withPangular()` for the server calls and the overlay for the linked page. |
-| Router timings        | `ssrMiddleware` and `providePangularHttp()`.                                                     |
-| HTTP timeline         | `withPangular()` and the overlay.                                                                |
-| Fault injection       | `withPangular()`.                                                                                |
-| Hydration stats       | The overlay.                                                                                     |
-| Hydration warnings    | `providePangularHttp()`.                                                                         |
-| App stable after      | `providePangularHttp()`.                                                                         |
-| SSR overrides         | `ssrMiddleware` and `actions.http`. See [SSR overrides](#ssr-overrides) for each kind.           |
-| TransferState payload | The overlay, on a server-rendered page.                                                          |
+| Part                  | Needs                                                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| SSR requests          | `ssrMiddleware` or `withPangularSsr()`, plus `withPangular()` for the server calls and the overlay for the linked page. |
+| Router timings        | `ssrMiddleware` and `providePangularHttp()`.                                                                            |
+| HTTP timeline         | `withPangular()` and the overlay.                                                                                       |
+| Fault injection       | `withPangular()`.                                                                                                       |
+| Hydration stats       | The overlay.                                                                                                            |
+| Hydration warnings    | `providePangularHttp()`.                                                                                                |
+| App stable after      | `providePangularHttp()`.                                                                                                |
+| SSR overrides         | `ssrMiddleware` and `actions.http`. See [SSR overrides](#ssr-overrides) for each kind.                                  |
+| TransferState payload | The overlay, on a server-rendered page.                                                                                 |
 
 ### Development builds
 
@@ -275,16 +281,21 @@ The interceptor works in development builds only. In production it passes reques
 
 ## Agent tools
 
-| Tool                           | What it answers                                                                                                                                                                                                                        | Arguments                                                                   |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `pangular:list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`                                                                     |
-| `pangular:explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url`                                                                 |
-| `pangular:list-http-calls`     | The app's HttpClient calls, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, transfer cache hit and the matched rule.                                                      | `page`, `url`, `failed`, `limit`, `preview`                                 |
-| `pangular:list-http-rules`     | The [fault rules](#fault-injection) in match order: id, on or off, method, URL pattern, where it applies and its effect.                                                                                                               | none                                                                        |
-| `pangular:set-http-rule`       | Adds a fault rule, or replaces the rule with `id`. Checks the input like the form does.                                                                                                                                                | `pattern`, `id`, `method`, `target`, `status`, `delayMs`, `body`, `enabled` |
-| `pangular:remove-http-rule`    | Removes the fault rule with `id`.                                                                                                                                                                                                      | `id`                                                                        |
+| Tool                              | What it answers                                                                                                                                                                                                                        | Arguments                                                                   |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `pangular:list-ssr-requests`      | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`                                                                     |
+| `pangular:explain-ssr-request`    | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url`                                                                 |
+| `pangular:list-http-calls`        | The app's HttpClient calls, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, transfer cache hit and the matched rule.                                                      | `page`, `url`, `failed`, `limit`, `preview`, `headers`                      |
+| `pangular:http-waterfall`         | One tab's client calls as a waterfall, grouped by navigation: each call's start offset, duration, status and a text bar, with masked headers on request.                                                                               | `page`, `limit`, `headers`                                                  |
+| `pangular:list-http-rules`        | The [fault rules](#fault-injection) in match order: id, on or off, method, URL pattern, where it applies and its effect.                                                                                                               | none                                                                        |
+| `pangular:set-http-rule`          | Adds a fault rule, or replaces the rule with `id`. Checks the input like the form does.                                                                                                                                                | `pattern`, `id`, `method`, `target`, `status`, `delayMs`, `body`, `enabled` |
+| `pangular:remove-http-rule`       | Removes the fault rule with `id`.                                                                                                                                                                                                      | `id`                                                                        |
+| `pangular:inspect-transfer-state` | The [TransferState payload](#transferstate-payload) of a page: each key with its kind and size, or one key's value.                                                                                                                    | `page`, `key`, `search`, `limit`                                            |
+| `pangular:list-ssr-overrides`     | The [SSR overrides](#ssr-overrides): id, on or off, kind, page pattern and effect.                                                                                                                                                     | none                                                                        |
+| `pangular:set-ssr-override`       | Adds an override, or replaces the one with `id`. Checks the input like the form does.                                                                                                                                                  | `kind`, `pattern`, `id`, `message`, `key`, `value`, `enabled`               |
+| `pangular:remove-ssr-override`    | Removes the override with `id`.                                                                                                                                                                                                        | `id`                                                                        |
 
-`set-http-rule` and `remove-http-rule` change the same rules as this tab, so the rule list in this tab updates as an agent edits it. Both need `actions.http`. See [Fault rules](../agents/tools.md#fault-rules).
+`set-http-rule` and `remove-http-rule` change the same rules as this tab, so the rule list in this tab updates as an agent edits it. `set-ssr-override` and `remove-ssr-override` do the same for the SSR overrides. All four need `actions.http`. See [Fault rules](../agents/tools.md#fault-rules) and [TransferState and SSR overrides](../agents/tools.md#transferstate-and-ssr-overrides).
 
 For the rest of this tab, agents read the `pangular:http` key with the `devframe_state_read` tool. See [Resources](../agents/resources.md).
 
@@ -298,14 +309,14 @@ Two router tools cover related ground:
 ## Limits and gotchas
 
 <ngmd-callout type="warning" title="Only secrets that match a rule are redacted">
-  Request URLs, page URLs, error messages, response previews and TransferState entries are redacted on the devtools server: secret-looking keys, JWTs, bearer tokens and secret query values. Other values are shown as they are, so don't expose the dev server beyond localhost. See <a href="../security.md">Security</a>.
+  Request URLs, page URLs, error messages, response previews, headers and TransferState entries are redacted on the devtools server: secret-looking keys, JWTs, bearer tokens and secret query values. Other values are shown as they are, so don't expose the dev server beyond localhost. See <a href="../security.md">Security</a>.
 </ngmd-callout>
 
 ### Static files are not traced
 
 Prerendered pages that `express.static` serves as files never reach the Angular handler, so they have no SSR request. Pages that the engine serves from its prerender output are traced with the **Prerender** render mode.
 
-The middleware records a request only while the `http` inspector is on. When it is off, `ssrMiddleware` passes every request through untouched and adds no header.
+The middleware records a request only while the `http` inspector is on. When it is off, `ssrMiddleware` passes every request through untouched and adds no header, and `withPangularSsr()` calls the handler directly.
 
 ### Prerendered routes make no requests
 

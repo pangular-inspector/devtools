@@ -1,6 +1,12 @@
 import type {
   CdAfterRenderStat,
+  CdCause,
+  CdCauseKind,
   CdCheck,
+  CdDiagnosis,
+  CdInputStat,
+  CdWasteStat,
+  CdZoneStat,
   CdComponentStat,
   CdCycle,
   CdHookStat,
@@ -31,6 +37,8 @@ const MAX_SPAN_NAMES = 4000;
 const MAX_DEPTH = 1000;
 const MAX_TIMINGS = 100;
 const MAX_PAGE_ID = 50;
+const MAX_FRAMES = 3;
+const MAX_DIAGNOSIS_ROWS = 50;
 
 /** What each {@link CdSpan} kind letter means. */
 export const CD_SPAN_KIND = {
@@ -91,6 +99,9 @@ function cycle(value: unknown, names: number): CdCycle | null {
     afterRenderMs: optional(value['afterRenderMs']),
     outputMs: optional(value['outputMs']),
   };
+  const reason = cause(value['cause']);
+  const refreshed = optional(value['refreshed']);
+  const unchanged = optional(value['unchanged']);
   return {
     id: num(value['id']),
     at: num(value['at']),
@@ -102,7 +113,248 @@ function cycle(value: unknown, names: number): CdCycle | null {
     ...Object.fromEntries(Object.entries(timing).filter(([, v]) => v !== undefined)),
     ...(spans.length ? { spans } : {}),
     ...(droppedSpans ? { droppedSpans } : {}),
+    ...(reason ? { cause: reason } : {}),
+    ...(refreshed ? { refreshed } : {}),
+    ...(unchanged ? { unchanged } : {}),
   };
+}
+
+/** Every cause kind, in the order the panel and the agent tool list them. */
+export const CD_CAUSE_KINDS: readonly CdCauseKind[] = [
+  'event',
+  'http',
+  'timer',
+  'signal',
+  'effect',
+  'markForCheck',
+  'input',
+  'view',
+  'tick',
+  'zone',
+  'unknown',
+];
+
+/** How the panel and the agent tool name each cause kind. */
+export const CD_CAUSE_LABEL: Record<CdCauseKind, string> = {
+  event: 'Event',
+  http: 'HTTP response',
+  timer: 'Timer',
+  signal: 'Signal write',
+  effect: 'Effect',
+  markForCheck: 'markForCheck',
+  input: 'setInput',
+  view: 'View change',
+  tick: 'ApplicationRef.tick',
+  zone: 'zone.js only',
+  unknown: 'Unknown',
+};
+
+const isCauseKind = (value: unknown): value is CdCauseKind =>
+  typeof value === 'string' && (CD_CAUSE_KINDS as readonly string[]).includes(value);
+
+function cause(value: unknown): CdCause | undefined {
+  if (!isRecord(value) || !isCauseKind(value['kind'])) return undefined;
+  const fields = ['component', 'listener', 'event', 'target', 'signal', 'task'] as const;
+  const out: CdCause = { kind: value['kind'] };
+  if (isCauseKind(value['via'])) out.via = value['via'];
+  for (const field of fields) {
+    const each = text(value[field], MAX_NAME);
+    if (each) out[field] = each;
+  }
+  if (value['zone'] === true) out.zone = true;
+  const stack = list(value['stack'], MAX_FRAMES)
+    .map((frame) => text(frame, MAX_TRIGGER))
+    .filter(Boolean);
+  if (stack.length) out.stack = stack;
+  const more = Math.floor(num(value['more']));
+  if (more) out.more = more;
+  return out;
+}
+
+function wasteStat(value: unknown): CdWasteStat | null {
+  if (!isRecord(value)) return null;
+  const name = text(value['name'], MAX_NAME);
+  if (!name) return null;
+  const strategy = value['strategy'];
+  return {
+    name,
+    refreshed: Math.floor(num(value['refreshed'])),
+    unchanged: Math.floor(num(value['unchanged'])),
+    ...(strategy === 'OnPush' || strategy === 'Eager' ? { strategy } : {}),
+  };
+}
+
+function inputStat(value: unknown): CdInputStat | null {
+  if (!isRecord(value)) return null;
+  const name = text(value['name'], MAX_NAME);
+  const input = text(value['input'], MAX_NAME);
+  if (!name || !input) return null;
+  const parent = text(value['parent'], MAX_NAME);
+  return {
+    name,
+    input,
+    ...(parent ? { parent } : {}),
+    inPlace: Math.floor(num(value['inPlace'])),
+    sameContents: Math.floor(num(value['sameContents'])),
+  };
+}
+
+function zoneStat(value: unknown): CdZoneStat | null {
+  if (!isRecord(value)) return null;
+  const name = text(value['name'], MAX_NAME);
+  if (!name) return null;
+  const tasks = list(value['tasks'], 3)
+    .map((task) => text(task, MAX_NAME))
+    .filter(Boolean);
+  return { name, ticks: Math.floor(num(value['ticks'])), ...(tasks.length ? { tasks } : {}) };
+}
+
+/** Checks a recording's `diagnosis`; undefined when there is none. */
+export function sanitizeCdDiagnosis(value: unknown): CdDiagnosis | undefined {
+  if (!isRecord(value)) return undefined;
+  const causes: CdDiagnosis['causes'] = {};
+  if (isRecord(value['causes'])) {
+    for (const kind of CD_CAUSE_KINDS) {
+      const count = Math.floor(num(value['causes'][kind]));
+      if (count) causes[kind] = count;
+    }
+  }
+  const components = list(value['components'], MAX_COMPONENTS)
+    .map(wasteStat)
+    .filter((c): c is CdWasteStat => !!c);
+  const inputs = list(value['inputs'], MAX_DIAGNOSIS_ROWS)
+    .map(inputStat)
+    .filter((c): c is CdInputStat => !!c);
+  const zone = list(value['zone'], MAX_DIAGNOSIS_ROWS)
+    .map(zoneStat)
+    .filter((c): c is CdZoneStat => !!c);
+  const major = Math.floor(num(value['major']));
+  return {
+    triggers: value['triggers'] === true,
+    waste: value['waste'] === true,
+    ...(major && major < 1000 ? { major } : {}),
+    causes,
+    components,
+    ...(inputs.length ? { inputs } : {}),
+    ...(zone.length ? { zone } : {}),
+    ...(typeof value['zoneJs'] === 'boolean' ? { zoneJs: value['zoneJs'] } : {}),
+  };
+}
+
+/** What a cause holds for a signal written without a `debugName`. */
+export const UNNAMED_SIGNAL = '?';
+
+/** One line on what started a cycle, such as `click on button in Cart (add), wrote count`. */
+export function cdCauseText(reason: CdCause): string {
+  const parts: string[] = [];
+  const where = reason.component
+    ? ` in ${reason.component}${reason.listener ? ` (${reason.listener})` : ''}`
+    : '';
+  switch (reason.kind) {
+    case 'event':
+      parts.push(
+        `${reason.event ?? 'Template listener'}${reason.target ? ` on ${reason.target}` : ''}${where}`,
+      );
+      break;
+    case 'http':
+      parts.push(`HTTP response${where}`);
+      break;
+    case 'timer':
+      parts.push(`${reason.task ?? 'Timer'}${where}`);
+      break;
+    case 'zone':
+      parts.push(
+        `zone.js tick with no Angular notification${reason.task ? ` after ${reason.task}` : ''}`,
+      );
+      break;
+    case 'tick':
+      parts.push(`ApplicationRef.tick()${where}`);
+      break;
+    default:
+      parts.push(`${CD_CAUSE_LABEL[reason.kind]}${where}`);
+  }
+  if (reason.signal) {
+    parts.push(
+      reason.signal === UNNAMED_SIGNAL
+        ? 'wrote an unnamed signal'
+        : `wrote signal ${reason.signal}`,
+    );
+  } else if (reason.via && reason.via !== reason.kind)
+    parts.push(`via ${CD_CAUSE_LABEL[reason.via]}`);
+  if (reason.zone && reason.kind !== 'zone') parts.push('run by zone.js');
+  if (reason.more) parts.push(`${reason.more} more notification${reason.more === 1 ? '' : 's'}`);
+  return parts.join(', ');
+}
+
+/** A suggestion from a recording's diagnosis. */
+export interface CdHint {
+  /** The component class it is about. */
+  name: string;
+  kind: 'on-push' | 'already-on-push' | 'in-place' | 'same-contents' | 'zone';
+  text: string;
+}
+
+/** Refreshed checks a class needs before the OnPush hint looks at it. */
+export const CD_HINT_MIN_CHECKS = 10;
+/** The share of refreshed checks that may change something for the OnPush hint. */
+export const CD_HINT_MAX_CHANGED = 0.2;
+
+/**
+ * Suggestions from a diagnosis: OnPush for classes refreshed often that
+ * rarely change, inputs mutated in place or renewed with equal contents, and
+ * components that only zone.js keeps up to date.
+ */
+export function cdHints(diagnosis: CdDiagnosis | undefined): CdHint[] {
+  if (!diagnosis) return [];
+  const hints: CdHint[] = [];
+  const defaultOnPush = (diagnosis.major ?? 0) >= 22;
+  for (const stat of diagnosis.components) {
+    if (stat.refreshed < CD_HINT_MIN_CHECKS) continue;
+    const changed = stat.refreshed - stat.unchanged;
+    if (changed / stat.refreshed > CD_HINT_MAX_CHANGED) continue;
+    const counts = `refreshed ${stat.refreshed} times and changed something in ${changed}`;
+    if (stat.strategy === 'Eager') {
+      hints.push({
+        name: stat.name,
+        kind: 'on-push',
+        text: defaultOnPush
+          ? `${stat.name} was ${counts}. It opts out of OnPush, which is the default from Angular 22: remove \`changeDetection: ChangeDetectionStrategy.Eager\` (or \`Default\`) so Angular skips it until an input, event, signal or markForCheck marks it.`
+          : `${stat.name} was ${counts}. Add \`changeDetection: ChangeDetectionStrategy.OnPush\` so Angular skips it until an input, event, signal or markForCheck marks it.`,
+      });
+    } else if (stat.strategy === 'OnPush') {
+      hints.push({
+        name: stat.name,
+        kind: 'already-on-push',
+        text: `${stat.name} was ${counts}, and it is already OnPush${defaultOnPush ? ' (the default from Angular 22)' : ''}. Something keeps marking it: an input that gets a new reference each time, an event or output in it, markForCheck, or a signal it reads that is set to an equal value.`,
+      });
+    }
+  }
+  for (const input of diagnosis.inputs ?? []) {
+    const from = input.parent ? ` set by ${input.parent}` : '';
+    if (input.inPlace) {
+      hints.push({
+        name: input.name,
+        kind: 'in-place',
+        text: `Input ${input.input} of ${input.name}${from} changed in place ${input.inPlace} time${input.inPlace === 1 ? '' : 's'}: same reference, different contents. OnPush components, computed and signal equality don't see that. Pass a new object or array instead of mutating it.`,
+      });
+    }
+    if (input.sameContents) {
+      hints.push({
+        name: input.name,
+        kind: 'same-contents',
+        text: `Input ${input.input} of ${input.name}${from} got a new reference with the same contents ${input.sameContents} time${input.sameContents === 1 ? '' : 's'}, so Angular refreshed ${input.name} for nothing. Keep the reference when nothing changed, for example with a computed instead of a method call in the template.`,
+      });
+    }
+  }
+  for (const zone of diagnosis.zone ?? []) {
+    const tasks = zone.tasks?.length ? ` (after ${zone.tasks.join(', ')})` : '';
+    hints.push({
+      name: zone.name,
+      kind: 'zone',
+      text: `${zone.name} changed in ${zone.ticks} tick${zone.ticks === 1 ? '' : 's'} that only zone.js started${tasks}. Without zone.js it would not update: keep that state in a signal, or call markForCheck after changing it.`,
+    });
+  }
+  return hints;
 }
 
 function stat(value: unknown): CdComponentStat | null {
@@ -177,6 +429,7 @@ export function sanitizeCdRecording(value: unknown, maxCycles: number): CdRecord
   const droppedTimings = Math.floor(num(value['droppedTimings'])) + extraTimings;
   const afterRender = afterRenderStat(value['afterRender']);
   const used = cycles.some((c) => c.spans?.length);
+  const diagnosis = sanitizeCdDiagnosis(value['diagnosis']);
   return {
     recording: value['recording'] === true,
     startedAt:
@@ -197,6 +450,7 @@ export function sanitizeCdRecording(value: unknown, maxCycles: number): CdRecord
     ...(droppedTimings ? { droppedTimings } : {}),
     ...(afterRender ? { afterRender } : {}),
     ...(used ? { spanNames } : {}),
+    ...(diagnosis ? { diagnosis } : {}),
   };
 }
 
@@ -345,6 +599,8 @@ export function cdTraceFile(recording: CdRecording, pageId: string): CdTraceFile
         ...(cycle.hookMs ? { hookMs: cycle.hookMs } : {}),
         ...(cycle.afterRenderMs ? { afterRenderMs: cycle.afterRenderMs } : {}),
         ...(cycle.outputMs ? { outputMs: cycle.outputMs } : {}),
+        ...(cycle.cause ? { cause: cdCauseText(cycle.cause) } : {}),
+        ...(cycle.unchanged ? { unchanged: cycle.unchanged } : {}),
         slowest: cycle.components.map((c) => `${c.name} ${c.checks}x ${c.ms}ms`),
       },
     });

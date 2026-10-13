@@ -23,9 +23,13 @@ The package publishes `dist/` and `bin.mjs`. On publish, `publishConfig.exports`
 | `@pangular-inspector/devtools/overlay`        | `dist/overlay.mjs`        |
 | `@pangular-inspector/devtools/overlay-manual` | `dist/overlay-manual.mjs` |
 | `@pangular-inspector/devtools/capacitor-hook` | `dist/capacitor-hook.mjs` |
+| `@pangular-inspector/devtools/store-hook`     | `dist/store-hook.mjs`     |
+| `@pangular-inspector/devtools/startup-hook`   | `dist/startup-hook.mjs`   |
+| `@pangular-inspector/devtools/plugin`         | `dist/plugin.mjs`         |
 | `@pangular-inspector/devtools/popup`          | `dist/popup.mjs`          |
 | `@pangular-inspector/devtools/http`           | `dist/http.mjs`           |
 | `@pangular-inspector/devtools/hub`            | `dist/hub.mjs`            |
+| `@pangular-inspector/devtools/ssr`            | `dist/ssr.mjs`            |
 | `@pangular-inspector/devtools/vite`           | `dist/vite.mjs`           |
 
 The `pangular` binary is `bin.mjs`. In the workspace, the exports point at the TypeScript sources instead.

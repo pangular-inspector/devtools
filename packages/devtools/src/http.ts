@@ -26,6 +26,7 @@ import { redactMessage } from './forms-privacy.ts';
 import { transferCacheKeys } from './http-cache-key.ts';
 import { cacheSkipReason, requestSkipReason, type CacheSkip } from './http-cache-reason.ts';
 import { appIdOf, isHydrationMessage } from './http-hydration.ts';
+import { captureHeaders, withCapturedHeaders, type HeaderSource } from './http-headers.ts';
 
 import {
   MAX_CALLS,
@@ -42,6 +43,7 @@ import {
   activeSsrRequest,
   noteOverride,
   noteSsrFetch,
+  soleActiveSsrRequest,
   ssrRegistry,
 } from './ssr-registry.ts';
 import { matchingOverrides } from './ssr-overrides.ts';
@@ -85,7 +87,8 @@ function preview(body: unknown): string | undefined {
 
 function record(call: HttpCall) {
   const registry = httpRegistry();
-  if (registry.record) return registry.record(call);
+  // The devframe server takes the call right away, so its headers are read now.
+  if (registry.record) return registry.record(withCapturedHeaders(call));
   const calls = (registry.calls ??= []);
   calls.push(call);
   const extra = calls.length - (registry.maxCalls ?? MAX_CALLS);
@@ -182,6 +185,19 @@ function devMode(): boolean {
 }
 
 /**
+ * The traced request of a render that has no Angular `REQUEST`, such as an
+ * Analog page, when it is the only one in flight. A render the tracer skipped
+ * (no `Accept: text/html`, a `skip` path) is not in flight, so one running at
+ * the same time as a single traced render is linked to it: the known limit,
+ * documented in the Analog guide.
+ */
+function untaggedServerRequest(): { requestId?: string; pageUrl?: string } {
+  const requestId = soleActiveSsrRequest();
+  if (!requestId) return {};
+  return { requestId, pageUrl: ssrRegistry().active.get(requestId)?.url };
+}
+
+/**
  * Records every request for the SSR & HTTP tab and applies the fault rules
  * set there. It does nothing in production builds.
  */
@@ -199,7 +215,9 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
       pageUrl = undefined;
     }
     requestId = activeSsrRequest(request.headers.get(SSR_REQUEST_HEADER));
-  } else if (side === 'client') {
+  } else if (side === 'server') {
+    ({ requestId, pageUrl } = untaggedServerRequest());
+  } else {
     pageUrl = location.pathname + location.search;
   }
   const url = req.urlWithParams;
@@ -221,16 +239,22 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     ...(delay ? { delayMs: delay } : {}),
     ...(rule ? { ruleId: rule.id, rulePattern: rule.pattern } : {}),
   };
-  const done = (fields: Pick<HttpCall, 'status' | 'cacheHit'> & Partial<HttpCall>) => {
+  const done = (
+    fields: Pick<HttpCall, 'status' | 'cacheHit'> & Partial<HttpCall>,
+    responseHeaders?: HeaderSource | null,
+  ) => {
     const durationMs = Date.now() - started;
     if (requestId) noteSsrFetch(requestId, durationMs);
-    record({
+    const call: HttpCall = {
       id: `${side[0]}${Date.now().toString(36)}${++seq}`,
       at: started,
       durationMs,
       ...base,
       ...fields,
-    });
+    };
+    // Only references: the headers are read when the call is reported.
+    captureHeaders(call, req.headers, responseHeaders);
+    record(call);
   };
 
   let source: Observable<HttpEvent<unknown>>;
@@ -284,13 +308,16 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
         if (event instanceof HttpResponse) {
           settled = true;
           const fromPayload = claimable && claimTransferEntry(req);
-          done({
-            status: event.status,
-            // Only the browser reads the transfer cache. On the server, cacheStored says what it kept.
-            cacheHit: cacheable && (sync || fromPayload),
-            preview: preview(mocked ? rule?.body : event.body),
-            ...serverCache({ ok: event.ok, headers: event.headers }),
-          });
+          done(
+            {
+              status: event.status,
+              // Only the browser reads the transfer cache. On the server, cacheStored says what it kept.
+              cacheHit: cacheable && (sync || fromPayload),
+              preview: preview(mocked ? rule?.body : event.body),
+              ...serverCache({ ok: event.ok, headers: event.headers }),
+            },
+            event.headers,
+          );
         }
         subscriber.next(event);
       },
@@ -298,12 +325,15 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
         const failed = error instanceof HttpErrorResponse;
         const message = failed ? error.message : String(error);
         settled = true;
-        done({
-          status: failed ? error.status : 0,
-          cacheHit: false,
-          error: message.slice(0, 500),
-          ...serverCache(null),
-        });
+        done(
+          {
+            status: failed ? error.status : 0,
+            cacheHit: false,
+            error: message.slice(0, 500),
+            ...serverCache(null),
+          },
+          failed ? error.headers : null,
+        );
         subscriber.error(error);
       },
       complete: () => subscriber.complete(),
@@ -369,14 +399,18 @@ function watchServerNavigations() {
   const platform = inject(PLATFORM_ID, { optional: true });
   if (!devMode() || !platform || !isPlatformServer(platform)) return;
   const request = inject(REQUEST, { optional: true });
-  const requestId = activeSsrRequest(request?.headers.get(SSR_REQUEST_HEADER));
-  if (!requestId) return;
-  const url = new URL(request!.url);
-  const fault = matchingOverrides(
-    ssrRegistry().overrides,
-    url.pathname + url.search,
-    'render-error',
-  )[0];
+  let requestId: string | undefined;
+  let pageUrl: string | undefined;
+  if (request) {
+    requestId = activeSsrRequest(request.headers.get(SSR_REQUEST_HEADER));
+    if (!requestId) return;
+    const url = new URL(request.url);
+    pageUrl = url.pathname + url.search;
+  } else {
+    ({ requestId, pageUrl } = untaggedServerRequest());
+  }
+  if (!requestId || pageUrl === undefined) return;
+  const fault = matchingOverrides(ssrRegistry().overrides, pageUrl, 'render-error')[0];
   if (fault) {
     noteOverride(requestId, {
       id: fault.id,

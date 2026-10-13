@@ -1,4 +1,5 @@
 import { code } from './forms-tools.ts';
+import { callerPage } from './page-scope.ts';
 import { byRecency, unknownPageText } from './pages.ts';
 import { explainPipeText } from './pipe-explain.ts';
 import { currentPipes, type PipePageReport, type PipesState } from './pipes-tools.ts';
@@ -35,7 +36,8 @@ export function explainPipeOnPage(
   const picked = pipePageFor(pages, page);
   if ('markdown' in picked) return picked.markdown;
   const text = explainPipeText(name, cwd, picked.state, picked.pageId ? 1 : 0);
-  if (!picked.pageId || pages.size < 2) return text;
+  // A page tool answers for its own page only, so it names no other tab.
+  if (!picked.pageId || pages.size < 2 || callerPage() !== undefined) return text;
   return `Live data from page ${code(picked.pageId)}; ${pages.size} pages report ${WHAT}, pass \`page\` to pick another.\n\n${text}`;
 }
 

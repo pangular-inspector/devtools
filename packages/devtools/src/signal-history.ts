@@ -30,9 +30,15 @@ export interface SignalHistoryOptions {
   /**
    * Called with each exact write once it is serialized, and each sampled change
    * as it is collected. `id` is the graph node id, unknown until a snapshot
-   * matched the written signal to a node.
+   * matched the written signal to a node. `raw` holds the written value as
+   * the app set it (exact writes only), before serialization.
    */
-  onChange?: (id: string | undefined, label: string, change: SignalChange) => void;
+  onChange?: (
+    id: string | undefined,
+    label: string,
+    change: SignalChange,
+    raw?: { value: unknown },
+  ) => void;
 }
 
 function append(list: SignalChange[], change: SignalChange) {
@@ -72,17 +78,22 @@ export function createSignalHistory(
         const frames = stack ? appFrames(stack) : [];
         if (frames.length) change.stack = frames;
         append(track.changes, change);
-        notify(nodeOfTrack.get(track.id), track.label, change);
+        notify(nodeOfTrack.get(track.id), track.label, change, { value: write.value });
       }
       track.pending = [];
     }
     dirty.clear();
   }
 
-  function notify(id: string | undefined, label: string, change: SignalChange) {
+  function notify(
+    id: string | undefined,
+    label: string,
+    change: SignalChange,
+    raw?: { value: unknown },
+  ) {
     if (!options.onChange) return;
     try {
-      options.onChange(id, label, change);
+      options.onChange(id, label, change, raw);
     } catch {
       // A listener never breaks history.
     }

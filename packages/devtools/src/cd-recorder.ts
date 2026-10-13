@@ -23,6 +23,7 @@ import { className } from './injector-tree.ts';
  * the enum in `@angular/core/fesm2022/_debug_node-chunk.mjs` (Angular 22).
  */
 export const PROFILER_EVENT = {
+  TemplateUpdateStart: 2,
   LifecycleHookStart: 4,
   LifecycleHookEnd: 5,
   OutputStart: 6,
@@ -30,6 +31,7 @@ export const PROFILER_EVENT = {
   ChangeDetectionStart: 12,
   ChangeDetectionEnd: 13,
   ChangeDetectionSyncStart: 14,
+  ChangeDetectionSyncEnd: 15,
   AfterRenderHooksStart: 16,
   AfterRenderHooksEnd: 17,
   ComponentStart: 18,
@@ -410,6 +412,10 @@ export function createCdRecorder(options: {
     onEvent,
     get recording() {
       return recording;
+    },
+    /** The id of the cycle that is running, or null between cycles. */
+    get cycleId(): number | null {
+      return current?.id ?? null;
     },
     /** True while the recorder holds cycles, recording or stopped. */
     get hasCycles() {

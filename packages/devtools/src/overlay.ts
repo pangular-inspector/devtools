@@ -8,9 +8,19 @@ import { attachPipes } from './pipes-collector.ts';
 import { attachHttp } from './http-overlay.ts';
 import { attachCapacitor } from './capacitor-overlay.ts';
 import { attachErrors } from './errors-collector.ts';
+import { attachLeaks } from './leaks-collector.ts';
+import { attachPlugins } from './plugins-collector.ts';
+import { attachStartup } from './startup-timing.ts';
+import { attachBrowserTools } from './browser-tools.ts';
+import { attachAxe, axeOwnerNg } from './axe-runner.ts';
+import { createRecentWrites } from './error-explain.ts';
 import { allowClientRules, httpRegistry } from './http-rules.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
+import { attachReduxStores } from './redux-stores-collector.ts';
+import { uninstallReduxDevtoolsHook } from './redux-devtools-hook.ts';
+import { attachTanstackQuery } from './query-collector.ts';
 import { collectInjectorTree } from './injector-tree.ts';
+import { registerProviderValues } from './provider-values.ts';
 import {
   clearNavigations,
   droppedNavigations,
@@ -52,6 +62,7 @@ import {
 import { startComponentPick } from './component-pick.ts';
 import { registerComponentEdit } from './component-edit-overlay.ts';
 import { registerComponentValues } from './component-values-overlay.ts';
+import type { ScreenshotRequest } from './component-screenshot.ts';
 import { installSourceHelpers } from './component-source.ts';
 import { createDeferTracker } from './defer-blocks.ts';
 import { attachHydrationOverlay } from './hydration-overlay.ts';
@@ -346,13 +357,22 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   }
 
   const signalWatch = createSignalWatch();
+  // Named signal writes of the last moments, for the NG0100 explainer of the Errors inspector.
+  const recentWrites = createRecentWrites();
   const signalHistory = createSignalHistory(
     (value, name) => serializeNamed(name, value, { budget: 1000 }),
     Date.now,
     (value, name) => graphValue(name, value),
-    { stacks: signalWatch.stacks, onChange: signalWatch.onChange },
+    {
+      stacks: signalWatch.stacks,
+      onChange: (id, label, change, raw) => {
+        signalWatch.onChange(id, label, change);
+        if (on.errors) recentWrites.add(id, label, change, raw);
+      },
+    },
   );
   const restoreSignalHook = on.signals ? await installSignalWriteHook(signalHistory.onWrite) : null;
+  if (restoreSignalHook) recentWrites.listening();
   if (!own(restoreSignalHook ?? (() => {}))) return;
   const writeHookMissing = on.signals && !restoreSignalHook;
 
@@ -439,6 +459,8 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     });
   const treeChannel = channel('push-component-tree', 'ping-component-tree', COMPONENT_TREE_SHAPE);
   const injectorChannel = channel('push-injector-tree', 'ping-injector-tree', INJECTOR_TREE_SHAPE);
+  // Reads the value of a provider the injectors already created, for the Injectors view.
+  if (on.injectors) registerProviderValues(my.rpc, pageId, getNg);
   // Wakes up with a push of every leased report when a panel or an agent looks again.
   const lease = createPageLease(my, pageId, {
     wake: () =>
@@ -447,6 +469,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
         on.injectors && pushInjectorTree(true),
         on.components && cd?.push(false, true),
         forms?.push(true),
+        leaks?.push(true),
+        plugins?.push(true),
+        errors?.push(),
       ]),
   });
   own(lease.stop);
@@ -479,8 +504,37 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs, () => lease.active)
     : null;
   const ngrx = on.ngrx ? attachNgrx(my, pageId, getNg, limits.changeLog) : null;
-  const errors = on.errors ? attachErrors(my, pageId, getNg, { tickMs }) : null;
+  // NGXS, Elf and MiniRx report through their Redux DevTools integration.
+  if (!on.ngrx) uninstallReduxDevtoolsHook();
+  const otherStores = on.ngrx ? attachReduxStores(my, pageId, { maxLog: limits.changeLog }) : null;
+  const queries = on.tanstackQuery
+    ? attachTanstackQuery(my, pageId, getNg, {
+        allowWrites: devtoolsConfig.actions.tanstackQuery,
+      })
+    : null;
+  const errors = on.errors
+    ? attachErrors(my, pageId, getNg, {
+        tickMs,
+        writes: recentWrites,
+        active: () => lease.active,
+      })
+    : null;
+  const leaks = on.components
+    ? attachLeaks(my, pageId, getNg, { tickMs, active: () => lease.active })
+    : null;
+  const plugins = on.plugins
+    ? attachPlugins(my, pageId, getNg, {
+        config: devtoolsConfig,
+        active: () => lease.active,
+        tickMs,
+      })
+    : null;
+  const startup = on.injectors ? attachStartup(my, pageId, getNg, { tickMs }) : null;
+  // Runs axe-core only when the panel or an agent asks; it loads axe-core then.
+  // The component owning each element is component data: only with that inspector on.
+  const axe = attachAxe(my, pageId, axeOwnerNg(on.components, getNg));
   const angularInfo = attachAngularInfo(my, pageId, getNg, { tickMs });
+  const browserTools = devtoolsConfig.agent.browserTools ? attachBrowserTools(my, pageId) : null;
   const consoleGlobals = attachConsoleGlobals(my, pageId, {
     getNg,
     inspectors: on,
@@ -646,7 +700,8 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       lastRouterPayload = payload;
       lastRouterPushAt = Date.now();
       const answer = (await my.rpc.call('push-router', report)) as
-        { hasConfig?: boolean } | undefined;
+        | { hasConfig?: boolean }
+        | undefined;
       if (answer?.hasConfig === false) sentGeneration = -1;
       else if (report['config']) sentGeneration = configTracker.generation;
     } catch {
@@ -666,18 +721,30 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     own(run.cancel);
     return run;
   };
+  // Leak bookkeeping runs on every refresh so short-lived components are seen; the report is paced.
+  const pushLeaks = leaks && paced(() => void leaks.push().catch(() => {}));
   const collectors = [
     () => void angularInfo.push(),
     on.components && paced(() => void pushTree().catch(() => {})),
     on.signals && (() => void pushSignalGraph().catch(() => {})),
     on.injectors && paced(() => void pushInjectorTree().catch(() => {})),
     ngrx && (() => void ngrx.push()),
+    otherStores && (() => void otherStores.push()),
+    queries && (() => void queries.push()),
     forms && paced(() => void forms.sync()),
     pipes?.push,
     on.router && (() => void pushRouter()),
     http && (() => void http.push().catch(() => {})),
     cd && paced(() => void cd.push().catch(() => {})),
     errors && (() => void errors.push().catch(() => {})),
+    leaks &&
+      pushLeaks &&
+      (() => {
+        leaks.track();
+        pushLeaks();
+      }),
+    plugins && paced(() => void plugins.push().catch(() => {})),
+    startup && paced(() => void startup.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
   const pushAll = () => collectors.forEach((run) => run());
   pushAll();
@@ -853,6 +920,17 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       allowed: devtoolsConfig.actions.components,
       edited: () => void pushTree(true).catch(() => {}),
     });
+    // Loaded on the first capture, so pages that never take one don't pay for it.
+    my.rpc.register({
+      name: 'component-screenshot',
+      type: 'event',
+      jsonSerializable: true,
+      handler: (message: ScreenshotRequest | null) =>
+        void import('./component-screenshot.ts')
+          .then((screenshot) => screenshot.answerScreenshotRequest(my.rpc, pageId, message))
+          // A chunk that fails to load leaves the request to time out on the server.
+          .catch(() => {}),
+    });
 
     const componentOf = (el: unknown) => {
       const host = el instanceof Element ? componentHostOf(getNg(), el) : null;
@@ -891,8 +969,14 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     capacitor?.leave();
     forget('analog', 'forget-analog-page');
     ngrx?.leave();
+    otherStores?.leave();
+    queries?.leave();
     errors?.leave();
+    leaks?.leave();
+    plugins?.leave();
+    startup?.leave();
     angularInfo.leave();
+    browserTools?.leave();
   };
   addEventListener('pagehide', leave);
   const resendConfig = () => {
@@ -900,6 +984,10 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     pipes?.resume();
     capacitor?.resume();
     errors?.resume();
+    leaks?.resume();
+    plugins?.resume();
+    startup?.resume();
+    browserTools?.resume();
     void lease.refresh();
     left = false;
     onVisibility();
@@ -918,7 +1006,14 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     pipes?.stop();
     capacitor?.stop();
     ngrx?.stop();
+    otherStores?.stop();
+    queries?.stop();
     errors?.stop();
+    leaks?.stop();
+    plugins?.stop();
+    startup?.stop();
+    browserTools?.stop();
+    axe.stop();
     cd?.stop();
     hydrationOverlay?.stop();
     stopAnalog();

@@ -29,7 +29,9 @@ describe('page interest', () => {
   afterEach(() => vi.useRealTimers());
 
   it('watches while a connected panel follows a page state', () => {
-    expect(panelWatching({ _rpcGroup: { clients: [client('pangular:errors')] } })).toBe(false);
+    expect(panelWatching({ _rpcGroup: { clients: [client('pangular:http')] } })).toBe(false);
+    // The Errors tab keeps the console log coming.
+    expect(panelWatching({ _rpcGroup: { clients: [client('pangular:errors')] } })).toBe(true);
     expect(panelWatching({ _rpcGroup: { clients: [client('pangular:component-tree')] } })).toBe(
       true,
     );

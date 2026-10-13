@@ -187,6 +187,46 @@ describe('Log to console for a provider', () => {
     );
   });
 
+  it('names each provider of a repeated token by its position', async () => {
+    const root = tree.pages.p1.environment[0].children[0];
+    const saved = root.providers;
+    root.providers = [
+      ...saved,
+      { ...provider('PANEL_FEATURE'), multi: true } as (typeof saved)[number],
+      { ...provider('PANEL_FEATURE'), multi: true } as (typeof saved)[number],
+    ];
+    try {
+      const fixture = await render();
+      fixture.componentInstance.setView('environment');
+      fixture.componentInstance.select('inj-r');
+      await settle(fixture);
+      const toggles = [
+        ...host(fixture).querySelectorAll<HTMLButtonElement>('app-provider-value .toggle'),
+      ]
+        .map((b) => b.getAttribute('aria-label'))
+        .filter((label) => label?.includes('PANEL_FEATURE'));
+      expect(toggles).toEqual([
+        'Show the value of PANEL_FEATURE (1 of 2)',
+        'Show the value of PANEL_FEATURE (2 of 2)',
+      ]);
+      const logs = [...host(fixture).querySelectorAll<HTMLButtonElement>('button.log')]
+        .map((b) => b.textContent?.replace(/\s+/g, ' ').trim())
+        .filter((text) => text?.includes('PANEL_FEATURE'));
+      expect(logs).toEqual([
+        'Log to console : PANEL_FEATURE (1 of 2)',
+        'Log to console : PANEL_FEATURE (2 of 2)',
+      ]);
+      // A token shown once keeps its plain name.
+      expect(
+        host(fixture)
+          .querySelector('app-provider-value .toggle[aria-label$="TripStore"]')
+          ?.getAttribute('aria-label'),
+      ).toBe('Show the value of TripStore');
+    } finally {
+      root.providers = saved;
+    }
+  });
+
   it('offers "Show in Components" only when the Components tab is on', async () => {
     const fixture = await render();
     const emitted: unknown[] = [];

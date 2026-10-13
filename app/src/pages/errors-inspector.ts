@@ -13,6 +13,7 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { time } from '../format';
 import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
+import { ErrorExplainView } from './error-explain';
 import type { ComponentFocus } from '../types/component-focus.types';
 import {
   ALL_PAGES,
@@ -39,7 +40,7 @@ const LEVEL_TONE: Record<ConsoleLevel, string> = {
 
 @Component({
   selector: 'app-errors-inspector',
-  imports: [Select],
+  imports: [Select, ErrorExplainView],
   template: `
     @if (!loaded()) {
       <p class="state" role="status">Loading errors…</p>
@@ -193,6 +194,15 @@ const LEVEL_TONE: Record<ConsoleLevel, string> = {
                       }
                     }
                   </div>
+                  @if (error.explain; as explain) {
+                    <app-error-explain
+                      [explain]="explain"
+                      [owner]="error.owner"
+                      [pageId]="error.pageId"
+                      [rpc]="rpc()"
+                      [canExplain]="canExplainInjection()"
+                    />
+                  }
                   @if (error.stack) {
                     <details>
                       <summary>Stack</summary>
@@ -537,6 +547,8 @@ export class ErrorsInspector {
   readonly rpc = input<DevframeRpcClient | null>(null);
   /** Whether the Components tab is on, so "Show component" has somewhere to go. */
   readonly canShowComponent = input(true);
+  /** Whether the Injectors tab is on, so a missing provider can walk its lookup. */
+  readonly canExplainInjection = input(false);
   readonly showComponent = output<ComponentFocus>();
 
   private readonly destroyRef = inject(DestroyRef);

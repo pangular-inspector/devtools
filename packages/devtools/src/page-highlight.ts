@@ -62,6 +62,8 @@ export function showHighlight(
     }
   }
   const box = document.createElement('div');
+  // An axe pass leaves the overlay's own elements out by id.
+  box.id = 'pangular-highlight';
   highlightEl = box;
   Object.assign(box.style, {
     position: 'fixed',

@@ -38,6 +38,8 @@ export interface ErrorsRegistration {
   pages(): { pageId: string; reportedAt: number; url?: string; title?: string }[];
   /** Drops pages that stopped reporting; call it from the shared expiry interval. */
   expire(now?: number): void;
+  /** What every page reported, for the audit. */
+  state(): ErrorsState;
 }
 
 /**
@@ -117,7 +119,7 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
   host.agent.registerTool({
     id: 'pangular:explain-error',
     description:
-      "Explain one error from pangular:list-errors, or an Angular error code. With `id`: the message, count, sources, the owning component and its instance id (for pangular:inspect-component), the stack of the first occurrence, and for an Angular code its page in Angular's error reference with a short known-cause note taken from that reference. With `code` (such as NG0100): the reference entry and the errors on connected pages that carry it. Says so when Angular's reference has no page for the code.",
+      "Explain one error from pangular:list-errors, or an Angular error code. With `id`: the message, count, sources, the owning component and its instance id (for pangular:inspect-component), the stack of the first occurrence, and for an Angular code its page in Angular's error reference with a short known-cause note taken from that reference. Three codes get an explainer read from the page: NG0100 (ExpressionChangedAfterItHasBeenChecked) gives the component, the binding Angular names and the template function, the previous and current value (hidden when the binding or a field holding it has a secret-looking name), the component fields that hold the new value, and the named signals written with it just before the check with the code that wrote them when write stacks are on; NG0500 to NG0503 (hydration mismatches) give a line diff of the server HTML Angular expected and the client DOM it found around the node; NG0201 and NullInjectorError give the missing token and Angular's dependency path, to pass to pangular:explain-injection. With `code` (such as NG0100): the reference entry and the errors on connected pages that carry it. Says so when Angular's reference has no page for the code.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -138,7 +140,7 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
   host.agent.registerTool({
     id: 'pangular:list-console',
     description:
-      'Console calls on the running page (log, info, warn, error and debug), newest first: when, level, the text of the arguments, and the Angular error code it mentions. Calls repeated in a row show once with a count. The page keeps its last 200 calls from when the overlay connected. Values are masked like other live values. Empty when no page is connected.',
+      'Console calls on the running page (log, info, warn, error and debug), newest first: when, level, the text of the arguments, and the Angular error code it mentions. Filter by `level`, `search` text and `since` (such as 5m, to see what one reproduction logged). Calls repeated in a row show once with a count. The page keeps its last 200 calls from when the overlay connected, and sends them while a panel or an agent watches. Values are masked like other live values. Empty when no page is connected.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -149,6 +151,11 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
           description: 'Only calls at this level.',
         },
         search: { type: 'string', description: 'Only calls whose text contains this, any case.' },
+        since: {
+          type: 'string',
+          description:
+            'Only calls made since then: a duration back from now (30s, 5m, 1h), an ISO date, or epoch milliseconds. A call repeated in a row counts from its last repeat.',
+        },
         limit: { type: 'integer', description: 'How many calls to list (1-200, default 50).' },
       },
     },
@@ -157,6 +164,7 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
         page: pageArgument(args),
         level: typeof args?.['level'] === 'string' ? args['level'] : undefined,
         search: typeof args?.['search'] === 'string' ? args['search'] : undefined,
+        since: args?.['since'],
         limit: args?.['limit'],
       }),
     }),
@@ -170,6 +178,7 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
         url: page.url,
         title: page.title,
       })),
+    state,
     expire: (now = Date.now()) => drop(staleErrorPages(state(), now, host.ttl)),
   };
 }

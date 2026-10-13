@@ -77,6 +77,12 @@ For environment injectors, **Injected by its services** lists what the services 
 
 **Provides** lists each provider with its kind: `useClass`, `useValue`, `useFactory` or `useExisting`. A bare class shows as `useClass`. Chips mark **viewProviders** and **multi** providers. Providers that come from imported modules show the import path, as `via A › B`.
 
+### Peek at a provider value
+
+Each live provider row has a **Show value** button. It reads the provider's current value from the page and lists it like the properties of a component: its own fields, with signals and resources unwrapped (marked **signal** or **resource**), and methods left out. An object, array, Map or Set opens one level at a time, and each level is read from the page when you open it. A value without fields, such as a string or an array from `useValue`, shows whole. **Refresh** reads it again, since the list does not follow the app on its own. When several providers share a token, as `multi` providers do, their buttons and values are named with their position, such as **(2 of 2)**.
+
+Reading never creates a provider, with the same rules as **Store as global** below. A provider the app has not created yet says **… has not been created yet** instead. Getters never run, and secret-looking names and values are shown as `[redacted]`. See [what the devtools redact](../security.md).
+
 ### Store a provider as a global
 
 Each live provider row has a **Store as global** button. It stores the provider's value in the page console as `temp1`, then the first free `tempN`, and shows the name it used, for example **Stored as temp1.** Only the tab you are looking at gets the global, and the overlay never overwrites a `tempN` the page set itself. See [Console handles](./components.md#console-handles).
@@ -104,6 +110,37 @@ Without a live tree, the tab lists DI found in your source files, in four groups
 | **Component Providers**        | Any `providers` or `viewProviders` array, in components, routes, app config or NgModules.                     |
 
 If the devtools server does not answer, the tab says **Couldn't load DI data** with a **Retry** button instead of an empty list. If only the live tree fails, the source list stays and a **Couldn't load the live injector tree** message with **Retry** sits above it.
+
+### Startup timing
+
+Below the live tree, the **Startup** section shows how the shown page started, from navigation start, and how long Angular took from its start to the app's first stable state.
+
+| Milestone                  | Where it comes from                                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **DOM content loaded**     | The browser's navigation timing.                                                                           |
+| **First contentful paint** | The browser's paint timing.                                                                                |
+| **Angular started**        | When Angular published `ng`, with the startup hook. Without it, Angular's first `mark_feature_usage` mark. |
+| **Root component created** | Angular's profiler, with the startup hook on Angular 20 or later.                                          |
+| **First stable**           | The first time `ApplicationRef.isStable` was `true`.                                                       |
+| **Load event**             | The browser's navigation timing.                                                                           |
+| **Overlay started**        | When the overlay ran on the page.                                                                          |
+
+The first stable time is exact when the overlay or the startup hook watched the app become stable. Sometimes the overlay loads after that, as when `main.ts` imports it after `whenStable()`. The overlay then checks an app that is already stable, so it knows only that the app became stable before this time. The row reads **First stable, at the latest**.
+
+**Slowest providers** lists the providers that took longest to construct, by own time (without the providers each one created while it ran), with total time and instance count. Components and directives show up in it too, since Angular creates them through injectors. Angular reports provider construction only through its own profiling (`ng.enableProfiling()`, Angular 20 or later, development builds), so this list needs the startup hook loaded before Angular, from the polyfills of your development build. A configuration's `polyfills` replaces the build target's list, so repeat the polyfills the target already has and add the hook after them:
+
+```json
+// angular.json (or project.json), build target
+"configurations": {
+  "development": {
+    "polyfills": ["zone.js", "@pangular-inspector/devtools/startup-hook"]
+  }
+}
+```
+
+A zoneless app has no `zone.js` in its polyfills, so it lists only the hook (and any other polyfills it has).
+
+The hook turns Angular's profiling on right after `bootstrapApplication()` creates the platform and reads its provider entries until one second after the app is first stable, then turns it off. Providers created by environment initializers before that point are not timed. Angular's own track shows in the Chrome Performance panel while the hook records.
 
 ## Where the data comes from
 
@@ -143,6 +180,21 @@ The source-mode notice says to connect the overlay to a development build for th
   </ngmd-step>
 </ngmd-workflow>
 
+When the error reached the page, the [Errors](./errors.md#missing-provider-ng0201) tab has an **Explain lookup** button on it. It walks the same path for the missing token and says at each injector whether it provides the token and why the lookup stops. An agent does the same with `explain-injection`, flags included.
+
+### Explain a lookup with flags
+
+`pangular:explain-injection` follows Angular's own lookup for a token from one component, element or environment injector, without creating anything:
+
+| Flag       | What changes                                                                                                                                                                                    |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `self`     | Only the first injector is asked.                                                                                                                                                               |
+| `skipSelf` | The lookup starts at the parent injector.                                                                                                                                                       |
+| `host`     | The lookup stops at the host element of the component whose template declares the start. There, only its `viewProviders` and the component itself count. Environment injectors are never asked. |
+| `optional` | A token nobody provides gives `null` instead of NG0201.                                                                                                                                         |
+
+Each step says **provides it**, **not provided**, **hidden** (only in `viewProviders`, which projected content can't see), **skipped**, **not asked** or **unknown**. A service created on demand, such as `providedIn: 'root'`, counts as provided by the injector that gave it to something else on the page. Before anything injects it, the root injector's step says the tool can't tell from the token name.
+
 ### Find which instance a component gets
 
 <ngmd-workflow>
@@ -164,11 +216,14 @@ If the selected injector leaves the page because its component or directive was 
 
 ## Agent tools
 
-| Tool or resource             | Kind     | What it does                                                                                                                                                                                                                                                                                                                                                                   |
-| ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pangular:get-providers`     | tool     | DI providers from source: `@Injectable` services, `inject()` calls, constructor parameters and `providers` arrays.                                                                                                                                                                                                                                                             |
-| `pangular:inspect-providers` | tool     | The injector tree a page reported, with what components and created services inject. `selector` narrows it to matching element or environment injectors (`Root`, `Platform`, `Route: admin`) or a component instance id, `token` to where a token is provided and injected. `componentId` and `framework` mark the owning component and Angular's own injectors and providers. |
-| `pangular:injector-tree`     | resource | The live tree last reported by a page.                                                                                                                                                                                                                                                                                                                                         |
+| Tool or resource               | Kind     | What it does                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pangular:get-providers`       | tool     | DI providers from source: `@Injectable` services, `inject()` calls, constructor parameters and `providers` arrays.                                                                                                                                                                                                                                                             |
+| `pangular:explain-injection`   | tool     | The lookup of one token from a component, element or environment injector, step by step, with `self`, `skipSelf`, `host` and `optional`. Says at each injector whether it provides the token and why the lookup stops. See [Explain a lookup with flags](#explain-a-lookup-with-flags).                                                                                        |
+| `pangular:inspect-providers`   | tool     | The injector tree a page reported, with what components and created services inject. `selector` narrows it to matching element or environment injectors (`Root`, `Platform`, `Route: admin`) or a component instance id, `token` to where a token is provided and injected. `componentId` and `framework` mark the owning component and Angular's own injectors and providers. |
+| `pangular:read-provider-value` | tool     | The current value of a provider an injector already created, by `token` and optional `injector`, with `path` to read deeper. See [Peek at a provider value](#peek-at-a-provider-value).                                                                                                                                                                                        |
+| `pangular:startup-timing`      | tool     | How the page started: milestones from navigation start to the first stable state, and the slowest providers to construct with own and total time. See [Startup timing](#startup-timing).                                                                                                                                                                                       |
+| `pangular:injector-tree`       | resource | The live tree last reported by a page.                                                                                                                                                                                                                                                                                                                                         |
 
 See [Tools](../agents/tools.md) and [Resources](../agents/resources.md).
 
@@ -183,7 +238,7 @@ The full tree needs Angular 17.0 or later. On older versions the tab shows a not
 | 16.2 to 16.x | Element and environment injectors with providers and dependencies. Lookup paths list only the environment injectors. |
 | 12.0 to 16.1 | Element injectors with their components and directives, without providers or environment injectors.                  |
 
-`inspect-providers` starts its answer with the same note. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
+`inspect-providers` starts its answer with the same note. Before 16.2, `explain-injection` rebuilds the lookup path from the rendered tree and answers **unknown** where it can't see providers, and says so. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
 
 ### Up to 2000 element injectors
 

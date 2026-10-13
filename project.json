@@ -47,7 +47,8 @@
         "development": {
           "optimization": false,
           "extractLicenses": false,
-          "sourceMap": true
+          "sourceMap": true,
+          "polyfills": ["@pangular-inspector/devtools/startup-hook"]
         }
       },
       "defaultConfiguration": "production",
