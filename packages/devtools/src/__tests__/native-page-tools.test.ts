@@ -108,4 +108,17 @@ describe('tools that need a DOM on a native page', () => {
       on: true,
     });
   });
+
+  it('still records when live views are asked for a native page in the same call', async () => {
+    const { push, tool, sent } = await boot();
+    await push('push-component-tree', tree('an1', 'angular-native'));
+    const answer = await tool('change-detection', { page: 'an1', record: 'start', flash: true });
+    expect(answer.startsWith('Page `an1` is an Angular Native app')).toBe(true);
+    expect(answer).toContain('Recording started');
+    expect(sent.some((s) => s.method.endsWith('change-detection-options'))).toBe(false);
+    expect(sent.find((s) => s.method.endsWith('change-detection-record'))?.args[0]).toMatchObject({
+      pageId: 'an1',
+      on: true,
+    });
+  });
 });

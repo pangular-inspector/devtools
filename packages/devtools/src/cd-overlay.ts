@@ -168,7 +168,9 @@ export function attachChangeDetection(
     jsonSerializable: true,
     handler: (message: { pageId?: unknown } | null) => {
       if (typeof message?.pageId === 'string' && message.pageId !== pageId) return;
-      live?.apply(toCdOptionsRequest(message));
+      // A platform without live views has nothing new to report.
+      if (!live) return;
+      live.apply(toCdOptionsRequest(message));
       void push(true).catch(() => {});
     },
   });

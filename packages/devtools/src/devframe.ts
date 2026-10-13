@@ -3078,9 +3078,14 @@ const pangular = defineDevframe({
                 'the flash overlay, the Performance panel track and Angular profiling',
               )
             : undefined;
-        if (noViews) return { markdown: `${noViews} Recording with \`record\` works there.` };
-        const views = cdViewsAsked(args) ? cdViewsText(args) : '';
-        if (views) {
+        // A native page skips the live views, but a `record` in the same call still runs.
+        const views = noViews
+          ? `${noViews} Recording with \`record\` works there.`
+          : cdViewsAsked(args)
+            ? cdViewsText(args)
+            : '';
+        if (noViews && args.record === undefined) return { markdown: views };
+        if (views && !noViews) {
           requestCdOptions({
             pageId: args.page,
             flash: args.flash,
@@ -3101,6 +3106,7 @@ const pangular = defineDevframe({
               : args.record === 'stop'
                 ? 'Recording stopped. The cycles recorded so far stay available.'
                 : 'Recording cleared.';
+          if (noViews) return { markdown: `${noViews}\n\n${next}` };
           return { markdown: views ? `${next}\n\n${views}` : next };
         }
         const cd = cdState.value() as CdState;
