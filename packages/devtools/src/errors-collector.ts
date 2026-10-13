@@ -1,6 +1,8 @@
 import { keepaliveDue } from './change-detection.ts';
 import { CONSOLE_LEVELS, tapConsole, type ConsoleLevel } from './console-tap.ts';
-import { elementId } from './element-id.ts';
+import { elementById, elementId } from './element-id.ts';
+import { enrichExplain, explainError, rawMessage, type RecentWrites } from './error-explain.ts';
+import type { HydrationDebugNg } from './hydration.ts';
 import { className } from './injector-tree.ts';
 import { ngCodeOf, ngCodeUrl } from './ng-error-codes.ts';
 import { providerOf, redactMessage, redactUrl, type RouterDebugApi } from './router.ts';
@@ -32,7 +34,7 @@ const VALUE_LIMITS = { depth: 3, keys: 10, items: 10, text: 200, budget: 100 };
 type AnyRecord = Record<string, any>;
 
 /** The parts of `window.ng` this collector reads. */
-export interface ErrorsDebugNg extends RouterDebugApi {
+export interface ErrorsDebugNg extends RouterDebugApi, HydrationDebugNg {
   getComponent?: (el: Element) => unknown;
   getOwningComponent?: (el: Element) => unknown;
   getHostElement?: (component: unknown) => Element | null;
@@ -61,12 +63,16 @@ export interface ErrorsOptions {
   /** Where errors and rejections come from; the page's window by default. */
   target?: Pick<Window, 'addEventListener' | 'removeEventListener'>;
   now?: () => number;
+  /** Recent named signal writes, for the NG0100 explainer (`error-explain.ts`). */
+  writes?: RecentWrites;
 }
 
 interface Group extends ErrorGroup {
   key: string;
   /** Class names from the message and stack, for finding the owner later. */
   candidates: string[];
+  /** When the explainer still waits for the owner and the signal writes, from the next push. */
+  explainAt?: number;
 }
 
 function read<T>(fn: () => T, fallback: T): T {
@@ -168,10 +174,13 @@ export function ownerCandidates(message: string, stack: string | undefined): str
     }
   };
   for (const match of message.matchAll(
-    /(?:used in the '|in the template of |Expression location: )_?([A-Za-z$][\w$]*)'?(?: component)?/g,
+    /(?:used in the '|in the template of |Expression location: |check the ")_?([A-Za-z$][\w$]*)['"]?(?: component)?/g,
   )) {
     add(match[1]);
   }
+  // A missing provider names its requester first: `Path: App -> Api.` or `R3InjectorError(...)[App -> Api]`.
+  const path = / Path: (.+?)\.(?:\s|$)/.exec(message)?.[1] ?? /\)\[([^\]]+)\]/.exec(message)?.[1];
+  for (const name of path?.split(' -> ').slice(0, -1) ?? []) add(name.trim());
   for (const line of (stack ?? '').split('\n').slice(0, MAX_STACK_LINES)) {
     const fn =
       /^\s*at\s+(?:new\s+|async\s+)?([\w$.]+)/.exec(line)?.[1] ??
@@ -305,6 +314,7 @@ export function attachErrors(
       if (!group.sources.includes(source)) group.sources.push(source);
     } else {
       const stack = stackOf(value);
+      const explain = explainError(code, rawMessage(value), stack);
       group = {
         key,
         id: `e${++nextGroup}`,
@@ -318,6 +328,7 @@ export function attachErrors(
         ...(code ? { code } : {}),
         ...(code && ngCodeUrl(code) ? { docUrl: ngCodeUrl(code) } : {}),
         ...(stack ? { stack } : {}),
+        ...(explain ? { explain, explainAt: at } : {}),
       };
       groups.set(key, group);
       evictGroups();
@@ -447,9 +458,28 @@ export function attachErrors(
       group.candidates = [];
       if (owner) group.owner = owner;
     }
+    for (const group of changedGroups) {
+      if (group.explainAt === undefined || !group.explain) continue;
+      const ng = getNg();
+      const host = group.owner ? elementById(group.owner.id) : null;
+      const component =
+        host && ng?.getComponent ? read(() => ng.getComponent!(host), null) : undefined;
+      group.explain = read(
+        () =>
+          enrichExplain(group.explain!, {
+            at: group.explainAt!,
+            component,
+            host,
+            ng,
+            writes: options.writes,
+          }),
+        group.explain,
+      );
+      delete group.explainAt;
+    }
     const all = full;
     const errors = [...(all ? groups.values() : changedGroups)].map(
-      ({ key: _key, candidates: _candidates, ...group }) => ({
+      ({ key: _key, candidates: _candidates, explainAt: _explainAt, ...group }) => ({
         ...group,
         sources: [...group.sources],
       }),

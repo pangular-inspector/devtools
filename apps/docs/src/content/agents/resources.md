@@ -88,15 +88,16 @@ The HTTP endpoint leaves out the keys of an inspector whose agent tools are hidd
 
 This table covers the data that has no resource of its own.
 
-| Key                         | Content                                                               |
-| --------------------------- | --------------------------------------------------------------------- |
-| `pangular:http`             | The SSR & HTTP timeline, SSR requests, fault rules and hydration data |
-| `pangular:http-payloads`    | The TransferState payload of each page, by page id                    |
-| `pangular:change-detection` | Change detection recordings, by page id                               |
-| `pangular:pipe-usage`       | Live pipe instances and recorded calls                                |
-| `pangular:errors`           | Error groups and console calls, by page id                            |
-| `pangular:analog`           | Analog page data and the server call log                              |
-| `pangular:routes`           | Declared but not filled. Use `get-routes` or `list-routes` instead.   |
+| Key                         | Content                                                                 |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `pangular:http`             | The SSR & HTTP timeline, SSR requests, fault rules and hydration data   |
+| `pangular:http-payloads`    | The TransferState payload of each page, by page id                      |
+| `pangular:change-detection` | Change detection recordings, by page id                                 |
+| `pangular:pipe-usage`       | Live pipe instances and recorded calls                                  |
+| `pangular:errors`           | Error groups and console calls, by page id                              |
+| `pangular:leaks`            | Leak hints: retained instances, open subscriptions, effects, by page id |
+| `pangular:analog`           | Analog page data and the server call log                                |
+| `pangular:routes`           | Declared but not filled. Use `get-routes` or `list-routes` instead.     |
 
 The list also includes the keys behind the six resources above (`pangular:component-tree`, `pangular:forms`, and so on).
 

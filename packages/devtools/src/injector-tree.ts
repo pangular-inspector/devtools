@@ -211,6 +211,33 @@ export function injectorRef<H extends object = Element>(
   return { id: idFor(injector), name: environmentName(injector, meta?.source) };
 }
 
+/**
+ * The injector id of the host element of the component whose template
+ * declares `el`: where a `host` lookup from `el` stops (`@Host()`,
+ * `{ host: true }`). Read through `ng.getOwningComponent`; undefined for a
+ * root component, or when the page's Angular can't tell.
+ */
+function hostBoundary<H extends object>(
+  debugNg: DebugNg<H>,
+  el: H,
+  tree: HostNames<H>,
+): string | undefined {
+  // Not on `DebugNg`, so the collectors that extend it keep their own signatures.
+  const ng = debugNg as DebugNg<H> & {
+    getOwningComponent?(el: H): unknown;
+    getHostElement?(component: object): unknown;
+  };
+  if (!ng.getOwningComponent || !ng.getHostElement) return undefined;
+  try {
+    const owner = ng.getOwningComponent(el);
+    if (!owner || typeof owner !== 'object' || owner === ng.getComponent?.(el)) return undefined;
+    const host = ng.getHostElement(owner);
+    return host && host !== el && tree.isHost(host) ? idFor(host as object) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 type DependencyFlags = { optional?: boolean; host?: boolean; self?: boolean; skipSelf?: boolean };
 
 /**
@@ -429,6 +456,8 @@ function readElement<H extends object>(
     // The component tree's id for the same host, so the panel can link the two views.
     info.componentId = elementId(el);
   }
+  const boundary = hostBoundary(ng, el, tree);
+  if (boundary) info.host = boundary;
   const entry: ElementEntry = {
     info,
     providers,

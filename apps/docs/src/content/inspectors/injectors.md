@@ -143,6 +143,21 @@ The source-mode notice says to connect the overlay to a development build for th
   </ngmd-step>
 </ngmd-workflow>
 
+When the error reached the page, the [Errors](./errors.md#missing-provider-ng0201) tab has an **Explain lookup** button on it. It walks the same path for the missing token and says at each injector whether it provides the token and why the lookup stops. An agent does the same with `explain-injection`, flags included.
+
+### Explain a lookup with flags
+
+`pangular:explain-injection` follows Angular's own lookup for a token from one component, element or environment injector, without creating anything:
+
+| Flag       | What changes                                                                                                                                                                                    |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `self`     | Only the first injector is asked.                                                                                                                                                               |
+| `skipSelf` | The lookup starts at the parent injector.                                                                                                                                                       |
+| `host`     | The lookup stops at the host element of the component whose template declares the start. There, only its `viewProviders` and the component itself count. Environment injectors are never asked. |
+| `optional` | A token nobody provides gives `null` instead of NG0201.                                                                                                                                         |
+
+Each step says **provides it**, **not provided**, **hidden** (only in `viewProviders`, which projected content can't see), **skipped**, **not asked** or **unknown**. A service created on demand, such as `providedIn: 'root'`, counts as provided by the injector that gave it to something else on the page. Before anything injects it, the root injector's step says the tool can't tell from the token name.
+
 ### Find which instance a component gets
 
 <ngmd-workflow>
@@ -167,6 +182,7 @@ If the selected injector leaves the page because its component or directive was 
 | Tool or resource             | Kind     | What it does                                                                                                                                                                                                                                                                                                                                                                   |
 | ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `pangular:get-providers`     | tool     | DI providers from source: `@Injectable` services, `inject()` calls, constructor parameters and `providers` arrays.                                                                                                                                                                                                                                                             |
+| `pangular:explain-injection` | tool     | The lookup of one token from a component, element or environment injector, step by step, with `self`, `skipSelf`, `host` and `optional`. Says at each injector whether it provides the token and why the lookup stops. See [Explain a lookup with flags](#explain-a-lookup-with-flags).                                                                                        |
 | `pangular:inspect-providers` | tool     | The injector tree a page reported, with what components and created services inject. `selector` narrows it to matching element or environment injectors (`Root`, `Platform`, `Route: admin`) or a component instance id, `token` to where a token is provided and injected. `componentId` and `framework` mark the owning component and Angular's own injectors and providers. |
 | `pangular:injector-tree`     | resource | The live tree last reported by a page.                                                                                                                                                                                                                                                                                                                                         |
 
@@ -183,7 +199,7 @@ The full tree needs Angular 17.0 or later. On older versions the tab shows a not
 | 16.2 to 16.x | Element and environment injectors with providers and dependencies. Lookup paths list only the environment injectors. |
 | 12.0 to 16.1 | Element injectors with their components and directives, without providers or environment injectors.                  |
 
-`inspect-providers` starts its answer with the same note. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
+`inspect-providers` starts its answer with the same note. Before 16.2, `explain-injection` rebuilds the lookup path from the rendered tree and answers **unknown** where it can't see providers, and says so. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
 
 ### Up to 2000 element injectors
 

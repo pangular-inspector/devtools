@@ -48,6 +48,7 @@ import { ValueStore } from './component-value-store';
 import { nestedMatches } from './component-value-state';
 import { StoreGlobal } from '../ui/store-global';
 import { ForBlocksSection, type ForBlock } from './for-blocks-section';
+import { LeaksSection, type LeaksPage } from './leaks-section';
 import { VirtualWindow } from '../ui/virtual-window';
 
 interface SourceComponent {
@@ -201,6 +202,7 @@ function storedDirectiveHosts(): boolean {
     StoreGlobal,
     ForBlocksSection,
     HydrationSection,
+    LeaksSection,
     AngularUnavailable,
   ],
   host: { '(keydown.escape)': 'cancelPick()' },
@@ -806,6 +808,14 @@ function storedDirectiveHosts(): boolean {
           [pageId]="page()!.pageId"
           [rpc]="rpc()"
           (showComponent)="showCdComponent($event)"
+        />
+        <app-leaks-section
+          [report]="leaksPage()"
+          [pageId]="page()!.pageId"
+          [rpc]="rpc()"
+          [angular]="angularPage()"
+          (showComponent)="revealNode($event)"
+          (highlight)="highlight($event)"
         />
       }
     } @else {
@@ -1787,6 +1797,13 @@ export class ComponentTree {
   });
   readonly cdHosts = computed(() => this.cdPage()?.hosts ?? {});
 
+  private readonly leaksPages = signal<Record<string, LeaksPage>>({});
+  /** The shown page's leak report, from the `leaks` shared state. */
+  readonly leaksPage = computed(() => {
+    const pageId = this.page()?.pageId;
+    return pageId ? (this.leaksPages()[pageId] ?? null) : null;
+  });
+
   /** The page's tree, without directive hosts when this viewer hid them. */
   private readonly visibleRoots = computed(() => {
     const roots = this.page()?.roots ?? [];
@@ -2127,6 +2144,18 @@ export class ComponentTree {
       this.cleanups.push(cd.on('updated', applyCd));
     } catch {
       this.cdPages.set({});
+    }
+    try {
+      const leaks = await my.rpc.sharedState('leaks');
+      if (this.destroyRef.destroyed) return;
+      const applyLeaks = (value: unknown) => {
+        const pages = (value as { pages?: Record<string, LeaksPage> } | null)?.pages;
+        this.leaksPages.set(pages && typeof pages === 'object' ? pages : {});
+      };
+      applyLeaks(leaks.value());
+      this.cleanups.push(leaks.on('updated', applyLeaks));
+    } catch {
+      this.leaksPages.set({});
     }
     try {
       const router = await my.rpc.sharedState('router');

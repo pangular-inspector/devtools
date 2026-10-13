@@ -28,7 +28,17 @@ describe('sanitizeInjectorTree', () => {
           path: ['inj-1', 'inj-2'],
         },
         providers: [{ token: 'Store', type: 'class', isViewProvider: false, multi: true }],
-        children: [node('app-card')],
+        children: [
+          node('app-card', {
+            injector: {
+              id: 'inj-3',
+              type: 'element',
+              name: 'app-card',
+              providerCount: 0,
+              host: 'inj-1',
+            },
+          }),
+        ],
         dependencies: [
           { from: 'App', token: 'Store', flags: ['optional'], providedBy: null },
           { from: 'App', token: 'Http', flags: [], providedBy: 'inj-2', providedByName: 'Root' },

@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Seventy-one tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Seventy-five tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -41,7 +41,7 @@ If `page` names a tab that doesn't report that data, the tool answers `No page <
 
 ### Older Angular versions
 
-When the page's Angular lacks the debug API a tool needs, the tool answers **Unsupported on this Angular version** with the version the feature needs and the version the page runs, instead of an empty list. `inspect-signals`, `watch-signal`, `defer-blocks`, `for-blocks` and `change-detection` answer this way. `inspect-providers` puts the same note before a reduced tree. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
+When the page's Angular lacks the debug API a tool needs, the tool answers **Unsupported on this Angular version** with the version the feature needs and the version the page runs, instead of an empty list. `inspect-signals`, `watch-signal`, `defer-blocks`, `for-blocks`, `change-detection` and `diagnose-change-detection` answer this way. `inspect-providers` puts the same note before a reduced tree. See [Supported Angular versions](../getting-started/installation.md#supported-angular-versions).
 
 ### list-pages
 
@@ -65,11 +65,11 @@ The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#t
 
 Every tool has one of three safety tiers. The server sends the tier to your client as the tool's read-only and destructive hints.
 
-| Tier          | What the tool can do                                                                                              | Tools                                                                                                                                                                                                           |
-| ------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                        | Every other tool, and every resource                                                                                                                                                                            |
-| `action`      | Changes the running page, the server's fault rules or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `change-detection` and `hydration` |
-| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                                                                                        |
+| Tier          | What the tool can do                                                                                              | Tools                                                                                                                                                                                                                                  |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                        | Every other tool, and every resource                                                                                                                                                                                                   |
+| `action`      | Changes the running page, the server's fault rules or what the page records. A reload or the next call undoes it. | `navigate`, `dispatch-ngrx-action`, `form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `change-detection` and `hydration` |
+| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                      | `clear-recordings` and `analog-call-api`                                                                                                                                                                                               |
 
 <ngmd-alert severity="important">
   The fourteen <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
@@ -182,7 +182,7 @@ Each page lists at most 50 blocks, with a note on how many more are not shown, a
 
 ### hydration <ngmd-badge variant="alpha">Action</ngmd-badge>
 
-Hydration of each page that was rendered on the server: how many component hosts were hydrated, skipped with `ngSkipHydration`, mismatched or created on the client, and how many `@defer` blocks are still dehydrated. It names the skipped and client-created hosts and the dehydrated blocks, at most 30 of each, and each mismatch with what Angular expected and what it found. Reads: page.
+Hydration of each page that was rendered on the server: how many component hosts were hydrated, skipped with `ngSkipHydration`, mismatched or created on the client, and how many `@defer` blocks are still dehydrated. It names the skipped and client-created hosts and the dehydrated blocks, at most 30 of each, and each mismatch with a line diff of the server HTML Angular expected (`-`) and the client DOM it found (`+`). Reads: page.
 
 | Argument  | Required | Value                                                                                                                       |
 | --------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -210,6 +210,28 @@ Without `page`, it reads the page that is recording, and `record` goes to every 
 
 `export` only reads, so it stays available with `agent.readOnly`. The file is masked like other answers (JWTs, bearer tokens and secret names), has no instance check counts, and comes in a `json` code block to save as a `.json` file. An export over 100,000 characters is not returned, because cut JSON doesn't parse. The answer gives its size and the counts of cycles, timed spans, component classes, hook rows and output rows instead. Export it from the panel then, or clear the recording and record a shorter session. See [Export and import a recording](../inspectors/components.md#export-and-import-a-recording).
 
+Each cycle line also names what started the cycle and how many of its refreshed checks changed nothing, when the page reports them. See [diagnose-change-detection](#diagnose-change-detection).
+
+### diagnose-change-detection
+
+Why change detection ran and what it wasted, from the recording that `change-detection` or the panel started. Reads: page. Needs Angular 20 or later.
+
+| Argument | Required | Value                                  |
+| -------- | -------- | -------------------------------------- |
+| `limit`  | no       | Rows per list. Default 10, at most 50. |
+
+Without `page`, it reads the page that is recording, like `change-detection`. The answer starts with the page's change detection mode, then has these parts:
+
+| Part                                  | What it lists                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **What started the cycles**           | Cycles per cause, then the latest causes: a DOM event with its type, target and listener component, a signal write with the signal's `debugName`, an HTTP response, a timer, `markForCheck`, `setInput`, an effect, a view change, `ApplicationRef.tick()` from app code, or a zone.js tick that nothing in Angular asked for. Causes from app code carry its first app frames. |
+| **Components that depend on zone.js** | Components that changed in ticks only zone.js started, with the zone.js tasks behind them, such as `setTimeout`. Without zone.js these components would not update.                                                                                                                                                                                                             |
+| **Wasted checks**                     | Per component class, the refreshed checks where nothing it renders changed, and its change detection strategy.                                                                                                                                                                                                                                                                  |
+| **Inputs that break OnPush**          | Inputs mutated in place (same reference, other contents) and inputs given a new reference with the same contents, with the component that set them.                                                                                                                                                                                                                             |
+| **Hints**                             | OnPush for a class refreshed at least 10 times that changed something in under 20% of them, or a note that it is already OnPush, plus a line per input and per zone.js dependent above.                                                                                                                                                                                         |
+
+It only reads, so it stays with `agent.readOnly`. With no recording yet, it says to start one with `change-detection`. See [Why it ran and what it wasted](../inspectors/components.md#why-it-ran-and-what-it-wasted) for how the page finds causes and wasted checks.
+
 ### Edit a component <ngmd-badge variant="alpha">Action</ngmd-badge>
 
 `set-component-property` and `set-signal` write a JSON value to one live component instance, in development only, and answer with the value it now holds, redacted like the component detail. Reads: page.
@@ -234,6 +256,34 @@ Both tools refuse, and write nothing, when:
 - a class name or tag matches several instances, or more than one tab reports components and `page` is missing
 
 A parent binding sets a bound input again the next time its own value changes. Only signals held as component properties can be set; the signals that `inspect-signals` lists elsewhere cannot. Set [`actions.components`](../getting-started/configuration.md#actions) to `false` to drop both tools.
+
+### find-leaks
+
+Leak hints for one page, in three parts. Reads: page.
+
+| Part                                 | What it lists                                                                                                                                                                                                              |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Still retained**                   | Component instances destroyed but still in memory after at least 2 navigations and 10 seconds: class, instance id, the route they lived on, age, navigations since and open subscriptions. Detached views are named apart. |
+| **Open subscriptions after destroy** | Subscriptions still open after the component that made them went away, grouped by class, instance and call site, with why each is flagged. Only while subscription tracking is on.                                         |
+| **Live effects and subscriptions**   | Components with live effects (from `ng.ɵgetSignalGraph`, Angular 20.1 and later) or tracked open subscriptions, with instance ids for `inspect-component`.                                                                 |
+
+| Argument    | Required | Value                                                    |
+| ----------- | -------- | -------------------------------------------------------- |
+| `component` | no       | Only classes whose name contains this text, in any case. |
+| `limit`     | no       | Rows per table, 1 to 200. Defaults to 20.                |
+
+Garbage collection runs when the browser decides, so the answer says "still retained" and points to the retainers in the Chrome Memory panel rather than calling it a leak. It also says what the page can't report: no `WeakRef` or debug API, no signal graph, or tracking off. Routes and call sites are masked like other live values. See [Leaks](../inspectors/components.md#leaks).
+
+### Track subscriptions <ngmd-badge variant="alpha">Action</ngmd-badge>
+
+`track-subscriptions` starts or stops subscription tracking on a page, the same switch as **Track subscriptions** in the Components panel. Reads: page.
+
+| Argument | Required | Value                                                                                      |
+| -------- | -------- | ------------------------------------------------------------------------------------------ |
+| `action` | yes      | `start` or `stop`.                                                                         |
+| `page`   | no       | The tab to track. Defaults to the most recent page for `start`, and every page for `stop`. |
+
+While on, the overlay wraps `Observable.prototype.subscribe` and records which component made each subscription. `stop` puts `subscribe` back. Subscriptions made before tracking started are not seen, so reload the tab or go to the screen again after `start`, then call `find-leaks`. Tracking patches the page, so `track-subscriptions` is an `action` tool and `agent.readOnly` drops it. No action covers it, so `actions` leaves it in place. `agent.tools.components: false` hides both tools.
 
 ### inspect-signals
 
@@ -296,6 +346,21 @@ A `selector` that names an element injector returns it with its lookup path reso
 An element injector that belongs to a component carries `componentId`, the instance id that `inspect-component`, `list-components` and the `component-tree` resource use. `framework: true` marks the injectors and providers that come from the installed `@angular/*` packages; see [Framework injectors](../inspectors/injectors.md#framework-injectors).
 
 Without `selector` or `token`, the answer is the whole tree and says which change detection mode the page runs. The answer stays within 20,000 characters and its JSON always parses. A larger tree shows element injectors as an outline (id, name, type, component, and provider and dependency counts), and when that is still too long it leaves out the deepest injectors and says how many. The environment injectors are always there, as an outline when they are large, and without their deepest injectors when even that outline is too long. A `selector` or `token` answer that is too long keeps whole entries and says how many it shows. `selector` and `token` take at most 500 characters each. When the page reported only part of its injector tree (it keeps at most 2000 element injectors and 2500 in all, and leaves out injectors nested more than 1000 levels deep), the answer says so.
+
+### explain-injection
+
+How Angular resolves one token for one component, element or environment injector: each injector on the lookup path in order, whether it provides the token and why the lookup stops. It reads the injector tree the page reported, so nothing is created or injected. See [Explain a lookup with flags](../inspectors/injectors.md#explain-a-lookup-with-flags). Reads: page.
+
+| Argument   | Required | Value                                                                                                                                                                                                 |
+| ---------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `selector` | yes      | Where the injection happens: a component or directive class name, a tag, a component instance id like `c12` (an error's owner id works), an injector id, or an environment injector name like `Root`. |
+| `token`    | yes      | The token as the Injectors tab names it: a class name like `HttpClient` or an `InjectionToken` description like `API_URL`.                                                                            |
+| `self`     | no       | `true` asks only the first injector.                                                                                                                                                                  |
+| `skipSelf` | no       | `true` starts at the parent injector.                                                                                                                                                                 |
+| `host`     | no       | `true` stops at the host element of the component that declares the start, where only its `viewProviders` and the component count.                                                                    |
+| `optional` | no       | `true` ends in `null` instead of NG0201.                                                                                                                                                              |
+
+The answer is a table of steps: **provides it**, **not provided**, **hidden** (a `viewProviders` entry the lookup can't see), **skipped**, **not asked** or **unknown**. A `providedIn: 'root'` service counts as provided once something on the page got it. When a selector matches several injectors, the answer uses the first and lists the others. Before Angular 16.2 the path is rebuilt from the rendered tree and providers are unknown, and the answer says so. `selector` and `token` take at most 500 characters each.
 
 ## NgRx
 
@@ -555,11 +620,13 @@ These tools read what a Capacitor app reported: its platform, its plugins and th
 
 These tools read what a page captured: errors from Angular's `ErrorHandler`, uncaught errors, unhandled promise rejections and console calls. See [Errors](../inspectors/errors.md). Reads: page.
 
-| Tool            | What it answers                                                                                                                                                                                                                                 | Arguments                  |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| `list-errors`   | Error groups, most recent first: id, count, when last seen, the Angular error code linked to its reference page, the message, the owning component with its instance id, and the source (`handler`, `window` or `promise`).                     | `code`, `limit`            |
-| `explain-error` | One error by `id`: message, count, sources, the owning component, the stack of the first occurrence, and for an Angular code its reference page and a short known cause. With `code` instead, the reference entry and the errors that carry it. | `id`, `code`               |
-| `list-console`  | Console calls, newest first: when, level, the text of the arguments and the Angular code it mentions. Calls repeated in a row show once with a count.                                                                                           | `level`, `search`, `limit` |
+| Tool            | What it answers                                                                                                                                                                                                                                                                                                           | Arguments                  |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `list-errors`   | Error groups, most recent first: id, count, when last seen, the Angular error code linked to its reference page, the message, the owning component with its instance id, and the source (`handler`, `window` or `promise`).                                                                                               | `code`, `limit`            |
+| `explain-error` | One error by `id`: message, count, sources, the owning component, the stack of the first occurrence, and for an Angular code its reference page and a short known cause. With `code` instead, the reference entry and the errors that carry it. An NG0100, a hydration mismatch or a missing provider adds its explainer. | `id`, `code`               |
+| `list-console`  | Console calls, newest first: when, level, the text of the arguments and the Angular code it mentions. Calls repeated in a row show once with a count.                                                                                                                                                                     | `level`, `search`, `limit` |
+
+The explainers are the ones the [Errors](../inspectors/errors.md#explainers) tab shows. For NG0100: the binding, the template function, the previous and current value, the component fields that hold the new value, and the named signals written with it just before the check, with the code that wrote them when write stacks are on. For NG0500 to NG0503: a diff of the server HTML Angular expected and the client DOM it found. For NG0201 and `NullInjectorError`: the token and Angular's dependency path, to pass to `explain-injection`.
 
 `code` accepts `NG0100`, `ng100` or `NG01203`. `explain-error` says so when Angular's error reference has no page for a code, and gives no known cause then. Pass the owner's instance id to `inspect-component` for its inputs and state. `list-errors` takes `limit` up to 100 (default 30), and `list-console` up to 200 (default 50). Messages, stacks and console text are masked like other live values.
 

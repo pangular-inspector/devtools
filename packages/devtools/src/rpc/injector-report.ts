@@ -32,6 +32,7 @@ const InjectorSchema = v.object({
   directives: v.optional(texts(100)),
   selector: v.optional(clipped(MAX_SELECTOR)),
   path: v.optional(texts(200)),
+  host: v.optional(text),
 });
 
 const ProviderSchema = v.object({

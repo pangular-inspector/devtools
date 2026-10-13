@@ -27,6 +27,8 @@ const pageSide = [
   'http-server',
   'injector-tree',
   'injector-tree-real',
+  'leaks-collector',
+  'leaks-real',
   'ngrx-collector',
   'pipes-collector',
   'pipes-runtime',

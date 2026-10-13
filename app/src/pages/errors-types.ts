@@ -10,6 +10,65 @@ export interface ErrorOwner {
   name: string;
 }
 
+/** One line of the server vs client DOM diff the server builds for a hydration mismatch. */
+export interface DiffLine {
+  op: 'same' | 'expected' | 'actual';
+  text: string;
+}
+
+/** What the page read about an NG0100, a hydration mismatch or a missing provider. */
+export type ErrorExplain =
+  | {
+      kind: 'expression-changed';
+      binding?: string;
+      template?: string;
+      previous: string;
+      current: string;
+      masked?: boolean;
+      creation?: boolean;
+      members?: string[];
+      writes?: { signal: string; at: number; stack?: string[] }[];
+      writesKnown?: boolean;
+    }
+  | {
+      kind: 'hydration-mismatch';
+      summary?: string;
+      expected?: string;
+      actual?: string;
+      external?: boolean;
+      diff?: DiffLine[];
+    }
+  | { kind: 'missing-provider'; token: string; path?: string[]; source?: string };
+
+/** One injector of an `explain-injection` answer. */
+export interface InjectionStep {
+  id: string;
+  name: string;
+  type: 'element' | 'environment' | 'null';
+  component?: string;
+  status: 'provides' | 'missing' | 'hidden' | 'skipped' | 'not-asked' | 'unknown';
+  reason: string;
+}
+
+/** The `explain-injection` RPC answer: the lookup path of a token, step by step. */
+export interface InjectionExplanation {
+  pageId: string;
+  token: string;
+  flags: string[];
+  steps: InjectionStep[];
+  outcome: 'resolved' | 'null' | 'error' | 'unknown';
+  summary: string;
+  approximate?: boolean;
+}
+
+/** Text with `code` spans, split so a template can render them as `<code>`. */
+export function codeSegments(text: string): { code: boolean; text: string }[] {
+  return text
+    .split('`')
+    .map((part, index) => ({ code: index % 2 === 1, text: part }))
+    .filter((part) => part.text);
+}
+
 export interface ErrorGroup {
   id: string;
   message: string;
@@ -22,6 +81,7 @@ export interface ErrorGroup {
   sources: ('handler' | 'window' | 'promise')[];
   stack?: string;
   owner?: ErrorOwner;
+  explain?: ErrorExplain;
 }
 
 export interface ConsoleEntry {

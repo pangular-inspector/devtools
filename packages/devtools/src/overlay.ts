@@ -8,6 +8,8 @@ import { attachPipes } from './pipes-collector.ts';
 import { attachHttp } from './http-overlay.ts';
 import { attachCapacitor } from './capacitor-overlay.ts';
 import { attachErrors } from './errors-collector.ts';
+import { attachLeaks } from './leaks-collector.ts';
+import { createRecentWrites } from './error-explain.ts';
 import { allowClientRules, httpRegistry } from './http-rules.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
 import { collectInjectorTree } from './injector-tree.ts';
@@ -346,13 +348,22 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   }
 
   const signalWatch = createSignalWatch();
+  // Named signal writes of the last moments, for the NG0100 explainer of the Errors inspector.
+  const recentWrites = createRecentWrites();
   const signalHistory = createSignalHistory(
     (value, name) => serializeNamed(name, value, { budget: 1000 }),
     Date.now,
     (value, name) => graphValue(name, value),
-    { stacks: signalWatch.stacks, onChange: signalWatch.onChange },
+    {
+      stacks: signalWatch.stacks,
+      onChange: (id, label, change) => {
+        signalWatch.onChange(id, label, change);
+        if (on.errors) recentWrites.add(id, label, change);
+      },
+    },
   );
   const restoreSignalHook = on.signals ? await installSignalWriteHook(signalHistory.onWrite) : null;
+  if (restoreSignalHook) recentWrites.listening();
   if (!own(restoreSignalHook ?? (() => {}))) return;
   const writeHookMissing = on.signals && !restoreSignalHook;
 
@@ -479,7 +490,10 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs, () => lease.active)
     : null;
   const ngrx = on.ngrx ? attachNgrx(my, pageId, getNg, limits.changeLog) : null;
-  const errors = on.errors ? attachErrors(my, pageId, getNg, { tickMs }) : null;
+  const errors = on.errors
+    ? attachErrors(my, pageId, getNg, { tickMs, writes: recentWrites })
+    : null;
+  const leaks = on.components ? attachLeaks(my, pageId, getNg, { tickMs }) : null;
   const angularInfo = attachAngularInfo(my, pageId, getNg, { tickMs });
   const consoleGlobals = attachConsoleGlobals(my, pageId, {
     getNg,
@@ -678,6 +692,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     http && (() => void http.push().catch(() => {})),
     cd && paced(() => void cd.push().catch(() => {})),
     errors && (() => void errors.push().catch(() => {})),
+    leaks && (() => void leaks.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
   const pushAll = () => collectors.forEach((run) => run());
   pushAll();
@@ -892,6 +907,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     forget('analog', 'forget-analog-page');
     ngrx?.leave();
     errors?.leave();
+    leaks?.leave();
     angularInfo.leave();
   };
   addEventListener('pagehide', leave);
@@ -900,6 +916,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     pipes?.resume();
     capacitor?.resume();
     errors?.resume();
+    leaks?.resume();
     void lease.refresh();
     left = false;
     onVisibility();
@@ -919,6 +936,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     capacitor?.stop();
     ngrx?.stop();
     errors?.stop();
+    leaks?.stop();
     cd?.stop();
     hydrationOverlay?.stop();
     stopAnalog();

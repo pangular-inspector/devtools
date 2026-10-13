@@ -265,6 +265,7 @@ describe('agent tool and RPC registration', () => {
         'set-component-property',
         'set-http-rule',
         'set-signal',
+        'track-subscriptions',
         'watch-signal',
       ].sort(),
     );
@@ -372,6 +373,7 @@ describe('agent tool and RPC registration', () => {
         'set-component-property',
         'set-http-rule',
         'set-signal',
+        'track-subscriptions',
         'watch-signal',
       ].sort(),
     );

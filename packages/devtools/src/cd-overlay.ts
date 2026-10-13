@@ -1,4 +1,5 @@
-import { addProfilerListener } from './change-detection.ts';
+import { addProfilerListener, angularMajor, type Profiler } from './change-detection.ts';
+import { createCdDiagnosis } from './cd-diagnosis.ts';
 import { createDeltaChannel } from './delta-channel.ts';
 import { CHANGE_DETECTION_SHAPE } from './push-delta.ts';
 import { toCdOptionsRequest } from './cd-data.ts';
@@ -35,6 +36,12 @@ export function attachChangeDetection(
   active: () => boolean = () => true,
 ) {
   const recorder = createCdRecorder({ maxCycles });
+  const diagnosis = createCdDiagnosis({ getNg, maxCycles });
+  // The diagnosis reads each event after the recorder, with the id it gave the cycle.
+  const onEvent: Profiler = (event, instance, hook) => {
+    recorder.onEvent(event, instance, hook);
+    diagnosis.onEvent(event, instance, hook, recorder.cycleId);
+  };
   const live = createCdLive({ getNg });
   const hostIds = new WeakMap<object, string>();
   let removeListener: (() => void) | null = null;
@@ -68,24 +75,32 @@ export function attachChangeDetection(
 
   const setRecording = (on: boolean) => {
     if (on) {
-      removeListener ??= addProfilerListener(getNg(), recorder.onEvent);
+      removeListener ??= addProfilerListener(getNg(), onEvent);
       supported = removeListener !== null;
       // A second start, such as an agent start sent to every tab, keeps the
       // recording that is running. Only `clear` empties it.
-      if (supported && !recorder.recording) recorder.start();
+      if (supported && !recorder.recording) {
+        recorder.start();
+        diagnosis.start();
+      }
       return;
     }
     recorder.stop();
+    diagnosis.stop();
     removeListener?.();
     removeListener = null;
   };
 
   const collect = (): Record<string, unknown> => {
     const options = live.report();
+    const recording = recorder.snapshot(hostId);
+    const found = diagnosis.snapshot(angularMajor());
     const report: CdReport = {
       pageId,
       supported,
-      ...recorder.snapshot(hostId),
+      ...recording,
+      cycles: recording.cycles.map((cycle) => ({ ...cycle, ...diagnosis.cycle(cycle.id) })),
+      ...(found ? { diagnosis: found } : {}),
       ...(options ? { options } : {}),
     };
     return { ...report };
@@ -110,7 +125,10 @@ export function attachChangeDetection(
     handler: (message: { pageId?: unknown; on?: unknown; clear?: unknown } | null) => {
       if (typeof message?.pageId === 'string' && message.pageId !== pageId) return;
       if (typeof message?.on === 'boolean') setRecording(message.on);
-      if (message?.clear === true) recorder.clear();
+      if (message?.clear === true) {
+        recorder.clear();
+        diagnosis.clear();
+      }
       void push(true).catch(() => {});
     },
   });

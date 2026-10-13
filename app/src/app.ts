@@ -559,6 +559,7 @@ function readView(): View | null {
               <app-errors-inspector
                 [rpc]="rpc()"
                 [canShowComponent]="config().inspectors.components"
+                [canExplainInjection]="config().inspectors.injectors"
                 (showComponent)="showComponent($event)"
               />
             }

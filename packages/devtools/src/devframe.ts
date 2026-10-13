@@ -25,7 +25,9 @@ import {
 } from './rpc/hydration-tools.ts';
 import { registerConsoleGlobals } from './rpc/console-globals.ts';
 import { registerErrors } from './rpc/errors-register.ts';
+import { registerLeaks } from './rpc/leaks-register.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
+import { registerInjectionExplain } from './rpc/injection-explain.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
@@ -200,6 +202,7 @@ import {
   type CdState,
 } from './rpc/cd-tools.ts';
 import { cdExportText } from './rpc/cd-export-tools.ts';
+import { cdDiagnosisText } from './rpc/cd-diagnosis-tools.ts';
 import { toCdOptionsRequest } from './cd-data.ts';
 import type { HttpPage, HttpPayloadState, HttpReport, HttpState } from './types.ts';
 
@@ -743,6 +746,17 @@ const pangular = defineDevframe({
           ttl: liveTtl,
         })
       : null;
+    const leaksInspector = on.components
+      ? await registerLeaks({
+          my,
+          rpcHost: ctx.rpc,
+          register,
+          agent,
+          owns,
+          mayForget,
+          ttl: liveTtl,
+        })
+      : null;
 
     const routerPages = new Map<string, RouterPage>();
     const routerState = await my.rpc.sharedState('router', {
@@ -1174,6 +1188,7 @@ const pangular = defineDevframe({
       if (expireNgrxPages(ngrxPages, Date.now(), liveTtl)) applyNgrx();
       if (expireCapacitorPages(capacitorPages, Date.now(), liveTtl)) applyCapacitor();
       errorsInspector?.expire();
+      leaksInspector?.expire();
       componentDeltas.prune((id) => componentPages.has(id));
       injectorDeltas.prune((id) => injectorPages.has(id));
       cdDeltas.prune((id) => cdPages.has(id));
@@ -2870,6 +2885,37 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
+      id: 'pangular:diagnose-change-detection',
+      description:
+        'Why change detection ran and what it wasted, from the recording `pangular:change-detection` or the panel started (Angular 20+, development build). Lists what started each cycle (a DOM event with its type, target and listener component, a signal write with the signal name, an HTTP response, a timer, markForCheck, setInput, an effect, `ApplicationRef.tick()` from app code with its app frames, or a zone.js tick nothing in Angular asked for), the components that changed only in such zone.js ticks and so depend on zone.js, refreshed checks that changed nothing per component, inputs mutated in place or given an equal new reference (both break OnPush), and OnPush hints for components refreshed often that rarely change. While recording, the page wraps Angular\'s scheduler `notify`, adds a signal write hook and watches DOM updates; all three stop with the recording. Only reads. Empty until a recording ran: start one with `pangular:change-detection` and `record: "start"`.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: { type: 'string', description: 'Page id; defaults to the page that is recording.' },
+          limit: { type: 'number', description: 'Rows per list (default 10, max 50).' },
+        },
+      },
+      handler: async (args: { page?: string; limit?: number }) => {
+        const unknown =
+          args?.page &&
+          cdUnknownPageText(
+            args.page,
+            cdState.value() as CdState,
+            [...componentPages.values(), ...injectorPages.values()].filter(
+              (page) => !goneCdPages.has(page.pageId),
+            ),
+          );
+        if (unknown) return { markdown: unknown };
+        const cd = cdState.value() as CdState;
+        const zonePage = args?.page ?? pickCdPage(cd)?.pageId;
+        const injectors = zonePage ? injectorPages.get(zonePage) : latestInjectorPage();
+        const mode = injectors ? zoneModeText(injectors.zone, injectors.pageId) : '';
+        const text = cdDiagnosisText(cd, args ?? {}, angularPages.get);
+        return { markdown: [mode, text].filter(Boolean).join('\n\n') };
+      },
+    });
+
+    agent.registerTool({
       id: 'pangular:inspect-signals',
       description:
         "Get the signal graph the running page last reported: signal nodes (signal, computed, linkedSignal, effect), their dependency edges, `component` (instance id, class name, host tag and host path) or `injector` (an environment injector), `resources` (each resource(), httpResource() or rxResource() folded into one entry with status, isLoading, params, value, error and the ids of its internal nodes), `environments` (root and route injectors the page can report), and `history` (recent value changes per node id and status changes per resource id; `write` entries are exact, `sample` entries come from polling and `missed` counts values that went unseen). `changes` on a node or resource counts every change since the page first saw it, past the 50 kept entries. `nodeCount` is set when Angular reported more nodes than the 400 kept. `unnamedSignals` counts the signals, computeds and linkedSignals without a `debugName`; their history is sampled only, so suggest naming them. Only signals a template or an effect has read appear. The page reports one graph: the component picked on the Signals page (or via pangular:highlight), otherwise the component the primary router outlet renders deepest, otherwise the first component with a graph. Pass `root` for effects in root services, or a route path (`/admin` or `Route: admin`) for effects in that route's providers; the page reads that injector's graph once, without changing what the Signals page shows. A component selector that does not match the reported graph returns what is available instead; call pangular:highlight with it first to switch the graph to it. Nodes Angular's own router, forms or HTTP code created carry `framework: true` (a computed or effect with a debug name Angular uses, or a signal or unnamed node only such nodes read, never a field of the component); pass `framework: false` to leave them out. `watch` lists the node ids the page watches and whether write stacks are on (see pangular:watch-signal); with stacks on, `write` history entries carry `stack`, the first 3 app frames of the code that set the signal. Pass `node` (a node id or label) to get only that node with its direct producers and consumers, and `history: false` to leave out value history. The answer is cut at 20,000 characters, first by keeping fewer history entries per node, then fewer nodes, with a note saying what was left out.",
@@ -3027,6 +3073,21 @@ const pangular = defineDevframe({
             ? `${reduced} The page reports a reduced tree: element injectors with their components and directives, and providers and environment injectors only where its Angular exposes them.\n\n${text}`
             : text,
         };
+      },
+    });
+
+    registerInjectionExplain({
+      register,
+      agent,
+      page: (requested) => {
+        if (requested && !injectorPages.has(requested)) {
+          return {
+            error: unknownPageText(requested, [...injectorPages.values()], 'an injector tree'),
+          };
+        }
+        const page = requested ? injectorPages.get(requested) : latestInjectorPage();
+        const angular = angularPages.pick(page?.pageId ?? requested);
+        return { page, reduced: angular?.capabilities.injectorProviders === false };
       },
     });
 

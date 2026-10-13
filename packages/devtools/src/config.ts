@@ -337,6 +337,16 @@ export const PANEL_TABS = [
 
 export type PanelTab = (typeof PANEL_TABS)[number]['id'];
 
+/**
+ * Navigations a destroyed component has to outlive, along with
+ * {@link RETAINED_AFTER_MS}, before the leak views call it still retained. The
+ * garbage collector runs when it likes, so an instance still there right
+ * after one navigation says little. The panel and `find-leaks` share these.
+ */
+export const RETAINED_AFTER_NAVIGATIONS = 2;
+/** Time a destroyed component has to outlive before it counts as still retained. */
+export const RETAINED_AFTER_MS = 10_000;
+
 /** The panel tabs whose inspector is on under `config`. */
 export function enabledPanelTabs(config: ResolvedPangularConfig): (typeof PANEL_TABS)[number][] {
   return PANEL_TABS.filter((tab) => !('inspector' in tab) || config.inspectors[tab.inspector]);
@@ -785,6 +795,7 @@ export const AGENT_SAFETY: Record<string, Exclude<AgentSafety, 'read'>> = {
   'set-http-rule': 'action',
   'remove-http-rule': 'action',
   'record-pipes': 'action',
+  'track-subscriptions': 'action',
   'watch-signal': 'action',
   'change-detection': 'action',
   hydration: 'action',
@@ -869,6 +880,9 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'request-hydration-overlay': 'components',
   'request-component-value': 'components',
   'component-value-result': 'components',
+  'push-leaks': 'components',
+  'forget-leaks-page': 'components',
+  'request-leak-tracking': 'components',
   'get-signals': 'signals',
   'push-signal-graph': 'signals',
   'ping-signal-graph': 'signals',
@@ -880,6 +894,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'push-injector-tree': 'injectors',
   'ping-injector-tree': 'injectors',
   'forget-injector-page': 'injectors',
+  'explain-injection': 'injectors',
   'get-ngrx-store': 'ngrx',
   'push-ngrx-state': 'ngrx',
   'forget-ngrx-page': 'ngrx',
@@ -944,13 +959,17 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'for-blocks': 'components',
   hydration: 'components',
   'change-detection': 'components',
+  'diagnose-change-detection': 'components',
   'set-component-property': 'components',
   'set-signal': 'components',
+  'find-leaks': 'components',
+  'track-subscriptions': 'components',
   'signal-graph': 'signals',
   'inspect-signals': 'signals',
   'watch-signal': 'signals',
   'injector-tree': 'injectors',
   'inspect-providers': 'injectors',
+  'explain-injection': 'injectors',
   'ngrx-store': 'ngrx',
   'dispatch-ngrx-action': 'ngrx',
   'inspect-signal-store': 'ngrx',
@@ -1004,6 +1023,7 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
 export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
   'component-tree': 'components',
   'change-detection': 'components',
+  leaks: 'components',
   'signal-graph': 'signals',
   'injector-tree': 'injectors',
   'ngrx-store': 'ngrx',
@@ -1051,13 +1071,17 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'for-blocks',
   'hydration',
   'change-detection',
+  'diagnose-change-detection',
   'set-component-property',
   'set-signal',
+  'find-leaks',
+  'track-subscriptions',
   'signal-graph',
   'inspect-signals',
   'watch-signal',
   'injector-tree',
   'inspect-providers',
+  'explain-injection',
   'ngrx-store',
   'dispatch-ngrx-action',
   'inspect-signal-store',
@@ -1251,6 +1275,115 @@ export interface CdCycle {
   spans?: CdSpan[];
   /** Spans left out of `spans` past the cap. */
   droppedSpans?: number;
+  /** What started the cycle, from the recording's trigger attribution (`cd-diagnosis.ts`). */
+  cause?: CdCause;
+  /** Component checks where Angular ran the template, the dev-mode checkNoChanges pass left out. */
+  refreshed?: number;
+  /** Refreshed checks where nothing the component renders changed. */
+  unchanged?: number;
+}
+
+/**
+ * What started a change detection cycle:
+ * - `event`: a template listener (DOM event or output), or a DOM event handler that notified Angular.
+ * - `http`: code that ran on an HTTP response.
+ * - `timer`: code that ran in a timer, as zone.js reports it.
+ * - `signal`: a signal write that marked a template for check.
+ * - `effect`: a signal write that scheduled an effect.
+ * - `markForCheck`: `ChangeDetectorRef.markForCheck()`, such as the async pipe.
+ * - `input`: `ComponentRef.setInput()`.
+ * - `view`: a view attached or detached, a defer block, an afterRender registration or animations.
+ * - `tick`: app code called `ApplicationRef.tick()`.
+ * - `zone`: zone.js ran the tick and nothing notified Angular before it, so only zone.js picked the change up.
+ * - `unknown`: Angular's scheduler ran a tick the recording saw no notification for.
+ */
+export type CdCauseKind =
+  | 'event'
+  | 'http'
+  | 'timer'
+  | 'signal'
+  | 'effect'
+  | 'markForCheck'
+  | 'input'
+  | 'view'
+  | 'tick'
+  | 'zone'
+  | 'unknown';
+
+/** What started one cycle. The text form is `cdCauseText` in `cd-data.ts`. */
+export interface CdCause {
+  kind: CdCauseKind;
+  /** For `http`, `timer` and an `event` outside a template listener: how the code told Angular. */
+  via?: CdCauseKind;
+  /** The component class: the listener's owner for an event, else the class of the first app frame. */
+  component?: string;
+  /** The template listener's function name. */
+  listener?: string;
+  /** The DOM event type, such as `click`. */
+  event?: string;
+  /** The event target's tag, such as `button`. */
+  target?: string;
+  /** The `debugName` of the signal written, `?` for an unnamed one. */
+  signal?: string;
+  /** The zone.js task the code ran in, such as `setTimeout` or `XMLHttpRequest.send`. */
+  task?: string;
+  /** True when zone.js (`NgZone`) ran the tick rather than Angular's zoneless scheduler. */
+  zone?: boolean;
+  /** The first app frames of the code that notified Angular or called `tick()`. */
+  stack?: string[];
+  /** More notifications that came before the same tick. */
+  more?: number;
+}
+
+/** Refreshed and unchanged checks of one component class over a recording. */
+export interface CdWasteStat {
+  name: string;
+  /** Checks where Angular ran the component's template. */
+  refreshed: number;
+  /** Refreshed checks where nothing it renders changed: no DOM update and no new input reference for a child. */
+  unchanged: number;
+  /** The class's change detection strategy, from `ng.getDirectiveMetadata`. */
+  strategy?: 'OnPush' | 'Eager';
+}
+
+/** One input of one component class that broke OnPush during a recording. */
+export interface CdInputStat {
+  /** The component class that declares the input. */
+  name: string;
+  input: string;
+  /** The component class whose template set it, when the recording saw it. */
+  parent?: string;
+  /** Checks where the input kept its reference but its contents changed (mutated in place). */
+  inPlace: number;
+  /** Checks where the input got a new reference with the same contents. */
+  sameContents: number;
+}
+
+/** A component class that changed only in ticks zone.js started with no Angular notification. */
+export interface CdZoneStat {
+  name: string;
+  /** Zone-only ticks in which it changed. */
+  ticks: number;
+  /** The zone.js tasks behind those ticks, at most 3, such as `setTimeout`. */
+  tasks?: string[];
+}
+
+/** Trigger attribution and wasted checks over a recording. */
+export interface CdDiagnosis {
+  /** Whether the page found Angular's change detection scheduler, so cycles carry a cause. */
+  triggers: boolean;
+  /** Whether the page could watch DOM updates, so unchanged checks are counted. */
+  waste: boolean;
+  /** The page's Angular major version, for the OnPush hint. */
+  major?: number;
+  /** Cycles per cause kind. */
+  causes: Partial<Record<CdCauseKind, number>>;
+  /** Component classes by unchanged checks, at most 100. */
+  components: CdWasteStat[];
+  /** Inputs mutated in place or given equal new references, at most 50. */
+  inputs?: CdInputStat[];
+  /** Components that changed only in zone.js ticks, at most 50. */
+  zone?: CdZoneStat[];
 }
 
 /** What a {@link CdSpan} measures. */
@@ -1328,6 +1461,8 @@ export interface CdRecording {
   afterRender?: CdAfterRenderStat;
   /** Names the cycles' `spans` point to. */
   spanNames?: string[];
+  /** Trigger attribution, wasted checks and OnPush hints, on pages that record them. */
+  diagnosis?: CdDiagnosis;
 }
 
 /** The change detection views a page shows while it runs, turned on from the panel or an agent. */

@@ -3,6 +3,7 @@ import { ERROR_REFERENCE_URL, ngCodeInfo, ngCodeUrl, normalizeNgCode } from '../
 import { redactMessage, redactUrl } from '../router.ts';
 import { redactText } from '../serialize.ts';
 import { clip } from '../text.ts';
+import { explainSection, toErrorExplain, type ErrorExplain } from './error-explain-tools.ts';
 import { code, untrusted } from './forms-tools.ts';
 import { byRecency, unknownPageText } from './pages.ts';
 
@@ -34,6 +35,12 @@ export interface ErrorGroup {
   /** The stack of the first occurrence, masked and cut. */
   stack?: string;
   owner?: ErrorOwner;
+  /**
+   * What the page read about the error, for NG0100 (binding, values, signal
+   * writes), hydration mismatches (server and client DOM, with a diff) and
+   * missing providers (token and dependency path). See `error-explain-tools.ts`.
+   */
+  explain?: ErrorExplain;
 }
 
 export interface ConsoleEntry {
@@ -119,6 +126,7 @@ function toGroup(value: unknown): ErrorGroup | null {
   const owner = toOwner(value['owner']);
   const stack = text(value['stack'], MAX_STACK);
   const name = text(value['name'], 80);
+  const explain = toErrorExplain(value['explain']);
   return {
     id: clip(value['id'], MAX_ID),
     message: text(value['message'], MAX_MESSAGE),
@@ -132,6 +140,7 @@ function toGroup(value: unknown): ErrorGroup | null {
     ...(groupCode && ngCodeUrl(groupCode) ? { docUrl: ngCodeUrl(groupCode) } : {}),
     ...(stack ? { stack } : {}),
     ...(owner ? { owner } : {}),
+    ...(explain ? { explain } : {}),
   };
 }
 
@@ -382,6 +391,7 @@ export function explainErrorText(
         ? codeSection(group.code)
         : 'No Angular error code in this error, so it comes from app code or a library.',
     ];
+    if (group.explain) lines.push('', explainSection(group.explain, group.owner));
     if (group.stack) {
       const stack = group.stack.split('\n').slice(0, 15).join('\n').replace(/```/g, "'''");
       lines.push('', 'Stack (first occurrence):', '', '```text', stack, '```');

@@ -2,7 +2,8 @@ import type { AngularPageInfo } from '../config.ts';
 import { unsupportedToolText } from './angular-pages.ts';
 import type { CdReport } from '../cd-overlay.ts';
 import type { CdOptions } from '../config.ts';
-import { sanitizeCdRecording, toCdOptions } from '../cd-data.ts';
+import { cdCauseText, sanitizeCdRecording, toCdOptions } from '../cd-data.ts';
+import { redactCdCause, redactCdDiagnosis } from './cd-redact.ts';
 import type { CdComponentStat, CdCycle } from '../cd-recorder.ts';
 import { droppedNote } from '../timeline-limits.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
@@ -27,8 +28,16 @@ export function toCdPage(value: unknown, maxCycles: number, now = Date.now()): C
   const report = value as Record<string, unknown>;
   const pageId = report['pageId'];
   if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return null;
-  const recording = sanitizeCdRecording(report, maxCycles);
-  if (!recording) return null;
+  const sanitized = sanitizeCdRecording(report, maxCycles);
+  if (!sanitized) return null;
+  // Causes carry stack frames and signal names from the page: mask them before anyone reads them.
+  const recording = {
+    ...sanitized,
+    cycles: sanitized.cycles.map((cycle) =>
+      cycle.cause ? { ...cycle, cause: redactCdCause(cycle.cause) } : cycle,
+    ),
+    ...(sanitized.diagnosis ? { diagnosis: redactCdDiagnosis(sanitized.diagnosis) } : {}),
+  };
   const options = toCdOptions(report['options']);
   return {
     pageId,
@@ -252,7 +261,7 @@ export function changeDetectionText(
   const line = (c: CdComponentStat) =>
     `- ${code(c.name)}: ${c.checks} check(s) in ${c.cycles} cycle(s), ${ms(c.ms)} in its own template and hooks (slowest ${ms(c.maxMs)})`;
   const cycleLine = (c: CdCycle) =>
-    `- #${c.id}: ${ms(c.ms)}, ${c.checks} component check(s), ${c.passes} pass(es)${c.trigger ? `, after output in ${code(c.trigger)}${c.outputMs ? ` (${ms(c.outputMs)})` : ''}` : ''}${c.hookMs ? `, hooks ${ms(c.hookMs)}` : ''}${c.afterRenderMs ? `, afterRender ${ms(c.afterRenderMs)}` : ''}${
+    `- #${c.id}: ${ms(c.ms)}, ${c.checks} component check(s), ${c.passes} pass(es)${c.cause ? `, started by ${code(cdCauseText(c.cause))}` : ''}${c.unchanged ? `, ${c.unchanged} of ${c.refreshed ?? c.unchanged} refreshed check(s) changed nothing` : ''}${c.trigger ? `, after output in ${code(c.trigger)}${c.outputMs ? ` (${ms(c.outputMs)})` : ''}` : ''}${c.hookMs ? `, hooks ${ms(c.hookMs)}` : ''}${c.afterRenderMs ? `, afterRender ${ms(c.afterRenderMs)}` : ''}${
       c.components.length
         ? `; slowest ${c.components
             .slice(0, 3)

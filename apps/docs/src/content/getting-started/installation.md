@@ -38,6 +38,7 @@ When a tab needs a debug API the page doesn't have, it says which Angular versio
 | Feature                                                | Needs Angular |
 | ------------------------------------------------------ | ------------- |
 | Live component tree, detail and values                 | 12.0          |
+| Telling detached components from destroyed ones        | 14.0          |
 | Injected services, providers and environment injectors | 16.2          |
 | Full injector tree with lookup paths                   | 17.0          |
 | Signal values in the component detail (`ng.isSignal`)  | 17.1          |
@@ -45,7 +46,8 @@ When a tab needs a debug API the page doesn't have, it says which Angular versio
 | The `@pangular-inspector/devtools/http` entry          | 19.0          |
 | **Defer blocks** list                                  | 19.1          |
 | Change detection recording and Angular profiling       | 20.0          |
-| Live signal graph                                      | 20.1          |
+| Subscriptions tied to component instances              | 20.0          |
+| Live signal graph and effect counts in **Leaks**       | 20.1          |
 | **&#64;for blocks** list                               | 22.0          |
 
 All of them need a development build, since production builds leave out `window.ng`.

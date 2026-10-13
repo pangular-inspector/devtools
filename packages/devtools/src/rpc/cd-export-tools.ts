@@ -1,6 +1,5 @@
 import { cdExportFile, cdTraceFile } from '../cd-data.ts';
-import type { CdRecording } from '../config.ts';
-import { redactText } from '../text-redact.ts';
+import { redactCdRecording } from './cd-redact.ts';
 import { pickCdPage, type CdState } from './cd-tools.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 
@@ -8,33 +7,6 @@ import { code, UNTRUSTED } from './forms-tools.ts';
 export const CD_EXPORT_MAX_CHARS = 100_000;
 
 export type CdExportKind = 'json' | 'trace';
-
-/** Every page-controlled string of a recording, masked with the redaction helpers. */
-export function redactCdRecording(recording: CdRecording): CdRecording {
-  const mask = (text: string) => redactText(text);
-  return {
-    ...recording,
-    cycles: recording.cycles.map((cycle) => ({
-      ...cycle,
-      ...(cycle.trigger ? { trigger: mask(cycle.trigger) } : {}),
-      components: cycle.components.map((c) => ({ ...c, name: mask(c.name) })),
-    })),
-    components: recording.components.map((c) => ({ ...c, name: mask(c.name) })),
-    ...(recording.hooks
-      ? { hooks: recording.hooks.map((h) => ({ ...h, name: mask(h.name), hook: mask(h.hook) })) }
-      : {}),
-    ...(recording.outputs
-      ? {
-          outputs: recording.outputs.map((o) => ({
-            ...o,
-            name: mask(o.name),
-            ...(o.listener ? { listener: mask(o.listener) } : {}),
-          })),
-        }
-      : {}),
-    ...(recording.spanNames ? { spanNames: recording.spanNames.map(mask) } : {}),
-  };
-}
 
 /** A code fence longer than any run of backticks in `text`. */
 function fence(text: string): string {
