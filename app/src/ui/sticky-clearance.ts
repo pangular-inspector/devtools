@@ -34,3 +34,16 @@ export function stickyClearance(sticky: HTMLElement, gap = 8): number {
   const top = px(view.getComputedStyle(sticky).top);
   return Math.max(0, Math.ceil(padding + top + sticky.offsetHeight + gap - scrollPadding));
 }
+
+/**
+ * Scrolls `item`'s scroller so the item sits at least `gap` pixels below the
+ * stuck `sticky` bar. `scrollIntoView({ block: 'nearest' })` treats an item
+ * the bar covers as already visible, so it is measured and corrected here.
+ */
+export function keepBelowSticky(item: HTMLElement, sticky: HTMLElement, gap = 8): void {
+  const scroller = scrollParent(item);
+  const overlap = sticky.getBoundingClientRect().bottom + gap - item.getBoundingClientRect().top;
+  if (overlap <= 0) return;
+  if (scroller) scroller.scrollTop -= overlap;
+  else item.ownerDocument.defaultView?.scrollBy(0, -overlap);
+}

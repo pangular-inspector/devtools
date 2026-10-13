@@ -116,7 +116,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
         @if (page.support.retention === 'dev-di-debug') {
           <p class="stats">{{ plural(page.navigations, 'navigation') }}</p>
           <h3 class="sub">Still retained</h3>
-          <p class="note" role="status">
+          <p class="note">
             In a development build, Angular's DI debug data keeps every destroyed component in
             memory, so Pangular can't tell a leak from that. Check retainers in the Chrome DevTools
             Memory panel: take a heap snapshot after a few navigations, search for the class and
@@ -125,7 +125,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
           </p>
         } @else {
           @if (!page.support.retention) {
-            <p class="note" role="status">
+            <p class="note">
               This page cannot track destroyed components. It needs WeakRef, FinalizationRegistry
               and the Angular debug API of a development build.
             </p>

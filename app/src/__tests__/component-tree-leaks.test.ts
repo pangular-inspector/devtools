@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ComponentTree } from '../pages/component-tree';
 import type { TreeNode } from '../pages/component-tree-state';
 import { LeaksSection } from '../pages/leaks-section';
-import { scrollParent, stickyClearance } from '../ui/sticky-clearance';
+import { keepBelowSticky, scrollParent, stickyClearance } from '../ui/sticky-clearance';
 
 const roots: TreeNode[] = [
   {
@@ -100,5 +100,24 @@ describe('component tree and the Leaks section', () => {
     document.body.append(loose);
     expect(scrollParent(loose)).toBeNull();
     expect(stickyClearance(loose)).toBe(58);
+  });
+
+  it('scrolls a row the sticky bar covers back below it, and leaves a clear row alone', () => {
+    const scroller = document.createElement('div');
+    scroller.style.overflowY = 'auto';
+    const bar = document.createElement('div');
+    const row = document.createElement('div');
+    scroller.append(bar, row);
+    document.body.append(scroller);
+    scroller.scrollTop = 400;
+    const rect = (top: number, bottom: number) => ({ top, bottom }) as DOMRect;
+    bar.getBoundingClientRect = () => rect(65, 117);
+    row.getBoundingClientRect = () => rect(92, 124);
+    keepBelowSticky(row, bar);
+    // 117 + 8 - 92: the row moves 33px down.
+    expect(scroller.scrollTop).toBe(367);
+    row.getBoundingClientRect = () => rect(130, 162);
+    keepBelowSticky(row, bar);
+    expect(scroller.scrollTop).toBe(367);
   });
 });

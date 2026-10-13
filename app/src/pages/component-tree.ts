@@ -50,7 +50,7 @@ import { StoreGlobal } from '../ui/store-global';
 import { ForBlocksSection, type ForBlock } from './for-blocks-section';
 import { LeaksSection, type LeaksPage } from './leaks-section';
 import { VirtualWindow } from '../ui/virtual-window';
-import { stickyClearance } from '../ui/sticky-clearance';
+import { keepBelowSticky, stickyClearance } from '../ui/sticky-clearance';
 
 interface SourceComponent {
   selector: string;
@@ -2463,6 +2463,7 @@ export class ComponentTree {
         const row = document.querySelector<HTMLElement>(`.row[data-id="${CSS.escape(id)}"]`);
         this.clearToolbar();
         row?.scrollIntoView({ block: 'nearest' });
+        if (row) this.keepBelowToolbar(row);
         if (focus) row?.focus({ preventScroll: true });
       },
       { injector: this.injector },
@@ -2481,6 +2482,12 @@ export class ComponentTree {
       '--ct-toolbar-clearance',
       `${stickyClearance(toolbar)}px`,
     );
+  }
+
+  /** Moves a row the sticky toolbar covers back below it. */
+  private keepBelowToolbar(row: HTMLElement) {
+    const toolbar = this.host.nativeElement.querySelector<HTMLElement>('.toolbar');
+    if (toolbar) keepBelowSticky(row, toolbar);
   }
 
   toggle(id: string, event?: Event) {
@@ -2625,6 +2632,7 @@ export class ComponentTree {
         this.clearToolbar();
         el?.focus({ preventScroll: true });
         el?.scrollIntoView({ block: 'nearest' });
+        if (el) this.keepBelowToolbar(el);
       };
       // A row outside the rendered window is brought in first.
       if (this.rowWindow.rendered(next)) queueMicrotask(focus);
