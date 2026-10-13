@@ -26,6 +26,9 @@ import {
 import { registerConsoleGlobals } from './rpc/console-globals.ts';
 import { registerErrors } from './rpc/errors-register.ts';
 import { registerLeaks } from './rpc/leaks-register.ts';
+import { registerPlugins } from './rpc/plugins-register.ts';
+import { registerStartup } from './rpc/startup-register.ts';
+import type { PangularServerPlugin } from './plugin.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { registerInjectionExplain } from './rpc/injection-explain.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
@@ -254,6 +257,15 @@ import {
 } from './config.ts';
 
 export * from './config.ts';
+export {
+  definePangularServerPlugin,
+  type PangularPluginPage,
+  type PangularPluginTool,
+  type PangularPluginToolContext,
+  type PangularServerPlugin,
+  type PangularServerPluginContext,
+  type PluginActionResult,
+} from './plugin.ts';
 
 import { registerAuthTokens } from './auth-tokens.ts';
 import pkg from '../package.json' with { type: 'json' };
@@ -286,7 +298,11 @@ const clientAssets: RemoteAssets = {
   resolveFrom: import.meta.url,
 };
 
-type SetupInfo = DevframeSetupInfo & { config?: ResolvedPangularConfig; pageTools?: boolean };
+type SetupInfo = DevframeSetupInfo & {
+  config?: ResolvedPangularConfig;
+  pageTools?: boolean;
+  serverPlugins?: readonly PangularServerPlugin[];
+};
 
 const pangular = defineDevframe({
   id: 'pangular',
@@ -757,6 +773,40 @@ const pangular = defineDevframe({
           ttl: liveTtl,
         })
       : null;
+    const startupInspector = on.injectors
+      ? await registerStartup({
+          my,
+          rpcHost: ctx.rpc,
+          register,
+          agent,
+          owns,
+          mayForget,
+          ttl: liveTtl,
+        })
+      : null;
+    // A plugin tool's tier comes from the plugin; `pluginToolAllowed` checks it against the config.
+    const pluginsInspector = on.plugins
+      ? await registerPlugins({
+          my,
+          rpcHost: ctx.rpc,
+          config,
+          register,
+          agent,
+          registerPluginTool: (tool, safety) =>
+            ctx.agent.registerTool(
+              feed.wrapTool({
+                ...(tool as Parameters<typeof ctx.agent.registerTool>[0]),
+                safety,
+                handler: leased(() => interest, tool['handler']),
+              }),
+            ),
+          pageTools,
+          owns,
+          mayForget,
+          ttl: liveTtl,
+          serverPlugins: info?.serverPlugins,
+        })
+      : null;
 
     const routerPages = new Map<string, RouterPage>();
     const routerState = await my.rpc.sharedState('router', {
@@ -1189,6 +1239,8 @@ const pangular = defineDevframe({
       if (expireCapacitorPages(capacitorPages, Date.now(), liveTtl)) applyCapacitor();
       errorsInspector?.expire();
       leaksInspector?.expire();
+      startupInspector?.expire();
+      pluginsInspector?.expire();
       componentDeltas.prune((id) => componentPages.has(id));
       injectorDeltas.prune((id) => injectorPages.has(id));
       cdDeltas.prune((id) => cdPages.has(id));
@@ -1206,6 +1258,7 @@ const pangular = defineDevframe({
     registry.dispose = () => {
       clearInterval(expiry);
       clearInterval(interestTick);
+      pluginsInspector?.dispose();
       interest.stop();
       clearTimeout(flushTimer);
       registry.record = undefined;
@@ -3877,6 +3930,8 @@ const pangular = defineDevframe({
             http: withUrl(httpPages.values()),
             capacitor: withUrl(capacitorPages.values()),
             errors: withUrl(errorsInspector?.pages() ?? []),
+            startup: withUrl(startupInspector?.pages() ?? []),
+            plugins: withUrl(pluginsInspector?.pages() ?? []),
             analog: withUrl(on.analog ? analogPages() : []),
           },
           visibility.list(),
@@ -3979,6 +4034,8 @@ export interface PangularHostOptions {
    * Server-only: they never go into the published config.
    */
   authTokens?: string[];
+  /** Server plugins: agent tools and shared state of Pangular plugins (`plugin.ts`). */
+  serverPlugins?: readonly PangularServerPlugin[];
 }
 
 export function createPangular(options: PangularConfig = {}, host: PangularHostOptions = {}) {
@@ -3988,7 +4045,12 @@ export function createPangular(options: PangularConfig = {}, host: PangularHostO
   return defineDevframe({
     ...pangular,
     setup: (ctx, info) => {
-      const withConfig: SetupInfo = { ...info, config, pageTools: host.pageTools };
+      const withConfig: SetupInfo = {
+        ...info,
+        config,
+        pageTools: host.pageTools,
+        serverPlugins: host.serverPlugins,
+      };
       if (host.authTokens?.length && !registerAuthTokens(ctx, host.authTokens)) {
         console.warn(
           '[pangular] The pairing tokens could not be registered, so clients need the one-time code.',

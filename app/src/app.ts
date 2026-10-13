@@ -31,6 +31,7 @@ import { NetworkInspector } from './pages/network-inspector';
 import { ComingSoon, type ComingSoonInfo } from './pages/coming-soon';
 import { CapacitorInspector } from './pages/capacitor-inspector';
 import { ErrorsInspector } from './pages/errors-inspector';
+import { PluginsInspector, pluginsReporting } from './pages/plugins-inspector';
 import { Timeline } from './pages/timeline';
 import { capacitorPages } from './pages/capacitor-types';
 import { TabIcon } from './pages/tab-icon';
@@ -211,6 +212,7 @@ function readView(): View | null {
     NetworkInspector,
     CapacitorInspector,
     ErrorsInspector,
+    PluginsInspector,
     Timeline,
     ComingSoon,
     TabIcon,
@@ -554,6 +556,9 @@ function readView(): View | null {
             }
             @case ('capacitor') {
               <app-capacitor-inspector [rpc]="rpc()" />
+            }
+            @case ('plugins') {
+              <app-plugins-inspector [rpc]="rpc()" />
             }
             @case ('errors') {
               <app-errors-inspector
@@ -1030,6 +1035,8 @@ export class App implements OnInit, OnDestroy {
   readonly analogKnown = signal(false);
   /** Whether a Capacitor app reports, so the Capacitor tab has something to show. */
   readonly capacitorReporting = signal(false);
+  /** Whether a page runs a Pangular plugin (or a server plugin is set), so the Plugins tab has something to show. */
+  readonly pluginsReporting = signal(false);
   /** Whether the panel has read the Capacitor state yet, so the setup steps don't flash first. */
   readonly capacitorKnown = signal(false);
   readonly nativePageId = signal<string | null>(null);
@@ -1073,6 +1080,7 @@ export class App implements OnInit, OnDestroy {
       (t) =>
         (t.id !== 'analog' || this.analog()) &&
         (t.id !== 'capacitor' || this.capacitorReporting()) &&
+        (t.id !== 'plugins' || this.pluginsReporting()) &&
         !(view === 'angular' && TAB_VIEW[t.id]),
     );
   });
@@ -1147,6 +1155,7 @@ export class App implements OnInit, OnDestroy {
   private stopVisibility = () => {};
   private stopNative = () => {};
   private stopCapacitor = () => {};
+  private stopPlugins = () => {};
 
   private stopFollowing = () => {};
   private stopHighlights = () => {};
@@ -1273,6 +1282,7 @@ export class App implements OnInit, OnDestroy {
         void this.watchVisibility(client);
         void this.watchAngularNative(client);
         void this.watchCapacitor(client);
+        void this.watchPlugins(client);
         const scoped = client.scope('pangular').rpc as unknown as {
           call: (name: string) => Promise<unknown>;
         };
@@ -1338,6 +1348,7 @@ export class App implements OnInit, OnDestroy {
     clearTimeout(this.retryTimer);
     this.stopNative();
     this.stopCapacitor();
+    this.stopPlugins();
     this.stopFollowing();
     this.stopVisibility();
     this.stopHighlights();
@@ -1669,6 +1680,29 @@ export class App implements OnInit, OnDestroy {
       this.stopNative = state.on('updated', apply);
     } catch {
       this.nativeKnown.set(true);
+    }
+  }
+
+  /** The Plugins tab exists once a plugin reports; a stored or linked Plugins tab opens then. */
+  private async watchPlugins(client: DevframeRpcClient) {
+    let restore =
+      !this.view() &&
+      initialTab(location.hash, storedTab(this.tabScope()), ['plugins']) === 'plugins';
+    try {
+      const state = await client.scope('pangular').rpc.sharedState('plugins');
+      const apply = (value: unknown) => {
+        if (value === undefined) return;
+        const reporting = pluginsReporting(value);
+        this.pluginsReporting.set(reporting);
+        if (reporting && restore && tabEnabled('plugins', this.config())) this.tab.set('plugins');
+        if (reporting) restore = false;
+        if (!reporting && this.tab() === 'plugins' && !this.view()) this.tab.set('dashboard');
+      };
+      apply(state.value());
+      this.stopPlugins();
+      this.stopPlugins = state.on('updated', apply);
+    } catch {
+      this.pluginsReporting.set(false);
     }
   }
 

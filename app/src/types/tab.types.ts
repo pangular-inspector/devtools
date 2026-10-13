@@ -12,7 +12,8 @@ export type Tab =
   | 'analog'
   | 'capacitor'
   | 'settings'
-  | 'errors';
+  | 'errors'
+  | 'plugins';
 
 export type Tabs = {
   id: Tab;

@@ -27,6 +27,7 @@ import { signalPrimitivesAlias } from './vite-signals-stub.ts';
 import { terminalsEnabled } from './hub-terminals.ts';
 
 export type { PangularConfig } from './config.ts';
+import type { PangularServerPlugin } from './plugin.ts';
 
 export interface PangularViteOptions extends PangularConfig {
   base?: string;
@@ -54,6 +55,8 @@ export interface PangularViteOptions extends PangularConfig {
    * default. Ignored with `allowLan`.
    */
   terminals?: boolean;
+  /** Pangular plugins' server sides: their agent tools and shared state. */
+  serverPlugins?: readonly PangularServerPlugin[];
 }
 
 export {
@@ -163,6 +166,7 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
         terminals: terminalsEnabled(options.terminals, { remote: policy.lan }, (message) =>
           logger?.warn(message),
         ),
+        serverPlugins: options.serverPlugins,
       });
       httpServer?.on('upgrade', hubUpgradeListener(base, policy, devtools.handleUpgrade, blocked));
       server.middlewares.use(devtools.nodeMiddleware);

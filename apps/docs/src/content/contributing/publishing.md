@@ -23,6 +23,8 @@ The package publishes `dist/` and `bin.mjs`. On publish, `publishConfig.exports`
 | `@pangular-inspector/devtools/overlay`        | `dist/overlay.mjs`        |
 | `@pangular-inspector/devtools/overlay-manual` | `dist/overlay-manual.mjs` |
 | `@pangular-inspector/devtools/capacitor-hook` | `dist/capacitor-hook.mjs` |
+| `@pangular-inspector/devtools/startup-hook`   | `dist/startup-hook.mjs`   |
+| `@pangular-inspector/devtools/plugin`         | `dist/plugin.mjs`         |
 | `@pangular-inspector/devtools/popup`          | `dist/popup.mjs`          |
 | `@pangular-inspector/devtools/http`           | `dist/http.mjs`           |
 | `@pangular-inspector/devtools/hub`            | `dist/hub.mjs`            |

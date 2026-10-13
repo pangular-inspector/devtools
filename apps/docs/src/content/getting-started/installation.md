@@ -138,6 +138,8 @@ MCP agent support (`@devframes/agentic`) and Devframe itself are included. You d
 | `@pangular-inspector/devtools/overlay`                | The browser script that collects live data from your page.                                                 |
 | `@pangular-inspector/devtools/overlay-manual`         | The same script, started only when you call `initOverlay`. See [Set up Capacitor](../guides/capacitor.md). |
 | `@pangular-inspector/devtools/capacitor-hook`         | Logs Capacitor plugin calls from app start. See [Capacitor](../inspectors/capacitor.md#web-calls).         |
+| `@pangular-inspector/devtools/startup-hook`           | Times provider construction at startup. See [Injectors](../inspectors/injectors.md#startup-timing).        |
+| `@pangular-inspector/devtools/plugin`                 | The plugin API for a library's own tab and agent tools. See [Write a plugin](../guides/write-a-plugin.md). |
 | `@pangular-inspector/devtools/overlay-angular-native` | The overlay for an Angular Native app. See [Angular Native](./angular-native.md).                          |
 | `@pangular-inspector/devtools/overlay-nativescript`   | The overlay for a NativeScript Angular app. See [NativeScript](./nativescript.md).                         |
 | `@pangular-inspector/devtools/popup`                  | The floating button and panel on your page.                                                                |

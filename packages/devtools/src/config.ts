@@ -10,6 +10,7 @@ export const PANGULAR_INSPECTORS = [
   'analog',
   'capacitor',
   'errors',
+  'plugins',
 ] as const;
 
 export type PangularInspector = (typeof PANGULAR_INSPECTORS)[number];
@@ -44,6 +45,7 @@ export const PANGULAR_ACTIONS = [
   'http',
   'analog',
   'components',
+  'plugins',
 ] as const;
 
 export type PangularAction = (typeof PANGULAR_ACTIONS)[number];
@@ -210,7 +212,32 @@ export interface PangularConfig {
      */
     hotkey?: string | false;
   };
+  /**
+   * Turn one Pangular plugin off, by its id, or only its agent tools or its
+   * actions: `{ travel: false }` or `{ travel: { actions: false } }`.
+   * `inspectors.plugins: false` turns every plugin off.
+   */
+  plugins?: Record<string, boolean | PluginSwitchInput>;
 }
+
+/** What a `plugins` entry can turn off; each is on when left out. */
+export interface PluginSwitchInput {
+  enabled?: boolean;
+  /** The plugin's agent tools. */
+  tools?: boolean;
+  /** The plugin's actions: page actions run from the panel and its action agent tools. */
+  actions?: boolean;
+}
+
+/** One plugin's switches after the inspector, agent and action switches apply. */
+export interface PluginSwitches {
+  enabled: boolean;
+  tools: boolean;
+  actions: boolean;
+}
+
+/** A plugin id: lowercase letters, digits and dashes, starting with a letter. */
+export const PLUGIN_ID = /^[a-z][a-z0-9-]{0,39}$/;
 
 export interface ResolvedPangularConfig {
   inspectors: Record<PangularInspector, boolean>;
@@ -219,6 +246,19 @@ export interface ResolvedPangularConfig {
   redaction: { secretNames: string[]; unmask: string[] };
   limits: Record<PangularLimit, number>;
   popup: { hotkey: string | false };
+  /** The `plugins` entries that were given, by plugin id. */
+  plugins: Record<string, PluginSwitches>;
+}
+
+/** The switches of one plugin under `config`, whether or not it has a `plugins` entry. */
+export function pluginSwitches(id: string, config: ResolvedPangularConfig): PluginSwitches {
+  const own = config.plugins?.[id];
+  const enabled = config.inspectors.plugins && PLUGIN_ID.test(id) && (own?.enabled ?? true);
+  return {
+    enabled,
+    tools: enabled && config.agent.tools.plugins && (own?.tools ?? true),
+    actions: enabled && config.actions.plugins && (own?.actions ?? true),
+  };
 }
 
 export const PANGULAR_CONFIG_KEY = 'pangular';
@@ -333,6 +373,7 @@ export const PANEL_TABS = [
   { id: 'network', label: 'SSR & HTTP', inspector: 'http' },
   { id: 'errors', label: 'Errors', inspector: 'errors' },
   { id: 'capacitor', label: 'Capacitor', inspector: 'capacitor' },
+  { id: 'plugins', label: 'Plugins', inspector: 'plugins' },
 ] as const satisfies readonly { id: string; label: string; inspector?: PangularInspector }[];
 
 export type PanelTab = (typeof PANEL_TABS)[number]['id'];
@@ -565,7 +606,29 @@ export function resolvePangularConfig(config?: unknown): ResolvedPangularConfig 
       ]),
     ) as Record<PangularLimit, number>,
     popup: { hotkey: popupHotkey(record(input['popup'])['hotkey']) },
+    plugins: pluginEntries(input['plugins']),
   };
+}
+
+const MAX_PLUGIN_ENTRIES = 100;
+
+function pluginEntries(value: unknown): Record<string, PluginSwitches> {
+  const entries: Record<string, PluginSwitches> = {};
+  for (const [id, entry] of Object.entries(record(value)).slice(0, MAX_PLUGIN_ENTRIES)) {
+    if (!PLUGIN_ID.test(id)) continue;
+    if (typeof entry === 'boolean') {
+      entries[id] = { enabled: entry, tools: true, actions: true };
+      continue;
+    }
+    const switches = record(entry);
+    if (entry === undefined || !Object.keys(switches).length) continue;
+    entries[id] = {
+      enabled: flag(switches['enabled'], true),
+      tools: flag(switches['tools'], true),
+      actions: flag(switches['actions'], true),
+    };
+  }
+  return entries;
 }
 
 function popupHotkey(value: unknown): string | false {
@@ -601,7 +664,15 @@ function describe(value: unknown): string {
   return typeof value === 'string' ? `the string ${JSON.stringify(value)}` : `a ${typeof value}`;
 }
 
-const CONFIG_KEYS = ['inspectors', 'agent', 'actions', 'redaction', 'limits', 'popup'] as const;
+const CONFIG_KEYS = [
+  'inspectors',
+  'agent',
+  'actions',
+  'redaction',
+  'limits',
+  'popup',
+  'plugins',
+] as const;
 
 /**
  * Lists what `resolvePangularConfig()` ignores or changes in `config`:
@@ -700,6 +771,27 @@ export function pangularConfigProblems(config: unknown): string[] {
         : `\`popup.hotkey\` should be a shortcut string or false, got ${describe(hotkey)}. It was ignored, so it is ${DEFAULT_POPUP_HOTKEY}.`,
     );
   }
+  const plugins = input['plugins'];
+  if (plugins !== undefined && !isRecord(plugins)) {
+    problems.push(`\`plugins\` should be an object, got ${describe(plugins)}. It was ignored.`);
+  } else if (plugins) {
+    for (const [id, entry] of Object.entries(plugins)) {
+      if (!PLUGIN_ID.test(id)) {
+        problems.push(
+          `\`plugins.${id}\` is not a plugin id (lowercase letters, digits and dashes, starting with a letter). It was ignored.`,
+        );
+        continue;
+      }
+      if (typeof entry === 'boolean') continue;
+      if (!isRecord(entry)) {
+        problems.push(
+          `\`plugins.${id}\` should be true, false or an object, got ${describe(entry)}. It was ignored.`,
+        );
+        continue;
+      }
+      booleans(`plugins.${id}`, entry, ['enabled', 'tools', 'actions'], 'on');
+    }
+  }
   return problems;
 }
 
@@ -722,8 +814,8 @@ export function configFromConnection(
 export function pickPangularConfig<T extends PangularConfig>(
   options: T,
 ): { config: PangularConfig; rest: Omit<T, keyof PangularConfig> } {
-  const { inspectors, agent, actions, redaction, limits, popup, ...rest } = options;
-  return { config: { inspectors, agent, actions, redaction, limits, popup }, rest };
+  const { inspectors, agent, actions, redaction, limits, popup, plugins, ...rest } = options;
+  return { config: { inspectors, agent, actions, redaction, limits, popup, plugins }, rest };
 }
 
 /** Form actions that work without a `formId`: they act on the page, not on one form. */
@@ -765,6 +857,8 @@ export const ACTION_TOOLS: Record<PangularAction, readonly string[]> = {
   http: ['set-http-rule', 'remove-http-rule', 'clear-recordings'],
   analog: ['analog-call-api', 'clear-recordings'],
   components: ['set-component-property', 'set-signal'],
+  // Plugin tools are checked by `pluginToolAllowed`: their names come from the plugins.
+  plugins: [],
 };
 
 /**
@@ -827,6 +921,7 @@ export function actionBlockedMessage(action: PangularAction): string {
     http: 'Changing HTTP mock rules and clearing HTTP calls',
     analog: 'Calling API routes and clearing server calls',
     components: 'Editing component properties and signals',
+    plugins: 'Running plugin actions',
   }[action];
   return `${what} is turned off in the devtools config (actions.${action}).`;
 }
@@ -895,6 +990,8 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'ping-injector-tree': 'injectors',
   'forget-injector-page': 'injectors',
   'explain-injection': 'injectors',
+  'push-startup': 'injectors',
+  'forget-startup-page': 'injectors',
   'get-ngrx-store': 'ngrx',
   'push-ngrx-state': 'ngrx',
   'forget-ngrx-page': 'ngrx',
@@ -944,6 +1041,10 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'analog-render': 'analog',
   'analog-text': 'analog',
   'analog-call-api': 'analog',
+  'push-plugins': 'plugins',
+  'forget-plugins-page': 'plugins',
+  'request-plugin-action': 'plugins',
+  'plugin-action-result': 'plugins',
 };
 
 /**
@@ -970,6 +1071,7 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'injector-tree': 'injectors',
   'inspect-providers': 'injectors',
   'explain-injection': 'injectors',
+  'startup-timing': 'injectors',
   'ngrx-store': 'ngrx',
   'dispatch-ngrx-action': 'ngrx',
   'inspect-signal-store': 'ngrx',
@@ -1012,6 +1114,8 @@ export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
   'list-errors': 'errors',
   'explain-error': 'errors',
   'list-console': 'errors',
+  'list-plugins': 'plugins',
+  'inspect-plugin': 'plugins',
 };
 
 /**
@@ -1036,6 +1140,8 @@ export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
   capacitor: 'capacitor',
   analog: 'analog',
   errors: 'errors',
+  startup: 'injectors',
+  plugins: 'plugins',
 };
 
 /** Shared-state keys that belong to no inspector, without the `pangular:` prefix. */
@@ -1050,6 +1156,9 @@ export function sharedStateExposed(key: string, config: ResolvedPangularConfig):
   if (!key.startsWith('pangular:')) return true;
   const name = agentName(key);
   if (SHARED_STATE_KEYS.includes(name)) return true;
+  // A server plugin's own state, `plugin.<id>`.
+  const plugin = /^plugin\.(.+)$/.exec(name)?.[1];
+  if (plugin !== undefined) return pluginSwitches(plugin, config).tools;
   const inspector = SHARED_STATE_INSPECTOR[name];
   return inspector !== undefined && config.agent.tools[inspector];
 }
@@ -1082,6 +1191,7 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'injector-tree',
   'inspect-providers',
   'explain-injection',
+  'startup-timing',
   'ngrx-store',
   'dispatch-ngrx-action',
   'inspect-signal-store',
@@ -1123,6 +1233,8 @@ export const PAGE_AGENT_ENTRIES: readonly string[] = [
   'list-errors',
   'explain-error',
   'list-console',
+  'list-plugins',
+  'inspect-plugin',
 ];
 
 export function isPageAgentEntry(id: string): boolean {
@@ -1133,9 +1245,37 @@ function agentName(id: string): string {
   return id.replace(/^pangular:/, '');
 }
 
+/** A plugin agent tool's name within its plugin, like a plugin id. */
+export const PLUGIN_TOOL_NAME = PLUGIN_ID;
+
+/**
+ * The id of a plugin's agent tool: `pangular:plugin:<plugin>:<tool>`, which
+ * MCP clients call as `pangular_plugin_<plugin>_<tool>`. Built-in tools never
+ * start with `plugin`, so a plugin can't shadow one.
+ */
+export function pluginToolId(pluginId: string, name: string): string {
+  return `pangular:plugin:${pluginId}:${name}`;
+}
+
+/**
+ * Whether a plugin's agent tool is registered under `config`: its plugin and
+ * the plugin's tools are on, and a tool that is not `read` also needs actions
+ * on for the plugin and `agent.readOnly` off.
+ */
+export function pluginToolAllowed(
+  pluginId: string,
+  safety: AgentSafety,
+  config: ResolvedPangularConfig,
+): boolean {
+  const switches = pluginSwitches(pluginId, config);
+  if (!switches.tools) return false;
+  return safety === 'read' || (!config.agent.readOnly && switches.actions);
+}
+
 /** The inspector an agent tool or resource belongs to; `undefined` for shared ones. */
 export function agentInspector(id: string): PangularInspector | undefined {
   const name = agentName(id);
+  if (name.startsWith('plugin:')) return 'plugins';
   return (
     AGENT_INSPECTOR[name] ??
     RPC_INSPECTOR[name] ??
@@ -1180,6 +1320,7 @@ const INSPECTOR_LABEL: Record<PangularInspector, string> = {
   analog: 'Analog',
   capacitor: 'Capacitor',
   errors: 'Errors',
+  plugins: 'Plugins',
 };
 
 const ACTION_LABEL: Record<PangularAction, string> = {
@@ -1189,6 +1330,7 @@ const ACTION_LABEL: Record<PangularAction, string> = {
   http: 'HTTP mocking',
   analog: 'Analog API calls',
   components: 'Component edits',
+  plugins: 'Plugin actions',
 };
 
 const LIMIT_LABEL: Record<PangularLimit, (value: number) => string> = {
@@ -1238,6 +1380,20 @@ export function summarizePangularConfig(
   if (config.popup.hotkey !== DEFAULT_POPUP_HOTKEY) {
     add('Popup shortcut', [config.popup.hotkey === false ? 'Off' : config.popup.hotkey]);
   }
+  const plugins = Object.entries(config.plugins ?? {});
+  add(
+    'Plugins off',
+    plugins.filter(([, entry]) => !entry.enabled).map(([id]) => id),
+  );
+  add(
+    'Plugin tools or actions off',
+    plugins
+      .filter(([, entry]) => entry.enabled && (!entry.tools || !entry.actions))
+      .map(
+        ([id, entry]) =>
+          `${id} (${[!entry.tools && 'tools', !entry.actions && 'actions'].filter(Boolean).join(', ')})`,
+      ),
+  );
   return items;
 }
 

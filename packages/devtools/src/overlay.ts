@@ -9,6 +9,8 @@ import { attachHttp } from './http-overlay.ts';
 import { attachCapacitor } from './capacitor-overlay.ts';
 import { attachErrors } from './errors-collector.ts';
 import { attachLeaks } from './leaks-collector.ts';
+import { attachPlugins } from './plugins-collector.ts';
+import { attachStartup } from './startup-timing.ts';
 import { createRecentWrites } from './error-explain.ts';
 import { allowClientRules, httpRegistry } from './http-rules.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
@@ -459,6 +461,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
         on.components && cd?.push(false, true),
         forms?.push(true),
         leaks?.push(true),
+        plugins?.push(true),
       ]),
   });
   own(lease.stop);
@@ -497,6 +500,14 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   const leaks = on.components
     ? attachLeaks(my, pageId, getNg, { tickMs, active: () => lease.active })
     : null;
+  const plugins = on.plugins
+    ? attachPlugins(my, pageId, getNg, {
+        config: devtoolsConfig,
+        active: () => lease.active,
+        tickMs,
+      })
+    : null;
+  const startup = on.injectors ? attachStartup(my, pageId, getNg, { tickMs }) : null;
   const angularInfo = attachAngularInfo(my, pageId, getNg, { tickMs });
   const consoleGlobals = attachConsoleGlobals(my, pageId, {
     getNg,
@@ -703,6 +714,8 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
         leaks.track();
         pushLeaks();
       }),
+    plugins && paced(() => void plugins.push().catch(() => {})),
+    startup && (() => void startup.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
   const pushAll = () => collectors.forEach((run) => run());
   pushAll();
@@ -918,6 +931,8 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     ngrx?.leave();
     errors?.leave();
     leaks?.leave();
+    plugins?.leave();
+    startup?.leave();
     angularInfo.leave();
   };
   addEventListener('pagehide', leave);
@@ -927,6 +942,8 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     capacitor?.resume();
     errors?.resume();
     leaks?.resume();
+    plugins?.resume();
+    startup?.resume();
     void lease.refresh();
     left = false;
     onVisibility();
@@ -947,6 +964,8 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     ngrx?.stop();
     errors?.stop();
     leaks?.stop();
+    plugins?.stop();
+    startup?.stop();
     cd?.stop();
     hydrationOverlay?.stop();
     stopAnalog();

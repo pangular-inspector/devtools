@@ -23,7 +23,9 @@
     "./cd-data": "./src/cd-data.ts",
     "./overlay": "./src/overlay-auto.ts",
     "./overlay-manual": "./src/overlay.ts",
+    "./plugin": "./src/plugin.ts",
     "./capacitor-hook": "./src/capacitor-hook.ts",
+    "./startup-hook": "./src/startup-hook.ts",
     "./overlay-angular-native": "./src/overlay-angular-native.ts",
     "./popup": "./src/popup.ts",
     "./overlay-nativescript": "./src/overlay-nativescript.ts",
@@ -41,7 +43,9 @@
       "./cd-data": "./dist/cd-data.mjs",
       "./overlay": "./dist/overlay.mjs",
       "./overlay-manual": "./dist/overlay-manual.mjs",
+      "./plugin": "./dist/plugin.mjs",
       "./capacitor-hook": "./dist/capacitor-hook.mjs",
+      "./startup-hook": "./dist/startup-hook.mjs",
       "./overlay-angular-native": "./dist/overlay-angular-native.mjs",
       "./popup": "./dist/popup.mjs",
       "./overlay-nativescript": "./dist/overlay-nativescript.mjs",
@@ -69,8 +73,14 @@
       "overlay-manual": [
         "./dist/overlay-manual.d.mts"
       ],
+      "plugin": [
+        "./dist/plugin.d.mts"
+      ],
       "capacitor-hook": [
         "./dist/capacitor-hook.d.mts"
+      ],
+      "startup-hook": [
+        "./dist/startup-hook.d.mts"
       ],
       "overlay-angular-native": [
         "./dist/overlay-angular-native.d.mts"

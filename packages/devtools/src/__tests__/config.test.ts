@@ -62,6 +62,7 @@ describe('resolvePangularConfig', () => {
       http: true,
       analog: true,
       components: true,
+      plugins: true,
     });
   });
 
@@ -81,6 +82,7 @@ describe('resolvePangularConfig', () => {
       http: true,
       analog: true,
       components: true,
+      plugins: true,
     });
   });
 
@@ -92,6 +94,7 @@ describe('resolvePangularConfig', () => {
       http: false,
       analog: false,
       components: false,
+      plugins: false,
     });
     expect(resolvePangularConfig({ actions: { router: false } }).actions).toEqual({
       forms: true,
@@ -100,6 +103,7 @@ describe('resolvePangularConfig', () => {
       http: true,
       analog: true,
       components: true,
+      plugins: true,
     });
   });
 

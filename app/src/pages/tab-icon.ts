@@ -80,6 +80,11 @@ import { Component, input } from '@angular/core';
           <path d="M12 7v6" />
           <path d="M12 16.5v.01" />
         }
+        @case ('plugins') {
+          <path
+            d="M10 3h4v3a2 2 0 1 0 4 0V5h1a2 2 0 0 1 2 2v4h-2a2 2 0 1 0 0 4h2v4a2 2 0 0 1-2 2h-4v-2a2 2 0 1 0-4 0v2H7a2 2 0 0 1-2-2v-4H4a2 2 0 1 1 0-4h1V7a2 2 0 0 1 2-2h3Z"
+          />
+        }
         @case ('analog') {
           <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
         }

@@ -100,9 +100,10 @@ type PangularInspector =
   | 'http'
   | 'analog'
   | 'capacitor'
-  | 'errors';
+  | 'errors'
+  | 'plugins';
 
-type PangularAction = 'forms' | 'router' | 'ngrx' | 'http' | 'analog' | 'components';
+type PangularAction = 'forms' | 'router' | 'ngrx' | 'http' | 'analog' | 'components' | 'plugins';
 
 interface PangularConfig {
   inspectors?: Partial<Record<PangularInspector, boolean>>;
@@ -120,6 +121,7 @@ interface PangularConfig {
     idleAfterMs?: number;
   };
   popup?: {hotkey?: string | false};
+  plugins?: Record<string, boolean | {enabled?: boolean; tools?: boolean; actions?: boolean}>;
 }
 ```
 
@@ -147,6 +149,7 @@ Actions are the writes that the panel and agents make to your app or the server.
 | `actions.http`       | `true`  | Editing fault injection rules and SSR overrides, and clearing the HTTP timeline. Drops the `set-http-rule` and `remove-http-rule` agent tools and HTTP clearing in `clear-recordings`.                             |
 | `actions.analog`     | `true`  | The Analog request playground and clearing server calls. Drops the `analog-call-api` agent tool and Analog clearing in `clear-recordings`.                                                                         |
 | `actions.components` | `true`  | Editing component inputs, properties and writable signals from the **Components** tab. Drops the `set-component-property` and `set-signal` agent tools.                                                            |
+| `actions.plugins`    | `true`  | Every plugin's page actions, from the **Plugins** tab and from its tools. Drops the plugin tools that are not `read`.                                                                                              |
 | `actions`            | `true`  | All of the above.                                                                                                                                                                                                  |
 
 Pass `actions: false` to block every action, or an object to block some. Keys you leave out of the object stay on.
@@ -221,6 +224,25 @@ const devtools = initPangularHub({
 
 The overlay reads the option from the server when it connects, so the default works until then. With `false`, [passive mode](./settings.md#passive-mode) has no effect and the floating button always shows.
 
+### Plugins
+
+`inspectors.plugins: false` turns every [Pangular plugin](../guides/write-a-plugin.md) off: the **Plugins** tab, the page plugins, the server plugins' tools and state. `plugins` turns one plugin off, by its id, or only part of it:
+
+| Option                 | Default | What `false` turns off                                                                    |
+| ---------------------- | ------- | ----------------------------------------------------------------------------------------- |
+| `plugins.<id>`         | `true`  | The plugin: the page doesn't run it, and its tools and state are not registered.          |
+| `plugins.<id>.tools`   | `true`  | The plugin's agent tools and its shared state over HTTP MCP. Its view stays in the panel. |
+| `plugins.<id>.actions` | `true`  | The plugin's page actions and its tools that are not `read`.                              |
+
+```ts
+// src/server.ts
+const devtools = initPangularHub({
+  plugins: {travel: {actions: false}},
+});
+```
+
+The server plugins themselves go in `serverPlugins`, an option of the Express hub, the Vite plugin and `createPangular()`'s host options. It is not part of `PangularConfig`, so the CLI config file doesn't take it. See [Write a plugin](../guides/write-a-plugin.md#add-agent-tools).
+
 ### Terminals
 
 `terminals` is an option of the Express hub and the Vite plugin only, next to the access options. It is not part of `PangularConfig`, so `createPangular()` and the CLI config file don't take it.
@@ -245,16 +267,18 @@ A value that the server ignores falls back to its default, which is usually the 
 
 The [Dashboard](../inspectors/dashboard.md#configuration-block) has a **Configuration** block. It lists the options that differ from the defaults, or says **Defaults** when nothing is changed.
 
-| Row                       | Lists                                          |
-| ------------------------- | ---------------------------------------------- |
-| **Inspectors off**        | Inspectors set to `false`.                     |
-| **Agent**                 | **Read-only** when `agent.readOnly` is `true`. |
-| **Hidden from the agent** | Inspectors whose agent tools are hidden.       |
-| **Blocked actions**       | Actions set to `false`.                        |
-| **Extra secret names**    | `redaction.secretNames`.                       |
-| **Unmasked names**        | `redaction.unmask`.                            |
-| **Limits**                | Limits that differ from the defaults.          |
-| **Popup shortcut**        | `popup.hotkey`, or **Off** when it is `false`. |
+| Row                             | Lists                                             |
+| ------------------------------- | ------------------------------------------------- |
+| **Inspectors off**              | Inspectors set to `false`.                        |
+| **Agent**                       | **Read-only** when `agent.readOnly` is `true`.    |
+| **Hidden from the agent**       | Inspectors whose agent tools are hidden.          |
+| **Blocked actions**             | Actions set to `false`.                           |
+| **Extra secret names**          | `redaction.secretNames`.                          |
+| **Unmasked names**              | `redaction.unmask`.                               |
+| **Limits**                      | Limits that differ from the defaults.             |
+| **Popup shortcut**              | `popup.hotkey`, or **Off** when it is `false`.    |
+| **Plugins off**                 | Plugins set to `false` in `plugins`.              |
+| **Plugin tools or actions off** | Plugins with `tools` or `actions` set to `false`. |
 
 ## Where to next
 

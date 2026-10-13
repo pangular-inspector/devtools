@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Seventy-five tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Seventy-eight tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -53,11 +53,11 @@ The URL comes from the HTTP or router report. A page that sends neither (no rout
 
 Gives the user a link that opens the panel on one tab with one item selected, and switches the panels that are open to it. Reads: page. Use it to point the user at what you found.
 
-| Argument | Required | What it is                                                                                                                                                                                           |
-| -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `components`, `routes`, `signals`, `injectors`, `store`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog` or `capacitor`. Only tabs that are on count. |
-| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, a form id on `forms`. Other tabs ignore it.                               |
-| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                     |
+| Argument | Required | What it is                                                                                                                                                                                                      |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `components`, `routes`, `signals`, `injectors`, `store`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog`, `capacitor` or `plugins`. Only tabs that are on count. |
+| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, a form id on `forms`. Other tabs ignore it.                                          |
+| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                                |
 
 The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#tab=components&id=12&page=k3x9`, when the hub serves the panel and a page has reported its address. Otherwise it is the hash to add to the panel's address. Each panel that is open and not in a background tab opens the link at once. The tool is `read`: it changes what the panel shows, not the app. See [Deep links](../getting-started/popup-and-hub.md#deep-links).
 
@@ -79,7 +79,7 @@ When the hub is mounted, each finished call of an `action` or `destructive` tool
 
 ### Turn tools off
 
-The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record`, `flash`, `track` and `angularProfiling` arguments, so it reads a recording the panel started. `hydration` stays as a `read` tool without its `overlay` argument. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
+The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record`, `flash`, `track` and `angularProfiling` arguments, so it reads a recording the panel started. `hydration` stays as a `read` tool without its `overlay` argument. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. A [plugin's own tools](#plugins) follow the same switches, with the tier the plugin declares. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ## Source scan
 
@@ -361,6 +361,16 @@ How Angular resolves one token for one component, element or environment injecto
 | `optional` | no       | `true` ends in `null` instead of NG0201.                                                                                                                                                              |
 
 The answer is a table of steps: **provides it**, **not provided**, **hidden** (a `viewProviders` entry the lookup can't see), **skipped**, **not asked** or **unknown**. A `providedIn: 'root'` service counts as provided once something on the page got it. When a selector matches several injectors, the answer uses the first and lists the others. Before Angular 16.2 the path is rebuilt from the rendered tree and providers are unknown, and the answer says so. `selector` and `token` take at most 500 characters each.
+
+### startup-timing
+
+How the running app started, from navigation start: DOM content loaded, first contentful paint, when Angular started, when the root component was created, when the app was first stable, and the slowest providers to construct. Reads: page. See [Startup timing](../inspectors/injectors.md#startup-timing).
+
+| Argument | Required | Value                                   |
+| -------- | -------- | --------------------------------------- |
+| `limit`  | no       | Providers to list, 1 to 50. Default 10. |
+
+When the overlay or the startup hook saw the app become stable, the time is exact. Otherwise the answer says the app was stable at or before the time the overlay looked. Provider times need the `startup-hook` entry on Angular 20 or later in a development build; without it the answer says how to add it.
 
 ## NgRx
 
@@ -678,6 +688,19 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 <ngmd-alert severity="helpful">
   <code>analog-server-calls</code> and <code>analog-call-api</code> need the <a href="../getting-started/vite.md">Vite plugin</a>. The plugin records the calls and knows the dev server address.
 </ngmd-alert>
+
+## Plugins
+
+These tools read the views that [Pangular plugins](../guides/write-a-plugin.md) report from the page. Both read the page.
+
+| Tool             | What it answers                                                                                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `list-plugins`   | The page plugins each page runs, with version, status and pages, and the server plugins with their tools and tiers. Takes no arguments.                                              |
+| `inspect-plugin` | One plugin's view of a page as markdown: its tables, lists, stats and trees, its status, page actions and tools. Takes `plugin` (required, the plugin id) and `limit` (rows, 1-200). |
+
+### A plugin's own tools
+
+A server plugin adds tools named `plugin:<plugin id>:<tool>`, which your client calls as `pangular_plugin_<plugin id>_<tool>`. Built-in tools never start with `plugin`, so a plugin can't replace one. Each tool is `read` unless the plugin declares `action` or `destructive`, and its answer starts with a note that it comes from the plugin and the page. `agent.readOnly` and `actions.plugins: false` drop the tools that are not `read`, and `plugins.<id>.tools: false` drops all of one plugin's tools.
 
 ## Shared state
 
