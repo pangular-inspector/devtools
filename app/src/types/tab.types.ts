@@ -1,6 +1,7 @@
 export type Tab =
   | 'dashboard'
   | 'timeline'
+  | 'audit'
   | 'components'
   | 'pipes'
   | 'routes'

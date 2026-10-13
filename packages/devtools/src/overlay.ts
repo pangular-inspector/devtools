@@ -10,6 +10,7 @@ import { attachCapacitor } from './capacitor-overlay.ts';
 import { attachErrors } from './errors-collector.ts';
 import { attachLeaks } from './leaks-collector.ts';
 import { attachBrowserTools } from './browser-tools.ts';
+import { attachAxe, axeOwnerNg } from './axe-runner.ts';
 import { createRecentWrites } from './error-explain.ts';
 import { allowClientRules, httpRegistry } from './http-rules.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
@@ -504,6 +505,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   const leaks = on.components
     ? attachLeaks(my, pageId, getNg, { tickMs, active: () => lease.active })
     : null;
+  // Runs axe-core only when the panel or an agent asks; it loads axe-core then.
+  // The component owning each element is component data: only with that inspector on.
+  const axe = attachAxe(my, pageId, axeOwnerNg(on.components, getNg));
   const angularInfo = attachAngularInfo(my, pageId, getNg, { tickMs });
   const browserTools = devtoolsConfig.agent.browserTools ? attachBrowserTools(my, pageId) : null;
   const consoleGlobals = attachConsoleGlobals(my, pageId, {
@@ -969,6 +973,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     errors?.stop();
     leaks?.stop();
     browserTools?.stop();
+    axe.stop();
     cd?.stop();
     hydrationOverlay?.stop();
     stopAnalog();

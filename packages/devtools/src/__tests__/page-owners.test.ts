@@ -26,6 +26,18 @@ function fakeHost() {
 describe('page owners', () => {
   afterEach(() => vi.useRealTimers());
 
+  it('lists the claimed pages whose connection is still open', () => {
+    const { host, as, close } = fakeHost();
+    const owners = createPageOwners(host, () => PAGE_TTL_MS);
+    as(1);
+    owners.claim('tab-1', keyOf('a'));
+    as(2);
+    owners.claim('tab-2', keyOf('b'));
+    expect(owners.live().map((page) => page.pageId)).toEqual(['tab-1', 'tab-2']);
+    close(1);
+    expect(owners.live()).toEqual([{ pageId: 'tab-2', reportedAt: expect.any(Number) }]);
+  });
+
   it('gives a page to the first connection and refuses another one', () => {
     const { host, as } = fakeHost();
     const owners = createPageOwners(host, () => PAGE_TTL_MS);

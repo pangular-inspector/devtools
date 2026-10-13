@@ -378,6 +378,9 @@ importers:
       '@valibot/to-json-schema':
         specifier: ^1.8.0
         version: 1.8.0(valibot@1.5.0(typescript@6.0.3))
+      axe-core:
+        specifier: ^4.13.0
+        version: 4.13.0
       cac:
         specifier: ^7.0.0
         version: 7.0.0
