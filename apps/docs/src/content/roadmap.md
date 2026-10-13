@@ -57,13 +57,21 @@ Tracked in [#342](https://github.com/pangular-inspector/devtools/issues/342). Io
 
 ## Phase 4: deeper diagnosis
 
-Tracked in [#343](https://github.com/pangular-inspector/devtools/issues/343).
+Tracked in [#343](https://github.com/pangular-inspector/devtools/issues/343). Every item below is available now. The phase stays open until a third-party library ships its own Pangular tab.
 
-| Item                      | What it does                                                                                           |
-| ------------------------- | ------------------------------------------------------------------------------------------------------ |
-| What triggered each check | For zoneless apps, the event, signal, timer or request behind each run.                                |
-| Leak detection            | Live subscriptions and effects per component, and components that stay alive after they are destroyed. |
-| WebMCP tools              | Read-only tools registered on the page for browser agents.                                             |
+| Item                        | What it does                                                                                                       | Read more                                                                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| What triggered each check   | The event, signal, timer or request behind each run, wasted checks, OnPush hints and components that need zone.js. | [Why it ran and what it wasted](./inspectors/components.md#why-it-ran-and-what-it-wasted)                                                  |
+| Leak detection              | Live subscriptions and effects per component, and components that stay alive after they are destroyed.             | [Leaks](./inspectors/components.md#leaks)                                                                                                  |
+| Error explainers            | NG0100, hydration mismatches and missing providers explained, with the binding, the DOM diff or the lookup path.   | [Explainers](./inspectors/errors.md#explainers)                                                                                            |
+| One audit entry point       | One list of findings across the inspectors, an axe pass, and before and after sessions.                            | [Audit](./inspectors/audit.md), [Inspect, fix and verify](./guides/inspect-fix-verify.md)                                                  |
+| Tools for browser agents    | Read-only tools registered on the page through WebMCP, off by default.                                             | [Browser agents](./agents/browser-agents.md)                                                                                               |
+| Agent skills                | Skills shipped in the package, installed with one command.                                                         | [Agent skills](./agents/skills.md)                                                                                                         |
+| NgRx history and sessions   | Full state at any past entry, export and import of a session, and generated tests.                                 | [Session](./inspectors/ngrx-store.md#session)                                                                                              |
+| Other stores and queries    | NGXS, Elf and MiniRx through their Redux DevTools integration, and a TanStack Query tab.                           | [Other stores](./inspectors/ngrx-store.md#other-stores), [TanStack Query](./inspectors/tanstack-query.md)                                  |
+| Waterfall and SSR tracing   | A network waterfall, redacted headers, and SSR tracing for web-standard handlers such as Hono, h3 and Nitro.       | [HTTP timeline](./inspectors/ssr-http.md#http-timeline)                                                                                    |
+| Provider values and startup | Peek at a created service's value, and see the time to stable and the slowest providers.                           | [Peek at a provider value](./inspectors/injectors.md#peek-at-a-provider-value), [Startup timing](./inspectors/injectors.md#startup-timing) |
+| Plugin API                  | Libraries add their own tab and agent tools.                                                                       | [Write a plugin](./guides/write-a-plugin.md)                                                                                               |
 
 ## Fixes and improvements per inspector
 
