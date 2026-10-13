@@ -86,23 +86,25 @@ describe('LeaksSection', () => {
     expect(host().querySelectorAll('h3')).toHaveLength(3);
   });
 
-  it('names instances DI debug data keeps alive apart, without counting them as retained', async () => {
+  it('says retention is unavailable where DI debug data keeps every instance, and still lists detached views', async () => {
     await show(
       page({
-        destroyed: [
-          {
-            id: 'c12',
-            name: 'PipesExample',
-            route: '/pipes',
-            destroyedAt: NOW - 60_000,
-            navigations: 5,
-            devHeld: true,
-          },
-        ],
+        support: { retention: 'dev-di-debug', effects: true, subscriptions: 'off', detached: true },
       }),
     );
-    expect(host().querySelectorAll('.rows')[0]?.textContent ?? '').not.toContain('PipesExample');
-    expect(text()).toContain('DI debug data can keep alive: PipesExample');
+    expect(text()).toContain(
+      "In a development build, Angular's DI debug data keeps every destroyed component in memory, so Pangular can't tell a leak from that.",
+    );
+    expect(text()).toContain('Chrome DevTools Memory panel');
+    // No instance is listed as retained or recent, and no collected count is claimed.
+    expect(text()).not.toContain('still retained ·');
+    expect(text()).not.toContain('collected');
+    expect(text()).not.toContain('destroyed recently');
+    expect(text()).not.toContain('TripCard');
+    expect(text()).toContain('5 navigations');
+    expect(text()).toContain('not destroyed (detached views, such as a route reuse cache): Cached');
+    expect(host().querySelectorAll('h3')).toHaveLength(3);
+    expect(host().querySelectorAll('h3')[0]!.textContent!.trim()).toBe('Still retained');
   });
 
   it('lists live effects, with the shared note, and selects or highlights a component', async () => {

@@ -257,7 +257,11 @@ A line above the lists counts the navigations, the retained instances and the de
   The browser collects garbage when it decides, so an instance in <strong>Still retained</strong> is not proof of a leak. Take a heap snapshot in the Chrome DevTools <strong>Memory</strong> panel, search for the class name and read its <strong>Retainers</strong> to see what holds it.
 </ngmd-alert>
 
-In a development build, Angular's DI debug data (the records behind `ng.ɵgetInjectorProviders`) keeps the last instance of each component class alive. One destroyed instance of a class with none left on the page is therefore no sign of a leak on its own. The section and the `find-leaks` agent tool name that instance in a separate note and don't count it as retained. A second destroyed instance of the same class that stays is the stronger hint.
+#### Development builds of Angular 16.2 and later
+
+From Angular 16.2, a development build records DI debug data for its debug API (the injector profiler behind `ng.ɵgetInjectorProviders`). The records keep every value a component injected and, from 17.0, the view it injected from. That keeps every destroyed component in memory, and its children through its view, so a retained instance says nothing about your code. Production builds have no such data, but no debug API either.
+
+When the page has `ng.ɵgetInjectorProviders`, **Still retained** lists no instances. It shows a note instead: In a development build, Angular's DI debug data keeps every destroyed component in memory, so Pangular can't tell a leak from that. The `find-leaks` agent tool says the same. To check a component there, take a heap snapshot in the Chrome DevTools **Memory** panel after a few navigations, search for the class and look for a retainer other than Angular's DI debug records. **Open subscriptions after destroy**, detached views and **Live effects and subscriptions** work as usual, and an open subscription after destroy is still a real leak. On Angular 12 to 16.1, **Still retained** works as described above.
 
 #### How destroyed components are found
 
@@ -408,7 +412,7 @@ To go the other way, select a component and click **Reveal in Elements** in its 
     Open the screen you suspect, then navigate away and around a few times.
   </ngmd-step>
   <ngmd-step title="Read the lists">
-    An instance under <strong>Still retained</strong> with open subscriptions points at a missing teardown. <strong>Open subscriptions after destroy</strong> shows the line that subscribed.
+    <strong>Open subscriptions after destroy</strong> shows the line that subscribed, which points at a missing teardown. On Angular 16.1 and earlier, an instance under <strong>Still retained</strong> with open subscriptions points there too.
   </ngmd-step>
   <ngmd-step title="Confirm in the Memory panel">
     Take a heap snapshot in Chrome DevTools, search for the class and read its retainers.
@@ -486,7 +490,7 @@ The devtools replace inputs and properties with secret-looking names with `[reda
 
 ### Selected components stay in memory
 
-The console handles `$ng0` to `$ng4`, a component stored as a global, and values you logged in the browser console keep their component in memory. A component you selected or logged can then show under **Still retained**. Select other components, or clear the console, before you judge the list.
+The console handles `$ng0` to `$ng4`, a component stored as a global, and values you logged in the browser console keep their component in memory. A component you selected or logged can then show under **Still retained** (on Angular 16.1 and earlier). Select other components, or clear the console, before you judge the list.
 
 ### Instance ids change on reload
 

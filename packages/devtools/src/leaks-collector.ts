@@ -50,6 +50,21 @@ export interface LeaksDebugNg extends ComponentDebugNg {
   ɵgetSignalGraph?(injector: unknown): { nodes?: { id?: unknown; kind?: unknown }[] } | null;
 }
 
+/**
+ * Whether the page's Angular records DI debug data that keeps destroyed
+ * components in memory. From 16.2 a development build's
+ * `publishDefaultGlobalUtils` turns on the injector profiler
+ * (`setupFrameworkInjectorProfiler`) in the same step that publishes
+ * `ng.ɵgetInjectorProviders`, and keeps it on. Its records hold every
+ * injected value (a `NodeInjector`, `ChangeDetectorRef`, `DestroyRef`) and,
+ * from 17.0, the injecting view (`injectedIn.lView`), under the component
+ * class as key, so each destroyed instance stays reachable through its own or
+ * its parent's view. Nothing on the page can tell that apart from a leak.
+ */
+export function holdsDestroyedInstances(ng: LeaksDebugNg | undefined): boolean {
+  return read(() => typeof ng?.ɵgetInjectorProviders === 'function', false);
+}
+
 interface Rpc {
   rpc: {
     call(name: string, ...args: unknown[]): Promise<unknown>;
@@ -103,8 +118,6 @@ export interface LeaksOptions {
    * count and the report, and only re-sends the last report as a keepalive.
    */
   active?: () => boolean;
-  /** Whether the app is a development build (`ngDevMode`), whose DI debug data holds instances. */
-  devMode?: () => boolean;
 }
 
 export interface LeaksCollector {
@@ -237,7 +250,11 @@ function nameOf(instance: object): string {
  * collector itself keeps nothing alive. Destroyed means the host left the page
  * and Angular dropped its view (`ng.getInjector` gives the null injector from
  * Angular 14); a host that left while Angular still holds the view is
- * reported as detached instead. Subscription tracking wraps
+ * reported as detached instead. Where Angular's DI debug data keeps every
+ * destroyed instance (`holdsDestroyedInstances`), the report lists detached
+ * views only and says why (`support.retention: 'dev-di-debug'`); the
+ * bookkeeping still runs, since subscriptions are flagged against it.
+ * Subscription tracking wraps
  * `Observable.prototype.subscribe` only while it is on, and restores it when
  * turned off.
  */
@@ -250,9 +267,6 @@ export function attachLeaks(
   const now = options.now ?? Date.now;
   const tickMs = options.tickMs ?? (() => 0);
   const active = options.active ?? (() => true);
-  const devMode =
-    options.devMode ??
-    (() => read(() => !!(globalThis as { ngDevMode?: unknown }).ngDevMode, false));
   const hasDocument = typeof document !== 'undefined';
   const tree = options.tree ?? (() => domTree());
   const route =
@@ -320,8 +334,14 @@ export function attachLeaks(
         }
       })
     : null;
-  const retention = () =>
-    !!weak.WeakRef && !!registry && typeof getNg()?.getComponent === 'function';
+  /**
+   * `true` when retained instances can be listed; `'dev-di-debug'` when the
+   * page's Angular keeps every destroyed instance itself, so none can be.
+   */
+  const retention = (ng: LeaksDebugNg | undefined): LeaksReport['support']['retention'] => {
+    if (!weak.WeakRef || !registry || typeof ng?.getComponent !== 'function') return false;
+    return holdsDestroyedInstances(ng) ? 'dev-di-debug' : true;
+  };
 
   const checkNavigation = () => {
     const next = route();
@@ -759,23 +779,12 @@ export function attachLeaks(
       )
       .slice(0, MAX_LEAK_COMPONENTS);
 
-    // In a development build Angular's DI debug data (the injector profiler's records behind
-    // `ng.ɵgetInjectorProviders`) keeps the last instance of a class alive, so the latest
-    // destroyed instance of a class with none on the page proves nothing. A second one does.
-    const devHeld = new Set<string>();
-    if (devMode()) {
-      const latest = new Map<string, Destroyed>();
-      for (const entry of destroyed.values()) {
-        if (entry.detached || liveClasses.has(entry.name) || entry.ref.deref() === undefined) {
-          continue;
-        }
-        const held = latest.get(entry.name);
-        if (!held || entry.destroyedAt >= held.destroyedAt) latest.set(entry.name, entry);
-      }
-      for (const entry of latest.values()) devHeld.add(entry.id);
-    }
+    const kept = retention(ng);
     const gone: LeakDestroyed[] = [...destroyed.values()]
-      .filter((entry) => entry.ref.deref() !== undefined)
+      // Angular's DI debug data keeps every destroyed instance: only detached views mean something.
+      .filter(
+        (entry) => entry.ref.deref() !== undefined && (kept !== 'dev-di-debug' || entry.detached),
+      )
       .slice(0, MAX_LEAK_DESTROYED)
       .map((entry) => {
         const subs = openBy.get(entry.id) ?? 0;
@@ -786,7 +795,6 @@ export function attachLeaks(
           destroyedAt: entry.destroyedAt,
           navigations: navigations - entry.navigation,
           ...(entry.detached ? { detached: true } : {}),
-          ...(devHeld.has(entry.id) ? { devHeld: true } : {}),
           ...(subs ? { subscriptions: subs } : {}),
         };
       });
@@ -797,7 +805,7 @@ export function attachLeaks(
       title: redactMessage(read(() => (hasDocument ? document.title : ''), '')),
       at,
       support: {
-        retention: retention(),
+        retention: kept,
         effects: effectsSupported,
         subscriptions: tracking,
         ...(tracking === 'on' && instancesKnown ? { instances: true } : {}),

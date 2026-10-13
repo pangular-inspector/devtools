@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ComponentTree } from '../pages/component-tree';
 import type { TreeNode } from '../pages/component-tree-state';
 import { LeaksSection } from '../pages/leaks-section';
+import { scrollParent, stickyClearance } from '../ui/sticky-clearance';
 
 const roots: TreeNode[] = [
   {
@@ -52,12 +53,18 @@ describe('component tree and the Leaks section', () => {
   it('moves focus to the tree row of a Leaks row and keeps it clear of the toolbar', async () => {
     const fixture = TestBed.createComponent(ComponentTree);
     fixture.componentRef.setInput('rpc', client());
-    document.body.append(fixture.nativeElement);
+    // The panel's scroller: the toolbar sticks inside its padding.
+    const main = document.createElement('main');
+    main.style.overflowY = 'auto';
+    main.style.paddingTop = '20px';
+    main.append(fixture.nativeElement);
+    document.body.append(main);
     for (let i = 0; i < 3; i++) {
       await new Promise((resolve) => setTimeout(resolve));
       await fixture.whenStable();
     }
     const el = fixture.nativeElement as HTMLElement;
+    Object.defineProperty(el.querySelector('.toolbar')!, 'offsetHeight', { value: 64 });
     const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
     const leaks = fixture.debugElement.query(By.directive(LeaksSection));
     expect(leaks).not.toBeNull();
@@ -68,6 +75,30 @@ describe('component tree and the Leaks section', () => {
     expect(row.getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(row);
     expect(scrolled).toHaveBeenCalled();
-    expect(el.style.getPropertyValue('--ct-toolbar-clearance')).toMatch(/px$/);
+    // The scroller's padding, the toolbar's height and an 8px gap.
+    expect(el.style.getPropertyValue('--ct-toolbar-clearance')).toBe('92px');
+  });
+
+  it('measures the clearance a sticky bar needs, with the scroller padding and scroll padding', () => {
+    const scroller = document.createElement('div');
+    scroller.style.overflowY = 'auto';
+    scroller.style.paddingTop = '16px';
+    const wrap = document.createElement('section');
+    const bar = document.createElement('div');
+    bar.style.top = '4px';
+    Object.defineProperty(bar, 'offsetHeight', { value: 100 });
+    wrap.append(bar);
+    scroller.append(wrap);
+    document.body.append(scroller);
+    expect(scrollParent(bar)).toBe(scroller);
+    expect(stickyClearance(bar)).toBe(16 + 4 + 100 + 8);
+    scroller.style.scrollPaddingTop = '10px';
+    expect(stickyClearance(bar, 0)).toBe(16 + 4 + 100 - 10);
+    // Without a scrolling ancestor the page scrolls, with no padding to add.
+    const loose = document.createElement('div');
+    Object.defineProperty(loose, 'offsetHeight', { value: 50 });
+    document.body.append(loose);
+    expect(scrollParent(loose)).toBeNull();
+    expect(stickyClearance(loose)).toBe(58);
   });
 });

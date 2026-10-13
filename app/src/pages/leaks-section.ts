@@ -25,8 +25,6 @@ export interface LeakDestroyed {
   destroyedAt: number;
   navigations: number;
   detached?: boolean;
-  /** Kept alive by Angular's development-mode DI debug data, so not counted as retained. */
-  devHeld?: boolean;
   subscriptions?: number;
 }
 
@@ -49,7 +47,11 @@ export interface LeaksPage {
   at: number;
   reportedAt: number;
   support: {
-    retention: boolean;
+    /**
+     * `'dev-di-debug'`: the page's Angular keeps DI debug data that holds every
+     * destroyed component, so retained instances can't be listed.
+     */
+    retention: boolean | 'dev-di-debug';
     effects: boolean;
     subscriptions: 'off' | 'on' | 'unavailable';
     instances?: boolean;
@@ -111,59 +113,63 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
       </p>
 
       @if (report(); as page) {
-        @if (!page.support.retention) {
+        @if (page.support.retention === 'dev-di-debug') {
+          <p class="stats">{{ plural(page.navigations, 'navigation') }}</p>
+          <h3 class="sub">Still retained</h3>
           <p class="note" role="status">
-            This page cannot track destroyed components. It needs WeakRef, FinalizationRegistry and
-            the Angular debug API of a development build.
+            In a development build, Angular's DI debug data keeps every destroyed component in
+            memory, so Pangular can't tell a leak from that. Check retainers in the Chrome DevTools
+            Memory panel: take a heap snapshot after a few navigations, search for the class and
+            look for a retainer other than Angular's DI debug records. Open subscriptions after
+            destroy are still tracked below.
           </p>
-        }
-        <p class="stats">
-          {{ plural(page.navigations, 'navigation') }} · {{ retained().length }} still retained ·
-          {{ plural(page.totals.collected, 'instance') }} collected
-        </p>
-
-        <h3 class="sub">
-          Still retained
-          <span class="pill">{{ retained().length }}</span>
-        </h3>
-        @if (retained().length) {
-          <p class="note">
-            Destroyed, yet still in memory after at least {{ minNavigations }} navigations and
-            {{ minSeconds }} seconds. Take a heap snapshot, search for the class and read its
-            retainers.
-          </p>
-          <ul class="rows">
-            @for (item of retained().slice(0, shown); track item.id) {
-              <li class="row">
-                <span class="name mono">{{ item.name }}</span>
-                <span class="meta mono">{{ item.route || '/' }}</span>
-                <span class="count">{{ plural(item.navigations, 'navigation') }} ago</span>
-                <span class="meta">{{ ageOf(item) }}</span>
-                @if (item.subscriptions) {
-                  <span class="flag warn">{{
-                    plural(item.subscriptions, 'open subscription')
-                  }}</span>
-                }
-              </li>
-            }
-          </ul>
         } @else {
-          <p class="note">No destroyed component is still in memory after a few navigations.</p>
-        }
-        @if (recent().length) {
-          <p class="note">
-            {{ plural(recent().length, 'instance') }} destroyed recently and not collected yet:
-            <span class="mono">{{ names(recent()) }}</span
-            >. Navigate a few times to see whether they stay.
+          @if (!page.support.retention) {
+            <p class="note" role="status">
+              This page cannot track destroyed components. It needs WeakRef, FinalizationRegistry
+              and the Angular debug API of a development build.
+            </p>
+          }
+          <p class="stats">
+            {{ plural(page.navigations, 'navigation') }} · {{ retained().length }} still retained ·
+            {{ plural(page.totals.collected, 'instance') }} collected
           </p>
-        }
-        @if (devHeld().length) {
-          <p class="note">
-            Not counted: the last destroyed instance of a class with none left on the page, which
-            Angular's development-mode DI debug data can keep alive:
-            <span class="mono">{{ names(devHeld()) }}</span
-            >.
-          </p>
+
+          <h3 class="sub">
+            Still retained
+            <span class="pill">{{ retained().length }}</span>
+          </h3>
+          @if (retained().length) {
+            <p class="note">
+              Destroyed, yet still in memory after at least {{ minNavigations }} navigations and
+              {{ minSeconds }} seconds. Take a heap snapshot, search for the class and read its
+              retainers.
+            </p>
+            <ul class="rows">
+              @for (item of retained().slice(0, shown); track item.id) {
+                <li class="row">
+                  <span class="name mono">{{ item.name }}</span>
+                  <span class="meta mono">{{ item.route || '/' }}</span>
+                  <span class="count">{{ plural(item.navigations, 'navigation') }} ago</span>
+                  <span class="meta">{{ ageOf(item) }}</span>
+                  @if (item.subscriptions) {
+                    <span class="flag warn">{{
+                      plural(item.subscriptions, 'open subscription')
+                    }}</span>
+                  }
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="note">No destroyed component is still in memory after a few navigations.</p>
+          }
+          @if (recent().length) {
+            <p class="note">
+              {{ plural(recent().length, 'instance') }} destroyed recently and not collected yet:
+              <span class="mono">{{ names(recent()) }}</span
+              >. Navigate a few times to see whether they stay.
+            </p>
+          }
         }
         @if (detached().length) {
           <p class="note">
@@ -424,20 +430,20 @@ export class LeaksSection {
     const retained: LeakDestroyed[] = [];
     const recent: LeakDestroyed[] = [];
     const detached: LeakDestroyed[] = [];
-    const devHeld: LeakDestroyed[] = [];
-    if (!page) return { retained, recent, detached, devHeld };
+    if (!page) return { retained, recent, detached };
+    // Angular's DI debug data keeps every destroyed instance; only detached views mean something.
+    const held = page.support.retention === 'dev-di-debug';
     for (const item of page.destroyed) {
       if (item.detached) detached.push(item);
-      else if (item.devHeld) devHeld.push(item);
+      else if (held) continue;
       else if (this.isRetained(page, item)) retained.push(item);
       else recent.push(item);
     }
-    return { retained, recent, detached, devHeld };
+    return { retained, recent, detached };
   });
   protected readonly retained = computed(() => this.split().retained);
   protected readonly recent = computed(() => this.split().recent);
   protected readonly detached = computed(() => this.split().detached);
-  protected readonly devHeld = computed(() => this.split().devHeld);
 
   private ageMs(page: LeaksPage, item: LeakDestroyed): number {
     return Math.max(0, this.now()() - page.reportedAt + (page.at - item.destroyedAt));

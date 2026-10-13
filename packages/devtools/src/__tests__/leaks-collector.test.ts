@@ -5,6 +5,7 @@ import {
   MAX_TRACKED_DESTROYED,
   TRACKING_KEY,
   attachLeaks,
+  holdsDestroyedInstances,
   stackClasses,
   type LeaksDebugNg,
   type LeaksOptions,
@@ -624,37 +625,62 @@ describe('attachLeaks: pushes', () => {
 });
 
 describe('attachLeaks: development builds', () => {
-  it('marks only the latest destroyed instance of a class with none left as held by DI debug data', async () => {
-    const { root, components, cards } = page(3);
-    const ng = fakeNg(components);
+  it('detects the DI debug data that holds destroyed instances by ng.ɵgetInjectorProviders', () => {
+    expect(holdsDestroyedInstances(undefined)).toBe(false);
+    expect(holdsDestroyedInstances(fakeNg(new Map()))).toBe(false);
+    expect(holdsDestroyedInstances(fakeNg(new Map(), { ɵgetInjectorProviders: () => [] }))).toBe(
+      true,
+    );
+    const throwing = fakeNg(new Map());
+    Object.defineProperty(throwing, 'ɵgetInjectorProviders', {
+      get() {
+        throw new Error('no');
+      },
+    });
+    expect(holdsDestroyedInstances(throwing)).toBe(false);
+  });
+
+  it('reports retention as unavailable with that data, lists only detached views, and still flags subscriptions', async () => {
+    const { components, cards } = page(2);
+    let withDebugData = true;
+    const base = fakeNg(components);
+    const ng = () => (withDebugData ? { ...base, ɵgetInjectorProviders: () => [] } : base);
+    const rx = fakeRxjs();
+    const source = new rx.Observable();
     let now = 1000;
-    let devMode = true;
-    const h = harness(() => ng, { now: () => now, devMode: () => devMode });
+    const h = harness(ng, { now: () => now, loadRxjs: async () => rx.module as never });
+    await h.collector.setTracking(true);
     await h.collector.push();
-    // Two cards go, one stays: the class is still on the page, so neither is excused.
+    // A card subscribes and goes; another goes while Angular still holds its view.
+    (components.get(cards[0]!) as TripCard).listen(source as never);
+    base.alive.add(cards[1]!);
     cards[0]!.remove();
-    await h.collector.push(true);
-    now += 10;
     cards[1]!.remove();
+    h.route.value = '/a';
+    now += 60_000;
     await h.collector.push(true);
-    expect(h.reports.at(-1)!.destroyed.filter((d) => d.devHeld)).toEqual([]);
+    h.route.value = '/b';
+    await h.collector.push(true);
 
-    // The last card goes too: only the latest destroyed card is excused.
-    now += 10;
-    cards[2]!.remove();
-    await h.collector.push(true);
-    const held = h.reports
-      .at(-1)!
-      .destroyed.filter((d) => d.devHeld)
-      .map((d) => d.id);
-    expect(held).toEqual([elementId(cards[2]!)]);
-    expect(h.reports.at(-1)!.destroyed).toHaveLength(3);
+    const dev = h.reports.at(-1)!;
+    expect(dev.support.retention).toBe('dev-di-debug');
+    expect(dev.destroyed).toEqual([
+      expect.objectContaining({ id: elementId(cards[1]!), detached: true }),
+    ]);
+    expect(dev.destroyed.some((d) => 'devHeld' in d)).toBe(false);
+    expect(dev.subscriptions).toEqual([
+      expect.objectContaining({ name: 'TripCard', reason: 'no-live-instance' }),
+    ]);
+    expect(dev.navigations).toBe(2);
 
-    // A production build excuses nothing.
-    devMode = false;
+    // Without the debug data (older Angular) the same instances are listed as before.
+    withDebugData = false;
     await h.collector.push(true);
-    expect(h.reports.at(-1)!.destroyed.some((d) => d.devHeld)).toBe(false);
-    expect(root.isConnected).toBe(true);
+    const plain = h.reports.at(-1)!;
+    expect(plain.support.retention).toBe(true);
+    expect(plain.destroyed.map((d) => d.id).sort()).toEqual(
+      [elementId(cards[0]!), elementId(cards[1]!)].sort(),
+    );
   });
 });
 

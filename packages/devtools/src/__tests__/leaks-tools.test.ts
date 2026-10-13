@@ -125,50 +125,62 @@ describe('isRetained', () => {
     expect(isRetained(page, page.destroyed[1]!)).toBe(false);
     expect(isRetained(page, { ...page.destroyed[0]!, detached: true })).toBe(false);
     expect(isRetained(page, { ...page.destroyed[0]!, navigations: 1 })).toBe(false);
-    expect(isRetained(page, { ...page.destroyed[0]!, devHeld: true })).toBe(false);
   });
+});
 
-  it('keeps devHeld through the sanitizer, but never on a detached view', () => {
+describe('retention held by DI debug data', () => {
+  it('keeps the reason through the sanitizer and drops the instances it makes meaningless', () => {
     const base = report().destroyed[0]!;
     const sane = toLeaksReport(
       report({
-        destroyed: [
-          { ...base, devHeld: true },
-          { ...base, id: 'c11', detached: true, devHeld: true },
-          { ...base, id: 'c12', devHeld: 'yes' as never },
-        ],
+        support: { retention: 'dev-di-debug', effects: true, subscriptions: 'off' },
+        destroyed: [base, { ...base, id: 'c11', detached: true }],
       }),
     )!;
-    expect(sane.destroyed.map((item) => item.devHeld)).toEqual([true, undefined, undefined]);
+    expect(sane.support.retention).toBe('dev-di-debug');
+    expect(sane.destroyed.map((item) => item.id)).toEqual(['c11']);
+    expect(
+      toLeaksReport(report({ support: { retention: 'yes' as never } } as never))!.support.retention,
+    ).toBe(false);
+    // The old per-instance flag is not passed on.
+    const old = toLeaksReport(report({ destroyed: [{ ...base, devHeld: true } as never] }))!;
+    expect(old.destroyed[0]).not.toHaveProperty('devHeld');
   });
 
-  it('names the instance dev-mode DI debug data may hold apart, and still lists a second one', () => {
+  it('says retention is unavailable and why, and still answers subscriptions, detached views and effects', () => {
     const old = Date.now() - RETAINED_AFTER_MS - 5000;
     const page = {
       ...report({
+        support: {
+          retention: 'dev-di-debug',
+          effects: true,
+          subscriptions: 'on',
+          instances: true,
+          detached: true,
+        },
         destroyed: [
-          { id: 'a1', name: 'About', route: '/about', destroyedAt: old, navigations: 4 },
           {
-            id: 'a2',
-            name: 'About',
-            route: '/about',
-            destroyedAt: old + 1,
-            navigations: 3,
-            devHeld: true,
+            id: 'r1',
+            name: 'Reused',
+            route: '/r',
+            destroyedAt: old,
+            navigations: 4,
+            detached: true,
           },
-          { id: 'h1', name: 'Home', route: '/', destroyedAt: old, navigations: 3, devHeld: true },
         ],
-        subscriptions: [],
       }),
       reportedAt: Date.now(),
     };
     const text = findLeaksText({ pages: { tab1: page } });
-    expect(text).toMatch(/\| `About` \| `a1` \|/);
-    expect(text).not.toMatch(/\| `About` \| `a2` \|/);
-    expect(text).not.toMatch(/\| `Home` \|/);
-    expect(text).toMatch(/Not counted as retained: .*2 classes.*`About`, `Home`/);
-    expect(text).toMatch(/DI debug data/);
-    expect(text).not.toMatch(/destroyed recently/);
+    expect(text).toMatch(/## Still retained\n\nNot available on this page/);
+    expect(text).toMatch(/DI debug data .*keeps every destroyed component in memory/);
+    expect(text).toMatch(/can't tell a leak from that/);
+    expect(text).toMatch(/Memory panel/);
+    expect(text).not.toMatch(/garbage collected since/);
+    expect(text).not.toMatch(/\| Class \| Instance \| Route when destroyed/);
+    expect(text).toMatch(/off the page but not destroyed .*`Reused`/);
+    expect(text).toMatch(/its instance is destroyed/);
+    expect(text).toMatch(/\| `TripList` \| `c1` \| 2 \| 1 \|/);
   });
 });
 

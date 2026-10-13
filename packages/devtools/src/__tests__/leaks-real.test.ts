@@ -77,7 +77,14 @@ describe.runIf(angularAtLeast('17.0'))('the leaks collector with a real app', ()
         },
       },
     };
-    const ng = () => (globalThis as { ng?: LeaksDebugNg }).ng;
+    // Hides the DI debug data's marker, to read the destroyed list as on Angular 16.1 and earlier.
+    let hideDiDebug = false;
+    const ng = () => {
+      const real = (globalThis as { ng?: LeaksDebugNg }).ng;
+      if (!real || !hideDiDebug) return real;
+      const { ɵgetInjectorProviders: _hidden, ...rest } = real;
+      return rest as LeaksDebugNg;
+    };
     const collector = attachLeaks(my, 'real-page', ng, {
       route: () => route.value,
       dirty: null,
@@ -111,6 +118,16 @@ describe.runIf(angularAtLeast('17.0'))('the leaks collector with a real app', ()
     await collector.push();
     report = reports.at(-1)!;
     expect(report.support.detached).toBe(true);
+    // From 16.2 a development build's DI debug data keeps every destroyed instance.
+    const diDebug = angularAtLeast('16.2');
+    expect(report.support.retention).toBe(diDebug ? 'dev-di-debug' : true);
+    if (diDebug) {
+      expect(report.destroyed).toEqual([]);
+      hideDiDebug = true;
+      await collector.push(true);
+      report = reports.at(-1)!;
+      expect(report.support.retention).toBe(true);
+    }
     expect(report.destroyed).toEqual([
       expect.objectContaining({ name: 'LeakyCard', route: '/trips', navigations: 1 }),
     ]);

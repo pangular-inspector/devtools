@@ -50,6 +50,7 @@ import { StoreGlobal } from '../ui/store-global';
 import { ForBlocksSection, type ForBlock } from './for-blocks-section';
 import { LeaksSection, type LeaksPage } from './leaks-section';
 import { VirtualWindow } from '../ui/virtual-window';
+import { stickyClearance } from '../ui/sticky-clearance';
 
 interface SourceComponent {
   selector: string;
@@ -2460,18 +2461,25 @@ export class ComponentTree {
     afterNextRender(
       () => {
         const row = document.querySelector<HTMLElement>(`.row[data-id="${CSS.escape(id)}"]`);
-        // Keep the row clear of the sticky toolbar, whose height changes as it wraps.
-        const toolbar = this.host.nativeElement.querySelector<HTMLElement>('.toolbar');
-        if (toolbar) {
-          this.host.nativeElement.style.setProperty(
-            '--ct-toolbar-clearance',
-            `${toolbar.offsetHeight + 8}px`,
-          );
-        }
+        this.clearToolbar();
         row?.scrollIntoView({ block: 'nearest' });
         if (focus) row?.focus({ preventScroll: true });
       },
       { injector: this.injector },
+    );
+  }
+
+  /**
+   * Sets the rows' `scroll-margin-top` so a row scrolled into view sits below
+   * the sticky toolbar, whose height changes as it wraps and which sticks
+   * inside the scroller's padding.
+   */
+  private clearToolbar() {
+    const toolbar = this.host.nativeElement.querySelector<HTMLElement>('.toolbar');
+    if (!toolbar) return;
+    this.host.nativeElement.style.setProperty(
+      '--ct-toolbar-clearance',
+      `${stickyClearance(toolbar)}px`,
     );
   }
 
@@ -2614,7 +2622,8 @@ export class ComponentTree {
       this.focusId.set(id);
       const focus = () => {
         const el = document.querySelector<HTMLElement>(`.row[data-id="${CSS.escape(id)}"]`);
-        el?.focus();
+        this.clearToolbar();
+        el?.focus({ preventScroll: true });
         el?.scrollIntoView({ block: 'nearest' });
       };
       // A row outside the rendered window is brought in first.

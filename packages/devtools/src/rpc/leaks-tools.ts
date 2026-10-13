@@ -21,6 +21,16 @@ const MAX_ID = 40;
 /** Whether subscription tracking runs on the page. */
 export type SubscriptionTracking = 'off' | 'on' | 'unavailable';
 
+/**
+ * Whether retained instances can be listed. `true`: `WeakRef`,
+ * `FinalizationRegistry` and `ng.getComponent` are there. `false`: one is
+ * missing. `'dev-di-debug'`: the page's Angular (16.2+ development build, seen
+ * by `ng.ɵgetInjectorProviders`) keeps DI debug data that holds every
+ * destroyed component, so a retained instance says nothing; only detached
+ * views are listed.
+ */
+export type LeakRetention = boolean | 'dev-di-debug';
+
 /** One component on the page with its live effects and tracked open subscriptions. */
 export interface LeakComponent {
   /** The host element id, the same one the Components tab and `inspect-component` use. */
@@ -52,13 +62,6 @@ export interface LeakDestroyed {
    * as a `RouteReuseStrategy` or a portal does on purpose.
    */
   detached?: boolean;
-  /**
-   * The latest destroyed instance of a class with none left on the page, in a
-   * development build: Angular's DI debug data keeps the last instance of each
-   * class alive, so this one alone is no sign of a leak. Never set on a
-   * detached view or in a production build.
-   */
-  devHeld?: boolean;
   /** Subscriptions it made that are still open. */
   subscriptions?: number;
 }
@@ -90,8 +93,7 @@ export interface LeaksReport {
   /** The page clock when the report was made, to turn its times into ages. */
   at: number;
   support: {
-    /** `WeakRef`, `FinalizationRegistry` and `ng.getComponent` are there. */
-    retention: boolean;
+    retention: LeakRetention;
     /** `ng.ɵgetSignalGraph` is there, so effects can be counted. */
     effects: boolean;
     subscriptions: SubscriptionTracking;
@@ -107,7 +109,7 @@ export interface LeaksReport {
     effects: number;
     /** Open subscriptions tied to a component, tracked while tracking was on. */
     subscriptions: number;
-    /** Destroyed instances the page still tracks (not collected yet). */
+    /** Destroyed instances the page still tracks (not collected yet), listed or not. */
     destroyed: number;
     /** Destroyed instances the garbage collector freed since the overlay started. */
     collected: number;
@@ -157,6 +159,9 @@ function toComponent(value: unknown): LeakComponent | null {
   };
 }
 
+const toRetention = (value: unknown): LeakRetention =>
+  value === true ? true : value === 'dev-di-debug' ? 'dev-di-debug' : false;
+
 function toDestroyed(value: unknown): LeakDestroyed | null {
   if (!isRecord(value) || typeof value['id'] !== 'string') return null;
   const subscriptions = count(value['subscriptions']);
@@ -167,7 +172,6 @@ function toDestroyed(value: unknown): LeakDestroyed | null {
     destroyedAt: num(value['destroyedAt']),
     navigations: count(value['navigations']),
     ...(value['detached'] === true ? { detached: true } : {}),
-    ...(value['devHeld'] === true && value['detached'] !== true ? { devHeld: true } : {}),
     ...(subscriptions ? { subscriptions } : {}),
   };
 }
@@ -198,13 +202,15 @@ export function toLeaksReport(message: unknown): LeaksReport | null {
   const support = isRecord(message['support']) ? message['support'] : {};
   const totals = isRecord(message['totals']) ? message['totals'] : {};
   const tracking = support['subscriptions'];
+  const retention = toRetention(support['retention']);
+  const destroyed = list(message['destroyed'], toDestroyed, MAX_LEAK_DESTROYED);
   return {
     pageId: message['pageId'],
     url: typeof message['url'] === 'string' ? redactUrl(message['url']) : '',
     title: typeof message['title'] === 'string' ? redactMessage(message['title']) : '',
     at: num(message['at'], Date.now()),
     support: {
-      retention: support['retention'] === true,
+      retention,
       effects: support['effects'] === true,
       subscriptions: tracking === 'on' || tracking === 'unavailable' ? tracking : 'off',
       ...(support['instances'] === true ? { instances: true } : {}),
@@ -220,7 +226,8 @@ export function toLeaksReport(message: unknown): LeaksReport | null {
       dropped: count(totals['dropped']),
     },
     components: list(message['components'], toComponent, MAX_LEAK_COMPONENTS),
-    destroyed: list(message['destroyed'], toDestroyed, MAX_LEAK_DESTROYED),
+    // Instances Angular's DI debug data keeps prove nothing; detached views still do.
+    destroyed: retention === 'dev-di-debug' ? destroyed.filter((item) => item.detached) : destroyed,
     subscriptions: list(message['subscriptions'], toSubscription, MAX_LEAK_SUBSCRIPTIONS),
   };
 }
@@ -245,7 +252,6 @@ export function destroyedAge(page: LeaksPageView, item: LeakDestroyed, now = Dat
 export function isRetained(page: LeaksPageView, item: LeakDestroyed, now = Date.now()): boolean {
   return (
     !item.detached &&
-    !item.devHeld &&
     item.navigations >= RETAINED_AFTER_NAVIGATIONS &&
     destroyedAge(page, item, now) >= RETAINED_AFTER_MS
   );
@@ -269,6 +275,10 @@ export function leakTrackingRequest(
 
 const NO_PAGE =
   'No page reports leak data. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser and the overlay loaded.';
+
+/** Why `find-leaks` lists no retained instance on a page whose Angular keeps them all. */
+const DEV_DI_DEBUG =
+  "Not available on this page. In a development build Angular's DI debug data (the injector profiler records behind `ng.ɵgetInjectorProviders`, Angular 16.2 and later) keeps every destroyed component in memory, and its children through its view, so Pangular can't tell a leak from that. Check retainers in the Chrome DevTools Memory panel: take a heap snapshot after a few navigations, search for the class, and look for a retainer other than Angular's DI debug records. Open subscriptions after destroy, detached views and live effects are still reported below.";
 
 const cell = (value: string) => value.replace(/\|/g, '\\|').replace(/\s+/g, ' ');
 
@@ -314,50 +324,40 @@ export function findLeaksText(
       `Page ${code(page.pageId)}; ${pages.length} pages report leak data, pass \`page\` to pick another.`,
     );
   }
-  if (!page.support.retention) {
-    out.push(
-      'This page cannot track destroyed components: it needs `WeakRef`, `FinalizationRegistry` and the Angular debug API (a development build).',
-    );
-  }
-
   const destroyed = page.destroyed.filter((item) => match(item.name));
-  const retained = destroyed.filter((item) => isRetained(page, item, now));
-  const recent = destroyed.filter(
-    (item) => !item.detached && !item.devHeld && !isRetained(page, item, now),
-  );
-  const devHeld = destroyed.filter((item) => item.devHeld);
   const detached = destroyed.filter((item) => item.detached);
-  out.push(
-    `## Still retained\n\n${page.navigations} navigations on this page so far. ${page.totals.collected} destroyed instances were garbage collected since the overlay started. Garbage collection runs when the browser decides, so an instance listed here is not proof of a leak: it is still in memory after at least ${RETAINED_AFTER_NAVIGATIONS} navigations and ${RETAINED_AFTER_MS / 1000} seconds. Take a heap snapshot in the Chrome DevTools Memory panel, search for the class, and read its retainers to see what holds it.`,
-  );
-  if (retained.length) {
-    const rows = retained.slice(0, limit).map((item) => {
-      const subs = item.subscriptions ? String(item.subscriptions) : '';
-      return `| ${code(item.name)} | ${code(item.id)} | ${code(item.route || '/')} | ${duration(destroyedAge(page, item, now))} | ${item.navigations} | ${subs} |`;
-    });
-    out.push(
-      `| Class | Instance | Route when destroyed | Age | Navigations since | Open subscriptions |\n| --- | --- | --- | --- | --- | --- |\n${rows.join('\n')}${retained.length > limit ? `\n\n${retained.length - limit} more; raise \`limit\`.` : ''}`,
-    );
+  if (page.support.retention === 'dev-di-debug') {
+    out.push(`## Still retained\n\n${DEV_DI_DEBUG}`);
   } else {
-    out.push('No destroyed component is still retained after enough navigations.');
-  }
-  if (recent.length) {
+    if (!page.support.retention) {
+      out.push(
+        'This page cannot track destroyed components: it needs `WeakRef`, `FinalizationRegistry` and the Angular debug API (a development build).',
+      );
+    }
+    const retained = destroyed.filter((item) => isRetained(page, item, now));
+    const recent = destroyed.filter((item) => !item.detached && !isRetained(page, item, now));
     out.push(
-      `${plural(recent.length, 'instance was', 'instances were')} destroyed recently and not collected yet: ${recent
-        .slice(0, 10)
-        .map((item) => code(item.name))
-        .join(', ')}. Navigate a few times and ask again.`,
+      `## Still retained\n\n${page.navigations} navigations on this page so far. ${page.totals.collected} destroyed instances were garbage collected since the overlay started. Garbage collection runs when the browser decides, so an instance listed here is not proof of a leak: it is still in memory after at least ${RETAINED_AFTER_NAVIGATIONS} navigations and ${RETAINED_AFTER_MS / 1000} seconds. Take a heap snapshot in the Chrome DevTools Memory panel, search for the class, and read its retainers to see what holds it.`,
     );
-  }
-  if (devHeld.length) {
-    out.push(
-      `Not counted as retained: the last destroyed instance of ${plural(devHeld.length, 'class', 'classes')} with none left on the page, ${devHeld
-        .slice(0, 10)
-        .map((item) => code(item.name))
-        .join(
-          ', ',
-        )}. In a development build Angular's DI debug data (the records behind \`ng.ɵgetInjectorProviders\`) keeps the last instance of each class alive, so one instance proves nothing. A second destroyed instance of the same class that stays is listed above.`,
-    );
+    if (retained.length) {
+      const rows = retained.slice(0, limit).map((item) => {
+        const subs = item.subscriptions ? String(item.subscriptions) : '';
+        return `| ${code(item.name)} | ${code(item.id)} | ${code(item.route || '/')} | ${duration(destroyedAge(page, item, now))} | ${item.navigations} | ${subs} |`;
+      });
+      out.push(
+        `| Class | Instance | Route when destroyed | Age | Navigations since | Open subscriptions |\n| --- | --- | --- | --- | --- | --- |\n${rows.join('\n')}${retained.length > limit ? `\n\n${retained.length - limit} more; raise \`limit\`.` : ''}`,
+      );
+    } else {
+      out.push('No destroyed component is still retained after enough navigations.');
+    }
+    if (recent.length) {
+      out.push(
+        `${plural(recent.length, 'instance was', 'instances were')} destroyed recently and not collected yet: ${recent
+          .slice(0, 10)
+          .map((item) => code(item.name))
+          .join(', ')}. Navigate a few times and ask again.`,
+      );
+    }
   }
   if (detached.length) {
     out.push(
@@ -367,7 +367,7 @@ export function findLeaksText(
         .join(', ')}.`,
     );
   }
-  if (page.totals.dropped) {
+  if (page.totals.dropped && page.support.retention !== 'dev-di-debug') {
     out.push(
       `${page.totals.dropped} older destroyed instances are no longer tracked, to stay under the page's cap.`,
     );
