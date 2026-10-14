@@ -307,7 +307,7 @@ What the copy can't show:
 - Scroll positions inside the component, `::before` and `::after` content other than plain text, and elements past the first 3000 are left out.
 - A component larger than 2000 pixels on its longest side is scaled down to fit.
 
-The image needs an MCP client that shows image content. `agent.tools.components: false` hides the tool.
+The image needs an MCP client that shows image content. It also needs devframe to pass image content on, which devframe 1.2.5 does not do yet. Until it does, an installed package answers with the note and no image. `agent.tools.components: false` hides the tool.
 
 An [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app has no DOM to copy. With its `page`, the tool says so without asking the app. Without `page`, the search skips those apps, and when only a device app reports, the answer says so.
 
