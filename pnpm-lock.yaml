@@ -7,15 +7,15 @@ settings:
 packageExtensionsChecksum: sha256-pZ5Yb81CXMsN4lVTkqET1vwZkSfW0B8hDR3b6oB8KVw=
 
 patchedDependencies:
-  '@devframes/agentic@1.2.3':
+  '@devframes/agentic@1.2.5':
     hash: a4ddfbdad6a1baeb51c5bd6b8bde8503690346600f88a4d796673e309ef97ad9
-    path: patches/@devframes__agentic@1.2.3.patch
-  '@devframes/hub@1.2.3':
-    hash: 47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b
-    path: patches/@devframes__hub@1.2.3.patch
-  devframe@1.2.3:
-    hash: 877e107b3b640e28241731b2173f869f4b34ad5ab62106d024b98fede65d82bd
-    path: patches/devframe@1.2.3.patch
+    path: patches/@devframes__agentic@1.2.5.patch
+  '@devframes/hub@1.2.5':
+    hash: 136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051
+    path: patches/@devframes__hub@1.2.5.patch
+  devframe@1.2.5:
+    hash: c57683e516f48b81c1ae3a73b5d592e82a2b1bb1c9d35642ce910d25d3f64807
+    path: patches/devframe@1.2.5.patch
 
 importers:
 
@@ -52,8 +52,8 @@ importers:
         specifier: workspace:*
         version: link:packages/devtools
       devframe:
-        specifier: ^1.2.3
-        version: 1.2.3(patch_hash=877e107b3b640e28241731b2173f869f4b34ad5ab62106d024b98fede65d82bd)(@devframes/agentic@1.2.3)(cac@7.0.0)(srvx@1.0.5)
+        specifier: ^1.2.5
+        version: 1.2.5(patch_hash=c57683e516f48b81c1ae3a73b5d592e82a2b1bb1c9d35642ce910d25d3f64807)(@devframes/agentic@1.2.5)(cac@7.0.0)(srvx@1.0.5)
       express:
         specifier: ^5.1.0
         version: 5.2.1
@@ -89,11 +89,11 @@ importers:
         specifier: ^4.13.0
         version: 4.13.0(playwright-core@1.63.0)
       '@devframes/agentic':
-        specifier: ^1.2.3
-        version: 1.2.3(patch_hash=a4ddfbdad6a1baeb51c5bd6b8bde8503690346600f88a4d796673e309ef97ad9)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3)
+        specifier: ^1.2.5
+        version: 1.2.5(patch_hash=a4ddfbdad6a1baeb51c5bd6b8bde8503690346600f88a4d796673e309ef97ad9)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5)
       '@devframes/vite':
-        specifier: ^1.2.3
-        version: 1.2.3(@devframes/hub-ui@1.2.3(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(devframe@1.2.3))(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(devframe@1.2.3)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))
+        specifier: ^1.2.5
+        version: 1.2.5(@devframes/hub-ui@1.2.5(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(devframe@1.2.5))(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(devframe@1.2.5)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))
       '@ngrx/store':
         specifier: ^22.0.1
         version: 22.0.1(@angular/core@22.1.7(@angular/compiler@22.1.7)(rxjs@7.8.2)(zone.js@0.16.3))(rxjs@7.8.2)
@@ -355,26 +355,26 @@ importers:
   packages/devtools:
     dependencies:
       '@devframes/agentic':
-        specifier: ^1.2.3
-        version: 1.2.3(patch_hash=a4ddfbdad6a1baeb51c5bd6b8bde8503690346600f88a4d796673e309ef97ad9)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3)
+        specifier: ^1.2.5
+        version: 1.2.5(patch_hash=a4ddfbdad6a1baeb51c5bd6b8bde8503690346600f88a4d796673e309ef97ad9)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5)
       '@devframes/hub':
-        specifier: ^1.2.3
-        version: 1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3)
+        specifier: ^1.2.5
+        version: 1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5)
       '@devframes/hub-ui':
-        specifier: ^1.2.3
-        version: 1.2.3(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(devframe@1.2.3)
+        specifier: ^1.2.5
+        version: 1.2.5(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(devframe@1.2.5)
       '@devframes/plugin-messages':
-        specifier: ^1.2.3
-        version: 1.2.3(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(@devframes/plugin-messages--assets@1.2.3)(devframe@1.2.3)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))
+        specifier: ^1.2.5
+        version: 1.2.5(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(@devframes/plugin-messages--assets@1.2.5)(devframe@1.2.5)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))
       '@devframes/plugin-messages--assets':
-        specifier: ^1.2.3
-        version: 1.2.3
+        specifier: ^1.2.5
+        version: 1.2.5
       '@devframes/plugin-terminals':
-        specifier: ^1.2.3
-        version: 1.2.3(@devframes/hub-ui@1.2.3(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(devframe@1.2.3))(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(@devframes/plugin-terminals--assets@1.2.3)(devframe@1.2.3)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))
+        specifier: ^1.2.5
+        version: 1.2.5(@devframes/hub-ui@1.2.5(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(devframe@1.2.5))(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(@devframes/plugin-terminals--assets@1.2.5)(devframe@1.2.5)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))
       '@devframes/plugin-terminals--assets':
-        specifier: ^1.2.3
-        version: 1.2.3
+        specifier: ^1.2.5
+        version: 1.2.5
       '@valibot/to-json-schema':
         specifier: ^1.8.0
         version: 1.8.0(valibot@1.5.0(typescript@6.0.3))
@@ -385,8 +385,8 @@ importers:
         specifier: ^7.0.0
         version: 7.0.0
       devframe:
-        specifier: ^1.2.3
-        version: 1.2.3(patch_hash=877e107b3b640e28241731b2173f869f4b34ad5ab62106d024b98fede65d82bd)(@devframes/agentic@1.2.3)(cac@7.0.0)(srvx@1.0.5)
+        specifier: ^1.2.5
+        version: 1.2.5(patch_hash=c57683e516f48b81c1ae3a73b5d592e82a2b1bb1c9d35642ce910d25d3f64807)(@devframes/agentic@1.2.5)(cac@7.0.0)(srvx@1.0.5)
       h3:
         specifier: ^1.15.11
         version: 1.15.11
@@ -1491,40 +1491,40 @@ packages:
     resolution: {integrity: sha512-bPlN9S9O1A0euCpEWE4qnvB5YDuyYVsUTrxSgmAM1Is0j4tICHoVyOVAXfWMP/kS9ZrjvyIXWV2PmomiAXXqOw==}
     engines: {node: '>=20.19.0'}
 
-  '@devframes/agentic@1.2.3':
-    resolution: {integrity: sha512-GYFvBBPCPsbNF7H79gY6Ky4rwo7C7Gt8qWhwUTUNACEnSi3SrQQPixiTNeccrasAYJiSMPKKOy9A1XbWevpm2g==}
+  '@devframes/agentic@1.2.5':
+    resolution: {integrity: sha512-2bVZFxGD7C+U1y0vkesUnLWHtrU3qD/Gq/Ri+aWkpXhDe/0EQ64ODA9gxCqFunUvJZ5z1rFvP1XLRLfUiSpvGg==}
     peerDependencies:
-      devframe: 1.2.3
+      devframe: 1.2.5
 
-  '@devframes/hub-ui@1.2.3':
-    resolution: {integrity: sha512-pGEAj/dUp4B7fZ73v8Ypn9c/Z9lEziz8E0fH7qTAJqZ9ZGbpQSp8aT3d36T3Ew4X9HE4vcA12IU0p40ZxjSxbw==}
+  '@devframes/hub-ui@1.2.5':
+    resolution: {integrity: sha512-zyQAvSGO8SM1KCAv/crlHbzA5mp1OY1UgcrHBrLaX2ocvj8SQ6Zu2D46PlgMe41zwcP5Gsc/gVxtpglstnD+ZA==}
     peerDependencies:
-      '@devframes/hub': 1.2.3
-      '@devframes/json-render': 1.2.3
-      devframe: 1.2.3
+      '@devframes/hub': 1.2.5
+      '@devframes/json-render': 1.2.5
+      devframe: 1.2.5
     peerDependenciesMeta:
       '@devframes/json-render':
         optional: true
 
-  '@devframes/hub@1.2.3':
-    resolution: {integrity: sha512-Z5WtKK0+UxEZizo1wpRFEYR3y9UtbQk50k47dvtOgn/z/F8lpj4/nbH9HfAIDH6Z7s0vfhvQQQW6U5OnaYMM0g==}
+  '@devframes/hub@1.2.5':
+    resolution: {integrity: sha512-cN/cb3uRqdSfOTkHFg3cfzsi8oWXDakvqKuENphPz7zQZPEedxtAa7E1e5Ap77wRkEsBn5gP0K7i5yL8box+vQ==}
     peerDependencies:
-      '@devframes/agentic': 1.2.3
-      devframe: 1.2.3
+      '@devframes/agentic': 1.2.5
+      devframe: 1.2.5
     peerDependenciesMeta:
       '@devframes/agentic':
         optional: true
 
-  '@devframes/plugin-messages--assets@1.2.3':
-    resolution: {integrity: sha512-GzSZ7E1227mJNwQUvLRDbZc4KyyzRAeFool4K/lB7LpeaF90EpwOebEuif+opcIEDBIwimzdIv16X8jHnhuLXA==}
+  '@devframes/plugin-messages--assets@1.2.5':
+    resolution: {integrity: sha512-07dIV6XVXeL8fECnDFJX0iqQ/IqQhxlhoc82Oo8f5OevW53IAKH5M8ixF+H6S1MJrqusylx01IfHqtU5QZD5hQ==}
 
-  '@devframes/plugin-messages@1.2.3':
-    resolution: {integrity: sha512-bGRlw/uoBWPDhGYsY/c0aX6fz44iF9GNHDHwo5B3F4GARiXKjPOUae/UUd+WP0pEn524kjQ7NI1q4/cm30Co+g==}
+  '@devframes/plugin-messages@1.2.5':
+    resolution: {integrity: sha512-T1SfTR4cAzjb/whiFT6O3QisyhC2khpUUn1MR16ZV9iQ8sn/7tiCsMWYsAYpEkbHwVcxFPJv69jRGYmvE1exBw==}
     hasBin: true
     peerDependencies:
-      '@devframes/hub': 1.2.3
-      '@devframes/plugin-messages--assets': 1.2.3
-      devframe: 1.2.3
+      '@devframes/hub': 1.2.5
+      '@devframes/plugin-messages--assets': 1.2.5
+      devframe: 1.2.5
       vite: ^7.0.0 || ^8.0.0
     peerDependenciesMeta:
       '@devframes/plugin-messages--assets':
@@ -1532,15 +1532,15 @@ packages:
       vite:
         optional: true
 
-  '@devframes/plugin-terminals--assets@1.2.3':
-    resolution: {integrity: sha512-mOPl+0f48NFuXkjHXddsKZvMXBnlwqHXc8A42NQrE0fyP3PyX5Nwhcl1UnTeMhy1qXfnK05CqLWVwYOsSUspZg==}
+  '@devframes/plugin-terminals--assets@1.2.5':
+    resolution: {integrity: sha512-OdZO1k1ZfgANKLfWS6pMvEUt+nNa4y+z6y5knMa6Sz/lDK/8BLvMspqOhq11O/SNIQuKESjcnYw1S8U28a+jCQ==}
 
-  '@devframes/plugin-terminals@1.2.3':
-    resolution: {integrity: sha512-y9Yla9XMkLwleYVkBlAam7ekPfgNT/vKAQ9UAIBCYGXSprcR19ZrbAco9liwoopTNsjKmd2bathFs4R5TndHeg==}
+  '@devframes/plugin-terminals@1.2.5':
+    resolution: {integrity: sha512-IT+2fHDQYg/tkAyCCXveSpOMp5W9KG4f/eRrGZM/Tae4QMAL36k4pEKbXCWYzloVlr50jL6y+Nrj/rN56m5FSw==}
     hasBin: true
     peerDependencies:
-      '@devframes/plugin-terminals--assets': 1.2.3
-      devframe: 1.2.3
+      '@devframes/plugin-terminals--assets': 1.2.5
+      devframe: 1.2.5
       vite: ^8.0.0
     peerDependenciesMeta:
       '@devframes/plugin-terminals--assets':
@@ -1548,17 +1548,17 @@ packages:
       vite:
         optional: true
 
-  '@devframes/service-open@1.2.3':
-    resolution: {integrity: sha512-x71jVlxkERpLnScjyhE/EuL7QvDsaxjoWRffOqp6ntwhCzQvOyWsJOPTHKE3PYrAH1kAbhZj7pBDse7jcMbyzg==}
+  '@devframes/service-open@1.2.5':
+    resolution: {integrity: sha512-U4y2Ahd534uEgkni5Zv9vNZamTFcIZq3e/VSmIZp5FMjgUHajPklZlk1ljB7MNcr9BbR7CMMNhRuPxIbAUDCMg==}
     peerDependencies:
-      devframe: 1.2.3
+      devframe: 1.2.5
 
-  '@devframes/vite@1.2.3':
-    resolution: {integrity: sha512-VzPL2SyzN1J9YwaBQ1YIb2QLYIhUYlImnN0r/eobraUiozc6rzJwXk1B4IDaOkfCQYN7CcTwkPUIUiR+e52S6A==}
+  '@devframes/vite@1.2.5':
+    resolution: {integrity: sha512-6Xk7W9mWqyc2iAjjL9weub0IOpyEUoTFSScz9FJIwvuPGHwNcsHE0ORZE0h/qVtRCabGrVRPa4636Hn7ZmoXAw==}
     peerDependencies:
-      '@devframes/hub': 1.2.3
-      '@devframes/hub-ui': 1.2.3
-      devframe: 1.2.3
+      '@devframes/hub': 1.2.5
+      '@devframes/hub-ui': 1.2.5
+      devframe: 1.2.5
       vite: ^7.0.0 || ^8.0.0
     peerDependenciesMeta:
       '@devframes/hub':
@@ -4985,11 +4985,11 @@ packages:
     engines: {node: '>= 16.0.0'}
     hasBin: true
 
-  devframe@1.2.3:
-    resolution: {integrity: sha512-IIe9q99/B4OS2IQ4LNk9H2NFXvWxdLteM1C2OFbpAFIQ4cWLpzmsfWsuwF3VfVclXhKl/MniNwv4vz4a+5CumA==}
+  devframe@1.2.5:
+    resolution: {integrity: sha512-7txhfBgFafXHN/KIyP/M6F1W5WF1VPypoB4mZtZEa4KM8n1Y57EtnVm281Y3cg7SHti/PtfCtmmmtDh/k/CS3g==}
     hasBin: true
     peerDependencies:
-      '@devframes/agentic': 1.2.3
+      '@devframes/agentic': 1.2.5
       cac: ^7.0.0
     peerDependenciesMeta:
       '@devframes/agentic':
@@ -9069,75 +9069,75 @@ snapshots:
 
   '@csstools/css-tokenizer@4.0.1': {}
 
-  '@devframes/agentic@1.2.3(patch_hash=a4ddfbdad6a1baeb51c5bd6b8bde8503690346600f88a4d796673e309ef97ad9)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3)':
+  '@devframes/agentic@1.2.5(patch_hash=a4ddfbdad6a1baeb51c5bd6b8bde8503690346600f88a4d796673e309ef97ad9)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5)':
     dependencies:
       '@modelcontextprotocol/client': 2.3.1
       '@modelcontextprotocol/server': 2.3.1
-      devframe: 1.2.3(patch_hash=877e107b3b640e28241731b2173f869f4b34ad5ab62106d024b98fede65d82bd)(@devframes/agentic@1.2.3)(cac@7.0.0)(srvx@1.0.5)
+      devframe: 1.2.5(patch_hash=c57683e516f48b81c1ae3a73b5d592e82a2b1bb1c9d35642ce910d25d3f64807)(@devframes/agentic@1.2.5)(cac@7.0.0)(srvx@1.0.5)
       h3: 2.0.1(crossws@0.4.12(srvx@1.0.5))
       pathe: 2.0.3
     transitivePeerDependencies:
       - crossws
       - ocache
 
-  '@devframes/hub-ui@1.2.3(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(devframe@1.2.3)':
+  '@devframes/hub-ui@1.2.5(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(devframe@1.2.5)':
     dependencies:
-      '@devframes/hub': 1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3)
-      devframe: 1.2.3(patch_hash=877e107b3b640e28241731b2173f869f4b34ad5ab62106d024b98fede65d82bd)(@devframes/agentic@1.2.3)(cac@7.0.0)(srvx@1.0.5)
+      '@devframes/hub': 1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5)
+      devframe: 1.2.5(patch_hash=c57683e516f48b81c1ae3a73b5d592e82a2b1bb1c9d35642ce910d25d3f64807)(@devframes/agentic@1.2.5)(cac@7.0.0)(srvx@1.0.5)
 
-  '@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3)':
+  '@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5)':
     dependencies:
       destr: 2.0.5
-      devframe: 1.2.3(patch_hash=877e107b3b640e28241731b2173f869f4b34ad5ab62106d024b98fede65d82bd)(@devframes/agentic@1.2.3)(cac@7.0.0)(srvx@1.0.5)
+      devframe: 1.2.5(patch_hash=c57683e516f48b81c1ae3a73b5d592e82a2b1bb1c9d35642ce910d25d3f64807)(@devframes/agentic@1.2.5)(cac@7.0.0)(srvx@1.0.5)
       h3: 2.0.1(crossws@0.4.12(srvx@1.0.5))
       pathe: 2.0.3
       tinyexec: 1.3.1
       zigpty: 0.2.1
     optionalDependencies:
-      '@devframes/agentic': 1.2.3(patch_hash=a4ddfbdad6a1baeb51c5bd6b8bde8503690346600f88a4d796673e309ef97ad9)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3)
+      '@devframes/agentic': 1.2.5(patch_hash=a4ddfbdad6a1baeb51c5bd6b8bde8503690346600f88a4d796673e309ef97ad9)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5)
     transitivePeerDependencies:
       - crossws
       - ocache
 
-  '@devframes/plugin-messages--assets@1.2.3': {}
+  '@devframes/plugin-messages--assets@1.2.5': {}
 
-  '@devframes/plugin-messages@1.2.3(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(@devframes/plugin-messages--assets@1.2.3)(devframe@1.2.3)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))':
+  '@devframes/plugin-messages@1.2.5(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(@devframes/plugin-messages--assets@1.2.5)(devframe@1.2.5)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))':
     dependencies:
-      '@devframes/hub': 1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3)
-      '@devframes/service-open': 1.2.3(devframe@1.2.3)
+      '@devframes/hub': 1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5)
+      '@devframes/service-open': 1.2.5(devframe@1.2.5)
       cac: 7.0.0
-      devframe: 1.2.3(patch_hash=877e107b3b640e28241731b2173f869f4b34ad5ab62106d024b98fede65d82bd)(@devframes/agentic@1.2.3)(cac@7.0.0)(srvx@1.0.5)
+      devframe: 1.2.5(patch_hash=c57683e516f48b81c1ae3a73b5d592e82a2b1bb1c9d35642ce910d25d3f64807)(@devframes/agentic@1.2.5)(cac@7.0.0)(srvx@1.0.5)
     optionalDependencies:
-      '@devframes/plugin-messages--assets': 1.2.3
+      '@devframes/plugin-messages--assets': 1.2.5
       vite: 8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0)
 
-  '@devframes/plugin-terminals--assets@1.2.3': {}
+  '@devframes/plugin-terminals--assets@1.2.5': {}
 
-  '@devframes/plugin-terminals@1.2.3(@devframes/hub-ui@1.2.3(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(devframe@1.2.3))(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(@devframes/plugin-terminals--assets@1.2.3)(devframe@1.2.3)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))':
+  '@devframes/plugin-terminals@1.2.5(@devframes/hub-ui@1.2.5(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(devframe@1.2.5))(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(@devframes/plugin-terminals--assets@1.2.5)(devframe@1.2.5)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))':
     dependencies:
-      '@devframes/vite': 1.2.3(@devframes/hub-ui@1.2.3(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(devframe@1.2.3))(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(devframe@1.2.3)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))
+      '@devframes/vite': 1.2.5(@devframes/hub-ui@1.2.5(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(devframe@1.2.5))(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(devframe@1.2.5)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))
       cac: 7.0.0
-      devframe: 1.2.3(patch_hash=877e107b3b640e28241731b2173f869f4b34ad5ab62106d024b98fede65d82bd)(@devframes/agentic@1.2.3)(cac@7.0.0)(srvx@1.0.5)
+      devframe: 1.2.5(patch_hash=c57683e516f48b81c1ae3a73b5d592e82a2b1bb1c9d35642ce910d25d3f64807)(@devframes/agentic@1.2.5)(cac@7.0.0)(srvx@1.0.5)
       zigpty: 0.2.1
     optionalDependencies:
-      '@devframes/plugin-terminals--assets': 1.2.3
+      '@devframes/plugin-terminals--assets': 1.2.5
       vite: 8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@devframes/hub'
       - '@devframes/hub-ui'
 
-  '@devframes/service-open@1.2.3(devframe@1.2.3)':
+  '@devframes/service-open@1.2.5(devframe@1.2.5)':
     dependencies:
-      devframe: 1.2.3(patch_hash=877e107b3b640e28241731b2173f869f4b34ad5ab62106d024b98fede65d82bd)(@devframes/agentic@1.2.3)(cac@7.0.0)(srvx@1.0.5)
+      devframe: 1.2.5(patch_hash=c57683e516f48b81c1ae3a73b5d592e82a2b1bb1c9d35642ce910d25d3f64807)(@devframes/agentic@1.2.5)(cac@7.0.0)(srvx@1.0.5)
       pathe: 2.0.3
 
-  '@devframes/vite@1.2.3(@devframes/hub-ui@1.2.3(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(devframe@1.2.3))(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(devframe@1.2.3)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))':
+  '@devframes/vite@1.2.5(@devframes/hub-ui@1.2.5(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(devframe@1.2.5))(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(devframe@1.2.5)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0))':
     dependencies:
-      devframe: 1.2.3(patch_hash=877e107b3b640e28241731b2173f869f4b34ad5ab62106d024b98fede65d82bd)(@devframes/agentic@1.2.3)(cac@7.0.0)(srvx@1.0.5)
+      devframe: 1.2.5(patch_hash=c57683e516f48b81c1ae3a73b5d592e82a2b1bb1c9d35642ce910d25d3f64807)(@devframes/agentic@1.2.5)(cac@7.0.0)(srvx@1.0.5)
       pathe: 2.0.3
     optionalDependencies:
-      '@devframes/hub': 1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3)
-      '@devframes/hub-ui': 1.2.3(@devframes/hub@1.2.3(patch_hash=47cc90f584a849c60796c501e52048208c6eeca320859012f9f9acf454c7929b)(@devframes/agentic@1.2.3)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3))(devframe@1.2.3)
+      '@devframes/hub': 1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5)
+      '@devframes/hub-ui': 1.2.5(@devframes/hub@1.2.5(patch_hash=136c0671b31c23643faf18a1ebc7c5c0d71a41b89677c65e23ae878911bff051)(@devframes/agentic@1.2.5)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5))(devframe@1.2.5)
       vite: 8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.0)(terser@5.51.2)(yaml@2.9.0)
 
   '@emnapi/core@1.11.1':
@@ -11838,14 +11838,14 @@ snapshots:
     dependencies:
       address: 2.0.3
 
-  devframe@1.2.3(patch_hash=877e107b3b640e28241731b2173f869f4b34ad5ab62106d024b98fede65d82bd)(@devframes/agentic@1.2.3)(cac@7.0.0)(srvx@1.0.5):
+  devframe@1.2.5(patch_hash=c57683e516f48b81c1ae3a73b5d592e82a2b1bb1c9d35642ce910d25d3f64807)(@devframes/agentic@1.2.5)(cac@7.0.0)(srvx@1.0.5):
     dependencies:
       crossws: 0.4.12(srvx@1.0.5)
       h3: 2.0.1(crossws@0.4.12(srvx@1.0.5))
       nostics: 1.3.0
       pathe: 2.0.3
     optionalDependencies:
-      '@devframes/agentic': 1.2.3(patch_hash=a4ddfbdad6a1baeb51c5bd6b8bde8503690346600f88a4d796673e309ef97ad9)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.3)
+      '@devframes/agentic': 1.2.5(patch_hash=a4ddfbdad6a1baeb51c5bd6b8bde8503690346600f88a4d796673e309ef97ad9)(crossws@0.4.12(srvx@1.0.5))(devframe@1.2.5)
       cac: 7.0.0
     transitivePeerDependencies:
       - ocache

@@ -43,9 +43,16 @@ pnpm install
 
 ### Patched dependencies
 
-`patches/` holds `pnpm patch` changes to the built files of `devframe`, `@devframes/agentic` and `@devframes/hub` 1.2.3, listed under `patchedDependencies` in `pnpm-workspace.yaml`. They add two MCP route options that devframe doesn't ship yet: `instructions`, sent when a client connects, and an `exposeSharedState` filter, which hides the shared-state keys of an inspector with `agent.tools.<name>: false`. `packages/devtools/src/agent-mcp.ts` sets both. Both are proposed upstream ("MCP: let hosts set the server `instructions` sent in `initialize`" and "MCP: accept the `exposeSharedState` filter on the hub and dev server routes").
+`patches/` holds `pnpm patch` changes to the built files of `devframe`, `@devframes/agentic` and `@devframes/hub` 1.2.5, listed under `patchedDependencies` in `pnpm-workspace.yaml`. They add what devframe doesn't ship:
 
-The patches apply only inside this repository. An app that installs the published package gets neither option until devframe ships them. Each patch names an exact version and file names with build hashes, so a devframe upgrade needs the patches redone with `pnpm patch`, or removed once devframe has the options.
+| Patch                | What it adds                                                                                                                              | Used by                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `instructions`       | An MCP route option, sent as `instructions` in the `initialize` result. Patched in `devframe`, `@devframes/hub` and `@devframes/agentic`. | `pangularMcp()` in `packages/devtools/src/agent-mcp.ts`                              |
+| `mcpContent` answers | `@devframes/agentic` sends a tool result's `mcpContent` blocks (`text` and `image`) as the MCP content, instead of the result as JSON.    | `screenshot-component`, through `withMcpContent()` in `rpc/component-screenshots.ts` |
+
+The `exposeSharedState` filter, which hides the shared-state keys of an inspector with `agent.tools.<name>: false`, is part of devframe since 1.2.4 and needs no patch.
+
+The patches apply only inside this repository. An app that installs the published package gets no server `instructions`, and `screenshot-component` answers with its text note only, until devframe ships both. Each patch names an exact version and file names with build hashes, so a devframe upgrade needs the patches redone with `pnpm patch`, or removed once devframe has the feature.
 
 ## Project structure
 

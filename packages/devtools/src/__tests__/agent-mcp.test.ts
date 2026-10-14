@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createDevServer } from 'devframe/adapters/dev';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { pangularMcp, pangularMcpInstructions } from '../agent-mcp.ts';
@@ -231,5 +233,40 @@ describe('pangular dev MCP route', () => {
     const keys = await stateKeys(call);
     expect(keys).not.toContain('pangular:forms');
     expect(keys).toContain('pangular:router');
+  });
+});
+
+describe('shared-state filter source', () => {
+  const repo = fileURLToPath(new URL('../../../../', import.meta.url));
+
+  // The filter must come from published devframe, not from `patches/`, which
+  // apply only inside this repository: an app that installs the package would
+  // otherwise get every key again (issue #238).
+  it('needs no local patch', () => {
+    for (const file of readdirSync(`${repo}patches`)) {
+      const lines = readFileSync(`${repo}patches/${file}`, 'utf8').split('\n');
+      // A line a hunk only touches (to add a comma) is removed and added again.
+      const removed = new Set(
+        lines
+          .filter((line) => /^-(?!--)/.test(line))
+          .map((line) => line.slice(1).replace(/,$/, '')),
+      );
+      const added = lines
+        .filter((line) => /^\+(?!\+\+)/.test(line))
+        .filter((line) => !removed.has(line.slice(1).replace(/,$/, '')));
+      expect(added.join('\n'), file).not.toContain('exposeSharedState');
+    }
+  });
+
+  it('requires a devframe release that has the route option', () => {
+    const pkg = JSON.parse(readFileSync(`${repo}packages/devtools/package.json`, 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+    for (const name of ['devframe', '@devframes/hub', '@devframes/agentic']) {
+      const [major, minor, patch] = pkg.dependencies[name]!.replace(/^\^/, '')
+        .split('.')
+        .map(Number);
+      expect(major! * 1e6 + minor! * 1e3 + patch!, name).toBeGreaterThanOrEqual(1_002_004);
+    }
   });
 });

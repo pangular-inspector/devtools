@@ -1,13 +1,11 @@
 diff --git a/dist/node/initiate.mjs b/dist/node/initiate.mjs
-index dd29f3c74df019fc992138f7eda6ebda863fca64..e6582fb96ca4c73762d3850cfbef2e78f96ffc8c 100644
+index d1bff38cf29d5003365d2baddc36d7e11c5707ab..e6582fb96ca4c73762d3850cfbef2e78f96ffc8c 100644
 --- a/dist/node/initiate.mjs
 +++ b/dist/node/initiate.mjs
-@@ -149,7 +149,8 @@ function initHub(options) {
- 			const mounted = mcpModule.mountMcpHttp(app, ctx, joinURL(base, mcpRoute), {
+@@ -150,6 +150,7 @@ function initHub(options) {
  				serverName: options.name ?? "devframes-hub",
  				serverVersion: options.version ?? "0.0.0",
--				exposeSharedState: true,
-+				exposeSharedState: mcpConfig.exposeSharedState ?? true,
+ 				exposeSharedState: mcpConfig.exposeSharedState ?? true,
 +				instructions: mcpConfig.instructions,
  				authorization: mcpConfig.authorization,
  				allowedOrigins: mcpConfig.allowedOrigins

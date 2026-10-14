@@ -1,0 +1,68 @@
+diff --git a/dist/_shared-DlRoV7v3.mjs b/dist/_shared-DlRoV7v3.mjs
+index 6f112f6e47f992e17597b8e949e6d3cadcf34c4c..05e8742fe34fbb87acb62334148eabaa385b8a0a 100644
+--- a/dist/_shared-DlRoV7v3.mjs
++++ b/dist/_shared-DlRoV7v3.mjs
+@@ -144,6 +144,7 @@ function resolveMcpConfig(mcp) {
+ 		...mcp.path !== void 0 ? { path: mcp.path } : {},
+ 		...mcp.allowedOrigins !== void 0 ? { allowedOrigins: mcp.allowedOrigins } : {},
+ 		...mcp.exposeSharedState !== void 0 ? { exposeSharedState: mcp.exposeSharedState } : {},
++		...mcp.instructions !== void 0 ? { instructions: mcp.instructions } : {},
+ 		authorization
+ 	};
+ }
+diff --git a/dist/_shared-NSl4p_om.d.mts b/dist/_shared-NSl4p_om.d.mts
+index d6f43f5913434da962a95c3fe7e075a5edef546d..40db07c07db6ac97414d92bb5f77e32ff3a66f94 100644
+--- a/dist/_shared-NSl4p_om.d.mts
++++ b/dist/_shared-NSl4p_om.d.mts
+@@ -37,6 +37,8 @@ interface ResolvedMcpConfig {
+   allowedOrigins?: readonly string[] | false;
+   /** Shared-state exposure from the route options; omitted means every key. */
+   exposeSharedState?: boolean | ((key: string) => boolean);
++  /** Usage guidance sent as `instructions` in the MCP `initialize` result. */
++  instructions?: string;
+   /** The resolved identity policy: a bearer token, callback, or `false`. */
+   authorization: McpAuthorization;
+ }
+diff --git a/dist/context-DhycZ2lx.d.mts b/dist/context-DhycZ2lx.d.mts
+index 2f3e7035b31326e1de8c19526c8683896e9dbc30..3b11a20659d947865c6d5eb7de29d3f742ed8657 100644
+--- a/dist/context-DhycZ2lx.d.mts
++++ b/dist/context-DhycZ2lx.d.mts
+@@ -1289,6 +1289,8 @@ interface McpRouteOptions {
+    * The states themselves stay available to the UI over RPC.
+    */
+   exposeSharedState?: boolean | ((key: string) => boolean);
++  /** Usage guidance sent as `instructions` in the MCP `initialize` result. */
++  instructions?: string;
+ }
+ interface DevframeCliOptions {
+   /** Binary name; default: the devframe's `id`. */
+@@ -1616,6 +1618,8 @@ interface CreateMcpServerOptions {
+    * - `(key) => boolean`: filter
+    */
+   exposeSharedState?: boolean | ((key: string) => boolean);
++  /** Usage guidance sent as `instructions` in the MCP `initialize` result. */
++  instructions?: string;
+   /** Override the name reported in the MCP handshake. */
+   serverName?: string;
+   /** Override the version reported in the MCP handshake. Defaults to `definition.version ?? '0.0.0'`. */
+@@ -1635,6 +1639,8 @@ interface CreateMcpFetchHandlerOptions {
+   serverVersion: string;
+   /** Expose shared-state keys as MCP resources; see {@link CreateMcpServerOptions.exposeSharedState}. */
+   exposeSharedState: boolean | ((key: string) => boolean);
++  /** Usage guidance sent as `instructions` in the MCP `initialize` result. */
++  instructions?: string;
+   /**
+    * Optional identity check, layered on top of the origin gate and checked
+    * **after** it: a bearer token string (matched in constant time against
+diff --git a/dist/dev-BViAfnlw.mjs b/dist/dev-BViAfnlw.mjs
+index 19f385cf45e59be7c0508a3c5a255f694003a347..0c4803369a7365d4d4aa901b1d0f55fc6b02dca5 100644
+--- a/dist/dev-BViAfnlw.mjs
++++ b/dist/dev-BViAfnlw.mjs
+@@ -140,6 +140,7 @@ async function mountMcpRoute(app, context, def, base, setting) {
+ 		serverName: `${def.id} (devframe)`,
+ 		serverVersion: def.version ?? "0.0.0",
+ 		exposeSharedState: config.exposeSharedState ?? true,
++		instructions: config.instructions,
+ 		authorization: config.authorization,
+ 		allowedOrigins: config.allowedOrigins
+ 	});
