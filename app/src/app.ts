@@ -46,7 +46,7 @@ import { hostPageId, scopeToPage } from './page-id';
 import { angularNativePage, type PlatformPage } from './native-page';
 import { initialTab, storeTab, storedTab } from './tab-memory';
 import { detectBaseURL } from './base-url';
-import { clearHighlightsOnHide, rpcTry } from './rpc';
+import { clearHighlightsOnHide, panelCacheOptions, rpcTry } from './rpc';
 import { EditorOpener } from './ui/source-link';
 import { viewAccent } from './view-accents';
 import {
@@ -1279,7 +1279,10 @@ export class App implements OnInit, OnDestroy {
     this.connecting = true;
     clearTimeout(this.retryTimer);
     const baseURL = detectBaseURL();
-    connectDevframe(baseURL ? { baseURL } : {}).then(
+    connectDevframe({
+      ...(baseURL ? { baseURL } : {}),
+      cacheOptions: panelCacheOptions(),
+    }).then(
       (client) => {
         this.connecting = false;
         if (this.destroyed) {

@@ -993,6 +993,17 @@ export const SHARED_RPC: readonly string[] = [
 ];
 
 /**
+ * Server RPC functions the panel's devframe client caches (its `cacheOptions`),
+ * so a repeat call is answered without a round trip. Only functions whose
+ * answer can't change while the server runs belong here, each one `static` or
+ * marked `cacheable: true`. Live page data and source scans never do: they
+ * change as the app runs and as files are edited. devframe drops the cache
+ * when the connection drops, and the panel connects a new client then, so a
+ * restarted server is asked again.
+ */
+export const PANEL_CACHED_RPC: readonly string[] = ['pangular:build-meta'];
+
+/**
  * The inspector each server RPC function belongs to. A function missing here
  * is shared and always registered.
  */

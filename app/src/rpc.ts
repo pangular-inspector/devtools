@@ -1,4 +1,14 @@
+import { PANEL_CACHED_RPC } from '@pangular-inspector/devtools/config';
 import type { DevframeRpcClient } from 'devframe/client';
+
+/**
+ * The panel client's devframe `cacheOptions`: an explicit list, so only the
+ * functions in `PANEL_CACHED_RPC` are cached, never whatever else the server
+ * advertises as cacheable. devframe clears it when the connection changes.
+ */
+export function panelCacheOptions(): { functions: string[] } {
+  return { functions: [...PANEL_CACHED_RPC] };
+}
 
 /** Calls a `pangular` RPC; resolves `null` without a client, rejections propagate. */
 export function rpcCall(

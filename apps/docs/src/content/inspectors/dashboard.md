@@ -102,6 +102,8 @@ The Forms and SSR & HTTP cards read the live page only, and update while it runs
 
 If the project block says **Project details unavailable**, check that the dev server is running, then click **Try again**. In a [static report](../getting-started/cli.md#static-report) there is no **Try again** button, so run `pangular build` again to rebuild the report.
 
+The panel reads the project details once per connection and keeps them. If you upgrade a package or edit `angular.json` while the dev server runs, restart the dev server or reload the panel to see the change.
+
 ## FAQ
 
 <ngmd-accordion>

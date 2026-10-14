@@ -8,6 +8,10 @@ const connection = vi.hoisted(() => ({
   answers: [] as boolean[],
   /** Sends a `connection:status` event to the last connected client's listeners. */
   emitStatus: (_status: string) => {},
+  /** The options each attempt passed to `connectDevframe`. */
+  options: [] as unknown[],
+  /** How many clients the panel closed. */
+  closed: 0,
 }));
 
 function fakeClient(): DevframeRpcClient {
@@ -27,12 +31,15 @@ function fakeClient(): DevframeRpcClient {
         return () => {};
       },
     },
-    close: () => {},
+    close: () => {
+      connection.closed++;
+    },
   } as unknown as DevframeRpcClient;
 }
 
 vi.mock('devframe/client', () => ({
-  connectDevframe: () => {
+  connectDevframe: (options?: unknown) => {
+    connection.options.push(options);
     const ok = connection.answers[connection.attempts++] ?? false;
     return ok ? Promise.resolve(fakeClient()) : Promise.reject(new Error('no server'));
   },
@@ -55,6 +62,8 @@ afterEach(() => {
   document.body.innerHTML = '';
   connection.attempts = 0;
   connection.answers = [];
+  connection.options = [];
+  connection.closed = 0;
   TestBed.resetTestingModule();
 });
 
@@ -109,6 +118,25 @@ describe('App connection retry', () => {
     await vi.waitFor(() => expect(connection.attempts).toBe(2), { timeout: 3000 });
     await settle(fixture);
     expect(status(fixture)).toBe('Live');
+    fixture.destroy();
+  });
+
+  it('caches only build-meta, in a new client after the connection drops', async () => {
+    connection.answers = [true, true];
+    const fixture = TestBed.createComponent(App);
+    await settle(fixture);
+    expect(connection.options[0]).toMatchObject({
+      cacheOptions: { functions: ['pangular:build-meta'] },
+    });
+
+    // A restarted server gets a new client, so nothing cached before is reused.
+    connection.emitStatus('disconnected');
+    await settle(fixture);
+    expect(connection.closed).toBe(1);
+    await vi.waitFor(() => expect(connection.attempts).toBe(2), { timeout: 3000 });
+    expect(connection.options[1]).toMatchObject({
+      cacheOptions: { functions: ['pangular:build-meta'] },
+    });
     fixture.destroy();
   });
 

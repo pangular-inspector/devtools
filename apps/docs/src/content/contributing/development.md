@@ -232,6 +232,8 @@ If a code change needs no docs change, add the `no-docs` label to the pull reque
 3. Map it to its inspector in `RPC_INSPECTOR` in `packages/devtools/src/config.ts`, so turning the inspector off removes it.
 4. Call it from the UI in `app/src/pages/`.
 
+The panel's devframe client caches the functions listed in `PANEL_CACHED_RPC` in `packages/devtools/src/config.ts`, and only those. A cached call is answered from the client until the connection drops, so a restarted server is asked again. Add a function there only when its answer can't change while the server runs, and give it `type: 'static'` or `cacheable: true`. Live page data and source scans never qualify.
+
 ### Add a tab
 
 1. Create a component in `app/src/pages/`.

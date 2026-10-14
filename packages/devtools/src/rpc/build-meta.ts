@@ -18,6 +18,11 @@ const BuildMetaSchema = v.object({
 export const getBuildMeta = defineRpcFunction({
   name: 'build-meta',
   type: 'static',
+  // Versions, project name and SSR come from package.json, node_modules and
+  // angular.json, which a running dev server doesn't reload, so the panel
+  // caches the answer for the connection (PANEL_CACHED_RPC). `static` already
+  // implies it for devframe; the flag says so here.
+  cacheable: true,
   jsonSerializable: true,
   snapshot: true,
   args: [],
