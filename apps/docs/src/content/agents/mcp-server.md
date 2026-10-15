@@ -255,7 +255,7 @@ A tool answers with a JSON object, sent as text. Most tools answer `{ "markdown"
 | ----------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | Every tool whose name starts with `list-` or `inspect-`                                                     | `{ "markdown": "..." }`        |
 | `analog-routes`, `analog-api-routes`, `analog-server-functions`, `analog-server-calls` and `analog-content` | `{ "markdown": "..." }`        |
-| `wait-for`                                                                                                  | `{ "markdown": "..." }`        |
+| `wait-for` and `lint-templates`                                                                             | `{ "markdown": "..." }`        |
 | `build-meta`                                                                                                | The project and version fields |
 | `snapshot`                                                                                                  | `{ "markdown": "..." }`        |
 

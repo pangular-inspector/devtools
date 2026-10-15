@@ -925,6 +925,7 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
 
   // components
   'get-components': { kind: 'rpc', inspectors: ['components'] },
+  'lint-templates': { kind: 'tool', inspectors: ['components'] },
   'component-tree': { kind: 'resource', inspectors: ['components'], page: true },
   highlight: { kind: 'tool', inspectors: ['components'], page: true },
   'inspect-component': { kind: 'tool', inspectors: ['components'], page: true },

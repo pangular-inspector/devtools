@@ -214,6 +214,7 @@ describe('agent tool output schemas', () => {
         'pangular_analog-server-calls',
         'pangular_analog-content',
         'pangular_build-meta',
+        'pangular_lint-templates',
         'pangular_wait-for',
         'pangular_snapshot',
       ].includes(name);

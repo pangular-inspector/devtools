@@ -309,7 +309,7 @@ An app can put any text in a value, a URL, a label or an error message, includin
 
 A tool answer that names a page the server does not know lists the pages that report, with their URLs. That answer starts with the first notice too.
 
-Answers that hold no page text carry no notice: `highlight` (instance ids, class names and tags), answers that only say there is no data yet, `lint-pipes` and the source scan tools such as `get-components` (they read your project files, not the page). The `component-tree`, `signal-graph`, `injector-tree`, `ngrx-store`, `forms` and `router` resources carry the notice in an `_untrusted` field at the top of their JSON, also when they return a truncated summary.
+Answers that hold no page text carry no notice: `highlight` (instance ids, class names and tags), answers that only say there is no data yet, `lint-pipes`, `lint-templates` and the source scan tools such as `get-components` (they read your project files, not the page). The `component-tree`, `signal-graph`, `injector-tree`, `ngrx-store`, `forms` and `router` resources carry the notice in an `_untrusted` field at the top of their JSON, also when they return a truncated summary.
 
 ## Checklist
 

@@ -39,6 +39,7 @@ import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
+import { templateLintTool } from './rpc/template-lint-tool.ts';
 import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
 import { createPageOwners } from './rpc/page-owners.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
@@ -2954,6 +2955,8 @@ const pangular = defineDevframe({
         );
       },
     });
+
+    agent.registerTool(templateLintTool(ctx.cwd));
 
     agent.registerTool({
       id: 'pangular:for-blocks',

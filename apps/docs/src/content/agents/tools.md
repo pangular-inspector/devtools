@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Ninety-seven tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Ninety-eight tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -230,6 +230,28 @@ Angular reports the `track` expression as one of three kinds, not as its source 
 The page reads the blocks with `ng.ɵgetControlFlowBlocks`, which Angular 22.0 added for development builds. On an older Angular or a production build, the answer says the page cannot list them. The page sends the item count only, never the items.
 
 Each page lists at most 50 blocks, with a note on how many more are not shown, and says when the page has more than the 500 blocks it reports. The whole answer stops at 20,000 characters. If several tabs report, pass `page` to read one. The **&#64;for blocks** list on the [Components](../inspectors/components.md#for-blocks) page has every block.
+
+### lint-templates
+
+Checks the component templates in your source, inline `template` and `templateUrl` files, with the project's own `@angular/compiler`. Reads: source.
+
+| Argument   | Required | Value                                                                  |
+| ---------- | -------- | ---------------------------------------------------------------------- |
+| `rule`     | no       | Only findings of this rule, one of the ids below.                      |
+| `file`     | no       | Only findings in files whose path contains this text, such as `cart/`. |
+| `severity` | no       | Only findings of this severity: `error`, `warning` or `info`.          |
+| `limit`    | no       | How many findings to list, 1 to 200. Defaults to 50.                   |
+
+| Rule                   | Severity  | Finds                                                                                                                                                                                                                      |
+| ---------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `template-parse-error` | `error`   | An error the template parser reports, such as an unclosed element, a broken expression or `@for` without `track`.                                                                                                          |
+| `track-by-index`       | `warning` | `@for` that tracks by `$index` (or an alias of it) while its body reads fields of the item, so the items are objects. Rows that bind a form directive, such as `[formControlName]="$index"` or `[formField]`, are skipped. |
+| `img-missing-alt`      | `warning` | `<img>` without `alt`, `[alt]` or `[attr.alt]`, unless it has `role="presentation"`, `role="none"` or `aria-hidden="true"`.                                                                                                |
+| `click-without-key`    | `warning` | `(click)` on a plain element such as `<div>` or `<span>` with no `keydown`, `keyup` or `keypress` handler. Buttons, links, form controls and components are skipped.                                                       |
+| `legacy-control-flow`  | `info`    | `*ngIf`, `*ngFor`, `*ngSwitchCase` or `*ngSwitchDefault` where `@if`, `@for` or `@switch` would do. Skipped before Angular 17.                                                                                             |
+| `ngclass-ngstyle`      | `info`    | `ngClass` or `ngStyle` where `[class]` or `[style]` bindings would do.                                                                                                                                                     |
+
+Each finding gives its severity, rule, `file:line` and a fix. Errors come first. A template whose text has not changed since the last call is not parsed again. A backtick template built with `${}` is skipped. If the project has no `@angular/compiler` installed, the answer says so and lists nothing.
 
 ### hydration <ngmd-badge variant="alpha">Action</ngmd-badge>
 

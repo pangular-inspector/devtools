@@ -33,6 +33,7 @@ Pangular Inspector reads a running Angular app through Angular's debug APIs and 
 | Why does `inject()` fail (NG0201, NullInjectorError)? | `explain-injection` with `selector` and `token`                                  |
 | Which route is active, and why did navigation fail?   | `inspect-route`, `explain-navigation`, `export-navigation`                       |
 | Is the route config wrong?                            | `lint-routes`, `list-routes` with `match`                                        |
+| Do the templates have errors or a11y problems?        | `lint-templates`, with `rule` or `file` to narrow it                             |
 | Why is the form invalid or the submit dead?           | `explain-form-invalid`, `explain-field`, `explain-submit` (see `pangular-forms`) |
 | What errors and console messages happened?            | `list-errors`, `explain-error`, `list-console` (see `pangular-errors`)           |
 | Which HTTP calls ran, and what did SSR do?            | `list-http-calls`, `list-ssr-requests`, `explain-ssr-request`                    |
