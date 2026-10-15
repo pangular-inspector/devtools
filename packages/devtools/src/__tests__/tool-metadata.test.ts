@@ -215,6 +215,7 @@ describe('agent tool output schemas', () => {
         'pangular_analog-content',
         'pangular_build-meta',
         'pangular_wait-for',
+        'pangular_snapshot',
       ].includes(name);
     expect(withSchema.map((tool) => tool.name).sort()).toEqual(
       tools

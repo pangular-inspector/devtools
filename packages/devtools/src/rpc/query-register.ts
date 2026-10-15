@@ -49,6 +49,8 @@ export interface QueryHost {
 export interface QueryRegistration {
   pages(): { pageId: string; reportedAt: number; url?: string; title?: string }[];
   expire(now?: number): void;
+  /** What every page reported, for `snapshot`. */
+  state(): QueryState;
 }
 
 /**
@@ -268,5 +270,6 @@ export async function registerTanstackQuery(host: QueryHost): Promise<QueryRegis
         title: page.title,
       })),
     expire: (now = Date.now()) => drop(staleQueryPages(state(), now, host.ttl)),
+    state,
   };
 }

@@ -910,6 +910,8 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'build-meta': { kind: 'rpc' },
   'list-pages': { kind: 'tool', page: true },
   'open-in-panel': { kind: 'tool', page: true },
+  // Reads every inspector's data and leaves out the sections that are off.
+  snapshot: { kind: 'tool', page: true },
   // Only with `axe`, which loads and runs axe-core in the page.
   audit: { kind: 'tool', safety: 'action', readOnlyVariant: true, page: true },
   // Reads what the components, router, http and errors collectors report; each
@@ -1242,6 +1244,8 @@ export const SHARED_RPC: readonly string[] = [
   'list-pages',
   // Opens any tab, so it stays with every inspector off; it lists only the tabs that are on.
   'open-in-panel',
+  // Reads every inspector and leaves out the sections that are off, so it stays with every inspector off.
+  'snapshot',
   // The page registers the `read` agent tools for browser agents (agent.browserTools),
   // and the panel's Settings turns them on or off while the server runs.
   'list-browser-tools',

@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Ninety-six tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Ninety-seven tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -17,7 +17,7 @@ This page lists every tool the [MCP server](./mcp-server.md) exposes. Each group
 
 Tool ids use a colon, as `pangular:get-routes`. MCP clients see them with an underscore, as `pangular_get-routes`. The tables below drop the `pangular:` prefix. The `read` tools are also registered on the page under the same names, for [browser agents](./browser-agents.md).
 
-Each tool has a short title that clients show in their tool lists, and the `list-` and `inspect-` tools also send their answer as structured content. See [Titles and structured output](./mcp-server.md#titles-and-structured-output).
+Each tool has a short title that clients show in their tool lists, and the `list-` and `inspect-` tools and `snapshot` also send their answer as structured content. See [Titles and structured output](./mcp-server.md#titles-and-structured-output).
 
 ### Source and live tools
 
@@ -37,7 +37,7 @@ Each tool reads from one of three places. The stdio server registers only the to
 
 ### The page argument
 
-Most page tools take an optional `page` argument to pick a browser tab. It defaults to the most recent one. `dispatch-ngrx-action`, `set-component-property` and `set-signal` refuse to guess when more than one tab could take the action. `form-action` and `fill-form` take the tab from the form id instead (the part after `@`, as in `Checkout.form@ab12`). `highlight` and `inspect-component` search every tab without it, newest first, and `defer-blocks`, `for-blocks` and `hydration` list every tab. `inspect-providers`, `highlight`, `inspect-component`, `defer-blocks`, `for-blocks` and `hydration` also accept `pageId`. The tables below leave `page` out.
+Most page tools take an optional `page` argument to pick a browser tab. It defaults to the most recent one. `dispatch-ngrx-action`, `set-component-property` and `set-signal` refuse to guess when more than one tab could take the action. `form-action` and `fill-form` take the tab from the form id instead (the part after `@`, as in `Checkout.form@ab12`). `highlight` and `inspect-component` search every tab without it, newest first, and `defer-blocks`, `for-blocks` and `hydration` list every tab. `inspect-providers`, `highlight`, `inspect-component`, `defer-blocks`, `for-blocks`, `hydration` and `snapshot` also accept `pageId`. The tables below leave `page` out.
 
 If `page` names a tab that doesn't report that data, the tool answers `No page <id> is reporting ...` and lists the tabs that do, newest first. It never falls back to another tab. Without `page`, a class name or tag resolves on the most recent tab that has it, and `highlight` names the other tabs where it also matches.
 
@@ -50,6 +50,32 @@ When the page's Angular lacks the debug API a tool needs, the tool answers **Uns
 Lists the tabs, [Angular Native](../getting-started/angular-native.md) apps, [NativeScript](../getting-started/nativescript.md) apps and [Capacitor](../guides/capacitor.md) apps that report to the server, newest first: page id, URL, title, platform (`browser`, `Angular Native`, `NativeScript`, or `Capacitor (android)` and `Capacitor (ios)` for an app in a native WebView, followed by the page's Angular version when it reported one, as in `browser, Angular 15.2`), seconds since the last report, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
 
 The URL comes from the HTTP or router report. A page that sends neither (no router, and no [HTTP setup](../getting-started/express.md)) still shows the URL its component tree reports, which also stands in when the other reports are more than 15 seconds older. A tab in the background stops reporting until it is shown again, so its last report is marked `(background)`: an old time there means the data is the last known state, not that the page is gone.
+
+### snapshot
+
+Gives one page's full picture in one bounded markdown answer, for an agent that wants everything at once or a bug report. Reads: page. Each section comes from the tool named under its heading, with the same masking, so call that tool for the rest.
+
+| Section       | What it holds                                              | Full answer            |
+| ------------- | ---------------------------------------------------------- | ---------------------- |
+| `page`        | Page id, URL, title, platform, Angular version, inspectors | `list-pages`           |
+| `components`  | The component outline                                      | `list-components`      |
+| `route`       | The URL and the active route tree                          | `inspect-route`        |
+| `navigations` | Recent navigations, one line each, newest first            | `explain-navigation`   |
+| `http`        | HttpClient calls, newest first                             | `list-http-calls`      |
+| `errors`      | Error groups, most recent first                            | `list-errors`          |
+| `console`     | Console calls, newest first                                | `list-console`         |
+| `forms`       | Each form with its status and error count                  | `inspect-forms`        |
+| `signals`     | The signal graph, without Angular's own nodes and history  | `inspect-signals`      |
+| `stores`      | NgRx stores and Redux DevTools stores                      | `inspect-signal-store` |
+| `queries`     | TanStack Query queries and mutations                       | `list-queries`         |
+
+| Argument   | Required | What it is                                                             |
+| ---------- | -------- | ---------------------------------------------------------------------- |
+| `sections` | No       | The sections to include, in the order above. Every section without it. |
+| `limit`    | No       | Most items per section, 1 to 50 (default 10).                          |
+| `maxChars` | No       | Longest answer, 2,000 to 50,000 characters (default 20,000).           |
+
+Each section is also cut at 4,000 characters. When the answer reaches `maxChars`, it ends with a `Truncated` note that names the sections left out. A section whose inspector is off in `inspectors`, or whose tools are off in `agent.tools`, is listed under `Skipped`, and a section the page reported nothing for is listed as empty. The answer starts with the untrusted-data notice once, for every section.
 
 ### open-in-panel
 

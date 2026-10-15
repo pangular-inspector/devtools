@@ -187,7 +187,7 @@ export function summarizePages(
 const cell = (text: string) => text.replace(/\|/g, '\\|').replace(/\s+/g, ' ');
 
 /** `Angular Native`, `NativeScript`, `Capacitor (ios)` and so on, or `browser`. */
-function platformLabel(platform: string | undefined): string {
+export function platformLabel(platform: string | undefined): string {
   if (platform === 'angular-native') return 'Angular Native';
   if (platform === 'nativescript') return 'NativeScript';
   if (platform?.startsWith('capacitor-'))

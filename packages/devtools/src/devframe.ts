@@ -25,6 +25,7 @@ import {
 } from './rpc/hydration-tools.ts';
 import { registerConsoleGlobals } from './rpc/console-globals.ts';
 import { registerErrors } from './rpc/errors-register.ts';
+import { registerSnapshot } from './rpc/snapshot-tools.ts';
 import { registerLeaks } from './rpc/leaks-register.ts';
 import { registerReduxStores } from './rpc/redux-stores-register.ts';
 import { registerTanstackQuery } from './rpc/query-register.ts';
@@ -4173,6 +4174,47 @@ const pangular = defineDevframe({
       },
     });
 
+    // Every reporting page, merged across inspectors, newest first.
+    const livePages = () => {
+      const details = livePageDetails();
+      const platforms = new Map<string, string>();
+      for (const page of componentPages.values()) {
+        if (page.platform) platforms.set(page.pageId, page.platform);
+      }
+      for (const page of capacitorPages.values()) {
+        if (page.info.bridge && !platforms.has(page.pageId)) {
+          platforms.set(page.pageId, `capacitor-${page.info.platform}`);
+        }
+      }
+      const withUrl = <T extends { pageId: string; reportedAt: number }>(pages: Iterable<T>) =>
+        [...pages].map((page) => ({
+          pageId: page.pageId,
+          reportedAt: page.reportedAt,
+          ...details.get(page.pageId),
+          platform: platforms.get(page.pageId),
+          angular: angularPages.get(page.pageId)?.version,
+        }));
+      return summarizePages(
+        {
+          components: withUrl(componentPages.values()),
+          signals: withUrl([...signalPages].map(([pageId, entry]) => ({ pageId, ...entry }))),
+          injectors: withUrl(injectorPages.values()),
+          ngrx: withUrl([...ngrxPages.values(), ...(reduxStores?.pages() ?? [])]),
+          tanstackQuery: withUrl(tanstackQuery?.pages() ?? []),
+          forms: withUrl(formPages.values()),
+          router: withUrl(routerPages.values()),
+          pipes: withUrl(pipePages.values()),
+          http: withUrl(httpPages.values()),
+          capacitor: withUrl(capacitorPages.values()),
+          errors: withUrl(errorsInspector?.pages() ?? []),
+          startup: withUrl(startupInspector?.pages() ?? []),
+          plugins: withUrl(pluginsInspector?.pages() ?? []),
+          analog: withUrl(on.analog ? analogPages() : []),
+        },
+        visibility.list(),
+      );
+    };
+
     agent.registerTool({
       id: 'pangular:list-pages',
       title: 'List connected pages',
@@ -4180,45 +4222,23 @@ const pangular = defineDevframe({
       description:
         'List connected browser tabs, Angular Native apps, and Capacitor apps reporting live data, newest first: page id, URL, title, platform, Angular version, recency, background status, and reporting inspectors. Pass a page id as `page` to the live tools to target a specific tab.',
       inputSchema: { type: 'object', properties: {} },
-      handler: async () => {
-        const details = livePageDetails();
-        const platforms = new Map<string, string>();
-        for (const page of componentPages.values()) {
-          if (page.platform) platforms.set(page.pageId, page.platform);
-        }
-        for (const page of capacitorPages.values()) {
-          if (page.info.bridge && !platforms.has(page.pageId)) {
-            platforms.set(page.pageId, `capacitor-${page.info.platform}`);
-          }
-        }
-        const withUrl = <T extends { pageId: string; reportedAt: number }>(pages: Iterable<T>) =>
-          [...pages].map((page) => ({
-            pageId: page.pageId,
-            reportedAt: page.reportedAt,
-            ...details.get(page.pageId),
-            platform: platforms.get(page.pageId),
-            angular: angularPages.get(page.pageId)?.version,
-          }));
-        const pages = summarizePages(
-          {
-            components: withUrl(componentPages.values()),
-            signals: withUrl([...signalPages].map(([pageId, entry]) => ({ pageId, ...entry }))),
-            injectors: withUrl(injectorPages.values()),
-            ngrx: withUrl([...ngrxPages.values(), ...(reduxStores?.pages() ?? [])]),
-            tanstackQuery: withUrl(tanstackQuery?.pages() ?? []),
-            forms: withUrl(formPages.values()),
-            router: withUrl(routerPages.values()),
-            pipes: withUrl(pipePages.values()),
-            http: withUrl(httpPages.values()),
-            capacitor: withUrl(capacitorPages.values()),
-            errors: withUrl(errorsInspector?.pages() ?? []),
-            startup: withUrl(startupInspector?.pages() ?? []),
-            plugins: withUrl(pluginsInspector?.pages() ?? []),
-            analog: withUrl(on.analog ? analogPages() : []),
-          },
-          visibility.list(),
-        );
-        return { markdown: listPagesText(pages) };
+      handler: async () => ({ markdown: listPagesText(livePages()) }),
+    });
+
+    registerSnapshot({
+      agent,
+      config,
+      sources: {
+        pages: livePages,
+        components: () => componentPages.values(),
+        router: () => routerState.value() as RouterState,
+        http: httpSnapshot,
+        errors: () => errorsInspector?.state(),
+        forms: () => formsState.value() as FormsState,
+        signals: () => [...signalPages].map(([pageId, entry]) => ({ pageId, ...entry })),
+        ngrx: () => ngrxPages,
+        reduxStores: () => reduxStores?.state(),
+        queries: () => tanstackQuery?.state(),
       },
     });
 

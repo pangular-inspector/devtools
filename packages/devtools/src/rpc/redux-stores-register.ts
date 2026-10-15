@@ -33,6 +33,8 @@ export interface ReduxStoresRegistration {
   pages(): { pageId: string; reportedAt: number; url?: string; title?: string }[];
   /** Drops pages that stopped reporting; call it from the shared expiry interval. */
   expire(now?: number): void;
+  /** What every page reported, for `snapshot`. */
+  state(): ReduxStoresState;
 }
 
 /**
@@ -117,5 +119,6 @@ export async function registerReduxStores(host: ReduxStoresHost): Promise<ReduxS
         title: page.title,
       })),
     expire: (now = Date.now()) => drop(staleReduxStoresPages(state(), now, host.ttl)),
+    state,
   };
 }
