@@ -861,35 +861,308 @@ export const FORM_WRITE_ACTIONS: readonly string[] = [
 /** Router actions that start, stop, repeat or probe a navigation. */
 export const ROUTER_WRITE_ACTIONS: readonly string[] = ['navigate', 'abort', 'replay', 'probe'];
 
+/** What the devframe setup registers for an agent entry. */
+export type AgentEntryKind = 'tool' | 'resource' | 'rpc';
+
 /**
- * Agent tools that perform an action's writes; blocking the action drops them,
- * except the tools in `ACTION_TOOL_FREE_MODES`.
+ * What the config needs to know about one built-in agent tool or resource.
+ * `AGENT_INSPECTOR`, `AGENT_SAFETY`, `READ_ONLY_VARIANTS`, `ACTION_TOOLS`,
+ * `ACTION_TOOL_FREE_MODES`, `PAGE_AGENT_ENTRIES` and `agentTags` derive from
+ * it, and `agent-metadata.test.ts` fails when a registered
+ * entry is missing here or an entry here is not registered.
  */
-export const ACTION_TOOLS: Record<PangularAction, readonly string[]> = {
-  forms: ['form-action', 'fill-form'],
-  router: ['navigate', 'clear-recordings'],
-  ngrx: ['dispatch-ngrx-action', 'restore-ngrx-state'],
-  http: [
-    'set-http-rule',
-    'remove-http-rule',
-    'set-ssr-override',
-    'remove-ssr-override',
-    'clear-recordings',
-  ],
-  analog: ['analog-call-api', 'clear-recordings'],
-  components: ['set-component-property', 'set-signal'],
-  tanstackQuery: ['query-action'],
-  // Plugin tools are checked by `pluginToolAllowed`: their names come from the plugins.
-  plugins: [],
+export interface AgentEntry {
+  /**
+   * `tool` for `ctx.agent.registerTool`, `resource` for
+   * `ctx.agent.registerResource`, `rpc` for an RPC function with `agent`.
+   */
+  kind: AgentEntryKind;
+  /**
+   * The inspectors it belongs to; the first is the one `inspectors` and
+   * `agent.tools` turn it off with, and all of them are its tags. Left out for
+   * shared entries. An `rpc` entry repeats its `RPC_INSPECTOR` inspector.
+   */
+  inspectors?: readonly PangularInspector[];
+  /** The tier when it is not `read`. */
+  safety?: Exclude<AgentSafety, 'read'>;
+  /** `agent.readOnly` keeps it as `read`, and its handler refuses the arguments that act. */
+  readOnlyVariant?: true;
+  /** The `actions` it writes for; blocking all of them drops it. */
+  actions?: readonly PangularAction[];
+  /** Modes that work while its actions are blocked, so blocking them keeps it. */
+  freeModes?: readonly string[];
+  /**
+   * It answers only while a page reports, calls the app's dev server, or
+   * points into the panel the server serves, so the stdio MCP server leaves it out.
+   */
+  page?: true;
+}
+
+/**
+ * Every built-in agent tool and resource, without the `pangular:` prefix.
+ * Plugin tools (`pangular:plugin:<id>:<tool>`) are not here: their plugin
+ * declares their tier, and they always belong to `plugins`.
+ */
+export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
+  // Shared: no inspector turns these off.
+  'build-meta': { kind: 'rpc' },
+  'list-pages': { kind: 'tool', page: true },
+  'open-in-panel': { kind: 'tool', page: true },
+  // Only with `axe`, which loads and runs axe-core in the page.
+  audit: { kind: 'tool', safety: 'action', readOnlyVariant: true, page: true },
+
+  // components
+  'get-components': { kind: 'rpc', inspectors: ['components'] },
+  'component-tree': { kind: 'resource', inspectors: ['components'], page: true },
+  highlight: { kind: 'tool', inspectors: ['components'], page: true },
+  'inspect-component': { kind: 'tool', inspectors: ['components'], page: true },
+  'list-components': { kind: 'tool', inspectors: ['components'], page: true },
+  'defer-blocks': { kind: 'tool', inspectors: ['components'], page: true },
+  'for-blocks': { kind: 'tool', inspectors: ['components'], page: true },
+  hydration: {
+    kind: 'tool',
+    inspectors: ['components'],
+    safety: 'action',
+    readOnlyVariant: true,
+    page: true,
+  },
+  'change-detection': {
+    kind: 'tool',
+    inspectors: ['components'],
+    safety: 'action',
+    readOnlyVariant: true,
+    page: true,
+  },
+  'diagnose-change-detection': { kind: 'tool', inspectors: ['components'], page: true },
+  'set-component-property': {
+    kind: 'tool',
+    inspectors: ['components'],
+    safety: 'action',
+    actions: ['components'],
+    page: true,
+  },
+  'set-signal': {
+    kind: 'tool',
+    inspectors: ['components'],
+    safety: 'action',
+    actions: ['components'],
+    page: true,
+  },
+  'find-leaks': { kind: 'tool', inspectors: ['components'], page: true },
+  'track-subscriptions': {
+    kind: 'tool',
+    inspectors: ['components'],
+    safety: 'action',
+    page: true,
+  },
+  'screenshot-component': { kind: 'tool', inspectors: ['components'], page: true },
+
+  // signals
+  'get-signals': { kind: 'rpc', inspectors: ['signals'] },
+  'signal-graph': { kind: 'resource', inspectors: ['signals'], page: true },
+  'inspect-signals': { kind: 'tool', inspectors: ['signals'], page: true },
+  'watch-signal': { kind: 'tool', inspectors: ['signals'], safety: 'action', page: true },
+
+  // injectors
+  'get-providers': { kind: 'rpc', inspectors: ['injectors'] },
+  'injector-tree': { kind: 'resource', inspectors: ['injectors'], page: true },
+  'inspect-providers': { kind: 'tool', inspectors: ['injectors'], page: true },
+  'explain-injection': { kind: 'tool', inspectors: ['injectors'], page: true },
+  'read-provider-value': { kind: 'tool', inspectors: ['injectors'], page: true },
+  'startup-timing': { kind: 'tool', inspectors: ['injectors'], page: true },
+
+  // ngrx
+  'get-ngrx-store': { kind: 'rpc', inspectors: ['ngrx'] },
+  'ngrx-store': { kind: 'resource', inspectors: ['ngrx'], page: true },
+  'dispatch-ngrx-action': {
+    kind: 'tool',
+    inspectors: ['ngrx'],
+    safety: 'action',
+    actions: ['ngrx'],
+    page: true,
+  },
+  'inspect-signal-store': { kind: 'tool', inspectors: ['ngrx'], page: true },
+  'signal-store-history': { kind: 'tool', inspectors: ['ngrx'], page: true },
+  'inspect-ngrx-entry': { kind: 'tool', inspectors: ['ngrx'] },
+  'export-ngrx-session': { kind: 'tool', inspectors: ['ngrx'], page: true },
+  'import-ngrx-session': { kind: 'tool', inspectors: ['ngrx'] },
+  'generate-ngrx-test': { kind: 'tool', inspectors: ['ngrx'] },
+  'restore-ngrx-state': {
+    kind: 'tool',
+    inspectors: ['ngrx'],
+    safety: 'action',
+    actions: ['ngrx'],
+    page: true,
+  },
+  'inspect-redux-stores': { kind: 'tool', inspectors: ['ngrx'], page: true },
+
+  // tanstackQuery
+  'list-queries': { kind: 'tool', inspectors: ['tanstackQuery'], page: true },
+  'inspect-query': { kind: 'tool', inspectors: ['tanstackQuery'], page: true },
+  'query-action': {
+    kind: 'tool',
+    inspectors: ['tanstackQuery'],
+    safety: 'action',
+    actions: ['tanstackQuery'],
+    page: true,
+  },
+
+  // forms
+  forms: { kind: 'resource', inspectors: ['forms'], page: true },
+  'inspect-forms': { kind: 'tool', inspectors: ['forms'], page: true },
+  'explain-form-invalid': { kind: 'tool', inspectors: ['forms'], page: true },
+  'explain-field': { kind: 'tool', inspectors: ['forms'], page: true },
+  'explain-submit': { kind: 'tool', inspectors: ['forms'], page: true },
+  'form-payload': { kind: 'tool', inspectors: ['forms'], page: true },
+  'form-history': { kind: 'tool', inspectors: ['forms'], page: true },
+  'form-diff': { kind: 'tool', inspectors: ['forms'], page: true },
+  'lint-forms': { kind: 'tool', inspectors: ['forms'], page: true },
+  'explain-custom-control': { kind: 'tool', inspectors: ['forms'], page: true },
+  'export-form': { kind: 'tool', inspectors: ['forms'], page: true },
+  'wait-for-form': { kind: 'tool', inspectors: ['forms'], page: true },
+  'form-action': {
+    kind: 'tool',
+    inspectors: ['forms'],
+    safety: 'action',
+    actions: ['forms'],
+    page: true,
+  },
+  'fill-form': {
+    kind: 'tool',
+    inspectors: ['forms'],
+    safety: 'action',
+    actions: ['forms'],
+    page: true,
+  },
+
+  // router
+  'get-routes': { kind: 'rpc', inspectors: ['router'] },
+  router: { kind: 'resource', inspectors: ['router'], page: true },
+  'inspect-route': { kind: 'tool', inspectors: ['router'], page: true },
+  'explain-navigation': { kind: 'tool', inspectors: ['router'], page: true },
+  'list-routes': { kind: 'tool', inspectors: ['router'], page: true },
+  'lint-routes': { kind: 'tool', inspectors: ['router'], page: true },
+  'router-config': { kind: 'tool', inspectors: ['router'], page: true },
+  'export-navigation': { kind: 'tool', inspectors: ['router'], page: true },
+  'explain-render-mode': { kind: 'tool', inspectors: ['router'] },
+  navigate: {
+    kind: 'tool',
+    inspectors: ['router'],
+    safety: 'action',
+    actions: ['router'],
+    freeModes: ['instrument', 'resolve-lazy'],
+    page: true,
+  },
+
+  // pipes
+  'get-pipes': { kind: 'rpc', inspectors: ['pipes'] },
+  'lint-pipes': { kind: 'tool', inspectors: ['pipes'] },
+  'explain-pipe': { kind: 'tool', inspectors: ['pipes'] },
+  'record-pipes': { kind: 'tool', inspectors: ['pipes'], safety: 'action', page: true },
+
+  // http
+  'list-ssr-requests': { kind: 'tool', inspectors: ['http'], page: true },
+  'explain-ssr-request': { kind: 'tool', inspectors: ['http'], page: true },
+  'list-http-calls': { kind: 'tool', inspectors: ['http'], page: true },
+  'http-waterfall': { kind: 'tool', inspectors: ['http'], page: true },
+  'list-http-rules': { kind: 'tool', inspectors: ['http'], page: true },
+  'set-http-rule': {
+    kind: 'tool',
+    inspectors: ['http'],
+    safety: 'action',
+    actions: ['http'],
+    page: true,
+  },
+  'remove-http-rule': {
+    kind: 'tool',
+    inspectors: ['http'],
+    safety: 'action',
+    actions: ['http'],
+    page: true,
+  },
+  'inspect-transfer-state': { kind: 'tool', inspectors: ['http'], page: true },
+  'list-ssr-overrides': { kind: 'tool', inspectors: ['http'], page: true },
+  'set-ssr-override': {
+    kind: 'tool',
+    inspectors: ['http'],
+    safety: 'action',
+    actions: ['http'],
+    page: true,
+  },
+  'remove-ssr-override': {
+    kind: 'tool',
+    inspectors: ['http'],
+    safety: 'action',
+    actions: ['http'],
+    page: true,
+  },
+
+  // analog
+  'analog-routes': { kind: 'tool', inspectors: ['analog'] },
+  'analog-explain-url': { kind: 'tool', inspectors: ['analog'] },
+  'analog-current-page': { kind: 'tool', inspectors: ['analog'], page: true },
+  'analog-server-calls': { kind: 'tool', inspectors: ['analog'], page: true },
+  'analog-server-functions': { kind: 'tool', inspectors: ['analog'] },
+  'analog-api-routes': { kind: 'tool', inspectors: ['analog'] },
+  // Sends writes to the app's own API routes.
+  'analog-call-api': {
+    kind: 'tool',
+    inspectors: ['analog'],
+    safety: 'destructive',
+    actions: ['analog'],
+    page: true,
+  },
+  'analog-render-modes': { kind: 'tool', inspectors: ['analog'] },
+  'analog-prerender-plan': { kind: 'tool', inspectors: ['analog'] },
+  'analog-content': { kind: 'tool', inspectors: ['analog'] },
+  'analog-lint': { kind: 'tool', inspectors: ['analog'] },
+
+  // http, router and analog: erases what the three inspectors record.
+  'clear-recordings': {
+    kind: 'tool',
+    inspectors: ['http', 'router', 'analog'],
+    safety: 'destructive',
+    actions: ['router', 'http', 'analog'],
+    page: true,
+  },
+
+  // capacitor
+  'list-capacitor-calls': { kind: 'tool', inspectors: ['capacitor'], page: true },
+  'list-capacitor-plugins': { kind: 'tool', inspectors: ['capacitor'], page: true },
+
+  // errors
+  'list-errors': { kind: 'tool', inspectors: ['errors'], page: true },
+  'explain-error': { kind: 'tool', inspectors: ['errors'], page: true },
+  'list-console': { kind: 'tool', inspectors: ['errors'], page: true },
+
+  // plugins
+  'list-plugins': { kind: 'tool', inspectors: ['plugins'], page: true },
+  'inspect-plugin': { kind: 'tool', inspectors: ['plugins'], page: true },
 };
 
 /**
- * Action tools with modes that work while their action is blocked. Blocking
- * the action keeps the tool, and its handler refuses the other modes.
+ * Agent tools that perform an action's writes; blocking the action drops them,
+ * except the tools in `ACTION_TOOL_FREE_MODES`. From `actions` in `AGENT_ENTRIES`.
+ * Plugin tools are checked by `pluginToolAllowed`: their names come from the plugins.
  */
-export const ACTION_TOOL_FREE_MODES: Record<string, readonly string[]> = {
-  navigate: ['instrument', 'resolve-lazy'],
-};
+export const ACTION_TOOLS: Record<PangularAction, readonly string[]> =
+  /* @__PURE__ */ actionTools();
+
+function actionTools(): Record<PangularAction, readonly string[]> {
+  const tools = {} as Record<PangularAction, readonly string[]>;
+  for (const action of PANGULAR_ACTIONS) {
+    tools[action] = agentEntryNames((entry) => entry.actions?.includes(action) ?? false);
+  }
+  return tools;
+}
+
+/**
+ * Action tools with modes that work while their action is blocked. Blocking
+ * the action keeps the tool, and its handler refuses the other modes. From
+ * `freeModes` in `AGENT_ENTRIES`.
+ */
+export const ACTION_TOOL_FREE_MODES: Record<string, readonly string[]> =
+  /* @__PURE__ */ agentEntryValues((entry) => entry.freeModes);
 
 /**
  * How much an agent tool can change, sent to MCP clients as the tool's
@@ -902,37 +1175,24 @@ export const ACTION_TOOL_FREE_MODES: Record<string, readonly string[]> = {
  */
 export type AgentSafety = 'read' | 'action' | 'destructive';
 
-/** The tier of every agent tool that is not `read`, without the `pangular:` prefix. */
-export const AGENT_SAFETY: Record<string, Exclude<AgentSafety, 'read'>> = {
-  'form-action': 'action',
-  'fill-form': 'action',
-  navigate: 'action',
-  'dispatch-ngrx-action': 'action',
-  'restore-ngrx-state': 'action',
-  'set-http-rule': 'action',
-  'remove-http-rule': 'action',
-  'set-ssr-override': 'action',
-  'remove-ssr-override': 'action',
-  'record-pipes': 'action',
-  'track-subscriptions': 'action',
-  'watch-signal': 'action',
-  'change-detection': 'action',
-  hydration: 'action',
-  'clear-recordings': 'destructive',
-  'analog-call-api': 'destructive',
-  'set-component-property': 'action',
-  'set-signal': 'action',
-  'query-action': 'action',
-  // Only with `axe`, which loads and runs axe-core in the page.
-  audit: 'action',
-};
+/**
+ * The tier of every agent tool that is not `read`, without the `pangular:`
+ * prefix. From `safety` in `AGENT_ENTRIES`.
+ */
+export const AGENT_SAFETY: Record<
+  string,
+  Exclude<AgentSafety, 'read'>
+> = /* @__PURE__ */ agentEntryValues((entry) => entry.safety);
 
 /**
  * Tools that `agent.readOnly` keeps as `read` tools, with the arguments that
  * act refused: `change-detection` still answers, but without `record`,
- * `hydration` without `overlay`, and `audit` without `axe`.
+ * `hydration` without `overlay`, and `audit` without `axe`. From
+ * `readOnlyVariant` in `AGENT_ENTRIES`.
  */
-export const READ_ONLY_VARIANTS: readonly string[] = ['change-detection', 'hydration', 'audit'];
+export const READ_ONLY_VARIANTS: readonly string[] = /* @__PURE__ */ agentEntryNames(
+  (entry) => entry.readOnlyVariant === true,
+);
 
 /** The tier an agent tool or resource is registered with under `config`. Resources are `read`. */
 export function agentSafety(id: string, config: ResolvedPangularConfig): AgentSafety {
@@ -1112,90 +1372,14 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
 
 /**
  * The inspector each agent tool and resource belongs to, without the
- * `pangular:` prefix. RPC functions exposed as tools use `RPC_INSPECTOR`.
+ * `pangular:` prefix: the first of its `inspectors` in `AGENT_ENTRIES`. RPC
+ * functions exposed as tools (in `RPC_INSPECTOR`) and the `analog-` tools are
+ * left out, as they always were; `agentInspector` covers every entry.
  */
-export const AGENT_INSPECTOR: Record<string, PangularInspector> = {
-  'component-tree': 'components',
-  highlight: 'components',
-  'inspect-component': 'components',
-  'list-components': 'components',
-  'defer-blocks': 'components',
-  'for-blocks': 'components',
-  hydration: 'components',
-  'change-detection': 'components',
-  'diagnose-change-detection': 'components',
-  'set-component-property': 'components',
-  'set-signal': 'components',
-  'find-leaks': 'components',
-  'track-subscriptions': 'components',
-  'screenshot-component': 'components',
-  'signal-graph': 'signals',
-  'inspect-signals': 'signals',
-  'watch-signal': 'signals',
-  'injector-tree': 'injectors',
-  'inspect-providers': 'injectors',
-  'explain-injection': 'injectors',
-  'read-provider-value': 'injectors',
-  'startup-timing': 'injectors',
-  'ngrx-store': 'ngrx',
-  'dispatch-ngrx-action': 'ngrx',
-  'inspect-signal-store': 'ngrx',
-  'signal-store-history': 'ngrx',
-  'inspect-ngrx-entry': 'ngrx',
-  'export-ngrx-session': 'ngrx',
-  'import-ngrx-session': 'ngrx',
-  'generate-ngrx-test': 'ngrx',
-  'restore-ngrx-state': 'ngrx',
-  'inspect-redux-stores': 'ngrx',
-  'list-queries': 'tanstackQuery',
-  'inspect-query': 'tanstackQuery',
-  'query-action': 'tanstackQuery',
-  forms: 'forms',
-  'inspect-forms': 'forms',
-  'explain-form-invalid': 'forms',
-  'explain-field': 'forms',
-  'explain-submit': 'forms',
-  'form-payload': 'forms',
-  'form-history': 'forms',
-  'form-diff': 'forms',
-  'lint-forms': 'forms',
-  'explain-custom-control': 'forms',
-  'export-form': 'forms',
-  'wait-for-form': 'forms',
-  'form-action': 'forms',
-  'fill-form': 'forms',
-  router: 'router',
-  'inspect-route': 'router',
-  'explain-navigation': 'router',
-  'list-routes': 'router',
-  'lint-routes': 'router',
-  'router-config': 'router',
-  'export-navigation': 'router',
-  'explain-render-mode': 'router',
-  navigate: 'router',
-  'lint-pipes': 'pipes',
-  'explain-pipe': 'pipes',
-  'record-pipes': 'pipes',
-  'list-ssr-requests': 'http',
-  'explain-ssr-request': 'http',
-  'list-http-calls': 'http',
-  'http-waterfall': 'http',
-  'list-http-rules': 'http',
-  'set-http-rule': 'http',
-  'remove-http-rule': 'http',
-  'inspect-transfer-state': 'http',
-  'list-ssr-overrides': 'http',
-  'set-ssr-override': 'http',
-  'remove-ssr-override': 'http',
-  'clear-recordings': 'http',
-  'list-capacitor-calls': 'capacitor',
-  'list-capacitor-plugins': 'capacitor',
-  'list-errors': 'errors',
-  'explain-error': 'errors',
-  'list-console': 'errors',
-  'list-plugins': 'plugins',
-  'inspect-plugin': 'plugins',
-};
+export const AGENT_INSPECTOR: Record<string, PangularInspector> = /* @__PURE__ */ agentEntryValues(
+  (entry, name) =>
+    entry.kind !== 'rpc' && !name.startsWith('analog-') ? entry.inspectors?.[0] : undefined,
+);
 
 /**
  * The inspector behind each shared-state key, without the `pangular:` prefix.
@@ -1258,90 +1442,12 @@ export function sharedStateExposed(key: string, config: ResolvedPangularConfig):
 /**
  * Agent tools and resources that answer only while a page reports to the
  * server, that call the app's dev server, or that point into the panel the
- * server serves. The stdio MCP server has none of these.
+ * server serves. The stdio MCP server has none of these. From `page` in
+ * `AGENT_ENTRIES`.
  */
-export const PAGE_AGENT_ENTRIES: readonly string[] = [
-  'list-pages',
-  'open-in-panel',
-  'clear-recordings',
-  'component-tree',
-  'highlight',
-  'inspect-component',
-  'list-components',
-  'defer-blocks',
-  'for-blocks',
-  'hydration',
-  'change-detection',
-  'diagnose-change-detection',
-  'set-component-property',
-  'set-signal',
-  'find-leaks',
-  'track-subscriptions',
-  'screenshot-component',
-  'signal-graph',
-  'inspect-signals',
-  'watch-signal',
-  'injector-tree',
-  'inspect-providers',
-  'explain-injection',
-  'read-provider-value',
-  'startup-timing',
-  'ngrx-store',
-  'dispatch-ngrx-action',
-  'inspect-signal-store',
-  'signal-store-history',
-  'export-ngrx-session',
-  'restore-ngrx-state',
-  'inspect-redux-stores',
-  'list-queries',
-  'inspect-query',
-  'query-action',
-  'forms',
-  'inspect-forms',
-  'explain-form-invalid',
-  'explain-field',
-  'explain-submit',
-  'form-payload',
-  'form-history',
-  'form-diff',
-  'lint-forms',
-  'explain-custom-control',
-  'export-form',
-  'wait-for-form',
-  'form-action',
-  'fill-form',
-  'router',
-  'inspect-route',
-  'explain-navigation',
-  'list-routes',
-  'lint-routes',
-  'router-config',
-  'export-navigation',
-  'navigate',
-  'record-pipes',
-  'analog-current-page',
-  'analog-server-calls',
-  'analog-call-api',
-  'list-ssr-requests',
-  'explain-ssr-request',
-  'list-http-calls',
-  'http-waterfall',
-  'list-http-rules',
-  'set-http-rule',
-  'remove-http-rule',
-  'inspect-transfer-state',
-  'list-ssr-overrides',
-  'set-ssr-override',
-  'remove-ssr-override',
-  'list-capacitor-calls',
-  'list-capacitor-plugins',
-  'list-errors',
-  'explain-error',
-  'list-console',
-  'list-plugins',
-  'inspect-plugin',
-  'audit',
-];
+export const PAGE_AGENT_ENTRIES: readonly string[] = /* @__PURE__ */ agentEntryNames(
+  (entry) => entry.page === true,
+);
 
 export function isPageAgentEntry(id: string): boolean {
   return PAGE_AGENT_ENTRIES.includes(agentName(id));
@@ -1349,6 +1455,29 @@ export function isPageAgentEntry(id: string): boolean {
 
 function agentName(id: string): string {
   return id.replace(/^pangular:/, '');
+}
+
+function agentEntry(name: string): AgentEntry | undefined {
+  return Object.hasOwn(AGENT_ENTRIES, name) ? AGENT_ENTRIES[name] : undefined;
+}
+
+/** The names in `AGENT_ENTRIES` whose entry passes `test`, in table order. */
+function agentEntryNames(test: (entry: AgentEntry) => boolean): string[] {
+  return Object.entries(AGENT_ENTRIES)
+    .filter(([, entry]) => test(entry))
+    .map(([name]) => name);
+}
+
+/** A value for each name in `AGENT_ENTRIES` that `pick` gives one, in table order. */
+function agentEntryValues<T>(
+  pick: (entry: AgentEntry, name: string) => T | undefined,
+): Record<string, T> {
+  const values: Record<string, T> = {};
+  for (const [name, entry] of Object.entries(AGENT_ENTRIES)) {
+    const value = pick(entry, name);
+    if (value !== undefined) values[name] = value;
+  }
+  return values;
 }
 
 /** A plugin agent tool's name within its plugin, like a plugin id. */
@@ -1396,20 +1525,21 @@ export function agentInspector(id: string): PangularInspector | undefined {
   const name = agentName(id);
   if (name.startsWith('plugin:')) return 'plugins';
   return (
-    AGENT_INSPECTOR[name] ??
+    agentEntry(name)?.inspectors?.[0] ??
     RPC_INSPECTOR[name] ??
     (name.startsWith('analog-') ? 'analog' : undefined)
   );
 }
 
 /**
- * The tags of an agent tool: the inspector it belongs to, by the same key as
- * `AGENT_INSPECTOR`. `clear-recordings` erases what the HTTP, router and
+ * The tags of an agent tool: its `inspectors` in `AGENT_ENTRIES`, or the
+ * inspector it belongs to. `clear-recordings` erases what the HTTP, router and
  * Analog inspectors record, so it carries all three. Shared tools have none.
  * Devframe keeps them in its agent manifest; MCP `tools/list` does not send them.
  */
 export function agentTags(id: string): readonly PangularInspector[] | undefined {
-  if (agentName(id) === 'clear-recordings') return ['http', 'router', 'analog'];
+  const own = agentEntry(agentName(id))?.inspectors;
+  if (own) return own;
   const inspector = agentInspector(id);
   return inspector ? [inspector] : undefined;
 }

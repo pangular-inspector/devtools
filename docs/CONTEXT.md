@@ -81,7 +81,7 @@ A server function the panel or an agent calls over Devframe RPC, listed in `RPC_
 _Avoid_: endpoint, API, handler
 
 **Agent tool**:
-An RPC function marked for agents, which Devframe exposes as an MCP tool. It is listed in `AGENT_INSPECTOR`, and in `ACTION_TOOLS` too when it writes.
+An RPC function marked for agents, which Devframe exposes as an MCP tool. Its inspector, safety tier and the `actions` it writes for are in its entry in `AGENT_ENTRIES` in `config.ts`.
 _Avoid_: MCP command, function, skill
 
 **Action**:

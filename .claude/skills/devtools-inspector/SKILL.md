@@ -44,6 +44,7 @@ Read `docs/contributing/coding-standards.md` ("Reading data from the page") befo
 ## Agent tools
 
 - Describe what the tool returns, where the data comes from and what an empty answer means. Answer in markdown.
+- Give each new tool or resource one entry in `AGENT_ENTRIES` (`packages/devtools/src/config.ts`): its inspector, safety tier, the `actions` it writes for and whether it needs a page. `AGENT_INSPECTOR`, `AGENT_SAFETY`, `ACTION_TOOLS`, `PAGE_AGENT_ENTRIES` and the tags derive from it. `packages/devtools/src/__tests__/agent-metadata.test.ts` fails on a registered tool without an entry; update `packages/devtools/src/__tests__/fixtures/agent-metadata-derived.json` with it.
 - Update descriptions in `devframe.ts` when data shapes change, and the tool list on the docs site (apps/docs/src/content/agents/tools.md). Use the `devtools-docs` skill for that edit.
 
 ## Tests

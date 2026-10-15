@@ -357,7 +357,7 @@ const pangular = defineDevframe({
     const feed = createHubFeed(ctx, config);
     const agent = {
       registerTool: (tool: Parameters<typeof ctx.agent.registerTool>[0]) => {
-        // The tier comes from AGENT_SAFETY and the tags from AGENT_INSPECTOR, so
+        // The tier and the tags come from the tool's entry in AGENT_ENTRIES, so
         // the config is the one place that sets them.
         if (agentExposed(tool))
           ctx.agent.registerTool(

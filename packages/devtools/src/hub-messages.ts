@@ -322,7 +322,7 @@ export function createHubFeed(
 
   return {
     wrapTool: (tool) => {
-      // A plugin tool declares its own tier; the built-in ones take it from AGENT_SAFETY.
+      // A plugin tool declares its own tier; the built-in ones take it from AGENT_ENTRIES.
       const safety = tool.safety ?? agentSafety(tool.id, config);
       if (!messages || safety === 'read') return tool;
       return {

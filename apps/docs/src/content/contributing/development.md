@@ -244,7 +244,19 @@ The panel's devframe client caches the functions listed in `PANEL_CACHED_RPC` in
 
 Add `agent: { description }` to an RPC function, or call `ctx.agent.registerTool()` in the devframe setup. List the tool on the [Tools](../agents/tools.md) page.
 
-Map a registered tool to its inspector in `AGENT_INSPECTOR` in `packages/devtools/src/config.ts`, so `inspectors` and `agent.tools` can hide it. A tool that acts on the page or the server gets its safety tier in `AGENT_SAFETY`: `action`, or `destructive` when it can lose data. `agent.readOnly` drops both tiers, and every tool missing there is registered as `read`. A tool that writes for one of the `actions` also goes in `ACTION_TOOLS`. See [Configuration](../getting-started/configuration.md).
+Give every registered tool and resource an entry in `AGENT_ENTRIES` in `packages/devtools/src/config.ts`. `AGENT_INSPECTOR`, `AGENT_SAFETY`, `ACTION_TOOLS`, `PAGE_AGENT_ENTRIES` and the tool's tags derive from it, so the entry is the only list to edit.
+
+| Field             | Set it to                                                                                                                    |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `kind`            | `tool` for `ctx.agent.registerTool()`, `resource` for `ctx.agent.registerResource()`, `rpc` for an RPC function with `agent` |
+| `inspectors`      | The inspector that `inspectors` and `agent.tools` hide it with. More than one adds tags. Leave it out for a shared tool      |
+| `safety`          | `action` when it acts on the page or the server, `destructive` when it can lose data. Left out, the tool is `read`           |
+| `readOnlyVariant` | `true` when `agent.readOnly` keeps it as a `read` tool and its handler refuses the arguments that act                        |
+| `actions`         | The `actions` keys it writes for, so blocking them drops it                                                                  |
+| `freeModes`       | The modes that still work while those actions are blocked                                                                    |
+| `page`            | `true` when it needs a connected page, the app's dev server or the panel, so the stdio MCP server leaves it out              |
+
+`packages/devtools/src/__tests__/agent-metadata.test.ts` boots the server and fails when a registered tool has no entry, or an entry has no registered tool. It also compares the derived lists with `packages/devtools/src/__tests__/fixtures/agent-metadata-derived.json`, so update that file with the tool and the reviewer sees what changed. See [Configuration](../getting-started/configuration.md).
 
 <ngmd-callout type="tip" title="Changed app/?">
   Run <code>pnpm extension:build</code> and commit <code>extension/ui</code>. CI fails when it is stale. See <a href="./chrome-extension.md">Build the extension</a>.
