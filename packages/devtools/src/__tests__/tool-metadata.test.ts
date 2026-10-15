@@ -259,6 +259,21 @@ describe('agent tool output schemas', () => {
     }
   });
 
+  it('asks for a selector instead of failing when it is missing', async () => {
+    const { invoke, push } = await bootMcp();
+    await push('push-component-tree', {
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+    });
+    for (const name of ['pangular_inspect-component', 'pangular_highlight']) {
+      const result = await invoke(name, {});
+      expect(result.isError, name).toBeFalsy();
+      expect(result.content[0]!.text, name).toContain('Pass `selector`');
+    }
+  });
+
   it('keeps the markdown schema to one string field', () => {
     expect(MARKDOWN_OUTPUT_SCHEMA).toMatchObject({
       type: 'object',

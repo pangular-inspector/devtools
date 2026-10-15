@@ -2723,6 +2723,9 @@ const pangular = defineDevframe({
             markdown: noComponentTree(', so nothing was highlighted'),
           };
         }
+        if (typeof args.selector !== 'string' || !args.selector.trim()) {
+          return { markdown: 'Pass `selector`: an instance id, class name or host tag.' };
+        }
         const hits = componentHits(args.selector, page);
         const [hit] = hits;
         const target = hit
@@ -2809,6 +2812,9 @@ const pangular = defineDevframe({
         if (unknown) return unknown;
         if (![...componentPages.values()].some((entry) => entry.roots.length)) {
           return { markdown: noComponentTree('') };
+        }
+        if (typeof args.selector !== 'string' || !args.selector.trim()) {
+          return { markdown: 'Pass `selector`: an instance id, class name or host tag.' };
         }
         const hits = componentHits(args.selector, page);
         const [hit] = hits;
