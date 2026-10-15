@@ -16,6 +16,7 @@ import {
   type AgentEntryKind,
   type PangularConfig,
 } from '../config.ts';
+import { PAGE_RESOURCE_NAMES } from '../agent-page-resources.ts';
 import { createPangular, type PangularHostOptions } from '../devframe.ts';
 import { travelServerPlugin } from '../../../../src/app/devtools/travel-plugin.server.ts';
 
@@ -110,6 +111,18 @@ describe('agent metadata', () => {
     const page = Object.keys(AGENT_ENTRIES).filter((name) => AGENT_ENTRIES[name]?.page);
     expect(page.filter((name) => kinds.has(name))).toEqual([]);
     expect(Object.keys(AGENT_ENTRIES).filter((name) => !kinds.has(name))).toEqual(page);
+  });
+
+  // Per-page MCP resource templates are route options, not agent registrations,
+  // so they have no entry of their own: each one follows its page resource's entry.
+  it('maps each per-page resource template to a page resource entry', () => {
+    for (const name of PAGE_RESOURCE_NAMES) {
+      expect(AGENT_ENTRIES[name], name).toMatchObject({ kind: 'resource', page: true });
+    }
+    const pageResources = Object.keys(AGENT_ENTRIES).filter(
+      (name) => AGENT_ENTRIES[name]?.kind === 'resource' && AGENT_ENTRIES[name]?.page,
+    );
+    expect(sorted(pageResources)).toEqual(sorted(PAGE_RESOURCE_NAMES));
   });
 
   it('keeps each entry consistent', () => {

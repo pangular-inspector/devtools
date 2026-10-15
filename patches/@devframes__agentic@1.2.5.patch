@@ -1,5 +1,5 @@
 diff --git a/dist/mcp/index.mjs b/dist/mcp/index.mjs
-index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..e51cae93e96a8c5d7280d6ecc1d64de44b9b5a8c 100644
+index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..4c1085fd8814c1dd706007f16ee5f9ff6e93a0d9 100644
 --- a/dist/mcp/index.mjs
 +++ b/dist/mcp/index.mjs
 @@ -1,6 +1,6 @@
@@ -10,7 +10,7 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..e51cae93e96a8c5d7280d6ecc1d64de4
  import { DEVFRAME_EVENTS } from "devframe/constants";
  import { argsToJsonSchema, diagnostics, formatMcpError, returnToJsonSchema, stringifyForMcp } from "devframe/internal";
  import { createHostContext } from "devframe/node";
-@@ -26,12 +26,17 @@ function buildMcpServerFromContext(ctx, options) {
+@@ -26,12 +26,19 @@ function buildMcpServerFromContext(ctx, options) {
  	const server = new Server({
  		name: options.serverName,
  		version: options.serverVersion
@@ -26,24 +26,66 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..e51cae93e96a8c5d7280d6ecc1d64de4
 +		},
 +		...options.instructions ? { instructions: options.instructions } : {}
 +	});
++	if (options.resourceTemplates?.length) serverResourceTemplates.set(server, compileResourceTemplates(options.resourceTemplates));
  	registerToolHandlers(server, ctx, options.exposeSharedState);
  	registerResourceHandlers(server, ctx, options.exposeSharedState);
 +	if (options.prompts?.length) registerPromptHandlers(server, options.prompts);
++	if (options.resourceTemplates?.length) registerResourceTemplateHandlers(server);
  	return server;
  }
  /**
-@@ -89,7 +94,9 @@ async function createMcpServer(definition, options = {}) {
+@@ -44,9 +51,13 @@ function buildMcpServerFromContext(ctx, options) {
+ * passes the pinned server's `send*ListChanged` methods, which `serveStdio`
+ * routes onto the connection's active `subscriptions/listen` streams.
+ *
++* A host's own `onResourcesChanged` subscription (a route option) feeds
++* `resources()` too, for resources that come and go with the host's data,
++* such as the concrete entries of a resource template.
++*
+ * @internal
+ */
+-function bridgeListChanged(ctx, sinks) {
++function bridgeListChanged(ctx, sinks, onResourcesChanged) {
+ 	const offManifest = ctx.agent.events.on(DEVFRAME_EVENTS.bus.agentManifestChanged, () => {
+ 		sinks.tools();
+ 		sinks.resources();
+@@ -54,9 +65,13 @@ function bridgeListChanged(ctx, sinks) {
+ 	const offKeyAdded = ctx.rpc.sharedState.onKeyAdded(() => {
+ 		sinks.resources();
+ 	});
++	const offHost = onResourcesChanged?.(() => {
++		sinks.resources();
++	}, ctx);
+ 	return () => {
+ 		offManifest();
+ 		offKeyAdded();
++		if (typeof offHost === "function") offHost();
+ 	};
+ }
+ /**
+@@ -89,7 +104,11 @@ async function createMcpServer(definition, options = {}) {
  	const buildOptions = {
  		serverName: options.serverName ?? `${definition.id} (devframe)`,
  		serverVersion: options.serverVersion ?? definition.version ?? "0.0.0",
 -		exposeSharedState: options.exposeSharedState ?? true
 +		exposeSharedState: options.exposeSharedState ?? true,
 +		instructions: options.instructions,
-+		prompts: options.prompts
++		prompts: options.prompts,
++		resourceTemplates: options.resourceTemplates,
++		onResourcesChanged: options.onResourcesChanged
  	};
  	let handle;
  	try {
-@@ -165,6 +172,25 @@ async function readStateResult(ctx, filter, key) {
+@@ -103,7 +122,7 @@ async function createMcpServer(definition, options = {}) {
+ 				resources: () => {
+ 					server.sendResourceListChanged().catch(() => {});
+ 				}
+-			});
++			}, buildOptions.onResourcesChanged);
+ 			const priorOnClose = server.onclose;
+ 			server.onclose = () => {
+ 				unbridge();
+@@ -165,6 +184,25 @@ async function readStateResult(ctx, filter, key) {
  		value: (await ctx.rpc.sharedState.get(key)).value()
  	};
  }
@@ -69,7 +111,7 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..e51cae93e96a8c5d7280d6ecc1d64de4
  function registerToolHandlers(server, ctx, exposeSharedState) {
  	const stateFilter = sharedStateFilter(exposeSharedState);
  	const warnedCollisions = /* @__PURE__ */ new Set();
-@@ -216,6 +242,8 @@ function registerToolHandlers(server, ctx, exposeSharedState) {
+@@ -216,6 +254,8 @@ function registerToolHandlers(server, ctx, exposeSharedState) {
  			}
  			const outputSchema = tool ? usableOutputSchema(tool.outputSchema ?? computeOutputSchema(tool, ctx)) : void 0;
  			const result = await ctx.agent.invoke(tool?.id ?? name, args ?? {});
@@ -78,10 +120,114 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..e51cae93e96a8c5d7280d6ecc1d64de4
  			return {
  				content: [{
  					type: "text",
-@@ -278,6 +306,39 @@ function registerResourceHandlers(server, ctx, exposeSharedState) {
+@@ -252,6 +292,7 @@ function registerResourceHandlers(server, ctx, exposeSharedState) {
+ 				mimeType: "application/json"
+ 			});
+ 		}
++		for (const entry of await listTemplateResources(server, ctx)) resources.push(entry);
+ 		return { resources };
+ 	});
+ 	server.setRequestHandler("resources/read", async (request) => {
+@@ -274,10 +315,135 @@ function registerResourceHandlers(server, ctx, exposeSharedState) {
+ 				text: stringifyForMcp(state.value())
+ 			}] };
+ 		}
++		const templated = await readTemplateResource(server, ctx, uri);
++		if (templated) return templated;
+ 		throw new Error(`[devframe/mcp] unknown resource URI "${uri}"`);
  	});
  }
  /**
++* Resource templates per server, set by `buildMcpServerFromContext` from the
++* `resourceTemplates` option before the resource handlers run.
++*/
++const serverResourceTemplates = /* @__PURE__ */ new WeakMap();
++/**
++* Turn each template's RFC 6570 level-1 URI template (`{name}` expressions
++* only) into a matcher. A variable matches one or more characters other than
++* `/`, and its value is percent-decoded. A template with another kind of
++* expression (`{+path}`, `{?q}`) never matches.
++*/
++function compileResourceTemplates(templates) {
++	return templates.map((template) => {
++		const names = [];
++		let source = "^";
++		let last = 0;
++		let valid = true;
++		for (const match of template.uriTemplate.matchAll(/\{([^{}]*)\}/g)) {
++			if (!/^[A-Za-z0-9_]+$/.test(match[1])) valid = false;
++			source += escapeRegExp(template.uriTemplate.slice(last, match.index));
++			source += "([^/]+)";
++			names.push(match[1]);
++			last = match.index + match[0].length;
++		}
++		source += escapeRegExp(template.uriTemplate.slice(last)) + "$";
++		const pattern = valid ? new RegExp(source) : void 0;
++		return {
++			template,
++			match: (uri) => {
++				const found = pattern?.exec(uri);
++				if (!found) return void 0;
++				const params = {};
++				try {
++					names.forEach((name, index) => {
++						params[name] = decodeURIComponent(found[index + 1]);
++					});
++				} catch {
++					return void 0;
++				}
++				return Object.values(params).some((value) => value.includes("/")) ? void 0 : params;
++			}
++		};
++	});
++}
++function escapeRegExp(text) {
++	return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
++}
++/** The concrete resources each template's `list` names, for `resources/list`. */
++async function listTemplateResources(server, ctx) {
++	const compiled = serverResourceTemplates.get(server) ?? [];
++	const entries = [];
++	for (const { template } of compiled) {
++		if (!template.list) continue;
++		for (const entry of await template.list(ctx)) entries.push({
++			uri: entry.uri,
++			name: entry.name,
++			...entry.title !== void 0 ? { title: entry.title } : {},
++			...entry.description !== void 0 ? { description: entry.description } : {},
++			mimeType: entry.mimeType ?? template.mimeType ?? "application/json"
++		});
++	}
++	return entries;
++}
++/**
++* Read `uri` through the first template that matches it, or `undefined` when
++* none does. A failing `read` is reported like a failing resource read.
++*/
++async function readTemplateResource(server, ctx, uri) {
++	for (const { template, match } of serverResourceTemplates.get(server) ?? []) {
++		const params = match(uri);
++		if (!params) continue;
++		const content = await template.read(params, uri, ctx);
++		return { contents: [{
++			uri,
++			mimeType: content.mimeType ?? template.mimeType ?? "application/json",
++			text: content.text ?? stringifyForMcp(content.json)
++		}] };
++	}
++	return void 0;
++}
++/** Serve `resources/templates/list` from the `resourceTemplates` option. */
++function registerResourceTemplateHandlers(server) {
++	server.setRequestHandler("resources/templates/list", async () => ({ resourceTemplates: (serverResourceTemplates.get(server) ?? []).map(({ template }) => ({
++		uriTemplate: template.uriTemplate,
++		name: template.name,
++		...template.title !== void 0 ? { title: template.title } : {},
++		...template.description !== void 0 ? { description: template.description } : {},
++		...template.mimeType !== void 0 ? { mimeType: template.mimeType } : {}
++	})) }));
++}
++/**
 +* Serve a fixed list of prompt templates. `prompts/list` projects each one;
 +* `prompts/get` checks the required arguments and returns the messages its
 +* `get` builds. An unknown name or a missing required argument is an
@@ -118,14 +264,24 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..e51cae93e96a8c5d7280d6ecc1d64de4
  * MCP constrains a tool's `outputSchema` to a JSON Schema of `type:
  * "object"`; clients (the SDK included) reject anything else. Non-object
  * return schemas (e.g. a schema for `void` / a bare string) simply project
-@@ -398,7 +459,9 @@ function createMcpFetchHandler(ctx, options) {
+@@ -398,7 +564,10 @@ function createMcpFetchHandler(ctx, options) {
  	const handler = createMcpHandler(() => buildMcpServerFromContext(ctx, {
  		serverName: options.serverName,
  		serverVersion: options.serverVersion,
 -		exposeSharedState: options.exposeSharedState
 +		exposeSharedState: options.exposeSharedState,
 +		instructions: options.instructions,
-+		prompts: options.prompts
++		prompts: options.prompts,
++		resourceTemplates: options.resourceTemplates
  	}));
  	const unbridge = bridgeListChanged(ctx, {
  		tools: () => {
+@@ -407,7 +576,7 @@ function createMcpFetchHandler(ctx, options) {
+ 		resources: () => {
+ 			handler.notify.resourcesChanged();
+ 		}
+-	});
++	}, options.onResourcesChanged);
+ 	const originOnlyDefault = allowedOrigins === void 0 && authorization === false;
+ 	async function handle(req, connection) {
+ 		const origin = req.headers.get("origin") ?? void 0;

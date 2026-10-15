@@ -1603,6 +1603,20 @@ export function agentToolOffered(name: string, config: ResolvedPangularConfig): 
   return !inspector || config.inspectors[inspector];
 }
 
+/**
+ * Whether the built-in agent resource `name` (no `pangular:` prefix) is
+ * offered to agents under `config`, by the same rules as
+ * {@link agentToolOffered}. Each per-page MCP resource template follows the
+ * resource it mirrors through this check.
+ */
+export function agentResourceOffered(name: string, config: ResolvedPangularConfig): boolean {
+  const entry = agentEntry(name);
+  if (entry?.kind !== 'resource') return false;
+  if (!agentAllowed({ id: `pangular:${name}` }, config)) return false;
+  const inspector = entry.inspectors?.[0];
+  return !inspector || config.inspectors[inspector];
+}
+
 const INSPECTOR_LABEL: Record<PangularInspector, string> = {
   components: 'Components',
   injectors: 'Injectors',

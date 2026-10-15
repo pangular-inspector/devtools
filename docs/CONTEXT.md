@@ -93,7 +93,7 @@ An MCP prompt: a ready request for one workflow, such as `debug-error` or `fix-f
 _Avoid_: template, command, skill (a skill is a `SKILL.md` folder the agent reads)
 
 **Resource**:
-Live state an agent reads as JSON over MCP, such as `pangular:component-tree`. It holds what the connected pages reported, so it is empty when no page is connected.
+Live state an agent reads as JSON over MCP, such as `pangular:component-tree`. It holds what the connected pages reported, so it is empty when no page is connected. Each page-scoped resource also has a per-page resource template, `pangular://page/{pageId}/<name>`, that holds one page (`packages/devtools/src/agent-page-resources.ts`).
 _Avoid_: snapshot, feed, state dump
 
 **Source scan**:

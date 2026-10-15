@@ -1,13 +1,15 @@
 diff --git a/dist/node/initiate.mjs b/dist/node/initiate.mjs
-index d1bff38cf29d5003365d2baddc36d7e11c5707ab..da6b8b66e7ad6e0607624a78ec342f593eeafee0 100644
+index d1bff38cf29d5003365d2baddc36d7e11c5707ab..42c9eb0fd5d4c584c4f411dd7e4e35d38bd2b649 100644
 --- a/dist/node/initiate.mjs
 +++ b/dist/node/initiate.mjs
-@@ -150,6 +150,8 @@ function initHub(options) {
+@@ -150,6 +150,10 @@ function initHub(options) {
  				serverName: options.name ?? "devframes-hub",
  				serverVersion: options.version ?? "0.0.0",
  				exposeSharedState: mcpConfig.exposeSharedState ?? true,
 +				instructions: mcpConfig.instructions,
 +				prompts: mcpConfig.prompts,
++				resourceTemplates: mcpConfig.resourceTemplates,
++				onResourcesChanged: mcpConfig.onResourcesChanged,
  				authorization: mcpConfig.authorization,
  				allowedOrigins: mcpConfig.allowedOrigins
  			});

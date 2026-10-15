@@ -78,6 +78,37 @@ Every form the page reported (Signal Forms, reactive and template-driven), with 
 
 The active route tree (params, data, guards, resolvers) and recent navigations of each page. When the data is too large, the resource returns the URL and recent navigations of each page, and points to `inspect-route`, `explain-navigation` and `list-routes`.
 
+## Read one page
+
+The six resources above hold every connected page. When several tabs or apps are connected, read one page through its own resource instead.
+
+### Page resource templates
+
+The HTTP endpoint lists one *MCP resource template per resource in `resources/templates/list`. Put a page id from [`list-pages`](./tools.md#list-pages) in the URI:
+
+| Template                                  | Same data as              |
+| ----------------------------------------- | ------------------------- |
+| `pangular://page/{pageId}/component-tree` | `pangular:component-tree` |
+| `pangular://page/{pageId}/signal-graph`   | `pangular:signal-graph`   |
+| `pangular://page/{pageId}/injector-tree`  | `pangular:injector-tree`  |
+| `pangular://page/{pageId}/ngrx-store`     | `pangular:ngrx-store`     |
+| `pangular://page/{pageId}/forms`          | `pangular:forms`          |
+| `pangular://page/{pageId}/router`         | `pangular:router`         |
+
+Each one returns the JSON of its resource with only that page in it, with the same `_untrusted` field and the same summary when it is too large. The selection made in the panel (`selectedId` and the like) is left out, since it belongs to no page. If no page with that id reports the data, the answer is a markdown note that lists the pages that do.
+
+A template follows its resource: it is left out when the inspector is off through `inspectors` or `agent.tools`.
+
+### Per-page entries in the list
+
+Some clients don't read templates. For them, `resources/list` also names one resource per reporting page, such as `pangular://page/<pageId>/component-tree`.
+
+### List changes
+
+When a page starts reporting or expires, the server sends `notifications/resources/list_changed`, so a client can list the resources again. Changes settle for half a second first, and a report from a page that is already listed sends nothing.
+
+Like the prompts, the templates need a devframe patch that devframe 1.2.5 does not ship. The stdio server has no templates, since no page connects to it.
+
 ## Shared state
 
 The devtools keep their live data in shared-state keys. Every key is also listed as a resource, at `devframe://state/<key>` with the key encoded.

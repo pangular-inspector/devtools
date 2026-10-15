@@ -259,6 +259,10 @@ The argument is your own text. The server puts it on one line, cuts it at 200 ch
 
 The stdio server offers no prompts. Like the instructions, the prompts need a devframe patch that devframe 1.2.5 does not ship, so an installed package offers none until devframe ships it.
 
+### Resource templates
+
+The HTTP endpoint also lists a resource template for each page-scoped resource, such as `pangular://page/{pageId}/component-tree`, and sends `notifications/resources/list_changed` when a page starts reporting or expires. See [Read one page](./resources.md#read-one-page).
+
 ### Tool names
 
 The server registers tools with a colon, as `pangular:get-routes`. MCP clients see them with an underscore, as `pangular_get-routes`. Calls with either form work.

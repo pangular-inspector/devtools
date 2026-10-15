@@ -292,6 +292,7 @@ import {
 } from './rpc/browser-tools.ts';
 import pkg from '../package.json' with { type: 'json' };
 import { INTEREST_TICK_MS, createPageInterest, leased } from './rpc/page-interest.ts';
+import { createPageResourceSource, providePageResources } from './agent-page-resources.ts';
 import { createReportDeltas, deltaPush } from './rpc/report-deltas.ts';
 import {
   CHANGE_DETECTION_SHAPE,
@@ -2617,6 +2618,22 @@ const pangular = defineDevframe({
       mimeType: 'application/json',
       read: () => ({ text: routerResourceText(routerState.value() as RouterState) }),
     });
+
+    // The same states one page at a time, for the MCP resource templates (`agent-mcp.ts`).
+    providePageResources(
+      ctx,
+      createPageResourceSource({
+        states: {
+          'component-tree': componentTree,
+          'signal-graph': signalGraphState,
+          'injector-tree': injectorTreeState,
+          'ngrx-store': ngrxStoreState,
+          forms: formsState,
+          router: routerState,
+        },
+        touch: () => interest.touch(),
+      }),
+    );
 
     const ngrxPageProperty = {
       type: 'string',
