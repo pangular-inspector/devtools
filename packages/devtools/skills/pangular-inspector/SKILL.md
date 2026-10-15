@@ -12,7 +12,7 @@ Pangular Inspector reads a running Angular app through Angular's debug APIs and 
 1. Call `pangular_list-pages`. It lists the browser tabs and native apps that report to the server, newest first, with a page id, URL and the inspectors that report.
 2. An empty list means no page is connected. Ask the user to open the app in a browser (a development build with the overlay imported in `main.ts`), or connect to the HTTP server (`pangular-live`) instead of the stdio one. The stdio server (`pangular mcp`) only has the source tools: `get-routes`, `get-components`, `get-signals`, `get-providers`, `get-ngrx-store`, `get-pipes` and `build-meta`.
 3. With several pages open, pass the page id as `page` to the page tools. Without it they read the most recent page.
-4. For the whole picture in one call (page, components, route, navigations, HTTP calls, errors, console, forms, signals, stores), call `snapshot`. It is bounded and names the tool that has the rest of each section, so it also fits a bug report.
+4. For the whole picture in one call (page, components, route, navigations, HTTP calls, errors, console, forms, signals, stores, TanStack queries), call `snapshot`. It is bounded and names the tool that has the rest of each section, so it also fits a bug report.
 
 ## The loop: inspect, fix, verify
 
