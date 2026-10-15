@@ -1,68 +1,123 @@
 diff --git a/dist/_shared-DlRoV7v3.mjs b/dist/_shared-DlRoV7v3.mjs
-index 6f112f6e47f992e17597b8e949e6d3cadcf34c4c..05e8742fe34fbb87acb62334148eabaa385b8a0a 100644
+index 6f112f6e47f992e17597b8e949e6d3cadcf34c4c..36e20be540fa32ccd3b67a82548f0c5332d8c510 100644
 --- a/dist/_shared-DlRoV7v3.mjs
 +++ b/dist/_shared-DlRoV7v3.mjs
-@@ -144,6 +144,7 @@ function resolveMcpConfig(mcp) {
+@@ -144,6 +144,8 @@ function resolveMcpConfig(mcp) {
  		...mcp.path !== void 0 ? { path: mcp.path } : {},
  		...mcp.allowedOrigins !== void 0 ? { allowedOrigins: mcp.allowedOrigins } : {},
  		...mcp.exposeSharedState !== void 0 ? { exposeSharedState: mcp.exposeSharedState } : {},
 +		...mcp.instructions !== void 0 ? { instructions: mcp.instructions } : {},
++		...mcp.prompts !== void 0 ? { prompts: mcp.prompts } : {},
  		authorization
  	};
  }
 diff --git a/dist/_shared-NSl4p_om.d.mts b/dist/_shared-NSl4p_om.d.mts
-index d6f43f5913434da962a95c3fe7e075a5edef546d..40db07c07db6ac97414d92bb5f77e32ff3a66f94 100644
+index d6f43f5913434da962a95c3fe7e075a5edef546d..172afc14f9cb80ef26add073e04c0e23a77b5e79 100644
 --- a/dist/_shared-NSl4p_om.d.mts
 +++ b/dist/_shared-NSl4p_om.d.mts
-@@ -37,6 +37,8 @@ interface ResolvedMcpConfig {
+@@ -1,4 +1,4 @@
+-import { B as DevframeDefinition, Q as McpSetting, V as DevframeDeploymentKind, Wt as DevframeAgentHost, X as McpAuthorization, t as ConnectionMeta } from "./context-DhycZ2lx.mjs";
++import { B as DevframeDefinition, Q as McpSetting, V as DevframeDeploymentKind, Wt as DevframeAgentHost, X as McpAuthorization, Z as McpRouteOptions, t as ConnectionMeta } from "./context-DhycZ2lx.mjs";
+ import { t as AgenticMcpModule } from "./agentic-D61fXLzA.mjs";
+ //#region src/adapters/_shared.d.ts
+ /**
+@@ -37,6 +37,10 @@ interface ResolvedMcpConfig {
    allowedOrigins?: readonly string[] | false;
    /** Shared-state exposure from the route options; omitted means every key. */
    exposeSharedState?: boolean | ((key: string) => boolean);
 +  /** Usage guidance sent as `instructions` in the MCP `initialize` result. */
 +  instructions?: string;
++  /** Prompt templates served through `prompts/list` and `prompts/get`. */
++  prompts?: McpRouteOptions['prompts'];
    /** The resolved identity policy: a bearer token, callback, or `false`. */
    authorization: McpAuthorization;
  }
 diff --git a/dist/context-DhycZ2lx.d.mts b/dist/context-DhycZ2lx.d.mts
-index 2f3e7035b31326e1de8c19526c8683896e9dbc30..3b11a20659d947865c6d5eb7de29d3f742ed8657 100644
+index 2f3e7035b31326e1de8c19526c8683896e9dbc30..fea92d92926b26db391bacaed444c081d0dd90df 100644
 --- a/dist/context-DhycZ2lx.d.mts
 +++ b/dist/context-DhycZ2lx.d.mts
-@@ -1289,6 +1289,8 @@ interface McpRouteOptions {
+@@ -1289,6 +1289,10 @@ interface McpRouteOptions {
     * The states themselves stay available to the UI over RPC.
     */
    exposeSharedState?: boolean | ((key: string) => boolean);
 +  /** Usage guidance sent as `instructions` in the MCP `initialize` result. */
 +  instructions?: string;
++  /** Prompt templates served through `prompts/list` and `prompts/get`; omitted means no `prompts` capability. */
++  prompts?: readonly McpPrompt[];
  }
  interface DevframeCliOptions {
    /** Binary name; default: the devframe's `id`. */
-@@ -1616,6 +1618,8 @@ interface CreateMcpServerOptions {
+@@ -1601,6 +1605,38 @@ type DevframeSnapshotRpcEntry = string | {
+  * `devframe/internal`) instead: `devframe/types` must stay lib-neutral, and
+  * h3's declarations are not.
+  */
++/** One argument of an {@link McpPrompt}. */
++interface McpPromptArgument {
++  name: string;
++  description?: string;
++  /** `prompts/get` fails with invalid params when a required argument is missing or empty. */
++  required?: boolean;
++}
++/** One message of a prompt's answer. */
++interface McpPromptMessage {
++  role: 'user' | 'assistant';
++  content: {
++    type: 'text';
++    text: string;
++  };
++}
++/** What `prompts/get` returns for a prompt. */
++interface McpPromptResult {
++  description?: string;
++  messages: McpPromptMessage[];
++}
++/**
++ * A prompt template the MCP server lists in `prompts/list` and builds in
++ * `prompts/get`. A client usually offers it to the user as a slash command.
++ */
++interface McpPrompt {
++  name: string;
++  title?: string;
++  description?: string;
++  arguments?: readonly McpPromptArgument[];
++  /** Build the messages from the arguments the client sent. */
++  get: (args: Record<string, string>) => McpPromptResult | Promise<McpPromptResult>;
++}
+ interface CreateMcpServerOptions {
+   /**
+    * Transport to use. `createMcpServer` itself runs `'stdio'` (a standalone
+@@ -1616,6 +1652,10 @@ interface CreateMcpServerOptions {
     * - `(key) => boolean`: filter
     */
    exposeSharedState?: boolean | ((key: string) => boolean);
 +  /** Usage guidance sent as `instructions` in the MCP `initialize` result. */
 +  instructions?: string;
++  /** Prompt templates served through `prompts/list` and `prompts/get`; omitted means no `prompts` capability. */
++  prompts?: readonly McpPrompt[];
    /** Override the name reported in the MCP handshake. */
    serverName?: string;
    /** Override the version reported in the MCP handshake. Defaults to `definition.version ?? '0.0.0'`. */
-@@ -1635,6 +1639,8 @@ interface CreateMcpFetchHandlerOptions {
+@@ -1635,6 +1675,10 @@ interface CreateMcpFetchHandlerOptions {
    serverVersion: string;
    /** Expose shared-state keys as MCP resources; see {@link CreateMcpServerOptions.exposeSharedState}. */
    exposeSharedState: boolean | ((key: string) => boolean);
 +  /** Usage guidance sent as `instructions` in the MCP `initialize` result. */
 +  instructions?: string;
++  /** Prompt templates served through `prompts/list` and `prompts/get`; omitted means no `prompts` capability. */
++  prompts?: readonly McpPrompt[];
    /**
     * Optional identity check, layered on top of the origin gate and checked
     * **after** it: a bearer token string (matched in constant time against
 diff --git a/dist/dev-BViAfnlw.mjs b/dist/dev-BViAfnlw.mjs
-index 19f385cf45e59be7c0508a3c5a255f694003a347..0c4803369a7365d4d4aa901b1d0f55fc6b02dca5 100644
+index 19f385cf45e59be7c0508a3c5a255f694003a347..13e4b8479c03c793b542a0901aaf73fd2060690b 100644
 --- a/dist/dev-BViAfnlw.mjs
 +++ b/dist/dev-BViAfnlw.mjs
-@@ -140,6 +140,7 @@ async function mountMcpRoute(app, context, def, base, setting) {
+@@ -140,6 +140,8 @@ async function mountMcpRoute(app, context, def, base, setting) {
  		serverName: `${def.id} (devframe)`,
  		serverVersion: def.version ?? "0.0.0",
  		exposeSharedState: config.exposeSharedState ?? true,
 +		instructions: config.instructions,
++		prompts: config.prompts,
  		authorization: config.authorization,
  		allowedOrigins: config.allowedOrigins
  	});

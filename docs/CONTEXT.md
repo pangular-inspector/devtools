@@ -88,6 +88,10 @@ _Avoid_: MCP command, function, skill
 Anything that changes the app or the server rather than reading it: setting a form value, navigating, restoring store state, HTTP fault rules. `actions` in the config blocks them, and `agent.readOnly` drops the agent tools that perform them.
 _Avoid_: mutation, command, write tool
 
+**Prompt**:
+An MCP prompt: a ready request for one workflow, such as `debug-error` or `fix-form`, that the HTTP MCP endpoint lists and an MCP client usually offers as a slash command. It names agent tools in numbered steps and is built from the shipped skills in `packages/devtools/src/agent-prompts.ts`; a prompt whose tools are off is not offered.
+_Avoid_: template, command, skill (a skill is a `SKILL.md` folder the agent reads)
+
 **Resource**:
 Live state an agent reads as JSON over MCP, such as `pangular:component-tree`. It holds what the connected pages reported, so it is empty when no page is connected.
 _Avoid_: snapshot, feed, state dump

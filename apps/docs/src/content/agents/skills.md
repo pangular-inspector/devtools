@@ -20,6 +20,8 @@ A skill is a folder with a `SKILL.md` file that an agent reads when a task match
 
 The skills use the tools of the [MCP server](./mcp-server.md), so connect it first.
 
+The HTTP endpoint also serves the same workflows as MCP prompts, which need no install. See [Prompts](./mcp-server.md#prompts).
+
 ## Install them
 
 Run the command in your project folder. It copies the skills into your agent's skill folder.

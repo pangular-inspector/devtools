@@ -1588,6 +1588,21 @@ export function agentAllowed(entry: { id: string }, config: ResolvedPangularConf
   return !inspector || config.agent.tools[inspector];
 }
 
+/**
+ * Whether the built-in agent tool `name` (no `pangular:` prefix) is offered to
+ * agents under `config`: it has an entry in `AGENT_ENTRIES`, `agentAllowed`
+ * keeps it, and its inspector is on. MCP prompts use it to name only tools
+ * that exist.
+ */
+export function agentToolOffered(name: string, config: ResolvedPangularConfig): boolean {
+  const entry = agentEntry(name);
+  if (!entry || entry.kind === 'resource') return false;
+  if (!agentAllowed({ id: `pangular:${name}` }, config)) return false;
+  // `agentAllowed` already checks every inspector of an `anyInspector` entry.
+  const inspector = entry.anyInspector ? undefined : entry.inspectors?.[0];
+  return !inspector || config.inspectors[inspector];
+}
+
 const INSPECTOR_LABEL: Record<PangularInspector, string> = {
   components: 'Components',
   injectors: 'Injectors',

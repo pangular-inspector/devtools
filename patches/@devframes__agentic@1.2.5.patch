@@ -1,8 +1,16 @@
 diff --git a/dist/mcp/index.mjs b/dist/mcp/index.mjs
-index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..06c8b33540e4d130156ea1839ef85dc603bd032a 100644
+index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..e51cae93e96a8c5d7280d6ecc1d64de44b9b5a8c 100644
 --- a/dist/mcp/index.mjs
 +++ b/dist/mcp/index.mjs
-@@ -26,10 +26,13 @@ function buildMcpServerFromContext(ctx, options) {
+@@ -1,6 +1,6 @@
+ import { homedir } from "node:os";
+ import process from "node:process";
+-import { Server, createMcpHandler } from "@modelcontextprotocol/server";
++import { ProtocolError, ProtocolErrorCode, Server, createMcpHandler } from "@modelcontextprotocol/server";
+ import { DEVFRAME_EVENTS } from "devframe/constants";
+ import { argsToJsonSchema, diagnostics, formatMcpError, returnToJsonSchema, stringifyForMcp } from "devframe/internal";
+ import { createHostContext } from "devframe/node";
+@@ -26,12 +26,17 @@ function buildMcpServerFromContext(ctx, options) {
  	const server = new Server({
  		name: options.serverName,
  		version: options.serverVersion
@@ -13,24 +21,29 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..06c8b33540e4d130156ea1839ef85dc6
 +	}, {
 +		capabilities: {
 +			tools: { listChanged: true },
-+			resources: { listChanged: true }
++			resources: { listChanged: true },
++			...options.prompts?.length ? { prompts: { listChanged: false } } : {}
 +		},
 +		...options.instructions ? { instructions: options.instructions } : {}
 +	});
  	registerToolHandlers(server, ctx, options.exposeSharedState);
  	registerResourceHandlers(server, ctx, options.exposeSharedState);
++	if (options.prompts?.length) registerPromptHandlers(server, options.prompts);
  	return server;
-@@ -89,7 +92,8 @@ async function createMcpServer(definition, options = {}) {
+ }
+ /**
+@@ -89,7 +94,9 @@ async function createMcpServer(definition, options = {}) {
  	const buildOptions = {
  		serverName: options.serverName ?? `${definition.id} (devframe)`,
  		serverVersion: options.serverVersion ?? definition.version ?? "0.0.0",
 -		exposeSharedState: options.exposeSharedState ?? true
 +		exposeSharedState: options.exposeSharedState ?? true,
-+		instructions: options.instructions
++		instructions: options.instructions,
++		prompts: options.prompts
  	};
  	let handle;
  	try {
-@@ -165,6 +169,25 @@ async function readStateResult(ctx, filter, key) {
+@@ -165,6 +172,25 @@ async function readStateResult(ctx, filter, key) {
  		value: (await ctx.rpc.sharedState.get(key)).value()
  	};
  }
@@ -56,7 +69,7 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..06c8b33540e4d130156ea1839ef85dc6
  function registerToolHandlers(server, ctx, exposeSharedState) {
  	const stateFilter = sharedStateFilter(exposeSharedState);
  	const warnedCollisions = /* @__PURE__ */ new Set();
-@@ -216,6 +239,8 @@ function registerToolHandlers(server, ctx, exposeSharedState) {
+@@ -216,6 +242,8 @@ function registerToolHandlers(server, ctx, exposeSharedState) {
  			}
  			const outputSchema = tool ? usableOutputSchema(tool.outputSchema ?? computeOutputSchema(tool, ctx)) : void 0;
  			const result = await ctx.agent.invoke(tool?.id ?? name, args ?? {});
@@ -65,13 +78,54 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..06c8b33540e4d130156ea1839ef85dc6
  			return {
  				content: [{
  					type: "text",
-@@ -398,7 +423,8 @@ function createMcpFetchHandler(ctx, options) {
+@@ -278,6 +306,39 @@ function registerResourceHandlers(server, ctx, exposeSharedState) {
+ 	});
+ }
+ /**
++* Serve a fixed list of prompt templates. `prompts/list` projects each one;
++* `prompts/get` checks the required arguments and returns the messages its
++* `get` builds. An unknown name or a missing required argument is an
++* invalid-params error. The first prompt with a name wins.
++*/
++function registerPromptHandlers(server, prompts) {
++	const byName = /* @__PURE__ */ new Map();
++	for (const prompt of prompts) if (!byName.has(prompt.name)) byName.set(prompt.name, prompt);
++	server.setRequestHandler("prompts/list", async () => ({ prompts: [...byName.values()].map((prompt) => ({
++		name: prompt.name,
++		...prompt.title !== void 0 ? { title: prompt.title } : {},
++		...prompt.description !== void 0 ? { description: prompt.description } : {},
++		...prompt.arguments?.length ? { arguments: prompt.arguments.map((argument) => ({
++			name: argument.name,
++			...argument.description !== void 0 ? { description: argument.description } : {},
++			...argument.required !== void 0 ? { required: argument.required } : {}
++		})) } : {}
++	})) }));
++	server.setRequestHandler("prompts/get", async (request) => {
++		const { name, arguments: args } = request.params;
++		const prompt = byName.get(name);
++		if (!prompt) throw new ProtocolError(ProtocolErrorCode.InvalidParams, `[devframe/mcp] unknown prompt "${name}"`);
++		const given = args ?? {};
++		const missing = (prompt.arguments ?? []).filter((argument) => argument.required && !given[argument.name]).map((argument) => argument.name);
++		if (missing.length) throw new ProtocolError(ProtocolErrorCode.InvalidParams, `[devframe/mcp] prompt "${name}" needs the argument(s): ${missing.join(", ")}`);
++		const result = await prompt.get(given);
++		return {
++			...result.description !== void 0 ? { description: result.description } : {},
++			messages: result.messages
++		};
++	});
++}
++/**
+ * MCP constrains a tool's `outputSchema` to a JSON Schema of `type:
+ * "object"`; clients (the SDK included) reject anything else. Non-object
+ * return schemas (e.g. a schema for `void` / a bare string) simply project
+@@ -398,7 +459,9 @@ function createMcpFetchHandler(ctx, options) {
  	const handler = createMcpHandler(() => buildMcpServerFromContext(ctx, {
  		serverName: options.serverName,
  		serverVersion: options.serverVersion,
 -		exposeSharedState: options.exposeSharedState
 +		exposeSharedState: options.exposeSharedState,
-+		instructions: options.instructions
++		instructions: options.instructions,
++		prompts: options.prompts
  	}));
  	const unbridge = bridgeListChanged(ctx, {
  		tools: () => {

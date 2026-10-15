@@ -1,4 +1,5 @@
 import type { McpSetting } from 'devframe/types';
+import { pangularMcpPrompts } from './agent-prompts.ts';
 import { sharedStateExposed, type ResolvedPangularConfig } from './config.ts';
 
 const TIERS =
@@ -25,16 +26,17 @@ export function pangularMcpInstructions(config: ResolvedPangularConfig): string 
 
 /**
  * The `mcp` setting for a host that serves Pangular: the caller's setting
- * with the server instructions, and shared state limited to what
- * `agent.tools` allows (see `sharedStateExposed`). `false` stays off.
+ * with the server instructions, the workflow prompts (`agent-prompts.ts`),
+ * and shared state limited to what `agent.tools` allows (see
+ * `sharedStateExposed`). `false` stays off.
  *
  * `'auto'`, `true` and an omitted setting become an object, which always
  * mounts the route. That matches `'auto'` here: `@devframes/agentic` is a
  * dependency, and Pangular always registers agent tools.
  *
  * `exposeSharedState` is a devframe route option (1.2.4 and later), so the
- * filter also holds for the published package. `instructions` still comes
- * from the patches in `patches/`; without them devframe ignores it.
+ * filter also holds for the published package. `instructions` and `prompts`
+ * still come from the patches in `patches/`; without them devframe ignores them.
  */
 export function pangularMcp(
   setting: McpSetting | undefined,
@@ -47,6 +49,7 @@ export function pangularMcp(
   return {
     ...own,
     instructions: own.instructions ?? pangularMcpInstructions(config),
+    prompts: own.prompts ?? pangularMcpPrompts(config),
     exposeSharedState:
       theirs === false
         ? false

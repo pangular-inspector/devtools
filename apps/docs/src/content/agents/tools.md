@@ -11,6 +11,8 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 
 This page lists every tool the [MCP server](./mcp-server.md) exposes. Each group matches an inspector in the panel.
 
+The server's [prompts](./mcp-server.md#prompts) chain these tools into ready workflows, such as `debug-error` and `fix-form`.
+
 ## Before you call a tool
 
 ### Names

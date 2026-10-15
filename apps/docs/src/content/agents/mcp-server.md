@@ -241,6 +241,24 @@ The HTTP endpoint sends short `instructions` when your client connects. Clients 
 
 The stdio server sends none. The HTTP endpoint needs devframe to pass the instructions on, which devframe 1.2.5 does not do yet, so an installed package sends none either for now.
 
+### Prompts
+
+The HTTP endpoint also offers *MCP prompts: ready requests for the workflows in the [agent skills](./skills.md). Clients that support prompts usually show them as slash commands. Each prompt has one optional argument and returns a single user message with numbered steps that name the tools to call.
+
+| Prompt             | Argument      | What it asks the agent to do                                                                                      | Needs                      |
+| ------------------ | ------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `inspect-page`     | `page`        | Call `list-pages`, then `snapshot`, and summarize the route, components, errors, HTTP calls and forms.            | Always offered             |
+| `debug-error`      | `error`       | Find the error with `list-errors`, explain it with `explain-error`, fix the cause and check it stops.             | `errors` on for agents     |
+| `fix-form`         | `form`        | Explain the form with `explain-form-invalid`, keep a `form-history` marker, fix it and prove it with `form-diff`. | `forms` on for agents      |
+| `performance-pass` | `interaction` | Record change detection, read `change-detection` and `diagnose-change-detection`, fix one thing and compare.      | `components` on for agents |
+| `verify-fix`       | `fix`         | Repeat the calls that showed the problem, compare the answers and check `list-errors` for new errors.             | Always offered             |
+
+The prompts follow the same config as the tools. A prompt is left out when a tool it needs is off through `inspectors` or `agent.tools`, and its steps leave out the tools that are off. Under `agent.readOnly` or with `actions.forms` off, `fix-form` names no action tool. Under `agent.readOnly`, `performance-pass` asks you to start the recording from the panel.
+
+The argument is your own text. The server puts it on one line, cuts it at 200 characters and masks JWTs, bearer tokens and secret values in it, the same way it masks tool answers.
+
+The stdio server offers no prompts. Like the instructions, the prompts need a devframe patch that devframe 1.2.5 does not ship, so an installed package offers none until devframe ships it.
+
 ### Tool names
 
 The server registers tools with a colon, as `pangular:get-routes`. MCP clients see them with an underscore, as `pangular_get-routes`. Calls with either form work.
