@@ -245,6 +245,20 @@ The stdio server sends none. The HTTP endpoint needs devframe to pass the instru
 
 The server registers tools with a colon, as `pangular:get-routes`. MCP clients see them with an underscore, as `pangular_get-routes`. Calls with either form work.
 
+### Titles and structured output
+
+Each tool also has a short title, such as **List connected pages** for `pangular_list-pages`. The server sends it as the tool's `title` and `annotations.title`, and clients show it in their tool lists and approval prompts.
+
+A tool answers with a JSON object, sent as text. Most tools answer `{ "markdown": "..." }`. The tools below also declare an `outputSchema` and send the same object as `structuredContent`, so a client can read the answer without parsing the text. The text is the same either way.
+
+| Tools                                                                                                       | `structuredContent`            |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Every tool whose name starts with `list-` or `inspect-`                                                     | `{ "markdown": "..." }`        |
+| `analog-routes`, `analog-api-routes`, `analog-server-functions`, `analog-server-calls` and `analog-content` | `{ "markdown": "..." }`        |
+| `build-meta`                                                                                                | The project and version fields |
+
+The other source scan tools answer with a JSON array, and `screenshot-component` with an image, so they send text and images only.
+
 ### Read and action tools
 
 Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty tools act on the app, so the server does not mark them read-only:

@@ -137,6 +137,7 @@ export function createComponentScreenshots(deps: Deps) {
 
   const tool = {
     id: 'pangular:screenshot-component',
+    title: 'Screenshot a component',
     description:
       'An image (PNG, or JPEG when large) of one component\'s host element as rendered now. Pass `selector`: an instance id, class name, host tag or CSS selector. Without `page`, ids, class names and tags are searched on every page, newest first; a CSS selector uses the newest page. The page draws a copy from computed styles, so it works off screen and never changes the app. Password and secret fields, `data-private`, `.sentry-mask`, `.rr-mask` and `data-pangular="mask"` elements, and tokens in text are masked. Cross-origin images without CORS, iframes and web fonts are not drawn. At most 2000 px.',
     inputSchema: {

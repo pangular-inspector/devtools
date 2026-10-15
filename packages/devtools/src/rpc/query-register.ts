@@ -17,6 +17,7 @@ import {
   staleQueryPages,
   toQueryReport,
 } from './query-tools.ts';
+import { MARKDOWN_OUTPUT_SCHEMA } from './agent-output.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -162,6 +163,8 @@ export async function registerTanstackQuery(host: QueryHost): Promise<QueryRegis
 
   host.agent.registerTool({
     id: 'pangular:list-queries',
+    title: 'List TanStack queries',
+    outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
       'TanStack Query on the running page: the `QueryClient`s the app provides (found once something injected them; the overlay never creates one), then cached queries and mutations with id, key, status, fetch status, freshness, last update, observer count and error. Filter with `status` and `search`; `limit` caps rows (default 50). The page reports up to 300 queries and 100 mutations, the most recently updated. Keys and errors are masked. Pass an id to pangular:inspect-query for the data. Uses `page` or the most recent page.',
     inputSchema: {
@@ -196,6 +199,8 @@ export async function registerTanstackQuery(host: QueryHost): Promise<QueryRegis
 
   host.agent.registerTool({
     id: 'pangular:inspect-query',
+    title: 'Inspect a TanStack query',
+    outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
       "One TanStack Query query or mutation from pangular:list-queries, with its data read from the page now: status, fetch status, freshness and staleTime, when the data was last updated, observers, gcTime, failures and error, then the data (and a mutation's variables) serialized up to about 20,000 values. Secret-looking keys, JWTs and bearer tokens are masked. Pass `id`, or `key` to find a query whose key contains that text. Read-only.",
     inputSchema: {
@@ -216,6 +221,7 @@ export async function registerTanstackQuery(host: QueryHost): Promise<QueryRegis
 
   host.agent.registerTool({
     id: 'pangular:query-action',
+    title: 'Invalidate or refetch a query',
     description:
       "Invalidate or refetch one TanStack Query query on the running page, through the app's own `QueryClient`. `invalidate` marks it stale (`invalidateQueries`), and a query with an active observer refetches at once; `refetch` fetches it again now (`refetchQueries`). Both call the query function, so they send the app's requests again. Needs `actions.tanstackQuery`. Pass `id` from pangular:list-queries, or `key`, and `page` when more than one tab reports.",
     inputSchema: {

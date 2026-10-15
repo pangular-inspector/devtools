@@ -19,6 +19,7 @@ import { untrusted } from './forms-tools.ts';
 import type { NgrxPageRecord } from './ngrx-tools.ts';
 import { callerPage } from './page-scope.ts';
 import { pageArgument, unknownPageText } from './pages.ts';
+import { MARKDOWN_OUTPUT_SCHEMA } from './agent-output.ts';
 
 /**
  * The NgRx history on the server: the State, Diff and Action of a past entry
@@ -208,6 +209,8 @@ export function createNgrxHistory(deps: Deps) {
   const tools = [
     {
       id: 'pangular:inspect-ngrx-entry',
+      title: 'Inspect an NgRx log entry',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description: INSPECT_NGRX_ENTRY_DESCRIPTION,
       inputSchema: NGRX_HISTORY_SCHEMAS.entry,
       handler: async (args: Record<string, unknown>) => {
@@ -228,6 +231,7 @@ export function createNgrxHistory(deps: Deps) {
     },
     {
       id: 'pangular:export-ngrx-session',
+      title: 'Export an NgRx session',
       description: EXPORT_NGRX_SESSION_DESCRIPTION,
       inputSchema: NGRX_HISTORY_SCHEMAS.export,
       handler: async (args: Record<string, unknown>) => ({
@@ -246,6 +250,7 @@ export function createNgrxHistory(deps: Deps) {
     },
     {
       id: 'pangular:import-ngrx-session',
+      title: 'Import an NgRx session',
       description: IMPORT_NGRX_SESSION_DESCRIPTION,
       inputSchema: NGRX_HISTORY_SCHEMAS.import,
       handler: async (args: Record<string, unknown>) => ({
@@ -254,6 +259,7 @@ export function createNgrxHistory(deps: Deps) {
     },
     {
       id: 'pangular:generate-ngrx-test',
+      title: 'Generate an NgRx test',
       description: GENERATE_NGRX_TEST_DESCRIPTION,
       inputSchema: NGRX_HISTORY_SCHEMAS.test,
       handler: async (args: Record<string, unknown>) => {
@@ -277,6 +283,7 @@ export function createNgrxHistory(deps: Deps) {
     },
     {
       id: 'pangular:restore-ngrx-state',
+      title: 'Restore NgRx state',
       description: RESTORE_NGRX_STATE_DESCRIPTION,
       inputSchema: NGRX_HISTORY_SCHEMAS.restore,
       handler: async (args: Record<string, unknown>) => {

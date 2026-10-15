@@ -375,6 +375,7 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
 
   host.agent.registerTool({
     id: 'pangular:audit',
+    title: 'Audit the running page',
     description: `One ranked list of what is wrong on the running page: change detection (needs a pangular:change-detection recording), leaks, errors, hydration, route and form lint, failed HTTP calls and transfer cache misses, pipe lint and axe-core violations. Each finding has severity, area, target, why and the tool for detail, then key numbers. ${
       host.agentAxe ? '`axe: true` runs a fresh axe pass first. ' : ''
     }\`session\`: \`before\` saves a baseline, \`after\` compares, \`clear\` drops it; kept per page 30 minutes.${

@@ -29,6 +29,7 @@ interface Deps {
 
 export interface ComponentEditTool {
   id: string;
+  title: string;
   description: string;
   inputSchema: Record<string, unknown>;
   handler: (args: Record<string, unknown>) => Promise<{ markdown: string }>;
@@ -126,6 +127,7 @@ export function createComponentEdits(deps: Deps) {
     const field = kind === 'signal' ? 'signal' : 'property';
     return {
       id: kind === 'signal' ? 'pangular:set-signal' : 'pangular:set-component-property',
+      title: kind === 'signal' ? 'Set a signal' : 'Set a component property',
       description:
         kind === 'signal'
           ? 'Sets a writable signal of a live component instance via `.set()` (dev only). Returns updated redacted value. Pass property name or path within signal value (e.g. `filters.query`). Supports signal(), linkedSignal(), model(); rejects inputs, computed, readonly signals, non-JSON values and redacted names. Specify an instance id, or a class name or host tag matching one instance. Multi-tab setups require `page`. Requires `actions.components` write permission.'

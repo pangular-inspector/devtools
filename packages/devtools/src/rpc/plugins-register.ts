@@ -33,6 +33,7 @@ import { code, untrusted } from './forms-tools.ts';
 import { PAGE_ARGUMENT, byRecency, pageArgument, unknownPageText } from './pages.ts';
 import { trackPageSessions } from './page-sessions.ts';
 import type { PageTtl } from './page-ttl.ts';
+import { MARKDOWN_OUTPUT_SCHEMA } from './agent-output.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -558,6 +559,8 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
 
   host.agent.registerTool({
     id: 'pangular:list-plugins',
+    title: 'List plugins',
+    outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
       'List the Pangular plugins: the page plugins each connected page runs (id, version, status, which pages) and the server plugins with their agent tools (`pangular:plugin:<plugin>:<tool>`, with their tier). Page plugins are libraries that registered a view with `registerPangularPlugin()`; read one with pangular:inspect-plugin. Plugins whose tools the devtools config turns off (`plugins.<id>.tools: false`) are left out. Empty when no page runs a plugin and no server plugin is set.',
     inputSchema: { type: 'object', properties: {} },
@@ -566,6 +569,8 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
 
   host.agent.registerTool({
     id: 'pangular:inspect-plugin',
+    title: 'Inspect a plugin',
+    outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
       "Read one Pangular plugin's view of the running page, the same sections its Plugins tab shows (tables, lists, stats, key and value trees) as markdown, with its status, page actions and agent tools. The values come from the library's plugin code on the page and are masked like other live data. Pass the plugin id (from pangular:list-plugins) as `plugin`. A plugin whose tools the devtools config turns off (`plugins.<id>.tools: false`) reads as not reported.",
     inputSchema: {

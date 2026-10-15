@@ -77,6 +77,7 @@ export function createProviderValues(deps: Deps) {
   /** The read-provider-value agent tool. */
   const tool = {
     id: 'pangular:read-provider-value',
+    title: 'Read a provider value',
     description: READ_PROVIDER_VALUE_DESCRIPTION,
     inputSchema: {
       type: 'object',

@@ -257,6 +257,7 @@ import {
   actionBlockedMessage,
   agentAllowed,
   agentSafety,
+  agentTags,
   angularUnavailableText,
   enabledPanelTabs,
   isPageAgentEntry,
@@ -295,6 +296,7 @@ import {
   FORMS_SHAPE,
   INJECTOR_TREE_SHAPE,
 } from './push-delta.ts';
+import { MARKDOWN_OUTPUT_SCHEMA } from './rpc/agent-output.ts';
 
 type CapacitorToolArgs = {
   page?: string;
@@ -347,18 +349,22 @@ const pangular = defineDevframe({
     const register: typeof my.rpc.register = (definition) => {
       if (!rpcAllowed(definition.name, config)) return;
       const exposed = !definition.agent || agentAllowed({ id: definition.name }, config);
-      my.rpc.register(exposed ? definition : { ...definition, agent: undefined });
+      if (!exposed) return my.rpc.register({ ...definition, agent: undefined });
+      const agent = definition.agent && { ...definition.agent, tags: agentTags(definition.name) };
+      my.rpc.register(agent ? { ...definition, agent } : definition);
     };
     // Agent writes, NG errors and hydration mismatches, posted to the hub's messages.
     const feed = createHubFeed(ctx, config);
     const agent = {
       registerTool: (tool: Parameters<typeof ctx.agent.registerTool>[0]) => {
-        // The tier comes from AGENT_SAFETY, so the config is the one place that sets it.
+        // The tier comes from AGENT_SAFETY and the tags from AGENT_INSPECTOR, so
+        // the config is the one place that sets them.
         if (agentExposed(tool))
           ctx.agent.registerTool(
             feed.wrapTool({
               ...tool,
               safety: agentSafety(tool.id, config),
+              tags: agentTags(tool.id),
               handler: leased(() => interest, tool.handler),
             }),
           );
@@ -840,6 +846,7 @@ const pangular = defineDevframe({
               feed.wrapTool({
                 ...(tool as Parameters<typeof ctx.agent.registerTool>[0]),
                 safety,
+                tags: agentTags(String(tool['id'])),
                 handler: leased(() => interest, tool['handler']),
               }),
             ),
@@ -1352,6 +1359,8 @@ const pangular = defineDevframe({
     const httpSnapshot = () => httpState.value() as HttpState;
     agent.registerTool({
       id: 'pangular:list-ssr-requests',
+      title: 'List SSR requests',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'Recent document requests that the Angular SSR server answered, traced by `devtools.ssrMiddleware` or `withPangularSsr()`: id, URL, status, render mode read from the HTML (Server, Prerender, Client), render time, how many server HttpClient calls the render made, and whether a connected page reported loading that response. Empty when neither is installed.',
       inputSchema: {
@@ -1368,6 +1377,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:explain-ssr-request',
+      title: 'Explain an SSR request',
       description:
         'One SSR request from start to finish: status, render mode, render and fetch times, kept response headers, each server HttpClient call, then the browser page that loaded the response with its hydration result and any call the browser made again instead of reading the transfer cache. Picks the request by `id` (from list-ssr-requests), else the newest one for `url`, else the newest one.',
       inputSchema: {
@@ -1390,6 +1400,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:list-http-calls',
+      title: 'List HTTP calls',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         "The app's HttpClient calls recorded by `withPangular()`, newest first: side (SSR or client), method, URL, status, duration and flags (mocked or faulted by a rule, cancelled, transfer cache hit or skip, the matched rule). Without `page` it lists every reporting tab and the server; with `page` only that tab and the server render that served it. Secrets in URLs, errors, previews and headers are masked; `headers` adds each call's request and response headers. Empty when no page uses the interceptor.",
       inputSchema: {
@@ -1427,6 +1439,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:http-waterfall',
+      title: 'Show an HTTP waterfall',
       description:
         "One page's client HttpClient calls as a waterfall, grouped by navigation (a new group each time the page URL changes), newest navigation first: each call's start offset in its navigation, duration, status and a text bar. With `headers`, each call's request headers (as they reached `withPangular()`) and the response headers the app could read; `Authorization`, cookies, secret-looking names, JWTs and bearer tokens are masked. Empty when no page uses the interceptor.",
       inputSchema: {
@@ -1450,6 +1463,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:list-capacitor-calls',
+      title: 'List Capacitor plugin calls',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'List Capacitor plugin calls made by the app, newest first: plugin, method, bridge target (native vs web), arguments, result/error, and duration. Also includes active listeners and event counts. Filter by `plugin`, `failed` calls, or `slowMs`. Calls a web implementation answers are logged only when `@pangular-inspector/devtools/capacitor-hook` loads before @capacitor/core. Arguments, results, and errors are masked for privacy. Empty when no Capacitor app reports.',
       inputSchema: {
@@ -1472,6 +1487,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:list-capacitor-plugins',
+      title: 'List Capacitor plugins',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'The Capacitor environment of the app and its plugins: platform, server URL, whether CapacitorHttp and native logging are on, the WebView user agent, and each plugin with whether it is available on this platform, imported by the app, installed natively, and its native methods. Flags plugins the app imports that are not available (run `npx cap sync`) and native plugins the app does not import. Empty when no Capacitor app reports.',
       inputSchema: { type: 'object', properties: { page: PAGE_ARGUMENT } },
@@ -1512,6 +1529,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:list-http-rules',
+      title: 'List HTTP mock rules',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'The HTTP fault and mock rules the panel or an agent set, in match order: id, on or off, method, URL pattern, whether it applies to browser calls, SSR calls or both, and its effect (fail with a status, answer with a status and mock body, delay). Rules apply to every connected tab and to the server. Patterns and bodies are masked like recorded calls. Empty when no rule is set.',
       inputSchema: { type: 'object', properties: {} },
@@ -1522,6 +1541,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:set-http-rule',
+      title: 'Set an HTTP mock rule',
       description:
         "Adds an HTTP fault or mock rule, or replaces the rule with `id`, the same way the panel's Fault injection form does (development only). `pattern` plus at least one of `status`, `delayMs` or `body`. The rule applies to every connected tab right away and to SSR on the next page load. Returns the saved rule list. Needs the HTTP write action (actions.http).",
       inputSchema: { type: 'object', properties: ruleInput, required: ['pattern'] },
@@ -1534,6 +1554,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:remove-http-rule',
+      title: 'Remove an HTTP mock rule',
       description:
         'Removes the HTTP fault or mock rule with `id` (from list-http-rules) and returns the rules left. Needs the HTTP write action (actions.http).',
       inputSchema: {
@@ -1547,6 +1568,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:clear-recordings',
+      title: 'Clear recordings',
       description:
         'Clears recorded HTTP calls, router navigations, or Analog server calls between reproduction runs (development only). Specify `target` as "http", "router", "analog", or "all". An optional `page` clears only the navigations of that specific page.',
       inputSchema: {
@@ -2216,6 +2238,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:watch-signal',
+      title: 'Watch a signal',
       description:
         'Watch a signal on the running page and toggle write stack recording. Watched signals log changes to the console; pangular:inspect-signals includes them in `watch`. When write stacks are enabled, exact history entries include the top app call frames. Pass `node` (id or label) to watch, `watch: false` to unwatch, or `stacks: true|false` to toggle stack traces. Resets on reload. Uses `page` or the most recent page with a signal graph.',
       inputSchema: {
@@ -2598,6 +2621,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:inspect-signal-store',
+      title: 'Inspect a signal store',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description: INSPECT_SIGNAL_STORE_DESCRIPTION,
       inputSchema: {
         type: 'object',
@@ -2619,6 +2644,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:signal-store-history',
+      title: 'Show signal store history',
       description: SIGNAL_STORE_HISTORY_DESCRIPTION,
       inputSchema: {
         type: 'object',
@@ -2669,6 +2695,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:highlight',
+      title: 'Highlight a component',
       description:
         'Highlight a component in the running Angular app and select it: the pangular:component-tree resource then carries its live `detail` and pangular:inspect-signals targets it. Pass an instance id from the pangular:component-tree resource (targets that exact instance, e.g. the second card of a list), a class name, a host tag, or any CSS selector. A class name or tag resolves on the most recent page unless `page` names another tab. When it matches several instances, it picks the first and lists the ids of all of them.',
       inputSchema: {
@@ -2733,6 +2760,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:inspect-component',
+      title: 'Inspect a component',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'Get live details of a component instance: inputs, outputs, properties (signals unwrapped), listeners, host directives, DI dependencies, change detection, and source location. Pass `selector` (instance id, class name, or host tag); without `page` it searches every page. It selects the instance on its page (the panel follows); several matches answer for the first and list the other ids. Fields carry `edit` (for pangular:set-component-property or pangular:set-signal) or `locked`. `path` reads a nested value without changing the selection. Secrets are redacted; cut past 20,000 characters.',
       inputSchema: {
@@ -2832,6 +2861,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:list-components',
+      title: 'List live components',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description: LIST_COMPONENTS_DESCRIPTION,
       inputSchema: {
         type: 'object',
@@ -2874,6 +2905,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:defer-blocks',
+      title: 'List @defer blocks',
       description:
         'List live `@defer` blocks rendered on the page: owning component, state (placeholder, loading, complete, error), triggers, and incremental hydration status. Flags blocks needing attention (failed loads, stuck placeholders, dehydrated). Lists every page unless `page` names one. Requires an Angular development build with debug APIs enabled.',
       inputSchema: {
@@ -2903,6 +2935,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:for-blocks',
+      title: 'List @for blocks',
       description:
         'List live `@for` blocks rendered on the running page (Angular 22+ dev builds): owning component, item count, `track` expression target (`$index`, item, or expression), and `@empty` block status. Flags empty blocks lacking `@empty`. Lists every page unless `page` names one. Returns up to 50 blocks per page; results cut at 20,000 chars.',
       inputSchema: {
@@ -2933,6 +2966,7 @@ const pangular = defineDevframe({
     const hydrationOverlayAllowed = !config.agent.readOnly;
     agent.registerTool({
       id: 'pangular:hydration',
+      title: 'Check hydration',
       description: `${HYDRATION_DESCRIPTION}${
         hydrationOverlayAllowed
           ? HYDRATION_OVERLAY_DESCRIPTION
@@ -2990,6 +3024,7 @@ const pangular = defineDevframe({
       : 'Recording is off until the panel starts it: under agent.readOnly this tool cannot record or turn on views.';
     agent.registerTool({
       id: 'pangular:change-detection',
+      title: 'Record change detection',
       description: `Inspect change detection cycles from Angular's profiler (Angular 20+, dev build): slowest components, check counts, cycle durations, hooks and outputs, and the mode (zoneless or zone.js). ${cdActionDesc} \`export: "json"\` returns the panel file, \`"trace"\` a Perfetto trace (only counts past 100,000 characters). Uses \`page\` or the page that is recording.`,
       inputSchema: {
         type: 'object',
@@ -3125,6 +3160,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:diagnose-change-detection',
+      title: 'Diagnose change detection',
       description:
         'Why change detection ran and what it wasted, from the recording pangular:change-detection or the panel started (Angular 20+, dev build). Lists what started each cycle (DOM event, signal write, HTTP response, timer, markForCheck, setInput, effect, an app `ApplicationRef.tick()`, or a zone.js tick nothing asked for), components that change only in zone.js ticks, checks that changed nothing, inputs mutated in place or given an equal new reference, and OnPush hints. `limit` sets rows per list. Uses `page` or the page that is recording. Only reads. Empty until a recording ran.',
       inputSchema: {
@@ -3156,6 +3192,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:inspect-signals',
+      title: 'Inspect signals',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         "Get the signal graph the running page last reported: signal nodes (signal, computed, linkedSignal, effect), dependency edges, resources, and value history. Only signals a template or an effect has read appear. `selector` names a component (tag, class, id), `root` for root service effects, or a route path. The page reports one component graph: for another component, call pangular:highlight first, or you get the graph available. Use `node` for a single node with its direct producers and consumers; `framework: false` excludes Angular's own nodes; `history: false` omits history.",
       inputSchema: {
@@ -3267,6 +3305,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:inspect-providers',
+      title: 'Inspect injectors and providers',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'Get dependency injection injectors from a running page. Without arguments, returns the injector tree (element and environment injectors with providers). Use `selector` to filter by component tag, class, or environment injector (e.g. Root, Platform, Route: admin). Use `token` to find where a service or token is provided and injected. Supports `page` selection across multiple tabs.',
       inputSchema: {
@@ -3337,6 +3377,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:inspect-route',
+      title: 'Inspect the active route',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'Inspect current route state on the running page: URL, query params, fragment, document title, in-flight navigation, active route tree (component, params, data, guards, resolvers), and outlet tree. Pass `selector` (component class, tag, or link text) to inspect the route for a specific component or check if a link is active. Secret values are redacted.',
       inputSchema: {
@@ -3359,6 +3401,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:explain-navigation',
+      title: 'Explain a navigation',
       description:
         'Detailed breakdown of recent navigations, newest first: source trigger, redirect chains, redirect loops, phase timing, guards, resolvers, lazy loads, HTTP calls, and cancellation/error explanations with NG0 error details. Filter with `url` or `id`. Set `perf: true` to summarize slowest navigations and preloads.',
       inputSchema: {
@@ -3397,6 +3440,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:list-routes',
+      title: 'List live routes',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         "The router's live route config (not just the active route): every route with its full path, component or redirect, lazy state, outlet, guards, resolvers, title, the source file it is declared in and an example URL, with the active routes marked. Pass `match` to predict which route a URL matches (or the nearest routes when it matches none), `audit` for the guards protecting each page, or `filter` to narrow by path or component.",
       inputSchema: {
@@ -3434,6 +3479,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:lint-routes',
+      title: 'Lint routes',
       description:
         "Checks the live route config for common issues: routes after '**', shadowed param routes, missing pathMatch 'full' on empty paths, runtime redirect loops, deprecated guards, title issues, and security flags (e.g. emails or open redirects). Findings indicate severity (throws, warns, or silent) and remediation steps.",
       inputSchema: { type: 'object', properties: { page: pageProperty } },
@@ -3446,6 +3492,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:router-config',
+      title: 'Show the router setup',
       description:
         'How the router is set up on the running page: provideRouter, forRoot or other, or unknown when the build cannot tell, Angular version, effective options with which are set and which are defaults (onSameUrlNavigation, paramsInheritanceStrategy, urlUpdateStrategy, canceledNavigationResolution, scrolling, initial navigation), enabled features (input binding, view transitions, error handler, preloading strategy, scroller, resources), strategies (location, title, reuse, URL handling), base href, hydration and whether per-guard instrumentation is on.',
       inputSchema: { type: 'object', properties: { page: pageProperty } },
@@ -3458,6 +3505,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:export-navigation',
+      title: 'Export a navigation',
       description:
         'A markdown repro for one navigation (default: the latest that did not succeed): Angular version, router options and features, how it started, the full redirect chain with every detail from explain-navigation, any redirect loop it is part of, and the relevant slice of the route config. Secret-looking values stay redacted.',
       inputSchema: {
@@ -3473,6 +3521,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:explain-render-mode',
+      title: "Explain a URL's render mode",
       description:
         "Which ServerRoute (from the workspace's *.routes.server.ts) and render mode (Server, Client, Prerender) a URL gets, plus server entries that match no client route and the render mode of every client route.",
       inputSchema: {
@@ -3496,6 +3545,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:navigate',
+      title: 'Navigate the app',
       description:
         'Performs router actions in the running app (dev only). Actions: `navigate` (navigates to `url` or `pattern` with `params`), `abort` (cancels in-flight navigation), `replay` (re-runs navigation by `id`), `probe` (runs the matcher without navigating; runs canMatch guards and may load lazy chunks), `instrument` (toggles guard/resolver logging), and `resolve-lazy` (inspects lazy routes). Actions `navigate`, `abort`, `replay`, and `probe` require `actions.router` permission.',
       inputSchema: {
@@ -3581,6 +3631,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:dispatch-ngrx-action',
+      title: 'Dispatch an NgRx action',
       description:
         'Dispatches an action to the @ngrx/store Store in the running app (dev only) and returns the action log entry with origin and state diff. Pass `type` with optional `payload`, or `seq` to redispatch an action from the log. Without `page` it uses the one page with a Store; with several, it dispatches nothing and lists them. Requires `actions.ngrx` write permission.',
       inputSchema: {
@@ -3657,6 +3708,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:inspect-forms',
+      title: 'Inspect forms',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'Inspect forms on the running page (Signal Forms, reactive, and template-driven). Without arguments, lists all forms with status and error counts. Pass `form` for the full field tree (values, status, touched/dirty, errors, webMcp tool status). Filter using `path`, `onlyInvalid`, or `includeValues`. Secret values are redacted; large results are truncated past 20,000 characters.',
       inputSchema: {
@@ -3694,6 +3747,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:explain-form-invalid',
+      title: 'Explain invalid forms',
       description:
         'Explain why forms on the running page are invalid: each failing field with its current value, the validator that failed, its message and whether it was touched, plus fields waiting on async validators and disabled reasons. Without `form` it covers every form that is invalid or waiting on async validation. Lists at most 100 problems per form; pass `path` to explain one group.',
       inputSchema: {
@@ -3742,6 +3796,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:explain-field',
+      title: 'Explain a form field',
       description:
         'Explain one form field: value, flags, every error with where it comes from (validator, template attribute, cross-field rule and which ancestor, async, parse, server/submission, setErrors), why validation is skipped (hidden, disabled, readonly), inherited disabled reasons, uncommitted or debounced input, stale validity, rules and validator names, the binding (accessor or [formField]) and DOM facts (label, visible error text, drift). Pass `selector` instead of form/path to start from a CSS selector.',
       inputSchema: {
@@ -3781,6 +3836,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:explain-submit',
+      title: 'Explain a form submit',
       description:
         'Explain what submitting a form will do and why it might do nothing: Signal Forms submit() dry-run (action present, ignoreValidators, already submitting), ngSubmit semantics for reactive and template forms, DOM reasons (no submit button, type="button", disabled button, directive not on a <form>, native validation), blocking and pending fields, and recent submits with their outcome (ran, blocked, threw).',
       inputSchema: { type: 'object', properties: { form: formProperty, page: formPageProperty } },
@@ -3789,6 +3845,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:form-payload',
+      title: 'Show a form payload',
       description:
         'Show what a form would send: form.value vs getRawValue() with the disabled fields form.value drops (reactive), or the hidden/disabled/readonly fields Signal Forms keeps in the value without validating them, plus which fields the user changed. Each value is cut at 8,000 characters; pass `path` for one group.',
       inputSchema: {
@@ -3800,6 +3857,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:form-history',
+      title: 'Show form history',
       description:
         'Timeline of form changes: value (with previous value and repeat count), status, submit (ran, blocked, threw), added and removed fields, each tagged with its origin (user, code, devtools, binding, or agent for a WebMCP tool call). Filter by form, path, type, origin or `since` (a marker from an earlier call). Returns the current marker.',
       inputSchema: {
@@ -3833,6 +3891,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:form-diff',
+      title: 'Diff form values',
       description:
         'Net change of a form since a marker: each field whose value or status ended different, with from → to and how many changes happened in between. Get a marker from form-history, inspect-forms or a form-action result, act, then call this.',
       inputSchema: {
@@ -3851,6 +3910,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:lint-forms',
+      title: 'Lint forms',
       description:
         'Deterministic checks on live forms: stale validity after validator changes, stuck PENDING, unreachable submit, missing submission action, hidden fields still rendered, view out of sync with the model, [disabled] on reactive controls, required-but-unbound fields, NG01xxx setup errors, and model-aware accessibility (missing label, aria-invalid desync, required not exposed, error text not shown or not linked, no focus after invalid submit).',
       inputSchema: { type: 'object', properties: { form: formProperty, page: formPageProperty } },
@@ -3865,6 +3925,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:lint-pipes',
+      title: 'Lint pipes',
       description:
         'Deterministic checks on pipes found in source: an impure pipe used inside an @for block (runs every check, potentially once per row), `| json` left in a template (a debugging aid), a pure pipe whose transform() reads a signal (its memoization only tracks its own arguments, not signals it reads; zero-argument calls on injected services are reported at info level), and a method call piped to `| async`, like `getData() | async` (a new Observable per check makes AsyncPipe resubscribe every time).',
       inputSchema: { type: 'object', properties: {} },
@@ -3873,6 +3934,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:explain-pipe',
+      title: 'Explain a pipe',
       description:
         'Explain one pipe by name: where it is declared or used, whether it is pure, live instance/call counts, time spent in transform, errors thrown and last input/output when instrumentation is on, an experimental stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage (for `async`), and any lint findings. Use this to answer "why is this pipe slow or stale?"',
       inputSchema: {
@@ -3891,6 +3953,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:record-pipes',
+      title: 'Record pipe calls',
       description:
         "Start or stop recording pipe calls on the running page, the same switch as Record calls in the Pipes panel. Recording wraps each pipe's transform() to count and time calls, count errors and keep the last input, output and caller, and turns on the experimental stale-argument check; pangular:explain-pipe then shows them. `start` records on the page `page` names, or on the most recent page; `stop` stops that page, or every page without `page`. Calls recorded so far stay after a stop.",
       inputSchema: {
@@ -3911,6 +3974,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:explain-custom-control',
+      title: 'Explain a custom form control',
       description:
         'Explain how a field is bound to its element (built-in accessor, custom ControlValueAccessor, custom control, [formField]) and what is wrong with it: value drift, missing setDisabledState, touched never set, captured NG01xxx setup errors.',
       inputSchema: {
@@ -3922,6 +3986,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:export-form',
+      title: 'Export a form',
       description:
         'Export a form as a JSON snapshot (tree, status, raw value) or as a test fixture (setValue / signal model plus the expected status) with a repro header. Secret values stay [redacted]. A snapshot keeps as many fields as fit in 20,000 characters (at most 200) and notes what was cut.',
       inputSchema: {
@@ -3937,6 +4002,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:wait-for-form',
+      title: 'Wait for a form',
       description:
         'Wait until a form is settled (no pending async validation, debounce or submit in flight), valid, not pending, or submitted after a marker. Resolves as soon as the condition holds, or reports the state on timeout.',
       inputSchema: {
@@ -4004,6 +4070,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:form-action',
+      title: 'Run a form action',
       description:
         'Perform actions on a live form in dev mode. Actions include `set-value` (modes: code/user), `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`, `touch-all`, `revalidate`, `reset`, `enable`, `disable`, `submit`, `focus`, `focus-first-invalid`, `store-as-global`, `snapshot`, `restore`, and `instrument`. Actions `reset`, `submit`, and `restore` require `confirm: true`. Secret, hidden and readonly fields are never written; disabled reactive fields require `force: true`.',
       inputSchema: {
@@ -4054,6 +4121,7 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:fill-form',
+      title: 'Fill a form',
       description:
         'Fill several fields at once, by dotted path, through the inputs like a user would (so parsing, dirty and touched run for real). Reports written and skipped fields (secret, hidden, readonly, disabled, missing, or a <select> with no option for the value) and the resulting status. A <select> value must equal the value of one of its options ([ngValue] or value); a multiple select takes an array. Optionally submits afterwards (needs confirm: true).',
       inputSchema: {
@@ -4086,6 +4154,8 @@ const pangular = defineDevframe({
 
     agent.registerTool({
       id: 'pangular:list-pages',
+      title: 'List connected pages',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'List connected browser tabs, Angular Native apps, and Capacitor apps reporting live data, newest first: page id, URL, title, platform, Angular version, recency, background status, and reporting inspectors. Pass a page id as `page` to the live tools to target a specific tab.',
       inputSchema: { type: 'object', properties: {} },
@@ -4137,6 +4207,7 @@ const pangular = defineDevframe({
     )?.base;
     agent.registerTool({
       id: 'pangular:open-in-panel',
+      title: 'Open in the devtools panel',
       description: OPEN_IN_PANEL_DESCRIPTION,
       inputSchema: {
         type: 'object',

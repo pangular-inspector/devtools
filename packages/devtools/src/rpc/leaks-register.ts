@@ -125,6 +125,7 @@ export async function registerLeaks(host: LeaksHost): Promise<LeaksRegistration>
 
   host.agent.registerTool({
     id: 'pangular:find-leaks',
+    title: 'Find memory leaks',
     description:
       'Leak hints for one page (`page`, or the most recent that reports leaks): destroyed components still in memory after 2 navigations and 10 seconds (class, instance id, route, age), detached views apart; subscriptions still open after destroy, only while pangular:track-subscriptions is on; and live effects and subscriptions per component (Angular 20.1+). GC timing is up to the browser, so retained rows are hints to check in the Chrome Memory panel. Dev builds of Angular 16.2+ keep destroyed components in DI debug data, so retention is not judged there. Names and routes are masked.',
     inputSchema: {
@@ -149,6 +150,7 @@ export async function registerLeaks(host: LeaksHost): Promise<LeaksRegistration>
 
   host.agent.registerTool({
     id: 'pangular:track-subscriptions',
+    title: 'Track subscriptions',
     description:
       'Start or stop tracking RxJS subscriptions on the running page (`action`: `start` or `stop`). While on, the overlay wraps `Observable.prototype.subscribe` to record which component made each subscription, so pangular:find-leaks can count open ones per component and flag those still open after destroy; stopping restores `subscribe`. Subscriptions made before tracking started are not seen, and the choice survives a reload. `start` tracks the page `page` names, or the most recent page; `stop` stops that page, or every page without `page`.',
     inputSchema: {

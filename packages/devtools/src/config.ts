@@ -1402,6 +1402,18 @@ export function agentInspector(id: string): PangularInspector | undefined {
   );
 }
 
+/**
+ * The tags of an agent tool: the inspector it belongs to, by the same key as
+ * `AGENT_INSPECTOR`. `clear-recordings` erases what the HTTP, router and
+ * Analog inspectors record, so it carries all three. Shared tools have none.
+ * Devframe keeps them in its agent manifest; MCP `tools/list` does not send them.
+ */
+export function agentTags(id: string): readonly PangularInspector[] | undefined {
+  if (agentName(id) === 'clear-recordings') return ['http', 'router', 'analog'];
+  const inspector = agentInspector(id);
+  return inspector ? [inspector] : undefined;
+}
+
 export function rpcAllowed(name: string, config: ResolvedPangularConfig): boolean {
   const inspector = RPC_INSPECTOR[name];
   return !inspector || config.inspectors[inspector];

@@ -493,6 +493,7 @@ export function registerInjectionExplain(host: InjectionExplainHost): void {
   });
   host.agent.registerTool({
     id: 'pangular:explain-injection',
+    title: 'Explain an injection',
     description: EXPLAIN_INJECTION_DESCRIPTION,
     inputSchema: EXPLAIN_INJECTION_SCHEMA,
     handler: async (raw: unknown) => ({ markdown: explainInjectionText(run(raw)) }),

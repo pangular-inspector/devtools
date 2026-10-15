@@ -14,6 +14,7 @@ import type { HttpPage } from '../types.ts';
 import { code, untrusted } from './forms-tools.ts';
 import { PAGE_ARGUMENT, byRecency, pageArgument, unknownPageText } from './pages.ts';
 import { capped } from './router-tools.ts';
+import { MARKDOWN_OUTPUT_SCHEMA } from './agent-output.ts';
 
 /** The limits `sanitizeSsrOverrides` and the panel's form enforce. */
 export const MAX_OVERRIDE_PATTERN = 500;
@@ -349,6 +350,8 @@ export function ssrOverrideTools(deps: SsrOverrideToolDeps) {
   return [
     {
       id: 'pangular:inspect-transfer-state',
+      title: 'Inspect TransferState',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         "The TransferState payload a server rendered page was served with, as the SSR & HTTP tab shows it: each key with its kind (HTTP transfer cache, app state, hydration data, Analog), size, and for a cached response its status and URL. Pass `key` for one entry's value. Values are masked like other live values and cut at 20,000 characters, so use them to read, not to copy back. Empty when no page with `withPangular()` is connected.",
       inputSchema: {
@@ -374,6 +377,8 @@ export function ssrOverrideTools(deps: SsrOverrideToolDeps) {
     },
     {
       id: 'pangular:list-ssr-overrides',
+      title: 'List SSR overrides',
+      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'The SSR overrides the panel or an agent set: id, on or off, kind (render error, client render, TransferState edit), page pattern and effect. They change what the server sends for matching pages from the next full page load. Patterns, messages and values are masked like recorded calls. Empty when none is set.',
       inputSchema: { type: 'object', properties: {} },
@@ -383,6 +388,7 @@ export function ssrOverrideTools(deps: SsrOverrideToolDeps) {
     },
     {
       id: 'pangular:set-ssr-override',
+      title: 'Set an SSR override',
       description:
         "Adds an SSR override, or replaces the one with `id`, like the panel's SSR overrides form (development only). `kind` `render-error` throws `message` while the server renders (needs `providePangularHttp()`); `client-render` serves `index.csr.html` (needs `browserDistFolder` in `initPangularHub()`); `state-edit` sets TransferState `key` to the JSON `value`, or removes it without `value` (needs `ssrMiddleware`). `pattern` matches the page path and query. Applies from the next full page load; returns the saved list. Needs actions.http.",
       inputSchema: {
@@ -418,6 +424,7 @@ export function ssrOverrideTools(deps: SsrOverrideToolDeps) {
     },
     {
       id: 'pangular:remove-ssr-override',
+      title: 'Remove an SSR override',
       description:
         'Removes the SSR override with `id` (from list-ssr-overrides) and returns the overrides left. Needs the HTTP write action (actions.http).',
       inputSchema: {

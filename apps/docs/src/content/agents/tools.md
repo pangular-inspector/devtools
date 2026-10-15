@@ -17,6 +17,8 @@ This page lists every tool the [MCP server](./mcp-server.md) exposes. Each group
 
 Tool ids use a colon, as `pangular:get-routes`. MCP clients see them with an underscore, as `pangular_get-routes`. The tables below drop the `pangular:` prefix. The `read` tools are also registered on the page under the same names, for [browser agents](./browser-agents.md).
 
+Each tool has a short title that clients show in their tool lists, and the `list-` and `inspect-` tools also send their answer as structured content. See [Titles and structured output](./mcp-server.md#titles-and-structured-output).
+
 ### Source and live tools
 
 Each tool reads from one of three places. The stdio server registers only the tools that read your source, because no page reaches it.
