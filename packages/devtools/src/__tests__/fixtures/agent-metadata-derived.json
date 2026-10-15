@@ -78,6 +78,7 @@
     "signal-store-history": "ngrx",
     "startup-timing": "injectors",
     "track-subscriptions": "components",
+    "wait-for": "components",
     "wait-for-form": "forms",
     "watch-signal": "signals"
   },
@@ -202,6 +203,7 @@
     "signal-store-history",
     "startup-timing",
     "track-subscriptions",
+    "wait-for",
     "wait-for-form",
     "watch-signal"
   ],
@@ -306,6 +308,7 @@
     "signal-store-history": ["ngrx"],
     "startup-timing": ["injectors"],
     "track-subscriptions": ["components"],
+    "wait-for": ["components", "router", "http", "errors"],
     "wait-for-form": ["forms"],
     "watch-signal": ["signals"]
   }

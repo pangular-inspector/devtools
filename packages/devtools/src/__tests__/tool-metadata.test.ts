@@ -183,6 +183,8 @@ describe('agent tool tags', () => {
       const inspector = agentInspector(tool.id);
       if (tool.id === 'pangular:clear-recordings') {
         expect(tool.tags).toEqual(['http', 'router', 'analog']);
+      } else if (tool.id === 'pangular:wait-for') {
+        expect(tool.tags).toEqual(['components', 'router', 'http', 'errors']);
       } else if (inspector) {
         expect(tool.tags, tool.id).toEqual([inspector]);
       } else {
@@ -212,6 +214,7 @@ describe('agent tool output schemas', () => {
         'pangular_analog-server-calls',
         'pangular_analog-content',
         'pangular_build-meta',
+        'pangular_wait-for',
       ].includes(name);
     expect(withSchema.map((tool) => tool.name).sort()).toEqual(
       tools

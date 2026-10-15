@@ -896,6 +896,8 @@ export interface AgentEntry {
    * points into the panel the server serves, so the stdio MCP server leaves it out.
    */
   page?: true;
+  /** It stays while any of its `inspectors` is on for agents, not only the first. */
+  anyInspector?: true;
 }
 
 /**
@@ -910,6 +912,14 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'open-in-panel': { kind: 'tool', page: true },
   // Only with `axe`, which loads and runs axe-core in the page.
   audit: { kind: 'tool', safety: 'action', readOnlyVariant: true, page: true },
+  // Reads what the components, router, http and errors collectors report; each
+  // condition needs its own inspector.
+  'wait-for': {
+    kind: 'tool',
+    inspectors: ['components', 'router', 'http', 'errors'],
+    anyInspector: true,
+    page: true,
+  },
 
   // components
   'get-components': { kind: 'rpc', inspectors: ['components'] },
@@ -1564,6 +1574,10 @@ export function agentAllowed(entry: { id: string }, config: ResolvedPangularConf
       (config.agent.tools.router && config.inspectors.router && config.actions.router) ||
       (config.agent.tools.analog && config.inspectors.analog && config.actions.analog),
     );
+  }
+  const own = agentEntry(name);
+  if (own?.anyInspector) {
+    return (own.inspectors ?? []).some((key) => config.agent.tools[key] && config.inspectors[key]);
   }
   const inspector = agentInspector(entry.id);
   return !inspector || config.agent.tools[inspector];

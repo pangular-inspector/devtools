@@ -255,6 +255,7 @@ A tool answers with a JSON object, sent as text. Most tools answer `{ "markdown"
 | ----------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | Every tool whose name starts with `list-` or `inspect-`                                                     | `{ "markdown": "..." }`        |
 | `analog-routes`, `analog-api-routes`, `analog-server-functions`, `analog-server-calls` and `analog-content` | `{ "markdown": "..." }`        |
+| `wait-for`                                                                                                  | `{ "markdown": "..." }`        |
 | `build-meta`                                                                                                | The project and version fields |
 
 The other source scan tools answer with a JSON array, and `screenshot-component` with an image, so they send text and images only.

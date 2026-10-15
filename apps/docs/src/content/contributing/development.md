@@ -255,6 +255,7 @@ Give every registered tool and resource an entry in `AGENT_ENTRIES` in `packages
 | `actions`         | The `actions` keys it writes for, so blocking them drops it                                                                  |
 | `freeModes`       | The modes that still work while those actions are blocked                                                                    |
 | `page`            | `true` when it needs a connected page, the app's dev server or the panel, so the stdio MCP server leaves it out              |
+| `anyInspector`    | `true` when it stays while any of its `inspectors` is on, not only the first                                                 |
 
 `packages/devtools/src/__tests__/agent-metadata.test.ts` boots the server and fails when a registered tool has no entry, or an entry has no registered tool. It also compares the derived lists with `packages/devtools/src/__tests__/fixtures/agent-metadata-derived.json`, so update that file with the tool and the reviewer sees what changed. See [Configuration](../getting-started/configuration.md).
 

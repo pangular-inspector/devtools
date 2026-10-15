@@ -18,7 +18,7 @@ Pangular Inspector reads a running Angular app through Angular's debug APIs and 
 1. **Inspect.** Find what the app actually does. Pick the tool from the table below, read the answer, and narrow with its arguments (`selector`, `form`, `path`, `limit`) rather than reading everything.
 2. **Explain.** Prefer the `explain-*` tools: they say why, not only what. Note the ids they return (a component instance id like `c12`, a form id like `Checkout.form@ab12`, an error id).
 3. **Fix** the code. The page reloads or hot reloads on its own.
-4. **Verify.** Call the same tool again with the same arguments and compare. For forms, take a marker from `form-history` before acting and call `form-diff` with `since` after. For navigation, `navigate` with `waitFor: "stable"` and read `inspect-route`.
+4. **Verify.** Call the same tool again with the same arguments and compare. For forms, take a marker from `form-history` before acting and call `form-diff` with `since` after. For navigation, `navigate` with `waitFor: "stable"` and read `inspect-route`. After a click, `wait-for` holds until a component appears or goes, a navigation settles, an HTTP call finishes or a new error arrives, instead of calling tools in a loop.
 5. **Show the user.** `open-in-panel` returns a link that opens the panel on the tab and item you found.
 
 ## Which tool for which question

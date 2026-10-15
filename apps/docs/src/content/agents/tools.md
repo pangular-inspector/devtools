@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Ninety-five tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Ninety-six tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -63,6 +63,29 @@ Gives the user a link that opens the panel on one tab with one item selected, an
 
 The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#tab=components&id=12&page=k3x9`, when the hub serves the panel and a page has reported its address. Otherwise it is the hash to add to the panel's address. Each panel that is open and not in a background tab opens the link at once. The tool is `read`: it changes what the panel shows, not the app. See [Deep links](../getting-started/popup-and-hub.md#deep-links).
 
+### wait-for
+
+Waits until a condition holds on a page, then answers. Use it after a click, a navigation or an action instead of calling another tool in a loop. Reads: page. It reads what the collectors already reported and never changes the page. It answers as soon as the condition holds, or after `timeoutMs` with `Timed out after <n>ms` and the last state it saw.
+
+| Condition        | Holds when                                                                                | Argument                 | Inspector  |
+| ---------------- | ----------------------------------------------------------------------------------------- | ------------------------ | ---------- |
+| `component`      | A component matching `selector` is rendered.                                              | `selector` (required)    | Components |
+| `component-gone` | No component matches `selector` any more.                                                 | `selector` (required)    | Components |
+| `navigation`     | The router has no navigation in progress, and its URL matches `url` when given.           | `url`                    | Router     |
+| `http-call`      | An HttpClient call finished after the wait started, and its URL matches `url` when given. | `url`                    | SSR & HTTP |
+| `error`          | A new error was captured after the wait started, with the Angular code `code` when given. | `code`, such as `NG0100` | Errors     |
+
+| Argument    | Required | What it is                                                                                                                            |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `condition` | Yes      | One of the conditions above.                                                                                                          |
+| `selector`  | No       | An instance id, class name or host tag, as in `highlight`.                                                                            |
+| `url`       | No       | Text the URL contains. `*` matches anything and a leading `^` anchors it at the start of the path, as in [fault rules](#fault-rules). |
+| `code`      | No       | An Angular error code.                                                                                                                |
+| `timeoutMs` | No       | How long to wait. Default 5000, at most 30000.                                                                                        |
+| `page`      | No       | The page id. Without it, every page counts, and `navigation` uses the most recent page. `pageId` is accepted too.                     |
+
+Without `url`, `navigation` holds as soon as no navigation is in progress, which can be before a navigation you just started reaches the page. Pass `url` to wait for the destination. A condition is offered only while its inspector is on for agents, and the tool is dropped when all four are off.
+
 ### Action tools
 
 Every tool has one of three safety tiers. The server sends the tier to your client as the tool's read-only and destructive hints.
@@ -81,7 +104,7 @@ When the hub is mounted, each finished call of an `action` or `destructive` tool
 
 ### Turn tools off
 
-The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record`, `flash`, `track` and `angularProfiling` arguments, so it reads a recording the panel started. `hydration` stays as a `read` tool without its `overlay` argument, and `audit` without its `axe` argument, so it reads the last axe pass the panel ran. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. A [plugin's own tools](#plugins) follow the same switches, with the tier the plugin declares. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
+The server decides which tools exist. Set `agent.readOnly` to keep only the `read` tools. `change-detection` stays as a `read` tool without its `record`, `flash`, `track` and `angularProfiling` arguments, so it reads a recording the panel started. `hydration` stays as a `read` tool without its `overlay` argument, and `audit` without its `axe` argument, so it reads the last axe pass the panel ran. Set `agent.tools.<inspector>` to `false` to hide one inspector's tools and resources, and keep its tab. Turning an inspector off with `inspectors`, or blocking an action with `actions`, drops the matching tools too. `wait-for` stays while any of the Components, Router, SSR & HTTP and Errors inspectors is on, with only the conditions of the inspectors that are. A [plugin's own tools](#plugins) follow the same switches, with the tier the plugin declares. `actions.router` is the exception: `navigate` stays for `instrument` and `resolve-lazy`, and refuses `navigate`, `abort`, `replay` and `probe`. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ## Source scan
 

@@ -265,6 +265,7 @@ import {
   resolvePangularConfig,
   rpcAllowed,
   type PangularConfig,
+  type PangularInspector,
   type ResolvedPangularConfig,
 } from './config.ts';
 
@@ -297,6 +298,7 @@ import {
   INJECTOR_TREE_SHAPE,
 } from './push-delta.ts';
 import { MARKDOWN_OUTPUT_SCHEMA } from './rpc/agent-output.ts';
+import { createWaitForTool } from './rpc/wait-for.ts';
 
 type CapacitorToolArgs = {
   page?: string;
@@ -2692,6 +2694,19 @@ const pangular = defineDevframe({
             ),
           }
         : null;
+
+    const forAgents = (key: PangularInspector) => on[key] && config.agent.tools[key];
+    const waitFor = createWaitForTool({
+      components: forAgents('components') ? () => componentPages.values() : undefined,
+      router: forAgents('router') ? () => routerPages.values() : undefined,
+      http: forAgents('http') ? () => httpPages.values() : undefined,
+      errors: forAgents('errors') ? errorsInspector?.state : undefined,
+      subscribe: [componentTree, routerState, httpState].map(
+        (state) => (listener: () => void) => state.on('updated', listener),
+      ),
+      keepAlive: () => interest.touch(),
+    });
+    if (waitFor) agent.registerTool(waitFor);
 
     agent.registerTool({
       id: 'pangular:highlight',
