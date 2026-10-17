@@ -588,7 +588,12 @@ export function attachPipes<H extends object = Element>(
       lastPayload = payload;
       lastPushAt = now;
       if (paused) return;
-      await my.rpc.call('push-pipes', report);
+      try {
+        await my.rpc.call('push-pipes', report);
+      } catch {
+        // Not sent: the next push sends it again, as the heartbeat leaves no keepalive.
+        lastPayload = '';
+      }
     } catch {
       return;
     }

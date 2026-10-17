@@ -299,6 +299,8 @@ export interface PluginsHost {
   owns(pageId: unknown): pageId is string;
   mayForget(pageId: unknown): pageId is string;
   ttl: PageTtl;
+  /** When the page last beat (`page-heartbeats.ts`): an idle page sends only that, so it counts as a report. */
+  seenAt?: (pageId: string) => number | undefined;
   serverPlugins?: readonly PangularServerPlugin[];
   warn?: (message: string) => void;
 }
@@ -550,7 +552,8 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
       pages: Object.fromEntries(
         Object.entries(all.pages).flatMap(([pageId, page]) => {
           const plugins = page.plugins.filter((plugin) => visible(plugin.id));
-          return plugins.length ? [[pageId, { ...page, plugins }]] : [];
+          const reportedAt = Math.max(page.reportedAt, host.seenAt?.(pageId) ?? 0);
+          return plugins.length ? [[pageId, { ...page, reportedAt, plugins }]] : [];
         }),
       ),
       server: all.server.filter((plugin) => visible(plugin.id)),

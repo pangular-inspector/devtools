@@ -14,9 +14,17 @@ export function createPageHeartbeats(ttlMs = PAGE_TTL_MS) {
     /**
      * Records a beat. Returns whether the server still had the page: false for
      * a page it never heard from, or whose data expired since its last beat.
+     * That is judged the way the stores judge it, before this beat counts: the
+     * last beat is within the expiry, or `held` (a tab in the background) keeps
+     * it. So a page the sweep has not dropped from here yet is still unknown.
      */
-    beat(pageId: string, now = Date.now()): boolean {
-      const known = beats.has(pageId);
+    beat(
+      pageId: string,
+      now = Date.now(),
+      held: (pageId: string) => boolean = () => false,
+    ): boolean {
+      const at = beats.get(pageId);
+      const known = at !== undefined && (now - at <= ttlMs || held(pageId));
       beats.set(pageId, now);
       return known;
     },

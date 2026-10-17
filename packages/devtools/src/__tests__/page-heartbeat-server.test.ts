@@ -148,7 +148,7 @@ describe('page heartbeat on the server', () => {
     expect(ttl('p1')).toBe(PAGE_TTL_MS);
     // Dropped in the sweep, unless the tab is in the background.
     beats.expire(PAGE_TTL_MS + 1, (pageId) => pageId === 'p1');
-    expect(beats.beat('p1', PAGE_TTL_MS + 2)).toBe(true);
+    expect(beats.beat('p1', PAGE_TTL_MS + 2, (pageId) => pageId === 'p1')).toBe(true);
     beats.expire(3 * PAGE_TTL_MS);
     expect(beats.beat('p1', 3 * PAGE_TTL_MS)).toBe(false);
     // A visibility report refreshes a known page and never adds one.

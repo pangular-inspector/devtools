@@ -296,7 +296,10 @@ export function attachAnalog(
     if (text === last && !keepaliveDue(lastAt, refreshMs)) return;
     last = text;
     lastAt = Date.now();
-    void my.rpc.call('push-analog', report).catch(() => {});
+    void my.rpc.call('push-analog', report).catch(() => {
+      // Not sent: the next tick sends it again, as the heartbeat leaves no keepalive.
+      if (last === text) last = '';
+    });
   };
 
   const watch = () => {

@@ -14,6 +14,7 @@ import {
 import { BehaviorSubject, of, type Observable } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachPipes } from '../pipes-collector.ts';
+import { createPageHeartbeat } from '../page-heartbeat.ts';
 import type { HostTree } from '../host-tree.ts';
 import { setRedaction } from '../forms-privacy.ts';
 import { explainPipeText } from '../rpc/pipe-explain.ts';
@@ -902,5 +903,36 @@ describe('pipes collector', () => {
     const collector = attachPipes(my, 'pg', () => undefined);
     stops.push(collector.stop);
     expect(() => collector.push()).not.toThrow();
+  });
+
+  it('sends an unchanged report again after a push failed, while the heartbeat runs', async () => {
+    // The heartbeat turns the keepalive resend off, so a lost push must not count as sent.
+    const heartbeat = createPageHeartbeat({ rpc: { call: async () => ({ known: true }) } }, 'pg');
+    await heartbeat.beat();
+    const pushes: unknown[] = [];
+    let fail = true;
+    const my = {
+      rpc: {
+        call: async (name: string, report: unknown) => {
+          if (name !== 'push-pipes') return;
+          pushes.push(report);
+          if (fail) throw new Error('[devframe] Not connected to the devframe server');
+        },
+        register: () => {},
+      },
+    };
+    const collector = attachPipes(my, 'pg', () => ({ getComponent: () => null }) as any);
+    stops.push(collector.stop, heartbeat.stop);
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    collector.push();
+    await settle();
+    expect(pushes).toHaveLength(1);
+    fail = false;
+    collector.push();
+    await settle();
+    expect(pushes).toHaveLength(2);
+    collector.push();
+    await settle();
+    expect(pushes).toHaveLength(2);
   });
 });

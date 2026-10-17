@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { domTree } from '../host-tree.ts';
 import { createNgrxCollector } from '../ngrx-collector.ts';
 import { attachNgrx } from '../ngrx-overlay.ts';
+import { createPageHeartbeat } from '../page-heartbeat.ts';
 import {
   diff,
   NGRX_DIFF_MORE_CAP,
@@ -1262,6 +1263,40 @@ describe('ngrx collector with Store DevTools', () => {
       expect(ngrxStateOf(pages).pages[0].dropped).toBe(0);
     } finally {
       overlay.stop();
+    }
+  });
+
+  it('sends an unchanged report again after a push failed, while the heartbeat runs', async () => {
+    // The heartbeat turns the keepalive resend off, so a lost push must not count as sent.
+    const heartbeat = createPageHeartbeat({ rpc: { call: async () => ({ known: true }) } }, 'p1');
+    await heartbeat.beat();
+    const { ng } = setupDevtools();
+    const pushes: unknown[] = [];
+    let fail = true;
+    const my = {
+      rpc: {
+        call: async (name: string, report: unknown) => {
+          if (name !== 'push-ngrx-state') return undefined;
+          pushes.push(report);
+          if (fail) throw new Error('[devframe] Not connected to the devframe server');
+          return { seq: 0 };
+        },
+        register: () => {},
+      },
+    };
+    const overlay = attachNgrx(my, 'p1', () => ng as any);
+    try {
+      await overlay.push();
+      expect(pushes).toHaveLength(1);
+      fail = false;
+      await overlay.push();
+      expect(pushes).toHaveLength(2);
+      // Once it went through, the same report is skipped.
+      await overlay.push();
+      expect(pushes).toHaveLength(2);
+    } finally {
+      overlay.stop();
+      heartbeat.stop();
     }
   });
 

@@ -14,6 +14,7 @@ import {
   mergeHydrationErrors,
 } from '../analog-runtime.ts';
 import { httpRegistry } from '../http-rules.ts';
+import { createPageHeartbeat } from '../page-heartbeat.ts';
 
 const META = Symbol(ANALOG_META_DESCRIPTION);
 
@@ -265,5 +266,39 @@ describe('Analog runtime reader', () => {
       vi.useRealTimers();
     }
     expect(mergeHydrationErrors(undefined, ['NG0501: x', 'NG0501: x'])).toEqual(['NG0501: x']);
+  });
+
+  it('sends an unchanged report again after a push failed, while the heartbeat runs', async () => {
+    // The heartbeat turns the keepalive resend off, so a lost push must not count as sent.
+    const heartbeat = createPageHeartbeat({ rpc: { call: async () => ({ known: true }) } }, 'p1');
+    await heartbeat.beat();
+    vi.useFakeTimers();
+    document.body.innerHTML = '<app-root ng-version="22"></app-root>';
+    const router = {
+      url: '/',
+      config: [analogRoute('', '/src/app/pages/index.page.ts')],
+      routerState: { snapshot: { root: { routeConfig: null, data: {}, firstChild: null } } },
+    };
+    const ng = { getInjector: () => ({}), ɵgetRouterInstance: () => router };
+    let pushes = 0;
+    let fail = true;
+    const call = async () => {
+      pushes++;
+      if (fail) throw new Error('[devframe] Not connected to the devframe server');
+    };
+    const detach = attachAnalog({ rpc: { call } } as never, 'p1', () => ng, 1000);
+    try {
+      expect(pushes).toBe(1);
+      await vi.advanceTimersByTimeAsync(0);
+      fail = false;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(pushes).toBe(2);
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(pushes).toBe(2);
+    } finally {
+      detach();
+      heartbeat.stop();
+      vi.useRealTimers();
+    }
   });
 });

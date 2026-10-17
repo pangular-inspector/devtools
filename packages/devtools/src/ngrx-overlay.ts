@@ -100,6 +100,8 @@ export function attachNgrx<H extends object = Element>(
         schedule();
       }
     } catch {
+      // Not sent: the next push sends it again, as the heartbeat leaves no keepalive.
+      lastBody = '';
       return;
     } finally {
       pushing = false;

@@ -458,11 +458,13 @@ const pangular = defineDevframe({
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return undefined;
         if (!owners.write(pageId)) return undefined;
         // The forms timeline and the router history outlive the page, counted
-        // from its last sign of life, so a beat counts as their report.
-        const form = formPages.get(pageId);
-        if (form) form.reportedAt = Date.now();
-        touchRouterPage(routerPages, pageId);
-        return { known: heartbeats.beat(pageId), ...interest.handle({ pageId }) };
+        // from its last sign of life, so a beat counts as their report, in
+        // the shared states too: their tools call a page stale by it.
+        const now = Date.now();
+        touchFormsPage(pageId, now);
+        touchRouter(pageId, now);
+        const known = heartbeats.beat(pageId, now, visibility.has);
+        return { known, ...interest.handle({ pageId }) };
       },
     });
     const interestTick = setInterval(() => interest.tick(), INTEREST_TICK_MS);
@@ -697,6 +699,17 @@ const pangular = defineDevframe({
         draft.dropped = next.dropped ?? {};
         draft.webMcp = next.webMcp ?? [];
       });
+    /** A sign of life from a page with forms: its report time, here and in the shared state. */
+    const touchFormsPage = (pageId: string, now = Date.now()): boolean => {
+      const page = formPages.get(pageId);
+      if (!page) return false;
+      page.reportedAt = now;
+      formsState.mutate((draft) => {
+        draft.pagesReportedAt = { ...draft.pagesReportedAt, [pageId]: now };
+        draft.reportedAt = Math.min(...[...formPages.values()].map((p) => p.reportedAt));
+      });
+      return true;
+    };
 
     register({
       name: 'push-forms',
@@ -894,6 +907,7 @@ const pangular = defineDevframe({
           owns,
           mayForget,
           ttl: liveTtl,
+          seenAt: heartbeats.seenAt,
           serverPlugins: info?.serverPlugins,
         })
       : null;
@@ -934,6 +948,15 @@ const pangular = defineDevframe({
       routerState.mutate((draft) => {
         draft.pages = next.pages;
       });
+    /** A sign of life from a page with a router: its report time, here and in the shared state. */
+    const touchRouter = (pageId: string, now = Date.now()): boolean => {
+      if (!touchRouterPage(routerPages, pageId, now)) return false;
+      routerState.mutate((draft) => {
+        const page = draft.pages.find((p) => p.pageId === pageId);
+        if (page) page.reportedAt = now;
+      });
+      return true;
+    };
 
     register({
       name: 'push-router',
@@ -959,15 +982,7 @@ const pangular = defineDevframe({
       name: 'ping-router',
       type: 'action',
       jsonSerializable: true,
-      handler: (pageId: unknown) => {
-        if (!owns(pageId) || !touchRouterPage(routerPages, pageId)) return { known: false };
-        const reportedAt = routerPages.get(pageId as string)!.reportedAt;
-        routerState.mutate((draft) => {
-          const page = draft.pages.find((p) => p.pageId === pageId);
-          if (page) page.reportedAt = reportedAt;
-        });
-        return { known: true };
-      },
+      handler: (pageId: unknown) => ({ known: owns(pageId) && touchRouter(pageId) }),
     });
 
     const pendingActions = new Map<
@@ -1329,21 +1344,24 @@ const pangular = defineDevframe({
     };
 
     const expiry = setInterval(() => {
-      heartbeats.expire(Date.now(), visibility.has);
-      if (visibility.expire()) applyVisibility();
+      // Background marks first, then beats, on one clock: a page whose data
+      // goes in this sweep is gone from the beats too, so its next beat is unknown.
+      const now = Date.now();
+      if (visibility.expire(now)) applyVisibility();
+      heartbeats.expire(now, visibility.has);
       if (angularPages.expire(liveTtl)) applyAngularPages();
-      owners.expire();
-      const staleHttp = [...httpPages].filter(([id, p]) => Date.now() - p.reportedAt > liveTtl(id));
+      owners.expire(now);
+      const staleHttp = [...httpPages].filter(([id, p]) => now - p.reportedAt > liveTtl(id));
       if (staleHttp.length) forgetHttpPages(staleHttp.map(([id]) => id));
-      const stale = [...signalPages].filter(([id, p]) => Date.now() - p.reportedAt > liveTtl(id));
+      const stale = [...signalPages].filter(([id, p]) => now - p.reportedAt > liveTtl(id));
       if (stale.length) forgetSignalPages(stale.map(([id]) => id));
-      if (expireComponentPages(componentPages, Date.now(), liveTtl)) applyComponentPages();
-      if (expireCdPages(cdPages, Date.now(), liveTtl)) applyCd();
+      if (expireComponentPages(componentPages, now, liveTtl)) applyComponentPages();
+      if (expireCdPages(cdPages, now, liveTtl)) applyCd();
       for (const id of goneCdPages) {
         if (!componentPages.has(id) && !injectorPages.has(id)) goneCdPages.delete(id);
       }
       const staleInjectors = [...injectorPages].filter(
-        ([id, p]) => Date.now() - p.reportedAt > liveTtl(id),
+        ([id, p]) => now - p.reportedAt > liveTtl(id),
       );
       if (staleInjectors.length) {
         for (const [id] of staleInjectors) injectorPages.delete(id);
@@ -1351,27 +1369,23 @@ const pangular = defineDevframe({
       }
       const next = expirePages(
         formPages,
-        Date.now(),
+        now,
         limits.formTimeline,
         visibility.ttl(FORMS_PAGE_TTL_MS),
       );
       if (next) applyForms(next);
-      const nextRouter = expireRouterPages(
-        routerPages,
-        Date.now(),
-        visibility.ttl(ROUTER_PAGE_TTL_MS),
-      );
+      const nextRouter = expireRouterPages(routerPages, now, visibility.ttl(ROUTER_PAGE_TTL_MS));
       if (nextRouter) applyRouter(nextRouter);
-      const nextPipes = expirePipePages(pipePages, Date.now(), liveTtl);
+      const nextPipes = expirePipePages(pipePages, now, liveTtl);
       if (nextPipes) applyPipes(nextPipes);
-      if (expireNgrxPages(ngrxPages, Date.now(), liveTtl)) applyNgrx();
-      if (expireCapacitorPages(capacitorPages, Date.now(), liveTtl)) applyCapacitor();
-      errorsInspector?.expire();
-      leaksInspector?.expire();
-      reduxStores?.expire();
-      tanstackQuery?.expire();
-      startupInspector?.expire();
-      pluginsInspector?.expire();
+      if (expireNgrxPages(ngrxPages, now, liveTtl)) applyNgrx();
+      if (expireCapacitorPages(capacitorPages, now, liveTtl)) applyCapacitor();
+      errorsInspector?.expire(now);
+      leaksInspector?.expire(now);
+      reduxStores?.expire(now);
+      tanstackQuery?.expire(now);
+      startupInspector?.expire(now);
+      pluginsInspector?.expire(now);
       componentDeltas.prune((id) => componentPages.has(id));
       injectorDeltas.prune((id) => injectorPages.has(id));
       cdDeltas.prune((id) => cdPages.has(id));
@@ -1734,12 +1748,7 @@ const pangular = defineDevframe({
       name: 'ping-forms',
       type: 'action',
       jsonSerializable: true,
-      handler: (pageId: unknown) => {
-        const page = owns(pageId) ? formPages.get(pageId) : undefined;
-        if (!page) return { known: false };
-        page.reportedAt = Date.now();
-        return { known: true };
-      },
+      handler: (pageId: unknown) => ({ known: owns(pageId) && touchFormsPage(pageId) }),
     });
 
     register({
