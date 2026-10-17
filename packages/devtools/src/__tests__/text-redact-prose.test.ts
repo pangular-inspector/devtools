@@ -1,0 +1,58 @@
+import { describe, expect, it } from 'vitest';
+import { redactText } from '../text-redact.ts';
+
+describe('redactText in messages', () => {
+  it('masks a secret key=value pair inside a sentence', () => {
+    expect(redactText('retry with token=abc123')).toBe('retry with token=[redacted]');
+    expect(redactText('failed (api_key=XYZ987, user=7)')).toBe(
+      'failed (api_key=[redacted], user=7)',
+    );
+    expect(redactText('Error:password=hunter2')).toBe('Error:password=[redacted]');
+    expect(redactText("sent 'session_id=s3ss10n' twice")).toBe(
+      "sent 'session_id=[redacted]' twice",
+    );
+    expect(redactText('retry with key = k3y-value')).toBe('retry with key = [redacted]');
+  });
+
+  it('masks key: value and JSON-ish pairs under secret names', () => {
+    expect(redactText('login failed, password: hunter2')).toBe(
+      'login failed, password: [redacted]',
+    );
+    expect(redactText('body {"token":"abc123","page":2}')).toBe(
+      'body {"token":"[redacted]","page":2}',
+    );
+    expect(redactText("{ 'refreshToken': 'r3fr3sh', id: 4 }")).toBe(
+      "{ 'refreshToken': '[redacted]', id: 4 }",
+    );
+    expect(redactText('{accessToken: abc123}')).toBe('{accessToken: [redacted]}');
+    expect(redactText('token: Bearer abc.def-123')).not.toContain('abc.def');
+    expect(redactText('Authorization: Negotiate YIIBhwYGKwYBBQUCoIIB')).toBe(
+      'Authorization: Negotiate [redacted]',
+    );
+  });
+
+  it('keeps ordinary prose and non-secret pairs', () => {
+    for (const text of [
+      'the token is valid',
+      'Invalid key: expected a string',
+      'status code: 404',
+      'session: 5 minutes left',
+      'password reset sent to the user',
+      'token: null',
+      'at 12:30 the page=2 view loaded',
+      'tokens are refreshed every 5 minutes',
+      'Invalid token: expired',
+      'authorization: required for this endpoint',
+      'the password field is empty',
+    ]) {
+      expect(redactText(text), text).toBe(text);
+    }
+  });
+
+  it('still masks URL pairs and nested queries in text', () => {
+    expect(redactText('Redirecting to "/login?token=abc&x=1"')).toBe(
+      'Redirecting to "/login?token=[redacted]&x=1"',
+    );
+    expect(redactText('go /cb?next=%2Fa%3Ftoken%3Dabc')).not.toContain('abc');
+  });
+});

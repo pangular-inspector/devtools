@@ -26,6 +26,25 @@ function fakeHost() {
 describe('page owners', () => {
   afterEach(() => vi.useRealTimers());
 
+  it('delivers a page action only to the connection that owns the page', () => {
+    const { host, as, close } = fakeHost();
+    const owners = createPageOwners(host, () => PAGE_TTL_MS);
+    as(1);
+    owners.write('tab-1');
+    as(2);
+    owners.write('tab-2');
+    const client = (id: number) => ({ $meta: { id } });
+    const panel = client(3);
+    const toTab1 = owners.deliversTo('tab-1');
+    expect([client(1), client(2), panel].map(toTab1)).toEqual([true, false, false]);
+    const toPages = owners.deliversTo();
+    expect([client(1), client(2), panel].map(toPages)).toEqual([true, true, false]);
+    expect(owners.deliversTo('unknown')(client(1))).toBe(false);
+    close(1);
+    expect(owners.deliversTo('tab-1')(client(1))).toBe(false);
+    expect(owners.deliversTo()({})).toBe(false);
+  });
+
   it('lists the claimed pages whose connection is still open', () => {
     const { host, as, close } = fakeHost();
     const owners = createPageOwners(host, () => PAGE_TTL_MS);

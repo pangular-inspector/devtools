@@ -5,6 +5,7 @@ import { MAX_DIRECTIVE_HOSTS, selectorAttributes } from './directive-hosts.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
 import { createHydrationTally, type HydrationDebugNg } from './hydration.ts';
 import { className, dependenciesOf, type DebugNg } from './injector-tree.ts';
+import { maskedFormValues } from './component-form-masks.ts';
 import { isSecretName, serializeNamed, VALUE_LEVEL } from './serialize.ts';
 import type {
   ComponentDetail,
@@ -137,8 +138,8 @@ export function unwrap<H extends object>(ng: ComponentDebugNg<H>, value: unknown
 }
 
 /** The first level of a value, with the instance itself shown as `[Circular]` inside it. */
-function levelOf(instance: object) {
-  return { ...VALUE_LEVEL, ancestors: [instance] };
+function levelOf(instance: object, secrets?: ReadonlySet<string>) {
+  return { ...VALUE_LEVEL, ancestors: [instance], secrets };
 }
 
 function propName(entry: unknown, fallback: string): string {
@@ -151,6 +152,7 @@ function readInputs<H extends object>(
   ng: ComponentDebugNg<H>,
   instance: object,
   inputs: Record<string, unknown> | undefined,
+  secrets?: ReadonlySet<string>,
 ): ComponentProp[] {
   return Object.entries(inputs ?? {})
     .slice(0, MAX_PROPS)
@@ -158,7 +160,11 @@ function readInputs<H extends object>(
       const prop = propName(entry, name);
       const raw = read(() => (instance as Record<string, unknown>)[prop], undefined);
       const key = isSecretName(prop) ? prop : name;
-      return { name, prop, value: serializeNamed(key, unwrap(ng, raw), levelOf(instance)) };
+      return {
+        name,
+        prop,
+        value: serializeNamed(key, unwrap(ng, raw), levelOf(instance, secrets)),
+      };
     });
 }
 
@@ -233,6 +239,7 @@ function readProperties<H extends object>(
   instance: object,
   skip: Set<string>,
   injected: Set<unknown>,
+  secrets?: ReadonlySet<string>,
 ): ComponentProp[] {
   const out: ComponentProp[] = [];
   const keys = read(() => Object.keys(instance), [] as string[]);
@@ -247,7 +254,7 @@ function readProperties<H extends object>(
         name,
         prop: name,
         kind: 'resource',
-        value: serializeNamed(name, resource, levelOf(instance)),
+        value: serializeNamed(name, resource, levelOf(instance, secrets)),
       });
       continue;
     }
@@ -256,7 +263,7 @@ function readProperties<H extends object>(
     const prop: ComponentProp = {
       name,
       prop: name,
-      value: serializeNamed(name, unwrap(ng, raw), levelOf(instance)),
+      value: serializeNamed(name, unwrap(ng, raw), levelOf(instance, secrets)),
     };
     if (isSignal) prop.kind = 'signal';
     out.push(prop);
@@ -296,21 +303,22 @@ export function componentDetail<H extends object = Element>(
     ),
   );
   const injected = injector ? injectedValues(ng, injector, instance.constructor) : new Set();
+  const masked = maskedFormValues(ng, el);
 
   const detail: ComponentDetail = {
     id: elementId(el),
     name: nameOf(instance),
     tag: hosts.tag(el),
     path: hostPath(ng, el, hosts),
-    inputs: readInputs(ng, instance, meta?.inputs),
+    inputs: readInputs(ng, instance, meta?.inputs, masked),
     outputs: readOutputs(meta?.outputs, listened),
-    properties: readProperties(ng, instance, bound, injected),
+    properties: readProperties(ng, instance, bound, injected, masked),
     listeners: dom.slice(0, MAX_PROPS),
     directives: directives.map((directive) => {
       const dirMeta = read(() => ng.getDirectiveMetadata?.(directive) ?? null, null);
       return {
         name: nameOf(directive),
-        inputs: readInputs(ng, directive, dirMeta?.inputs),
+        inputs: readInputs(ng, directive, dirMeta?.inputs, masked),
         outputs: readOutputs(dirMeta?.outputs, listened),
       };
     }),

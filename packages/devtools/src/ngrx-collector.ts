@@ -21,6 +21,7 @@ import {
 } from './ngrx-shared.ts';
 import { registeredPatchState, registeredWatchState } from './ngrx-register.ts';
 import { historyRequest, type HistorySource } from './ngrx-history.ts';
+import { markSecretWriter, safeArgs, touchesSecret } from './ngrx-args.ts';
 
 /**
  * Angular's `untracked` (16.0+), read at runtime: a named import of it fails
@@ -90,7 +91,16 @@ interface Tracked {
    * get labeled with the method's name and args (and their duration folds into
    * the method's rolling stats) instead of showing as a bare `patchState` entry.
    */
-  methodStack: { name: string; args: unknown[]; startedAt: number; fired?: number }[];
+  methodStack: {
+    name: string;
+    args: unknown[];
+    startedAt: number;
+    fired?: number;
+    /** The wrapped method, for the argument masking in `ngrx-args.ts`. */
+    method?: unknown;
+    /** Entries this call logged with arguments, masked after the fact once it writes a secret. */
+    logged?: NgrxLogEntry[];
+  }[];
 }
 
 interface Classic {
@@ -349,6 +359,7 @@ export function createNgrxCollector<H extends object = Element>(
     before: Snapshot,
     logNoop = false,
     durationMs?: number,
+    method?: unknown,
   ) => {
     const after = snapshot(t);
     const changes = snapshotDiff(before, after, t.stateKeys);
@@ -374,7 +385,16 @@ export function createNgrxCollector<H extends object = Element>(
         source: 'signal-store',
         storeId: t.id,
         type,
-        ...(args ? { args: args.map((a) => serialize(a, SMALL)) } : {}),
+        ...(args
+          ? {
+              args: safeArgs(args, (a) => serialize(a, SMALL), {
+                method,
+                before,
+                after,
+                keys: t.stateKeys,
+              }),
+            }
+          : {}),
         timestamp: Date.now(),
         diff: changes.diff,
         ...truncated(changes.more),
@@ -436,13 +456,27 @@ export function createNgrxCollector<H extends object = Element>(
     const type = call?.name ?? 'patchState';
     const isRestore = /^Restore #\d+/.test(type);
     const durationMs = call && !isRestore ? Math.round(now() - call.startedAt) : undefined;
-    append(
+    if (call && !isRestore && touchesSecret(before, after, t.stateKeys)) {
+      // An earlier write of the same call may have logged arguments in clear.
+      markSecretWriter(call.method);
+      for (const earlier of call.logged ?? []) {
+        if (earlier.args) earlier.args = earlier.args.map(() => REDACTED);
+      }
+    }
+    const logged = append(
       {
         source: 'signal-store',
         storeId: t.id,
         type,
         ...(call?.args?.length && !isRestore
-          ? { args: call.args.map((a) => serialize(a, SMALL)) }
+          ? {
+              args: safeArgs(call.args, (a) => serialize(a, SMALL), {
+                method: call.method,
+                before,
+                after,
+                keys: t.stateKeys,
+              }),
+            }
           : {}),
         timestamp: Date.now(),
         diff: changes.diff,
@@ -454,6 +488,7 @@ export function createNgrxCollector<H extends object = Element>(
       { kind: 'signal', tracked: t, before, after },
     );
     if (call) call.fired = (call.fired ?? 0) + 1;
+    if (call && logged?.args) (call.logged ??= []).push(logged);
   };
 
   /**
@@ -527,7 +562,7 @@ export function createNgrxCollector<H extends object = Element>(
         const outer = t.depth === 0;
         if (outer) flushPending(t);
         const before = outer ? snapshot(t) : null;
-        const frame = { name, args, startedAt: now(), fired: 0 };
+        const frame = { name, args, startedAt: now(), fired: 0, method: original };
         t.methodStack.push(frame);
         t.depth++;
         try {
@@ -543,12 +578,12 @@ export function createNgrxCollector<H extends object = Element>(
           t.methodStack.pop();
           t.depth--;
           // Microtask-fallback path: one entry per method call (with throttled noop).
-          if (before && !t.watched) finish(t, name, args, before, true, durationMs);
+          if (before && !t.watched) finish(t, name, args, before, true, durationMs, original);
           // watchState path: watchState already emitted one entry per patchState.
           // If the method did not patch at all (e.g. `isSaved` just reads state),
           // append a throttled noop entry so method calls stay visible.
           if (outer && t.watched && !frame.fired) {
-            finish(t, name, args, t.lastWatched ?? snapshot(t), true, durationMs);
+            finish(t, name, args, t.lastWatched ?? snapshot(t), true, durationMs, original);
           }
         }
       },
@@ -720,7 +755,8 @@ export function createNgrxCollector<H extends object = Element>(
    * earlier, still-unresolved dispatch to this one. */
   const wrapDispatch = (d: AnyRecord): (() => void) | undefined => {
     const original = read(() => d['dispatch'], undefined) as
-      ((...args: unknown[]) => unknown) | undefined;
+      | ((...args: unknown[]) => unknown)
+      | undefined;
     if (typeof original !== 'function') return undefined;
     const own = Object.prototype.hasOwnProperty.call(d, 'dispatch');
     d['dispatch'] = function (this: unknown, ...args: unknown[]) {
@@ -1139,7 +1175,8 @@ export function createNgrxCollector<H extends object = Element>(
       const idsRaw = read(() => peek(t.source[idsKey]), undefined);
       if (!Array.isArray(idsRaw)) continue;
       const entityMapRaw = read(() => peek(t.source[key]), undefined) as
-        Record<PropertyKey, unknown> | undefined;
+        | Record<PropertyKey, unknown>
+        | undefined;
       const entitiesKey = collection ? `${collection}Entities` : 'entities';
       const entry: NonNullable<NgrxSignalStoreInfo['entities']>[number] = {
         ...(collection ? { collection } : {}),

@@ -115,6 +115,8 @@ A list keeps loopback origins and the Pangular Inspector extension. So does a cu
 
 The CLI server binds to `localhost` and asks for a one-time code. `--host` changes the bind address and `--no-auth` turns the code off. `--allowed-origin` adds an origin to the loopback origins it accepts, and `--auth-token` adds [pairing tokens](#pairing-tokens). See [Standalone CLI](./getting-started/cli.md).
 
+It runs the same request gate as the Vite plugin and the Express hub in front of every route, the panel and `__connection.json` included: a foreign `Origin`, `Origin: null`, a `Host` that is not this machine and a cross-site request without `Origin` get a `403`. With `--host` set to a network address, other machines get through when their `Origin` is allowed or they send none, such as a device app.
+
 ### Pairing tokens
 
 A pairing token lets a client skip the one-time code, for example an app on a phone, where typing the code is awkward. The code stays on for every other client, and a wrong token falls back to it.
@@ -209,7 +211,7 @@ A field's value is replaced with `[redacted]` when the field:
 
 The Fields view says why a field is redacted: **name looks secret**, **password input**, **autocomplete is a secret kind**, **marked as mask**, **inside a secret group** or **listed in mask**. The field details say the same where the Set editor is hidden, with a link to this section.
 
-Those values are also removed from error messages. The form event log follows the same rules: a value that holds a JWT or bearer token, or repeats a secret from another field of the form, is shown as `[redacted]` in the event and in its previous value. The devtools don't write secret fields unless you unmask them (see [Opt fields in or out](#opt-fields-in-or-out)). Other values are sent as they are, so keep real credentials out of forms you inspect.
+Those values are also removed from error messages. The form event log follows the same rules: a value that holds a JWT or bearer token, or repeats a secret from another field of the form, is shown as `[redacted]` in the event and in its previous value. A secret's earlier values count too (the last 50), so a `confirmation` field that still holds the old password stays masked after the password changes. The devtools don't write secret fields unless you unmask them (see [Opt fields in or out](#opt-fields-in-or-out)). Other values are sent as they are, so keep real credentials out of forms you inspect.
 
 ### Opt fields in or out
 
@@ -232,6 +234,8 @@ You can also name secret and unmasked fields on the server, with the `redaction`
 Unmasking also changes what the devtools can write. A key listed in `unmask` on `window` can be written. The element marker only lifts the checks that come from the element (password type, `autocomplete` and mask markers), so a field with a secret-looking name is still not written.
 
 A refused write names the reason and the unmask that lifts it. The panel, `form-action` and `fill-form` show the same message.
+
+The values that `form-action` and `fill-form` write, and the values of component and signal edits, travel from the devtools server to the page that owns them only, not to the panel or to other tabs.
 
 <ngmd-accordion>
   <ngmd-accordion-item title="The full list of secret words">
@@ -274,7 +278,13 @@ A secret route param is known from the route config before a navigation is recog
 
 ### Components, signals, NgRx and pipes
 
-Component inputs, signal values, NgRx state, and pipe inputs, outputs and async values use the same secret names and the same `mask` and `unmask` lists as forms. A value whose name looks secret is replaced with `[redacted]`. JWTs, bearer tokens and `key=value` pairs under secret keys (such as `token=abc123` or `password=…&user=a`) inside strings and error messages are replaced too, NgRx strings and errors included, and so are tokens used as object keys. The URL and title of the NgRx page, and the request URL of an `httpResource`, are redacted like router URLs.
+Component inputs, signal values, NgRx state, and pipe inputs, outputs and async values use the same secret names and the same `mask` and `unmask` lists as forms. A value whose name looks secret is replaced with `[redacted]`. JWTs, bearer tokens and `key=value` pairs under secret keys (such as `token=abc123` or `password=…&user=a`) inside strings and error messages are replaced too, NgRx strings and errors included, and so are tokens used as object keys.
+
+A pair counts anywhere in a sentence, such as `retry with token=abc123` or `(api_key=…, user=7)`, and in the `password: hunter2` and `"token":"abc123"` forms. A `key: value` pair counts only for the secret words, and an unquoted lowercase word after the colon is read as prose, so `Invalid token: expired` and `status code: 404` stay readable. Errors, console messages, snapshots, audit results and WebMCP tool descriptions use the same rule.
+
+Component values follow the form masks of the fields in the component, not only their names. When a form field in the component's template is masked by its element (a password field, a credential `autocomplete`, `data-pangular="mask"` or another mask marker), its value is replaced with `[redacted]` wherever it shows in the component's inputs and properties: the `FormGroup` that holds it, the `ngModel` model object and the Signal Forms model. Values such a field held earlier stay masked too (the last 50 on the page).
+
+NgRx signal store method calls in the change log mask their arguments. When the call writes a state key whose name looks secret, at any depth, every argument shows as `[redacted]`, for that call, its earlier entries and every later call of the method. Otherwise an argument whose parameter name looks secret (`password` in `login(email, password)`) is masked, and values the store holds under secret keys are cut out of the other arguments. The URL and title of the NgRx page, and the request URL of an `httpResource`, are redacted like router URLs.
 
 The **Components** tab and the `set-component-property` and `set-signal` tools never write a value you could not see: a name on the path that looks secret, or a value that shows `[redacted]` anywhere, is refused. Write a field next to a secret instead of the object that holds it. See [Editing values](./inspectors/components.md#editing-values).
 
@@ -290,7 +300,7 @@ Server call previews and URLs are redacted: keys in JSON bodies that the forms r
 
 Request URLs, page URLs and error messages in the [SSR & HTTP tab](./inspectors/ssr-http.md) are redacted like router URLs, in the page and again on the devtools server. This covers SSR and client calls, and `devframe_state_read`.
 
-The page title, the hydration warnings and mismatch details, and the TransferState parse error are redacted too. Response previews are redacted on the devtools server: keys that the forms rules treat as secret, JWTs, bearer tokens and secret query pairs, also in a preview that was cut inside a nested object or array. Request and response headers are redacted on the page and again on the devtools server: `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` always, whatever `redaction.unmask` says, names that look secret or match `redaction.secretNames`, and JWTs, bearer tokens and credentials inside any other value. The same holds for TransferState entries: their values, keys and request URLs are redacted before they reach the panel or an agent. Large payload values are still cut, so a long value can end in `[Truncated]`.
+The page title, the hydration warnings and mismatch details, and the TransferState parse error are redacted too. Response previews are redacted on the devtools server: keys that the forms rules treat as secret, JWTs, bearer tokens and secret query pairs, also in a preview that was cut inside a nested object or array. Request and response headers are redacted on the page and again on the devtools server: `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` always, whatever `redaction.unmask` says, names that look secret or match `redaction.secretNames`, and JWTs, bearer tokens and credentials inside any other value. The same holds for TransferState entries: their values, keys and request URLs are redacted on the page, before the payload is sent to the devtools server, and again on the server. A custom key with a secret-looking name, such as `makeStateKey('password')`, has its whole value masked. Large payload values are still cut, so a long value can end in `[Truncated]`.
 
 ## Page text in agent answers
 

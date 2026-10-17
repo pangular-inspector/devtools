@@ -41,7 +41,7 @@ import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
 import { templateLintTool } from './rpc/template-lint-tool.ts';
 import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
-import { createPageOwners } from './rpc/page-owners.ts';
+import { createPageOwners, type OwnerBroadcast } from './rpc/page-owners.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
 import { getBuildMeta } from './rpc/build-meta.ts';
 import { createOpenInEditor, defaultLauncher } from './rpc/open-in-editor.ts';
@@ -1741,7 +1741,9 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: (
         selector:
-          string | { pageId?: unknown; id?: unknown; selector?: unknown; reveal?: unknown } | null,
+          | string
+          | { pageId?: unknown; id?: unknown; selector?: unknown; reveal?: unknown }
+          | null,
       ) => {
         const target =
           selector && typeof selector === 'object' && typeof selector.id === 'string'
@@ -1815,10 +1817,13 @@ const pangular = defineDevframe({
             );
           },
         });
-        void my.rpc.broadcast({
+        // Only the page's own connection gets the request: it can carry the values an agent fills in.
+        // The scoped `broadcast` passes `filter` through to devframe's host; its type leaves it out.
+        void (my.rpc.broadcast as (options: OwnerBroadcast) => Promise<void>)({
           method: 'form-action',
           args: [{ requestId, pageId, request: payload }],
           optional: true,
+          filter: owners.deliversTo(pageId),
         });
       });
 
@@ -2070,8 +2075,16 @@ const pangular = defineDevframe({
     const componentEdits = createComponentEdits({
       config,
       pages: () => componentPages.values(),
-      broadcast: (method, message) =>
-        void my.rpc.broadcast({ method, args: [message], optional: true }),
+      // Only the page's own connection gets the value to write, not the panel or other tabs.
+      broadcast: (method, message) => {
+        const pageId = (message as { pageId?: unknown } | null)?.pageId;
+        void (my.rpc.broadcast as (options: OwnerBroadcast) => Promise<void>)({
+          method,
+          args: [message],
+          optional: true,
+          filter: owners.deliversTo(typeof pageId === 'string' ? pageId : undefined),
+        });
+      },
       answersFor,
     });
     register({

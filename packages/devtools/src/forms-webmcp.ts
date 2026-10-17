@@ -1,5 +1,5 @@
 import { redactFormText } from './forms.ts';
-import { redactMessage } from './forms-privacy.ts';
+import { redactText } from './serialize.ts';
 import { childPath } from './forms-path.ts';
 import { tokenName, type DebugNg } from './injector-tree.ts';
 
@@ -421,8 +421,7 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
   }
 
   function toTool(record: ToolRecord, form?: WebMcpForm, shape?: Shape): WebMcpTool {
-    const redact = (text: string) =>
-      form ? redactFormText(form.formId, text) : redactMessage(text);
+    const redact = (text: string) => (form ? redactFormText(form.formId, text) : redactText(text));
     const tool: WebMcpTool = {
       name: record.name,
       description: redact(record.description),

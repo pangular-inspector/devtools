@@ -3,7 +3,7 @@ import type { HydrationMismatch } from './http-hydration.ts';
 import { redactStrings } from './http-redact.ts';
 import { redactJsonText } from './json-text-redact.ts';
 import { redactText, redactUrl } from './router.ts';
-import { serialize } from './serialize.ts';
+import { isSecretName, REDACTED, serialize } from './serialize.ts';
 import type { HydrationStats } from './types.ts';
 
 export type PayloadSource = 'http' | 'analog' | 'hydration';
@@ -53,6 +53,8 @@ function clip(value: unknown): unknown {
 const redactOptional = (url: string | undefined) => (url === undefined ? url : redactUrl(url));
 
 const MAX_ENTRIES = 500;
+/** A key that is a name (`makeStateKey('password')`), not an HTTP cache key holding a URL. */
+const NAME_KEY = /^[A-Za-z_$][\w$-]*$/;
 const MAX_LIST = 200;
 
 const str = (value: unknown, max: number) =>
@@ -91,7 +93,11 @@ export function sanitizePayload(input: unknown): PayloadSummary {
     entries.push({
       key,
       size: num(e.size) ?? 0,
-      value: safe(e.value),
+      // A custom TransferState key (`makeStateKey('password')`) masks its value like a field name.
+      value:
+        !h && NAME_KEY.test(rawKey) && isSecretName(rawKey) && e.value != null
+          ? REDACTED
+          : safe(e.value),
       ...(source && { source }),
       ...(fnId && /^[0-9a-f]{16}$/.test(fnId) && { fn: { id: fnId } }),
       ...(h && {

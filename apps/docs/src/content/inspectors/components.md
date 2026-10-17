@@ -501,7 +501,7 @@ The page sends the first level of each input and property, with 30 keys or items
 
 ### Secrets are redacted
 
-The devtools replace inputs and properties with secret-looking names with `[redacted]`. They also redact JWTs and `Bearer` values inside strings. See [what the devtools redact](../security.md).
+The devtools replace inputs and properties with secret-looking names with `[redacted]`. They also redact JWTs and `Bearer` values inside strings. The value of a form field in the component's template that the [Forms](./forms.md) tab masks by its element, such as a password field or one marked `data-pangular="mask"`, shows as `[redacted]` too, in the `FormGroup` or `ngModel` model that holds it. See [what the devtools redact](../security.md#components-signals-ngrx-and-pipes).
 
 ### Selected components stay in memory
 

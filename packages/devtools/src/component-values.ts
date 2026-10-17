@@ -1,4 +1,5 @@
 import { injectedValues, resourceOf, unwrap, type ComponentDebugNg } from './component-tree.ts';
+import { maskedFormValues } from './component-form-masks.ts';
 import { className } from './injector-tree.ts';
 import { isSecretName, serialize, VALUE_LEVEL } from './serialize.ts';
 import type { ComponentDetail } from './types.ts';
@@ -41,7 +42,8 @@ export interface ComponentValueRequest {
 }
 
 export type ComponentValueResult =
-  { ok: true; component: string; path: string[]; value: unknown } | { ok?: false; error: string };
+  | { ok: true; component: string; path: string[]; value: unknown }
+  | { ok?: false; error: string };
 
 /** The key of an opened level in `ComponentDetail.expanded`. */
 export function valuePathKey(path: readonly string[], directive?: number): string {
@@ -273,6 +275,7 @@ export function readComponentValue<H extends object>(
     items: limit,
     depth: request.depth ?? VALUE_LEVEL.depth,
     ancestors,
+    secrets: maskedFormValues(ng, host),
   });
   return { ok: true, component, path: request.path, value };
 }

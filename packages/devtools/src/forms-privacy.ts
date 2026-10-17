@@ -242,8 +242,27 @@ export function redactMessage(text: string, secrets: Iterable<string> = []): str
   return out;
 }
 
+/** Most earlier secret values a `SecretSet` keeps hiding after they changed. */
+export const MAX_RETIRED_SECRETS = 50;
+
+/**
+ * The secret values of one form, to hide them in its harmless fields and messages.
+ * Built again on every collection from `previous`, so a value a secret field held
+ * a moment ago (the old password a `confirmation` field still repeats) stays
+ * hidden: up to `MAX_RETIRED_SECRETS` earlier values, newest kept.
+ */
 export class SecretSet {
   private readonly values = new Set<string>();
+  private readonly retired = new Set<string>();
+
+  constructor(previous?: SecretSet) {
+    if (!previous) return;
+    const earlier = [...previous.retired, ...previous.values];
+    for (const value of earlier.slice(-MAX_RETIRED_SECRETS)) {
+      this.retired.delete(value);
+      this.retired.add(value);
+    }
+  }
 
   add(value: unknown) {
     if (typeof value === 'string' && value.length >= 3) this.values.add(value);
@@ -254,7 +273,12 @@ export class SecretSet {
     return this.values.size;
   }
 
+  /** The values this set hides, current and earlier. */
+  all(): string[] {
+    return [...this.values, ...this.retired];
+  }
+
   redact(text: string): string {
-    return redactMessage(text, this.values);
+    return redactMessage(text, this.retired.size ? [...this.values, ...this.retired] : this.values);
   }
 }

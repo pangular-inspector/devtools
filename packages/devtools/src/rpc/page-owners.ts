@@ -38,6 +38,12 @@ export interface PageOwners {
   live(now?: number): { pageId: string; reportedAt: number }[];
   /** Drops owners that have been quiet for long, so the map does not grow. */
   expire(now?: number): void;
+  /**
+   * A `broadcast` filter that reaches only the connection owning `pageId`, or,
+   * without a page, only connections that own a live page. A message carrying
+   * what an agent typed (a form fill) then never reaches a panel or another tab.
+   */
+  deliversTo(pageId?: string): (client: unknown) => boolean;
 }
 
 /**
@@ -109,6 +115,21 @@ export function createPageOwners(host: unknown, ttl: PageTtl): PageOwners {
         .filter(([pageId, owner]) => !gone(pageId, owner, now))
         .map(([pageId, owner]) => ({ pageId, reportedAt: owner.seenAt }));
     },
+    deliversTo(pageId) {
+      const now = Date.now();
+      const owner = pageId === undefined ? undefined : owners.get(pageId);
+      const targets = new Set<number>();
+      if (owner && owner.session !== null && !gone(pageId!, owner, now)) targets.add(owner.session);
+      else if (pageId === undefined) {
+        for (const [id, entry] of owners) {
+          if (entry.session !== null && !gone(id, entry, now)) targets.add(entry.session);
+        }
+      }
+      return (client) => {
+        const id = (client as { $meta?: { id?: unknown } } | null)?.$meta?.id;
+        return typeof id === 'number' && targets.has(id);
+      };
+    },
     expire(now = Date.now()) {
       for (const [pageId, owner] of owners) {
         if (now - owner.seenAt > Math.max(ttl(pageId), HIDDEN_PAGE_TTL_MS)) {
@@ -118,4 +139,12 @@ export function createPageOwners(host: unknown, ttl: PageTtl): PageOwners {
       }
     },
   };
+}
+
+/** A devframe broadcast narrowed by `PageOwners.deliversTo`. */
+export interface OwnerBroadcast {
+  method: string;
+  args: unknown[];
+  optional?: boolean;
+  filter: (client: unknown) => boolean;
 }

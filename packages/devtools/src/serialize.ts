@@ -19,6 +19,11 @@ export interface SerializeLimits {
   lazy?: boolean;
   /** Objects already open above the value, so one of them inside it shows as `[Circular]`. */
   ancestors?: readonly object[];
+  /**
+   * Values to hide wherever they appear, such as the values of form fields the
+   * forms privacy rules mask by their element (`maskedFormValues`).
+   */
+  secrets?: ReadonlySet<string>;
 }
 
 /**
@@ -103,6 +108,7 @@ export function serialize(value: unknown, limits: SerializeLimits = {}): unknown
   let budget = limits.budget ?? 5000;
   const lazy = limits.lazy === true;
   const path = new Set<object>(limits.ancestors ?? []);
+  const secrets = limits.secrets?.size ? limits.secrets : null;
 
   const walkNamed = (key: unknown, v: unknown, level: number): unknown =>
     isSecretName(key) && !keepsUnderSecret(v) ? REDACTED : walk(v, level);
@@ -122,9 +128,13 @@ export function serialize(value: unknown, limits: SerializeLimits = {}): unknown
   const walkNode = (v: unknown, level: number): unknown => {
     if (--budget < 0) return TRUNCATED;
     if (v === null || v === undefined || typeof v === 'boolean') return v;
-    if (typeof v === 'number') return Number.isFinite(v) ? v : String(v);
+    if (typeof v === 'number') {
+      if (secrets?.has(String(v))) return REDACTED;
+      return Number.isFinite(v) ? v : String(v);
+    }
     if (typeof v === 'string') {
-      const text = redactText(head(v));
+      if (secrets?.has(v)) return REDACTED;
+      const text = secrets ? redactMessage(redactText(head(v)), secrets) : redactText(head(v));
       return clipText(v.length > REDACT_WINDOW ? `${text}…` : text, maxText);
     }
     if (typeof v === 'bigint') return `${v}n`;

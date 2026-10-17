@@ -10,6 +10,7 @@ import {
   redactReason,
   type RedactReason,
 } from './forms-privacy.ts';
+import { redactText } from './serialize.ts';
 import {
   controlFacts,
   directiveBinding,
@@ -321,7 +322,8 @@ export function isFieldTree(value: unknown): value is () => AnyRecord {
   }, false);
 }
 
-function selectorsOf(directive: unknown): Set<string> {
+/** The attribute and element tokens of a directive's selector (`formControlName`, `ngModel`). */
+export function selectorsOf(directive: unknown): Set<string> {
   const def = (directive as AnyRecord | null)?.['constructor']?.['ɵdir'];
   const selectors: unknown = def?.['selectors'];
   const tokens = new Set<string>();
@@ -337,7 +339,7 @@ function selectorsOf(directive: unknown): Set<string> {
 }
 
 const TEMPLATE_SELECTORS = ['ngModel', 'ngForm', 'ngModelGroup'];
-const CONTROL_SELECTORS = ['ngModel', 'formControl', 'formControlName'];
+export const CONTROL_SELECTORS = ['ngModel', 'formControl', 'formControlName'];
 
 function isTemplateDirective(selectors: Set<string>): boolean {
   return TEMPLATE_SELECTORS.some((token) => selectors.has(token));
@@ -1073,7 +1075,7 @@ function collectOne(
   const owner = ownerName(found.owner);
   const label = labels.get(found.root) ?? `${owner}.${property ?? fallbackName(found)}`;
   const id = idOf ? idOf(found.root, label) : formIdFor(label);
-  const set = new SecretSet();
+  const set = new SecretSet(formSecrets.get(id));
   secrets = set;
   kept.set(id, set);
   let root: FormFieldNode;
@@ -1117,8 +1119,16 @@ export function forgetFormSecrets(formIds: Iterable<string>) {
   for (const id of formIds) formSecrets.delete(id);
 }
 
+/** Every value the forms on the page hide, current and earlier, for the component values. */
+export function formSecretValues(): Set<string> {
+  const out = new Set<string>();
+  for (const set of formSecrets.values()) for (const value of set.all()) out.add(value);
+  return out;
+}
+
 export function redactFormText(formId: string, text: string): string {
-  return formSecrets.get(formId)?.redact(text) ?? redactMessage(text);
+  const paired = redactText(text);
+  return formSecrets.get(formId)?.redact(paired) ?? redactMessage(paired);
 }
 
 const STRUCTURAL_KEYS = new Set([

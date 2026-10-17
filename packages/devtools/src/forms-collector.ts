@@ -255,7 +255,8 @@ export function attachForms(
     if (event.type === 'value') {
       const previous = lastValue.get(key);
       if (previous === event.detail) return;
-      if (previous !== undefined) event.prev = previous;
+      // Masked again now: the form's secrets may have grown since the value was seen.
+      if (previous !== undefined) event.prev = redactFormText(event.formId, previous);
       lastValue.set(key, event.detail ?? '');
     }
     if (event.type === 'status') {

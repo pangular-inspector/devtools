@@ -9,7 +9,7 @@ description: Live NgRx signal stores and @ngrx/store state, with entities, dispa
 
 # NgRx Store
 
-The Store tab shows your *NgRx state live. It covers `@ngrx/signals` stores (`signalStore` and `signalState`) and the classic `@ngrx/store`. NGXS, Elf and MiniRx stores show up in the same list through their Redux DevTools integration (see [Other stores](#other-stores)). With the hub mounted, it lives in the **NgRx** dock.
+The Store tab shows your \*NgRx state live. It covers `@ngrx/signals` stores (`signalStore` and `signalState`) and the classic `@ngrx/store`. NGXS, Elf and MiniRx stores show up in the same list through their Redux DevTools integration (see [Other stores](#other-stores)). With the hub mounted, it lives in the **NgRx** dock.
 
 The tab has two sections. **Live stores** reads the running page. **Source declarations** lists what your files declare.
 
@@ -291,7 +291,7 @@ Use `provideStore()` or `StoreModule.forRoot()`. The overlay stops looking after
 
 ### Redaction
 
-The devtools replace state keys with secret-looking names with `[redacted]`, at any depth. See [what the devtools redact](../security.md).
+The devtools replace state keys with secret-looking names with `[redacted]`, at any depth. A signal store method call that writes such a key shows every argument as `[redacted]` in the change log, and so do later calls of that method. An argument whose parameter name looks secret, such as `password` in `login(email, password)`, is masked too. See [what the devtools redact](../security.md#components-signals-ngrx-and-pipes).
 
 ### Action origin
 

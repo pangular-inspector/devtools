@@ -14,6 +14,7 @@ import {
   type CliAccess,
   type CliAccessFlags,
 } from './cli-access.ts';
+import { cliGatePolicy, gatedDevApp } from './cli-gate.ts';
 import pangular, { createPangular } from './devframe.ts';
 import { mcpPrintConfig, printConfigPort } from './mcp-print-config.ts';
 import {
@@ -349,6 +350,8 @@ export function createPangularCli(options: PangularCliOptions = {}) {
         await createDevServer(definition, {
           host: listenHost,
           port,
+          // The same request gate as the Vite plugin and the Express hub, in front of every route.
+          app: (await gatedDevApp(cliGatePolicy(access.allowedOrigins, listenHost))) as never,
           flags: flags as Record<string, unknown>,
           mcp: pangularMcp(flags.mcp ?? true, resolved),
           ...(access.allowedOrigins.length ? { allowedOrigins: access.allowedOrigins } : {}),

@@ -1,7 +1,7 @@
 import { keepaliveDue } from './change-detection.ts';
 import { watchDeferHydration } from './defer-hydration-watch.ts';
 import { appIdOf, scanHydration } from './http-hydration.ts';
-import { decodePayload, type PayloadSummary } from './http-payload.ts';
+import { decodePayload, sanitizePayload, type PayloadSummary } from './http-payload.ts';
 import { withCapturedHeaders } from './http-headers.ts';
 import { redactCall } from './http-redact.ts';
 import { httpRegistry, sanitizeRules, storeRules, type HttpCall } from './http-rules.ts';
@@ -94,6 +94,9 @@ function hydrationStats(
  */
 export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = () => 0) {
   const payload = decodePayload(document, appIdOf(document));
+  // TransferState holds whatever the server rendered with, so it is masked here, before it
+  // leaves the page, with the same rules the server applies to it.
+  let maskedPayload: PayloadSummary | undefined;
   const initialUrl = redactUrl(location.pathname + location.search);
   const ssrRequestId = readSsrRequestId();
   const scanner = createHydrationScanner();
@@ -137,8 +140,13 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
       calls: calls.map((call) => redactCall(withCapturedHeaders(call))),
       full,
     };
-    const answer = (await my.rpc.call('push-http', full ? { ...report, payload } : report)) as
-      { needPayload?: boolean } | null | undefined;
+    const sent = full
+      ? { ...report, payload: (maskedPayload ??= sanitizePayload(payload)) }
+      : report;
+    const answer = (await my.rpc.call('push-http', sent)) as
+      | { needPayload?: boolean }
+      | null
+      | undefined;
     lastMeta = metaJson;
     lastSentAt = Date.now();
     lastCall = sentUpTo;
