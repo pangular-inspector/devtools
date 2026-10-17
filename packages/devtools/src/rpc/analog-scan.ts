@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { IGNORED_DIRS, maskStrings, stripComments } from './source-scan.ts';
+import { PARTIAL_HINT, partialReasons } from './analog-config-partial.ts';
 
 export type AnalogRouteKind = 'page' | 'layout' | 'markdown' | 'group' | 'implicit';
 
@@ -63,6 +64,10 @@ export interface AnalogConfig {
   noSsrRoutes: string[];
   routeRules: AnalogRouteRule[];
   configFile?: string;
+  /** Set when parts of the config could not be read as literals, so the values above are incomplete. */
+  partial?: true;
+  /** Why the config is partial, one sentence each. */
+  partialReasons?: string[];
 }
 
 export interface AnalogProject {
@@ -585,10 +590,31 @@ export function analogConfig(root: string): AnalogConfig {
   const config: AnalogConfig = { apiPrefix: 'api', noSsrRoutes: [], routeRules: [] };
   if (!file) return config;
   config.configFile = file;
-  const source = stripComments(read(join(root, file)));
+  const partial = (reasons: string[]) => {
+    if (!reasons.length) return;
+    config.partial = true;
+    config.partialReasons = reasons;
+  };
+  const raw = read(join(root, file));
+  if (!raw.trim()) {
+    partial([`${file} could not be read, so the Analog defaults are shown.`]);
+    return config;
+  }
+  const source = stripComments(raw);
   const start = source.search(/\banalog\s*\(/);
-  if (start < 0) return config;
-  const options = source.slice(start, callEnd(maskStrings(source), source.indexOf('(', start)) + 1);
+  if (start < 0) {
+    partial([`${file} has no analog() call, so the Analog defaults are shown.`]);
+    return config;
+  }
+  const maskedSource = maskStrings(source);
+  const open = source.indexOf('(', start);
+  const close = callEnd(maskedSource, open);
+  if (close >= source.length) {
+    partial([`The analog( call in ${file} never closes, so its options were not read.`]);
+    return config;
+  }
+  partial(partialReasons(source.slice(open + 1, close), maskedSource.slice(open + 1, close)));
+  const options = source.slice(start, close + 1);
   const topLevel = stripBlocks(options.slice(options.indexOf('(') + 1), [
     'nitro',
     'routeRules',
@@ -862,6 +888,15 @@ export function lintAnalog(project: AnalogProject): AnalogLintFinding[] {
       file: error.slice(0, error.lastIndexOf(':')),
       message: `Could not read this folder (${error.slice(error.lastIndexOf(':') + 2)}), so its files are missing from every result.`,
       fix: 'Check the folder permissions, or that the path is a folder and not a file.',
+    });
+  }
+  if (project.config.partial) {
+    out.push({
+      rule: 'config-partial',
+      severity: 'warning',
+      file: project.config.configFile,
+      message: `The analog() options could not be read in full: ${(project.config.partialReasons ?? []).join(' ')} ${PARTIAL_HINT}`,
+      fix: 'Write the options the inspector reads (ssr, static, apiPrefix, prerender.routes, routeRules) as literals in the analog() call, or keep in mind that the values shown here may be missing some.',
     });
   }
   const all = flattenRoutes(project.routes);

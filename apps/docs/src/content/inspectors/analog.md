@@ -94,6 +94,7 @@ Checks grouped by rule, each with a fix. The count on the tab adds up errors and
 - Redirect mistakes.
 - API method suffixes, duplicate API routes, and routes outside the API prefix.
 - Prerender entries that match nothing.
+- A `vite.config` the scan could not read in full (rule `config-partial`). See [Config the scan cannot read](#config-the-scan-cannot-read).
 - Frontmatter errors, duplicate slugs, and content that shadows a page.
 - From the live page: `load()` fetched twice, server function reads called again after hydration, hydration errors, API routes not found, and added pages that need a restart. To catch hydration errors from the first load, add `providePangularHttp()` (see [Set up Analog](../guides/analog.md#catch-hydration-errors-from-the-first-load)).
 
@@ -127,6 +128,10 @@ The tab reads every `routeRules` entry in `vite.config`. A rule like `/blog/**` 
 | Prerendered | The page is in the build output, a rule has `prerender: true`, or the page is in `prerender.routes`.       |
 | Cached      | A rule has `isr`, `swr` or `cache`, or a `Cache-Control` header with a `max-age` or `s-maxage` above zero. |
 | SSR         | None of the above.                                                                                         |
+
+### Config the scan cannot read
+
+The scan reads the `analog()` options as written in `vite.config`, without running the file. It reads `ssr`, `static`, `apiPrefix`, `prerender.routes` and `routeRules` only when they are literals. If an option comes from a variable, a spread (`...`), a template string or a computed key, the scan can't know its value. The **Render** view then shows a note with the reasons, the lint reports `config-partial`, and `analog-render-modes` and `analog-prerender-plan` add a **Config read in part** line. The modes and the plan may be missing what the scan could not read.
 
 ### Other tabs in Analog apps
 

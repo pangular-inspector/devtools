@@ -576,12 +576,12 @@ Use `explain-navigation` for "why was I redirected". Pass `perf: true` for "why 
 
 ### Read the route config
 
-| Tool                  | What it answers                                                                                                                                                                                                     | Arguments                       |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `list-routes`         | The live route config: every route with its full path, component or redirect, lazy state, guards, resolvers, title, source file and an example URL.                                                                 | `match`, `audit`, `filter`      |
-| `lint-routes`         | Route config mistakes, such as routes after `**`, redirect cycles, redirect loops seen at runtime, deprecated class guards, missing titles and param typos. Each finding says how Angular reacts and how to fix it. | none                            |
-| `router-config`       | How the router is set up (`provideRouter`, `forRoot or other` or `unknown`), effective options, enabled features, strategies, base href and hydration.                                                              | none                            |
-| `explain-render-mode` | The `ServerRoute` and render mode (Server, Client, Prerender) a URL gets, plus server entries that match no client route.                                                                                           | `url`, defaults to the page URL |
+| Tool                  | What it answers                                                                                                                                                                                                                                                              | Arguments                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `list-routes`         | The live route config: every route with its full path, component or redirect, lazy state, guards, resolvers, title, source file and an example URL.                                                                                                                          | `match`, `audit`, `filter`      |
+| `lint-routes`         | Route config mistakes, such as routes after `**`, redirect cycles, redirect loops seen at runtime, deprecated class guards, missing titles and param typos. Each finding says how Angular reacts and how to fix it. Says how many links past the first 100 were not checked. | none                            |
+| `router-config`       | How the router is set up (`provideRouter`, `forRoot or other` or `unknown`), effective options, enabled features, strategies, base href and hydration.                                                                                                                       | none                            |
+| `explain-render-mode` | The `ServerRoute` and render mode (Server, Client, Prerender) a URL gets, plus server entries that match no client route.                                                                                                                                                    | `url`, defaults to the page URL |
 
 `list-routes` takes three optional arguments:
 
@@ -914,10 +914,10 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 ### Rendering
 
-| Tool                    | What it answers                                                                                                                                                   | Arguments |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `analog-render-modes`   | For each page: server rendered, prerendered, cached, redirected or client only, the route rule or config that decides it, and what the last request actually did. | none      |
-| `analog-prerender-plan` | `prerender.routes` and `routeRules` with `prerender: true`, compared with the page files and the build output.                                                    | none      |
+| Tool                    | What it answers                                                                                                                                                                                                      | Arguments |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `analog-render-modes`   | For each page: server rendered, prerendered, cached, redirected or client only, the route rule or config that decides it, and what the last request actually did. Says when `vite.config` could not be read in full. | none      |
+| `analog-prerender-plan` | `prerender.routes` and `routeRules` with `prerender: true`, compared with the page files and the build output. Says when `vite.config` could not be read in full.                                                    | none      |
 
 ### Call a server route <ngmd-badge variant="alpha">Destructive</ngmd-badge>
 
@@ -934,7 +934,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 ### Lint
 
-`analog-lint` finds Analog mistakes: two files for one URL, a missing default export, a layout without `router-outlet`, bad API method suffixes, prerender entries that match nothing, and frontmatter errors. It also reports live problems, like a `load()` fetched twice, a server function read that runs again after hydration, or a restart needed. Hydration errors and restart hints come from one page: pass `page` to pick it, or leave it out for the most recent. If no page with that id sends Analog data, the answer says so and lists the pages that do.
+`analog-lint` finds Analog mistakes: two files for one URL, a missing default export, a layout without `router-outlet`, bad API method suffixes, prerender entries that match nothing, frontmatter errors, and a `vite.config` it could not read in full (`config-partial`). It also reports live problems, like a `load()` fetched twice, a server function read that runs again after hydration, or a restart needed. Hydration errors and restart hints come from one page: pass `page` to pick it, or leave it out for the most recent. If no page with that id sends Analog data, the answer says so and lists the pages that do.
 
 <ngmd-alert severity="helpful">
   <code>analog-server-calls</code> and <code>analog-call-api</code> need the <a href="../getting-started/vite.md">Vite plugin</a>. The plugin records the calls and knows the dev server address.

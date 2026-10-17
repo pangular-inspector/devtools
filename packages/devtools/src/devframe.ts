@@ -3523,7 +3523,7 @@ const pangular = defineDevframe({
       id: 'pangular:lint-routes',
       title: 'Lint routes',
       description:
-        "Checks the live route config for common issues: routes after '**', shadowed param routes, missing pathMatch 'full' on empty paths, runtime redirect loops, deprecated guards, title issues, and security flags (e.g. emails or open redirects). Findings indicate severity (throws, warns, or silent) and remediation steps.",
+        "Checks the live route config for common issues: routes after '**', shadowed param routes, missing pathMatch 'full' on empty paths, runtime redirect loops, deprecated guards, title issues, and security flags (e.g. emails or open redirects). Findings indicate severity (throws, warns, or silent) and remediation steps. Link checks cover the first 100 RouterLinks on the page (property-bound [routerLink] included); the answer says how many more were not checked.",
       inputSchema: { type: 'object', properties: { page: pageProperty } },
       handler: async (args: { page?: string }) => {
         const state = routerState.value() as RouterState;

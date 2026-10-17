@@ -137,6 +137,7 @@ interface RenderRow {
 
 interface PrerenderPlan {
   dynamicConfig: boolean;
+  configPartial?: string[];
   listed: string[] | null;
   fromRules?: string[];
   staticMissing: string[];
@@ -908,6 +909,15 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
           }
 
           @case ('render') {
+            @if (plan()?.configPartial?.length) {
+              <p class="note" role="status">
+                The analog() options in vite.config could not be read in full, so these modes and
+                the prerender plan may be incomplete.
+                @for (reason of plan()!.configPartial; track reason) {
+                  {{ reason }}
+                }
+              </p>
+            }
             @if (modeCounts().length) {
               <div class="chips">
                 @for (m of modeCounts(); track m.mode) {

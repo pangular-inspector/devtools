@@ -491,7 +491,7 @@ export async function registerAnalog(
     id: 'pangular:analog-render-modes',
     title: 'Show Analog render modes',
     description:
-      'For each Analog page: how it is rendered (server rendered per request, prerendered, cached, redirected or client only) with the routeRules entry, prerender.routes or build output that decides it, and what the last request to that page (including dynamic and catch-all URLs) actually did.',
+      'For each Analog page: how it is rendered (server rendered per request, prerendered, cached, redirected or client only) with the routeRules entry, prerender.routes or build output that decides it, and what the last request to that page (including dynamic and catch-all URLs) actually did. Ends with a "Config read in part" note when vite.config builds analog() options from variables, spreads or other non-literals the scan cannot read.',
     inputSchema: { type: 'object', properties: {} },
     handler: async () => text(analogRenderModesText(project(), current())),
   });
@@ -499,7 +499,7 @@ export async function registerAnalog(
     id: 'pangular:analog-prerender-plan',
     title: 'Check the Analog prerender plan',
     description:
-      'Compare prerender.routes with the page files and the build output: static pages left out, dynamic pages that need explicit entries, and listed routes missing from dist.',
+      'Compare prerender.routes with the page files and the build output: static pages left out, dynamic pages that need explicit entries, and listed routes missing from dist. Ends with a "Config read in part" note when vite.config could not be read in full.',
     inputSchema: { type: 'object', properties: {} },
     handler: async () => text(analogPrerenderText(project())),
   });
@@ -516,7 +516,7 @@ export async function registerAnalog(
     id: 'pangular:analog-lint',
     title: 'Lint the Analog project',
     description:
-      'Analog checks: two files for one URL, sibling [param] files, missing default export, layout without router-outlet, .server.ts without load, action or server functions, or without a page, redirect mistakes, bad API method suffix, duplicate API routes, routes outside the API prefix, prerender entries that match nothing, frontmatter errors, duplicate slugs, plus live problems (load fetched twice, seeded server function read called again, hydration errors, restart needed, API 404/405). Hydration errors and restart hints come from one page: `page`, or the most recent one.',
+      'Analog checks: two files for one URL, sibling [param] files, missing default export, layout without router-outlet, .server.ts without load, action or server functions, or without a page, redirect mistakes, bad API method suffix, duplicate API routes, routes outside the API prefix, prerender entries that match nothing, partly read config, frontmatter errors, duplicate slugs, plus live problems (load fetched twice, seeded server function read called again, hydration errors, restart needed, API 404/405). Hydration errors and restart hints come from one page: `page`, or the most recent one.',
     inputSchema: { type: 'object', properties: { page } },
     handler: async (args: { page?: string }) =>
       text(analogLintText(project(), current(), args?.page)),
