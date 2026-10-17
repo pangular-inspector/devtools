@@ -4,22 +4,53 @@ import { boundField, locateWritable, writableFields } from '../signal-locator.ts
 
 const SIGNAL = Symbol('SIGNAL');
 
+interface Link {
+  producer: FakeNode;
+  consumer: FakeNode;
+  nextProducer?: Link;
+  nextConsumer?: Link;
+}
+
 interface FakeNode {
   kind: string;
   version: number;
-  value: unknown;
+  value?: unknown;
   debugName?: string;
+  producers?: Link;
+  consumers?: Link;
+}
+
+const node = (kind: string, value: unknown, debugName?: string, version = 0): FakeNode => ({
+  kind,
+  version,
+  value,
+  ...(debugName ? { debugName } : {}),
+});
+
+/** Records that `consumer` reads `producer`, the way Angular links a live consumer. */
+function reads(consumer: FakeNode, ...producers: FakeNode[]) {
+  for (const producer of producers) {
+    const link: Link = { producer, consumer };
+    let last = consumer.producers;
+    while (last?.nextProducer) last = last.nextProducer;
+    if (last) last.nextProducer = link;
+    else consumer.producers = link;
+    let tail = producer.consumers;
+    while (tail?.nextConsumer) tail = tail.nextConsumer;
+    if (tail) tail.nextConsumer = link;
+    else producer.consumers = link;
+  }
 }
 
 /** A getter shaped like Angular's: the node under the `SIGNAL` symbol, `set` when writable. */
-function fakeSignal(node: FakeNode, writable = true) {
-  const getter = Object.assign(() => node.value, { [SIGNAL]: node }) as (() => unknown) & {
+function fakeSignal(n: FakeNode, writable = true) {
+  const getter = Object.assign(() => n.value, { [SIGNAL]: n }) as (() => unknown) & {
     set?: (value: unknown) => void;
   };
   if (writable) {
     getter.set = (value: unknown) => {
-      node.value = value;
-      node.version++;
+      n.value = value;
+      n.version++;
     };
   }
   return getter;
@@ -27,19 +58,42 @@ function fakeSignal(node: FakeNode, writable = true) {
 
 const ng = { isSignal: (value: unknown) => typeof value === 'function' && SIGNAL in value };
 
-const graphNode = (id: string, n: FakeNode) => ({
-  id,
-  kind: n.kind,
-  label: n.debugName,
-  epoch: n.version,
-  ...(n.kind === 'linkedSignal' ? {} : { value: n.value }),
-});
+/** What `ɵgetSignalGraph` reports for these roots: depth-first, producers in link order. */
+function graphOf(...roots: FakeNode[]) {
+  const order: FakeNode[] = [];
+  const visit = (n: FakeNode) => {
+    if (order.includes(n)) return;
+    order.push(n);
+    for (let l = n.producers; l; l = l.nextProducer) visit(l.producer);
+  };
+  roots.forEach(visit);
+  const nodes = order.map((n, i) => ({
+    id: String(i + 1),
+    kind: n.kind,
+    label: n.debugName,
+    epoch: n.version,
+    ...(n.kind === 'signal' || n.kind === 'computed' ? { value: n.value } : {}),
+  }));
+  const edges: { consumer: number; producer: number }[] = [];
+  order.forEach((n, consumer) => {
+    for (let l = n.producers; l; l = l.nextProducer) {
+      edges.push({ consumer, producer: order.indexOf(l.producer) });
+    }
+  });
+  return { nodes, edges };
+}
+
+const keys = (found: Map<number, { key: string }>) =>
+  [...found].map(([index, f]) => [index, f.key]);
 
 describe('locateWritable', () => {
   it('skips computed nodes, signal inputs and fields without a signal', () => {
-    const name = { kind: 'signal', version: 0, value: 'Ada', debugName: 'name' };
-    const total = { kind: 'computed', version: 1, value: 3, debugName: 'total' };
-    const label = { kind: 'signal', version: 0, value: 'x', debugName: 'label' };
+    const name = node('signal', 'Ada', 'name');
+    const label = node('signal', 'x', 'label');
+    const total = node('computed', 3, 'total', 1);
+    reads(total, name);
+    const template = node('template', undefined);
+    reads(template, name, total, label);
     const instance = {
       name: fakeSignal(name),
       total: fakeSignal(total, false),
@@ -47,41 +101,65 @@ describe('locateWritable', () => {
       plain: 3,
     };
     expect(writableFields(ng, instance).map((f) => f.key)).toEqual(['name']);
-    const found = locateWritable(ng, instance, [
-      graphNode('1', name),
-      graphNode('2', total),
-      graphNode('3', label),
-    ]);
-    expect([...found].map(([index, f]) => [index, f.key])).toEqual([[0, 'name']]);
+    const { nodes, edges } = graphOf(template);
+    expect(keys(locateWritable(ng, instance, nodes, edges))).toEqual([[1, 'name']]);
   });
 
-  it('matches unnamed signals by value identity, and waits while two look the same', () => {
-    const a = { kind: 'signal', version: 0, value: 0 };
-    const b = { kind: 'signal', version: 0, value: 0 };
+  it('tells apart unnamed signals with the same value by where the graph reads them', () => {
+    const a = node('signal', 0);
+    const b = node('signal', 0);
+    const doubled = node('computed', 0);
+    reads(doubled, b);
+    const template = node('template', undefined);
+    reads(template, a, doubled);
     const instance = { a: fakeSignal(a), b: fakeSignal(b) };
-    expect(locateWritable(ng, instance, [graphNode('1', a), graphNode('2', b)]).size).toBe(0);
-
-    instance.b.set!(5);
-    const found = locateWritable(ng, instance, [graphNode('1', a), graphNode('2', b)]);
-    expect(found.get(0)?.key).toBe('a');
-    expect(found.get(1)?.key).toBe('b');
-
-    // Once bound, the id keeps its field even when the values look the same again.
-    instance.a.set!(5);
-    instance.a.set!(5);
-    b.version = a.version;
-    const again = locateWritable(ng, instance, [graphNode('1', a), graphNode('2', b)]);
-    expect(again.get(0)?.key).toBe('a');
-    expect(boundField(ng, instance, '2')?.key).toBe('b');
+    const { nodes, edges } = graphOf(template);
+    const found = locateWritable(ng, instance, nodes, edges);
+    expect(keys(found)).toEqual([
+      [1, 'a'],
+      [3, 'b'],
+    ]);
+    expect(boundField(ng, instance, nodes[3].id)?.key).toBe('b');
   });
 
-  it('matches a linkedSignal by name and version, and forgets a field that was replaced', () => {
-    const picked = { kind: 'linkedSignal', version: 2, value: 'x', debugName: 'picked' };
-    const instance: Record<string, unknown> = { picked: fakeSignal(picked) };
-    expect(locateWritable(ng, instance, [graphNode('7', picked)]).get(0)?.key).toBe('picked');
+  it('binds no field to a service signal that looks the same when the graph never reads the field', () => {
+    const own = node('signal', false, 'loading');
+    const service = node('signal', false, 'loading');
+    const template = node('template', undefined);
+    reads(template, service);
+    const instance = { loading: fakeSignal(own) };
+    const { nodes, edges } = graphOf(template);
+    expect(locateWritable(ng, instance, nodes, edges).size).toBe(0);
+    expect(boundField(ng, instance, nodes[1].id)).toBeUndefined();
+  });
 
-    instance['picked'] = fakeSignal({ ...picked, version: 9 });
-    expect(boundField(ng, instance, '7')).toBeUndefined();
+  it('binds no field when its root fits two places in the graph', () => {
+    const own = node('signal', 1, 'n');
+    const other = node('signal', 1, 'n');
+    const mine = node('effect', undefined);
+    const theirs = node('effect', undefined);
+    reads(mine, own);
+    reads(theirs, other);
+    const instance = { n: fakeSignal(own) };
+    const { nodes, edges } = graphOf(mine, theirs);
+    expect(locateWritable(ng, instance, nodes, edges).size).toBe(0);
+  });
+
+  it('drops a binding the next collect no longer proves', () => {
+    const picked = node('linkedSignal', 'x', 'picked', 2);
+    const template = node('template', undefined);
+    reads(template, picked);
+    const instance: Record<string, unknown> = { picked: fakeSignal(picked) };
+    const graph = graphOf(template);
+    expect(locateWritable(ng, instance, graph.nodes, graph.edges).get(1)?.key).toBe('picked');
+    expect(boundField(ng, instance, '2')?.key).toBe('picked');
+
+    // The field now holds a look-alike the template does not read.
+    instance['picked'] = fakeSignal({ ...picked, consumers: undefined });
+    expect(boundField(ng, instance, '2')).toBeUndefined();
+    expect(locateWritable(ng, instance, graph.nodes, graph.edges).size).toBe(0);
+    instance['picked'] = fakeSignal(picked);
+    expect(boundField(ng, instance, '2')).toBeUndefined();
   });
 
   it('reads no field of an instance whose graph has no writable node', () => {

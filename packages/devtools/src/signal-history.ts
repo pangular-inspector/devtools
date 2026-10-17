@@ -1,4 +1,4 @@
-import { rawValueOf } from './signal-locator.ts';
+import { isLocatedNode, rawValueOf } from './signal-locator.ts';
 import { appFrames, captureStack } from './signal-stack.ts';
 import type { SignalChange, SignalGraphNode } from './types.ts';
 
@@ -37,6 +37,17 @@ interface Track {
 }
 
 export interface SignalHistoryOptions {
+  /**
+   * Whether the page may restore a past value (`actions.components`). Raw
+   * values are kept for restores only when this is on, and only for nodes the
+   * snapshot gave a `locator`; everything else keeps just the serialized copy.
+   */
+  restorable?: boolean;
+  /**
+   * Whether a written node is a field the locator bound to a graph node, so
+   * its writes keep raw values. Defaults to the locator's own bindings.
+   */
+  located?: (node: RawSignalNode) => boolean;
   /** Whether to record the stack of each write. Checked on every write, so keep it cheap. */
   stacks?: () => boolean;
   /**
@@ -74,6 +85,9 @@ export function createSignalHistory(
   const sent = new Map<string, number>();
   // Lives as long as the entry is kept, so it shares the history caps.
   const raws = new WeakMap<SignalChange, RawEntry>();
+  const located = options.located ?? isLocatedNode;
+  /** Nodes the last snapshot gave a locator, whose entries keep raw values. */
+  const restorable = new Set<string>();
   let trackSeq = 0;
 
   const dirty = new Set<Track>();
@@ -82,6 +96,8 @@ export function createSignalHistory(
   function flush() {
     flushQueued = false;
     for (const track of dirty) {
+      const node = options.restorable ? track.ref.deref() : undefined;
+      const keepWrites = !!node && located(node);
       for (const { stack, ...write } of track.pending) {
         let change: SignalChange;
         try {
@@ -91,7 +107,7 @@ export function createSignalHistory(
         }
         const frames = stack ? appFrames(stack) : [];
         if (frames.length) change.stack = frames;
-        raws.set(change, { value: write.value, label: track.label });
+        if (keepWrites) raws.set(change, { value: write.value, label: track.label });
         append(track.changes, change);
         notify(nodeOfTrack.get(track.id), track.label, change, { value: write.value });
       }
@@ -222,6 +238,9 @@ export function createSignalHistory(
     for (const node of nodes) {
       if (!VALUE_KINDS.has(node.kind)) continue;
       const list = history.get(node.id) ?? [];
+      const keepRaw = !!options.restorable && !!node.locator;
+      if (keepRaw) restorable.add(node.id);
+      else if (restorable.delete(node.id)) for (const change of list) raws.delete(change);
       let lastEpoch = list.at(-1)?.epoch ?? -1;
       let total = totals.get(node.id) ?? 0;
       for (const change of findTrack(node, taken)?.changes ?? []) {
@@ -241,7 +260,7 @@ export function createSignalHistory(
           source: lastEpoch < 0 ? 'initial' : 'sample',
           ...(missed > 0 ? { missed } : {}),
         };
-        const raw = rawValueOf(node);
+        const raw = keepRaw ? rawValueOf(node) : undefined;
         if (raw) raws.set(change, { value: raw.value, label: node.label });
         append(list, change);
         if (change.source === 'sample') notify(node.id, node.label ?? node.id, change);
@@ -255,6 +274,7 @@ export function createSignalHistory(
       if (history.size <= MAX_NODES) break;
       history.delete(id);
       totals.delete(id);
+      restorable.delete(id);
       unbind(id);
     }
     return out;

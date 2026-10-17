@@ -8,6 +8,7 @@ import {
   installSignalWriteHook,
   type RawSignalNode,
 } from '../signal-history.ts';
+import { setRawValue } from '../signal-locator.ts';
 import type { SignalGraphNode } from '../types.ts';
 
 const identity = (v: unknown) => v;
@@ -300,6 +301,66 @@ describe('createSignalHistory', () => {
     older.rollback();
     const retry = h.collectDelta([graphNode('a', 'count', 3, 3)]);
     expect(retry['a'].map((c) => c.epoch)).toEqual([2, 3]);
+  });
+});
+
+describe('raw values kept for restores', () => {
+  const located = (epoch: number, value: unknown, locator = true): SignalGraphNode => {
+    const node = graphNode('a', 'count', epoch, value);
+    if (locator) node.locator = { id: 'c1', key: 'count' };
+    setRawValue(node, value);
+    return node;
+  };
+
+  /** One sampled entry (epoch 0) and one written entry (epoch 1). */
+  async function record(h: ReturnType<typeof createSignalHistory>, locator = true) {
+    const raw: RawSignalNode = { debugName: 'count', kind: 'signal', value: 0, version: 0 };
+    h.collect([located(0, 0, locator)]);
+    write(h.onWrite, raw, 1);
+    await Promise.resolve();
+    h.collect([located(1, 1, locator)]);
+    return [h.rawEntry('a', 0), h.rawEntry('a', 1)];
+  }
+
+  it('keeps no raw values when restores are off', async () => {
+    const entries = await record(
+      createSignalHistory(identity, Date.now, identity, { located: () => true }),
+    );
+    expect(entries).toEqual([
+      { found: false, reason: 'unkept' },
+      { found: false, reason: 'unkept' },
+    ]);
+  });
+
+  it('keeps no raw values for a node without a locator', async () => {
+    const entries = await record(
+      createSignalHistory(identity, Date.now, identity, { restorable: true, located: () => false }),
+      false,
+    );
+    expect(entries).toEqual([
+      { found: false, reason: 'unkept' },
+      { found: false, reason: 'unkept' },
+    ]);
+  });
+
+  it('keeps raw values for a node with a locator when restores are on', async () => {
+    const h = createSignalHistory(identity, Date.now, identity, {
+      restorable: true,
+      located: () => true,
+    });
+    const entries = await record(h);
+    expect(entries.map((e) => e.found && e.value)).toEqual([0, 1]);
+  });
+
+  it('drops the raw values of a node that lost its locator', async () => {
+    const h = createSignalHistory(identity, Date.now, identity, {
+      restorable: true,
+      located: () => true,
+    });
+    await record(h);
+    h.collect([located(1, 1, false)]);
+    expect(h.rawEntry('a', 0)).toEqual({ found: false, reason: 'unkept' });
+    expect(h.rawEntry('a', 1)).toEqual({ found: false, reason: 'unkept' });
   });
 });
 

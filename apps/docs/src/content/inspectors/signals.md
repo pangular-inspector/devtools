@@ -111,17 +111,17 @@ The line above the list counts the changes, for example **3 changes recorded, ne
 
 ### Restore a past value
 
-Each entry but the newest has a **Restore** button when the signal is a `signal()`, `linkedSignal()` or `model()` field of the shown component. Click it to set the signal back to that entry's value with `.set()`, the same write `pangular:set-signal` makes. A line above the list says what was restored, or why the page refused.
+Each entry but the newest has a **Restore** button when the signal is a `signal()`, `linkedSignal()` or `model()` field of the shown component. The page ties a graph node to a field only when the field's own reactive node is that node, and checks it again on every read, so a service signal with the same name and value as a field never gets the field's button. Click it to set the signal back to that entry's value with `.set()`, the same write `pangular:set-signal` makes. A line above the list says what was restored, or why the page refused.
 
 The page writes the value it kept when it recorded the entry, not the copy the panel shows. A value the history cut to fit, or showed with masked secrets, comes back whole, and the value never leaves the page.
 
-| Case                                                            | What happens                                                                                      |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `computed()`, a signal input, or a signal of a service          | No **Restore** button.                                                                            |
-| Unnamed signal                                                  | **Restore** shows once the page tells the field apart from the other fields by value and version. |
-| Entry past the last 50, or the page reloaded                    | The page refuses: the entry is no longer in its history.                                          |
-| The app changed the value in place after it was recorded        | The page refuses, because the value no longer matches the entry.                                  |
-| `actions.components` is `false`, a saved report or a native app | No **Restore** button, and a note says why.                                                       |
+| Case                                                                   | What happens                                                     |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `computed()`, a signal input, or a signal of a service                 | No **Restore** button.                                           |
+| A field that neither the template nor an effect of the component reads | No **Restore** button: the graph doesn't hold the field.         |
+| Entry past the last 50, or the page reloaded                           | The page refuses: the entry is no longer in its history.         |
+| The app changed the value in place after it was recorded               | The page refuses, because the value no longer matches the entry. |
+| `actions.components` is `false`, a saved report or a native app        | No **Restore** button, and a note says why.                      |
 
 See [`actions`](../getting-started/configuration.md#actions) for the option.
 

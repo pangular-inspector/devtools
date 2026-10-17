@@ -78,6 +78,7 @@ describe.skipIf(!angularAtLeast('20.1.0'))('restoring signal history with a real
       (value, name) => serializeNamed(name, value, { budget: 1000 }),
       Date.now,
       (value, name) => graphValue(name, value),
+      { restorable: true },
     );
     unhook = await installSignalWriteHook(history.onWrite);
     app = await bootstrapApplication(Editor, { providers: [provideZonelessChangeDetection()] });

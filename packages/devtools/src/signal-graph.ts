@@ -220,7 +220,8 @@ function buildGraph<H extends object>(
 ) {
   let linked: LinkedReader[] | null = null;
   const kept = raw.nodes.slice(0, MAX_NODES);
-  const located = instance && componentId ? locateWritable(ng, instance, kept) : new Map();
+  const located =
+    instance && componentId ? locateWritable(ng, instance, raw.nodes, raw.edges) : new Map();
   const twins = new Map<string, number>();
   for (const n of kept) {
     if (n.kind !== 'linkedSignal' || 'value' in n) continue;
