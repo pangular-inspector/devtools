@@ -84,7 +84,9 @@ export function partialReasons(args: string, masked: string): string[] {
   }
   const own = ownLevel(object);
   for (const key of ['ssr', 'static']) {
-    if (new RegExp(`(?:[{,]\\s*)${key}\\s*:\\s*(?!true\\b|false\\b)[^\\s,}]`).test(own)) {
+    if (
+      new RegExp(`(?:[{,]\\s*)${key}\\s*:\\s*(?!(?:true|false)\\s*(?:[,}]|$))[^\\s,}]`).test(own)
+    ) {
       reasons.push(`${key} is not a plain true or false, so its value is unknown.`);
     }
   }

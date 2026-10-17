@@ -244,7 +244,7 @@ npx pangular lint --format sarif --output reports/pangular.sarif --fail-on error
 
 The JSON has the package version under `tool`, each lint with `ran` and its finding count under `lints`, counts per severity under `counts`, and the `findings`. Each finding has `lint`, `rule`, `severity`, `file` and `line` relative to the project folder (or `path` for a route), `message` and `fix`.
 
-The SARIF output is a SARIF 2.1.0 log with one run. Rule ids are the lint and the rule, such as `templates/track-by-index`. `error`, `warning` and `info` become the SARIF levels `error`, `warning` and `note`. File paths are relative to `%SRCROOT%`, the project folder. A finding about a whole file points at line 1, and a finding about a route has no location. Upload the file to a code scanning tool, such as GitHub code scanning, to see the findings on the lines they are about.
+The SARIF output is a SARIF 2.1.0 log with one run. Rule ids are the lint and the rule, such as `templates/track-by-index`. `error`, `warning` and `info` become the SARIF levels `error`, `warning` and `note`. File paths are relative to `%SRCROOT%`, the project folder. A finding about a whole file points at line 1, and a finding about a route has no location. Upload the file to a code scanning tool, such as GitHub code scanning. The tool then shows each finding on the line it is about.
 
 ## FAQ
 

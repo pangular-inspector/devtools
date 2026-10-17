@@ -35,7 +35,7 @@ export interface ExpressionChangedExplain {
   members?: string[];
   /** Named signals written with the current value shortly before the error. */
   writes?: ExplainWrite[];
-  /** Whether the page hears signal writes at all (Signals inspector on, Angular 17+). */
+  /** Whether the page hears signal writes at all (Signals inspector on, Angular 20.0+). */
   writesKnown?: boolean;
 }
 

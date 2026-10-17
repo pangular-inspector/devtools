@@ -131,7 +131,9 @@ The tab reads every `routeRules` entry in `vite.config`. A rule like `/blog/**` 
 
 ### Config the scan cannot read
 
-The scan reads the `analog()` options as written in `vite.config`, without running the file. It reads `ssr`, `static`, `apiPrefix`, `prerender.routes` and `routeRules` only when they are literals. If an option comes from a variable, a spread (`...`), a template string or a computed key, the scan can't know its value. The **Render** view then shows a note with the reasons, the lint reports `config-partial`, and `analog-render-modes` and `analog-prerender-plan` add a **Config read in part** line. The modes and the plan may be missing what the scan could not read.
+The scan reads the `analog()` options as written in `vite.config`. It does not run the file. It reads `ssr`, `static`, `apiPrefix`, `prerender.routes` and `routeRules` only when they are literals.
+
+If an option comes from a variable, a spread (`...`), a template string or a computed key, the scan can't know its value. In that case the **Render** view shows a note with the reasons. The lint reports `config-partial`, and `analog-render-modes` and `analog-prerender-plan` add a **Config read in part** line. The modes and the plan may be missing what the scan could not read.
 
 ### Other tabs in Analog apps
 

@@ -193,7 +193,7 @@ A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:
 
 ### Angular compatibility
 
-`.github/workflows/compat.yml` runs the page-side tests on the oldest Angular version the peer range allows, the last minor of 15, 17 and 19, each current major, and the `next` prerelease. It runs on pushes to `main`, every Monday at 06:00 UTC, and on demand from the **Actions** tab. It doesn't run on pull requests.
+`.github/workflows/compat.yml` runs the page-side tests on the oldest Angular version the peer range allows, the last minor of 15, 17 and 19, the first and last minor of 20, each later major, and the `next` prerelease. It runs on pushes to `main`, every Monday at 06:00 UTC, and on demand from the **Actions** tab. It doesn't run on pull requests.
 
 | Job          | Angular range | Node.js |
 | ------------ | ------------- | ------- |

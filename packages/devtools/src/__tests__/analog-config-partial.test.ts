@@ -53,6 +53,15 @@ describe('Analog config read in part', () => {
     expect(result.ssr).toBeUndefined();
   });
 
+  it('flags a flag that only starts with true or false', () => {
+    const text = config('analog({ ssr: true && isProd, static: false || x })').partialReasons!.join(
+      '\n',
+    );
+    expect(text).toMatch(/ssr is not a plain true or false/);
+    expect(text).toMatch(/static is not a plain true or false/);
+    expect(config('analog({ ssr: true , static: false })').partial).toBeUndefined();
+  });
+
   it('flags a spread inside routeRules and computed rule keys', () => {
     expect(
       config(`analog({ routeRules: { ...rules, '/a': { ssr: false } } })`).partialReasons,

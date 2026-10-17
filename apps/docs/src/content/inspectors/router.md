@@ -229,7 +229,7 @@ The devtools replace query, matrix and fragment values with secret-looking keys 
 
 ### History and config caps
 
-The page keeps the last 50 navigations and 50 preloads. Set the navigation count with [`limits.navigations`](../getting-started/configuration.md#limits). Once older navigations are dropped, the **Navigations** view and `explain-navigation` say how many. The live config lists at most 200 routes per level (a route's children and its loaded lazy routes count as one level) and 1000 routes in total. The **Routes** view and `pangular:list-routes` say how many routes were left out. The page reports at most 100 router links, and checks at most 2000 elements that could hold one after each DOM change. `lint-routes` and `inspect-route` say how many links past those were not checked. When the page has more elements than it checks, they say "at least" that many and how many elements were left out.
+The page keeps the last 50 navigations and 50 preloads. Set the navigation count with [`limits.navigations`](../getting-started/configuration.md#limits). Once older navigations are dropped, the **Navigations** view and `explain-navigation` say how many. The live config lists at most 200 routes per level (a route's children and its loaded lazy routes count as one level) and 1000 routes in total. The **Routes** view and `pangular:list-routes` say how many routes were left out. The page reports at most 100 router links. After each DOM change, it checks at most 2000 elements that could hold a link. `lint-routes` and `inspect-route` say how many links past the first 100 were not checked. If the page has more elements than the check limit, the count is a minimum, and both tools also say how many elements were left out.
 
 ## FAQ
 

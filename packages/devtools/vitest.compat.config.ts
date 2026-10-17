@@ -48,6 +48,8 @@ const pageSide = [
   'router-shared-guards',
   'signal-graph-real',
   'signal-history-real',
+  'signal-locator-real',
+  'signal-restore-real',
   'signal-peek',
   'signal-resources',
 ];
