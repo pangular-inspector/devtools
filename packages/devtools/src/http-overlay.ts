@@ -1,4 +1,5 @@
 import { keepaliveDue } from './change-detection.ts';
+import { watchDeferHydration } from './defer-hydration-watch.ts';
 import { appIdOf, scanHydration } from './http-hydration.ts';
 import { decodePayload, type PayloadSummary } from './http-payload.ts';
 import { withCapturedHeaders } from './http-headers.ts';
@@ -30,12 +31,19 @@ export function createHydrationScanner(scan: () => HydrationScan = () => scanHyd
   let cached: HydrationScan | null = null;
   let key = '';
   let scans = 0;
-  return (counters: Record<string, unknown> | undefined, now = Date.now()): HydrationScan => {
+  return (
+    counters: Record<string, unknown> | undefined,
+    now = Date.now(),
+    deferEpoch = 0,
+  ): HydrationScan => {
     // Without counters (`ngDevMode` is plain `true`), a time bucket stands in for them, so
-    // nodes that incremental hydration reaches later still show up.
-    const next = counters
-      ? `${counters['hydratedNodes']}:${counters['componentsSkippedHydration']}:${counters['deferBlocksWithIncrementalHydration']}`
-      : `t${Math.floor(now / RESCAN_MS)}`;
+    // nodes that incremental hydration reaches later still show up. `deferEpoch` moves when a
+    // `@defer (hydrate …)` block finishes hydrating, which rescans at once either way.
+    const next = `${
+      counters
+        ? `${counters['hydratedNodes']}:${counters['componentsSkippedHydration']}:${counters['deferBlocksWithIncrementalHydration']}`
+        : `t${Math.floor(now / RESCAN_MS)}`
+    }:d${deferEpoch}`;
     if (cached && scans >= 3 && next === key) return cached;
     cached = scan();
     key = next;
@@ -47,6 +55,7 @@ export function createHydrationScanner(scan: () => HydrationScan = () => scanHyd
 function hydrationStats(
   payload: PayloadSummary,
   scanner: ReturnType<typeof createHydrationScanner>,
+  deferEpoch: number,
 ): HydrationStats {
   const counters = (globalThis as { ngDevMode?: Record<string, unknown> | boolean }).ngDevMode;
   const num = (key: string) =>
@@ -54,7 +63,11 @@ function hydrationStats(
       ? (counters[key] as number)
       : undefined;
   const hydratedComponents = num('hydratedComponents');
-  const scan = scanner(counters && typeof counters === 'object' ? counters : undefined);
+  const scan = scanner(
+    counters && typeof counters === 'object' ? counters : undefined,
+    Date.now(),
+    deferEpoch,
+  );
   const annotated = payload.entries.some((e) => e.key === '__nghData__');
   const warnings = httpRegistry().warnings;
   return {
@@ -103,7 +116,7 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
       url: redactUrl(location.pathname + location.search),
       initialUrl,
       title: redactMessage(document.title),
-      hydration: hydrationStats(payload, scanner),
+      hydration: hydrationStats(payload, scanner, deferHydration.epoch()),
       dropped: registry.dropped ?? 0,
       ...(ssrRequestId ? { ssrRequestId } : {}),
     };
@@ -133,6 +146,9 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
   };
 
   const push = () => (queue = queue.then(pushOnce, pushOnce));
+  // A `@defer (hydrate on …)` block can finish after the change detection that runs the
+  // collectors, so its hydration is pushed on its own.
+  const deferHydration = watchDeferHydration(() => void push().catch(() => {}));
 
   my.rpc.register({
     name: 'http-rules',
@@ -160,5 +176,6 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
   return {
     push,
     leave: () => void my.rpc.call('forget-http-page', pageId).catch(() => {}),
+    stop: () => deferHydration.stop(),
   };
 }
