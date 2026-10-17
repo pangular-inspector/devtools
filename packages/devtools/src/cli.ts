@@ -208,7 +208,9 @@ export function proxyPanelUrl(value: string): string {
  * origin. The link it prints by default only trusts the CLI's own port.
  */
 export function proxyAuth(panelUrl: string) {
-  return (ctx: Parameters<typeof createInteractiveAuth>[0]) =>
+  return (
+    ctx: Parameters<typeof createInteractiveAuth>[0],
+  ): ReturnType<typeof createInteractiveAuth> =>
     createInteractiveAuth(ctx, { serverUrl: () => panelUrl });
 }
 
