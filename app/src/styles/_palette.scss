@@ -91,6 +91,112 @@ $status-text-light: (
   danger-text: #991b1b,
 );
 
+// Category hues for pills and chips that label a kind of thing rather than a
+// status (Analog route kinds, render modes and server calls). `line` is the
+// border or tint, `text` the label. The text keeps 4.5:1 on every surface and on
+// a 12 to 16% tint of its own line (tint-contrast.test.ts checks it).
+$hues: (
+  slate: (
+    line: #94a3b8,
+    text: #e2e8f0,
+  ),
+  sky: (
+    line: #0ea5e9,
+    text: #bae6fd,
+  ),
+  info: (
+    line: #60a5fa,
+    text: #bfdbfe,
+  ),
+  blue: (
+    line: #3b82f6,
+    text: #bfdbfe,
+  ),
+  teal: (
+    line: #2dd4bf,
+    text: #99f6e4,
+  ),
+  green: (
+    line: #22c55e,
+    text: #bbf7d0,
+  ),
+  yellow: (
+    line: #eab308,
+    text: #fef08a,
+  ),
+  orange: (
+    line: #f97316,
+    text: #fed7aa,
+  ),
+  pink: (
+    line: #ec4899,
+    text: #fbcfe8,
+  ),
+  purple: (
+    line: #a855f7,
+    text: #e9d5ff,
+  ),
+);
+
+$hues-light: (
+  slate: (
+    line: #64748b,
+    text: #475569,
+  ),
+  sky: (
+    line: #0284c7,
+    text: #075985,
+  ),
+  info: (
+    line: #1d4ed8,
+    text: #1e40af,
+  ),
+  blue: (
+    line: #2563eb,
+    text: #1e40af,
+  ),
+  teal: (
+    line: #0d9488,
+    text: #115e59,
+  ),
+  green: (
+    line: #16a34a,
+    text: #14532d,
+  ),
+  yellow: (
+    line: #92400e,
+    text: #713f12,
+  ),
+  orange: (
+    line: #c2410c,
+    text: #7c2d12,
+  ),
+  pink: (
+    line: #db2777,
+    text: #9d174d,
+  ),
+  purple: (
+    line: #9333ea,
+    text: #6b21a8,
+  ),
+);
+
+// Router timeline phases: the bar segments and legend dots. Graphics, so each
+// keeps 3:1 on every surface (tint-contrast.test.ts checks it).
+$phases: (
+  recognize: #60a5fa,
+  guards: #f59e0b,
+  resolve: #2dd4bf,
+  activate: #34d399,
+);
+
+$phases-light: (
+  recognize: #1d4ed8,
+  guards: #b45309,
+  resolve: #0f766e,
+  activate: #15803d,
+);
+
 @function accent($name, $key, $subkey: null) {
   $a: map.get($accents, $name);
   @if $subkey {

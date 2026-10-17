@@ -29,6 +29,15 @@ $ease: cubic-bezier(0.2, 0.8, 0.2, 1);
     --#{$name}: #{$value};
   }
 
+  @each $name, $hue in p.$hues {
+    --hue-#{$name}: #{map.get($hue, line)};
+    --hue-#{$name}-text: #{map.get($hue, text)};
+  }
+
+  @each $name, $value in p.$phases {
+    --phase-#{$name}: #{$value};
+  }
+
   --radius: #{$radius};
   --radius-sm: #{$radius-sm};
   --control-h: 34px;
@@ -57,6 +66,15 @@ $ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
   @each $name, $value in p.$status-text-light {
     --#{$name}: #{$value};
+  }
+
+  @each $name, $hue in p.$hues-light {
+    --hue-#{$name}: #{map.get($hue, line)};
+    --hue-#{$name}-text: #{map.get($hue, text)};
+  }
+
+  @each $name, $value in p.$phases-light {
+    --phase-#{$name}: #{$value};
   }
 
   --shadow: 0 2px 12px -4px rgba(0, 0, 0, 0.12);

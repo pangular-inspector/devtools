@@ -16,6 +16,8 @@ The palette lives in `app/src/styles/_palette.scss` and becomes CSS variables in
 
 Accents available: `amber` (default), `ember`, `gold`. Add one by extending `$accents` in `_palette.scss` with `base`, `hover`, `ink` and `text`, plus a `light` map with the same keys whose `base` passes 4.5:1 on `--surface-3` in the light theme. Light neutrals and status colors are `$neutrals-light` and `$status-light`. The text-on-tint colors are `$status-text` and `$status-text-light`, plus each accent's `text`.
 
+Category hues (`$hues` and `$hues-light`) label a kind of thing rather than a status, such as the Analog route kinds, render modes and server calls. Each has a `line` (border or tint) and a `text`. Router timeline phases are `$phases` and `$phases-light`. `app/src/__tests__/tint-contrast.test.ts` checks both themes: hue text keeps 4.5:1 on every surface and on its own tint, and phase colors keep 3:1 on every surface.
+
 Always use the variables, never hex values:
 
 | Variable                                          | Use                                                                     |
@@ -28,6 +30,8 @@ Always use the variables, never hex values:
 | `--accent-soft`, `--accent-line`                  | Selected backgrounds, focus glow, accent borders                        |
 | `--ok`, `--warn`, `--danger`                      | Status                                                                  |
 | `--ok-text`, `--warn-text`, `--danger-text`       | Text on a tint of the matching status color (pills, badges, chips)      |
+| `--hue-<name>`, `--hue-<name>-text`               | Category pills and chips (names in `$hues`)                             |
+| `--phase-<name>`                                  | Router timeline phases (`recognize`, `guards`, `resolve`, `activate`)   |
 | `--accent-text`                                   | Text on an accent tint; brand views set their own value                 |
 | `--radius`, `--radius-sm`                         | Cards, controls                                                         |
 | `--control-h`                                     | 34px, the height of every input, select and button                      |

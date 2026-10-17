@@ -17,12 +17,6 @@ import {
 } from './router-types';
 
 const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
-const PHASE_COLORS: Record<string, string> = {
-  recognize: '#60a5fa',
-  guards: '#f59e0b',
-  resolve: '#2dd4bf',
-  activate: '#34d399',
-};
 
 @Component({
   selector: 'app-route-timeline',
@@ -669,8 +663,9 @@ export class RouteTimeline {
     return tone(outcome);
   }
 
+  /** The theme token of a phase (`--phase-<name>` in _palette.scss), for both themes. */
   color(phase: string) {
-    return PHASE_COLORS[phase];
+    return `var(--phase-${phase})`;
   }
 
   bars(nav: NavigationRecord) {

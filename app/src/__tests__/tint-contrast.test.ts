@@ -12,6 +12,7 @@ type Rgb = [number, number, number];
 type Tokens = Record<string, string>;
 
 const STYLES = new URL('../styles/', import.meta.url).pathname;
+const PAGES = new URL('../pages/', import.meta.url).pathname;
 const ACCENTS = ['amber', 'ember', 'gold'];
 const TONES = ['ok', 'warn', 'danger', 'accent'];
 
@@ -97,5 +98,81 @@ describe('text on tinted pills', () => {
         });
       }
     }
+  }
+});
+
+// Category hues (Analog route kinds, render modes, server calls and method
+// badges): `--hue-<name>-text` sits on a plain surface-2 pill or on a 12 to 16%
+// tint of `--hue-<name>`, over any surface or a selected row in the Analog view.
+const HUES = [
+  'slate',
+  'sky',
+  'info',
+  'blue',
+  'teal',
+  'green',
+  'yellow',
+  'orange',
+  'pink',
+  'purple',
+];
+
+describe('text on category hue pills', () => {
+  const base = theme('amber');
+  for (const mode of ['dark', 'light'] as const) {
+    const analog = VIEW_ACCENTS[mode].analog;
+    for (const hue of HUES) {
+      it(`${mode}: --hue-${hue}-text keeps 4.5:1 on plain and tinted pills`, () => {
+        const tokens = base[mode];
+        expect(tokens[`hue-${hue}`], `--hue-${hue}`).toBeDefined();
+        expect(tokens[`hue-${hue}-text`], `--hue-${hue}-text`).toBeDefined();
+        const text = rgb(tokens[`hue-${hue}-text`]);
+        for (const surface of ['bg', 'surface', 'surface-2', 'surface-3']) {
+          expect(ratio(text, rgb(tokens[surface])), `on --${surface}`).toBeGreaterThanOrEqual(4.5);
+        }
+        for (const accent of [tokens['accent'], analog.accent]) {
+          const min = worst({ ...tokens, accent }, `hue-${hue}`);
+          expect(min.ratio, `${min.on} (accent ${accent})`).toBeGreaterThanOrEqual(4.5);
+        }
+      });
+    }
+  }
+});
+
+// Router timeline phases are graphics (bar segments and legend dots), so they
+// need 3:1 on the bar track and every surface the timeline sits on.
+const PHASES = ['recognize', 'guards', 'resolve', 'activate'];
+
+describe('router timeline phase colours', () => {
+  const base = theme('amber');
+  for (const mode of ['dark', 'light'] as const) {
+    for (const phase of PHASES) {
+      it(`${mode}: --phase-${phase} keeps 3:1 on every surface`, () => {
+        const tokens = base[mode];
+        expect(tokens[`phase-${phase}`], `--phase-${phase}`).toBeDefined();
+        const color = rgb(tokens[`phase-${phase}`]);
+        for (const surface of ['bg', 'surface', 'surface-2', 'surface-3']) {
+          expect(ratio(color, rgb(tokens[surface])), `on --${surface}`).toBeGreaterThanOrEqual(3);
+        }
+      });
+    }
+  }
+});
+
+// Pages that used hard-coded hex colors now take them from the tokens above, so
+// both themes get a value these tests check.
+const TOKEN_ONLY_PAGES = ['analog-inspector.ts', 'route-timeline.ts'];
+
+describe('pages that use theme tokens only', () => {
+  for (const file of TOKEN_ONLY_PAGES) {
+    it(`${file} has no hex colors`, async () => {
+      // The panel tsconfig has no Node types, so read the file through a loose import.
+      const fsName = 'node:fs';
+      const fs = (await import(/* @vite-ignore */ fsName)) as {
+        readFileSync(path: string, encoding: 'utf8'): string;
+      };
+      const source = fs.readFileSync(`${PAGES}${file}`, 'utf8');
+      expect(source.match(/#[0-9a-f]{3,8}\b/gi) ?? []).toEqual([]);
+    });
   }
 });

@@ -1158,13 +1158,6 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
     :host {
       --good: var(--ok);
       --bad: var(--danger);
-      --info: #60a5fa;
-      --info-text: #bfdbfe;
-
-      @include m.light {
-        --info: #1d4ed8;
-        --info-text: #1e40af;
-      }
     }
     :host {
       --mono: var(--font-mono);
@@ -1541,9 +1534,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
 
     .callout {
       padding: 12px 16px;
-      border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+      border: 1px solid color-mix(in srgb, var(--hue-info) 30%, transparent);
       border-radius: var(--radius);
-      background: color-mix(in srgb, var(--info) 8%, var(--surface));
+      background: color-mix(in srgb, var(--hue-info) 8%, var(--surface));
       line-height: 1.6;
       animation: enter 0.35s var(--ease) both;
     }
@@ -1725,122 +1718,45 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       background: color-mix(in srgb, var(--accent) 12%, var(--surface));
       color: var(--accent-text);
     }
-    .pill[data-kind='layout'] {
-      border-color: #94a3b8;
-      color: #e2e8f0;
-
-      @include m.light {
-        border-color: #64748b;
-        color: #475569;
-      }
+    .pill[data-kind='layout'],
+    .pill[data-mode='redirect'] {
+      border-color: var(--hue-slate);
+      color: var(--hue-slate-text);
     }
     .pill[data-kind='markdown'] {
-      border-color: #0ea5e9;
-      color: #bae6fd;
-
-      @include m.light {
-        border-color: #0284c7;
-        color: #0369a1;
-      }
+      border-color: var(--hue-sky);
+      color: var(--hue-sky-text);
     }
-    .pill[data-kind='load'] {
-      border-color: #2dd4bf;
-      color: #99f6e4;
-
-      @include m.light {
-        border-color: #0d9488;
-        color: #0f766e;
-      }
+    .pill[data-kind='load'],
+    .pill[data-call='load'],
+    .pill[data-call='fn'] {
+      border-color: var(--hue-teal);
+      color: var(--hue-teal-text);
     }
-    .pill[data-mode='ssr'] {
-      border-color: #3b82f6;
-      color: #bfdbfe;
-
-      @include m.light {
-        border-color: #2563eb;
-        color: #1d4ed8;
-      }
+    .pill[data-mode='ssr'],
+    .pill[data-call='page'] {
+      border-color: var(--hue-blue);
+      color: var(--hue-blue-text);
     }
     .pill[data-mode='ssg'] {
-      border-color: #22c55e;
-      color: #bbf7d0;
-
-      @include m.light {
-        border-color: #16a34a;
-        color: #166534;
-      }
+      border-color: var(--hue-green);
+      color: var(--hue-green-text);
     }
     .pill[data-mode='client'] {
-      border-color: #eab308;
-      color: #fef08a;
-
-      @include m.light {
-        border-color: #92400e;
-        color: #713f12;
-      }
+      border-color: var(--hue-yellow);
+      color: var(--hue-yellow-text);
     }
     .pill[data-mode='cached'] {
-      border-color: #a855f7;
-      color: #e9d5ff;
-
-      @include m.light {
-        border-color: #9333ea;
-        color: #7e22ce;
-      }
-    }
-    .pill[data-mode='redirect'] {
-      border-color: #94a3b8;
-      color: #e2e8f0;
-
-      @include m.light {
-        border-color: #64748b;
-        color: #475569;
-      }
-    }
-    .pill[data-call='page'] {
-      border-color: #3b82f6;
-      color: #bfdbfe;
-
-      @include m.light {
-        border-color: #2563eb;
-        color: #1d4ed8;
-      }
-    }
-    .pill[data-call='load'] {
-      border-color: #2dd4bf;
-      color: #99f6e4;
-
-      @include m.light {
-        border-color: #0d9488;
-        color: #0f766e;
-      }
-    }
-    .pill[data-call='fn'] {
-      border-color: #14b8a6;
-      color: #99f6e4;
-
-      @include m.light {
-        border-color: #0d9488;
-        color: #0f766e;
-      }
+      border-color: var(--hue-purple);
+      color: var(--hue-purple-text);
     }
     .pill[data-call='api'] {
-      border-color: #f97316;
-      color: #fed7aa;
-
-      @include m.light {
-        border-color: #c2410c;
-        color: #9a3412;
-      }
+      border-color: var(--hue-orange);
+      color: var(--hue-orange-text);
     }
     .pill[data-call='action'] {
-      border-color: #ec4899;
-      color: #fbcfe8;
-
-      @include m.light {
-        border-color: #db2777;
-        color: #9d174d;
-      }
+      border-color: var(--hue-pink);
+      color: var(--hue-pink-text);
     }
     [data-tone='good'].pill {
       @include m.tint(ok);
@@ -1854,9 +1770,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       @include m.tint(danger);
     }
     [data-tone='info'].pill {
-      border-color: color-mix(in srgb, var(--info) 30%, transparent);
-      background: color-mix(in srgb, var(--info) 12%, transparent);
-      color: var(--info-text);
+      @include m.tint(hue-info);
     }
 
     .status {
@@ -1885,43 +1799,17 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       text-align: center;
     }
     .method[data-method='GET'] {
-      border-color: color-mix(in srgb, #7dd3fc 30%, transparent);
-      background: color-mix(in srgb, #7dd3fc 12%, transparent);
-      color: #7dd3fc;
-
-      @include m.light {
-        border-color: color-mix(in srgb, #0369a1 30%, transparent);
-        background: color-mix(in srgb, #0369a1 8%, transparent);
-        color: #075985;
-      }
+      @include m.tint(hue-sky);
     }
     .method[data-method='POST'] {
-      border-color: color-mix(in srgb, var(--ok) 30%, transparent);
-      background: color-mix(in srgb, var(--ok) 12%, transparent);
-      color: #86efac;
-
-      @include m.light {
-        color: var(--ok-text);
-      }
+      @include m.tint(ok);
     }
     .method[data-method='PUT'],
     .method[data-method='PATCH'] {
-      border-color: color-mix(in srgb, var(--warn) 30%, transparent);
-      background: color-mix(in srgb, var(--warn) 12%, transparent);
-      color: #fde68a;
-
-      @include m.light {
-        color: var(--warn-text);
-      }
+      @include m.tint(warn);
     }
     .method[data-method='DELETE'] {
-      border-color: color-mix(in srgb, var(--danger) 30%, transparent);
-      background: color-mix(in srgb, var(--danger) 12%, transparent);
-      color: #fecaca;
-
-      @include m.light {
-        color: var(--danger-text);
-      }
+      @include m.tint(danger);
     }
     .request {
       min-width: 260px;
@@ -2162,7 +2050,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       border-radius: var(--radius);
       background: var(--surface);
       box-shadow:
-        inset 3px 0 0 var(--info),
+        inset 3px 0 0 var(--hue-info),
         var(--shadow);
       transition: border-color 180ms var(--ease);
     }
