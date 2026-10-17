@@ -41,11 +41,11 @@ The devtools only answer requests from this machine. When a request carries an `
 In detail, a request to the devtools must:
 
 - come from a loopback address (any `127.x.x.x` address or `::1`),
-- be sent to a `Host` that is a loopback host, a host that Vite's `server.allowedHosts` accepts, or the host of an entry in `allowedOrigins`, and
+- be sent to a `Host` that is a loopback host, a host that Vite's `server.allowedHosts` accepts, the host of an entry in `allowedOrigins`, or the address an Android emulator reaches this machine at (`10.0.2.2`, or `10.0.3.2` on Genymotion), and
 - have an origin that is a loopback host, the [Pangular Inspector extension](#chrome-extension), an entry in `allowedOrigins`, or a host that Vite's `server.allowedHosts` accepts, or
 - have no `Origin` header, and a `Sec-Fetch-Site` header of `same-origin`, `same-site` or `none`, or no `Sec-Fetch-Site` header at all.
 
-The `Host` check stops DNS rebinding: a website that points its own name at `127.0.0.1` still sends that name as the `Host`. Clients that send neither `Origin` nor `Sec-Fetch-Site`, such as curl or a native app, are not browsers, so they pass the last check. A request without a `Host` header passes the `Host` check, since browsers always send one.
+The `Host` check stops DNS rebinding: a website that points its own name at `127.0.0.1` still sends that name as the `Host`. Clients that send neither `Origin` nor `Sec-Fetch-Site`, such as curl or a native app, are not browsers, so they pass the last check. A request without a `Host` header passes the `Host` check, since browsers always send one. The emulator addresses are IP literals, which DNS rebinding cannot send, and the emulator forwards them to your machine's loopback interface, so only the emulator can send them from a loopback address.
 
 Other requests get `403` with the message "Pangular Inspector only answers requests from this machine." A request from another machine also gets the fix: set `allowLan: true` and list its origin in `allowedOrigins`. WebSocket upgrades follow the same rules.
 
@@ -67,7 +67,7 @@ export default defineConfig({
 
 #### One-time code
 
-The plugin's `auth` option decides whether the devtools also ask for the one-time code. The server prints the code in the terminal, and a browser reads data only after it exchanges that code.
+The plugin's `auth` option decides whether the devtools also ask for the one-time code. The server prints the code in the terminal, and a browser reads data only after it exchanges that code. If the server later revokes a page's access, the page stops reporting and logs one warning in the console. It doesn't try to connect again until you reload it and enter a new code, or until a code entered in another tab of the same app trusts it again.
 
 | `auth`          | One-time code                                                                                    |
 | --------------- | ------------------------------------------------------------------------------------------------ |
@@ -160,7 +160,7 @@ Every installed extension can send requests to a loopback host, with its own `ch
 
 If you build the extension with another `key`, add its origin to `allowedOrigins`. Each entry names one extension. The ID is on the extension card in `chrome://extensions`. See [Server origin](./getting-started/chrome-extension.md#server-origin).
 
-The extension origin is trusted by the origin check only, never in place of the one-time code. Any local process can send an `Origin` header with the extension's ID, so the header can't prove who is asking. With the code on, the extension panel asks for the code like any other panel, trades it for a token over the devframe auth handshake, and keeps that token per server origin in the extension's own storage. See [One-time code](./getting-started/chrome-extension.md#one-time-code).
+The extension origin is trusted by the origin check only, never in place of the one-time code. Any local process can send an `Origin` header with the extension's ID, so the header can't prove who is asking. With the code on, the extension panel asks for the code like any other panel, trades it for a token over the devframe auth handshake, and keeps that token per server origin in the extension's own storage. A token goes only to the server that issued it: a code typed in one panel never reaches a panel open on another server, which keeps its own login. See [One-time code](./getting-started/chrome-extension.md#one-time-code).
 
 ### Open in editor
 
@@ -213,7 +213,7 @@ A field's value is replaced with `[redacted]` when the field:
 
 The Fields view says why a field is redacted: **name looks secret**, **password input**, **autocomplete is a secret kind**, **marked as mask**, **inside a secret group** or **listed in mask**. The field details say the same where the Set editor is hidden, with a link to this section.
 
-Those values are also removed from error messages. The form event log follows the same rules: a value that holds a JWT or bearer token, or repeats a secret from another field of the form, is shown as `[redacted]` in the event and in its previous value. A secret's earlier values count too (the last 50), so a `confirmation` field that still holds the old password stays masked after the password changes. The devtools don't write secret fields unless you unmask them (see [Opt fields in or out](#opt-fields-in-or-out)). Other values are sent as they are, so keep real credentials out of forms you inspect.
+Those values are also removed from error messages. The form event log follows the same rules: a value that holds a JWT or bearer token, or repeats a secret from another field of the form, is shown as `[redacted]` in the event and in its previous value. A secret's earlier values count too (the last 50), so a `confirmation` field that still holds the old password stays masked after the password changes. A value counts as earlier only once the field holds something that doesn't start with it, so the first letters of a password you are still typing (`Sec` on the way to `Secret123`) don't mask words such as `Section` elsewhere. The devtools don't write secret fields unless you unmask them (see [Opt fields in or out](#opt-fields-in-or-out)). Other values are sent as they are, so keep real credentials out of forms you inspect.
 
 ### Opt fields in or out
 
@@ -282,11 +282,11 @@ A secret route param is known from the route config before a navigation is recog
 
 Component inputs, signal values, NgRx state, and pipe inputs, outputs and async values use the same secret names and the same `mask` and `unmask` lists as forms. A value whose name looks secret is replaced with `[redacted]`. JWTs, bearer tokens and `key=value` pairs under secret keys (such as `token=abc123` or `password=…&user=a`) inside strings and error messages are replaced too, NgRx strings and errors included, and so are tokens used as object keys.
 
-A pair counts anywhere in a sentence, such as `retry with token=abc123` or `(api_key=…, user=7)`, and in the `password: hunter2` and `"token":"abc123"` forms. A `key: value` pair counts only for the secret words, and an unquoted lowercase word after the colon is read as prose, so `Invalid token: expired` and `status code: 404` stay readable. Errors, console messages, snapshots, audit results and WebMCP tool descriptions use the same rule.
+A pair counts anywhere in a sentence, such as `retry with token=abc123` or `(api_key=…, user=7)`, and in the `password: hunter2` and `"token":"abc123"` forms. A `key: value` pair counts only for the secret words, and an unquoted lowercase word after the colon is read as prose, so `Invalid token: expired` and `status code: 404` stay readable. After a name that rarely starts a sentence (`password`, `passwd`, `pwd`, `passphrase`, `passcode`, `secret` and names with it such as `client_secret`, and `api_key`, `private_key`, `secret_key` or `access_key`), that word is masked too: `password: correcthorse` shows as `password: [redacted]`. Errors, console messages, snapshots, audit results and WebMCP tool descriptions use the same rule.
 
 Component values follow the form masks of the fields in the component, not only their names. When a form field in the component's template is masked by its element (a password field, a credential `autocomplete`, `data-pangular="mask"` or another mask marker), its value is replaced with `[redacted]` wherever it shows in the component's inputs and properties: the `FormGroup` that holds it, the `ngModel` model object and the Signal Forms model. Values such a field held earlier stay masked too (the last 50 on the page).
 
-NgRx signal store method calls in the change log mask their arguments. When the call writes a state key whose name looks secret, at any depth, every argument shows as `[redacted]`, for that call, its earlier entries and every later call of the method. Otherwise an argument whose parameter name looks secret (`password` in `login(email, password)`) is masked, and values the store holds under secret keys are cut out of the other arguments. The URL and title of the NgRx page, and the request URL of an `httpResource`, are redacted like router URLs.
+NgRx signal store method calls in the change log mask their arguments. When the call writes a state key whose name looks secret, at any depth, every argument shows as `[redacted]`, for that call, its earlier entries and every later call of the method. A method that returns a promise counts as making the writes that follow its `await` until the promise settles: if such a write touches a secret key, the arguments of every call of the store still running are masked, also in the entries the panel already received. An `rxMethod` stream returns no promise, so a secret it writes later doesn't mask the arguments it was called with. Otherwise an argument whose parameter name looks secret (`password` in `login(email, password)`) is masked, and values the store holds under secret keys are cut out of the other arguments. The URL and title of the NgRx page, and the request URL of an `httpResource`, are redacted like router URLs.
 
 The **Components** tab and the `set-component-property` and `set-signal` tools never write a value you could not see: a name on the path that looks secret, or a value that shows `[redacted]` anywhere, is refused. Write a field next to a secret instead of the object that holds it. See [Editing values](./inspectors/components.md#editing-values).
 

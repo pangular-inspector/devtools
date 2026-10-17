@@ -41,17 +41,31 @@ export interface HubLoaderHost {
   createRequire?: (from: string) => LoaderRequire;
   /** The URL the loader resolves the package from: its own module. */
   from: string;
+  /** `process.versions.node`, when this is Node.js. */
+  nodeVersion?: string;
+}
+
+/** Why the hub cannot load on this Node.js, with the versions it needs. */
+function nodeTooOld(version: string | undefined): string {
+  return `[pangular] The hub needs Node.js 20.19, 22.12 or later, which can require() ES modules. This is ${version ? `v${version.replace(/^v/, '')}` : 'an older version'}.`;
 }
 
 function nodeHost(): HubLoaderHost {
   const nodeProcess = (
     globalThis as {
-      process?: { getBuiltinModule?: (id: string) => unknown };
+      process?: {
+        getBuiltinModule?: (id: string) => unknown;
+        versions?: { node?: string };
+      };
     }
   ).process;
   const nodeModule = nodeProcess?.getBuiltinModule?.('node:module') as
     { createRequire: (from: string) => LoaderRequire } | undefined;
-  return { createRequire: nodeModule?.createRequire, from: import.meta.url };
+  return {
+    createRequire: nodeModule?.createRequire,
+    from: import.meta.url,
+    nodeVersion: nodeProcess?.versions?.node,
+  };
 }
 
 /**
@@ -63,6 +77,8 @@ function nodeHost(): HubLoaderHost {
  */
 export function loadHubServer(host: HubLoaderHost = nodeHost()): typeof HubServer {
   if (!host.createRequire) {
+    // Node.js before 22.3 (and 20.16) has no `process.getBuiltinModule`.
+    if (host.nodeVersion) throw new Error(nodeTooOld(host.nodeVersion));
     throw new Error('[pangular] initPangularHub() runs in Node.js only.');
   }
   const requireHere = host.createRequire(host.from);
@@ -82,7 +98,9 @@ export function loadHubServer(host: HubLoaderHost = nodeHost()): typeof HubServe
     const code = (error as { code?: string }).code;
     if (code === 'ERR_REQUIRE_ESM') {
       throw new Error(
-        `[pangular] The hub needs Node.js 20.19, 22.12 or later, which can require() ES modules. This is ${String((globalThis as { process?: { version?: string } }).process?.version)}.`,
+        nodeTooOld(
+          host.nodeVersion ?? (globalThis as { process?: { version?: string } }).process?.version,
+        ),
         { cause: error },
       );
     }

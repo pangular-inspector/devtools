@@ -9,7 +9,8 @@ import { webOrigin } from './allowed-origins.ts';
 /**
  * The request gate both servers put in front of the hub: the Vite plugin and
  * the Express hub (`initPangularHub()`). A request passes when it comes from a
- * loopback address, names a loopback or allowed host in `Host`, and carries an
+ * loopback address, names a loopback or allowed host (or an Android emulator's
+ * address for this machine) in `Host`, and carries an
  * allowed `Origin`, or no `Origin` and no cross-site `Sec-Fetch-Site`.
  */
 export interface HubOriginPolicy {
@@ -159,6 +160,25 @@ export function isAllowedFetchSite(req: IncomingMessage): boolean {
   return site === 'same-origin' || site === 'same-site' || site === 'none';
 }
 
+/**
+ * The addresses an Android emulator uses for the machine that runs it: `10.0.2.2`
+ * (the SDK emulator) and `10.0.3.2` (Genymotion). The emulator forwards them
+ * to the host's loopback interface, so a request sent to one arrives from a
+ * loopback address with that IP in `Host`.
+ */
+const EMULATOR_HOSTS: ReadonlySet<string> = new Set(['10.0.2.2', '10.0.3.2']);
+
+/**
+ * Whether `Host` is the address an Android emulator reaches this machine at.
+ * Only checked for a request from a loopback address: an IP literal cannot
+ * be a DNS rebinding name, and on this machine those addresses lead nowhere
+ * but the emulator. Its `Origin` and `Sec-Fetch-Site` are still checked.
+ */
+function isEmulatorHost(host: string | undefined): boolean {
+  const hostname = host === undefined ? undefined : hostnameOf(host);
+  return hostname !== undefined && EMULATOR_HOSTS.has(hostname);
+}
+
 /** What the gate refused: an `Origin`, or the `Host` a request was sent to. */
 export type BlockedRequest = (value: string, kind?: 'origin' | 'host') => void;
 
@@ -171,7 +191,7 @@ export function isAllowedHubRequest(
   const local = isLoopback(req.socket?.remoteAddress);
   if (!local && !policy.remote) return isAllowedLanRequest(req, policy);
   const host = req.headers?.host;
-  if (local && !isAllowedHubHost(host, policy)) {
+  if (local && !isAllowedHubHost(host, policy) && !isEmulatorHost(host)) {
     if (host !== undefined) onBlocked?.(host, 'host');
     return false;
   }

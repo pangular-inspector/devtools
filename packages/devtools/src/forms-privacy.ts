@@ -246,22 +246,46 @@ export function redactMessage(text: string, secrets: Iterable<string> = []): str
 export const MAX_RETIRED_SECRETS = 50;
 
 /**
+ * Whether `value` is one of `values` or the start of one, as a field's value
+ * is while someone keeps typing.
+ */
+export function startsAnyOf(value: string, values: Iterable<string>): boolean {
+  for (const other of values) if (other.startsWith(value)) return true;
+  return false;
+}
+
+/**
  * The secret values of one form, to hide them in its harmless fields and messages.
  * Built again on every collection from `previous`, so a value a secret field held
  * a moment ago (the old password a `confirmation` field still repeats) stays
  * hidden: up to `MAX_RETIRED_SECRETS` earlier values, newest kept.
+ *
+ * A value is kept only once no value of the form starts with it any more: the
+ * field moved on to something else. While someone types `Secret123`, the collections see `Sec`,
+ * `Secr` and so on; those are the start of the next value, not values the
+ * field left, and hiding them would mask `Section` or `Security` everywhere.
  */
 export class SecretSet {
   private readonly values = new Set<string>();
   private readonly retired = new Set<string>();
+  /** The previous collection's values, kept unless a value of this one starts with them. */
+  private readonly previous: readonly string[];
 
   constructor(previous?: SecretSet) {
+    this.previous = previous ? [...previous.values] : [];
     if (!previous) return;
-    const earlier = [...previous.retired, ...previous.values];
-    for (const value of earlier.slice(-MAX_RETIRED_SECRETS)) {
-      this.retired.delete(value);
-      this.retired.add(value);
+    for (const value of previous.earlier()) this.retired.add(value);
+  }
+
+  /** The earlier values this set hides, oldest first, at most `MAX_RETIRED_SECRETS`. */
+  private earlier(): string[] {
+    const out = new Set(this.retired);
+    for (const value of this.previous) {
+      if (startsAnyOf(value, this.values)) continue;
+      out.delete(value);
+      out.add(value);
     }
+    return [...out].slice(-MAX_RETIRED_SECRETS);
   }
 
   add(value: unknown) {
@@ -275,10 +299,10 @@ export class SecretSet {
 
   /** The values this set hides, current and earlier. */
   all(): string[] {
-    return [...this.values, ...this.retired];
+    return [...new Set([...this.values, ...this.earlier()])];
   }
 
   redact(text: string): string {
-    return redactMessage(text, this.retired.size ? [...this.values, ...this.retired] : this.values);
+    return redactMessage(text, this.all());
   }
 }

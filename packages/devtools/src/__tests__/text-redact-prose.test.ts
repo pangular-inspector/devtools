@@ -49,6 +49,25 @@ describe('redactText in messages', () => {
     }
   });
 
+  it('masks a lowercase word after a strong secret name and a colon', () => {
+    expect(redactText('password: correcthorse')).toBe('password: [redacted]');
+    expect(redactText('login failed, passwd: hunter')).toBe('login failed, passwd: [redacted]');
+    expect(redactText('secret: swordfish')).toBe('secret: [redacted]');
+    expect(redactText('client_secret: abcdef')).toBe('client_secret: [redacted]');
+    expect(redactText('api_key: letmein')).toBe('api_key: [redacted]');
+    expect(redactText('Passwords: opensesame')).toBe('Passwords: [redacted]');
+    // Plain values and the weak names, which read as prose, stay.
+    for (const text of [
+      'password: null',
+      'Invalid token: expired',
+      'status code: 404',
+      'the token is valid',
+      'authorization: required',
+    ]) {
+      expect(redactText(text), text).toBe(text);
+    }
+  });
+
   it('still masks URL pairs and nested queries in text', () => {
     expect(redactText('Redirecting to "/login?token=abc&x=1"')).toBe(
       'Redirecting to "/login?token=[redacted]&x=1"',

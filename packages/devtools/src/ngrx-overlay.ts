@@ -33,6 +33,7 @@ export function attachNgrx<H extends object = Element>(
   const session = Math.random().toString(36).slice(2, 10);
   let sentSeq = 0;
   let sentLost = 0;
+  let sentMasked = 0;
   let lastBody = '';
   let lastPushAt = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -63,9 +64,10 @@ export function attachNgrx<H extends object = Element>(
       const { stores, classic } = collector.collect(rediscover);
       const log = collector.logSince(sentSeq);
       const lost = collector.unrestorableSince(sentLost);
+      const masked = collector.argsRedactedSince(sentMasked);
       if (!stores.length && !classic && !log.length && !lastBody) return;
       const body = JSON.stringify({ stores, classic });
-      const quiet = !log.length && !lost.updates.length;
+      const quiet = !log.length && !lost.updates.length && !masked.seqs.length;
       if (quiet && body === lastBody && Date.now() - lastPushAt < HEARTBEAT_MS) return;
       lastBody = body;
       lastPushAt = Date.now();
@@ -82,15 +84,18 @@ export function attachNgrx<H extends object = Element>(
         log,
         since: sentSeq,
         ...(lost.updates.length ? { unrestorable: lost.updates } : {}),
+        ...(masked.seqs.length ? { argsRedacted: masked.seqs } : {}),
       };
       const answer = (await my.rpc.call('push-ngrx-state', report)) as
         { seq?: unknown } | undefined;
       const previous = sentSeq;
       sentSeq = typeof answer?.seq === 'number' ? answer.seq : collector.lastSeq();
       sentLost = lost.last;
+      sentMasked = masked.last;
       // A lower seq means the server lost this page: resend the held log.
       if (sentSeq < previous) {
         sentLost = 0;
+        sentMasked = 0;
         schedule();
       }
     } catch {

@@ -89,6 +89,22 @@ function typesOf(schema: ToolInputSchema): readonly string[] {
   return schema.type ?? [];
 }
 
+/**
+ * Whether `null` counts as a value left out for this property: only when the
+ * property names its types and `null` is not one of them. An untyped property
+ * (such as a signal's new value) or one that allows `null` keeps it.
+ */
+function nullIsMissing(schema: ToolInputSchema | undefined): boolean {
+  if (!schema) return true;
+  const types = typesOf(schema);
+  return types.length > 0 && !types.includes('null');
+}
+
+/** Whether a required argument is missing: left out, or a `null` its type refuses. */
+function isMissing(value: unknown, schema: ToolInputSchema | undefined): boolean {
+  return value === undefined || (value === null && nullIsMissing(schema));
+}
+
 function listed(values: readonly unknown[]): string {
   return values.map((value) => `\`${String(value)}\``).join(', ');
 }
@@ -135,13 +151,14 @@ function problemsOf(name: string, value: unknown, schema: ToolInputSchema): stri
     const problems: string[] = [];
     const properties = schema.properties ?? {};
     for (const key of schema.required ?? []) {
-      if (value[key] === undefined || value[key] === null)
-        problems.push(`\`${name}.${key}\` is required.`);
+      if (isMissing(value[key], properties[key])) problems.push(`\`${name}.${key}\` is required.`);
     }
     for (const [key, item] of Object.entries(value)) {
       const property = properties[key];
       if (property) {
-        if (item !== undefined) problems.push(...problemsOf(`${name}.${key}`, item, property));
+        // A null its type refuses counts as left out, as at the top level.
+        if (!isMissing(item, property))
+          problems.push(...problemsOf(`${name}.${key}`, item, property));
       } else if (isRecord(schema.additionalProperties)) {
         problems.push(...problemsOf(`${name}.${key}`, item, schema.additionalProperties));
       } else if (schema.additionalProperties === false) {
@@ -166,8 +183,11 @@ function describe(schema: ToolInputSchema | undefined): string {
  * the arguments to call the tool with, or a readable error that names each
  * bad argument and what it takes.
  *
- * A `null` for an optional argument with a type counts as left out, since some
- * clients send one for every argument they skip; it is dropped from the args.
+ * A `null` for an argument whose type does not allow `null` counts as left
+ * out, since some clients send one for every argument they skip: an optional
+ * one is dropped from the args, a required one is asked for. An untyped
+ * argument (one that takes any value, such as a signal's new value) or one
+ * that allows `null` keeps it, required or not.
  * Keys the schema does not list pass through, unless it sets
  * `additionalProperties: false`. A `page` or `pageId` must be a string, even
  * when the schema leaves the alias out, so a wrong one is refused instead of
@@ -185,9 +205,7 @@ export function checkToolArgs(schema: unknown, input: unknown): CheckedArgs {
   const properties = shape.properties ?? {};
   const problems: string[] = [];
 
-  const missing = (shape.required ?? []).filter(
-    (key) => args[key] === undefined || args[key] === null,
-  );
+  const missing = (shape.required ?? []).filter((key) => isMissing(args[key], properties[key]));
   for (const key of missing) problems.push(`Pass \`${key}\`${describe(properties[key])}.`);
 
   for (const [key, value] of Object.entries(args)) {
@@ -201,8 +219,7 @@ export function checkToolArgs(schema: unknown, input: unknown): CheckedArgs {
     if (value === null) {
       // Left out (a required one is asked for above), unless the argument
       // takes any value, such as a signal's new value.
-      if (property && typesOf(property).length && !typesOf(property).includes('null'))
-        delete args[key];
+      if (property && nullIsMissing(property)) delete args[key];
       continue;
     }
     if (property) problems.push(...problemsOf(key, value, property));

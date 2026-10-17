@@ -238,6 +238,8 @@ export function readComponentValue<H extends object>(
   ng: ComponentDebugNg<H> | undefined,
   host: H | null,
   request: ComponentValueRequest,
+  /** The masked form values of `host`, when the caller read them already for this push. */
+  secrets?: ReadonlySet<string>,
 ): ComponentValueResult {
   if (!ng?.getComponent) return fail('Angular debug APIs are not available on this page.');
   const instance = host ? read(() => ng.getComponent?.(host) ?? null, null) : null;
@@ -274,7 +276,7 @@ export function readComponentValue<H extends object>(
     items: limit,
     depth: request.depth ?? VALUE_LEVEL.depth,
     ancestors,
-    secrets: maskedFormValues(ng, host),
+    secrets: secrets ?? maskedFormValues(ng, host),
   });
   return { ok: true, component, path: request.path, value };
 }
@@ -339,8 +341,10 @@ export function createComponentValues<H extends object>(options: {
       if (detail.id !== watchedId || !watched.size) return;
       const ng = options.getNg();
       const expanded: Record<string, unknown> = {};
+      // Once for every opened level of this push.
+      const secrets = maskedFormValues(ng, host);
       for (const [key, entry] of watched) {
-        const result = readComponentValue(ng, host, { id: detail.id, ...entry });
+        const result = readComponentValue(ng, host, { id: detail.id, ...entry }, secrets);
         if (result.ok) expanded[key] = result.value;
       }
       if (Object.keys(expanded).length) detail.expanded = expanded;

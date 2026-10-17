@@ -35,6 +35,17 @@ describe('pangular dev request gate', () => {
     expect(status({ 'sec-fetch-site': 'cross-site' })).toBe(403);
   });
 
+  it('answers the Android emulator, which reaches this machine at 10.0.2.2', () => {
+    // The emulator forwards 10.0.2.2 (Genymotion: 10.0.3.2) to the host's loopback.
+    expect(status({ host: '10.0.2.2:4300' })).toBe(200);
+    expect(status({ host: '10.0.3.2:4300' })).toBe(200);
+    // Only from loopback, and a foreign Origin is still refused.
+    expect(status({ host: '10.0.2.2:4300' }, '10.0.2.15')).toBe(403);
+    expect(status({ host: '10.0.2.2:4300', origin: EVIL })).toBe(403);
+    expect(status({ host: '10.0.2.2:4300', 'sec-fetch-site': 'cross-site' })).toBe(403);
+    expect(status({ host: '10.0.2.3:4300' })).toBe(403);
+  });
+
   it('refuses other machines unless the server listens on the network', () => {
     expect(status({}, '192.168.1.30')).toBe(403);
     const lan = cliRequestGate(cliGatePolicy([], '0.0.0.0'));

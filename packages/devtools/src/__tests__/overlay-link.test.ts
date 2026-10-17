@@ -134,6 +134,47 @@ describe('overlay link', () => {
     link.stop();
   });
 
+  it('goes quiet with one warning when the server revokes the page, and does not reconnect', async () => {
+    const first = fakeClient();
+    const connect = vi.fn<() => Promise<LinkClient>>();
+    const warn = vi.fn();
+    const dropped = vi.fn();
+    const restored = vi.fn();
+    const link = createOverlayLink(first as LinkClient, { connect, delaysMs: [10], warn });
+    link.follow({ dropped, restored });
+
+    first.set('unauthorized');
+    first.set('unauthorized');
+    expect(dropped).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toMatch(/revoked/);
+    await expect(link.scope.rpc.call('push-forms', {})).rejects.toBeInstanceOf(OverlayOfflineError);
+    expect(first.calls).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(connect).not.toHaveBeenCalled();
+    expect(first.close).not.toHaveBeenCalled();
+
+    // Trusted again (a code entered in another tab): reports resume on the same client.
+    first.set('connected');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(restored).toHaveBeenCalledTimes(1);
+    await link.scope.rpc.call('push-forms', { pageId: 'p1' });
+    expect(first.calls.map((c) => c.name)).toEqual(['push-forms']);
+    link.stop();
+  });
+
+  it('leaves a first connection that waits for its code alone', async () => {
+    const first = fakeClient('connecting');
+    const warn = vi.fn();
+    const dropped = vi.fn();
+    const link = createOverlayLink(first as LinkClient, { connect: vi.fn(), warn });
+    link.follow({ dropped, restored: vi.fn() });
+    first.set('unauthorized');
+    expect(dropped).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    link.stop();
+  });
+
   it('stops trying with one warning when the server refuses the page', async () => {
     const first = fakeClient();
     const refused = fakeClient('unauthorized');

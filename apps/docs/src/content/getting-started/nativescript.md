@@ -89,7 +89,7 @@ The overlay marks its component reports with `platform: 'nativescript'`, the URL
 | iOS      | `http://localhost:9999/` |
 | Android  | `http://10.0.2.2:9999/`  |
 
-`10.0.2.2` is how the Android emulator reaches its host. A physical device needs your machine's LAN address as `baseURL`.
+`10.0.2.2` is how the Android emulator reaches its host. The devtools server answers requests sent to it (and to `10.0.3.2`, Genymotion's address for the host) from the emulator without any option, as it does `localhost`. A physical device needs your machine's LAN address as `baseURL`.
 
 `initNativeScriptOverlay()` returns a function that stops the overlay and tells the server to forget every report the app sent.
 

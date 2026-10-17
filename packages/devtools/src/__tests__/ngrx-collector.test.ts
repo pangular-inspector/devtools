@@ -1713,6 +1713,72 @@ describe.runIf(realNgrx)('ngrx collector with @ngrx/signals', () => {
     expect(collector.collect().stores).toEqual([]);
   });
 
+  for (const watched of [true, false]) {
+    it(`masks the pushed args of an async call that writes a secret after an await (watchState ${watched ? 'on' : 'off'})`, async () => {
+      delete (globalThis as Record<string, unknown>)['__PANGULAR_NGRX_SIGNALS__'];
+      await import('@angular/compiler');
+      const { Injector } = await import('@angular/core');
+      const { signalStore, withState, withMethods, patchState, watchState } =
+        await import('@ngrx/signals');
+      const { registerNgrxSignals } = await import('../ngrx-register.ts');
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const Store = signalStore(
+        withState({ loading: false, user: '', accessToken: '' }),
+        withMethods((store) => ({
+          async login(user: string, code: string) {
+            patchState(store, { user, loading: true });
+            await gate;
+            patchState(store, { accessToken: `tok-${code}`, loading: false });
+          },
+        })),
+      );
+      const injector = Injector.create({ providers: [Store] });
+      const store = injector.get(Store);
+      if (watched) registerNgrxSignals({ patchState, watchState });
+      const ng = realNgWithInjector(store, injector);
+      const pages: NgrxPages = new Map();
+      const reports: NgrxPageReport[] = [];
+      const my = {
+        rpc: {
+          call: async (name: string, report: unknown) => {
+            if (name !== 'push-ngrx-state') return undefined;
+            reports.push(structuredClone(report as NgrxPageReport));
+            return { seq: mergeNgrxReport(pages, report as NgrxPageReport, []) };
+          },
+          register: () => {},
+        },
+      };
+      const overlay = attachNgrx(my, 'p1', () => ng as never);
+      try {
+        await overlay.push();
+        void store.login('ada', 'SECRET-CODE-1');
+        await Promise.resolve();
+        await overlay.push();
+        // Pushed before the call wrote its secret: nothing hides the code yet.
+        expect(JSON.stringify(reports.at(-1)!.log)).toContain('SECRET-CODE-1');
+        release();
+        await gate;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await overlay.push();
+        const log = ngrxStateOf(pages).pages[0].log;
+        expect(JSON.stringify(log)).not.toContain('SECRET-CODE-1');
+        expect(log.find((entry) => entry.type === 'login')?.args).toEqual([
+          '[redacted]',
+          '[redacted]',
+        ]);
+        // A later call of the same method is masked from the start.
+        void store.login('bob', 'SECRET-CODE-2');
+        await Promise.resolve();
+        await overlay.push();
+        expect(JSON.stringify(reports.at(-1)!.log)).not.toContain('SECRET-CODE-2');
+      } finally {
+        overlay.stop();
+        delete (globalThis as Record<string, unknown>)['__PANGULAR_NGRX_SIGNALS__'];
+      }
+    });
+  }
+
   it('records every patchState call as its own entry via watchState, even in one tick', async () => {
     await import('@angular/compiler');
     const { Injector } = await import('@angular/core');
@@ -2251,7 +2317,7 @@ describe.runIf(realNgrx)('ngrx collector with @ngrx/store', () => {
  * path so the collector can call the registered `watchState()` with it.
  * `records` wraps the store so `discover()` finds it in the env.
  */
-function realCollectorWithInjector(store: object, injector: unknown) {
+function realNgWithInjector(store: object, injector: unknown) {
   document.body.innerHTML = '<app-root ng-version="22"></app-root>';
   const root = document.querySelector('app-root')!;
   const token = class StoreToken {};
@@ -2281,6 +2347,11 @@ function realCollectorWithInjector(store: object, injector: unknown) {
     ɵgetInjectorResolutionPath: () => [node, injector],
     ɵgetInjectorProviders: () => [],
   };
+  return ng;
+}
+
+function realCollectorWithInjector(store: object, injector: unknown) {
+  const ng = realNgWithInjector(store, injector);
   return createNgrxCollector(
     () => ng as any,
     () => {},

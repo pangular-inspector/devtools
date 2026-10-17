@@ -103,6 +103,29 @@ describe('set-component-property and set-signal', () => {
     expect(sent[1].request).toMatchObject({ kind: 'property', path: 'user.name' });
   });
 
+  it('send a null value to the page instead of asking for one', async () => {
+    const { ctx, push, call } = await boot();
+    await push('push-component-tree', tree('p1'));
+    const sent = answerEdits(ctx, push, (request) => ({
+      ok: true,
+      kind: request.kind,
+      component: 'Card',
+      path: request.path,
+      value: request.value,
+    }));
+    const text = await call('set-signal', { component: 'p1-a', signal: 'user', value: null });
+    expect(text).not.toContain('Pass `value`');
+    expect(text).toContain('```json\nnull\n```');
+    expect(sent[0].request).toMatchObject({ kind: 'signal', path: 'user', value: null });
+    const prop = await call('set-component-property', {
+      component: 'p1-b',
+      property: 'selected',
+      value: null,
+    });
+    expect(prop).not.toContain('Pass `value`');
+    expect(sent[1].request).toMatchObject({ kind: 'property', path: 'selected', value: null });
+  });
+
   it('pass the page refusal on behind the untrusted notice', async () => {
     const { ctx, push, call } = await boot();
     await push('push-component-tree', tree('p1'));

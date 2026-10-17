@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { forgetMaskedFormValues, maskedFormValues } from '../component-form-masks.ts';
-import { componentDetail, type ComponentDebugNg } from '../component-tree.ts';
-import { readComponentValue } from '../component-values.ts';
-import { elementId } from '../element-id.ts';
+import { collectComponentTree, componentDetail, type ComponentDebugNg } from '../component-tree.ts';
+import { createComponentValues, readComponentValue } from '../component-values.ts';
+import { elementById, elementId } from '../element-id.ts';
 
 function directive(selector: string, fields: Record<string, unknown>) {
   class Dir {}
@@ -131,5 +131,60 @@ describe('component values and form masks', () => {
   it('leaves values alone on a host without a DOM', () => {
     const { ng } = setup();
     expect(maskedFormValues(ng as never, {} as never).size).toBe(0);
+  });
+
+  it('scans the component once per collect, however many levels are open', async () => {
+    const { ng, host, instance } = setup();
+    const id = elementId(host);
+    const values = createComponentValues({ getNg: () => ng, find: (key) => elementById(key) });
+    const paths = [['group'], ['group', 'value'], ['model'], ['note'], ['group', 'value', 'word']];
+    for (const path of paths) values.handle({ id, path, watch: true });
+    // The page changed since the levels were opened, so this collect scans again.
+    host.appendChild(document.createElement('span'));
+    const scans = vi.spyOn(host, 'querySelectorAll');
+    const getDirectives = vi.spyOn(ng, 'getDirectives');
+
+    const tree = collectComponentTree(ng, { selectedId: id, withDetail: values.attach });
+    expect(Object.keys(tree.detail!.expanded!)).toHaveLength(paths.length);
+    expect(JSON.stringify(tree.detail)).not.toContain('NICK-4711');
+    expect(scans.mock.calls.filter(([selector]) => selector === '*')).toHaveLength(1);
+    const scanned = getDirectives.mock.calls.length;
+
+    // Nothing in the DOM changed: the next collect reads the known fields only.
+    instance.model.nick = 'TD-NICK-99';
+    collectComponentTree(ng, { selectedId: id, withDetail: values.attach });
+    expect(scans.mock.calls.filter(([selector]) => selector === '*')).toHaveLength(1);
+    expect(getDirectives.mock.calls.length - scanned).toBeLessThan(scanned);
+
+    // A field added to the component is found after the DOM change.
+    const added = document.createElement('input');
+    added.setAttribute('type', 'password');
+    host.appendChild(added);
+    const directives = new Map<Element, object[]>([
+      [added, [directive('ngModel', { name: 'pin', model: 'PIN-90210' })]],
+    ]);
+    const before = ng.getDirectives!;
+    ng.getDirectives = (el) => directives.get(el) ?? before(el);
+    instance.note = 'pin is PIN-90210';
+    await Promise.resolve();
+    const next = collectComponentTree(ng, { selectedId: id, withDetail: values.attach });
+    expect(scans.mock.calls.filter(([selector]) => selector === '*')).toHaveLength(2);
+    expect(JSON.stringify(next.detail)).not.toContain('PIN-90210');
+  });
+
+  it('does not keep the prefixes of a masked value being typed', () => {
+    const instance = new SecretsForm();
+    const { ng, host, at, directives } = setup(instance);
+    for (let i = 3; i <= 'Secret123'.length; i++) {
+      directives.set(at('word'), [
+        directive('formControlName', { name: 'word', control: control('Secret123'.slice(0, i)) }),
+      ]);
+      maskedFormValues(ng, host);
+    }
+    const masked = maskedFormValues(ng, host);
+    expect(masked.has('Secret123')).toBe(true);
+    for (const prefix of ['Sec', 'Secr', 'Secret12']) expect(masked.has(prefix)).toBe(false);
+    instance.note = 'Section and Security';
+    expect(JSON.stringify(componentDetail(ng, host)!.properties)).toContain('Section and Security');
   });
 });

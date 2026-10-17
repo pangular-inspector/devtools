@@ -89,6 +89,22 @@ describe('loadHubServer', () => {
   it('refuses to run off Node', () => {
     expect(() => loadHubServer({ from: 'file:///app/server.mjs' })).toThrow(/Node\.js only/);
   });
+
+  it('names the Node.js versions it needs on a Node.js without getBuiltinModule', () => {
+    const host: HubLoaderHost = { from: 'file:///app/server.mjs', nodeVersion: '22.1.0' };
+    expect(() => loadHubServer(host)).toThrow(
+      /needs Node\.js 20\.19, 22\.12 or later.*This is v22\.1\.0/,
+    );
+    expect(() => loadHubServer(host)).not.toThrow(/Node\.js only/);
+    // The default host reads the running Node.js version.
+    const original = process.getBuiltinModule;
+    Object.defineProperty(process, 'getBuiltinModule', { value: undefined, configurable: true });
+    try {
+      expect(() => loadHubServer()).toThrow(/needs Node\.js 20\.19, 22\.12 or later/);
+    } finally {
+      Object.defineProperty(process, 'getBuiltinModule', { value: original, configurable: true });
+    }
+  });
 });
 
 describe('the hub entry', () => {

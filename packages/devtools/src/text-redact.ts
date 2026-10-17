@@ -1,5 +1,5 @@
 import { redactCredentials } from './credential-redact.ts';
-import { JWT, REDACTED, isRedactedKey } from './forms-privacy.ts';
+import { JWT, REDACTED, isRedactedKey, wordsOf } from './forms-privacy.ts';
 
 /**
  * Masking for free text and URLs, shared by `serialize`, the router collector
@@ -20,6 +20,21 @@ const TEXT_PAIR =
   /(?<![\w$%.[\]-])(["']?)((?:(?!%3D)[\w$%.[\]-])+)\1(\s*(?:=|%3D)\s*|\s*:\s*)("[^"]*"|'[^']*'|[^&#;\s"',)}\]<>]*)/gi;
 /** Values a `key: value` text pair keeps, so `token: null` in a log stays readable. */
 const PLAIN_VALUE = /^(?:null|undefined|true|false|)$/;
+/**
+ * Names that hold a secret and rarely start prose, so `password: correcthorse`
+ * is masked although its value is one lowercase word. Weaker names (`token`,
+ * `key`, `auth`) keep such a word, as in `Invalid token: expired`.
+ */
+const STRONG_WORDS = new Set([
+  'password',
+  'passwd',
+  'passphrase',
+  'passcode',
+  'pwd',
+  'secret',
+  'privkey',
+]);
+const STRONG_PAIRS = new Set(['apikey', 'privatekey', 'secretkey', 'accesskey']);
 const URL_PAIR = /(^|[?&#;])((?:(?!%3D)[^=&#;?\s/])+)(=|%3D)([^&#;\s]*)/gi;
 const MAX_KNOWN_SECRETS = 100;
 
@@ -42,6 +57,16 @@ function isOpaqueToken(token: string): boolean {
     /[a-z]/.test(token) &&
     /[A-Z]/.test(token) &&
     (token.match(/-/g) ?? []).length <= 2
+  );
+}
+
+function isStrongSecretKey(key: string): boolean {
+  const words = wordsOf(key);
+  return words.some(
+    (word, i) =>
+      STRONG_WORDS.has(word) ||
+      STRONG_WORDS.has(word.replace(/s$/, '')) ||
+      (i > 0 && STRONG_PAIRS.has(words[i - 1] + word.replace(/s$/, ''))),
   );
 }
 
@@ -126,13 +151,14 @@ export function redactText(
       const head = `${quote}${key}${quote}${eq}`;
       const colon = eq.trim() === ':';
       // `:` reads as prose more often than `=`, so it takes only the secret names, not `key`
-      // or `code`, and an unquoted lowercase word (`token: expired`) or a scheme whose
-      // credential is already hidden (`Authorization: Negotiate [redacted]`) stays.
+      // or `code`, and an unquoted lowercase word after a weak name (`token: expired`) or a
+      // scheme whose credential is already hidden (`Authorization: Negotiate [redacted]`)
+      // stays. After a strong name (`password: correcthorse`) the word is masked.
       const secret = colon ? isRedactedKey(decode(key)) : isSecretKey(decode(key));
       const prose =
         colon &&
         (PLAIN_VALUE.test(bare) ||
-          (!quote && !quoted && /^[a-z]+$/.test(bare)) ||
+          (!quote && !quoted && /^[a-z]+$/.test(bare) && !isStrongSecretKey(decode(key))) ||
           whole.startsWith(` ${REDACTED}`, at + match.length));
       if (secret) {
         if (prose) return match;

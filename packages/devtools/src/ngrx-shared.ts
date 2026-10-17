@@ -147,9 +147,17 @@ export interface NgrxPageReport {
   since?: number;
   /** Entries sent earlier that Store DevTools can no longer restore. */
   unrestorable?: NgrxUnrestorableUpdate[];
+  /**
+   * Entries sent earlier whose args are now masked: the call wrote a secret
+   * after it logged them (a write after an `await`).
+   */
+  argsRedacted?: number[];
 }
 
-export interface NgrxPage extends Omit<NgrxPageReport, 'session' | 'unrestorable'> {
+export interface NgrxPage extends Omit<
+  NgrxPageReport,
+  'session' | 'unrestorable' | 'argsRedacted'
+> {
   reportedAt: number;
   /** Older change log entries removed at `limits.changeLog`. */
   dropped?: number;

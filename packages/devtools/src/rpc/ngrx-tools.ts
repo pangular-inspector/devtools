@@ -11,6 +11,7 @@ import type {
 } from '../ngrx-shared.ts';
 import type { SignalStoreMembers } from './get-ngrx-store.ts';
 import { redactMessage, redactUrl } from '../router.ts';
+import { REDACTED } from '../forms-privacy.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
 import { untrusted } from './forms-tools.ts';
 
@@ -146,9 +147,18 @@ export function mergeNgrxReport(
       lost.set(update.seq, update.reason);
     }
   }
+  const redacted = new Set(
+    (Array.isArray(report.argsRedacted) ? report.argsRedacted : []).filter(
+      (seq): seq is number => typeof seq === 'number',
+    ),
+  );
   const log = [...keep, ...fresh].slice(-maxLog).map((entry) => {
     const reason = lost.get(entry.seq);
-    return reason ? { ...entry, restorable: false, unrestorable: reason } : entry;
+    const masked =
+      redacted.has(entry.seq) && Array.isArray(entry.args)
+        ? { ...entry, args: entry.args.map(() => REDACTED) }
+        : entry;
+    return reason ? { ...masked, restorable: false, unrestorable: reason } : masked;
   });
   pages.set(report.pageId, {
     pageId: report.pageId,

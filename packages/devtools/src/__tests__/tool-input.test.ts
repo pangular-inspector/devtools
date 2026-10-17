@@ -108,6 +108,42 @@ describe('checkToolArgs', () => {
     });
   });
 
+  it('accepts null for a required argument that takes any value or allows null', () => {
+    const setSignal = {
+      type: 'object',
+      properties: {
+        component: { type: 'string' },
+        signal: { type: 'string' },
+        value: { description: 'The new value, as JSON.' },
+        note: { type: ['string', 'null'] },
+      },
+      required: ['component', 'signal', 'value', 'note'],
+    };
+    const args = { component: 'c1', signal: 'count', value: null, note: null };
+    expect(checkToolArgs(setSignal, args)).toEqual({ args });
+    expect(error({ component: null, signal: 's', value: 1, note: 'x' }, setSignal)).toBe(
+      'Pass `component`.',
+    );
+    expect(error({ component: 'c1', signal: 's', note: 'x' }, setSignal)).toBe(
+      'Pass `value`: The new value, as JSON.',
+    );
+  });
+
+  it('accepts null for a nested required key that takes any value', () => {
+    const nested = {
+      type: 'object',
+      properties: {
+        edit: {
+          type: 'object',
+          properties: { path: { type: 'string' }, value: {} },
+          required: ['path', 'value'],
+        },
+      },
+    };
+    expect(error({ edit: { path: 'a', value: null } }, nested)).toBeUndefined();
+    expect(error({ edit: { path: null, value: 1 } }, nested)).toBe('`edit.path` is required.');
+  });
+
   it('refuses arguments that are not an object, and lists at most five problems', () => {
     expect(error([1, 2])).toMatch(/^The arguments must be an object of named values, not an array/);
     expect(error('x')).toMatch(/^The arguments must be an object/);

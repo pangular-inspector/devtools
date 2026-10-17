@@ -1,5 +1,6 @@
 import { CONTROL_SELECTORS, formSecretValues, pageElements, selectorsOf } from './forms.ts';
-import { MAX_RETIRED_SECRETS, redactReason } from './forms-privacy.ts';
+import { MAX_RETIRED_SECRETS, redactReason, startsAnyOf } from './forms-privacy.ts';
+import { DIRTY_HEARTBEAT_MS } from './dom-dirty.ts';
 
 /**
  * The values of the form fields inside a component that the forms inspector
@@ -9,10 +10,17 @@ import { MAX_RETIRED_SECRETS, redactReason } from './forms-privacy.ts';
  * values wherever they appear, so a `FormGroup` property, the `ngModel` model
  * object or a Signal Forms model shows `[redacted]` where the Forms view does.
  * The values the forms inspector hides in the page's forms (secret fields,
- * current and earlier) are hidden as well. Values seen earlier stay hidden too (up to `MAX_RETIRED_SECRETS`, newest
- * kept), so a harmless field that repeats a secret's old value stays masked
- * after the secret changes. Only a DOM host has fields; the native overlays
+ * current and earlier) are hidden as well. Values seen earlier stay hidden too
+ * (up to `MAX_RETIRED_SECRETS`, newest kept), so a harmless field that repeats
+ * a secret's old value stays masked after the secret changes. The start of a
+ * value still being typed is not kept. Only a DOM host has fields; the native overlays
  * get an empty set.
+ *
+ * Finding the fields walks every element of the component, so the elements
+ * that hold a form control are cached per host and found again only after a
+ * `MutationObserver` saw elements added or removed (or once per heartbeat, as
+ * a safety net). Each call still reads the values and the mask rules of those
+ * fields, which change without a DOM mutation.
  */
 
 type AnyRecord = Record<string, any>;
@@ -29,7 +37,13 @@ interface FormsDebugNg<H extends object> {
 /** Masked values seen on this page, newest last. */
 const seen = new Set<string>();
 
+/**
+ * Keeps `values` as seen. A value seen before that one of them starts with
+ * was the same field part way through typing (`Sec` on the way to
+ * `Secret123`), so it is dropped instead of hiding `Section` everywhere.
+ */
 function remember(values: Set<string>) {
+  for (const value of [...seen]) if (startsAnyOf(value, values)) seen.delete(value);
   for (const value of values) {
     seen.delete(value);
     seen.add(value);
@@ -77,6 +91,67 @@ function fieldOf(dir: AnyRecord, selectors: Set<string>, el: Element) {
   };
 }
 
+function isControl(selectors: Set<string>): boolean {
+  return selectors.has('formField') || CONTROL_SELECTORS.some((s) => selectors.has(s));
+}
+
+/** Bumped when elements are added or removed anywhere the scans looked. */
+let domVersion = 0;
+let observer: MutationObserver | null | undefined;
+const observed = new WeakSet<Node>();
+
+function observe(node: Node) {
+  if (!observer || observed.has(node)) return;
+  observed.add(node);
+  observer.observe(node, { childList: true, subtree: true });
+}
+
+/** The current DOM version, after the records not delivered yet. */
+function currentVersion(): number {
+  if (observer === undefined) {
+    observer =
+      typeof MutationObserver === 'function' && typeof document !== 'undefined'
+        ? new MutationObserver(() => void domVersion++)
+        : null;
+    if (observer) observe(document.documentElement ?? document);
+  }
+  if (observer?.takeRecords().length) domVersion++;
+  return domVersion;
+}
+
+interface ControlScan {
+  version: number;
+  at: number;
+  elements: Element[];
+}
+
+/** The elements with a form control directive inside each host, from the last scan. */
+const scans = new WeakMap<Element, ControlScan>();
+
+function controlElements<H extends object>(ng: FormsDebugNg<H>, host: Element): Element[] {
+  const version = currentVersion();
+  const cached = scans.get(host);
+  if (
+    cached &&
+    observer &&
+    cached.version === version &&
+    Date.now() - cached.at < DIRTY_HEARTBEAT_MS
+  ) {
+    return cached.elements;
+  }
+  const elements = read(() => pageElements(host, observe), [] as Element[]);
+  const controls = elements
+    .slice(0, MAX_ELEMENTS)
+    .filter((el) =>
+      read(
+        () => (ng.getDirectives!(el as unknown as H) ?? []).some((d) => isControl(selectorsOf(d))),
+        false,
+      ),
+    );
+  scans.set(host, { version, at: Date.now(), elements: controls });
+  return controls;
+}
+
 export function maskedFormValues<H extends object>(
   ng: FormsDebugNg<H> | undefined,
   host: H | null,
@@ -85,14 +160,13 @@ export function maskedFormValues<H extends object>(
   if (!ng?.getDirectives || typeof Element === 'undefined' || !(host instanceof Element)) {
     return new Set([...seen, ...formSecretValues()]);
   }
-  const elements = read(() => pageElements(host), [] as Element[]);
-  for (const el of elements.slice(0, MAX_ELEMENTS)) {
+  for (const el of controlElements(ng, host)) {
     for (const directive of read(
       () => ng.getDirectives!(el as unknown as H) ?? [],
       [] as unknown[],
     )) {
       const selectors = selectorsOf(directive);
-      if (!selectors.has('formField') && !CONTROL_SELECTORS.some((s) => selectors.has(s))) continue;
+      if (!isControl(selectors)) continue;
       const field = fieldOf(directive as AnyRecord, selectors, el);
       if (!redactReason(field.key, el)) continue;
       for (const value of field.values) addValue(out, value);

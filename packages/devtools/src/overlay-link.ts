@@ -74,6 +74,9 @@ const DROPPED = new Set(['disconnected', 'error']);
 const UNTRUSTED_WARNING =
   '[pangular] The devtools server came back but did not trust this page, so the overlay stopped reporting. Reload the page and enter the one-time code from the terminal.';
 
+const REVOKED_WARNING =
+  "[pangular] The devtools server revoked this page's access, so the overlay stopped reporting. Reload the page and enter the one-time code from the terminal.";
+
 /** Resolves once `client` is trusted; rejects when it drops, is refused or takes too long. */
 export function untilTrusted(client: LinkClient, timeoutMs = TRUST_TIMEOUT_MS): Promise<void> {
   if (client.isTrusted && client.status === 'connected') return Promise.resolve();
@@ -116,13 +119,53 @@ export function createOverlayLink(first: LinkClient, options: OverlayLinkOptions
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
   let offline = false;
+  let warnedRevoked = false;
 
   const adopt = (client: LinkClient) => {
     live = client;
+    // Whether the server trusted this client: only then does `unauthorized` mean it
+    // revoked that trust. A first client still waiting for its code is left alone.
+    let trusted = client.isTrusted && client.status === 'connected';
     // A client without events (a static report) never drops.
     unwatch = client.events?.on('connection:status', (status) => {
-      if (live === client && DROPPED.has(status)) drop();
+      if (live !== client) return;
+      if (DROPPED.has(status)) drop();
+      else if (status === 'unauthorized' && trusted) revoked();
+      else if (status === 'connected') {
+        trusted = true;
+        if (offline) void regained();
+      }
     });
+  };
+
+  /**
+   * The server revoked the trust of the live client (devframe's `authRevoked`):
+   * calls would reject with an auth error, so the link goes offline as on a
+   * drop, but keeps the client and does not reconnect, since a new connection
+   * would be refused as well. If the same client is trusted again, such as
+   * after a code entered in another tab, `regained` sends everything again.
+   */
+  const revoked = () => {
+    if (stopped || offline) return;
+    offline = true;
+    try {
+      hooks?.dropped();
+    } catch {
+      // A collector that fails to pause must not stop the others.
+    }
+    if (warnedRevoked) return;
+    warnedRevoked = true;
+    warn(REVOKED_WARNING);
+  };
+
+  const regained = async () => {
+    if (stopped) return;
+    offline = false;
+    try {
+      await hooks?.restored();
+    } catch {
+      // The next refresh sends what this one could not.
+    }
   };
 
   const release = () => {
