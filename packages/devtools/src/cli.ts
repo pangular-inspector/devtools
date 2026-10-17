@@ -23,6 +23,7 @@ import {
 } from './config.ts';
 import { pangularMcp } from './agent-mcp.ts';
 import { registerSkillsCommand } from './skills-install.ts';
+import { registerLintCommand } from './lint-export.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 export const PANGULAR_CONFIG_FILE = 'pangular.config.json';
@@ -268,8 +269,8 @@ export interface PangularCliOptions {
 }
 
 /**
- * The `pangular` command line: `dev` (the default), `build`, `mcp` and
- * `skills`, with `--root`, `--config` and `--read-only` on each.
+ * The `pangular` command line: `dev` (the default), `build`, `mcp`, `skills`
+ * and `lint`, with `--root`, `--config` and `--read-only` on each.
  */
 export function createPangularCli(options: PangularCliOptions = {}) {
   const env = options.env ?? process.env;
@@ -330,6 +331,8 @@ export function createPangularCli(options: PangularCliOptions = {}) {
       'A pairing token a client may send instead of the one-time code (repeat for more; prefer PANGULAR_AUTH_TOKEN)',
     );
     registerSkillsCommand(cli, { cwd: (flags) => resolveCliRoot(flags, env), log });
+    registerLintCommand(cli, { cwd: (flags) => resolveCliRoot(flags, env), log });
+    registerLintCommand(cli, { cwd: (flags) => resolveCliRoot(flags, env), log });
     const defaultCommand = cli.commands.find((command) => command.isDefaultCommand);
     if (defaultCommand) {
       const run = async (

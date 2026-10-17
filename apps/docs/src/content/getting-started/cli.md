@@ -1,10 +1,10 @@
 ---
 title: Standalone CLI
-description: Run the devtools from the command line, build a static report, or start an MCP server.
+description: Run the devtools from the command line, build a static report, start an MCP server, or export lint findings for CI.
 ---
 
 <ngmd-hero title="Standalone CLI" gradient>
-  Three commands from one binary. A local devtools server, an offline report, and an MCP server for coding agents.
+  One binary for a local devtools server, an offline report, an MCP server for coding agents and lint findings for CI.
 </ngmd-hero>
 
 # Standalone CLI
@@ -19,6 +19,7 @@ The package installs a `pangular` binary. Run it from the root of your Angular w
 | `build`  | Writes a static copy of the devtools with the scan.                |
 | `mcp`    | Starts an MCP server over stdio for coding agents.                 |
 | `skills` | Lists or installs the bundled [agent skills](../agents/skills.md). |
+| `lint`   | Runs the source lints and prints the findings as JSON or SARIF.    |
 
 `pangular --version` prints the package version. An unknown command or flag prints one error line and exits with code 1. `pangular --help` lists the commands and flags.
 
@@ -212,11 +213,44 @@ pangular skills install --agent agents --dry-run
 
 `--agent` takes `claude`, `agents` or `github`. See [Install them](../agents/skills.md#install-them) for every flag.
 
+## Lint export
+
+### Run the source lints
+
+`lint` runs the lints that read only your source files and prints their findings as JSON on stdout. No app or server needs to run, so it fits a CI job.
+
+```bash
+npx pangular lint --format sarif --output reports/pangular.sarif --fail-on error
+```
+
+| Lint        | Agent tool                                            | What it checks                                                                                        |
+| ----------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `templates` | [`lint-templates`](../agents/tools.md#lint-templates) | Component templates, parsed with your project's own `@angular/compiler`. Skipped when it is missing.  |
+| `pipes`     | [`lint-pipes`](../agents/tools.md#lint-pipes)         | Pipe use in templates and pipe declarations.                                                          |
+| `analog`    | [`analog-lint`](../agents/tools.md#lint)              | The static Analog checks: routes, API routes, server files, content and prerender. Skipped elsewhere. |
+
+`lint-forms`, `lint-routes` and the live checks of `analog-lint` read the running page, so `lint` leaves them out. When a lint is skipped, the command says why on stderr and the JSON lists it with `ran: false`.
+
+### Lint flags
+
+| Flag                   | What it does                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `--format <format>`    | `json` (the default) or `sarif`.                                                                                                     |
+| `--output <file>`      | Write the findings to this file instead of stdout. Missing folders are created.                                                      |
+| `--only <lints>`       | Only these lints, comma separated, such as `templates,pipes`.                                                                        |
+| `--fail-on <severity>` | Exit with code 1 when a finding of this severity or worse is found: `error`, `warning` or `info`. The default, `none`, exits with 0. |
+
+### Output formats
+
+The JSON has the package version under `tool`, each lint with `ran` and its finding count under `lints`, counts per severity under `counts`, and the `findings`. Each finding has `lint`, `rule`, `severity`, `file` and `line` relative to the project folder (or `path` for a route), `message` and `fix`.
+
+The SARIF output is a SARIF 2.1.0 log with one run. Rule ids are the lint and the rule, such as `templates/track-by-index`. `error`, `warning` and `info` become the SARIF levels `error`, `warning` and `note`. File paths are relative to `%SRCROOT%`, the project folder. A finding about a whole file points at line 1, and a finding about a route has no location. Upload the file to a code scanning tool, such as GitHub code scanning, to see the findings on the lines they are about.
+
 ## FAQ
 
 <ngmd-accordion>
   <ngmd-accordion-item title="Do I need to run my app first?" open>
-    No. <code>dev</code>, <code>build</code> and <code>mcp</code> read your source files. Only live data needs a running app with the overlay loaded.
+    No. <code>dev</code>, <code>build</code>, <code>mcp</code> and <code>lint</code> read your source files. Only live data needs a running app with the overlay loaded.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Which directory should I run it from?">
     The root of your Angular workspace. The scan starts from the current directory, or from the folder you pass with <code>--root</code>.

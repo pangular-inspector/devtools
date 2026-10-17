@@ -3880,7 +3880,7 @@ const pangular = defineDevframe({
       id: 'pangular:explain-submit',
       title: 'Explain a form submit',
       description:
-        'Explain what submitting a form will do and why it might do nothing: Signal Forms submit() dry-run (action present, ignoreValidators, already submitting), ngSubmit semantics for reactive and template forms, DOM reasons (no submit button, type="button", disabled button, directive not on a <form>, native validation), blocking and pending fields, and recent submits with their outcome (ran, blocked, threw).',
+        'Explain what submitting a form will do and why it might do nothing: Signal Forms submit() dry-run (action present, ignoreValidators, already submitting), ngSubmit semantics for reactive and template forms, DOM reasons (no submit button, type="button", disabled button, directive not on a <form>, native validation), blocking and pending fields, and recent submits with their outcome (ran, blocked, rejected, threw) and the fields and validators behind it.',
       inputSchema: { type: 'object', properties: { form: formProperty, page: formPageProperty } },
       handler: withForms(explainSubmitText),
     });
@@ -3901,7 +3901,7 @@ const pangular = defineDevframe({
       id: 'pangular:form-history',
       title: 'Show form history',
       description:
-        'Timeline of form changes: value (with previous value and repeat count), status, submit (ran, blocked, threw), added and removed fields, each tagged with its origin (user, code, devtools, binding, or agent for a WebMCP tool call). Filter by form, path, type, origin or `since` (a marker from an earlier call). Returns the current marker.',
+        'Timeline of form changes: value (with previous value and repeat count), status, submit (ran, blocked, rejected, threw, with the fields and validators that blocked or rejected it), added and removed fields, each tagged with its origin (user, code, devtools, binding, or agent for a WebMCP tool call). Filter by form, path, type, origin or `since` (a marker from an earlier call). Returns the current marker.',
       inputSchema: {
         type: 'object',
         properties: {
