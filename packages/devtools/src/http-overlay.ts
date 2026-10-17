@@ -144,9 +144,7 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
       ? { ...report, payload: (maskedPayload ??= sanitizePayload(payload)) }
       : report;
     const answer = (await my.rpc.call('push-http', sent)) as
-      | { needPayload?: boolean }
-      | null
-      | undefined;
+      { needPayload?: boolean } | null | undefined;
     lastMeta = metaJson;
     lastSentAt = Date.now();
     lastCall = sentUpTo;

@@ -1741,9 +1741,7 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: (
         selector:
-          | string
-          | { pageId?: unknown; id?: unknown; selector?: unknown; reveal?: unknown }
-          | null,
+          string | { pageId?: unknown; id?: unknown; selector?: unknown; reveal?: unknown } | null,
       ) => {
         const target =
           selector && typeof selector === 'object' && typeof selector.id === 'string'

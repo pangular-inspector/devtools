@@ -755,8 +755,7 @@ export function createNgrxCollector<H extends object = Element>(
    * earlier, still-unresolved dispatch to this one. */
   const wrapDispatch = (d: AnyRecord): (() => void) | undefined => {
     const original = read(() => d['dispatch'], undefined) as
-      | ((...args: unknown[]) => unknown)
-      | undefined;
+      ((...args: unknown[]) => unknown) | undefined;
     if (typeof original !== 'function') return undefined;
     const own = Object.prototype.hasOwnProperty.call(d, 'dispatch');
     d['dispatch'] = function (this: unknown, ...args: unknown[]) {
@@ -1175,8 +1174,7 @@ export function createNgrxCollector<H extends object = Element>(
       const idsRaw = read(() => peek(t.source[idsKey]), undefined);
       if (!Array.isArray(idsRaw)) continue;
       const entityMapRaw = read(() => peek(t.source[key]), undefined) as
-        | Record<PropertyKey, unknown>
-        | undefined;
+        Record<PropertyKey, unknown> | undefined;
       const entitiesKey = collection ? `${collection}Entities` : 'entities';
       const entry: NonNullable<NgrxSignalStoreInfo['entities']>[number] = {
         ...(collection ? { collection } : {}),
