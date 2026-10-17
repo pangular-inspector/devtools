@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
+import { redactMessage } from '../forms-privacy.ts';
 import { serialize, serializeNamed } from '../serialize.ts';
 
 class _Trip {
@@ -141,5 +142,14 @@ describe('serialize', () => {
     expect(out).toContain('[Truncated]');
     expect(out.match(/"f\d+":\d+/g)!.length).toBeLessThan(100);
     expect(JSON.stringify(serialize(big))).toContain('[Truncated]');
+  });
+
+  it('masks known secret values in every string as redactMessage does, longest first', () => {
+    const secrets = new Set(['pw', 'hunter2', 'hunter2-long', 'tok-9']);
+    const texts = ['a hunter2-long b', 'hunter2 and tok-9', 'pw stays', 'tok-9hunter2'];
+    expect(serialize({ texts }, { secrets })).toEqual({
+      texts: texts.map((text) => redactMessage(text, secrets)),
+    });
+    expect(redactMessage('a hunter2-long b', secrets)).toBe('a [redacted] b');
   });
 });

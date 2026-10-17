@@ -8,6 +8,8 @@ const connection = vi.hoisted(() => ({
   answers: [] as boolean[],
   /** Sends a `connection:status` event to the last connected client's listeners. */
   emitStatus: (_status: string) => {},
+  /** `emitStatus` for each client, in the order they were made. */
+  emitters: [] as ((status: string) => void)[],
   /** The options each attempt passed to `connectDevframe`. */
   options: [] as unknown[],
   /** How many clients the panel closed. */
@@ -40,6 +42,7 @@ function fakeClient(): DevframeRpcClient {
     client.status = status;
     listeners.forEach((listener) => listener(status));
   };
+  connection.emitters.push(connection.emitStatus);
   return {
     get status() {
       return client.status;
@@ -89,6 +92,7 @@ afterEach(() => {
   connection.attempts = 0;
   connection.answers = [];
   connection.options = [];
+  connection.emitters = [];
   connection.closed = 0;
   connection.initialStatus = 'connected';
   TestBed.resetTestingModule();
@@ -198,6 +202,30 @@ describe('App before the server trusts it', () => {
     await settle(fixture);
     expect(status(fixture)).toBe('Disconnected');
     expect(host(fixture).querySelector('.connection-error')).not.toBeNull();
+    fixture.destroy();
+  });
+
+  it('does not start a second client while one still waits for the server', async () => {
+    connection.answers = [false, true, true];
+    connection.initialStatus = 'connecting';
+    const fixture = TestBed.createComponent(App);
+    document.body.appendChild(host(fixture));
+    await settle(fixture);
+    const retry = () => host(fixture).querySelector<HTMLButtonElement>('.connection-error button');
+
+    // The first retry finds the connection file; its socket is still opening.
+    retry()!.click();
+    await settle(fixture);
+    expect(connection.attempts).toBe(2);
+    expect(retry()).not.toBeNull();
+
+    retry()!.click();
+    await settle(fixture);
+    expect(connection.attempts).toBe(2);
+
+    connection.emitters[0]!('connected');
+    await settle(fixture);
+    expect(status(fixture)).toBe('Live');
     fixture.destroy();
   });
 

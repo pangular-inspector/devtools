@@ -171,6 +171,22 @@ describe('checkToolArgs', () => {
       'There is no `x` argument.',
     );
   });
+
+  it('checks unlisted top-level keys against a schema-valued additionalProperties', () => {
+    const schema = {
+      type: 'object',
+      properties: { page: { type: 'string' } },
+      additionalProperties: { type: 'string' },
+    };
+    expect(checkToolArgs(schema, { page: 'p1', id: '7' })).toEqual({
+      args: { page: 'p1', id: '7' },
+    });
+    expect(error({ id: 7 }, schema)).toMatch(/`id`.*string/);
+    // A null the schema refuses counts as left out, as for a listed argument.
+    expect(checkToolArgs(schema, { id: null })).toEqual({ args: {} });
+    const nullable = { ...schema, additionalProperties: { type: ['string', 'null'] } };
+    expect(checkToolArgs(nullable, { id: null })).toEqual({ args: { id: null } });
+  });
 });
 
 describe('guardHandler', () => {

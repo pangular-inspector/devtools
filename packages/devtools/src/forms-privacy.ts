@@ -288,12 +288,22 @@ function safeQuery(element: Element, selector: string): boolean {
 }
 
 export function redactMessage(text: string, secrets: Iterable<string> = []): string {
+  return redactMessageWith(text, longestFirst(secrets));
+}
+
+/** `secrets` as `redactMessageWith` takes them: 3 characters or more, longest first. */
+export function longestFirst(secrets: Iterable<string>): string[] {
+  const out = [...secrets].filter((secret) => secret.length >= 3);
+  out.sort((a, b) => b.length - a.length);
+  return out;
+}
+
+/** `redactMessage` with secrets `longestFirst` already prepared, for many texts in a row. */
+export function redactMessageWith(text: string, ordered: readonly string[]): string {
   let out = redactCredentials(text, REDACTED)
     .replace(JWT, REDACTED)
     .replace(BEARER, `Bearer ${REDACTED}`);
-  const longestFirst = [...secrets].filter((secret) => secret.length >= 3);
-  longestFirst.sort((a, b) => b.length - a.length);
-  for (const secret of longestFirst) out = out.split(secret).join(REDACTED);
+  for (const secret of ordered) out = out.split(secret).join(REDACTED);
   return out;
 }
 

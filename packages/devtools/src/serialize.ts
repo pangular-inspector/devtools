@@ -1,4 +1,11 @@
-import { REDACTED, redactionEpoch, redactMessage, redactReason } from './forms-privacy.ts';
+import {
+  REDACTED,
+  longestFirst,
+  redactionEpoch,
+  redactMessage,
+  redactMessageWith,
+  redactReason,
+} from './forms-privacy.ts';
 import { TextMemo } from './redaction-scope.ts';
 import { knownSecrets, knownSecretsVersion, redactText as redactPairs } from './text-redact.ts';
 import { clip as clipText } from './text.ts';
@@ -118,6 +125,8 @@ export function serialize(value: unknown, limits: SerializeLimits = {}): unknown
   const lazy = limits.lazy === true;
   const path = new Set<object>(limits.ancestors ?? []);
   const secrets = limits.secrets?.size ? limits.secrets : null;
+  // Sorted once per call, not for every string.
+  let ordered: string[] | null = null;
 
   const walkNamed = (key: unknown, v: unknown, level: number): unknown =>
     isSecretName(key) && !keepsUnderSecret(v) ? REDACTED : walk(v, level);
@@ -143,7 +152,9 @@ export function serialize(value: unknown, limits: SerializeLimits = {}): unknown
     }
     if (typeof v === 'string') {
       if (secrets?.has(v)) return REDACTED;
-      const text = secrets ? redactMessage(redactText(head(v)), secrets) : redactText(head(v));
+      const text = secrets
+        ? redactMessageWith(redactText(head(v)), (ordered ??= longestFirst(secrets)))
+        : redactText(head(v));
       return clipText(v.length > REDACT_WINDOW ? `${text}…` : text, maxText);
     }
     if (typeof v === 'bigint') return `${v}n`;

@@ -17,10 +17,21 @@ import {
  * `403`, for the panel, `__connection.json`, the SSE endpoint and MCP alike.
  * `--allowed-origin` adds origins. With `--host` on a network address, other
  * machines get through when their `Origin` is allowed or they send none (a
- * device app), as with the Express hub's `allowLan`.
+ * device app), as with the Express hub's `allowLan`. The app's dev server
+ * named by `--proxy-origin` is allowed too, for a proxy that keeps its
+ * `Origin` and `Host`.
  */
-export function cliGatePolicy(allowedOrigins: readonly string[], host: string): HubOriginPolicy {
-  return { allowedOrigins, remote: listensOnNetwork(host) };
+export function cliGatePolicy(
+  allowedOrigins: readonly string[],
+  host: string,
+  proxyUrl?: string,
+): HubOriginPolicy {
+  const proxy = proxyUrl ? new URL(proxyUrl).origin : undefined;
+  return {
+    allowedOrigins:
+      proxy && !allowedOrigins.includes(proxy) ? [...allowedOrigins, proxy] : allowedOrigins,
+    remote: listensOnNetwork(host),
+  };
 }
 
 const REFUSED = 'Pangular Inspector only answers requests from this machine.';

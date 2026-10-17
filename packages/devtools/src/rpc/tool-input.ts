@@ -189,7 +189,8 @@ function describe(schema: ToolInputSchema | undefined): string {
  * argument (one that takes any value, such as a signal's new value) or one
  * that allows `null` keeps it, required or not.
  * Keys the schema does not list pass through, unless it sets
- * `additionalProperties: false`. A `page` or `pageId` must be a string, even
+ * `additionalProperties: false`, or are checked against `additionalProperties`
+ * when it is a schema, as for a listed argument. A `page` or `pageId` must be a string, even
  * when the schema leaves the alias out, so a wrong one is refused instead of
  * falling back to another tab; an empty one counts as left out.
  */
@@ -208,8 +209,9 @@ export function checkToolArgs(schema: unknown, input: unknown): CheckedArgs {
   const missing = (shape.required ?? []).filter((key) => isMissing(args[key], properties[key]));
   for (const key of missing) problems.push(`Pass \`${key}\`${describe(properties[key])}.`);
 
+  const extra = isRecord(shape.additionalProperties) ? shape.additionalProperties : undefined;
   for (const [key, value] of Object.entries(args)) {
-    const property = properties[key];
+    const property = properties[key] ?? (PAGE_KEYS.has(key) ? undefined : extra);
     if (value === undefined) continue;
     if (PAGE_KEYS.has(key) && value === '') {
       // An empty page id is a page left out, as some clients send for every optional string.

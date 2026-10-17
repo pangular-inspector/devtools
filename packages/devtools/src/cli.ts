@@ -353,7 +353,9 @@ export function createPangularCli(options: PangularCliOptions = {}) {
           host: listenHost,
           port,
           // The same request gate as the Vite plugin and the Express hub, in front of every route.
-          app: (await gatedDevApp(cliGatePolicy(access.allowedOrigins, listenHost))) as never,
+          app: (await gatedDevApp(
+            cliGatePolicy(access.allowedOrigins, listenHost, proxyUrl),
+          )) as never,
           flags: flags as Record<string, unknown>,
           mcp: pangularMcp(flags.mcp ?? true, resolved),
           ...(access.allowedOrigins.length ? { allowedOrigins: access.allowedOrigins } : {}),

@@ -55,6 +55,18 @@ describe('pangular dev request gate', () => {
     expect(lan(evil)?.status).toBe(403);
   });
 
+  it("answers the app's dev server named by --proxy-origin when it keeps Origin and Host", () => {
+    const proxied = { host: 'myapp.test:4200', origin: 'http://myapp.test:4200' };
+    expect(cliRequestGate(cliGatePolicy([], 'localhost'))(nodeEvent(proxied))?.status).toBe(403);
+    const gate = cliRequestGate(
+      cliGatePolicy([], 'localhost', 'http://myapp.test:4200/__pangular/'),
+    );
+    expect(gate(nodeEvent(proxied))).toBeUndefined();
+    expect(gate(nodeEvent({ host: 'myapp.test:4200' }))).toBeUndefined();
+    expect(gate(nodeEvent({ host: 'myapp.test:4200', origin: EVIL }))?.status).toBe(403);
+    expect(gate(nodeEvent({ host: 'evil.example', origin: EVIL }))?.status).toBe(403);
+  });
+
   it('runs in front of the routes of the dev server app', async () => {
     const warn = vi.fn();
     const app = (await gatedDevApp(cliGatePolicy([], 'localhost'), warn)) as unknown as {

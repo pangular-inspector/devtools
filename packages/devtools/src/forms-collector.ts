@@ -17,8 +17,10 @@ import {
   type FormFieldNode,
   type FoundForm,
   forgetFormSecrets,
+  formSecretValues,
   redactFormText,
 } from './forms.ts';
+import { createFormEventMask } from './forms-event-mask.ts';
 import {
   isDevtoolsAction,
   formActionProblem,
@@ -200,6 +202,9 @@ export function attachForms(
   let lastForms: CollectedForm[] = [];
   let lastRoots = new Map<string, object>();
   const formEvents: FormEvent[] = [];
+  const remaskEvents = createFormEventMask(redactFormText, () =>
+    [...formSecretValues()].join('\0'),
+  );
   let droppedEvents = 0;
   const watched = new Map<object, { formId: string; stop: () => void }>();
   const lastStatus = new Map<string, string>();
@@ -565,6 +570,8 @@ export function attachForms(
         const tool = root && mcp.forms.get(root);
         if (tool) form.webMcp = tool;
       }
+      // The read above may have learned secrets that events recorded before it hold.
+      remaskEvents(formEvents);
       const report = {
         pageId,
         forms,

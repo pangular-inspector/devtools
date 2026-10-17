@@ -532,4 +532,20 @@ describe('forms collector event redaction', () => {
     expect(JSON.stringify(events)).not.toContain(leak);
     expect(JSON.stringify(events)).toContain('[redacted]');
   });
+
+  it('masks a value the password field takes after the event was recorded', async () => {
+    const fixture = await mount(Notes);
+    const h = harness();
+    h.collector.push();
+    await tick();
+    const { notes, password } = fixture.componentInstance.form.controls;
+    // The notes event is recorded before the next read learns that the
+    // password field holds the same text.
+    notes.setValue('typed-pass-42');
+    password.setValue('typed-pass-42');
+    await tick(LEASED_PUSH_MS + 200);
+    const sent = JSON.stringify(h.lastEvents());
+    expect(sent).not.toContain('typed-pass-42');
+    expect(sent).toContain('[redacted]');
+  });
 });

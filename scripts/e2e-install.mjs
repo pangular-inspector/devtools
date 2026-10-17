@@ -206,6 +206,9 @@ const pmEnv = () => ({
   npm_config_store_dir: path.join(work, 'pnpm-store'),
   YARN_CACHE_FOLDER: path.join(work, 'yarn-cache'),
   YARN_REGISTRY: REGISTRY,
+  // Yarn 2 and later read neither `.yarnrc` nor YARN_REGISTRY, and refuse a plain http registry.
+  YARN_NPM_REGISTRY_SERVER: REGISTRY,
+  YARN_UNSAFE_HTTP_WHITELIST: new URL(REGISTRY).hostname,
   BUN_INSTALL_CACHE_DIR: path.join(work, 'bun-cache'),
   BUN_CONFIG_REGISTRY: REGISTRY,
 });

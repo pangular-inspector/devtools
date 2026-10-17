@@ -1287,12 +1287,14 @@ export class App implements OnInit, OnDestroy {
   }
 
   private connecting = false;
+  /** A client whose socket is still opening: neither `rpc()` nor `pairing()` yet. */
+  private pendingClient: DevframeRpcClient | null = null;
   private retries = 0;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** Connects to the devframe server, and keeps trying with backoff while it can't. */
   private connect() {
-    if (this.connecting || this.rpc() || this.pairing()) return;
+    if (this.connecting || this.pendingClient || this.rpc() || this.pairing()) return;
     this.connecting = true;
     clearTimeout(this.retryTimer);
     const baseURL = detectBaseURL();
@@ -1314,7 +1316,13 @@ export class App implements OnInit, OnDestroy {
         }
         // Resolving only means the connection file was found: the server counts
         // once it trusts this client, which also tells a dead socket apart.
+        this.pendingClient = client;
         const onStatus = (status: string) => {
+          // A client the panel already dropped no longer speaks for the connection.
+          if (client !== this.pendingClient && client !== this.rpc() && client !== this.pairing()) {
+            return;
+          }
+          if (this.pendingClient === client && status !== 'connecting') this.pendingClient = null;
           if (status === 'connected') {
             this.pairing.set(null);
             // devframe says it is trusted before it stores the token it got for the code.
