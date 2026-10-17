@@ -26,12 +26,12 @@ Read `docs/contributing/coding-standards.md` ("Reading data from the page") befo
   - `serialize.ts`: safe, size-limited serialization.
   - `router.ts` `providerOf()`: find a service through the injector resolution path.
 - Never write attributes into the app's DOM. Never run app code (validators, guards) on a timer unless the user turned recording on.
-- Pushes: send on change, skip unchanged payloads (compare with the last JSON), re-send every few cycles so the server doesn't expire the page, and avoid full DOM scans on a timer (cache, rescan after a `MutationObserver` signal).
+- Pushes: send on change, skip unchanged payloads (compare with the last JSON), and let the page heartbeat keep the page alive: re-send an unchanged report only when `keepaliveDue`/`keepaliveAfter` says so (the server lost the page), and avoid full DOM scans on a timer (cache, rescan after a `MutationObserver` signal).
 - Every report carries `pageId` from `claimPageId()`. Call `forget-<area>-page` from `leave()`.
 
 ## Server side (`devframe.ts`, `rpc/`)
 
-- Keep a `Map<pageId, report>` with `reportedAt`, drop pages older than 15 seconds in the shared expiry interval, and write the combined value into the shared state.
+- Keep a `Map<pageId, report>` with `reportedAt`, drop pages older than `ttl(pageId)` (from `visibility.ttl()`, so a page with a current heartbeat never expires) in the shared expiry interval, and write the combined value into the shared state.
 - Page actions that the panel triggers (restore, highlight, run) go panel -> `request-<area>-action` -> broadcast `<area>-action` to the page -> `<area>-action-result`, keyed by `requestId`, with a timeout.
 - Source scans in `rpc/` enrich or stand in for live data. They must return a `kind` for anything the Dashboard counts.
 

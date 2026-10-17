@@ -1,3 +1,4 @@
+import { keepaliveAfter } from './page-heartbeat.ts';
 import { elementId } from './element-id.ts';
 import type { HostTree } from './host-tree.ts';
 import { serialize } from './serialize.ts';
@@ -583,7 +584,7 @@ export function attachPipes<H extends object = Element>(
       };
       const payload = JSON.stringify(report);
       const now = Date.now();
-      if (payload === lastPayload && now - lastPushAt < HEARTBEAT_MS) return;
+      if (payload === lastPayload && !keepaliveAfter(lastPushAt, HEARTBEAT_MS, now)) return;
       lastPayload = payload;
       lastPushAt = now;
       if (paused) return;

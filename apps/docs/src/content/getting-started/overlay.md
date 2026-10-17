@@ -285,7 +285,7 @@ While you pick an element on the page, the box follows the pointer and clears wh
     No. The overlay adds the floating button itself. See <a href="./popup-and-hub.md">Popup and hub</a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Does it slow down my app?">
-    It reads the page after change detection, at most once every 250 ms, plus a heartbeat every 4 seconds. It sends an inspector's data only when it changed. The HTTP inspector sends only the calls made since its last report. When the data of the components, signals, injectors, router or HTTP inspector stays the same for 5 to 8 seconds, the page sends a short ping instead, so the server keeps the page. With the dynamic import above, it never loads in production builds.
+    It reads the page after change detection, at most once every 250 ms, plus a heartbeat every 4 seconds. It sends an inspector's data only when it changed. The HTTP inspector sends only the calls made since its last report. While nothing changes, the page sends only a small heartbeat every 10 seconds, which keeps all of its data on the server. With the dynamic import above, it never loads in production builds.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Which values leave the page?">
     Live values are sent to the devtools server. Secret-looking values are redacted first. See <a href="../security.md">Access and redaction</a>.

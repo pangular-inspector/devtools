@@ -223,6 +223,7 @@ import type { HttpPage, HttpPayloadState, HttpReport, HttpState } from './types.
 
 import { analogPages, nameServerFns, registerAnalog } from './rpc/analog-register.ts';
 import { clearCalls } from './analog-server-log.ts';
+import { createPageHeartbeats } from './rpc/page-heartbeats.ts';
 import { createPageVisibility } from './rpc/page-ttl.ts';
 import {
   createAngularPages,
@@ -411,7 +412,9 @@ const pangular = defineDevframe({
 
     // Tabs in the background stop reporting, so their last data stays until
     // they come back or close.
-    const visibility = createPageVisibility();
+    // Pages that beat keep all their reports, so they send only what changed.
+    const heartbeats = createPageHeartbeats();
+    const visibility = createPageVisibility((pageId) => heartbeats.alive(pageId));
     const liveTtl = visibility.ttl();
     const visibilityState = await my.rpc.sharedState('page-visibility', {
       initialValue: { hidden: [] as string[] },
@@ -445,6 +448,22 @@ const pangular = defineDevframe({
       type: 'action',
       jsonSerializable: true,
       handler: (message: unknown) => interest.handle(message),
+    });
+    register({
+      name: 'page-heartbeat',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown } | null) => {
+        const pageId = message?.pageId;
+        if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return undefined;
+        if (!owners.write(pageId)) return undefined;
+        // The forms timeline and the router history outlive the page, counted
+        // from its last sign of life, so a beat counts as their report.
+        const form = formPages.get(pageId);
+        if (form) form.reportedAt = Date.now();
+        touchRouterPage(routerPages, pageId);
+        return { known: heartbeats.beat(pageId), ...interest.handle({ pageId }) };
+      },
     });
     const interestTick = setInterval(() => interest.tick(), INTEREST_TICK_MS);
     interestTick.unref?.();
@@ -485,6 +504,8 @@ const pangular = defineDevframe({
         const pageId = message?.pageId;
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return { ok: false };
         const ok = owners.claim(pageId, message?.key);
+        // A claim comes before the page sends everything, so its first beat finds it known.
+        if (ok) heartbeats.beat(pageId);
         // The overlay claims once per load: what the audit holds of the old document is stale.
         if (ok) onPageClaimed(pageId);
         return { ok };
@@ -499,6 +520,7 @@ const pangular = defineDevframe({
         const pageId = report?.pageId;
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return;
         if (!owners.write(pageId)) return;
+        heartbeats.touch(pageId);
         if (visibility.set(pageId, report?.hidden === true)) applyVisibility();
       },
     });
@@ -1307,6 +1329,7 @@ const pangular = defineDevframe({
     };
 
     const expiry = setInterval(() => {
+      heartbeats.expire(Date.now(), visibility.has);
       if (visibility.expire()) applyVisibility();
       if (angularPages.expire(liveTtl)) applyAngularPages();
       owners.expire();
@@ -4272,7 +4295,8 @@ const pangular = defineDevframe({
       const withUrl = <T extends { pageId: string; reportedAt: number }>(pages: Iterable<T>) =>
         [...pages].map((page) => ({
           pageId: page.pageId,
-          reportedAt: page.reportedAt,
+          // An idle page sends only its heartbeat, which counts as a report here.
+          reportedAt: Math.max(page.reportedAt, heartbeats.seenAt(page.pageId) ?? 0),
           ...details.get(page.pageId),
           platform: platforms.get(page.pageId),
           angular: angularPages.get(page.pageId)?.version,

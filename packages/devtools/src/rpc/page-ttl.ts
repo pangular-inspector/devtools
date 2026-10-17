@@ -17,9 +17,11 @@ export const fixedTtl =
 
 /**
  * Tabs that said they are in the background. They stop reporting to save work,
- * so their last data is kept for as long as they keep saying so.
+ * so their last data is kept for as long as they keep saying so. `alive` tells
+ * the pages whose heartbeat is current (`page-heartbeats.ts`): they send only
+ * what changed, so their reports don't expire either.
  */
-export function createPageVisibility() {
+export function createPageVisibility(alive: (pageId: string) => boolean = () => false) {
   const hidden = new Map<string, number>();
   return {
     /** Records a report and returns whether the list of hidden pages changed. */
@@ -31,11 +33,14 @@ export function createPageVisibility() {
     },
     has: (pageId: string) => hidden.has(pageId),
     list: () => [...hidden.keys()],
-    /** `base` for visible pages; hidden pages never expire while their mark lives. */
+    /**
+     * `base` for visible pages; hidden pages and pages with a current
+     * heartbeat never expire while their mark or their beats last.
+     */
     ttl:
       (base = PAGE_TTL_MS): PageTtl =>
       (pageId) =>
-        hidden.has(pageId) ? Infinity : base,
+        hidden.has(pageId) || alive(pageId) ? Infinity : base,
     /** Drops tabs that stopped saying they are hidden, and returns whether any went. */
     expire(now = Date.now()): boolean {
       let changed = false;

@@ -1242,6 +1242,8 @@ export const SHARED_RPC: readonly string[] = [
   'forget-page-angular',
   // The activity lease: pages ask whether a panel or an agent watches.
   'page-interest',
+  // Keeps every report of a page alive and carries the lease, so an idle page sends nothing else.
+  'page-heartbeat',
   'list-pages',
   // Opens any tab, so it stays with every inspector off; it lists only the tabs that are on.
   'open-in-panel',

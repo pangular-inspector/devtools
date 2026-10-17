@@ -4,6 +4,8 @@
 // asked recently). The server says when that changes; an idle page only keeps
 // itself alive and sends everything again when interest comes back.
 
+import { heartbeatRunning } from './page-heartbeat.ts';
+
 interface Rpc {
   rpc: {
     call(name: string, ...args: unknown[]): Promise<unknown>;
@@ -26,6 +28,8 @@ export interface PageLease {
   readonly active: boolean;
   /** Asks the server again (on start and when the tab comes back). */
   refresh(): Promise<void>;
+  /** The server's word carried by another call, such as the page heartbeat. */
+  update(watching: boolean): void;
   stop(): void;
 }
 
@@ -94,8 +98,9 @@ export function createPageLease(my: Rpc, pageId: string, options: PageLeaseOptio
     }
   };
 
+  // The page heartbeat carries the server's word, so an idle page only polls without it.
   const poll = setInterval(() => {
-    if (!active) void refresh();
+    if (!active && !heartbeatRunning()) void refresh();
   }, options.pollMs ?? LEASE_POLL_MS);
 
   return {
@@ -103,6 +108,7 @@ export function createPageLease(my: Rpc, pageId: string, options: PageLeaseOptio
       return active && !stopped;
     },
     refresh,
+    update: set,
     stop() {
       stopped = true;
       clearInterval(poll);

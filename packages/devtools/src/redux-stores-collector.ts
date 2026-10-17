@@ -1,3 +1,4 @@
+import { keepaliveAfter } from './page-heartbeat.ts';
 import { referenceDiff, serialize } from './ngrx-shared.ts';
 import {
   installReduxDevtoolsHook,
@@ -116,7 +117,7 @@ export function attachReduxStores(my: RpcScope, pageId: string, options: ReduxSt
       const log = collector.logSince(sent);
       if (!stores.length && !log.length && !lastBody) return;
       const body = JSON.stringify(stores);
-      if (!log.length && body === lastBody && Date.now() - lastPushAt < HEARTBEAT_MS) return;
+      if (!log.length && body === lastBody && !keepaliveAfter(lastPushAt, HEARTBEAT_MS)) return;
       lastBody = body;
       lastPushAt = Date.now();
       const page = options.describe?.() ?? {

@@ -41,7 +41,7 @@ The tree Angular rendered into, as the component, injector, signal graph and NgR
 _Avoid_: view tree, render tree, DOM (when the code does not depend on it)
 
 **Push**:
-A report a collector sends to the server over RPC, such as `push-component-tree`. A collector sends one when something changed, and a keepalive at intervals so the server knows the page is still there. Pushes stay cheap.
+A report a collector sends to the server over RPC, such as `push-component-tree`. A collector sends one when something changed. One page heartbeat (`page-heartbeat`) every 10 seconds tells the server the page is still there, for every collector. Pushes stay cheap.
 _Avoid_: sync, upload, post
 
 **Inspector**:

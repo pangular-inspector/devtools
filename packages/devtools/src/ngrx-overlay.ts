@@ -1,3 +1,4 @@
+import { keepaliveAfter } from './page-heartbeat.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
 import { createNgrxCollector, type NgrxDebugNg } from './ngrx-collector.ts';
 import type { NgrxPageReport, NgrxRequest } from './ngrx-shared.ts';
@@ -68,7 +69,7 @@ export function attachNgrx<H extends object = Element>(
       if (!stores.length && !classic && !log.length && !lastBody) return;
       const body = JSON.stringify({ stores, classic });
       const quiet = !log.length && !lost.updates.length && !masked.seqs.length;
-      if (quiet && body === lastBody && Date.now() - lastPushAt < HEARTBEAT_MS) return;
+      if (quiet && body === lastBody && !keepaliveAfter(lastPushAt, HEARTBEAT_MS)) return;
       lastBody = body;
       lastPushAt = Date.now();
       const page = options.describe?.() ?? {

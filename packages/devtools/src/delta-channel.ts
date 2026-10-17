@@ -1,3 +1,4 @@
+import { keepaliveAfter } from './page-heartbeat.ts';
 import { keepaliveDue } from './change-detection.ts';
 import { createDeltaSender, type DeltaShape } from './push-delta.ts';
 
@@ -49,7 +50,7 @@ export function createDeltaChannel(options: DeltaChannelOptions): DeltaChannel {
   const due = () =>
     options.keepaliveMs === undefined
       ? keepaliveDue(sentAt, tickMs(), now())
-      : now() - sentAt >= options.keepaliveMs;
+      : keepaliveAfter(sentAt, options.keepaliveMs, now());
 
   const ping = async (): Promise<boolean> => {
     sentAt = now();

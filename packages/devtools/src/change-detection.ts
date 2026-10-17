@@ -1,3 +1,5 @@
+import { resendDue } from './page-heartbeat.ts';
+
 export type Profiler = (event: number, instance?: unknown, hook?: unknown) => void;
 
 interface ProfilerApi {
@@ -16,15 +18,20 @@ const TEMPLATE_UPDATE_START = 2;
 export const REFRESH_DEBOUNCE_MS = 250;
 export const POLL_MS = 3000;
 export const HEARTBEAT_MS = 4000;
-/** An unchanged report is sent again this often, well inside the server's 15 s TTL. */
+/**
+ * Without the page heartbeat (`page-heartbeat.ts`), an unchanged report is
+ * sent again this often, well inside the server's 15 s TTL.
+ */
 export const KEEPALIVE_MS = 8000;
 
 /**
- * Whether an unchanged report must be sent on this tick: waiting for the next
- * one, `tickMs` away, would leave more than `KEEPALIVE_MS` since the last send.
+ * Whether an unchanged report must be sent on this tick. While the page
+ * heartbeat runs, only after the server lost the page. Otherwise when waiting
+ * for the next tick, `tickMs` away, would leave more than `KEEPALIVE_MS` since
+ * the last send.
  */
 export function keepaliveDue(sentAt: number, tickMs: number, now = Date.now()): boolean {
-  return now - sentAt + tickMs > KEEPALIVE_MS;
+  return resendDue(sentAt, now - sentAt + tickMs > KEEPALIVE_MS);
 }
 
 export interface RefreshOptions {

@@ -1,3 +1,4 @@
+import { keepaliveAfter } from './page-heartbeat.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
 import { serialize } from './ngrx-shared.ts';
 import { redactText } from './serialize.ts';
@@ -449,7 +450,7 @@ export function attachTanstackQuery<H extends object = Element>(
       const { at, ...rest } = collector.collect();
       if (!rest.clients.length && !lastBody) return;
       const body = JSON.stringify(rest);
-      if (body === lastBody && Date.now() - lastPushAt < HEARTBEAT_MS) return;
+      if (body === lastBody && !keepaliveAfter(lastPushAt, HEARTBEAT_MS)) return;
       lastBody = body;
       lastPushAt = Date.now();
       const page = options.describe?.() ?? {
