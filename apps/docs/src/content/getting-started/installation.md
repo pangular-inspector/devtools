@@ -15,7 +15,7 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`. It contain
 
 <ngmd-card-grid columns="3">
   <ngmd-card icon="terminal" title="Node.js 22 or later">
-    The package declares <code>node &gt;=22</code> in its <code>engines</code> field. CI tests Node.js 22 and 24.
+    The package declares <code>node &gt;=22</code> in its <code>engines</code> field, and <code>initPangularHub()</code> needs 22.12 or later. Your app's tools may need more: the Angular 22.2 CLI needs Node.js 22.22.3 or later, and the Analog app template needs npm 11. CI tests Node.js 22 and 24.
   </ngmd-card>
   <ngmd-card icon="code" title="Angular 12.2 or later">
     <code>&#64;angular/core</code> and <code>&#64;angular/common</code> 12.2 and newer are supported, with no upper bound. Older versions show less data. See <a href="#supported-angular-versions">Supported Angular versions</a>.
@@ -68,7 +68,7 @@ On Angular 12 to 19 the overlay degrades as the table above shows:
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | Overlay import in `main.ts`              | Works with the webpack-based `@angular-devkit/build-angular:browser` builder. Signal history uses samples, since `@angular/core/primitives/signals` exists from 17.0. | Works with `browser` and `application`. Under webpack, signal history uses samples. |
 | Vite plugin (Analog)                     | Works. The plugin points `@angular/core/primitives/signals` at a stub before 17.0.                                                                                    | Works.                                                                              |
-| `initPangularHub()` in an Express server | Works when the server runs on Node.js 22 or later. If the server must stay on an older Node.js, run the standalone CLI on Node.js 22 or later beside it instead.      | Works.                                                                              |
+| `initPangularHub()` in an Express server | Works when the server runs on Node.js 22.12 or later. If the server must stay on an older Node.js, run the standalone CLI on Node.js 22 or later beside it instead.   | Works.                                                                              |
 | Standalone CLI next to `ng serve`        | Works. Run `npx pangular dev` with Node.js 22 or later, and the app's own CLI with the Node.js version it supports.                                                   | Works.                                                                              |
 | Chrome extension                         | Works on top of any of the setups above.                                                                                                                              | Works.                                                                              |
 | `@pangular-inspector/devtools/http`      | Not available. It imports `REQUEST` and `provideEnvironmentInitializer`, so the build fails. Leave it out; the HTTP timeline and fault rules need it.                 | Not available before 19.0, for the same reason.                                     |
@@ -148,6 +148,9 @@ MCP agent support (`@devframes/agentic`) and Devframe itself are included. You d
 | `@pangular-inspector/devtools/ssr`                    | SSR tracing for web-standard handlers, Fastify and Analog. See [Hono, h3 and Fastify](./other-servers.md).            |
 | `@pangular-inspector/devtools/config`                 | The `PangularConfig` type and its defaults. See [Configuration](./configuration.md).                                  |
 | `@pangular-inspector/devtools/devframe`               | The devframe definition and `initDevframe()`, for custom hosts.                                                       |
+| `@pangular-inspector/devtools`                        | The same as `@pangular-inspector/devtools/devframe`.                                                                  |
+| `@pangular-inspector/devtools/cd-data`                | The change detection recording types and checks the server and the panel share.                                       |
+| `@pangular-inspector/devtools/cli`                    | `createPangularCli()`, the `pangular` command line, to run it from your own script. See [Standalone CLI](./cli.md).   |
 
 ### The CLI binary
 

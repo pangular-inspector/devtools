@@ -18,7 +18,7 @@ When the overlay loads, a floating button appears in the bottom-right corner of 
 Importing the [overlay](./overlay.md) adds the button. The first time the panel opens, it looks for the devtools server:
 
 1. If the overlay connected, it uses that path. When the path is `<base>pangular/` and a hub answers at `<base>`, it opens the hub.
-2. Otherwise it checks for the hub at `/__devframes/`, then for the devtools alone in the places the overlay looks: next to the page, `/__pangular/`, `/__devframes/pangular/` and `/__devframe/`.
+2. Otherwise it checks for the hub at `/__devframes/`, then for the devtools alone in the places the overlay looks: `/__devframes/pangular/`, `/__pangular/`, next to the page and `/__devframe/`.
 
 A path counts only when it answers with JSON. If nothing answers, the panel says **No devtools server found** with a **Try again** button, and looks again the next time it opens.
 

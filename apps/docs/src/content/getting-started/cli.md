@@ -68,7 +68,10 @@ pnpm dlx @pangular-inspector/devtools dev
 ```
 
 ```bash group="run" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
+# Yarn 2 or later
 yarn dlx -p @pangular-inspector/devtools pangular dev
+# Yarn 1 has no dlx: npx works with any package manager
+npx @pangular-inspector/devtools dev
 ```
 
 ```bash group="run" name="bun" image="https://bun.sh/logo.svg"

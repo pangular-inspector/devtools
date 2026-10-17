@@ -13,7 +13,7 @@ This page takes one path: an *Angular CLI app with SSR, run with `ng serve`. Fou
 
 ## Before you start
 
-You need an Angular CLI app with SSR, on Angular 20 or later, and Node.js 22 or later. An SSR app has a `src/server.ts`. To create one, run `ng new my-app --ssr`.
+You need an Angular CLI app with SSR, on Angular 20 or later, and Node.js 22.12 or later. Angular 22.2 itself needs Node.js 22.22.3 or later. An SSR app has a `src/server.ts`. To create one, run `ng new my-app --ssr`.
 
 <ngmd-callout type="info" title="No server.ts?">
   A client-only app has no server to mount the devtools in. Follow <a href="./installation.md#client-only-angular-cli-app">Client-only Angular CLI app</a> instead.

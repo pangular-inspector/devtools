@@ -26,9 +26,12 @@ import { pangularMcp } from './agent-mcp.ts';
 import { PANGULAR_LOGO_DATA_URI, PANGULAR_PRIMARY_COLOR } from './brand.ts';
 import { createSsrMiddleware } from './ssr-middleware.ts';
 import { releaseServerState } from './server-state.ts';
+import { disabledHub, hubEnabled, type PangularHub } from './hub-off.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 export const PANGULAR_HUB_BASE = DEVFRAMES_HUB_BASE;
+
+export { hubEnabled } from './hub-off.ts';
 
 export type { PangularConfig } from './config.ts';
 
@@ -131,16 +134,6 @@ export function hubAllowedOrigins(
       (origin !== undefined && isAllowedExtensionOrigin(origin)) || custom.isAllowed(origin),
   };
 }
-
-type PangularHub = ReturnType<typeof initHub> & {
-  /**
-   * Opt-in Express or Connect middleware that traces each SSR request and adds
-   * a `Server-Timing` header. Add it before the Angular request handler.
-   */
-  ssrMiddleware: ReturnType<typeof createSsrMiddleware>;
-  /** Whether the hub is mounted. `false` when `enabled` is off, as in production by default. */
-  enabled: boolean;
-};
 
 interface HubRegistry {
   token?: string;
@@ -311,46 +304,6 @@ function gatedTransport(
         detach();
       };
     },
-  };
-}
-
-/** `enabled`, or on unless `NODE_ENV` is `production`. */
-export function hubEnabled(
-  enabled: boolean | undefined,
-  env: Record<string, string | undefined> = process.env,
-  warn: (message: string) => void = console.warn,
-): boolean {
-  const production = env['NODE_ENV'] === 'production';
-  if (enabled === undefined) return !production;
-  if (enabled && production) {
-    warn(
-      '\n  [pangular] WARNING: the Pangular Inspector hub is on in production (enabled: true with NODE_ENV=production).\n' +
-        '  It exposes your app state, source and agent tools to anyone who can pass its checks.\n' +
-        '  Remove enabled: true unless this server only runs on your machine.\n',
-    );
-  }
-  return enabled;
-}
-
-/** The hub when `enabled` is off: every middleware calls `next()` and nothing is mounted. */
-function disabledHub(base: string): PangularHub {
-  const context = Promise.reject(new Error('[pangular] The hub is off (enabled: false).'));
-  context.catch(() => undefined);
-  return {
-    base,
-    enabled: false,
-    handler: async () => new Response(null, { status: 404 }),
-    nodeMiddleware: (_req, _res, next) => next?.(),
-    ssrMiddleware: ((_req: unknown, _res: unknown, next: () => void) =>
-      next()) as PangularHub['ssrMiddleware'],
-    attach: () => () => undefined,
-    handleUpgrade: (_req, socket) => socket.destroy(),
-    ready: Promise.resolve(),
-    context,
-    connectionMeta: () => {
-      throw new Error('[pangular] The hub is off (enabled: false).');
-    },
-    close: async () => undefined,
   };
 }
 

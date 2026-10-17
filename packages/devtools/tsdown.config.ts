@@ -1,31 +1,42 @@
-import { defineConfig } from 'tsdown';
+import { defineConfig, type UserConfig } from 'tsdown';
+import {
+  BROWSER_ENTRIES,
+  NODE_ENTRIES,
+  assertBrowserSafe,
+  assertHubLoaderStandsAlone,
+} from './build/entries.ts';
 
-export default defineConfig({
-  // Named after the package exports: `overlay` is the entry that starts on
-  // import (`overlay-auto.ts`), `overlay-manual` the one that waits for
-  // `initOverlay()` (`overlay.ts`).
-  entry: {
-    devframe: 'src/devframe.ts',
-    config: 'src/config.ts',
-    'cd-data': 'src/cd-data.ts',
-    popup: 'src/popup.ts',
-    overlay: 'src/overlay-auto.ts',
-    'overlay-manual': 'src/overlay.ts',
-    'capacitor-hook': 'src/capacitor-hook.ts',
-    'store-hook': 'src/store-hook.ts',
-    'startup-hook': 'src/startup-hook.ts',
-    plugin: 'src/plugin.ts',
-    'overlay-nativescript': 'src/overlay-nativescript.ts',
-    'overlay-angular-native': 'src/overlay-angular-native.ts',
-    vite: 'src/vite.ts',
-    'signals-stub': 'src/signals-stub.ts',
-    http: 'src/http.ts',
-    hub: 'src/hub.ts',
-    ssr: 'src/ssr.ts',
-    cli: 'src/cli.ts',
-  },
+const shared = {
   external: [/^@angular\//, /^@nativescript\//, /^rxjs/],
   format: 'esm',
-  platform: 'node',
   dts: true,
-});
+  // The package exports name `.mjs` files, which the browser build would
+  // otherwise write as `.js`.
+  outExtensions: () => ({ js: '.mjs', dts: '.d.mts' }),
+} satisfies UserConfig;
+
+/**
+ * The browser build. Its own build, so no chunk is shared with the Node
+ * entries, and it fails when an entry reaches a Node builtin.
+ */
+export const browserConfig = {
+  ...shared,
+  name: 'browser',
+  entry: BROWSER_ENTRIES,
+  platform: 'browser',
+  hooks: {
+    'build:done': ({ chunks }) => assertBrowserSafe(chunks),
+  },
+} satisfies UserConfig;
+
+export const nodeConfig = {
+  ...shared,
+  name: 'node',
+  entry: NODE_ENTRIES,
+  platform: 'node',
+  hooks: {
+    'build:done': ({ chunks }) => assertHubLoaderStandsAlone(chunks),
+  },
+} satisfies UserConfig;
+
+export default defineConfig([browserConfig, nodeConfig]);

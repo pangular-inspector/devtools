@@ -123,9 +123,9 @@ describe.sequential('overlay connectionMeta', () => {
     await expect(initOverlay()).rejects.toThrow('No devtools server found');
     expect(connects[0].connectionMeta).toBeUndefined();
     expect(fetches).toEqual([
-      './__connection.json',
-      '/__pangular/__connection.json',
       '/__devframes/pangular/__connection.json',
+      '/__pangular/__connection.json',
+      './__connection.json',
       '/__devframe/__connection.json',
     ]);
   });

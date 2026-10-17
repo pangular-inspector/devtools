@@ -48,6 +48,8 @@ app.use(devtools.nodeMiddleware);
 
 The full-page viewer is at `http://localhost:4000/__devframes/`. The hub is built on [`@devframes/hub`](https://github.com/devframes/devframe), so other devframe tools can join the same dock.
 
+The Angular CLI bundles `server.ts`, but not the hub. `initPangularHub()` loads the hub's server code from `node_modules/@pangular-inspector/devtools` when it starts, so the hub and its dependencies resolve from the package as they do under Vite, with any package manager. This needs Node.js 22.12 or later. When the hub is off, as in production, nothing is loaded.
+
 ### Middleware order
 
 Mount the middleware before `express.static` and the Angular SSR handler, so the devtools routes answer first.
@@ -206,13 +208,22 @@ ng serve
 
 ```bash group="run" name="SSR server" image="https://cdn.simpleicons.org/nodedotjs/5FA04E"
 ng build --configuration development
-node dist/<your-app>/server/server.mjs
+NG_ALLOWED_HOSTS=localhost node dist/<your-app>/server/server.mjs
 # open http://localhost:4000 and click the Pangular Inspector button
 ```
 
 ### With the built SSR server
 
 To test the real Express process, build with the development configuration and start `server.mjs`. Replace `<your-app>` with your project name.
+
+From Angular 22.2, the built server answers only the hosts in its allowed list, which a new app leaves empty, so every page returns an error. Name the host in the `NG_ALLOWED_HOSTS` environment variable, as above, or in `security.allowedHosts` under the build options in `angular.json`:
+
+```json
+// angular.json (projects.<your-app>.architect.build.options)
+"security": {
+  "allowedHosts": ["localhost"]
+}
+```
 
 <ngmd-callout type="danger" title="A plain build has no button">
   <code>ng build</code> uses the production configuration by default. <code>ngDevMode</code> is false there, so the overlay is never imported and the button never appears. The live tabs need <code>--configuration development</code>. In this repository, the same applies to <code>pnpm build</code>.

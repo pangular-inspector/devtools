@@ -64,10 +64,14 @@ The overlay reads `window.ng`, Angular's debug API. Production builds remove it,
 
 ### Where it looks
 
-The overlay looks for the devframe connection next to the page first. Then it tries these paths in order:
+The overlay looks for the devframe connection under these paths, in order, and uses the first one that answers:
 
-1. `/__pangular/`
-2. `/__devframes/pangular/`
+1. `/__devframes/pangular/`, where the Express hub and the Vite plugin serve it
+2. `/__pangular/`, the path `pangular dev` is proxied to
+3. Next to the page
+4. `/__devframe/`
+
+The browser logs each path that doesn't answer as a failed request, so the Express hub and the Vite plugin come first and connect without one.
 
 It also adds the [floating button](./popup-and-hub.md). With the hub mounted, the button opens the whole hub, with every dock in a side rail.
 
@@ -246,7 +250,7 @@ See [Restore NgRx signal state](../guides/ngrx-signals-restore.md).
 
 ## No devtools server found
 
-If no path answers, the overlay logs an error that starts with `[pangular] No devtools server found` and lists the paths it tried. Without a `baseURL`, it tries next to the page, then `/__pangular/`, `/__devframes/pangular/` and `/__devframe/`. The floating button still appears, and its panel says **No devtools server found** with a **Try again** button and a link to the setup guide.
+If no path answers, the overlay logs an error that starts with `[pangular] No devtools server found` and lists the paths it tried. Without a `baseURL`, it tries `/__devframes/pangular/`, `/__pangular/`, the path next to the page and `/__devframe/`. The floating button still appears, and its panel says **No devtools server found** with a **Try again** button and a link to the setup guide.
 
 Common causes:
 

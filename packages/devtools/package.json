@@ -38,6 +38,8 @@
     "./vite": "./src/vite.ts"
   },
   "publishConfig": {
+    "main": "./dist/devframe.mjs",
+    "types": "./dist/devframe.d.mts",
     "exports": {
       ".": "./dist/devframe.mjs",
       "./devframe": "./dist/devframe.mjs",

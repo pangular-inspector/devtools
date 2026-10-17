@@ -2,10 +2,11 @@ export const POPUP_ROOT_ID = 'pangular-popup-root';
 
 /**
  * Where the overlay and the floating button look for the devtools server, in
- * order: next to the page, the Express mount, the hub frame, then the devframe
- * mount.
+ * order: the hub frame (the Express hub and the Vite plugin), the
+ * `pangular dev` proxy path, next to the page, then the devframe mount. Each
+ * miss is a 404 the browser logs, so the setups most apps use come first.
  */
-export const DEVTOOLS_BASES = ['./', '/__pangular/', '/__devframes/pangular/', '/__devframe/'];
+export const DEVTOOLS_BASES = ['/__devframes/pangular/', '/__pangular/', './', '/__devframe/'];
 
 export const SETUP_URL = 'https://pangular-inspector.dev/getting-started/installation/';
 
