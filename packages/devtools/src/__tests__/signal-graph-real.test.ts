@@ -76,6 +76,8 @@ Component({
     {{ unnamed.value() }} {{ airport.value() }} {{ airport.statusCode() }} {{ selected() }}`,
 })(TripPage);
 
+const RESOURCE_LABELS = angularAtLeast('21.0.1');
+
 const settle = async (app: ApplicationRef) => {
   for (let i = 0; i < 5; i++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -90,67 +92,102 @@ describe.skipIf(!angularAtLeast('20.1.0'))('collectSignalGraph with a real app',
     app = null;
   });
 
-  it('folds resource and httpResource internals into entries with status, params, value and error', async () => {
-    document.body.innerHTML = '<app-root></app-root>';
-    app = await bootstrapApplication(TripPage, {
-      providers: [
-        provideZonelessChangeDetection(),
-        provideHttpClient(),
-        provideHttpClientTesting(),
-      ],
-    });
-    await settle(app);
-    const http = app.injector.get(HttpTestingController);
-    http.expectOne('/api/airports/Paris').flush({ code: 'CDG' }, { status: 200, statusText: 'OK' });
-    rejectForecast(new Error('Forecast service down'));
-    await settle(app);
+  // Angular names a resource's internal signals (`Resource#weather.state` and so on) from
+  // 21.0.1. Before, they have no debugName, so nothing marks them as one resource.
+  it.runIf(RESOURCE_LABELS)(
+    'folds resource and httpResource internals into entries with status, params, value and error',
+    async () => {
+      document.body.innerHTML = '<app-root></app-root>';
+      app = await bootstrapApplication(TripPage, {
+        providers: [
+          provideZonelessChangeDetection(),
+          provideHttpClient(),
+          provideHttpClientTesting(),
+        ],
+      });
+      await settle(app);
+      const http = app.injector.get(HttpTestingController);
+      http
+        .expectOne('/api/airports/Paris')
+        .flush({ code: 'CDG' }, { status: 200, statusText: 'OK' });
+      rejectForecast(new Error('Forecast service down'));
+      await settle(app);
 
-    const ng = (globalThis as { ng?: SignalDebugNg }).ng!;
-    const graph = collectSignalGraph(ng)!;
-    const byName = Object.fromEntries((graph.resources ?? []).map((r) => [r.name, r]));
-    expect(Object.keys(byName).sort()).toEqual(['airport', 'forecast', 'resource 1', 'weather']);
+      const ng = (globalThis as { ng?: SignalDebugNg }).ng!;
+      const graph = collectSignalGraph(ng)!;
+      const byName = Object.fromEntries((graph.resources ?? []).map((r) => [r.name, r]));
+      expect(Object.keys(byName).sort()).toEqual(['airport', 'forecast', 'resource 1', 'weather']);
 
-    expect(byName['weather']).toMatchObject({
-      named: true,
-      status: 'resolved',
-      isLoading: false,
-      params: { city: 'Paris' },
-      value: 'Sunny in Paris',
-    });
-    expect(byName['forecast']).toMatchObject({ status: 'error', params: 'Paris' });
-    expect(byName['forecast'].error).toContain('Forecast service down');
-    expect('value' in byName['forecast']).toBe(false);
-    expect(byName['resource 1']).toMatchObject({ named: false, status: 'resolved', value: 1 });
-    expect(byName['airport']).toMatchObject({
-      status: 'resolved',
-      params: { method: 'GET', url: '/api/airports/Paris' },
-      value: { code: 'CDG' },
-      statusCode: 200,
-    });
+      expect(byName['weather']).toMatchObject({
+        named: true,
+        status: 'resolved',
+        isLoading: false,
+        params: { city: 'Paris' },
+        value: 'Sunny in Paris',
+      });
+      expect(byName['forecast']).toMatchObject({ status: 'error', params: 'Paris' });
+      expect(byName['forecast'].error).toContain('Forecast service down');
+      expect('value' in byName['forecast']).toBe(false);
+      expect(byName['resource 1']).toMatchObject({ named: false, status: 'resolved', value: 1 });
+      expect(byName['airport']).toMatchObject({
+        status: 'resolved',
+        params: { method: 'GET', url: '/api/airports/Paris' },
+        value: { code: 'CDG' },
+        statusCode: 200,
+      });
 
-    // resourceOf reads these real resources through descriptors, without running getters.
-    const page = (ng as unknown as { getComponent: (el: Element) => TripPage }).getComponent(
-      document.querySelector('app-root')!,
-    );
-    expect(resourceOf(ng as never, page.weather)).toEqual({
-      status: 'resolved',
-      value: 'Sunny in Paris',
-    });
-    expect(resourceOf(ng as never, page.airport)).toMatchObject({
-      status: 'resolved',
-      value: { code: 'CDG' },
-    });
-    expect(resourceOf(ng as never, page.forecast)).toMatchObject({ status: 'error' });
+      // resourceOf reads these real resources through descriptors, without running getters.
+      const page = (ng as unknown as { getComponent: (el: Element) => TripPage }).getComponent(
+        document.querySelector('app-root')!,
+      );
+      expect(resourceOf(ng as never, page.weather)).toEqual({
+        status: 'resolved',
+        value: 'Sunny in Paris',
+      });
+      expect(resourceOf(ng as never, page.airport)).toMatchObject({
+        status: 'resolved',
+        value: { code: 'CDG' },
+      });
+      expect(resourceOf(ng as never, page.forecast)).toMatchObject({ status: 'error' });
 
-    const internals = new Set(graph.resources!.flatMap((r) => r.nodeIds));
-    const outside = graph.nodes.filter((n) => !internals.has(n.id)).map((n) => n.label);
-    expect(outside).not.toContainEqual(expect.stringMatching(/^Resource|^_statusCode|^stream$/));
-    expect(outside).toEqual(expect.arrayContaining(['city', 'selected', 'log', 'logEffect']));
-    const selected = graph.nodes.find((n) => n.label === 'selected');
-    expect(selected).toMatchObject({ kind: 'linkedSignal', value: 'PARIS' });
-    expect(graph.nodes.some((n) => n.kind === 'afterRenderEffectPhase')).toBe(true);
-  });
+      const internals = new Set(graph.resources!.flatMap((r) => r.nodeIds));
+      const outside = graph.nodes.filter((n) => !internals.has(n.id)).map((n) => n.label);
+      expect(outside).not.toContainEqual(expect.stringMatching(/^Resource|^_statusCode|^stream$/));
+      expect(outside).toEqual(expect.arrayContaining(['city', 'selected', 'log', 'logEffect']));
+      const selected = graph.nodes.find((n) => n.label === 'selected');
+      expect(selected).toMatchObject({ kind: 'linkedSignal', value: 'PARIS' });
+      expect(graph.nodes.some((n) => n.kind === 'afterRenderEffectPhase')).toBe(true);
+    },
+  );
 
+  it.runIf(!RESOURCE_LABELS)(
+    'lists no resources before Angular 21.0.1, whose resource internals have no names',
+    async () => {
+      document.body.innerHTML = '<app-root></app-root>';
+      app = await bootstrapApplication(TripPage, {
+        providers: [
+          provideZonelessChangeDetection(),
+          provideHttpClient(),
+          provideHttpClientTesting(),
+        ],
+      });
+      await settle(app);
+      const ng = (globalThis as { ng?: SignalDebugNg }).ng!;
+      const graph = collectSignalGraph(ng)!;
+      expect(graph.resources).toBeUndefined();
+      expect(graph.nodes.map((n) => n.label)).toEqual(
+        expect.arrayContaining(['city', 'selected', 'log', 'logEffect']),
+      );
+      // resourceOf still reads a resource the component holds, from its own state.
+      const page = (ng as unknown as { getComponent: (el: Element) => TripPage }).getComponent(
+        document.querySelector('app-root')!,
+      );
+      expect(resourceOf(ng as never, page.weather)).toEqual({
+        status: 'resolved',
+        value: 'Sunny in Paris',
+      });
+    },
+  );
   it('reports the effects of root services for the root target', async () => {
     document.body.innerHTML = '<app-root></app-root>';
     app = await bootstrapApplication(TripPage, {

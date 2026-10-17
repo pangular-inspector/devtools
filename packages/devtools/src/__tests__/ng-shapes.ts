@@ -24,8 +24,8 @@ export const NG_UTILS: Record<string, readonly string[]> = {
   '17.1': ['isSignal'],
   '19.1': ['ɵgetSignalGraph', 'ɵgetDeferBlocks'],
   '20.0': ['enableProfiling'],
+  '20.2': ['ɵgetTransferState'],
   '20.3': ['ɵgetRouterInstance'],
-  '21.0': ['ɵgetTransferState'],
   '22.0': ['ɵgetControlFlowBlocks'],
 };
 

@@ -202,6 +202,7 @@ A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:
 | Angular 17.3 | `~17.3.0`     | 22      |
 | Angular 19.2 | `~19.2.0`     | 22      |
 | Angular 20.0 | `~20.0.0`     | 22      |
+| Angular 20.3 | `~20.3.0`     | 22      |
 | Angular 21   | `^21.0.0`     | 22      |
 | Angular 22   | `^22.0.0`     | 22      |
 | Angular next | `next`        | 22      |

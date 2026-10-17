@@ -39,6 +39,11 @@ jobs:
             range: '~19.2.0'
           - angular: '20.0'
             range: '~20.0.0'
+          # The last 20.x minor. Several debug APIs arrive within 20.x (`ɵgetTransferState` in 20.2,
+          # `ɵgetRouterInstance` in 20.3.5), and resource internals have no debug names until
+          # 21.0.1, so the folded resources test is skipped here and the unfolded case runs instead.
+          - angular: '20.3'
+            range: '~20.3.0'
           - angular: '21'
             range: '^21.0.0'
           - angular: '22'

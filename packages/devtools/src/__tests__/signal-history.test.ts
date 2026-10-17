@@ -367,6 +367,40 @@ describe('installSignalWriteHook', () => {
     ).toBeNull();
   });
 
+  it('returns null when the hook is called without the written node, as before Angular 20', async () => {
+    const core = fakeCore();
+    const prev = vi.fn();
+    core.setPostSignalSetFn(prev);
+    // Angular 17.0 to 19.x: `postSignalSetFn?.()`.
+    const old = { ...core, SIGNAL_NODE: {}, signalSetFn: () => core.fire(undefined as never) };
+    expect(await installSignalWriteHook(vi.fn(), async () => old)).toBeNull();
+    expect(core.get()).toBe(prev);
+    expect(prev).not.toHaveBeenCalled();
+  });
+
+  it('installs when the probe write hands over the node, without the app hook seeing it', async () => {
+    const core = fakeCore();
+    const prev = vi.fn();
+    core.setPostSignalSetFn(prev);
+    const current = {
+      ...core,
+      SIGNAL_NODE: { kind: 'signal' },
+      signalSetFn: (node: RawSignalNode, value: unknown) => {
+        node.value = value;
+        core.fire(node);
+      },
+    };
+    const onWrite = vi.fn();
+    const restore = await installSignalWriteHook(onWrite, async () => current);
+    expect(restore).toBeTypeOf('function');
+    expect(prev).not.toHaveBeenCalled();
+    expect(onWrite).not.toHaveBeenCalled();
+    core.fire({ debugName: 'x' });
+    expect(onWrite).toHaveBeenCalledTimes(1);
+    restore!();
+    expect(core.get()).toBe(prev);
+  });
+
   it('returns a restore function when the hook installs', async () => {
     expect(await installSignalWriteHook(vi.fn(), async () => fakeCore())).toBeTypeOf('function');
   });

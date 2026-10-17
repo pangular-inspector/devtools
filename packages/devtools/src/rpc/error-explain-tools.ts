@@ -208,7 +208,7 @@ export function explainSection(
         );
       } else {
         lines.push(
-          '- Where it was written is unknown: the page does not report signal writes (the Signals inspector is off, or Angular is older than 17.0).',
+          '- Where it was written is unknown: the page does not report signal writes (the Signals inspector is off, or Angular is older than 20.0).',
         );
       }
       return lines.join('\n');

@@ -47,7 +47,7 @@ For `ExpressionChangedAfterItHasBeenCheckedError`, the box shows:
 | **Current**  | The value of the second check.                                                                                                                               |
 | **Held by**  | The fields of the component that hold the current value now, signals included. Getters and `computed` signals don't run.                                     |
 
-**Written by** lists the named signals written with the current value in the 2 seconds before the error. Values are compared the way Angular prints them, from the value as it was written, so dates and objects match too. When some of those signals are named like the binding or a field under **Held by**, only those are listed. With write stacks on (see [Signals](./signals.md)), each one shows the app frames that wrote it. Without a match, the box says where to look instead. The overlay hears signal writes only while the Signals inspector is on, on Angular 17.0 or later, and only for signals with a `debugName`.
+**Written by** lists the named signals written with the current value in the 2 seconds before the error. Values are compared the way Angular prints them, from the value as it was written, so dates and objects match too. When some of those signals are named like the binding or a field under **Held by**, only those are listed. With write stacks on (see [Signals](./signals.md)), each one shows the app frames that wrote it. Without a match, the box says where to look instead. The overlay hears signal writes only while the Signals inspector is on, on Angular 20.0 or later, and only for signals with a `debugName`.
 
 When the binding or a field that holds the value has a secret-looking name, both values show as `[redacted]`.
 
