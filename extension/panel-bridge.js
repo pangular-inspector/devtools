@@ -26,7 +26,18 @@ const REFUSED_TEXT_LIMIT = 200;
 const PAGE_ID_WAIT_MS = 5000;
 const PAGE_ID_POLL_MS = 250;
 const OPEN_RESOURCE_TIMEOUT_MS = 3000;
+// A page that just navigated has no execution context for a moment, so reading
+// it fails; it is read again, like devtools.js checks for Angular.
+const PAGE_READS = 10;
+const PAGE_READ_RETRY_MS = 300;
+// A page blocked by a dialog, such as the overlay's prompt for the one-time
+// code, never answers until the dialog closes.
+const EVAL_TIMEOUT_MS = 2000;
+const BUSY_RETRY_MS = 2000;
 const DETECTING = 'Detecting Angular app…';
+const BUSY =
+  'The inspected page is not answering. If it shows a prompt for the one-time code, enter the code from the terminal of the dev server there, or close the prompt. The panel keeps checking.';
+const UNREADABLE = "Couldn't read the inspected page. Reload it, then try again.";
 const PAGE_ID = `typeof window.__pangularPageId === 'string' ? window.__pangularPageId : null`;
 const STORED_PAGE_ID = `(() => {
   try {
@@ -37,6 +48,7 @@ const STORED_PAGE_ID = `(() => {
 })()`;
 
 let detection = 0;
+let busyRetry;
 let themeName = chrome.devtools.panels.themeName || 'dark';
 
 function applyTheme(name) {
@@ -53,12 +65,34 @@ chrome.devtools.panels.setThemeChangeHandler?.((name) => {
   );
 });
 
-function evalInPage(expression) {
+// `{ok, value}`, or `{ok: false, reason}` when the page threw or had no
+// execution context ('error'), or did not answer in time ('timeout').
+function evalPage(expression, timeoutMs = EVAL_TIMEOUT_MS) {
   return new Promise((resolve) => {
-    chrome.devtools.inspectedWindow.eval(expression, (result, error) =>
-      resolve(error ? null : result),
-    );
+    const timer = setTimeout(() => resolve({ ok: false, reason: 'timeout' }), timeoutMs);
+    chrome.devtools.inspectedWindow.eval(expression, (result, error) => {
+      clearTimeout(timer);
+      resolve(error ? { ok: false, reason: 'error' } : { ok: true, value: result });
+    });
   });
+}
+
+function evalInPage(expression) {
+  return evalPage(expression).then((answer) => (answer.ok ? answer.value : null));
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The page's origin, read again while the page has no execution context yet.
+async function readPageOrigin(run) {
+  for (let read = 1; ; read++) {
+    const answer = await evalPage('location.origin');
+    if (run !== detection || answer.ok || answer.reason === 'timeout' || read >= PAGE_READS) {
+      return answer;
+    }
+    await wait(PAGE_READ_RETRY_MS);
+    if (run !== detection) return answer;
+  }
 }
 
 function toURL(value) {
@@ -69,13 +103,28 @@ function toURL(value) {
   }
 }
 
-async function detectConnection() {
+async function detectConnection({ quiet = false } = {}) {
   const run = ++detection;
-  showStatus(DETECTING, { help: false });
-  const page = toURL(await evalInPage('location.origin'));
+  clearTimeout(busyRetry);
+  if (!quiet) showStatus(DETECTING, { help: false });
+  const answer = await readPageOrigin(run);
   if (run !== detection) return;
+  if (!answer.ok) {
+    if (answer.reason === 'timeout') {
+      showStatus(BUSY, { retry: true, help: false });
+      busyRetry = setTimeout(() => {
+        if (run === detection) detectConnection({ quiet: true });
+      }, BUSY_RETRY_MS);
+    } else {
+      showStatus(UNREADABLE, { retry: true, help: false });
+    }
+    return;
+  }
+  const page = toURL(answer.value);
   if (!page || !['http:', 'https:'].includes(page.protocol)) {
-    showStatus('Pangular Inspector connects to pages served over http or https.');
+    showStatus('Pangular Inspector connects to pages served over http or https.', {
+      retry: true,
+    });
     return;
   }
 
@@ -88,6 +137,7 @@ async function detectConnection() {
       allow: async () => {
         if (await chrome.permissions.request(access)) detectConnection();
       },
+      retry: true,
     });
     return;
   }
@@ -122,13 +172,25 @@ async function detectConnection() {
 }
 
 // The overlay sets the id once it claims it, which can be well after the app renders.
+// A page blocked by a dialog doesn't count toward the wait: its overlay claims the id
+// once the dialog closes.
 async function waitForPageId(run) {
-  for (let waited = 0; ; waited += PAGE_ID_POLL_MS) {
-    const id = await evalInPage(PAGE_ID);
+  let deadline = Date.now() + PAGE_ID_WAIT_MS;
+  let busy = false;
+  for (;;) {
+    const answer = await evalPage(PAGE_ID);
     if (run !== detection) return null;
-    if (typeof id === 'string' && id) return id;
-    if (waited >= PAGE_ID_WAIT_MS) return evalInPage(STORED_PAGE_ID);
-    await new Promise((resolve) => setTimeout(resolve, PAGE_ID_POLL_MS));
+    if (answer.ok && typeof answer.value === 'string' && answer.value) return answer.value;
+    if (!answer.ok && answer.reason === 'timeout') {
+      if (!busy) showStatus(BUSY, { retry: true, help: false });
+      busy = true;
+      deadline = Date.now() + PAGE_ID_WAIT_MS;
+      continue;
+    }
+    if (busy) showStatus(DETECTING, { help: false });
+    busy = false;
+    if (Date.now() >= deadline) return evalInPage(STORED_PAGE_ID);
+    await wait(PAGE_ID_POLL_MS);
   }
 }
 

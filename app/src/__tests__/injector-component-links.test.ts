@@ -83,6 +83,7 @@ function fakeClient(): DevframeRpcClient {
       Promise.resolve({ value: () => state[name] ?? null, on: () => () => {} }),
   };
   return {
+    status: 'connected',
     connectionMeta: { configs: {} },
     scope: () => ({ rpc }),
     events: { on: () => () => {} },

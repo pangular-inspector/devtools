@@ -23,6 +23,10 @@ interface Setup {
   grant?: boolean;
   fetch?: (url: string, init?: RequestInit) => Promise<Response>;
   inspect?: (expression: string) => unknown;
+  /** How the page answers `location.origin`: its origin, an error, or no answer at all. */
+  readOrigin?: () => 'error' | 'hang' | 'origin';
+  /** Whether the page answers the page id read, or hangs on a dialog. */
+  readPageId?: () => 'hang' | 'answer';
 }
 
 const offline = () => Promise.reject(new TypeError('Failed to fetch'));
@@ -47,7 +51,16 @@ function open(setup: Setup = {}) {
     permissions: { contains: vi.fn(async () => granted), request },
     devtools: {
       inspectedWindow: {
-        eval: (expression: string, callback: (result: unknown, error?: unknown) => void) =>
+        eval: (expression: string, callback: (result: unknown, error?: unknown) => void) => {
+          const read = expression === 'location.origin' ? (setup.readOrigin?.() ?? 'origin') : '';
+          if (read === 'hang') return;
+          if (expression.includes('__pangularPageId') && setup.readPageId?.() === 'hang') return;
+          if (read === 'error') {
+            queueMicrotask(() =>
+              callback(undefined, { isError: true, code: 'E_FAILED', description: 'no context' }),
+            );
+            return;
+          }
           queueMicrotask(() =>
             callback(
               expression === 'location.origin'
@@ -58,7 +71,8 @@ function open(setup: Setup = {}) {
                     ? (setup.storedPageId ?? null)
                     : (setup.inspect?.(expression) ?? null),
             ),
-          ),
+          );
+        },
         getResources: (callback: (resources: { url: string }[]) => void) => callback([]),
       },
       network: { onNavigated: { addListener: (l: Listener) => navigated.push(l) } },
@@ -78,6 +92,8 @@ function open(setup: Setup = {}) {
     AbortSignal,
     URL,
     setTimeout,
+    clearTimeout,
+    Date,
   });
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -125,9 +141,83 @@ describe('extension panel bridge', () => {
     const panel = open({ origin: 'chrome://newtab' });
     await vi.advanceTimersByTimeAsync(500);
     expect(panel.message()).toMatch(/pages served over http or https/);
+    expect(panel.retry.hidden).toBe(false);
     expect(panel.docs.hidden).toBe(false);
     expect(panel.allow.hidden).toBe(true);
     expect(panel.fetch).not.toHaveBeenCalled();
+  });
+
+  it('reads the page again while it has no execution context after a navigation', async () => {
+    let failures = 3;
+    const panel = open({
+      readOrigin: () => (failures-- > 0 ? 'error' : 'origin'),
+      pageId: () => 'page-1',
+      fetch: found('/__pangular/__devframe/__connection.json'),
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(panel.message()).toBe('Detecting Angular app…');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(panel.frame.style.display).toBe('block');
+    expect(new URL(panel.frame.src).searchParams.get('pageId')).toBe('page-1');
+  });
+
+  it('says it could not read the page, not that it is not http, and tries again on request', async () => {
+    let readable = false;
+    const panel = open({
+      readOrigin: () => (readable ? 'origin' : 'error'),
+      pageId: () => 'page-1',
+      fetch: found('/__pangular/__devframe/__connection.json'),
+    });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(panel.message()).toBe("Couldn't read the inspected page. Reload it, then try again.");
+    expect(panel.message()).not.toMatch(/http or https/);
+    expect(panel.retry.hidden).toBe(false);
+
+    readable = true;
+    panel.retry.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(panel.frame.style.display).toBe('block');
+  });
+
+  it('points at the code prompt while the page does not answer, and goes on once it does', async () => {
+    let blocked = true;
+    const panel = open({
+      readOrigin: () => (blocked ? 'hang' : 'origin'),
+      pageId: () => 'page-1',
+      fetch: found('/__pangular/__devframe/__connection.json'),
+    });
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(panel.message()).toBe('Detecting Angular app…');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(panel.message()).toMatch(/^The inspected page is not answering\. If it shows a prompt/);
+    expect(panel.retry.hidden).toBe(false);
+    // It checks again by itself, without going back to "Detecting".
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(panel.message()).toMatch(/^The inspected page is not answering/);
+
+    blocked = false;
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(panel.frame.style.display).toBe('block');
+    expect(panel.status.classList.contains('hidden')).toBe(true);
+  });
+
+  it('shows the hint while the page blocks on a prompt before its overlay claims an id', async () => {
+    let blocked = true;
+    const panel = open({
+      readPageId: () => (blocked ? 'hang' : 'answer'),
+      pageId: () => 'page-1',
+      fetch: found('/__pangular/__devframe/__connection.json'),
+    });
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(panel.message()).toMatch(/^The inspected page is not answering/);
+    // A blocked page doesn't use up the wait for its id.
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(panel.frame.style.display).toBe('none');
+
+    blocked = false;
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(panel.frame.style.display).toBe('block');
+    expect(new URL(panel.frame.src).searchParams.get('pageId')).toBe('page-1');
   });
 
   it('asks for access to a non-loopback host, then detects once granted', async () => {

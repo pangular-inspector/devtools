@@ -46,7 +46,9 @@ import { hostPageId, scopeToPage } from './page-id';
 import { angularNativePage, type PlatformPage } from './native-page';
 import { initialTab, storeTab, storedTab } from './tab-memory';
 import { detectBaseURL } from './base-url';
-import { clearHighlightsOnHide, panelCacheOptions, rpcTry } from './rpc';
+import { panelAuth } from './auth-token';
+import { AuthCode } from './ui/auth-code';
+import { clearHighlightsOnHide, forgetDevframeConnection, panelCacheOptions, rpcTry } from './rpc';
 import { EditorOpener } from './ui/source-link';
 import { viewAccent } from './view-accents';
 import {
@@ -222,6 +224,7 @@ function readView(): View | null {
     TabIcon,
     Settings,
     CommandPalette,
+    AuthCode,
   ],
   template: `
     <header>
@@ -464,7 +467,15 @@ function readView(): View | null {
         role="status"
       >
         <span class="dot" aria-hidden="true"><span></span></span>
-        {{ connected() ? 'Live' : connectionFailed() ? 'Disconnected' : 'Connecting…' }}
+        {{
+          connected()
+            ? 'Live'
+            : connectionFailed()
+              ? 'Disconnected'
+              : pairing()
+                ? 'Code needed'
+                : 'Connecting…'
+        }}
       </span>
     </header>
     <main #main tabindex="-1" [attr.aria-label]="mainLabel()">
@@ -482,6 +493,8 @@ function readView(): View | null {
           [paletteShortcut]="paletteShortcut"
           [rpc]="rpc()"
         />
+      } @else if (pairing(); as client) {
+        <app-auth-code [client]="client" />
       } @else if (connectionFailed()) {
         <div class="connection-error" role="alert">
           <p>
@@ -490,6 +503,8 @@ function readView(): View | null {
           </p>
           <button type="button" (click)="retryConnection()">Retry now</button>
         </div>
+      } @else if (!rpc()) {
+        <p class="turned-off" role="status">Connecting to the devtools server…</p>
       } @else if (comingSoon(); as info) {
         <app-coming-soon [info]="info" />
       } @else if (view() === 'angular-native' && !nativePageId()) {
@@ -1155,6 +1170,8 @@ export class App implements OnInit, OnDestroy {
   private readonly openedDock = signal<{ dock: string } | null>(null);
   connected = signal(false);
   readonly connectionFailed = signal(false);
+  /** A client the server does not trust yet: the panel asks for the one-time code. */
+  readonly pairing = signal<DevframeRpcClient | null>(null);
   private readonly hiddenPages = signal<string[]>([]);
   private readonly pageId = hostPageId();
   readonly backgroundNote = computed(() => {
@@ -1275,13 +1292,19 @@ export class App implements OnInit, OnDestroy {
 
   /** Connects to the devframe server, and keeps trying with backoff while it can't. */
   private connect() {
-    if (this.connecting || this.rpc()) return;
+    if (this.connecting || this.rpc() || this.pairing()) return;
     this.connecting = true;
     clearTimeout(this.retryTimer);
     const baseURL = detectBaseURL();
+    // After a drop, the server may come back on another WebSocket port.
+    if (this.dropped) forgetDevframeConnection();
+    const auth = panelAuth(baseURL);
     connectDevframe({
       ...(baseURL ? { baseURL } : {}),
+      ...(auth.token ? { authToken: auth.token } : {}),
       cacheOptions: panelCacheOptions(),
+      // The panel asks for the one-time code itself, also inside the extension and the hub.
+      simpleAuth: false,
     }).then(
       (client) => {
         this.connecting = false;
@@ -1289,46 +1312,30 @@ export class App implements OnInit, OnDestroy {
           client.close?.();
           return;
         }
-        this.retries = 0;
-        this.connectionFailed.set(false);
-        // Retry now disappears with the error, so its focus moves to the tabs.
-        if (this.refocusOnConnect) this.focusCurrentTab();
-        this.refocusOnConnect = false;
-        this.rpc.set(client);
-        this.connected.set(true);
-        this.listenForServer(client);
-        void this.watchVisibility(client);
-        void this.watchAngularNative(client);
-        void this.watchCapacitor(client);
-        void this.watchPlugins(client);
-        const scoped = client.scope('pangular').rpc as unknown as {
-          call: (name: string) => Promise<unknown>;
+        // Resolving only means the connection file was found: the server counts
+        // once it trusts this client, which also tells a dead socket apart.
+        const onStatus = (status: string) => {
+          if (status === 'connected') {
+            this.pairing.set(null);
+            // devframe says it is trusted before it stores the token it got for the code.
+            setTimeout(() => auth.remember(client.connection?.authToken));
+            this.ready(client);
+            this.connected.set(this.rpc() === client);
+          } else if (status === 'unauthorized') {
+            this.connected.set(false);
+            if (this.rpc() === client) this.rpc.set(null);
+            this.pairing.set(client);
+          } else if (status === 'disconnected' || status === 'error') {
+            // The client doesn't reconnect by itself, so a dropped one is replaced.
+            this.connected.set(false);
+            if (this.rpc() === client) this.rpc.set(null);
+            if (this.pairing() === client) this.pairing.set(null);
+            client.close?.();
+            this.retryLater();
+          }
         };
-        scoped.call('analog-project').then(
-          (project) => {
-            const isAnalog = !!(project as { analog?: boolean } | null)?.analog;
-            this.analog.set(isAnalog);
-            this.analogKnown.set(true);
-            if (isAnalog && this.restoreAnalog && tabEnabled('analog', this.config())) {
-              this.tab.set('analog');
-            }
-            this.restoreAnalog = false;
-            if (!isAnalog && this.tab() === 'analog' && !this.view()) this.tab.set('dashboard');
-          },
-          () => {
-            this.analogKnown.set(true);
-            this.restoreAnalog = false;
-            if (this.tab() === 'analog' && !this.view()) this.tab.set('dashboard');
-          },
-        );
-        client.events.on('connection:status', (status) => {
-          this.connected.set(status === 'connected');
-          // The client doesn't reconnect by itself, so a dropped one is replaced.
-          if ((status !== 'disconnected' && status !== 'error') || this.rpc() !== client) return;
-          this.rpc.set(null);
-          client.close?.();
-          this.retryLater();
-        });
+        client.events.on('connection:status', onStatus);
+        if (client.status !== 'connecting') onStatus(client.status);
       },
       () => {
         this.connecting = false;
@@ -1340,9 +1347,49 @@ export class App implements OnInit, OnDestroy {
     );
   }
 
+  /** Starts using a client the server trusts. */
+  private ready(client: DevframeRpcClient) {
+    if (this.rpc() === client || this.destroyed) return;
+    this.retries = 0;
+    this.connectionFailed.set(false);
+    // Retry now disappears with the error, so its focus moves to the tabs.
+    if (this.refocusOnConnect) this.focusCurrentTab();
+    this.refocusOnConnect = false;
+    this.rpc.set(client);
+    this.listenForServer(client);
+    void this.watchVisibility(client);
+    void this.watchAngularNative(client);
+    void this.watchCapacitor(client);
+    void this.watchPlugins(client);
+    const scoped = client.scope('pangular').rpc as unknown as {
+      call: (name: string) => Promise<unknown>;
+    };
+    scoped.call('analog-project').then(
+      (project) => {
+        const isAnalog = !!(project as { analog?: boolean } | null)?.analog;
+        this.analog.set(isAnalog);
+        this.analogKnown.set(true);
+        if (isAnalog && this.restoreAnalog && tabEnabled('analog', this.config())) {
+          this.tab.set('analog');
+        }
+        this.restoreAnalog = false;
+        if (!isAnalog && this.tab() === 'analog' && !this.view()) this.tab.set('dashboard');
+      },
+      () => {
+        this.analogKnown.set(true);
+        this.restoreAnalog = false;
+        if (this.tab() === 'analog' && !this.view()) this.tab.set('dashboard');
+      },
+    );
+  }
+
+  /** Whether a connection failed or dropped, so the next one reads the connection file again. */
+  private dropped = false;
+
   /** Shows the connection error and calls `connect()` again after the next backoff delay. */
   private retryLater() {
     if (this.destroyed) return;
+    this.dropped = true;
     this.connectionFailed.set(true);
     // A dev server that starts slowly or restarts answers a moment later.
     const delay = RETRY_DELAYS_MS[Math.min(this.retries++, RETRY_DELAYS_MS.length - 1)];

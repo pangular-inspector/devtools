@@ -53,6 +53,42 @@ export function overlayConnectOptions(
   };
 }
 
+/**
+ * The options for connecting again after the server dropped: only the mount
+ * that answered the first time (`metaUrl`, where its `__connection.json` came
+ * from), and no blocking prompt for the one-time code.
+ */
+export function overlayReconnectOptions(
+  options: OverlayConnectionInput,
+  defaultBases: string[],
+  metaUrl: string | undefined,
+  win?: { CapacitorWebFetch?: unknown },
+): ConnectOptions {
+  let base: string | undefined;
+  try {
+    base = !options.connectionMeta && metaUrl ? new URL('.', metaUrl).href : undefined;
+  } catch {
+    base = undefined;
+  }
+  return {
+    ...overlayConnectOptions(base ? { ...options, baseURL: base } : options, defaultBases, win),
+    simpleAuth: false,
+  };
+}
+
+/**
+ * Drops the connection devframe keeps on this window, so the next
+ * `connectDevframe()` reads `__connection.json` again. A restarted server can
+ * listen on another WebSocket port (the default one may be taken meanwhile),
+ * and the kept one could then reach another server.
+ */
+export function forgetDevframeConnection(
+  win: Record<string, unknown> = globalThis as unknown as Record<string, unknown>,
+) {
+  delete win['__DEVFRAME_CONNECTION__'];
+  delete win['__DEVFRAME_CONNECTION_META__'];
+}
+
 /** For tests: lets the next missing config warn again. */
 export function resetConnectionWarnings() {
   warnedNoConfig = false;

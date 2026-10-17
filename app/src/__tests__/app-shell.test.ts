@@ -12,6 +12,10 @@ const connection = vi.hoisted(() => ({
   options: [] as unknown[],
   /** How many clients the panel closed. */
   closed: 0,
+  /** The status each new client starts with. */
+  initialStatus: 'connected',
+  /** The one-time code the fake server accepts. */
+  code: '123456',
 }));
 
 function fakeClient(): DevframeRpcClient {
@@ -21,8 +25,30 @@ function fakeClient(): DevframeRpcClient {
     sharedState: () => Promise.resolve({ value: () => null, on: () => () => {} }),
   };
   const listeners: ((status: string) => void)[] = [];
-  connection.emitStatus = (status) => listeners.forEach((listener) => listener(status));
+  const client = {
+    status: connection.initialStatus,
+    connection: { authToken: undefined as string | undefined },
+    requestAuthCode: vi.fn(() => Promise.resolve()),
+    requestTrustWithCode: vi.fn(async (code: string) => {
+      if (code !== connection.code) return false;
+      client.connection.authToken = 'token-for-code';
+      connection.emitStatus('connected');
+      return true;
+    }),
+  };
+  connection.emitStatus = (status) => {
+    client.status = status;
+    listeners.forEach((listener) => listener(status));
+  };
   return {
+    get status() {
+      return client.status;
+    },
+    get connection() {
+      return client.connection;
+    },
+    requestAuthCode: client.requestAuthCode,
+    requestTrustWithCode: client.requestTrustWithCode,
     connectionMeta: { configs: {} },
     scope: () => ({ rpc }),
     events: {
@@ -64,6 +90,7 @@ afterEach(() => {
   connection.answers = [];
   connection.options = [];
   connection.closed = 0;
+  connection.initialStatus = 'connected';
   TestBed.resetTestingModule();
 });
 
@@ -110,6 +137,8 @@ describe('App connection retry', () => {
     expect(status(fixture)).toBe('Live');
 
     // The dev server restarted: the old client is closed for good.
+    const kept = globalThis as Record<string, unknown>;
+    kept['__DEVFRAME_CONNECTION__'] = { connectionMeta: { websocket: 9777 } };
     connection.emitStatus('disconnected');
     await settle(fixture);
     expect(status(fixture)).toBe('Disconnected');
@@ -118,6 +147,8 @@ describe('App connection retry', () => {
     await vi.waitFor(() => expect(connection.attempts).toBe(2), { timeout: 3000 });
     await settle(fixture);
     expect(status(fixture)).toBe('Live');
+    // It read the connection file again: the server may listen on another port now.
+    expect(kept['__DEVFRAME_CONNECTION__']).toBeUndefined();
     fixture.destroy();
   });
 
@@ -148,6 +179,58 @@ describe('App connection retry', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 1_200));
     expect(connection.attempts).toBe(1);
+  });
+});
+
+describe('App before the server trusts it', () => {
+  it('shows Connecting, not Live, until the socket is trusted, and the error when it fails', async () => {
+    connection.answers = [true, false];
+    connection.initialStatus = 'connecting';
+    const fixture = TestBed.createComponent(App);
+    await settle(fixture);
+    expect(status(fixture)).toBe('Connecting…');
+    expect(host(fixture).textContent).toContain('Connecting to the devtools server…');
+    expect(host(fixture).querySelector('app-dashboard')).toBeNull();
+    expect(connection.options[0]).toMatchObject({ simpleAuth: false });
+
+    // The server is down: the reused connection file resolves, the socket does not open.
+    connection.emitStatus('error');
+    await settle(fixture);
+    expect(status(fixture)).toBe('Disconnected');
+    expect(host(fixture).querySelector('.connection-error')).not.toBeNull();
+    fixture.destroy();
+  });
+
+  it('asks for the one-time code when the server does not trust the panel, then connects', async () => {
+    connection.answers = [true];
+    connection.initialStatus = 'connecting';
+    const fixture = TestBed.createComponent(App);
+    document.body.appendChild(host(fixture));
+    await settle(fixture);
+    connection.emitStatus('unauthorized');
+    await settle(fixture);
+    expect(status(fixture)).toBe('Code needed');
+    const form = host(fixture).querySelector('app-auth-code')!;
+    expect(form).not.toBeNull();
+    expect(form.querySelector('h2')?.textContent).toBe('Enter the one-time code');
+    const input = form.querySelector<HTMLInputElement>('input')!;
+    expect(document.activeElement).toBe(input);
+
+    input.value = '000000';
+    input.dispatchEvent(new Event('input'));
+    form.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(fixture);
+    expect(form.querySelector('[role="alert"]')?.textContent).toContain("didn't match");
+    expect(status(fixture)).toBe('Code needed');
+
+    input.value = ' 123456 ';
+    input.dispatchEvent(new Event('input'));
+    form.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(fixture);
+    expect(host(fixture).querySelector('app-auth-code')).toBeNull();
+    expect(status(fixture)).toBe('Live');
+    expect(host(fixture).querySelector('app-dashboard')).not.toBeNull();
+    fixture.destroy();
   });
 });
 

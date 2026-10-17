@@ -826,6 +826,8 @@ function storedDirectiveHosts(): boolean {
           The page reported no component instances. The live tree needs a development build with
           Angular's debug API. Showing what the source declares instead.
         </p>
+      } @else if (!pagesKnown()) {
+        <p class="notice" role="status">Loading the live component tree…</p>
       } @else {
         <p class="notice">
           No page is connected, so this lists what the source declares. Open the app in a browser
@@ -1754,7 +1756,7 @@ export class ComponentTree {
   private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
   private readonly cdRecording = viewChild(CdRecording);
   /** Whether the server sent the component tree state yet, so an empty one means no page. */
-  private readonly pagesKnown = signal(false);
+  protected readonly pagesKnown = signal(false);
   private readonly cleanups: (() => void)[] = [];
   private selection = { pageId: null as string | null, detailId: null as string | null };
 

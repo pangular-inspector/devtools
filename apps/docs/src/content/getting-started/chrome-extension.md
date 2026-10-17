@@ -87,7 +87,13 @@ If any URL got `401` or `403`, the panel says the server refused the request ins
 
 Both messages have a **Try again** button. Click it after you start or fix the server, and the panel looks for the server again without a page reload.
 
-The panel only connects to pages served over `http` or `https`. On other pages it says so and stops.
+The panel only connects to pages served over `http` or `https`. On other pages it says so, with a **Try again** button.
+
+### Reading the page
+
+The panel reads the origin of the inspected page through DevTools. Right after a navigation the page can have no execution context yet, so the panel reads it again every 300 milliseconds, up to 10 times. If every read fails, it says it couldn't read the page and offers **Try again**.
+
+A page that waits on a dialog, such as the overlay's prompt for the [one-time code](#one-time-code), doesn't answer at all. After 2 seconds the panel says the page is not answering and points at that prompt. It keeps checking every 2 seconds and connects once the prompt is closed.
 
 ### Other hosts
 
@@ -102,6 +108,21 @@ The overlay claims the id after it connects to the server, so it can come later 
 ### Navigation
 
 When the inspected page navigates, the panel shows "Detecting Angular app…", looks for the server again and reconnects.
+
+### One-time code
+
+The Vite plugin and the Express hub ask for a one-time code by default. Inside the extension, the panel asks for the code itself, with the same form the panel shows when you open it at `/__devframes/pangular/`:
+
+<ngmd-workflow>
+  <ngmd-step title="Find the code">
+    The dev server prints a 6-digit code in its terminal. If you can't find it, click <strong>Print a new code</strong>.
+  </ngmd-step>
+  <ngmd-step title="Enter it in the panel">
+    Type the code in the <strong>One-time code</strong> field and click <strong>Connect</strong>.
+  </ngmd-step>
+</ngmd-workflow>
+
+The server trades the code for a token. The extension keeps one token per server origin, in its own storage, so the panel connects without the code next time, and a token is never sent to a server that did not issue it. The code that the app page asks for in its own prompt doesn't count for the panel: the page and the panel are separate clients, and each gets its own token.
 
 ### Theme
 
@@ -164,6 +185,8 @@ const devtools = initPangularHub({
 
 In the Vite plugin, an extension entry does not turn the one-time code on. If the server refuses a build with another ID, the panel names its own origin in the message. See [Access and redaction](../security.md#chrome-extension).
 
+A trusted extension origin passes the origin check only. With the one-time code on, the panel still enters the code once per server. See [One-time code](#one-time-code).
+
 ### Pages you don't inspect
 
 The extension has no content scripts, so it runs nothing in the pages you browse. It reads a page only through DevTools, in the tab DevTools inspects, and only while DevTools is open. Chrome gives DevTools extensions that access without a host permission.
@@ -176,6 +199,12 @@ The extension has no content scripts, so it runs nothing in the pages you browse
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel asks me to allow access">
     The page is not on a loopback host. Click <strong>Allow access</strong> to let the extension reach that host. Chrome asks you to confirm.
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="The panel asks for a one-time code">
+    The server has the one-time code on, which is the default for the Vite plugin and the Express hub. Enter the code from the terminal of the dev server. See <a href="#one-time-code">One-time code</a>.
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="The panel says the page is not answering">
+    The page waits on a dialog, usually the overlay's prompt for the one-time code. Enter the code in the page or close the prompt. The panel goes on by itself.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel lists the URLs it tried">
     None of them served a connection file. The status next to each URL shows what the server answered. Check that the server of the page mounts the devtools and that the server accepts the request, then click <strong>Try again</strong>. See <a href="../security.md">Access and redaction</a>.

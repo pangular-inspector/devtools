@@ -136,9 +136,9 @@ const CLASSIC_KINDS = new Set([
           (valueChange)="selectPage($event)"
         />
       }
-      <span class="status" [class.on]="!!page()">
+      <span class="status" [class.on]="pageConnected()">
         <span class="live-dot" aria-hidden="true"></span>
-        {{ page() ? 'Live' : 'No page connected' }}
+        {{ !stateLoaded() ? 'Loading…' : pageConnected() ? 'Live' : 'No page connected' }}
       </span>
     </div>
 
@@ -1881,6 +1881,9 @@ export class StoreInspector {
       null
     );
   });
+
+  /** A page is connected, with stores or without: every page reports its Angular version. */
+  readonly pageConnected = computed(() => !!this.page() || !!this.angularPage());
 
   /** The other stores of the shown page. */
   readonly reduxPage = computed(

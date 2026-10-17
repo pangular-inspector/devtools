@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
+import { pickPage } from '../live-pages';
 import { RouteCurrent } from './route-current';
 import { RouteLint } from './route-lint';
 import { RouteSetup } from './route-setup';
@@ -281,25 +282,21 @@ export class LiveRoute {
   private readonly hostPageId = hostPageId();
   readonly loading = signal(true);
   readonly failed = signal(false);
+  /** The page picked here, else the inspected page, else the newest, as the other tabs pick it. */
   readonly pageId = linkedSignal<RouterPage[], string | null>({
     source: this.pages,
     computation: (pages, previous) =>
-      previous?.value && pages.some((p) => p.pageId === previous.value)
-        ? previous.value
-        : this.hostPageId
-          ? (pages.find((p) => p.pageId === this.hostPageId)?.pageId ?? null)
-          : (pages.find((p) => p.snapshot)?.pageId ?? pages[0]?.pageId ?? null),
+      pickPage(Object.fromEntries(pages.map((page) => [page.pageId, page])), {
+        chosen: previous?.value ?? null,
+        host: this.hostPageId,
+        previous: null,
+      }),
   });
 
   private unsubscribe: (() => void) | null = null;
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly page = computed(() => {
-    const pages = this.pages();
-    return (
-      pages.find((p) => p.pageId === this.pageId()) ?? (this.hostPageId ? null : pages[0]) ?? null
-    );
-  });
+  readonly page = computed(() => this.pages().find((p) => p.pageId === this.pageId()) ?? null);
 
   readonly problems = computed(
     () =>

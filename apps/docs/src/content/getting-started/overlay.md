@@ -85,6 +85,12 @@ Each read skips data that did not change. Router events are sent as they happen.
 
 Each browser tab gets its own page id, kept in `sessionStorage`. The devtools use it to tell tabs apart. When a tab closes, its data is dropped.
 
+### Server restarts
+
+If the dev server stops, the overlay stops sending and connects again once the server is back, without a page reload. It tries after half a second, then waits longer between attempts, up to 5 seconds. Each attempt reads the connection file again, so a server that comes back on another WebSocket port is found. Once connected, it claims the same page id and sends every report again in full. What the page recorded meanwhile, such as the forms timeline and the router navigations, stays on the page and goes out with it.
+
+The overlay keeps the token it got for the one-time code, and the server keeps its tokens across restarts, so the page is trusted again without the code. If the server refuses the token, the overlay logs one warning and stops. Reload the page to enter a new code.
+
 ## A custom mount path
 
 ### Call `initOverlay`

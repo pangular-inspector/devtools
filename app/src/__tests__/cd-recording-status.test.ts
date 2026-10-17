@@ -80,11 +80,29 @@ describe('CdRecording status', () => {
     expect(live()).toBe('Recording started.');
 
     await click('Stop recording');
-    expect(live()).toBe('Recording stopped. 3 cycles recorded.');
+    // The page's last report still brings cycles: the total waits for it.
+    expect(live()).toBe('Recording started.');
+    await show(false, 5);
+    expect(live()).toBe('Recording stopped. 5 cycles recorded.');
 
-    await show(false, 3);
     await click('Clear');
     expect(live()).toBe('Cleared the recorded cycles.');
+  });
+
+  it('announces the count it has when the last report does not come', async () => {
+    await show(true, 2);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      button('Stop recording').click();
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+      expect(live()).not.toContain('stopped');
+      await vi.advanceTimersByTimeAsync(3000);
+      fixture.detectChanges();
+      expect(live()).toBe('Recording stopped. 2 cycles recorded.');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('announces a repeated message again', async () => {

@@ -99,13 +99,14 @@ function routerPage(pageId: string, reportedAt: number, devtoolsId: string) {
   };
 }
 
-// Two app tabs: the older one reports a router snapshot first, so the Router tab
-// shows it, while the Components tab shows the newest page.
+// Two app tabs that reported in a different order to each inspector: the Router
+// tab shows the page with the newest router report, the Components tab the one
+// with the newest tree.
 const twoPages: Record<string, unknown> = {
   'component-tree': {
     pages: { old: treePage('old', 1, 'old-shell'), new: treePage('new', 2, 'new-shell') },
   },
-  router: { pages: [routerPage('old', 1, 'old-shell'), routerPage('new', 2, 'new-shell')] },
+  router: { pages: [routerPage('old', 3, 'old-shell'), routerPage('new', 2, 'new-shell')] },
 };
 
 // The router still reports a component the tree no longer has.
@@ -124,6 +125,7 @@ function fakeClient(): DevframeRpcClient {
       Promise.resolve({ value: () => state[name] ?? null, on: () => () => {} }),
   };
   return {
+    status: 'connected',
     connectionMeta: { configs: {} },
     scope: () => ({ rpc }),
     events: { on: () => () => {} },

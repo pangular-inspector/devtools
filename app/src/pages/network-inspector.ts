@@ -309,7 +309,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       </div>
     }
 
-    <div class="toolbar">
+    <div class="toolbar" [hidden]="loading()">
       <div class="page-picker">
         <span id="page-picker-label">Page</span>
         <app-select
@@ -332,7 +332,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       <p class="message" role="status">{{ message() }}</p>
     </div>
 
-    <div class="grid">
+    <div class="grid" [hidden]="loading()">
       <section class="panel wide" aria-labelledby="ssr-heading">
         <h2 id="ssr-heading">SSR requests ({{ requests().length }})</h2>
         @if (requests().length) {
@@ -1286,6 +1286,11 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
   `,
   styles: `
     @use 'mixins' as m;
+
+    .toolbar[hidden],
+    .grid[hidden] {
+      display: none;
+    }
 
     :host {
       display: block;

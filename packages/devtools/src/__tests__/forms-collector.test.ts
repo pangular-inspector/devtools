@@ -73,13 +73,14 @@ Component({
   template: `<form [formRoot]="form"><input id="tname" [formField]="form.name" /><button>Go</button></form>`,
 })(Tasks);
 
-function harness(maxEvents?: number) {
+function harness(maxEvents?: number, offline = () => false) {
   const calls: { name: string; args: any[] }[] = [];
   const handlers = new Map<string, (...args: any[]) => unknown>();
   const my = {
     rpc: {
       call: async (name: string, ...args: unknown[]) => {
         calls.push({ name, args });
+        if (offline()) throw new Error('Not connected to the devframe server');
       },
       register: (def: { name: string; handler: (...args: any[]) => unknown }) => {
         handlers.set(def.name, def.handler);
@@ -467,6 +468,34 @@ describe('forms collector', () => {
     } finally {
       delete (navigator as any).modelContext;
     }
+  });
+});
+
+describe('forms collector without a server', () => {
+  it('keeps a paced push that fails out of the unhandled rejections', async () => {
+    const fixture = await mount(Login);
+    let down = false;
+    const h = harness(undefined, () => down);
+    h.collector.push();
+    await tick();
+    down = true;
+    const seen: unknown[] = [];
+    const onRejection = (reason: unknown) => seen.push(reason);
+    process.on('unhandledRejection', onRejection);
+    try {
+      // Changes within a second of the last send wait for the paced timer.
+      fixture.componentInstance.form.controls.email.setValue('a@x.io');
+      void h.collector.sync();
+      await tick();
+      fixture.componentInstance.form.controls.email.setValue('b@x.io');
+      void h.collector.sync();
+      await tick(LEASED_PUSH_MS + 200);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    } finally {
+      process.off('unhandledRejection', onRejection);
+    }
+    expect(h.calls.filter((c) => c.name === 'push-forms').length).toBeGreaterThan(1);
+    expect(seen).toEqual([]);
   });
 });
 

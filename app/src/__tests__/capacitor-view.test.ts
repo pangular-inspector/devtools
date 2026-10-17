@@ -41,6 +41,7 @@ function fakeClient(initial: Record<string, CapacitorPage> | undefined) {
       Promise.resolve(name === 'capacitor' ? capacitor : { value: () => null, on: () => () => {} }),
   };
   const client = {
+    status: 'connected',
     connectionMeta: { configs: {} },
     scope: () => ({ rpc }),
     events: { on: () => () => {} },

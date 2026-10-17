@@ -1,6 +1,12 @@
 import { connectDevframe } from 'devframe/client';
 import { overlayPopup } from './overlay-popup.ts';
-import { overlayConnectOptions, warnOnConnectionTrouble } from './overlay-connection.ts';
+import {
+  forgetDevframeConnection,
+  overlayConnectOptions,
+  overlayReconnectOptions,
+  warnOnConnectionTrouble,
+} from './overlay-connection.ts';
+import { createOverlayLink, type LinkClient } from './overlay-link.ts';
 export { registerNgrxSignals } from './ngrx-register.ts';
 import { attachAnalog } from './analog-runtime.ts';
 import { attachForms } from './forms-collector.ts';
@@ -284,7 +290,16 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       throw noServerError(bases, error, where);
     },
   );
-  if (!own(() => rpc.close?.())) return;
+  // Follows the server through restarts: `my` always calls the live connection.
+  const link = createOverlayLink(rpc as unknown as LinkClient, {
+    connect: async () => {
+      forgetDevframeConnection();
+      return (await connectDevframe(
+        overlayReconnectOptions(options, DEFAULT_BASES, rpc.connection?.metaBaseUrl),
+      )) as unknown as LinkClient;
+    },
+  });
+  if (!own(link.stop)) return;
   if (!own(warnOnConnectionTrouble(rpc, options))) return;
   const metaUrl = rpc.connection?.metaBaseUrl;
   if (metaUrl) {
@@ -292,7 +307,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
       ?.then((m) => m.useDevtoolsBase(new URL('.', metaUrl).href))
       .catch(() => {});
   }
-  const my = rpc.scope('pangular');
+  const my = link.scope;
   const devtoolsConfig = configFromConnection(rpc.connectionMeta);
   void overlayPopup()
     ?.then((m) => m.setPopupHotkey(devtoolsConfig.popup.hotkey))
@@ -977,6 +992,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     forms?.leave();
     forget('forms', 'forget-forms-page');
     forget('router', 'forget-router-page');
+    lastRouterPayload = '';
     forget('pipes', 'forget-pipes-page');
     treeChannel.resync();
     forget('components', 'forget-component-page');
@@ -1014,6 +1030,14 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     onVisibility();
   };
   addEventListener('pageshow', resendConfig);
+  // After a server restart: stop sending, then claim the page and send everything again.
+  link.follow({
+    dropped: leave,
+    restored: async () => {
+      await claimPageOnServer(my.rpc, pageId, pageKey);
+      resendConfig();
+    },
+  });
 
   own(() => {
     refresher?.stop();

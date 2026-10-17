@@ -17,6 +17,7 @@ function fakeClient(): DevframeRpcClient {
       server.handlers.set(definition.name, definition.handler),
   };
   return {
+    status: 'connected',
     connectionMeta: { configs: {} },
     scope: () => ({ rpc }),
     events: { on: () => () => {} },

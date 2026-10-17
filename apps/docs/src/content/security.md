@@ -160,6 +160,8 @@ Every installed extension can send requests to a loopback host, with its own `ch
 
 If you build the extension with another `key`, add its origin to `allowedOrigins`. Each entry names one extension. The ID is on the extension card in `chrome://extensions`. See [Server origin](./getting-started/chrome-extension.md#server-origin).
 
+The extension origin is trusted by the origin check only, never in place of the one-time code. Any local process can send an `Origin` header with the extension's ID, so the header can't prove who is asking. With the code on, the extension panel asks for the code like any other panel, trades it for a token over the devframe auth handshake, and keeps that token per server origin in the extension's own storage. See [One-time code](./getting-started/chrome-extension.md#one-time-code).
+
 ### Open in editor
 
 The panel and the overlay can ask the server to open a source file in your editor (see [Open a file in your editor](./inspectors/components.md#open-a-file-in-your-editor)). The request goes through the same gate and one-time code as every other call. The server then checks the path before it starts the editor:

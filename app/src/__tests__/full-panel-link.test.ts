@@ -48,6 +48,7 @@ function fakeClient(capacitorPages: Record<string, unknown>, calls: unknown[][] 
       ),
   };
   return {
+    status: 'connected',
     connectionMeta: { configs: {} },
     scope: () => ({ rpc }),
     events: { on: () => () => {} },

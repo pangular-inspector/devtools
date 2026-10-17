@@ -487,7 +487,10 @@ export function attachForms(
         const next = pendingReport;
         pendingReport = null;
         // A page that went idle meanwhile only keeps itself alive, on its next read.
-        if (next && (!options.active || options.active())) void deliver(next, false);
+        // A failed send is sent again in full on the next push (`delta-channel.ts`).
+        if (next && (!options.active || options.active())) {
+          void deliver(next, false).catch(() => {});
+        }
       }, wait);
       return;
     }

@@ -80,3 +80,32 @@ describe('LiveRoute pinned to a page', () => {
     expect(fixture.componentInstance.page()?.pageId).toBe('B');
   });
 });
+
+describe('LiveRoute page choice', () => {
+  it('shows the page that reported last, as the other tabs do, not the first one listed', async () => {
+    const older = { ...routerPage('B'), reportedAt: 1 };
+    const newer = { ...routerPage('A'), reportedAt: 5, snapshot: null };
+    const { client } = fakeClient([older, newer]);
+    const fixture = TestBed.createComponent(LiveRoute);
+    fixture.componentRef.setInput('rpc', client);
+    await settle(fixture);
+    expect(fixture.componentInstance.page()?.pageId).toBe('A');
+  });
+
+  it('keeps the page picked in the view when another reports later', async () => {
+    const { client, report } = fakeClient([
+      { ...routerPage('A'), reportedAt: 1 },
+      { ...routerPage('B'), reportedAt: 2 },
+    ]);
+    const fixture = TestBed.createComponent(LiveRoute);
+    fixture.componentRef.setInput('rpc', client);
+    await settle(fixture);
+    fixture.componentInstance.pageId.set('A');
+    report([
+      { ...routerPage('A'), reportedAt: 3 },
+      { ...routerPage('B'), reportedAt: 9 },
+    ]);
+    await settle(fixture);
+    expect(fixture.componentInstance.page()?.pageId).toBe('A');
+  });
+});

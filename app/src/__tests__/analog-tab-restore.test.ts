@@ -25,6 +25,7 @@ function fakeClient(analog: boolean): DevframeRpcClient {
     sharedState: () => Promise.resolve({ value: () => null, on: () => () => {} }),
   };
   return {
+    status: 'connected',
     connectionMeta: { configs: {} },
     scope: () => ({ rpc }),
     events: { on: () => () => {} },

@@ -1,4 +1,15 @@
-import { Component, computed, input, linkedSignal, output, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  input,
+  linkedSignal,
+  output,
+  signal,
+  untracked,
+} from '@angular/core';
 import type { CdOptions, CdReport } from '@pangular-inspector/devtools/config';
 import type { DevframeRpcClient } from 'devframe/client';
 import { panelConfig } from '../devtools-config';
@@ -18,6 +29,9 @@ import { CdTransfer, type CdImported } from './cd-transfer';
 import { CdTreemap } from './cd-treemap';
 
 export type { CdCheck, CdComponentStat, CdCycle } from '@pangular-inspector/devtools/config';
+
+/** How long Stop waits for the page's last report before it announces the count it has. */
+const STOP_REPORT_WAIT_MS = 3000;
 /** One page's recording, as the page reports it. */
 export type CdPage = CdReport;
 
@@ -523,12 +537,35 @@ export class CdRecording {
     return cdCauseText(cause);
   }
 
+  /** Set after Stop: the total is announced once the page's last report says it stopped. */
+  private readonly stopping = signal(false);
+  private stopTimer: ReturnType<typeof setTimeout> | undefined;
+
+  constructor() {
+    effect(() => {
+      if (!this.stopping() || this.livePage()?.recording === true) return;
+      untracked(() => this.announceStopped());
+    });
+    inject(DestroyRef).onDestroy(() => clearTimeout(this.stopTimer));
+  }
+
+  private announceStopped() {
+    clearTimeout(this.stopTimer);
+    this.stopping.set(false);
+    const count = this.livePage()?.cycles.length ?? 0;
+    this.announce(`Recording stopped. ${count} ${count === 1 ? 'cycle' : 'cycles'} recorded.`);
+  }
+
   async toggle() {
     if (this.recording()) {
-      await this.send({ on: false }, '', () => {
-        const count = this.cycles().length;
-        return `Recording stopped. ${count} ${count === 1 ? 'cycle' : 'cycles'} recorded.`;
+      const sent = await this.send({ on: false }, '', () => '', 'request-change-detection-record', {
+        quiet: true,
       });
+      if (!sent) return;
+      // The page sends its last cycles with the report that says it stopped.
+      this.stopping.set(true);
+      clearTimeout(this.stopTimer);
+      this.stopTimer = setTimeout(() => this.announceStopped(), STOP_REPORT_WAIT_MS);
     } else {
       await this.send({ on: true }, 'Starting…', () => 'Recording started.');
     }
@@ -580,6 +617,7 @@ export class CdRecording {
     pending: string,
     done: () => string,
     rpc = 'request-change-detection-record',
+    { quiet = false } = {},
   ): Promise<boolean> {
     this.message.set(pending);
     try {
@@ -589,7 +627,7 @@ export class CdRecording {
         ...request,
       });
       this.message.set('');
-      this.announce(done());
+      if (!quiet) this.announce(done());
       return true;
     } catch {
       const failed = 'Could not reach the page.';

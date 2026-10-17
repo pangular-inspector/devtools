@@ -54,3 +54,16 @@ export function clearHighlightsOnHide(client: () => DevframeRpcClient | null): (
     clear();
   };
 }
+
+/**
+ * Drops the connection devframe keeps on this window, so the next
+ * `connectDevframe()` reads `__connection.json` again. A restarted server can
+ * listen on another WebSocket port (the default one may be taken meanwhile),
+ * and the kept one could then reach another server.
+ */
+export function forgetDevframeConnection(
+  win: Record<string, unknown> = globalThis as unknown as Record<string, unknown>,
+) {
+  delete win['__DEVFRAME_CONNECTION__'];
+  delete win['__DEVFRAME_CONNECTION_META__'];
+}

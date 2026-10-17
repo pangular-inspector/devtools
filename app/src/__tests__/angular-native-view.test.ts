@@ -38,6 +38,7 @@ function fakeClient(initial: Pages) {
       ),
   };
   const client = {
+    status: 'connected',
     connectionMeta: { configs: {} },
     scope: () => ({ rpc }),
     events: { on: () => () => {} },

@@ -251,6 +251,8 @@ const KIND_COLORS: Record<string, string> = {
       } @else if (graph()) {
         The live signal graph of one component. Only signals that its template or an effect has read
         appear here; a signal nothing has read yet is not part of the graph. Pick a kind to filter.
+      } @else if (!graphKnown()) {
+        Loading the live signal graph…
       } @else {
         Every signal, computed and effect found in your source. Pick a kind to filter.
       }
@@ -1749,6 +1751,8 @@ export class SignalInspector {
     return pageId === null ? null : (this.graphPages()[pageId] ?? null);
   });
   readonly unsupported = computed(() => !!this.reported()?.unsupported);
+  /** Whether the live graph state arrived, so the intro doesn't call it a source scan first. */
+  protected readonly graphKnown = signal(false);
   readonly graph = computed<SignalGraph | null>(() => {
     const reported = this.reported();
     return reported?.unsupported ? null : reported;
@@ -2082,12 +2086,15 @@ export class SignalInspector {
         const state = { graph: next?.graph ?? null, pages };
         this.notePageGone(graphPagesOf(state));
         this.graphState.set(state);
+        // A state the client hasn't loaded from the server yet says nothing.
+        if (value !== undefined) this.graphKnown.set(true);
       };
       apply(state.value());
       this.cleanups.push(state.on('updated', apply));
     } catch {
       if (stale()) return;
       this.graphState.set({ graph: null, pages: {} });
+      this.graphKnown.set(true);
       this.graphFailed.set(true);
     }
     try {

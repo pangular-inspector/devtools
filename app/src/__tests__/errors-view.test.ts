@@ -69,6 +69,7 @@ function fakeClient(value: unknown, configs: Record<string, unknown> = {}) {
       }),
   };
   return {
+    status: 'connected',
     connectionMeta: { configs },
     scope: () => ({ rpc }),
     events: { on: () => () => {} },
