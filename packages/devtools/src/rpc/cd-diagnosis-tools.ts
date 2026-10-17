@@ -1,7 +1,6 @@
 import { CD_CAUSE_KINDS, CD_CAUSE_LABEL, cdCauseText, cdHints } from '../cd-data.ts';
 import type { AngularPageInfo, CdCycle } from '../config.ts';
-import { unsupportedToolText } from './angular-pages.ts';
-import { pickCdPage, type CdState } from './cd-tools.ts';
+import { cdUnsupportedText, pickCdPage, type CdState } from './cd-tools.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 
 const percent = (part: number, whole: number) =>
@@ -23,11 +22,7 @@ export function cdDiagnosisText(
       ? `Page ${code(args.page)} has no change detection recording yet. Start one with \`pangular:change-detection\` and \`record: "start"\` (or **Record** in the panel), use the app, then call this tool again.`
       : 'No change detection recording yet. Start one with `pangular:change-detection` and `record: "start"` (or **Record** in the panel), use the app, then call this tool again.';
   }
-  if (!page.supported) {
-    const unsupported = unsupportedToolText(angularOf(page.pageId), 'profiler');
-    if (unsupported) return `Page ${code(page.pageId)}: ${unsupported}`;
-    return `Page ${code(page.pageId)} can't record change detection: it needs Angular 20 or later in a development build.`;
-  }
+  if (!page.supported) return cdUnsupportedText(page.pageId, angularOf(page.pageId));
   const diagnosis = page.diagnosis;
   if (!diagnosis) {
     return `Page ${code(page.pageId)} reported no diagnosis. Its overlay is older than this server, or the recording started before the page loaded it; clear the recording and record again.`;

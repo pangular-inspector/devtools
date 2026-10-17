@@ -76,7 +76,15 @@ const SHOWN_CYCLES = 30;
         }
       </p>
       @if (page()?.supported === false) {
-        <app-angular-unavailable [page]="angularPage()" capability="profiler" missing compact />
+        @if (attachPending()) {
+          <p class="note">
+            The page has Angular's profiler hook, but the recording could not attach to it yet. The
+            page tries again on its next update while recording is on. If this stays, stop and start
+            the recording, or reload the page.
+          </p>
+        } @else {
+          <app-angular-unavailable [page]="angularPage()" capability="profiler" missing compact />
+        }
       }
       @if (!imported() && !native()) {
         <div class="views" role="group" aria-labelledby="cd-views-label">
@@ -420,6 +428,10 @@ export class CdRecording {
   private readonly angularPages = injectAngularPages(() => this.rpc());
   /** This page's Angular version, for the unavailable notes. */
   readonly angularPage = computed(() => angularPageFor(this.angularPages(), this.pageId()));
+  /** The page has the profiler hook by its capability report, so a failed start is not its version. */
+  protected readonly attachPending = computed(
+    () => this.angularPage()?.capabilities.profiler === true,
+  );
   /** A component class picked in the treemap, to show in the component tree. */
   readonly showComponent = output<string>();
   /** The cycles picked in the chart by id, or null for all of them. */

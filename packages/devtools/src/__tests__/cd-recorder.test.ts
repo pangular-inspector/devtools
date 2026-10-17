@@ -377,6 +377,55 @@ describe('change detection in the overlay', () => {
     expect(sent).toEqual([]);
   });
 
+  it('attaches on a later push when Angular had not started at the first start', async () => {
+    const { ng, sent, handlers, profilers, emit } = setup('22.1.0');
+    let started = false;
+    const my = {
+      rpc: {
+        call: async (name: string, ...args: unknown[]) => {
+          sent.push({ name, args });
+          return undefined;
+        },
+        register: (def: { name: string; handler: (...args: unknown[]) => unknown }) =>
+          handlers.set(def.name, def.handler),
+      },
+    };
+    const cd = attachChangeDetection(my, 'p2', () => (started ? ng : undefined), 50);
+    const last = () => sent.filter((s) => s.name === 'push-change-detection').at(-1)!.args[0];
+    handlers.get('change-detection-record')!({ pageId: 'p2', on: true });
+    await Promise.resolve();
+    expect(last()).toMatchObject({ pageId: 'p2', supported: false, recording: false });
+
+    started = true;
+    await cd.push();
+    expect(profilers).toHaveLength(1);
+    expect(last()).toMatchObject({ pageId: 'p2', supported: true, recording: true });
+    emit(E.ChangeDetectionStart);
+    emit(E.ChangeDetectionEnd);
+    await cd.push();
+    expect(last()).toMatchObject({ cycles: [{ id: 1 }] });
+
+    // Once stopped, it no longer tries.
+    handlers.get('change-detection-record')!({ pageId: 'p2', on: false });
+    started = false;
+    expect(profilers).toHaveLength(0);
+    started = true;
+    await cd.push(true);
+    expect(profilers).toHaveLength(0);
+  });
+
+  it('records on an app without ng-version when ng.enableProfiling marks Angular 20 or later', async () => {
+    const { ng, profilers, handlers } = setup('22.1.0');
+    document.querySelector('app-root')!.removeAttribute('ng-version');
+    handlers.get('change-detection-record')!({ pageId: 'p1', on: true });
+    expect(ng.ɵsetProfiler).not.toHaveBeenCalled();
+    handlers.get('change-detection-record')!({ pageId: 'p1', on: false });
+
+    Object.assign(ng, { enableProfiling: () => {} });
+    handlers.get('change-detection-record')!({ pageId: 'p1', on: true });
+    expect(profilers).toHaveLength(1);
+  });
+
   it('reports that it cannot record before Angular 20', async () => {
     const { ng, sent, handlers } = setup('19.2.0');
     handlers.get('change-detection-record')!({ on: true });
@@ -428,6 +477,20 @@ describe('change detection agent text', () => {
     expect(changeDetectionText({ pages: { p1: { ...page, supported: false } } })).toContain(
       'Angular 20',
     );
+    // A page whose capabilities say it has the hook could not attach yet: not its version.
+    const unattached = changeDetectionText(
+      { pages: { p1: { ...page, supported: false } } },
+      {},
+      () => ({ version: '22.1.0', capabilities: { profiler: true } }),
+    );
+    expect(unattached).toContain('could not attach');
+    expect(unattached).not.toContain('Angular 20');
+    expect(
+      changeDetectionText({ pages: { p1: { ...page, supported: false } } }, {}, () => ({
+        version: '19.2.0',
+        capabilities: { profiler: false },
+      })),
+    ).toContain('needs Angular 20.0 or later; this page runs Angular 19.2.');
     expect(toCdPage({ pageId: 5 }, 10)).toBeNull();
   });
 

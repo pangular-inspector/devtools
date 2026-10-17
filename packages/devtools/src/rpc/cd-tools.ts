@@ -230,6 +230,22 @@ export function cdTimingText(
   return parts.length ? `\n\n${parts.join('\n\n')}` : '';
 }
 
+/**
+ * Why a page that answered `supported: false` has no recording. The page's
+ * capability report tells a version that lacks the profiler hook from a page
+ * that has it but could not attach yet (Angular had not started, or
+ * `ɵsetProfiler` failed); only a page that never reported its capabilities
+ * gets the plain version rule.
+ */
+export function cdUnsupportedText(pageId: string, info: AngularPageInfo | undefined): string {
+  const unsupported = unsupportedToolText(info, 'profiler');
+  if (unsupported) return `Page ${code(pageId)}: ${unsupported}`;
+  if (info?.capabilities.profiler) {
+    return `Page ${code(pageId)} has Angular's profiler hook, but the recording could not attach to it yet. The page tries again on its next update while recording is on; if this stays, stop and start the recording, or reload the page.`;
+  }
+  return `Page ${code(pageId)} can't record change detection: it needs Angular 20 or later in a development build.`;
+}
+
 /** Markdown for the `change-detection` agent tool. */
 export function changeDetectionText(
   state: CdState,
@@ -242,11 +258,7 @@ export function changeDetectionText(
       ? `Page ${code(args.page)} has no change detection recording yet. Call this tool with \`record: "start"\` and this \`page\`, use the app, then call it again.`
       : 'No change detection recording yet. Call this tool with `record: "start"`, use the app, then call it again.';
   }
-  if (!page.supported) {
-    const unsupported = unsupportedToolText(angularOf(page.pageId), 'profiler');
-    if (unsupported) return `Page ${code(page.pageId)}: ${unsupported}`;
-    return `Page ${code(page.pageId)} can't record change detection: it needs Angular 20 or later in a development build.`;
-  }
+  if (!page.supported) return cdUnsupportedText(page.pageId, angularOf(page.pageId));
   // Agents send strings, NaN and null too: anything that is not a finite number is the default.
   const asked = Number(args.limit ?? 10);
   const limit = Math.max(1, Math.min(Math.floor(Number.isFinite(asked) ? asked : 10), 50));

@@ -2,6 +2,7 @@ export type Profiler = (event: number, instance?: unknown, hook?: unknown) => vo
 
 interface ProfilerApi {
   ɵsetProfiler?: (profiler: Profiler | null) => unknown;
+  enableProfiling?: unknown;
 }
 
 interface ZoneLike {
@@ -58,6 +59,18 @@ export function angularMajor(doc: Document = document): number {
   return Number.isFinite(major) ? major : 0;
 }
 
+/**
+ * The page's Angular major for the profiler gate. An app started with
+ * `createApplication` (Angular Elements) has no `ng-version` root; there
+ * `ng.enableProfiling`, which Angular publishes from 20.0, tells 20.0 or later
+ * apart from an older version.
+ */
+function pageMajor(ng: unknown, doc: Document): number {
+  const major = angularMajor(doc);
+  if (major) return major;
+  return typeof (ng as ProfilerApi).enableProfiling === 'function' ? 20 : 0;
+}
+
 interface ProfilerHub {
   listeners: Set<Profiler>;
   remove: () => void;
@@ -80,7 +93,8 @@ export interface ProfilerGate {
  * returns its remover. Returns null before Angular 20: there is a single
  * profiler slot there, and taking it would evict the Angular DevTools
  * extension with no remover to give it back. In a browser the version comes
- * from the `ng-version` attribute; a platform without a DOM passes a gate.
+ * from the `ng-version` attribute, or from `ng.enableProfiling` on a page
+ * without one; a platform without a DOM passes a gate.
  */
 export function addProfilerListener(
   ng: unknown,
@@ -89,7 +103,7 @@ export function addProfilerListener(
 ): (() => void) | null {
   const setProfiler = (ng as ProfilerApi | undefined)?.ɵsetProfiler;
   if (!ng || typeof setProfiler !== 'function') return null;
-  const gate: ProfilerGate = 'major' in where ? where : { major: angularMajor(where) };
+  const gate: ProfilerGate = 'major' in where ? where : { major: pageMajor(ng, where) };
   if (gate.major < 20) return null;
   let hub = hubs.get(ng as object);
   if (!hub) {

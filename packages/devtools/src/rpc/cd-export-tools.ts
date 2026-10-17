@@ -1,6 +1,7 @@
 import { cdExportFile, cdTraceFile } from '../cd-data.ts';
+import type { AngularPageInfo } from '../config.ts';
 import { redactCdRecording } from './cd-redact.ts';
-import { pickCdPage, type CdState } from './cd-tools.ts';
+import { cdUnsupportedText, pickCdPage, type CdState } from './cd-tools.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 
 /** The longest export the `change-detection` tool answers with. */
@@ -24,6 +25,7 @@ export function cdExportText(
   state: CdState,
   args: { page?: string; export: CdExportKind },
   max = CD_EXPORT_MAX_CHARS,
+  angularOf: (pageId: string) => AngularPageInfo | undefined = () => undefined,
 ): string {
   const page = pickCdPage(state, args.page);
   if (!page) {
@@ -31,9 +33,7 @@ export function cdExportText(
       ? `Page ${code(args.page)} has no change detection recording to export yet. Record one first with \`record: "start"\`.`
       : 'No change detection recording to export yet. Record one first with `record: "start"`.';
   }
-  if (!page.supported) {
-    return `Page ${code(page.pageId)} can't record change detection: it needs Angular 20 or later in a development build.`;
-  }
+  if (!page.supported) return cdUnsupportedText(page.pageId, angularOf(page.pageId));
   const { pageId } = page;
   const safe = redactCdRecording(page);
   const file = args.export === 'trace' ? cdTraceFile(safe, pageId) : cdExportFile(safe, pageId);

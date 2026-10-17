@@ -98,6 +98,13 @@ describe('detectAngular', () => {
   it('leaves the version out when no root carries ng-version yet', () => {
     expect(detectAngular(fakeNg('15.2'), document)).not.toHaveProperty('version');
   });
+
+  it('counts the profiler without ng-version only where ng.enableProfiling marks 20.0 or later', () => {
+    // An app started with createApplication (Angular Elements) has no ng-version root.
+    expect(detectAngular(fakeNg('22.0'), document).capabilities.profiler).toBe(true);
+    expect(detectAngular(fakeNg('20.0'), document).capabilities.profiler).toBe(true);
+    expect(detectAngular(fakeNg('19.2'), document).capabilities.profiler).toBe(false);
+  });
 });
 
 describe('attachAngularInfo', () => {

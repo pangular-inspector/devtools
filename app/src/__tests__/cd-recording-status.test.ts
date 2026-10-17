@@ -126,3 +126,47 @@ describe('CdRecording status', () => {
     ]);
   });
 });
+
+describe('CdRecording on a page that could not record', () => {
+  afterEach(() => {
+    fixture?.destroy();
+    TestBed.resetTestingModule();
+  });
+
+  async function showUnsupported(capabilities: Record<string, boolean>, version: string) {
+    const angular = {
+      pages: { p1: { pageId: 'p1', reportedAt: 1, version, capabilities } },
+    };
+    const rpc = {
+      call: () => Promise.resolve({ ok: true }),
+      sharedState: (name: string) =>
+        Promise.resolve({
+          value: () => (name === 'page-angular' ? angular : null),
+          on: () => () => {},
+        }),
+    };
+    fixture = TestBed.createComponent(CdRecording);
+    fixture.componentRef.setInput('pageId', 'p1');
+    fixture.componentRef.setInput('rpc', {
+      scope: () => ({ rpc }),
+    } as unknown as DevframeRpcClient);
+    fixture.componentRef.setInput('page', { ...page(false, 0), supported: false });
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+    await fixture.whenStable();
+    return host().textContent!.replace(/\s+/g, ' ');
+  }
+
+  it('names the version when the page lacks the profiler hook', async () => {
+    const text = await showUnsupported({ profiler: false }, '19.2.0');
+    expect(text).toContain('Recording change detection needs Angular 20.0 or later');
+    expect(text).not.toContain('could not attach');
+  });
+
+  it('says the recording could not attach, not the version, when the page has the hook', async () => {
+    const text = await showUnsupported({ profiler: true }, '22.1.0');
+    expect(text).toContain('could not attach to it yet');
+    expect(text).not.toContain('needs Angular 20.0');
+    expect(text).not.toContain('Not available on Angular 22.1');
+  });
+});

@@ -53,9 +53,12 @@ const CHECKS: Record<AngularCapability, (ng: AnyRecord | null, version?: string)
   deferBlocks: (ng) => has(ng, 'ɵgetControlFlowBlocks') || has(ng, 'ɵgetDeferBlocks'),
   forBlocks: (ng) => has(ng, 'ɵgetControlFlowBlocks'),
   // Before 20.0 `ɵsetProfiler` has one slot and no remover, so trying it would
-  // evict the Angular DevTools extension. The version is the only safe check.
+  // evict the Angular DevTools extension. The version is the only safe check;
+  // without `ng-version` (Angular Elements), `enableProfiling` marks 20.0+, as
+  // in `addProfilerListener`.
   profiler: (ng, version) =>
-    has(ng, 'ɵsetProfiler') && !!version && angularVersionAtLeast(version, '20.0'),
+    has(ng, 'ɵsetProfiler') &&
+    (version ? angularVersionAtLeast(version, '20.0') : has(ng, 'enableProfiling')),
   angularProfiling: (ng) => has(ng, 'enableProfiling'),
   routerInstance: (ng) => has(ng, 'ɵgetRouterInstance'),
 };

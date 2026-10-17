@@ -98,20 +98,29 @@ export function attachChangeDetection(
     return id;
   };
 
+  // Whether the panel or an agent asked to record. A start that could not
+  // attach (Angular not started yet, `ɵsetProfiler` failed) is tried again on
+  // each push while it is wanted.
+  let wanted = false;
+  const attach = () => {
+    removeListener ??= addProfilerListener(
+      getNg(),
+      onEvent,
+      platform ? platform.profilerGate() : document,
+    );
+    supported = removeListener !== null;
+    // A second start, such as an agent start sent to every tab, keeps the
+    // recording that is running. Only `clear` empties it.
+    if (supported && !recorder.recording) {
+      recorder.start();
+      diagnosis.start();
+    }
+  };
+
   const setRecording = (on: boolean) => {
+    wanted = on;
     if (on) {
-      removeListener ??= addProfilerListener(
-        getNg(),
-        onEvent,
-        platform ? platform.profilerGate() : document,
-      );
-      supported = removeListener !== null;
-      // A second start, such as an agent start sent to every tab, keeps the
-      // recording that is running. Only `clear` empties it.
-      if (supported && !recorder.recording) {
-        recorder.start();
-        diagnosis.start();
-      }
+      attach();
       return;
     }
     recorder.stop();
@@ -137,6 +146,7 @@ export function attachChangeDetection(
 
   /** `wake`: sends what there is to send even on an idle page, as a panel or an agent just looked. */
   const push = async (force = false, wake = false) => {
+    if (wanted && !removeListener) attach();
     // After leave() a stopped recording with cycles is still worth sending again.
     if (!force && !recorder.recording && !recorder.hasCycles && !reported) return;
     if (!force && !wake && !active()) {
