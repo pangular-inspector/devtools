@@ -366,6 +366,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     (value, name) => graphValue(name, value),
     {
       stacks: signalWatch.stacks,
+      restorable: on.signals && devtoolsConfig.actions.components,
       onChange: (id, label, change, raw) => {
         signalWatch.onChange(id, label, change);
         if (on.errors) recentWrites.add(id, label, change, raw);
@@ -567,6 +568,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   let outlets: ReturnType<typeof outletsOf> = [];
   let links: ReturnType<typeof linksOf> = [];
   let linksTruncated = 0;
+  let linksUnchecked = 0;
   const routerDomObserver =
     on.router && typeof MutationObserver === 'function'
       ? new MutationObserver(() => (routerDomDirty = true))
@@ -654,6 +656,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     outlets = [];
     links = [];
     linksTruncated = 0;
+    linksUnchecked = 0;
   }
 
   async function pushRouter() {
@@ -685,13 +688,15 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
         if (routerDomDirty) {
           routerDomDirty = false;
           outlets = outletsOf(router);
-          const cut = { links: 0 };
+          const cut = { links: 0, unchecked: 0 };
           links = linksOf(ng, router, cut);
           linksTruncated = cut.links;
+          linksUnchecked = cut.unchecked;
         }
         report['outlets'] = outlets;
         report['links'] = links;
         if (linksTruncated) report['linksTruncated'] = linksTruncated;
+        if (linksUnchecked) report['linksUnchecked'] = linksUnchecked;
         report['preloads'] = preloads;
         report['instrumented'] = instrumented;
       }

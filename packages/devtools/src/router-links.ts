@@ -38,6 +38,11 @@ export interface LinkInfo {
 
 const MAX_OUTLETS = 100;
 const MAX_LINKS = 100;
+/**
+ * Candidate elements asked for their directives per scan. Each check is an
+ * `ng.getDirectives` call, and a scan runs after every DOM change.
+ */
+export const MAX_LINK_CANDIDATES = 2000;
 const MAX_DATA_PREVIEW = 300;
 
 function outletData(outlet: AnyRecord | null): string | undefined {
@@ -169,17 +174,22 @@ const LINK_CANDIDATES =
  * RouterLink and RouterLinkActive directives on the page: where each link
  * points, whether the router considers it active and what RouterLinkActive
  * decided, so the two can be compared. Links past the first 100 are counted
- * in `cut.links` instead of listed.
+ * in `cut.links` instead of listed. Only the first `MAX_LINK_CANDIDATES`
+ * elements that could hold a link are checked; the rest are counted in
+ * `cut.unchecked`, so `cut.links` is then a lower bound.
  */
 export function linksOf(
   ng: RouterDebugApi,
   router: AnyRecord,
-  cut: { links: number } = { links: 0 },
+  cut: { links: number; unchecked?: number } = { links: 0 },
 ): LinkInfo[] {
   if (typeof document === 'undefined' || !ng.getDirectives) return [];
-  const elements = Array.from(document.querySelectorAll(LINK_CANDIDATES));
+  const candidates = document.querySelectorAll(LINK_CANDIDATES);
+  const checked = Math.min(candidates.length, MAX_LINK_CANDIDATES);
+  cut.unchecked = candidates.length - checked;
   const out: LinkInfo[] = [];
-  for (const element of elements) {
+  for (let i = 0; i < checked; i++) {
+    const element = candidates[i];
     const directives = read(() => ng.getDirectives?.(element) ?? [], []);
     const link = directives.find(isRouterLink);
     const active = directives.find(isLinkActive);

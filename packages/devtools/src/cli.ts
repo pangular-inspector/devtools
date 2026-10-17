@@ -332,7 +332,6 @@ export function createPangularCli(options: PangularCliOptions = {}) {
     );
     registerSkillsCommand(cli, { cwd: (flags) => resolveCliRoot(flags, env), log });
     registerLintCommand(cli, { cwd: (flags) => resolveCliRoot(flags, env), log });
-    registerLintCommand(cli, { cwd: (flags) => resolveCliRoot(flags, env), log });
     const defaultCommand = cli.commands.find((command) => command.isDefaultCommand);
     if (defaultCommand) {
       const run = async (

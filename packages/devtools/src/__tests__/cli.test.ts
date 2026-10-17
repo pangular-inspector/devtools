@@ -213,4 +213,12 @@ describe('pangular dev --proxy-origin', () => {
     const force = build?.options.find((option) => option.name === 'force');
     expect(force?.description).toContain('--outDir');
   });
+
+  it('registers each command once, so help lists lint and skills once', () => {
+    const { cli } = createPangularCli({ env: {} });
+    const names = cli.commands.map((command) => command.name);
+    expect(names.filter((name) => name === 'lint')).toHaveLength(1);
+    expect(names.filter((name) => name === 'skills')).toHaveLength(1);
+    expect(new Set(names).size).toBe(names.length);
+  });
 });

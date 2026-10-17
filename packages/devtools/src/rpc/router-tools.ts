@@ -33,6 +33,11 @@ export interface RouterReport {
   links?: LinkInfo[];
   /** Links past the first 100 that the page found but did not list. */
   linksTruncated?: number;
+  /**
+   * Elements that could hold a link but were past the page's check limit, so
+   * `linksTruncated` is a lower bound.
+   */
+  linksUnchecked?: number;
   preloads?: PreloadRecord[];
   instrumented?: boolean;
 }
@@ -98,6 +103,26 @@ export const ERROR_CATALOG: Record<string, string> = {
   NG0950:
     'A required input has no value. With withComponentInputBinding the route must provide it as a param, query param or data key.',
 };
+
+/**
+ * What the page left out of its link list, for the agent text: links past the
+ * first 100, and when the page stopped checking elements early, that the count
+ * is only a lower bound. Empty when nothing was left out.
+ */
+export function skippedLinksNote(
+  page: Pick<RouterReport, 'linksTruncated' | 'linksUnchecked'>,
+  verb: 'checked' | 'searched',
+): string {
+  const truncated = page.linksTruncated ?? 0;
+  const unchecked = page.linksUnchecked ?? 0;
+  const limit = `${unchecked} elements that could hold a link were past the page's check limit`;
+  if (truncated && unchecked) {
+    return `At least ${truncated} link(s) past the first 100 on the page were not ${verb}: ${limit}.`;
+  }
+  if (truncated) return `${truncated} link(s) past the first 100 on the page were not ${verb}.`;
+  if (unchecked) return `${limit}, so links among them were not ${verb}.`;
+  return '';
+}
 
 function isRecord(value: unknown): value is object {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -329,6 +354,7 @@ export function isRouterReport(
       (v) => Array.isArray(v) && v.length <= 100 && isPlain(v, { n: 3_000 }),
     ) &&
     optional(report.linksTruncated, isNumber) &&
+    optional(report.linksUnchecked, isNumber) &&
     optional(
       report.preloads,
       (v) => Array.isArray(v) && v.length <= 50 && isPlain(v, { n: 500 }),
@@ -576,9 +602,8 @@ export function inspectRouteText(
         `- link ${code(link.text)} → ${code(link.href ?? '?')}: router says ${link.active ? 'active' : 'inactive'}${link.linkActive !== undefined ? `, RouterLinkActive says ${link.linkActive ? 'active' : 'inactive'}${link.exact ? ' (exact)' : ''}` : ''}`,
       );
     }
-    const unsearched = page.linksTruncated
-      ? `\n\n_${page.linksTruncated} link(s) past the first 100 on the page were not searched._`
-      : '';
+    const skipped = skippedLinksNote(page, 'searched');
+    const unsearched = skipped ? `\n\n_${skipped}_` : '';
     return capped(
       `${UNTRUSTED}\n\n${lines.length ? lines.join('\n') : `No routed component or link matches ${code(args.selector)}.`}${unsearched}${freshness(page, now)}`,
     );

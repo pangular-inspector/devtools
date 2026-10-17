@@ -6,7 +6,7 @@ import { Router, RouterLink, RouterLinkActive, provideRouter, type Routes } from
 import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { RouterDebugApi } from '../router.ts';
-import { linksOf } from '../router-links.ts';
+import { linksOf, MAX_LINK_CANDIDATES } from '../router-links.ts';
 import { elementById } from '../element-id.ts';
 import { isRouterReport } from '../rpc/router-tools.ts';
 import { lintRoutesText } from '../rpc/router-config-tools.ts';
@@ -108,6 +108,60 @@ describe('link truncation count', () => {
     expect(links).toHaveLength(100);
     expect(cut.links).toBe(30);
     expect(links[0]).toMatchObject({ text: 'L0', href: '/x', element: 'div' });
+  });
+
+  it('checks at most MAX_LINK_CANDIDATES elements and counts the ones it skipped', () => {
+    // Candidates already on the page (the host's and any an earlier test left).
+    let before = 0;
+    linksOf({ getDirectives: () => (before++, []) } as never, {});
+    const extra = document.createElement('div');
+    for (let i = 0; i < MAX_LINK_CANDIDATES; i++) extra.append(document.createElement('button'));
+    document.body.append(extra);
+    try {
+      let checked = 0;
+      const ng: RouterDebugApi = {
+        getDirectives: (el: Element) => {
+          checked++;
+          return host.contains(el) && el.hasAttribute('tabindex') ? [fakeLink] : [];
+        },
+      } as never;
+      const router = { serializeUrl: (tree: unknown) => String(tree), isActive: () => false };
+      const cut = { links: 0, unchecked: 0 };
+      const links = linksOf(ng, router, cut);
+      expect(checked).toBe(MAX_LINK_CANDIDATES);
+      expect(links).toHaveLength(100);
+      expect(cut.links).toBe(30);
+      expect(cut.unchecked).toBe(before);
+    } finally {
+      extra.remove();
+    }
+  });
+
+  it('says "at least" when some candidates were not checked', () => {
+    const report = {
+      pageId: 'p1',
+      snapshot: null,
+      navigations: [],
+      linksTruncated: 30,
+      linksUnchecked: 12,
+    };
+    expect(isRouterReport(report)).toBe(true);
+    expect(isRouterReport({ ...report, linksUnchecked: 'some' })).toBe(false);
+    const page = {
+      ...report,
+      reportedAt: Date.now(),
+      changedAt: Date.now(),
+      config: [],
+      snapshot: { url: '/', root: null, queryParams: {} },
+    };
+    const state = { pages: [page] } as never;
+    expect(lintRoutesText(state, {})).toContain('At least 30 link(s) past the first 100');
+    expect(lintRoutesText(state, {})).toContain('12 elements that could hold a link');
+    expect(inspectRouteText(state, { selector: 'Nope' })).toContain(
+      'At least 30 link(s) past the first 100 on the page were not searched',
+    );
+    const none = { pages: [{ ...page, linksTruncated: undefined }] } as never;
+    expect(lintRoutesText(none, {})).toContain('12 elements that could hold a link');
   });
 
   it('accepts linksTruncated in a report and mentions it in the agent text', () => {
