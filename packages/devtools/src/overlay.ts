@@ -490,6 +490,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     : null;
   const pipes = on.pipes ? attachPipes(my, pageId, getNg) : null;
   const http = on.http ? attachHttp(my, pageId, tickMs) : null;
+  if (http) own(http.stop);
   const capacitor = on.capacitor
     ? attachCapacitor(my, pageId, {
         maxCalls: limits.capacitorCalls,
@@ -564,6 +565,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   let routerDomDirty = true;
   let outlets: ReturnType<typeof outletsOf> = [];
   let links: ReturnType<typeof linksOf> = [];
+  let linksTruncated = 0;
   const routerDomObserver =
     on.router && typeof MutationObserver === 'function'
       ? new MutationObserver(() => (routerDomDirty = true))
@@ -650,6 +652,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     routerDomDirty = true;
     outlets = [];
     links = [];
+    linksTruncated = 0;
   }
 
   async function pushRouter() {
@@ -681,10 +684,13 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
         if (routerDomDirty) {
           routerDomDirty = false;
           outlets = outletsOf(router);
-          links = linksOf(ng, router);
+          const cut = { links: 0 };
+          links = linksOf(ng, router, cut);
+          linksTruncated = cut.links;
         }
         report['outlets'] = outlets;
         report['links'] = links;
+        if (linksTruncated) report['linksTruncated'] = linksTruncated;
         report['preloads'] = preloads;
         report['instrumented'] = instrumented;
       }

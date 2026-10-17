@@ -184,6 +184,8 @@ export interface RouterPage {
   setup?: RouterSetup;
   outlets?: OutletInfo[];
   links?: LinkInfo[];
+  /** Links past the first 100 that the page found but did not list. */
+  linksTruncated?: number;
   preloads?: { path: string; startedAt: number; ms?: number; failed?: boolean }[];
   instrumented?: boolean;
   loops?: NavigationLoop[];

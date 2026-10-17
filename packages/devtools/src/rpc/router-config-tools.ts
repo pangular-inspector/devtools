@@ -590,8 +590,11 @@ export function lintRoutesText(
       ? `No checks ran: page ${code(page.pageId)} has not reported its route config yet. It runs in events-only mode, which only limits setup detection, so the checks run once the config arrives.${freshness(page, now)}`
       : `Page ${code(page.pageId)} has not reported its route config yet.${freshness(page, now)}`;
   const findings = lintRoutes(page);
+  const skipped = page.linksTruncated
+    ? ` ${page.linksTruncated} link(s) past the first 100 on the page were not checked.`
+    : '';
   if (!findings.length)
-    return `${UNTRUSTED}\n\nNo route config problems found (${countNodes(page.config)} routes checked). Lazy routes that have not loaded yet are not checked.${freshness(page, now)}`;
+    return `${UNTRUSTED}\n\nNo route config problems found (${countNodes(page.config)} routes checked). Lazy routes that have not loaded yet are not checked.${skipped}${freshness(page, now)}`;
   const order = { error: 0, warning: 1, info: 2 };
   const lines = findings
     .sort((a, b) => order[a.severity] - order[b.severity])
@@ -600,7 +603,7 @@ export function lintRoutesText(
         `- **${f.severity}** ${code(f.rule)} ${code(f.route)}: ${f.message} Fix: ${f.fix} (Angular ${f.angular === 'throws' ? 'throws' : f.angular === 'warns' ? 'warns' : 'does not warn'})`,
     );
   return capped(
-    `${UNTRUSTED}\n\n${findings.length} finding(s):\n${lines.join('\n')}${freshness(page, now)}`,
+    `${UNTRUSTED}\n\n${findings.length} finding(s):\n${lines.join('\n')}${skipped ? `\n\n${skipped.trim()}` : ''}${freshness(page, now)}`,
   );
 }
 

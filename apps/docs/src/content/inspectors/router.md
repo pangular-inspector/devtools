@@ -97,7 +97,7 @@ Route config mistakes, each with a fix:
 - Deprecated class guards and `canLoad`.
 - Lazy chunks downloaded before a rejecting `canActivate`.
 - Missing or duplicate titles, and param or input typos.
-- `routerLinkActive` without `ariaCurrentWhenActive`.
+- `routerLinkActive` without `ariaCurrentWhenActive`. The check covers every `RouterLink` on the page, also one bound as `[routerLink]` on an element that isn't an anchor.
 - Emails in URLs, and return URLs taken from query params.
 
 Each finding says whether Angular throws, warns or does not warn. The lint skips lazy routes that have not loaded. It runs again after each navigation and config change, and keeps the current findings on screen while it does. Click **Check again** to rerun it.
@@ -229,7 +229,7 @@ The devtools replace query, matrix and fragment values with secret-looking keys 
 
 ### History and config caps
 
-The page keeps the last 50 navigations and 50 preloads. Set the navigation count with [`limits.navigations`](../getting-started/configuration.md#limits). Once older navigations are dropped, the **Navigations** view and `explain-navigation` say how many. The live config lists at most 200 routes per level (a route's children and its loaded lazy routes count as one level) and 1000 routes in total. The **Routes** view and `pangular:list-routes` say how many routes were left out.
+The page keeps the last 50 navigations and 50 preloads. Set the navigation count with [`limits.navigations`](../getting-started/configuration.md#limits). Once older navigations are dropped, the **Navigations** view and `explain-navigation` say how many. The live config lists at most 200 routes per level (a route's children and its loaded lazy routes count as one level) and 1000 routes in total. The **Routes** view and `pangular:list-routes` say how many routes were left out. The page reports at most 100 router links. `lint-routes` and `inspect-route` say how many links past those were not checked.
 
 ## FAQ
 

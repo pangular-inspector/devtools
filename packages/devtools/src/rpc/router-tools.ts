@@ -31,6 +31,8 @@ export interface RouterReport {
   setup?: RouterSetup;
   outlets?: OutletInfo[];
   links?: LinkInfo[];
+  /** Links past the first 100 that the page found but did not list. */
+  linksTruncated?: number;
   preloads?: PreloadRecord[];
   instrumented?: boolean;
 }
@@ -326,6 +328,7 @@ export function isRouterReport(
       report.links,
       (v) => Array.isArray(v) && v.length <= 100 && isPlain(v, { n: 3_000 }),
     ) &&
+    optional(report.linksTruncated, isNumber) &&
     optional(
       report.preloads,
       (v) => Array.isArray(v) && v.length <= 50 && isPlain(v, { n: 500 }),
@@ -573,8 +576,11 @@ export function inspectRouteText(
         `- link ${code(link.text)} → ${code(link.href ?? '?')}: router says ${link.active ? 'active' : 'inactive'}${link.linkActive !== undefined ? `, RouterLinkActive says ${link.linkActive ? 'active' : 'inactive'}${link.exact ? ' (exact)' : ''}` : ''}`,
       );
     }
+    const unsearched = page.linksTruncated
+      ? `\n\n_${page.linksTruncated} link(s) past the first 100 on the page were not searched._`
+      : '';
     return capped(
-      `${UNTRUSTED}\n\n${lines.length ? lines.join('\n') : `No routed component or link matches ${code(args.selector)}.`}${freshness(page, now)}`,
+      `${UNTRUSTED}\n\n${lines.length ? lines.join('\n') : `No routed component or link matches ${code(args.selector)}.`}${unsearched}${freshness(page, now)}`,
     );
   }
   const lines = [`**URL** ${code(snapshot.url)}`];

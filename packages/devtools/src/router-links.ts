@@ -33,6 +33,7 @@ export interface LinkInfo {
   exact?: boolean;
   ariaCurrent?: string;
   element?: string;
+  devtoolsId?: string;
 }
 
 const MAX_OUTLETS = 100;
@@ -155,27 +156,42 @@ function isLinkActive(value: unknown): value is AnyRecord {
 }
 
 /**
+ * Elements that can carry RouterLink or RouterLinkActive. A property-bound
+ * `[routerLink]` leaves no attribute in the DOM, but RouterLink writes `href`
+ * on anchors (and custom elements that observe `href`) and `tabindex` on every
+ * other host (`setTabIndexIfNotOnNativeEl` in @angular/router), so these
+ * attributes find each live link without walking every element.
+ */
+const LINK_CANDIDATES =
+  'a, area, button, [href], [tabindex], [routerlink], [routerLink], [routerlinkactive], [routerLinkActive]';
+
+/**
  * RouterLink and RouterLinkActive directives on the page: where each link
  * points, whether the router considers it active and what RouterLinkActive
- * decided, so the two can be compared.
+ * decided, so the two can be compared. Links past the first 100 are counted
+ * in `cut.links` instead of listed.
  */
-export function linksOf(ng: RouterDebugApi, router: AnyRecord): LinkInfo[] {
+export function linksOf(
+  ng: RouterDebugApi,
+  router: AnyRecord,
+  cut: { links: number } = { links: 0 },
+): LinkInfo[] {
   if (typeof document === 'undefined' || !ng.getDirectives) return [];
-  const elements = Array.from(
-    document.querySelectorAll(
-      'a, button, [routerlink], [routerLink], [routerlinkactive], [routerLinkActive]',
-    ),
-  );
+  const elements = Array.from(document.querySelectorAll(LINK_CANDIDATES));
   const out: LinkInfo[] = [];
   for (const element of elements) {
-    if (out.length >= MAX_LINKS) break;
     const directives = read(() => ng.getDirectives?.(element) ?? [], []);
     const link = directives.find(isRouterLink);
     const active = directives.find(isLinkActive);
     if (!link && !active) continue;
+    if (out.length >= MAX_LINKS) {
+      cut.links++;
+      continue;
+    }
     const info: LinkInfo = {
       text: clip((element.textContent ?? '').replace(/\s+/g, ' ').trim(), 60),
       element: element.tagName.toLowerCase(),
+      devtoolsId: elementId(element),
     };
     const tree = read(() => link?.['urlTree'], null);
     if (tree) {
