@@ -1,0 +1,9 @@
+{
+  "name": "e2e-security-fixture",
+  "private": true,
+  "type": "module",
+  "description": "Leak-corpus fixture for scripts/e2e-security.mjs. Not a workspace package.",
+  "dependencies": {
+    "@angular/core": "^22.1.0"
+  }
+}

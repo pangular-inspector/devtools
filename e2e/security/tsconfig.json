@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "types": [],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "paths": {}
+  },
+  "angularCompilerOptions": {
+    "strictTemplates": true
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["node_modules"]
+}

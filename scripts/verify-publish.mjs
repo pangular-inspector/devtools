@@ -10,7 +10,8 @@
  *
  * Nothing reaches npmjs. A throwaway Verdaccio serves `@pangular-inspector/*` itself, with no uplink
  * for the scope, so a package that failed to publish cannot be quietly satisfied by the real one.
- * Everything else is proxied to npmjs.
+ * Everything else is proxied to npmjs. The registry helpers live in `lib/local-registry.mjs`, which
+ * `e2e-install.mjs` shares for the full install matrix.
  *
  * Scenarios (`--scenario=<name>`, `angular-cli` by default):
  *   angular-cli  `ng new --ssr` on the newest Angular the peer range allows, the Express hub in
@@ -29,256 +30,30 @@
  * Ports: 4873 (registry), 4874 (the app). Override with VERIFY_PORT (the registry; the app uses
  * the next one).
  */
-import { execFileSync, spawn } from 'node:child_process';
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { appendFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const packageDir = path.join(root, 'packages/devtools');
-const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'));
-const manifest = readJson(path.join(packageDir, 'package.json'));
+import {
+  arg,
+  checkHub,
+  createRegistry,
+  manifest,
+  readJson,
+  replaceIn,
+  wireOverlayInMain,
+} from './lib/local-registry.mjs';
 
 const registryPort = Number(process.env.VERIFY_PORT ?? 4873);
 const appPort = registryPort + 1;
-const REGISTRY = `http://localhost:${registryPort}`;
-
-const arg = (name) =>
-  process.argv.find((value) => value.startsWith(`--${name}=`))?.slice(name.length + 3);
 
 const work = mkdtempSync(path.join(tmpdir(), 'pangular-verify-'));
-const children = new Set();
-
-function stopAll() {
-  for (const child of children) {
-    try {
-      process.kill(-child.pid, 'SIGTERM');
-    } catch {
-      // Already gone.
-    }
-  }
-  children.clear();
-}
-process.on('exit', stopAll);
+const { run, start, stopAll, waitFor, startRegistry, pack, publish, registryEnv, newest } =
+  createRegistry({ work, registryPort });
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => process.exit(130));
-
-/**
- * Every command after the publish runs against the local registry, with its own npm cache: each
- * run publishes the same version, and a cache keyed by name and version would hand back an older
- * build, or the real one from npmjs.
- */
-const registryEnv = () => ({
-  // Dropped in any case: setup-node exports NPM_CONFIG_USERCONFIG, which would compete with ours.
-  ...Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([key]) => !/^npm_config_(registry|userconfig|cache)$/i.test(key),
-    ),
-  ),
-  npm_config_registry: REGISTRY,
-  npm_config_userconfig: path.join(work, '.npmrc'),
-  npm_config_cache: path.join(work, 'npm-cache'),
-  npm_config_audit: 'false',
-  npm_config_fund: 'false',
-  npm_config_update_notifier: 'false',
-  NG_CLI_ANALYTICS: 'false',
-});
-
-function run(cmd, args, cwd, env = registryEnv()) {
-  try {
-    return execFileSync(cmd, args, {
-      cwd,
-      env,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      maxBuffer: 64 * 1024 * 1024,
-    });
-  } catch (error) {
-    throw new Error(
-      `${cmd} ${args.join(' ')} failed in ${cwd}:\n${error.stdout ?? ''}${error.stderr ?? ''}`,
-    );
-  }
-}
-
-/** A long-running process in its own group, so stopping it also stops what it started. */
-function start(cmd, args, cwd, env, logFile) {
-  const child = spawn(cmd, args, { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
-  children.add(child);
-  const log = (chunk) => appendFileSync(logFile, chunk);
-  child.stdout.on('data', log);
-  child.stderr.on('data', log);
-  return child;
-}
-
-async function waitFor(url, child, logFile, seconds) {
-  for (let tries = 0; tries < seconds; tries++) {
-    const response = await fetch(url).catch(() => undefined);
-    if (response?.ok) return response;
-    if (child.exitCode !== null) break;
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-  throw new Error(`${url} did not answer:\n${tail(logFile)}`);
-}
-
-const tail = (file) => (existsSync(file) ? readFileSync(file, 'utf8').slice(-4000) : '(no log)');
-
-/** Replaces `from` with `to`, or fails naming the generated file that no longer has `from`. */
-function replaceIn(file, from, to) {
-  const text = readFileSync(file, 'utf8');
-  if (!text.includes(from)) {
-    throw new Error(`${file} no longer contains ${JSON.stringify(from)}:\n${text}`);
-  }
-  writeFileSync(file, text.replace(from, to));
-}
-
-async function startRegistry() {
-  const storage = path.join(work, 'registry');
-  mkdirSync(storage);
-  const config = path.join(storage, 'config.yaml');
-  writeFileSync(
-    config,
-    `storage: ./storage
-auth:
-  htpasswd:
-    file: ./htpasswd
-    max_users: 10
-uplinks:
-  npmjs:
-    url: https://registry.npmjs.org/
-max_body_size: 200mb
-packages:
-  '@pangular-inspector/*':
-    access: $all
-    publish: $authenticated
-    # No proxy: the package under test must come from this registry or not at all.
-  '**':
-    access: $all
-    proxy: npmjs
-log: { type: stdout, format: pretty, level: warn }
-`,
-  );
-  const logFile = path.join(work, 'registry.log');
-  console.log(`starting Verdaccio on ${REGISTRY}`);
-  const child = start(
-    'pnpm',
-    ['dlx', 'verdaccio@6', '--config', config, '--listen', `localhost:${registryPort}`],
-    storage,
-    process.env,
-    logFile,
-  );
-  await waitFor(`${REGISTRY}/-/ping`, child, logFile, 180);
-
-  // Publishing needs a user. Verdaccio creates one on this request and returns its token.
-  const response = await fetch(`${REGISTRY}/-/user/org.couchdb.user:verify`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name: 'verify', password: 'verify-password' }),
-  });
-  const { token } = await response.json();
-  if (!token) throw new Error(`Verdaccio returned no token (${response.status})`);
-  writeFileSync(
-    path.join(work, '.npmrc'),
-    `registry=${REGISTRY}\n//localhost:${registryPort}/:_authToken=${token}\n`,
-  );
-}
-
-/** `pnpm pack` applies `publishConfig.exports`, and its `prepack` builds the library and panel. */
-function pack() {
-  const out = path.join(work, 'pack');
-  mkdirSync(out);
-  console.log('packing the package (builds the library and the panel)');
-  run('pnpm', ['pack', '--pack-destination', out], packageDir, process.env);
-  const [file] = readdirSync(out).filter((name) => name.endsWith('.tgz'));
-  if (!file) throw new Error(`pnpm pack wrote no tarball to ${out}`);
-  return path.join(out, file);
-}
-
-/** Every entry point the published manifest exports has to be in the tarball. */
-function checkTarball(tarball) {
-  const files = new Set(run('tar', ['-tzf', tarball], work, process.env).split('\n'));
-  const published = JSON.parse(run('tar', ['-xOzf', tarball, 'package/package.json'], work));
-  const missing = Object.values(published.exports ?? {})
-    .map((target) => path.posix.join('package', target))
-    .filter((file) => !files.has(file));
-  if (!files.has('package/dist/public/index.html')) missing.push('package/dist/public/index.html');
-  if (missing.length) throw new Error(`the tarball is missing:\n  ${missing.join('\n  ')}`);
-  return published.version;
-}
-
-function publish(tarball) {
-  const version = checkTarball(tarball);
-  console.log(`publishing ${manifest.name}@${version} to ${REGISTRY}`);
-  run('npm', ['publish', tarball, '--registry', REGISTRY, '--access', 'public'], work);
-  return version;
-}
-
-/** Compares two versions by major, minor and patch, with a prerelease sorting before its release. */
-function compareVersions(a, b) {
-  const parse = (v) => {
-    const [core, pre = ''] = v.split('-', 2);
-    return { parts: core.split('.').map(Number), pre };
-  };
-  const x = parse(a);
-  const y = parse(b);
-  for (let i = 0; i < 3; i++) {
-    const diff = (x.parts[i] ?? 0) - (y.parts[i] ?? 0);
-    if (diff) return diff;
-  }
-  if (x.pre === y.pre) return 0;
-  if (!x.pre) return 1;
-  if (!y.pre) return -1;
-  return x.pre.localeCompare(y.pre, 'en', { numeric: true });
-}
-
-/** The newest version of `name` inside `range`, from npmjs through the registry's proxy. */
-function newest(name, range) {
-  const found = JSON.parse(run('npm', ['view', `${name}@${range}`, 'version', '--json'], work));
-  return Array.isArray(found) ? [...found].sort(compareVersions).at(-1) : found;
-}
-
-const OVERLAY_CLI = `bootstrapApplication(App, appConfig)
-  .then(() => {
-    if (typeof ngDevMode === 'undefined' || ngDevMode) {
-      return import('@pangular-inspector/devtools/overlay');
-    }
-    return undefined;
-  })
-  .catch((err) => console.error(err));`;
 
 const OVERLAY_VITE = `bootstrapApplication(App, appConfig).then(() => {
   if (import.meta.env.DEV) void import('@pangular-inspector/devtools/overlay');
 });`;
-
-/** The hub answers its connection file and serves the panel the package bundles. */
-async function checkHub(base, child, logFile) {
-  const connection = await waitFor(`${base}/__devframes/__connection.json`, child, logFile, 180);
-  const text = await connection.text();
-  try {
-    JSON.parse(text);
-  } catch {
-    throw new Error(`__connection.json is not JSON:\n${text.slice(0, 500)}`);
-  }
-  const panelUrl = `${base}/__devframes/pangular/`;
-  const panel = await fetch(panelUrl);
-  const html = await panel.text();
-  if (!panel.ok || !html.includes('<title>Pangular Inspector</title>')) {
-    throw new Error(`the panel did not load (${panel.status}):\n${html.slice(0, 500)}`);
-  }
-  const script = /<script[^>]+src="([^"]+\.js)"/.exec(html)?.[1];
-  if (!script) throw new Error(`the panel page names no script:\n${html.slice(0, 500)}`);
-  const asset = await fetch(new URL(script, panelUrl));
-  if (!asset.ok) throw new Error(`the panel script ${script} did not load (${asset.status})`);
-  return 'the hub answers __connection.json and serves the panel and its script';
-}
 
 /** `ng new` with SSR, the Express hub (getting-started/express.md) and a development build. */
 async function angularCli(version) {
@@ -315,11 +90,7 @@ async function angularCli(version) {
     'const app = express();',
     'const app = express();\nconst devtools = initPangularHub({ ws: false });\napp.use(devtools.nodeMiddleware);',
   );
-  replaceIn(
-    path.join(app, 'src/main.ts'),
-    'bootstrapApplication(App, appConfig)\n  .catch((err) => console.error(err));',
-    OVERLAY_CLI,
-  );
+  wireOverlayInMain(path.join(app, 'src/main.ts'));
 
   console.log('ng build --configuration development');
   run('npx', ['ng', 'build', '--configuration', 'development'], app);
@@ -333,7 +104,7 @@ async function angularCli(version) {
     { ...process.env, PORT: String(appPort) },
     logFile,
   );
-  return { app, result: await checkHub(`http://localhost:${appPort}`, child, logFile) };
+  return { app, result: await checkHub(`http://localhost:${appPort}`, child, logFile, waitFor) };
 }
 
 /** `create-analog`, the Vite plugin (getting-started/vite.md), `vite build`, then the dev server. */
@@ -370,7 +141,7 @@ async function analog(version) {
     registryEnv(),
     logFile,
   );
-  return { app, result: await checkHub(`http://localhost:${appPort}`, child, logFile) };
+  return { app, result: await checkHub(`http://localhost:${appPort}`, child, logFile, waitFor) };
 }
 
 const SCENARIOS = { 'angular-cli': angularCli, analog };
