@@ -1,0 +1,147 @@
+name: Release
+
+# Run by hand from the Actions tab, on main, once CI is green there. See
+# apps/docs/src/content/contributing/publishing.md.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'An exact version (0.1.0), or a bump: patch, or minor for a breaking change'
+        required: true
+        default: patch
+
+# One release at a time: two would race for the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  # The version commit, the tag and the GitHub release.
+  contents: write
+  # npm provenance and trusted publishing.
+  id-token: write
+
+jobs:
+  # The same gate as every push to main, on exactly the commit being released.
+  ci:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      actions: read
+
+  release:
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          registry-url: https://registry.npmjs.org
+
+      - name: Version
+        id: version
+        env:
+          INPUT: ${{ inputs.version }}
+        working-directory: packages/devtools
+        run: |
+          if [[ ! "$INPUT" =~ ^(patch|minor|[0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "::error::version must be patch, minor or an exact x.y.z, not '$INPUT'"
+            exit 1
+          fi
+          IFS=. read -r major minor patch <<< "$(node -p "require('./package.json').version")"
+          case "$INPUT" in
+            patch) version="$major.$minor.$((patch + 1))" ;;
+            minor) version="$major.$((minor + 1)).0" ;;
+            # The same version as now is allowed: running again with the exact version of a
+            # release that failed part way through finishes it.
+            *) version="$INPUT" ;;
+          esac
+          # Only the version line changes. `npm version` would rewrite the whole file, and turn
+          # the escaped characters in the description into literal ones.
+          sed -i -E "s/^(  \"version\": )\"[^\"]+\"/\1\"$version\"/" package.json
+          test "$(node -p "require('./package.json').version")" = "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check the changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p .release
+          file=packages/devtools/CHANGELOG.md
+          # This version's section, from its `## x.y.z - date` heading (brackets allowed) to the
+          # next `## ` heading.
+          if [ -f "$file" ]; then
+            awk -v v="$VERSION" '
+              /^## / {
+                h = substr($0, 4); sub(/^\[/, "", h); split(h, w, /[] ]/)
+                inside = (w[1] == v); next
+              }
+              inside' "$file" > .release/notes.md
+          fi
+          if [ ! -s .release/notes.md ]; then
+            echo "::error file=$file::Add a '## $VERSION' section to $file before releasing."
+            exit 1
+          fi
+
+      # `pnpm pack` applies `publishConfig.exports`, and its `prepack` builds the library and the
+      # panel. `npm publish` of the tarball is what speaks npm's OIDC for trusted publishing.
+      - name: Build
+        working-directory: packages/devtools
+        run: pnpm pack --pack-destination "$GITHUB_WORKSPACE/.release"
+
+      # The exact tarball, installed from a local registry into a fresh Angular CLI app and built.
+      - name: Verify the tarball
+        run: pnpm verify:publish --tarball="$(ls .release/*.tgz)"
+
+      # No token: the package's trusted publisher on npmjs.com names this workflow, and npm
+      # authenticates the publish through OIDC.
+      - name: Publish
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Already there means an earlier run got this far: skip it, so running again with the
+          # same exact version finishes a release that failed part way through.
+          if npm view "@pangular-inspector/devtools@$VERSION" version > /dev/null 2>&1; then
+            echo "already published: $VERSION"
+          else
+            npm publish .release/*.tgz --provenance --access public
+          fi
+
+      - name: Push the version commit and tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          tag="devtools@$VERSION"
+          if ! git diff --quiet -- packages/devtools/package.json; then
+            git commit -m "chore(release): $VERSION" -- packages/devtools/package.json
+          fi
+          # Pull requests can merge while a release runs. Replay the version commit on top of them
+          # and tag where it lands. A rebase conflict fails the step rather than guessing.
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git rebase origin/main
+            git tag -f -a "$tag" -m "$tag"
+            if git push origin HEAD:main; then break; fi
+            if [ "$attempt" = 3 ]; then exit 1; fi
+          done
+          git push -f origin "refs/tags/$tag"
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag="devtools@$VERSION"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "release $tag already exists"
+          else
+            gh release create "$tag" --title "$VERSION" --notes-file .release/notes.md
+          fi
