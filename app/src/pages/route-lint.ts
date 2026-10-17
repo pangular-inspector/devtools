@@ -47,8 +47,8 @@ import {
         <p class="muted">
           @switch (reason) {
             @case ('events-only') {
-              This page runs in events-only mode: it has no debug utils (a production build or an
-              unusual setup), so it cannot report its route config.
+              The page has not reported its route config yet. It runs in events-only mode, which
+              only limits setup detection, so the checks run once the config arrives.
             }
             @case ('no-config') {
               The page has not reported its route config yet. It appears after the app finishes

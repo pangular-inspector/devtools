@@ -238,7 +238,7 @@ export function listRoutesText(
   if (!page) return noPage(args.page, state);
   const config = page.config;
   if (!config) {
-    return `Page ${code(page.pageId)} has not reported its route config yet${page.setup?.mode === 'events-only' ? ' (events-only mode: this build has no debug utils, so the config cannot be read)' : ''}.${freshness(page, now)}`;
+    return `Page ${code(page.pageId)} has not reported its route config yet${page.setup?.mode === 'events-only' ? ' (events-only mode only limits setup detection; the config appears once the router reports it)' : ''}.${freshness(page, now)}`;
   }
   const active = new Set(page.activeIds ?? []);
   const truncated = page.configTruncated
@@ -587,7 +587,7 @@ export function lintRoutesText(
   if (!page) return noPage(args.page, state);
   if (!page.config)
     return page.setup?.mode === 'events-only'
-      ? `No checks ran: page ${code(page.pageId)} runs in events-only mode (no debug utils, for example a production build), so it cannot report its route config.${freshness(page, now)}`
+      ? `No checks ran: page ${code(page.pageId)} has not reported its route config yet. It runs in events-only mode, which only limits setup detection, so the checks run once the config arrives.${freshness(page, now)}`
       : `Page ${code(page.pageId)} has not reported its route config yet.${freshness(page, now)}`;
   const findings = lintRoutes(page);
   if (!findings.length)

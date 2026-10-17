@@ -293,7 +293,9 @@ describe('router MCP tools', () => {
       'push-router',
       report({ config: undefined, setup: { ...report().setup, mode: 'events-only' } }),
     );
-    expect(await call('lint-routes')).toMatch(/No checks ran: page `p1` runs in events-only mode/);
+    expect(await call('lint-routes')).toMatch(
+      /No checks ran: page `p1` has not reported its route config yet\. It runs in events-only mode, which only limits setup detection/,
+    );
   });
 
   it('explains a redirect loop in explain-navigation, export-navigation and lint-routes', async () => {

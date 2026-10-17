@@ -439,7 +439,7 @@ function router(state: RouterState | undefined, pageId: string): Collected {
         state: 'empty',
         note:
           page?.setup?.mode === 'events-only'
-            ? 'The page runs the router in events-only mode, so its route config cannot be linted.'
+            ? 'The page has not reported its route config yet (events-only mode only limits setup detection), so the lint has not run.'
             : 'No route config reported yet.',
       },
     };

@@ -140,18 +140,10 @@ interface TestedUrl {
     @if (!page().config) {
       <div class="empty">
         <p class="empty-title">
-          {{
-            page().setup?.mode === 'events-only'
-              ? 'This build has no debug utils, so the live config cannot be read.'
-              : 'The page has not reported its route config yet.'
-          }}
+          {{ 'The page has not reported its route config yet.' }}
         </p>
         <p class="muted">
-          {{
-            page().setup?.mode === 'events-only'
-              ? 'Run the app with the development build to inspect the live config.'
-              : 'It appears once the router initializes. Navigate in the app if it stays empty.'
-          }}
+          {{ 'It appears once the router initializes. Navigate in the app if it stays empty.' }}
         </p>
       </div>
     } @else if (!rows().length) {
