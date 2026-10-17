@@ -52,6 +52,7 @@ import {
 } from './router-actions.ts';
 import { createSignalHistory, installSignalWriteHook } from './signal-history.ts';
 import { registerSignalPeek } from './signal-peek.ts';
+import { registerSignalRestore } from './signal-restore.ts';
 import { createSignalWatch, registerSignalWatch } from './signal-watch.ts';
 export { installSignalWriteHook } from './signal-history.ts';
 import {
@@ -871,6 +872,14 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     (target) => collectSignalGraph(getNg(), target),
     signalHistory,
   );
+  if (on.signals) {
+    registerSignalRestore(my.rpc, pageId, {
+      getNg,
+      history: signalHistory,
+      allowed: devtoolsConfig.actions.components,
+      restored: () => void pushSignalGraph(true).catch(() => {}),
+    });
+  }
 
   my.rpc.register({
     name: 'inspect-component-in-page',

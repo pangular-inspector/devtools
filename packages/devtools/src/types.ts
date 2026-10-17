@@ -44,6 +44,19 @@ export interface SignalGraphNode {
   changes?: number;
   /** Created by Angular's own code rather than the app (see `signal-framework.ts`). */
   framework?: true;
+  /**
+   * The own field of the component instance that holds this writable signal
+   * (`signal`, `linkedSignal` or `model`), so a history entry can be restored.
+   * Left out for `computed`, inputs, service signals and fields it could not
+   * match (see `signal-locator.ts`).
+   */
+  locator?: SignalWriteLocator;
+}
+
+/** Where a writable signal lives: the component instance id and its property. */
+export interface SignalWriteLocator {
+  id: string;
+  key: string;
 }
 
 export interface SignalGraphEdge {

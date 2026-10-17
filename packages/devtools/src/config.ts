@@ -1313,6 +1313,8 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'select-signal-target': 'signals',
   'set-signal-watch': 'signals',
   'signal-graph-peek-result': 'signals',
+  'request-signal-restore': 'signals',
+  'signal-restore-result': 'signals',
   'get-providers': 'injectors',
   'push-injector-tree': 'injectors',
   'ping-injector-tree': 'injectors',

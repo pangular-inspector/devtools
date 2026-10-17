@@ -16,6 +16,9 @@ import {
 import { DatePipe, JsonPipe, NgTemplateOutlet } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { pickPage, type ReportedPage } from '../live-pages';
+import { actionAllowed, actionBlockedMessage } from '../devtools-config';
+import { isNativePage } from '../native-page';
+import { isStaticReport } from '../rpc';
 import { hostPageId } from '../page-id';
 import { angularPageFor, injectAngularPages } from '../angular-pages';
 import { AngularUnavailable } from '../ui/angular-unavailable';
@@ -34,6 +37,14 @@ interface SignalNode {
   changes?: number;
   /** Created by Angular's own code, hidden unless the user shows framework signals. */
   framework?: boolean;
+  /** The component field that holds this writable signal, so history entries can be restored. */
+  locator?: { id: string; key: string };
+}
+
+interface RestoreResult {
+  ok?: boolean;
+  key?: string;
+  error?: string;
 }
 
 interface SignalEdge {
@@ -359,6 +370,20 @@ const KIND_COLORS: Record<string, string> = {
       @if (selectedHistory().length) {
         <h4 [id]="'history-heading-' + id">{{ label }}</h4>
         <p class="history-summary">{{ historySummary(id) }}</p>
+        @let restoreNode = restorable(id);
+        @if (restoreNode) {
+          @if (restoreBlocked(); as reason) {
+            <p class="hint">Restore is off. {{ reason }}</p>
+          }
+          <p
+            class="restore-result"
+            role="status"
+            [class.has-text]="restoreResult()?.id === id"
+            [class.restore-error]="restoreResult()?.id === id && restoreResult()?.error"
+          >
+            {{ restoreResult()?.id === id ? restoreResult()?.text : '' }}
+          </p>
+        }
         <ol
           class="history scroll-box"
           tabindex="0"
@@ -374,6 +399,18 @@ const KIND_COLORS: Record<string, string> = {
                 <span>epoch {{ change.epoch }}</span>
                 @if (change.missed) {
                   <span class="missed">{{ change.missed }} earlier not captured</span>
+                }
+                @if (restoreNode && !restoreBlocked() && !$first) {
+                  @let time = change.at | date: 'HH:mm:ss.SSS';
+                  <button
+                    type="button"
+                    class="restore"
+                    [attr.aria-label]="'Restore value from ' + time"
+                    [attr.aria-disabled]="restoring() || null"
+                    (click)="restore(restoreNode, change, time ?? '')"
+                  >
+                    Restore
+                  </button>
                 }
               </span>
               <pre>{{ change.value | json }}</pre>
@@ -1425,6 +1462,49 @@ const KIND_COLORS: Record<string, string> = {
     .missed {
       color: var(--warn);
     }
+    .restore {
+      margin-left: auto;
+      height: 22px;
+      padding: 0 8px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition:
+        background-color 150ms var(--ease),
+        border-color 150ms var(--ease);
+    }
+    .restore:hover:not([aria-disabled='true']) {
+      background: var(--surface-3);
+      border-color: var(--accent-line);
+    }
+    .restore[aria-disabled='true'] {
+      opacity: 0.6;
+      cursor: progress;
+    }
+    .restore:focus-visible {
+      @include m.focus-ring(-2px);
+    }
+    .restore-result {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .restore-result.has-text {
+      margin-bottom: 8px;
+    }
+    .restore-result.restore-error {
+      color: var(--danger-text);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .restore {
+        transition: none;
+      }
+    }
     .graph-section,
     .watched {
       margin-bottom: 16px;
@@ -1631,7 +1711,10 @@ export class SignalInspector {
   /** Counts graph loads, so only the newest one applies its result. */
   private graphLoad = 0;
   private readonly treePages = signal<
-    Record<string, { roots?: LiveNode[]; reportedAt?: number; title?: string; url?: string }>
+    Record<
+      string,
+      { roots?: LiveNode[]; reportedAt?: number; title?: string; url?: string; platform?: string }
+    >
   >({});
   private readonly graphState = signal<{
     graph: SignalGraph | null;
@@ -1798,6 +1881,59 @@ export class SignalInspector {
     const id = this.selectedId();
     return id ? [...(this.graph()?.history?.[id] ?? [])].reverse() : [];
   });
+
+  /**
+   * Why history entries cannot be restored on the shown page, or '' when they
+   * can: the same gate as component edits (a live browser page with
+   * `actions.components` on).
+   */
+  readonly restoreBlocked = computed(() => {
+    const client = this.rpc();
+    if (isStaticReport(client)) return 'A saved report cannot write to the app.';
+    const pageId = this.graph()?.pageId;
+    if (isNativePage(pageId ? this.treePages()[pageId] : null)) {
+      return 'It needs the app open in a browser.';
+    }
+    if (!actionAllowed(client, 'components')) return actionBlockedMessage('components');
+    return '';
+  });
+  readonly restoring = signal(false);
+  readonly restoreResult = signal<{ id: string; text: string; error: boolean } | null>(null);
+
+  /** The node with this id when its history can be restored: a writable field of the shown component. */
+  restorable(id: string): SignalNode | null {
+    const g = this.graph();
+    const node = g?.nodes.find((n) => n.id === id);
+    return node?.locator && g?.component && node.locator.id === g.component.id ? node : null;
+  }
+
+  /** Writes the value the page kept for this entry back to the signal. */
+  async restore(node: SignalNode, change: SignalChange, time: string) {
+    const client = this.rpc();
+    const pageId = this.graph()?.pageId;
+    const locator = node.locator;
+    if (!client || !pageId || !locator || this.restoring() || this.restoreBlocked()) return;
+    this.restoring.set(true);
+    let result: RestoreResult;
+    try {
+      result = ((await client.scope('pangular').rpc.call('request-signal-restore', {
+        pageId,
+        request: { component: locator.id, node: node.id, epoch: change.epoch },
+      })) ?? {}) as RestoreResult;
+    } catch {
+      result = { error: 'The devtools server did not answer. Try again.' };
+    }
+    this.restoring.set(false);
+    this.restoreResult.set(
+      result.ok
+        ? {
+            id: node.id,
+            text: `Restored ${result.key ?? locator.key} to the value from ${time}.`,
+            error: false,
+          }
+        : { id: node.id, text: result.error ?? 'The page did not restore it.', error: true },
+    );
+  }
 
   /** Why a writable signal has no exact set entries, when the panel can tell. */
   readonly writeHint = computed(() => {

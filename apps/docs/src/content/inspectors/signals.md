@@ -80,7 +80,7 @@ Click an entry under **Dependencies (producers)** or **Consumers** to open that 
 
 ### Resources
 
-Angular builds each `resource()`, `httpResource()` and `rxResource()` from several internal signals, labeled `Resource#name.value`, `Resource#name.state` and so on. The tab folds them into one card under **Resources**, and leaves them out of the **Signals** list. Each card shows:
+Angular builds each `resource()`, `httpResource()` and `rxResource()` from several internal signals, labeled `Resource#name.value`, `Resource#name.state` and so on. The tab folds them into one card under **Resources**, and leaves them out of the **Signals** list. Angular labels these signals from 21.0.1. On earlier versions they have no names, so the tab shows no **Resources** cards and lists them as unnamed nodes. Each card shows:
 
 | Field           | Meaning                                                                                   |
 | --------------- | ----------------------------------------------------------------------------------------- |
@@ -108,6 +108,22 @@ While write stacks are on, a **set** entry also lists the code that wrote it. Se
 When values change faster than the overlay reads the page, an entry says how many earlier values were not captured. Only `signal`, `computed` and `linkedSignal` nodes, and resource statuses, have a history.
 
 The line above the list counts the changes, for example **3 changes recorded, newest first.** The list keeps the last 50 entries. Past that, the line says **showing the last 50**, and the count keeps growing.
+
+### Restore a past value
+
+Each entry but the newest has a **Restore** button when the signal is a `signal()`, `linkedSignal()` or `model()` field of the shown component. Click it to set the signal back to that entry's value with `.set()`, the same write `pangular:set-signal` makes. A line above the list says what was restored, or why the page refused.
+
+The page writes the value it kept when it recorded the entry, not the copy the panel shows. A value the history cut to fit, or showed with masked secrets, comes back whole, and the value never leaves the page.
+
+| Case                                                            | What happens                                                                                      |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `computed()`, a signal input, or a signal of a service          | No **Restore** button.                                                                            |
+| Unnamed signal                                                  | **Restore** shows once the page tells the field apart from the other fields by value and version. |
+| Entry past the last 50, or the page reloaded                    | The page refuses: the entry is no longer in its history.                                          |
+| The app changed the value in place after it was recorded        | The page refuses, because the value no longer matches the entry.                                  |
+| `actions.components` is `false`, a saved report or a native app | No **Restore** button, and a note says why.                                                       |
+
+See [`actions`](../getting-started/configuration.md#actions) for the option.
 
 ### Watched signals
 

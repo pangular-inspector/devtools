@@ -4,6 +4,7 @@ import { domTree, hostBySelector, type HostTree } from './host-tree.ts';
 import { className, injectorRef } from './injector-tree.ts';
 import { serializeNamed } from './serialize.ts';
 import { frameworkNodes, type OwnSignal } from './signal-framework.ts';
+import { locateWritable, setRawValue } from './signal-locator.ts';
 import { cleanValue, groupResources, rawNodeOf, type RawNode } from './signal-resources.ts';
 import type {
   SignalGraph,
@@ -215,24 +216,34 @@ function buildGraph<H extends object>(
   raw: RawGraph,
   instance: object | null,
   ng: SignalDebugNg<H>,
+  componentId?: string,
 ) {
   let linked: LinkedReader[] | null = null;
   const kept = raw.nodes.slice(0, MAX_NODES);
+  const located = instance && componentId ? locateWritable(ng, instance, kept) : new Map();
   const twins = new Map<string, number>();
   for (const n of kept) {
     if (n.kind !== 'linkedSignal' || 'value' in n) continue;
     const key = `${n.label}@${n.epoch ?? 0}`;
     twins.set(key, (twins.get(key) ?? 0) + 1);
   }
-  const nodes = kept.map((n) => {
+  const nodes = kept.map((n, index) => {
     const node: SignalGraphNode = {
       id: String(n.id),
       kind: (n.kind ?? 'unknown') as SignalNodeKind,
       epoch: n.epoch ?? 0,
     };
     if (n.label) node.label = n.label;
+    const field = located.get(index);
+    if (field) node.locator = { id: componentId!, key: field.key };
+    // Angular sends no value for linkedSignal nodes; the matched field holds it.
+    const fieldValue = field && !('value' in n) ? cleanValue(field.node) : null;
     if ('value' in n) {
       node.value = graphValue(n.label, n.value);
+      setRawValue(node, n.value);
+    } else if (fieldValue) {
+      node.value = graphValue(n.label, fieldValue.value);
+      setRawValue(node, fieldValue.value);
     } else if (
       n.kind === 'linkedSignal' &&
       n.label &&
@@ -241,7 +252,10 @@ function buildGraph<H extends object>(
     ) {
       linked ??= linkedSignalReaders(ng, instance);
       const found = linkedValue(linked, n.label, node.epoch);
-      if (found) node.value = graphValue(n.label, found.value);
+      if (found) {
+        node.value = graphValue(n.label, found.value);
+        setRawValue(node, found.value);
+      }
     }
     return node;
   });
@@ -283,11 +297,12 @@ function graphFor<H extends object>(
   if (!raw) return null;
   if (!hasIds(raw)) return UNSUPPORTED;
   const tag = tree.tag(el);
+  const id = elementId(el);
   return {
-    ...buildGraph(raw, instance, ng),
+    ...buildGraph(raw, instance, ng, id),
     componentSelector: tag,
     component: {
-      id: elementId(el),
+      id,
       name: className((instance as { constructor: new () => unknown }).constructor),
       tag,
       path: hostPath(ng, el, tree),
@@ -420,7 +435,9 @@ export function signalOwner(graph: Pick<SignalGraph, 'component' | 'injector'>):
 }
 
 export function graphKey(graph: SignalGraph): string {
-  const nodes = graph.nodes.map((n) => `${n.id}:${n.epoch}`).join(',');
+  const nodes = graph.nodes
+    .map((n) => `${n.id}:${n.epoch}${n.locator ? `=${n.locator.key}` : ''}`)
+    .join(',');
   const edges = graph.edges.map((e) => `${e.consumer}>${e.producer}`).join(',');
   const owner =
     graph.component?.id ?? graph.injector?.id ?? (graph.unsupported ? 'unsupported' : '');

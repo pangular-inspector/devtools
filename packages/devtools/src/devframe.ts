@@ -107,6 +107,7 @@ import {
 import { LIST_COMPONENTS_DESCRIPTION, listComponentsText } from './rpc/component-outline.ts';
 import { inspectComponentText } from './rpc/component-detail-text.ts';
 import { createComponentEdits } from './rpc/component-edits.ts';
+import { createSignalRestores } from './rpc/signal-restores.ts';
 import { createComponentValues, valueResultText } from './rpc/component-values.ts';
 import { parsePath } from './component-edit.ts';
 import {
@@ -2333,6 +2334,28 @@ const pangular = defineDevframe({
       },
     });
 
+    // The panel's Restore button on a signal's value history; the value stays on the page.
+    const signalRestores = createSignalRestores({
+      config,
+      graphOf: (pageId) => signalPages.get(pageId)?.graph,
+      broadcast: (method, message) =>
+        void my.rpc.broadcast({ method, args: [message], optional: true }),
+      answersFor,
+    });
+    register({
+      name: 'signal-restore-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: signalRestores.answer,
+    });
+    register({
+      name: 'request-signal-restore',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; request?: unknown } | null) =>
+        signalRestores.request(message?.pageId, message?.request),
+    });
+
     register({
       name: 'forget-signal-page',
       type: 'action',
@@ -3135,10 +3158,12 @@ const pangular = defineDevframe({
             };
           }
           return {
-            markdown: cdExportText(cdState.value() as CdState, {
-              page: args.page,
-              export: args.export,
-            }),
+            markdown: cdExportText(
+              cdState.value() as CdState,
+              { page: args.page, export: args.export },
+              undefined,
+              angularPages.get,
+            ),
           };
         }
         if ((args?.record !== undefined || cdViewsAsked(args)) && !cdRecordAllowed) {
