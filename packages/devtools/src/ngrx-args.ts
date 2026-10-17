@@ -86,6 +86,17 @@ export function secretParams(fn: unknown): (string | null)[] {
   return found;
 }
 
+/** The entries `secretLeaves` walks: a Map's with string keys, or an object's own. */
+function entriesOf(value: object): (readonly [string, unknown])[] {
+  return read(
+    () =>
+      value instanceof Map
+        ? [...value.entries()].map(([k, v]) => [String(k), v] as const)
+        : Object.entries(value),
+    [] as (readonly [string, unknown])[],
+  );
+}
+
 /** The string and number leaves under secret-named keys in `value`, up to a small budget. */
 function secretLeaves(value: unknown, under: boolean, out: Set<string>, budget: { n: number }) {
   if (--budget.n < 0) return;
@@ -94,16 +105,68 @@ function secretLeaves(value: unknown, under: boolean, out: Set<string>, budget: 
     return;
   }
   if (!value || typeof value !== 'object') return;
-  const entries = read(
-    () =>
-      value instanceof Map
-        ? [...value.entries()].map(([k, v]) => [String(k), v] as const)
-        : Object.entries(value),
-    [] as (readonly [string, unknown])[],
-  );
-  for (const [key, child] of entries) {
+  for (const [key, child] of entriesOf(value)) {
     secretLeaves(child, under || isRedactedKey(key), out, budget);
   }
+}
+
+/** An array whose own enumerable keys are exactly its indexes: no holes, no extra fields. */
+function dense(list: unknown[]): boolean {
+  return read(() => Object.keys(list).length === list.length, false);
+}
+
+function differ(a: Set<string>, b: Set<string>): boolean {
+  return a.size !== b.size || [...a].some((value) => !b.has(value));
+}
+
+/**
+ * Whether the secret leaves of `before` and `after` differ at any path,
+ * walking both side by side and skipping what is the same value on both
+ * sides (an untouched item of a store's list): its leaves are the same. A
+ * secret moved from one path to another counts as a change, so this answers
+ * yes at least whenever the full walk would. Null when the walk would pass
+ * `budget` nodes; the caller then falls back to the bounded full walk.
+ */
+function secretsDiffer(
+  before: unknown,
+  after: unknown,
+  under: boolean,
+  budget: { n: number },
+): boolean | null {
+  if (Object.is(before, after)) return false;
+  if (--budget.n < 0) return null;
+  const containers = !!before && typeof before === 'object' && !!after && typeof after === 'object';
+  if (!containers) {
+    const now = new Set<string>();
+    const was = new Set<string>();
+    secretLeaves(after, under, now, budget);
+    secretLeaves(before, under, was, budget);
+    return budget.n < 0 ? null : differ(now, was);
+  }
+  if (Array.isArray(before) && Array.isArray(after) && dense(before) && dense(after)) {
+    // The same entries as below, by index, without building them.
+    for (let i = 0; i < Math.max(before.length, after.length); i++) {
+      const changed = secretsDiffer(before[i], after[i], under || isRedactedKey(String(i)), budget);
+      if (changed !== false) return changed;
+    }
+    return false;
+  }
+  const old = entriesOf(before);
+  const was = new Map(old);
+  const now = entriesOf(after);
+  // Two Map keys with the same text (`1` and `'1'`) can't be paired by path.
+  if (was.size !== old.length || new Map(now).size !== now.length) return null;
+  for (const [key, child] of now) {
+    const secret = under || isRedactedKey(key);
+    const changed = secretsDiffer(was.has(key) ? was.get(key) : undefined, child, secret, budget);
+    if (changed !== false) return changed;
+    was.delete(key);
+  }
+  for (const [key, child] of was) {
+    const changed = secretsDiffer(child, undefined, under || isRedactedKey(key), budget);
+    if (changed !== false) return changed;
+  }
+  return false;
 }
 
 /**
@@ -118,11 +181,17 @@ export function touchesSecret(
   for (const key of keys) {
     if (before[key] === after[key]) continue;
     if (typeof key === 'string' && isRedactedKey(key)) return true;
+    const quick = read(
+      () => secretsDiffer(before[key], after[key], false, { n: MAX_WALK * 2 }),
+      null,
+    );
+    if (quick === true) return true;
+    if (quick === false) continue;
     const now = new Set<string>();
     const was = new Set<string>();
     secretLeaves(after[key], false, now, { n: MAX_WALK });
     secretLeaves(before[key], false, was, { n: MAX_WALK });
-    if (now.size !== was.size || [...now].some((value) => !was.has(value))) return true;
+    if (differ(now, was)) return true;
   }
   return false;
 }

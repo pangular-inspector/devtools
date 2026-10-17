@@ -41,7 +41,15 @@ const MAX_KNOWN_SECRETS = 100;
 /** Secret values seen this session, such as secret route params, newest last. */
 export const knownSecrets = new Set<string>();
 
+let knownVersion = 0;
+
+/** Changes whenever `knownSecrets` does, so texts masked with the old set are not reused. */
+export function knownSecretsVersion(): string {
+  return `${knownVersion}:${knownSecrets.size}`;
+}
+
 export function rememberSecret(secret: string) {
+  knownVersion++;
   knownSecrets.delete(secret);
   knownSecrets.add(secret);
   if (knownSecrets.size > MAX_KNOWN_SECRETS) {

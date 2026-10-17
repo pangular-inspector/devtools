@@ -1,5 +1,6 @@
-import { REDACTED, redactMessage, redactReason } from './forms-privacy.ts';
-import { knownSecrets, redactText as redactPairs } from './text-redact.ts';
+import { REDACTED, redactionEpoch, redactMessage, redactReason } from './forms-privacy.ts';
+import { TextMemo } from './redaction-scope.ts';
+import { knownSecrets, knownSecretsVersion, redactText as redactPairs } from './text-redact.ts';
 import { clip as clipText } from './text.ts';
 
 export { REDACTED };
@@ -46,9 +47,17 @@ export function isSecretName(name: unknown): boolean {
   return typeof name === 'string' && !!name && redactReason(name) !== null;
 }
 
-/** Masks credentials, JWTs, bearer tokens, secret `key=value` pairs and known secret values. */
+const masked = new TextMemo();
+
+/**
+ * Masks credentials, JWTs, bearer tokens, secret `key=value` pairs and known
+ * secret values. Inside `withRedactionScope` a text is masked once per config.
+ */
 export function redactText(text: string): string {
-  return redactPairs(text, knownSecrets);
+  const epoch = redactionEpoch();
+  return masked.get(epoch === null ? null : `${epoch}/${knownSecretsVersion()}`, text, (t) =>
+    redactPairs(t, knownSecrets),
+  );
 }
 
 const REDACT_WINDOW = 65536;

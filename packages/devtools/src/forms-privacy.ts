@@ -1,4 +1,5 @@
 import { redactCredentials } from './credential-redact.ts';
+import { RedactionScope } from './redaction-scope.ts';
 
 export const REDACTED = '[redacted]';
 
@@ -130,6 +131,16 @@ interface PrivacyConfig {
   unmask?: string[];
 }
 
+const scope = new RedactionScope<PrivacyConfig, RedactReason | null>();
+
+/**
+ * A number that changes whenever a value redacted inside the current
+ * `withRedactionScope` could come out differently, or null outside a scope.
+ */
+export function redactionEpoch(): number | null {
+  return scope.epoch();
+}
+
 let secretNames: string[] = [];
 let unmaskNames: string[] = [];
 
@@ -139,6 +150,8 @@ export function setRedaction(options: { secretNames?: string[]; unmask?: string[
     .map((name) => wordsOf(name).map(singular).join(''))
     .filter(Boolean);
   unmaskNames = [...(options.unmask ?? [])];
+  secretKeys.clear();
+  scope.changed();
 }
 
 function pageConfig(): PrivacyConfig {
@@ -151,6 +164,8 @@ function pageConfig(): PrivacyConfig {
 }
 
 function config(): PrivacyConfig {
+  const pinned = scope.config();
+  if (pinned) return pinned;
   const page = pageConfig();
   if (!unmaskNames.length) return page;
   return { ...page, unmask: [...(Array.isArray(page.unmask) ? page.unmask : []), ...unmaskNames] };
@@ -180,7 +195,29 @@ function containsName(words: string[], name: string): boolean {
   return false;
 }
 
+/** `isSecretKey` per key: it depends only on the key and `secretNames`, so `setRedaction` clears it. */
+const secretKeys = new Map<string, boolean>();
+const MAX_CACHED_KEYS = 20_000;
+
 export function isSecretKey(key: string): boolean {
+  let secret = secretKeys.get(key);
+  if (secret === undefined) {
+    secret = classify(key);
+    if (secretKeys.size >= MAX_CACHED_KEYS) secretKeys.clear();
+    secretKeys.set(key, secret);
+  }
+  return secret;
+}
+
+let classified = 0;
+
+/** How many keys `isSecretKey` has classified (not answered from its cache), for the hot-path tests. */
+export function secretKeyClassifications(): number {
+  return classified;
+}
+
+function classify(key: string): boolean {
+  classified++;
   const words = wordsOf(key).map(singular);
   if (words.some((word) => SECRET_WORDS.has(word))) return true;
   if (SECRET_PAIRS.has(words.join(''))) return true;
@@ -195,7 +232,25 @@ export function isSecretKey(key: string): boolean {
  * `redaction.secretNames`, and the `mask` and `unmask` lists.
  */
 export function isRedactedKey(key: string): boolean {
-  return redactReason(key) !== null;
+  return scope.keyReason(key, () => redactReason(key)) !== null;
+}
+
+/**
+ * Runs `body` with the redaction config read once: the page's
+ * `__PANGULAR_FORMS__` lists and `redaction.unmask` are read at the start, and
+ * each key's `isRedactedKey` answer is kept until that config changes. Use it
+ * around a whole collect or store update; nested calls join the outer one.
+ */
+export function withRedactionScope<T>(body: () => T): T {
+  return scope.run(() => {
+    // Each list is read once (it may be a getter) and copied, so the scope sees one config.
+    const { mask, unmask } = pageConfig();
+    const own = Array.isArray(unmask) ? [...unmask] : unmask;
+    return {
+      mask: Array.isArray(mask) ? [...mask] : mask,
+      unmask: unmaskNames.length ? [...(Array.isArray(own) ? own : []), ...unmaskNames] : own,
+    };
+  }, body);
 }
 
 function listed(list: string[] | undefined, key: string): boolean {

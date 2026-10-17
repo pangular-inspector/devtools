@@ -1,5 +1,5 @@
 import * as angularCore from '@angular/core';
-import { isRedactedKey, REDACTED } from './forms-privacy.ts';
+import { isRedactedKey, REDACTED, withRedactionScope } from './forms-privacy.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
 import { className, tokenName } from './injector-tree.ts';
 import {
@@ -22,6 +22,7 @@ import {
 import { registeredPatchState, registeredWatchState } from './ngrx-register.ts';
 import { historyRequest, type HistorySource } from './ngrx-history.ts';
 import { markSecretWriter, safeArgs, touchesSecret } from './ngrx-args.ts';
+import { SliceCache } from './ngrx-slice-cache.ts';
 
 /**
  * Angular's `untracked` (16.0+), read at runtime: a named import of it fails
@@ -222,6 +223,8 @@ function truncated(more: number): { diffTruncated?: number } {
   return more > 0 ? { diffTruncated: Math.min(more, NGRX_DIFF_MORE_CAP) } : {};
 }
 
+const slices = new SliceCache();
+
 function snapshotDiff(before: Snapshot, after: Snapshot, keys: PropertyKey[]): Changes {
   const out: NgrxDiffEntry[] = [];
   const overflow = { more: 0 };
@@ -237,8 +240,8 @@ function snapshotDiff(before: Snapshot, after: Snapshot, keys: PropertyKey[]): C
     }
     const counted = overflow.more;
     const found = diff(
-      serializeSlice(key, before[key]),
-      serializeSlice(key, after[key]),
+      slices.before(key, before[key]),
+      slices.after(key, after[key]),
       MAX_DIFF - out.length,
       undefined,
       overflow,
@@ -403,7 +406,7 @@ export function createNgrxCollector<H extends object = Element>(
     }
   };
 
-  const finish = (
+  const finishNow = (
     t: Tracked,
     type: string,
     args: unknown[] | undefined,
@@ -459,6 +462,10 @@ export function createNgrxCollector<H extends object = Element>(
     );
   };
 
+  // The redaction config is read once per update, and key and text answers are reused.
+  const finish = (...args: Parameters<typeof finishNow>) =>
+    withRedactionScope(() => finishNow(...args));
+
   const onWrite = (t: Tracked) => {
     // When a `watchState()` watcher is attached, every patchState (even
     // several in the same tick) fires one callback synchronously inside
@@ -492,7 +499,7 @@ export function createNgrxCollector<H extends object = Element>(
    * `watchState()`. Dedicated to that path (not reused through `finish()`) so
    * it stays small and so it does not trip the per-method noop throttle.
    */
-  const appendChange = (
+  const appendChangeNow = (
     t: Tracked,
     before: Snapshot,
     call: Tracked['methodStack'][number] | undefined,
@@ -542,6 +549,9 @@ export function createNgrxCollector<H extends object = Element>(
     if (call) call.fired = (call.fired ?? 0) + 1;
     if (call && logged?.args) (call.logged ??= []).push(logged);
   };
+
+  const appendChange = (...args: Parameters<typeof appendChangeNow>) =>
+    withRedactionScope(() => appendChangeNow(...args));
 
   /**
    * Subscribes once through the registered `watchState` so every patchState
@@ -1523,7 +1533,7 @@ export function createNgrxCollector<H extends object = Element>(
   };
 
   return {
-    collect,
+    collect: (rediscover) => withRedactionScope(() => collect(rediscover)),
     logSince: (after) => log.filter((entry) => entry.seq > after),
     lastSeq: () => seq,
     argsRedactedSince: (after) => ({
