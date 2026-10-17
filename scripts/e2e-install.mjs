@@ -34,7 +34,8 @@
  *                                [--cells=angular-cli:pnpm:22,analog:npm] [--tarball=<file>]
  *                                [--report=<file.json>] [--no-audit] [--audit-only] [--keep]
  *                                [--list]
- * With no matrix flags it runs every scenario on npm with the newest Angular, plus the audit.
+ * With no matrix flags it runs every scenario on npm (Analog on pnpm) with the newest Angular, plus
+ * the audit.
  *
  * Ports: the registry on VERIFY_PORT (4873 by default) and the apps on the ports after it, up to
  * three per cell.
@@ -115,7 +116,8 @@ function plannedCells() {
         return { scenario, pm, angular };
       })
     : (list(arg('scenarios')) ?? SCENARIOS).flatMap((scenario) =>
-        (list(arg('pm')) ?? ['npm']).flatMap((pm) =>
+        // The create-analog template's `$vitest` override fails `npm install` on npm 10.
+        (list(arg('pm')) ?? [scenario === 'analog' ? 'pnpm' : 'npm']).flatMap((pm) =>
           (list(arg('angular')) ?? ['newest']).map((angular) => ({ scenario, pm, angular })),
         ),
       );
