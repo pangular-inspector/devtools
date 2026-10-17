@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createPangular } from '../devframe.ts';
 import type { PangularConfig } from '../config.ts';
 import type { HydrationReport, LiveComponentNode } from '../types.ts';
+import { answerText } from './tool-answer.ts';
 
 async function boot(config?: PangularConfig) {
   const host = {
@@ -15,7 +16,7 @@ async function boot(config?: PangularConfig) {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (tool: string, args: Record<string, unknown>) =>
-    ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
   const sent: { method: string; args: [Record<string, unknown>] }[] = [];
   vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: (typeof sent)[number]) => {
     sent.push(options);

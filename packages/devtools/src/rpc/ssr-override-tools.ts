@@ -15,6 +15,7 @@ import { code, untrusted } from './forms-tools.ts';
 import { PAGE_ARGUMENT, byRecency, pageArgument, unknownPageText } from './pages.ts';
 import { capped } from './router-tools.ts';
 import { MARKDOWN_OUTPUT_SCHEMA } from './agent-output.ts';
+import { refusal } from './refusal.ts';
 
 /** The limits `sanitizeSsrOverrides` and the panel's form enforce. */
 export const MAX_OVERRIDE_PATTERN = 500;
@@ -342,8 +343,8 @@ export interface SsrOverrideToolDeps {
 export function ssrOverrideTools(deps: SsrOverrideToolDeps) {
   const newId = () => `o${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const change = (result: OverrideChange, verb: 'Added' | 'Updated' | 'Removed') => {
-    if (!deps.config.actions.http) return { markdown: actionBlockedMessage('http') };
-    if ('error' in result) return { markdown: result.error };
+    if (!deps.config.actions.http) return { markdown: refusal(actionBlockedMessage('http')) };
+    if ('error' in result) return { markdown: refusal(result.error) };
     deps.save(result.overrides);
     return { markdown: overrideChangeText(verb, result.override, result.overrides) };
   };

@@ -5,6 +5,7 @@ import type { CdReport, PangularConfig } from '../config.ts';
 import { createPangular } from '../devframe.ts';
 import { cdExportText } from '../rpc/cd-export-tools.ts';
 import { toCdPage } from '../rpc/cd-tools.ts';
+import { answerText } from './tool-answer.ts';
 
 const JWT =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
@@ -55,7 +56,7 @@ async function boot(config?: PangularConfig) {
   await ctx.rpc.invokeLocal('pangular:push-change-detection' as never, ...([report()] as never));
   const tool = ctx.agent.list().tools.find((t) => t.id === 'pangular:change-detection');
   const call = async (args: Record<string, unknown>) =>
-    ((await ctx.agent.invoke('pangular:change-detection', args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke('pangular:change-detection', args));
   return { tool, call };
 }
 
@@ -113,7 +114,9 @@ describe('change-detection export', () => {
     expect(await full.call({ export: 'json', record: 'clear' })).toBe(
       'Pass either `record` or `export`, not both.',
     );
-    expect(await full.call({ export: 'csv' })).toBe('`export` must be `json` or `trace`.');
+    expect(await full.call({ export: 'csv' })).toMatch(
+      /^`export` must be one of `json`, `trace`, not a string \("csv"\)\./,
+    );
     // The recording is still there: the refused call did not clear it.
     expect(await full.call({})).toContain('1 cycle(s) kept');
   });

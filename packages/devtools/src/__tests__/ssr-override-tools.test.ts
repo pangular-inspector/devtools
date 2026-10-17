@@ -11,6 +11,7 @@ import {
   upsertSsrOverride,
 } from '../rpc/ssr-override-tools.ts';
 import type { HttpPage, HttpState } from '../types.ts';
+import { answerText } from './tool-answer.ts';
 
 const JWT = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlLXZhbHVl';
 
@@ -24,7 +25,7 @@ async function boot(config: PangularConfig = {}) {
   await createPangular(config).setup(ctx as never);
   const tools = ctx.agent.list().tools;
   const tool = async (name: string, args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke(`pangular:${name}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${name}`, args));
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never)) as Promise<unknown>;
   const state = async () =>

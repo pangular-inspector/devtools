@@ -12,6 +12,7 @@ import {
   staleReduxStoresPages,
   toReduxStoresReport,
 } from '../rpc/redux-stores-tools.ts';
+import { answerText } from './tool-answer.ts';
 
 type Target = Record<PropertyKey, any>;
 
@@ -31,7 +32,7 @@ async function boot(definition = pangular) {
   const call = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const invoke = async (id: string, args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke(`pangular:${id}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${id}`, args));
   const state = async () =>
     (
       await (

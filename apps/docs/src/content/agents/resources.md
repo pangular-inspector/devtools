@@ -107,6 +107,8 @@ Some clients don't read templates. For them, `resources/list` also names one res
 
 When a page starts reporting or expires, the server sends `notifications/resources/list_changed`, so a client can list the resources again. Changes settle for half a second first, and a report from a page that is already listed sends nothing.
 
+The HTTP endpoint is stateless, so the notification only reaches a client that keeps a stream open for it: one that speaks the 2026-07-28 protocol and calls `subscriptions/listen` with `resourcesListChanged`. A client on the 2025 protocol versions, such as one built on the MCP SDK 1.x defaults, gets no notification, even though `initialize` advertises `listChanged`. Such a client sees new pages the next time it calls `resources/list`, or through the [templates](#read-one-page), which need no list.
+
 Like the prompts, the templates need a devframe patch that devframe 1.2.5 does not ship. The stdio server has no templates, since no page connects to it.
 
 ## Shared state

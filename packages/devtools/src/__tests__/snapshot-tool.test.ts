@@ -6,6 +6,7 @@ import type { CollectedForm } from '../forms.ts';
 import { UNTRUSTED } from '../rpc/forms-tools.ts';
 import { SNAPSHOT_SECTION_CHARS } from '../rpc/snapshot-tools.ts';
 import type { LiveComponentNode } from '../types.ts';
+import { answerText } from './tool-answer.ts';
 
 const JWT = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
 
@@ -20,7 +21,7 @@ async function boot(options?: PangularConfig) {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const snapshot = async (args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke('pangular:snapshot', args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke('pangular:snapshot', args));
   const tools = ctx.agent.list().tools.map((tool) => tool.id);
   return { push, snapshot, tools };
 }
@@ -261,16 +262,17 @@ describe('snapshot agent tool', () => {
     expect(text).toContain('`q1`');
   });
 
-  it('lists only the sections asked for, and names unknown ones', async () => {
+  it('lists only the sections asked for, and refuses unknown ones', async () => {
     const { push, snapshot } = await boot();
     await pushAll(push);
-    const text = await snapshot({ sections: ['http', 'errors', 'bogus'] });
+    const text = await snapshot({ sections: ['http', 'errors'] });
     expect(text).toContain('## HTTP calls');
     expect(text).toContain('## Errors');
     expect(text).not.toContain('## Components');
     expect(text).not.toContain('## Page');
-    expect(text).toMatch(/Unknown section\(s\) `bogus` left out/);
-    expect(await snapshot({ sections: ['bogus'] })).toMatch(/^No section named `bogus`/);
+    expect(await snapshot({ sections: ['http', 'bogus'] })).toMatch(
+      /^`sections\[1\]` must be one of `page`, .*not a string \("bogus"\)\./,
+    );
   });
 
   it('skips the sections whose inspector or agent tools are off', async () => {

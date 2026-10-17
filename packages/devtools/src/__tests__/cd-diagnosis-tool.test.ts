@@ -12,6 +12,7 @@ import {
 import { AGENT_INSPECTOR, AGENT_SAFETY, PAGE_AGENT_ENTRIES, type CdDiagnosis } from '../config.ts';
 import { cdDiagnosisText } from '../rpc/cd-diagnosis-tools.ts';
 import { toCdPage, type CdState } from '../rpc/cd-tools.ts';
+import { answerText } from './tool-answer.ts';
 
 const JWT =
   'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
@@ -73,8 +74,7 @@ async function boot() {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (args: Record<string, unknown>) =>
-    ((await ctx.agent.invoke('pangular:diagnose-change-detection', args)) as { markdown: string })
-      .markdown;
+    await answerText(ctx.agent.invoke('pangular:diagnose-change-detection', args));
   return { push, call, ctx };
 }
 
@@ -272,8 +272,7 @@ describe('diagnose-change-detection tool', () => {
   it('adds the cause and unchanged checks to the change-detection cycle lines', async () => {
     const { push, ctx } = await boot();
     await push('push-change-detection', report('p1'));
-    const text = ((await ctx.agent.invoke('pangular:change-detection', {})) as { markdown: string })
-      .markdown;
+    const text = await answerText(ctx.agent.invoke('pangular:change-detection', {}));
     expect(text).toContain(
       'started by `click on button in Cart (add)`, 1 of 2 refreshed check(s) changed nothing',
     );

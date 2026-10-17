@@ -5,6 +5,7 @@ import { createPangular } from '../devframe.ts';
 import { httpRegistry, MAX_RULES, type HttpRule } from '../http-rules.ts';
 import { httpRulesText, removeHttpRule, upsertHttpRule } from '../rpc/http-rule-tools.ts';
 import type { HttpState } from '../types.ts';
+import { answerText } from './tool-answer.ts';
 
 async function boot(config: PangularConfig = {}) {
   const host = {
@@ -16,7 +17,7 @@ async function boot(config: PangularConfig = {}) {
   await createPangular(config).setup(ctx as never);
   const tools = ctx.agent.list().tools.map((t) => t.id);
   const tool = async (name: string, args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke(`pangular:${name}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${name}`, args));
   const state = async () =>
     (
       await (
@@ -109,7 +110,7 @@ describe('HTTP rule agent tools', () => {
     const { tool } = await boot();
     httpRegistry().rules = [rule()];
     const cases: [Record<string, unknown>, RegExp][] = [
-      [{ status: 500 }, /`pattern` is required/],
+      [{ status: 500 }, /^Pass `pattern`/],
       [{ pattern: '   ', status: 500 }, /`pattern` is required/],
       [{ pattern: 'x'.repeat(501), status: 500 }, /limited to 500 characters/],
       [{ pattern: '/a', status: 299 }, /`status` must be a standard HTTP status/],
@@ -132,7 +133,7 @@ describe('HTTP rule agent tools', () => {
     expect(await tool('remove-http-rule', { id: 'nope' })).toMatch(
       /^No rule `nope`\. Rule ids: `r1`/,
     );
-    expect(await tool('remove-http-rule', {})).toMatch(/^`id` is required/);
+    expect(await tool('remove-http-rule', {})).toMatch(/^Pass `id`/);
     expect(httpRegistry().rules).toEqual([rule()]);
   });
 

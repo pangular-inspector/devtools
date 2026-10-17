@@ -13,6 +13,7 @@ import {
 } from '../provider-values.ts';
 import { createProviderValues, findProvider, providerValueText } from '../rpc/provider-values.ts';
 import type { InjectorPage } from '../types.ts';
+import { toolAnswer } from './tool-answer.ts';
 
 const API_URL = { _desc: 'API_URL', toString: () => 'InjectionToken API_URL' };
 const API_KEY = { _desc: 'API_KEY', toString: () => 'InjectionToken API_KEY' };
@@ -361,10 +362,10 @@ describe('provider value server', () => {
     expect(broadcast).toHaveBeenCalled();
     expect(answer.markdown).toContain('`items[0]` of `CartService` from Root');
     expect(answer.markdown).toContain('"id": 1');
-    const bad = (await ctx.agent.invoke('pangular:read-provider-value', {
-      token: 'CartService',
-      path: 'a..b',
-    })) as { markdown: string };
+    const bad = await toolAnswer(
+      ctx.agent.invoke('pangular:read-provider-value', { token: 'CartService', path: 'a..b' }),
+    );
+    expect(bad.isError).toBe(true);
     expect(bad.markdown).toMatch(/Pass `path`/);
   });
 });

@@ -10,6 +10,7 @@ import {
 } from '../rpc/component-screenshots.ts';
 import { UNTRUSTED } from '../rpc/forms-tools.ts';
 import { makeProject } from './analog-fixture.ts';
+import { ToolRefusal } from '../rpc/refusal.ts';
 
 const PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -24,11 +25,17 @@ async function boot(config?: PangularConfig) {
   await (config ? createPangular(config) : pangular).setup(ctx as never);
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
+  // A refusal comes back as its text, the way an MCP client reads it.
   const call = (args: Record<string, unknown>) =>
-    ctx.agent.invoke('pangular:screenshot-component', args) as Promise<{
-      markdown: string;
-      mcpContent?: unknown[];
-    }>;
+    (
+      ctx.agent.invoke('pangular:screenshot-component', args) as Promise<{
+        markdown: string;
+        mcpContent?: unknown[];
+      }>
+    ).catch((error: unknown) => {
+      if (error instanceof ToolRefusal) return { markdown: error.message, mcpContent: undefined };
+      throw error;
+    });
   return { ctx, push, call };
 }
 

@@ -16,6 +16,7 @@ import {
   toWatchRequest,
 } from '../signal-watch.ts';
 import type { SignalGraph } from '../types.ts';
+import { answerText } from './tool-answer.ts';
 
 const graph = (pageId?: string): SignalGraph & { pageId?: string } => ({
   ...(pageId ? { pageId } : {}),
@@ -179,7 +180,7 @@ describe('watch-signal tool and set-signal-watch', () => {
     const push = (name: string, payload: unknown) =>
       ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
     const call = async (tool: string, args: Record<string, unknown>) =>
-      ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+      await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
     return { ctx, push, call };
   }
 

@@ -32,6 +32,7 @@ import {
   fitFields,
   valueJson,
 } from './forms-cap.ts';
+import { refusal } from './refusal.ts';
 
 export interface FieldArgs {
   form?: string;
@@ -89,7 +90,11 @@ export function resolveForm(
   const short = forms.filter((f) => f.id.split('@')[0] === query);
   return short.length > 1
     ? ambiguous(short)
-    : `No form ${query ?? ''}. Forms: ${forms.map((f) => f.id).join(', ')}.`;
+    : refusal(
+        forms.length
+          ? `No form ${query ?? ''}. Forms: ${forms.map((f) => f.id).join(', ')}.`
+          : `No form ${query ?? ''}: the page reports no forms right now.`,
+      );
 }
 
 export function latestMarker(state: FormsState): number {

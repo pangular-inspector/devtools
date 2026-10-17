@@ -5,6 +5,7 @@ import type { ComponentPage } from '../types.ts';
 import { findComponents, otherMatchesText, truncationText } from './component-tools.ts';
 import { untrusted } from './forms-tools.ts';
 import { byRecency, needsDomText, pageArgument, unknownPageText } from './pages.ts';
+import { refusal } from './refusal.ts';
 
 /** How long a capture waits for its page; drawing a large component and its images takes a moment. */
 export const SCREENSHOT_TIMEOUT_MS = 15_000;
@@ -181,7 +182,9 @@ export function createComponentScreenshots(deps: Deps) {
       const selector = typeof args?.['selector'] === 'string' ? args['selector'].trim() : '';
       if (!selector) {
         return {
-          markdown: 'Pass `selector`: an instance id, class name, host tag or CSS selector.',
+          markdown: refusal(
+            'Pass `selector`: an instance id, class name, host tag or CSS selector.',
+          ),
         };
       }
       const hits = findComponents(scope, selector);

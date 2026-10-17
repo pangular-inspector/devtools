@@ -32,6 +32,7 @@ import type { LeaksState } from './leaks-tools.ts';
 import { PAGE_ARGUMENT, byRecency, needsDomText, pageArgument, unknownPageText } from './pages.ts';
 import type { PipeLintFinding } from './pipe-lint.ts';
 import type { RouterState } from './router-tools.ts';
+import { refusal } from './refusal.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -380,7 +381,7 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       host.agentAxe ? '`axe: true` runs a fresh axe pass first. ' : ''
     }\`session\`: \`before\` saves a baseline, \`after\` compares, \`clear\` drops it; kept per page 30 minutes.${
       host.agentReadOnly
-        ? " Read-only: uses the panel's last axe pass; cannot clear or replace a baseline."
+        ? " Read-only: uses the panel's last axe pass (`axe: true` is refused); cannot clear or replace a baseline."
         : ''
     } Areas turned off are named under Coverage. Uses \`page\` or the most recent page.`,
     inputSchema: {
@@ -417,13 +418,23 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       const { pageId } = page;
       const session = args?.['session'] as SessionAction | undefined;
       if (session !== undefined && !MARKS.includes(session)) {
-        return { markdown: 'Pass `session`: `before`, `after` or `clear`.' };
+        return { markdown: refusal('Pass `session`: `before`, `after` or `clear`.') };
       }
       sessions.use(pageId);
       const kept = sessions.get(pageId)?.before;
+      if (!host.agentAxe && args?.['axe'] === true) {
+        // `axe` loads axe-core into the page, which a read-only agent may not do.
+        return {
+          markdown: refusal(
+            "The agent is read-only (`agent.readOnly`), so it can't run axe-core in the page. Call without `axe` to use the last axe pass the panel ran, or run one from the panel's Audit tab.",
+          ),
+        };
+      }
       if (host.agentReadOnly && (session === 'clear' || (session === 'before' && kept))) {
         return {
-          markdown: `The agent is read-only (\`agent.readOnly\`), so it can't ${session === 'clear' ? 'drop' : 'replace'} the audit session of page ${code(pageId)}, which the user may have taken.${kept ? ' Call with `session: "after"` to compare with the baseline.' : ''} Clear it in the panel's Audit tab.`,
+          markdown: refusal(
+            `The agent is read-only (\`agent.readOnly\`), so it can't ${session === 'clear' ? 'drop' : 'replace'} the audit session of page ${code(pageId)}, which the user may have taken.${kept ? ' Call with `session: "after"` to compare with the baseline.' : ''} Clear it in the panel's Audit tab.`,
+          ),
         };
       }
       if (session === 'clear') {
@@ -435,7 +446,9 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       }
       if (session === 'after' && !sessions.get(pageId)?.before) {
         return {
-          markdown: `Page ${code(pageId)} has no baseline. Call with \`session: "before"\` first, make the change, then call with \`session: "after"\`.`,
+          markdown: refusal(
+            `Page ${code(pageId)} has no baseline. Call with \`session: "before"\` first, make the change, then call with \`session: "after"\`.`,
+          ),
         };
       }
       let axeNote = '';

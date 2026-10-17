@@ -21,10 +21,11 @@ import {
 } from './forms.ts';
 import {
   isDevtoolsAction,
-  isFormAction,
+  formActionProblem,
   locateElement,
   runFormAction,
   type ActionContext,
+  type FormActionRequest,
   type FormActionResult,
 } from './forms-actions.ts';
 import {
@@ -811,9 +812,9 @@ export function attachForms(
           ok: false,
           error: 'This page has no Angular debug API (production build?).',
         });
-      if (!isFormAction(message.request))
-        return respond({ ok: false, error: 'Unknown form action.' });
-      const request = message.request;
+      const problem = formActionProblem(message.request);
+      if (problem) return respond({ ok: false, error: problem });
+      const request = message.request as FormActionRequest;
       if (request.formId && !foundById.has(request.formId) && request.action !== 'locate') return;
       if (!request.formId && !FORMLESS_FORM_ACTIONS.includes(request.action)) {
         return respond({ ok: false, error: `${request.action} needs a formId.` });

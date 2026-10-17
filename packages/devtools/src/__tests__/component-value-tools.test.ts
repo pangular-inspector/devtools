@@ -4,6 +4,7 @@ import pangular, { createPangular } from '../devframe.ts';
 import { RPC_INSPECTOR, agentSafety, resolvePangularConfig } from '../config.ts';
 import { createComponentValues } from '../rpc/component-values.ts';
 import { UNTRUSTED } from '../rpc/forms-tools.ts';
+import { answerText } from './tool-answer.ts';
 
 async function boot(inspectors?: Record<string, boolean>) {
   const host = {
@@ -16,7 +17,7 @@ async function boot(inspectors?: Record<string, boolean>) {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (tool: string, args: Record<string, unknown>) =>
-    ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
   return { ctx, push, call };
 }
 

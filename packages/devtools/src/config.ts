@@ -1561,6 +1561,21 @@ export function agentTags(id: string): readonly PangularInspector[] | undefined 
   return inspector ? [inspector] : undefined;
 }
 
+/** The recordings `clear-recordings` can clear. */
+export const CLEAR_RECORDING_TARGETS = ['http', 'router', 'analog'] as const;
+export type ClearRecordingTarget = (typeof CLEAR_RECORDING_TARGETS)[number];
+
+/**
+ * The recordings `clear-recordings` may clear under `config`: each needs its
+ * inspector, its agent tools and its action turned on. The tool is offered
+ * while there is at least one, and its `target` lists only these (and `all`).
+ */
+export function clearRecordingTargets(config: ResolvedPangularConfig): ClearRecordingTarget[] {
+  return CLEAR_RECORDING_TARGETS.filter(
+    (key) => config.agent.tools[key] && config.inspectors[key] && config.actions[key],
+  );
+}
+
 export function rpcAllowed(name: string, config: ResolvedPangularConfig): boolean {
   const inspector = RPC_INSPECTOR[name];
   return !inspector || config.inspectors[inspector];
@@ -1575,13 +1590,7 @@ export function agentAllowed(entry: { id: string }, config: ResolvedPangularConf
   if (matchingActions.length > 0 && matchingActions.every((key) => !config.actions[key])) {
     return false;
   }
-  if (name === 'clear-recordings') {
-    return Boolean(
-      (config.agent.tools.http && config.inspectors.http && config.actions.http) ||
-      (config.agent.tools.router && config.inspectors.router && config.actions.router) ||
-      (config.agent.tools.analog && config.inspectors.analog && config.actions.analog),
-    );
-  }
+  if (name === 'clear-recordings') return clearRecordingTargets(config).length > 0;
   const own = agentEntry(name);
   if (own?.anyInspector) {
     return (own.inspectors ?? []).some((key) => config.agent.tools[key] && config.inspectors[key]);
@@ -1600,8 +1609,10 @@ export function agentToolOffered(name: string, config: ResolvedPangularConfig): 
   const entry = agentEntry(name);
   if (!entry || entry.kind === 'resource') return false;
   if (!agentAllowed({ id: `pangular:${name}` }, config)) return false;
-  // `agentAllowed` already checks every inspector of an `anyInspector` entry.
-  const inspector = entry.anyInspector ? undefined : entry.inspectors?.[0];
+  // `agentAllowed` already checks every inspector of an `anyInspector` entry,
+  // and of `clear-recordings`, which is offered while any of its three is on.
+  const inspector =
+    entry.anyInspector || name === 'clear-recordings' ? undefined : entry.inspectors?.[0];
   return !inspector || config.inspectors[inspector];
 }
 

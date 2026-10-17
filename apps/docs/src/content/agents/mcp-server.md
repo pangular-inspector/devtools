@@ -261,7 +261,7 @@ The stdio server offers no prompts. Like the instructions, the prompts need a de
 
 ### Resource templates
 
-The HTTP endpoint also lists a resource template for each page-scoped resource, such as `pangular://page/{pageId}/component-tree`, and sends `notifications/resources/list_changed` when a page starts reporting or expires. See [Read one page](./resources.md#read-one-page).
+The HTTP endpoint also lists a resource template for each page-scoped resource, such as `pangular://page/{pageId}/component-tree`. When a page starts reporting or expires, it sends `notifications/resources/list_changed` to clients that listen through `subscriptions/listen` (the 2026-07-28 protocol). A client on an older protocol version, such as the MCP SDK 1.x defaults, gets no notification and lists the resources again to see new pages. See [Read one page](./resources.md#read-one-page) and [List changes](./resources.md#list-changes).
 
 ### Tool names
 

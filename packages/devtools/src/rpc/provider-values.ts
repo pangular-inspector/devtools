@@ -10,6 +10,7 @@ import type { InjectorPage, InjectorTreeNode } from '../types.ts';
 import { untrusted } from './forms-tools.ts';
 import { byRecency, PAGE_ARGUMENT, pageArgument, unknownPageText } from './pages.ts';
 import { capped } from './router-tools.ts';
+import { refusal } from './refusal.ts';
 
 /** How long a read waits for its page to answer. */
 export const PROVIDER_VALUE_TIMEOUT_MS = 5_000;
@@ -109,11 +110,15 @@ export function createProviderValues(deps: Deps) {
     handler: async (args: Record<string, unknown>): Promise<{ markdown: string }> => {
       const token = args?.['token'];
       if (typeof token !== 'string' || !token.trim() || token.length > 500) {
-        return { markdown: 'Pass `token`: a service class name or an InjectionToken description.' };
+        return {
+          markdown: refusal('Pass `token`: a service class name or an InjectionToken description.'),
+        };
       }
       const path = providerPath(args['path']);
       if (!path) {
-        return { markdown: 'Pass `path` as a member name, or a path such as `cart.items[0]`.' };
+        return {
+          markdown: refusal('Pass `path` as a member name, or a path such as `cart.items[0]`.'),
+        };
       }
       const pages = [...deps.pages()];
       const requested = pageArgument(args);

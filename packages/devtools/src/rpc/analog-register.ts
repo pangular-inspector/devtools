@@ -43,6 +43,7 @@ import {
 import type { PageOwners } from './page-owners.ts';
 import { fixedTtl, PAGE_TTL_MS, type PageTtl } from './page-ttl.ts';
 import { MARKDOWN_OUTPUT_SCHEMA } from './agent-output.ts';
+import { refusal } from './refusal.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -480,7 +481,7 @@ export async function registerAnalog(
     },
     handler: async (args: ApiRequest) => {
       const result = await sendApi(args ?? { path: '' });
-      if (result['error']) return text(`Refused: ${result['error']}`);
+      if (result['error']) return text(refusal(`Refused: ${result['error']}`));
       // The response body comes from the dev server's routes, so it sits behind the notice.
       return text(
         `${UNTRUSTED}\n\n${args.method ?? 'GET'} ${args.path}: ${result['status']} in ${result['ms']}ms (${result['type'] || 'no content type'})\n\n${result['body']}`,

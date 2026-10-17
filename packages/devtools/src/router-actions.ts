@@ -915,13 +915,31 @@ export async function runAction(
     case 'resolve-lazy':
       return resolveLazy(router, request.id);
     default:
-      return { error: 'Unknown action.' };
+      return { error: unknownRouterActionText(read(() => (request as AnyRecord)['action'], '')) };
   }
+}
+
+/** The actions `navigate` takes, in the order the tool describes them. */
+export const ROUTER_ACTIONS = [
+  'navigate',
+  'abort',
+  'replay',
+  'probe',
+  'instrument',
+  'resolve-lazy',
+] as const;
+
+/** The answer to a missing or unknown router action, listing the ones there are. */
+export function unknownRouterActionText(action: unknown): string {
+  const known = ROUTER_ACTIONS.map((name) => `\`${name}\``).join(', ');
+  return typeof action === 'string' && action
+    ? `Unknown action \`${action.slice(0, 40)}\`. Pass \`action\`: one of ${known}.`
+    : `Pass \`action\`: one of ${known}.`;
 }
 
 export function isRouterAction(value: unknown): value is RouterAction {
   const action = read(() => (value as AnyRecord)?.['action'] as string, '');
-  return ['navigate', 'abort', 'replay', 'probe', 'instrument', 'resolve-lazy'].includes(action);
+  return (ROUTER_ACTIONS as readonly string[]).includes(action);
 }
 
 export { redactUrl };

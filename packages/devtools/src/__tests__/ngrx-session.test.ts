@@ -31,6 +31,7 @@ import {
   MAX_IMPORTED,
   testText,
 } from '../rpc/ngrx-session-tools.ts';
+import { answerText } from './tool-answer.ts';
 
 function session(overrides: Partial<NgrxSession> = {}): NgrxSession {
   return {
@@ -538,7 +539,7 @@ describe('ngrx history agent tools', () => {
     const push = (name: string, payload: unknown) =>
       ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
     const call = async (tool: string, args: Record<string, unknown>) =>
-      ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+      await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
     return { ctx, push, call };
   }
 

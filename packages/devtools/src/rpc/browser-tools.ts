@@ -4,6 +4,7 @@ import { toAgentToolName } from 'devframe/utils/agent-tool-name';
 import { redactJsonText } from '../json-text-redact.ts';
 import { isSecretName, redactText } from '../serialize.ts';
 import { setCallerPageReader } from './page-scope.ts';
+import { ToolRefusal } from './refusal.ts';
 
 /**
  * The `read` agent tools a page registers for browser agents (WebMCP and
@@ -283,6 +284,8 @@ export async function callBrowserTool(
     const result = await callerScope.run(pageId, () => host.agent.invoke(id, args));
     return { text: redactAnswer(textOf(result)) };
   } catch (error) {
+    // A refusal already says what to change; anything else failed.
+    if (error instanceof ToolRefusal) return { text: redactAnswer(error.message), isError: true };
     const reason = (error as Error)?.message ?? String(error);
     return { text: redactAnswer(`${tool.name} failed: ${reason}`.slice(0, 2000)), isError: true };
   }

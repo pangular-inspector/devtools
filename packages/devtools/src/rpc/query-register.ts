@@ -18,6 +18,7 @@ import {
   toQueryReport,
 } from './query-tools.ts';
 import { MARKDOWN_OUTPUT_SCHEMA } from './agent-output.ts';
+import { refusal } from './refusal.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -239,7 +240,7 @@ export async function registerTanstackQuery(host: QueryHost): Promise<QueryRegis
     handler: async (args: AnyRecord) => {
       const action = args?.['action'];
       if (action !== 'invalidate' && action !== 'refetch') {
-        return { markdown: 'Pass `action`: `invalidate` or `refetch`.' };
+        return { markdown: refusal('Pass `action`: `invalidate` or `refetch`.') };
       }
       if (!host.writes) return { markdown: host.blocked };
       const pages = Object.values(state().pages);

@@ -259,6 +259,7 @@ import {
   ROUTER_WRITE_ACTIONS,
   actionBlockedMessage,
   agentAllowed,
+  clearRecordingTargets,
   agentSafety,
   agentTags,
   angularUnavailableText,
@@ -303,6 +304,9 @@ import {
 } from './push-delta.ts';
 import { MARKDOWN_OUTPUT_SCHEMA } from './rpc/agent-output.ts';
 import { createWaitForTool } from './rpc/wait-for.ts';
+import { guardHandler } from './rpc/tool-input.ts';
+import { refusal } from './rpc/refusal.ts';
+import { ROUTER_ACTIONS, unknownRouterActionText } from './router-actions.ts';
 
 type CapacitorToolArgs = {
   page?: string;
@@ -371,7 +375,12 @@ const pangular = defineDevframe({
               ...tool,
               safety: agentSafety(tool.id, config),
               tags: agentTags(tool.id),
-              handler: leased(() => interest, tool.handler),
+              // Arguments are checked against `inputSchema` before the lease
+              // wakes any page, and refusals go out with `isError`.
+              handler: guardHandler(
+                tool.inputSchema,
+                leased(() => interest, tool.handler),
+              ),
             }),
           );
       },
@@ -853,7 +862,10 @@ const pangular = defineDevframe({
                 ...(tool as Parameters<typeof ctx.agent.registerTool>[0]),
                 safety,
                 tags: agentTags(String(tool['id'])),
-                handler: leased(() => interest, tool['handler']),
+                handler: guardHandler(
+                  tool['inputSchema'],
+                  leased(() => interest, tool['handler']),
+                ),
               }),
             ),
           pageTools,
@@ -1527,8 +1539,8 @@ const pangular = defineDevframe({
     };
     const newRuleId = () => `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const httpRuleChange = (change: RuleChange, verb: 'Added' | 'Updated' | 'Removed') => {
-      if (!config.actions.http) return { markdown: actionBlockedMessage('http') };
-      if ('error' in change) return { markdown: change.error };
+      if (!config.actions.http) return { markdown: refusal(actionBlockedMessage('http')) };
+      if ('error' in change) return { markdown: refusal(change.error) };
       setHttpRules(change.rules);
       return { markdown: ruleChangeText(verb, change.rule, change.rules) };
     };
@@ -1572,27 +1584,29 @@ const pangular = defineDevframe({
         httpRuleChange(removeHttpRule(registry.rules ?? [], args.id), 'Removed'),
     });
 
+    // Only the recordings this config lets an agent clear are offered as targets.
+    const clearTargets: string[] = [...clearRecordingTargets(config), 'all'];
+    const clearTargetList = clearTargets.map((target) => `\`${target}\``).join(', ');
     agent.registerTool({
       id: 'pangular:clear-recordings',
       title: 'Clear recordings',
-      description:
-        'Clears recorded HTTP calls, router navigations, or Analog server calls between reproduction runs (development only). Specify `target` as "http", "router", "analog", or "all". An optional `page` clears only the navigations of that specific page.',
+      description: `Clears recorded HTTP calls, router navigations, or Analog server calls between reproduction runs (development only). \`target\` is one of ${clearTargetList}: only the recordings whose inspector, agent tools and action are turned on. An optional \`page\` clears only the navigations of that specific page.`,
       inputSchema: {
         type: 'object',
         required: ['target'],
         properties: {
           target: {
             type: 'string',
-            enum: ['http', 'router', 'analog', 'all'],
-            description: 'Which recordings to clear: `http`, `router`, `analog`, or `all`.',
+            enum: clearTargets,
+            description: `Which recordings to clear: ${clearTargetList}.`,
           },
           page: PAGE_ARGUMENT,
         },
       },
       handler: async (args: { target?: unknown; page?: string }) => {
         const target = typeof args?.target === 'string' ? args.target : undefined;
-        if (!target || !['http', 'router', 'analog', 'all'].includes(target)) {
-          throw new Error('Provide a valid target: "http", "router", "analog", or "all".');
+        if (!target || !clearTargets.includes(target)) {
+          return { markdown: refusal(`Pass \`target\`: one of ${clearTargetList}.`) };
         }
 
         const pageId = pageArgument(args as Record<string, unknown> | undefined);
@@ -3078,8 +3092,9 @@ const pangular = defineDevframe({
         if (args?.overlay === undefined) return { markdown: hydrationText(pages) };
         if (!hydrationOverlayAllowed) {
           return {
-            markdown:
+            markdown: refusal(
               'The agent is read-only in the devtools config (agent.readOnly), so it cannot turn the hydration overlay on or off. Use the Hydration section on the Components page of the panel, or call this tool without `overlay`.',
+            ),
           };
         }
         if (typeof args.overlay !== 'boolean') {
@@ -3157,15 +3172,16 @@ const pangular = defineDevframe({
         if (unknown) return { markdown: unknown };
         if (args?.export !== undefined) {
           if (args.export !== 'json' && args.export !== 'trace') {
-            return { markdown: '`export` must be `json` or `trace`.' };
+            return { markdown: refusal('`export` must be `json` or `trace`.') };
           }
           if (args.record !== undefined) {
-            return { markdown: 'Pass either `record` or `export`, not both.' };
+            return { markdown: refusal('Pass either `record` or `export`, not both.') };
           }
           if (cdViewsAsked(args)) {
             return {
-              markdown:
+              markdown: refusal(
                 'Pass either `export` or `flash`, `track` and `angularProfiling`, not both.',
+              ),
             };
           }
           return {
@@ -3179,8 +3195,9 @@ const pangular = defineDevframe({
         }
         if ((args?.record !== undefined || cdViewsAsked(args)) && !cdRecordAllowed) {
           return {
-            markdown:
+            markdown: refusal(
               'The agent is read-only in the devtools config (agent.readOnly), so it cannot start, stop or clear a change detection recording, or turn on the flash overlay, the Performance panel track or Angular profiling. Use the panel, then call this tool without those arguments.',
+            ),
           };
         }
         // The live views draw on a DOM or into the browser's Performance panel.
@@ -3301,6 +3318,13 @@ const pangular = defineDevframe({
         required: ['selector'],
       },
       handler: async (args: { selector: string; page?: string } & InspectSignalsArgs) => {
+        if (typeof args?.selector !== 'string' || !args.selector.trim()) {
+          return {
+            markdown: refusal(
+              'Pass `selector`: a host tag, class name or instance id (such as app-root), `root` for root service effects, or a route path such as /admin.',
+            ),
+          };
+        }
         // `broadcast` resolves with nothing, so the page cannot answer a
         // question. Read the graph the overlay pushes into shared state.
         const page = pageArgument(args);
@@ -3664,8 +3688,10 @@ const pangular = defineDevframe({
         on?: boolean;
         routeId?: string;
       }) => {
+        if (!(ROUTER_ACTIONS as readonly unknown[]).includes(args?.action))
+          return { markdown: refusal(unknownRouterActionText(args?.action)) };
         if (!config.actions.router && ROUTER_WRITE_ACTIONS.includes(args.action))
-          return { markdown: actionBlockedMessage('router') };
+          return { markdown: refusal(actionBlockedMessage('router')) };
         const state = routerState.value() as RouterState;
         const target = args.page
           ? state.pages.find((p) => p.pageId === args.page)
@@ -3679,7 +3705,7 @@ const pangular = defineDevframe({
           };
         }
         if (args.action === 'resolve-lazy' && typeof args.routeId !== 'string')
-          return { markdown: 'routeId is required for resolve-lazy.' };
+          return { markdown: refusal('Pass `routeId`, the id of the lazy route to resolve.') };
         const request =
           args.action === 'navigate'
             ? {
@@ -4143,7 +4169,8 @@ const pangular = defineDevframe({
         `Marker: ${latestMarker(state)}. Call form-diff with since set to the marker you had before this action to see what changed.`,
       );
       // The page writes the message, errors and skipped reasons.
-      return untrusted(lines.join('\n'));
+      const text = untrusted(lines.join('\n'));
+      return result['ok'] ? text : refusal(text);
     };
 
     agent.registerTool({

@@ -10,6 +10,7 @@ import {
   createDeltaSender,
   type DeltaShape,
 } from '../push-delta.ts';
+import { answerText } from './tool-answer.ts';
 
 // The same reports, pushed in full to one server and as deltas to another,
 // must leave both with the same shared state and the same agent answers.
@@ -25,7 +26,7 @@ async function boot() {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (tool: string, args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
   const state = async (key: string) =>
     (
       await (

@@ -5,6 +5,7 @@ import { UNTRUSTED } from '../rpc/forms-tools.ts';
 import { routerActionText } from '../rpc/router-tools.ts';
 import { SIGNAL_TOOL_MAX, signalGraphText } from '../rpc/signal-tools.ts';
 import type { SignalChange, SignalGraph } from '../types.ts';
+import { answerText } from './tool-answer.ts';
 
 async function boot() {
   const host = {
@@ -17,7 +18,7 @@ async function boot() {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (tool: string, args: Record<string, unknown>) =>
-    ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
   return { ctx, push, call };
 }
 

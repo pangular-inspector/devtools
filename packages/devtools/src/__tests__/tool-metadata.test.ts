@@ -29,6 +29,7 @@ interface McpTool {
   name: string;
   title?: string;
   outputSchema?: Record<string, unknown>;
+  inputSchema?: { properties?: Record<string, { type?: string }>; required?: string[] };
   annotations?: { title?: string };
 }
 
@@ -239,9 +240,18 @@ describe('agent tool output schemas', () => {
   it('returns structured content that matches the schema and the text', async () => {
     const { tools, invoke, push } = await bootMcp();
     const withSchema = tools.filter((tool) => tool.outputSchema);
+    let answered = 0;
+    let refused = 0;
     const check = async (tool: McpTool, args: Record<string, unknown>) => {
       const result = await invoke(tool.name, args);
-      expect(result.isError, `${tool.name} ${JSON.stringify(args)}`).toBeFalsy();
+      if (result.isError) {
+        // A refusal (a missing argument, an unknown page) is plain text with isError.
+        expect(result.structuredContent, tool.name).toBeUndefined();
+        expect(result.content[0]!.text, tool.name).not.toMatch(/TypeError|is not a function/);
+        refused += 1;
+        return;
+      }
+      answered += 1;
       expect(result.structuredContent, tool.name).toBeDefined();
       expect(schemaErrors(tool.outputSchema!, result.structuredContent), tool.name).toEqual([]);
       expect(result.content).toHaveLength(1);
@@ -262,9 +272,11 @@ describe('agent tool output schemas', () => {
       await check(tool, { selector: 'App', page: 'p1' });
       await check(tool, { selector: 'App', page: 'gone' });
     }
+    expect(answered).toBeGreaterThan(withSchema.length);
+    expect(refused).toBeGreaterThan(0);
   });
 
-  it('asks for a selector instead of failing when it is missing', async () => {
+  it('asks for a selector with isError instead of failing when it is missing', async () => {
     const { invoke, push } = await bootMcp();
     await push('push-component-tree', {
       pageId: 'p1',
@@ -274,7 +286,7 @@ describe('agent tool output schemas', () => {
     });
     for (const name of ['pangular_inspect-component', 'pangular_highlight']) {
       const result = await invoke(name, {});
-      expect(result.isError, name).toBeFalsy();
+      expect(result.isError, name).toBe(true);
       expect(result.content[0]!.text, name).toContain('Pass `selector`');
     }
   });
@@ -293,5 +305,99 @@ describe('agent tool output schemas', () => {
       const result = await invoke(name);
       expect(result.content, name).toEqual([{ type: 'text', text }]);
     }
+  });
+});
+
+describe('agent tool arguments', () => {
+  const RAW_ERROR =
+    /\b(?:TypeError|ReferenceError|RangeError)\b|Cannot read propert|is not a function/;
+  const wrong: Record<string, unknown> = {
+    string: 12345,
+    integer: 'not-a-number',
+    number: 'not-a-number',
+    boolean: 'yes',
+    array: 'not-an-array',
+    object: 'not-an-object',
+  };
+
+  it('refuses every wrong-typed argument with isError and names it, never a raw error', async () => {
+    const { tools, invoke, push } = await bootMcp();
+    await push('push-component-tree', {
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+    });
+    let checked = 0;
+    for (const tool of tools) {
+      for (const [key, property] of Object.entries(tool.inputSchema?.properties ?? {})) {
+        const value = property.type ? wrong[property.type] : undefined;
+        if (value === undefined) continue;
+        const result = await invoke(tool.name, { [key]: value });
+        const text = result.content[0]?.text ?? '';
+        expect(result.isError, `${tool.name} ${key}`).toBe(true);
+        expect(text, `${tool.name} ${key}`).toContain('Invalid arguments: ');
+        expect(text, `${tool.name} ${key}`).toContain(`\`${key}\` must be`);
+        expect(text, `${tool.name} ${key}`).not.toMatch(RAW_ERROR);
+        checked += 1;
+      }
+    }
+    expect(checked).toBeGreaterThan(150);
+  });
+
+  it('refuses a missing required argument with isError', async () => {
+    const { tools, invoke } = await bootMcp();
+    for (const tool of tools.filter((t) => t.inputSchema?.required?.length)) {
+      const result = await invoke(tool.name, {});
+      const text = result.content[0]?.text ?? '';
+      expect(result.isError, tool.name).toBe(true);
+      expect(text, tool.name).toContain(`Pass \`${tool.inputSchema!.required![0]}\``);
+      expect(text, tool.name).not.toMatch(RAW_ERROR);
+    }
+  });
+
+  it('answers inspect-signals without a selector instead of throwing', async () => {
+    const { invoke, push } = await bootMcp();
+    await push('push-signal-graph', {
+      pageId: 'p1',
+      nodes: [{ id: 'a', kind: 'signal', label: 'count', epoch: 0 }],
+      edges: [],
+      componentSelector: 'app-root',
+    });
+    for (const args of [{}, { selector: '   ' }]) {
+      const result = await invoke('pangular_inspect-signals', args);
+      expect(result.isError).toBe(true);
+      expect(result.content[0]!.text).toMatch(/Pass `selector`/);
+      expect(result.content[0]!.text).not.toMatch(RAW_ERROR);
+    }
+  });
+
+  it('never acts on another tab for a page that is not a string', async () => {
+    const { invoke, push } = await bootMcp();
+    await push('push-component-tree', {
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+    });
+    const result = await invoke('pangular_list-components', { page: 12345 });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toBe(
+      'Error invoking "pangular_list-components": Invalid arguments: `page` must be a string, not the number (12345). Pass a page id from pangular:list-pages, or leave it out for the most recent page.',
+    );
+    expect(result.content[0]!.text).not.toContain('p1');
+  });
+
+  it('sends an unknown page with isError', async () => {
+    const { invoke, push } = await bootMcp();
+    await push('push-component-tree', {
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+    });
+    const result = await invoke('pangular_list-components', { page: 'gone' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toMatch(/Refused: No page `gone` is reporting/);
   });
 });

@@ -20,6 +20,7 @@ import { createPangular } from '../devframe.ts';
 import { initPangularHub } from '../hub.ts';
 import { makeProject } from './analog-fixture.ts';
 import { isSecretKey, setRedaction } from '../forms-privacy.ts';
+import { toolAnswer } from './tool-answer.ts';
 
 async function boot(config?: PangularConfig) {
   const host = {
@@ -334,13 +335,15 @@ describe('agent tool and RPC registration', () => {
       expect(Object.keys(fullSchema.properties)).toContain(view);
       expect(Object.keys(schema.properties)).not.toContain(view);
     }
-    const answer = (await readOnly.ctx.agent.invoke('pangular:change-detection', {
-      record: 'start',
-    })) as { markdown: string };
+    const answer = await toolAnswer(
+      readOnly.ctx.agent.invoke('pangular:change-detection', { record: 'start' }),
+    );
+    expect(answer.isError).toBe(true);
     expect(answer.markdown).toContain('agent.readOnly');
-    const flash = (await readOnly.ctx.agent.invoke('pangular:change-detection', {
-      flash: true,
-    })) as { markdown: string };
+    const flash = await toolAnswer(
+      readOnly.ctx.agent.invoke('pangular:change-detection', { flash: true }),
+    );
+    expect(flash.isError).toBe(true);
     expect(flash.markdown).toContain('agent.readOnly');
   });
 

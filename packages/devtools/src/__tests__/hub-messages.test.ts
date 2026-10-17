@@ -6,6 +6,7 @@ import { registerHubDocks } from '../hub-docks.ts';
 import { FEED_PAGE_IDLE_MS, createHubFeed } from '../hub-messages.ts';
 import { definePangularServerPlugin, type PangularServerPlugin } from '../plugin.ts';
 import type { HydrationStats } from '../types.ts';
+import { answerText } from './tool-answer.ts';
 
 interface Message {
   id: string;
@@ -456,13 +457,16 @@ describe('hub messages in the devframe', () => {
 
   it('posts no agent write for tools that changed nothing', async () => {
     const { ctx, list } = await boot();
+    // Refusals come back as errors (isError over MCP), and post nothing either.
+    const answer = (id: string, args: Record<string, unknown>) =>
+      answerText(ctx.agent.invoke(id, args));
     const answers = [
-      await ctx.agent.invoke('pangular:navigate', { action: 'navigate', url: '/users' }),
-      await ctx.agent.invoke('pangular:dispatch-ngrx-action', { type: '[Cart] Add' }),
-      await ctx.agent.invoke('pangular:fill-form', { form: 'f', values: {} }),
-      await ctx.agent.invoke('pangular:record-pipes', { action: 'start' }),
-      await ctx.agent.invoke('pangular:remove-http-rule', { id: 'nope' }),
-      await ctx.agent.invoke('pangular:set-http-rule', { pattern: '/api/*' }),
+      await answer('pangular:navigate', { action: 'navigate', url: '/users' }),
+      await answer('pangular:dispatch-ngrx-action', { type: '[Cart] Add' }),
+      await answer('pangular:fill-form', { form: 'f', values: {} }),
+      await answer('pangular:record-pipes', { action: 'start' }),
+      await answer('pangular:remove-http-rule', { id: 'nope' }),
+      await answer('pangular:set-http-rule', { pattern: '/api/*' }),
     ];
     expect(answers).toHaveLength(6);
     expect(list()).toEqual([]);

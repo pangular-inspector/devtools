@@ -5,6 +5,7 @@ import type { ComponentPage } from '../types.ts';
 import { findComponents, otherMatchesText, truncationText } from './component-tools.ts';
 import { untrusted } from './forms-tools.ts';
 import { byRecency, choosePageText, pageArgument, unknownPageText } from './pages.ts';
+import { refusal } from './refusal.ts';
 
 /** How long a write waits for its page to answer. */
 export const EDIT_TIMEOUT_MS = 10_000;
@@ -171,7 +172,8 @@ export function createComponentEdits(deps: Deps) {
           return { markdown: choosePageText(live, 'a component tree') };
         }
         const selector = typeof args['component'] === 'string' ? args['component'] : '';
-        if (!selector) return { markdown: 'Pass `component`: an instance id, class name or tag.' };
+        if (!selector)
+          return { markdown: refusal('Pass `component`: an instance id, class name or tag.') };
         const scope = page ? live.filter((entry) => entry.pageId === page) : live;
         const hits = findComponents(scope, selector);
         if (!hits.length) {

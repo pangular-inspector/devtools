@@ -4,6 +4,7 @@ import pangular, { createPangular } from '../devframe.ts';
 import type { PangularConfig } from '../config.ts';
 import { agentSafety, resolvePangularConfig } from '../config.ts';
 import { UNTRUSTED } from '../rpc/forms-tools.ts';
+import { answerText } from './tool-answer.ts';
 
 async function boot(config?: PangularConfig) {
   const host = {
@@ -16,7 +17,7 @@ async function boot(config?: PangularConfig) {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (tool: string, args: Record<string, unknown>) =>
-    ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
   const tools = () => ctx.agent.list().tools.map((tool) => tool.id);
   return { ctx, push, call, tools };
 }

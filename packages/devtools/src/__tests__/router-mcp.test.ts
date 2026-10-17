@@ -4,6 +4,7 @@ import pangular, { createPangular } from '../devframe.ts';
 import type { PangularConfig } from '../config.ts';
 import type { NavigationRecord } from '../router.ts';
 import type { RouteNode } from '../router-config.ts';
+import { answerText } from './tool-answer.ts';
 
 async function boot(options?: PangularConfig) {
   const host = {
@@ -16,7 +17,7 @@ async function boot(options?: PangularConfig) {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (tool: string, args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
   return { ctx, push, call };
 }
 
@@ -453,7 +454,7 @@ describe('router MCP tools', () => {
     }) as never);
     await push('request-router-action', { request: { action: 'probe', url: '/' } });
     await push('request-router-action', { pageId: '', request: { action: 'probe', url: '/' } });
-    await call('navigate', { url: '/users/7', page: '' });
+    await call('navigate', { action: 'probe', url: '/users/7', page: '' });
     expect(seen).toEqual([report().pageId, report().pageId, report().pageId]);
   });
 
@@ -469,7 +470,7 @@ describe('router MCP tools', () => {
     expect(unknown).toMatch(/^_Labels.*_\n\nNo page `gone` is reporting router state\. Pages/);
     expect(unknown).toContain('`bare`');
     expect(unknown).not.toMatch(/stdio/);
-    expect(await call('navigate', { action: 'resolve-lazy' })).toContain('routeId is required');
+    expect(await call('navigate', { action: 'resolve-lazy' })).toContain('Pass `routeId`');
     expect(broadcast).not.toHaveBeenCalled();
   });
 

@@ -191,6 +191,18 @@ describe('call-browser-tool', () => {
     expect(typeof answer.text).toBe('string');
   });
 
+  it('answers a refused call with the reason and isError, not as a failure', async () => {
+    const { rpc } = await boot();
+    const answer = await rpc('call-browser-tool', {
+      pageId: 'p1',
+      name: 'pangular_inspect-component',
+      args: { selector: 12345 },
+    });
+    expect(answer.isError).toBe(true);
+    expect(answer.text).toMatch(/^`selector` must be a string, not the number \(12345\)/);
+    expect(answer.text).not.toContain('failed');
+  });
+
   it('answers for the calling page only, even when the call names another page', async () => {
     const { rpc } = await boot();
     const tree = (name: string, tag: string) => [{ id: 'c1', name, tag, children: [] }];

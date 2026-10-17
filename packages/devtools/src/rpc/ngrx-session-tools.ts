@@ -20,6 +20,7 @@ import type { NgrxPageRecord } from './ngrx-tools.ts';
 import { callerPage } from './page-scope.ts';
 import { pageArgument, unknownPageText } from './pages.ts';
 import { MARKDOWN_OUTPUT_SCHEMA } from './agent-output.ts';
+import { refusal } from './refusal.ts';
 
 /**
  * The NgRx history on the server: the State, Diff and Action of a past entry
@@ -216,7 +217,7 @@ export function createNgrxHistory(deps: Deps) {
       handler: async (args: Record<string, unknown>) => {
         const seq = args?.['seq'];
         if (typeof seq !== 'number' || !Number.isInteger(seq)) {
-          return { markdown: 'Pass `seq`, a log entry number.' };
+          return { markdown: refusal('Pass `seq`, a log entry number.') };
         }
         const session = sessionArgument(args);
         if (session === null) return { markdown: PAGE_TOOL_SESSION_TEXT };
@@ -294,7 +295,7 @@ export function createNgrxHistory(deps: Deps) {
         const seq = args?.['seq'];
         const latest = args?.['latest'] === true;
         if (!latest && (typeof seq !== 'number' || !Number.isInteger(seq))) {
-          return { markdown: 'Pass `seq` of a restorable log entry, or `latest: true`.' };
+          return { markdown: refusal('Pass `seq` of a restorable log entry, or `latest: true`.') };
         }
         const request: NgrxRequest = latest
           ? { type: 'latest' }

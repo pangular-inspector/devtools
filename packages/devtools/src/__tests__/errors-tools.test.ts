@@ -11,6 +11,7 @@ import {
   type ErrorsReport,
   type ErrorsState,
 } from '../rpc/errors-tools.ts';
+import { answerText } from './tool-answer.ts';
 
 const JWT = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
 
@@ -25,7 +26,7 @@ async function boot(definition = pangular) {
   const call = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const invoke = async (id: string, args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke(`pangular:${id}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${id}`, args));
   const state = async () =>
     (
       await (
@@ -198,7 +199,9 @@ describe('errors agent tools', () => {
     expect(all).toContain('(3x)');
     expect(await invoke('list-console', { level: 'warn' })).not.toContain('Loaded trips');
     expect(await invoke('list-console', { search: 'loaded' })).toContain('Loaded trips');
-    expect(await invoke('list-console', { level: 'loud' })).toMatch(/Unknown level/);
+    expect(await invoke('list-console', { level: 'loud' })).toMatch(
+      /^`level` must be one of `log`/,
+    );
   });
 
   it('list-console keeps the calls made since a duration, a date or epoch milliseconds', async () => {

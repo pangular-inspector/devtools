@@ -2,6 +2,7 @@ import { redactMessage, redactUrl } from '../router.ts';
 import { clip } from '../text.ts';
 import { code, untrusted } from './forms-tools.ts';
 import { callerPage } from './page-scope.ts';
+import { refusal } from './refusal.ts';
 import { PAGE_TTL_MS } from './page-ttl.ts';
 import { shortAngularVersion } from '../config.ts';
 
@@ -33,19 +34,20 @@ function pageList(pages: readonly ReportingPage[]) {
 export function choosePageText(pages: readonly ReportingPage[], what: string) {
   const text = `${pages.length} pages report ${what}: ${pageList(pages)}. This changes the app, so pass one of these ids as \`page\` to pick the page it runs on.`;
   // Page URLs come from the page, so they sit behind the notice.
-  return pages.some((page) => page.url) ? untrusted(text) : text;
+  return refusal(pages.some((page) => page.url) ? untrusted(text) : text);
 }
 
 /** The answer to a `page` argument that names no page reporting this data. */
 export function unknownPageText(pageId: string, pages: readonly ReportingPage[], what: string) {
   // A page tool answers for its own page only, so it names no other tab.
+  // A page asking about itself is told it has nothing yet, which is not a refusal.
   if (callerPage() !== undefined) return `This page is not reporting ${what} right now.`;
   const others = pages.length
     ? `Pages that report ${what}: ${pageList(pages)}. Pass one of these ids as \`page\`, or leave \`page\` out for the most recent.`
     : `No page reports ${what} right now.`;
   const text = `No page ${code(pageId)} is reporting ${what}. ${others}`;
   // Page URLs come from the page, so they sit behind the notice.
-  return pages.some((page) => page.url) ? untrusted(text) : text;
+  return refusal(pages.some((page) => page.url) ? untrusted(text) : text);
 }
 
 /** The value of `page`, or of an older alias such as `pageId`. */
@@ -76,7 +78,9 @@ export function needsDomText(
   const app = nativeAppName(platform);
   if (!app) return undefined;
   const article = /^[AEIOU]/.test(app) ? 'an' : 'a';
-  return `Page ${code(pageId)} is ${article} ${app} app, which renders native views and has no DOM, so ${what} needs a page in a browser. pangular:list-pages lists each page's platform.`;
+  return refusal(
+    `Page ${code(pageId)} is ${article} ${app} app, which renders native views and has no DOM, so ${what} needs a page in a browser. pangular:list-pages lists each page's platform.`,
+  );
 }
 
 /** Newest first. */

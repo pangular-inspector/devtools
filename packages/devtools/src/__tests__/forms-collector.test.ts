@@ -285,7 +285,9 @@ describe('forms collector', () => {
     await tick(200);
     const answers = h.calls.filter((c) => c.name === 'form-action-result').map((c) => c.args[0]);
     expect(answers.map((a) => a.requestId)).toEqual(['r3', 'r2']);
-    expect(answers[0].result.error).toBe('Unknown form action.');
+    expect(answers[0].result.error).toMatch(
+      /^Unknown form action "drop-tables"\. Actions: set-value, /,
+    );
     expect(answers[1].result).toMatchObject({ ok: true });
     expect(fixture.componentInstance.form.controls.email.touched).toBe(true);
   });

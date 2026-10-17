@@ -10,6 +10,7 @@ import {
 import { PAGE_ARGUMENT, pageArgument } from './pages.ts';
 import { trackPageSessions } from './page-sessions.ts';
 import type { PageTtl } from './page-ttl.ts';
+import { refusal } from './refusal.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -164,7 +165,7 @@ export async function registerLeaks(host: LeaksHost): Promise<LeaksRegistration>
     handler: async (args: AnyRecord) => {
       const action = args?.['action'];
       if (action !== 'start' && action !== 'stop') {
-        return { markdown: 'Pass `action`: `start` or `stop`.' };
+        return { markdown: refusal('Pass `action`: `start` or `stop`.') };
       }
       const page = pageArgument(args);
       if (page && !state().pages[page]) {

@@ -2,6 +2,8 @@ import { createHostContext } from 'devframe/node';
 import { describe, expect, it, vi } from 'vitest';
 import pangular from '../devframe.ts';
 import type { CollectedForm, FormEvent, FormFieldNode } from '../forms.ts';
+import { answerText } from './tool-answer.ts';
+import { toolAnswer } from './tool-answer.ts';
 
 async function boot() {
   const host = {
@@ -14,7 +16,7 @@ async function boot() {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (tool: string, args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
   return { ctx, push, call };
 }
 
@@ -560,8 +562,11 @@ describe('forms MCP tools', () => {
         ...([{ requestId, pageId: options.args[0].pageId ?? 'pg1', result }] as never),
       );
     }) as never);
-    const refused = await call('form-action', { action: 'reset', form: 'form-1' });
-    expect(refused).toContain('Refused: reset changes app state');
+    const refused = await toolAnswer(
+      ctx.agent.invoke('pangular:form-action', { action: 'reset', form: 'form-1' }),
+    );
+    expect(refused.isError).toBe(true);
+    expect(refused.markdown).toContain('Refused: reset changes app state');
     const filled = await call('fill-form', {
       form: 'form-1@pg1',
       values: { email: 'a@b.co', password: 'x' },

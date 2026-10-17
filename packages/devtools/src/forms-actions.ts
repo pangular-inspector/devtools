@@ -196,22 +196,37 @@ function read<T>(fn: () => T, fallback: T): T {
 }
 
 export function isFormAction(value: unknown): value is FormActionRequest {
-  if (!value || typeof value !== 'object') return false;
+  return formActionProblem(value) === undefined;
+}
+
+/** What is wrong with a form action request, or undefined when it is one. */
+export function formActionProblem(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') return 'The form action request is not an object.';
   const request = value as Partial<FormActionRequest>;
-  return (
-    typeof request.action === 'string' &&
-    (FORM_ACTIONS as readonly string[]).includes(request.action) &&
-    (request.formId === undefined ||
-      (typeof request.formId === 'string' && request.formId.length < 200)) &&
-    (request.path === undefined ||
-      (typeof request.path === 'string' && request.path.length < 500)) &&
-    (request.selector === undefined ||
-      (typeof request.selector === 'string' && request.selector.length < 500)) &&
-    (request.values === undefined ||
-      (typeof request.values === 'object' &&
-        request.values !== null &&
-        Object.keys(request.values).length <= 200))
-  );
+  if (
+    typeof request.action !== 'string' ||
+    !(FORM_ACTIONS as readonly string[]).includes(request.action)
+  ) {
+    return `Unknown form action ${JSON.stringify(String(request.action)).slice(0, 60)}. Actions: ${FORM_ACTIONS.join(', ')}.`;
+  }
+  const text = (key: 'formId' | 'path' | 'selector', max: number) => {
+    const field = request[key];
+    if (field === undefined) return undefined;
+    if (typeof field !== 'string') return `\`${key}\` must be a string.`;
+    return field.length < max ? undefined : `\`${key}\` is longer than ${max - 1} characters.`;
+  };
+  const problem = text('formId', 200) ?? text('path', 500) ?? text('selector', 500);
+  if (problem) return problem;
+  if (request.values !== undefined) {
+    if (
+      typeof request.values !== 'object' ||
+      request.values === null ||
+      Array.isArray(request.values)
+    )
+      return '`values` must be an object of field paths to values.';
+    if (Object.keys(request.values).length > 200) return '`values` has more than 200 fields.';
+  }
+  return undefined;
 }
 
 function parseJson(text: string): { value: unknown } | null {

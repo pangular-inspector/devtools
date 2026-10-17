@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import pangular, { createPangular } from '../devframe.ts';
 import type { QueryPageReport, QueryState } from '../query-shared.ts';
 import { ageText, staleQueryPages, toQueryReport } from '../rpc/query-tools.ts';
+import { answerText } from './tool-answer.ts';
 
 const JWT = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
 
@@ -17,7 +18,7 @@ async function boot(definition = pangular) {
   const call = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const invoke = async (id: string, args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke(`pangular:${id}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${id}`, args));
   const state = async () =>
     (
       await (
@@ -179,7 +180,9 @@ describe('the TanStack Query report on the server', () => {
       /Invalidated q1\./,
     );
     expect(await invoke('query-action', { action: 'refetch', id: 'm1' })).toMatch(/is a mutation/);
-    expect(await invoke('query-action', { action: 'drop', id: 'q1' })).toMatch(/Pass `action`/);
+    expect(await invoke('query-action', { action: 'drop', id: 'q1' })).toMatch(
+      /^`action` must be one of `invalidate`, `refetch`/,
+    );
     await call('push-tanstack-query', report({ pageId: 'tab2' }));
     expect(await invoke('query-action', { action: 'refetch', id: 'q1' })).toMatch(
       /2 pages report TanStack Query/,

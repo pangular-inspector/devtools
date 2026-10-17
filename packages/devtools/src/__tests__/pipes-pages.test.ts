@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import pangular from '../devframe.ts';
 import { isPipePageReport, mergePipePageReport, type PipePageReport } from '../rpc/pipes-tools.ts';
 import { fixtureDir } from '../rpc/__tests__/fixture-dir.ts';
+import { answerText } from './tool-answer.ts';
 
 async function boot() {
   const host = {
@@ -18,7 +19,7 @@ async function boot() {
   const invoke = (name: string, ...args: unknown[]) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...(args as never));
   const tool = async (id: string, args: Record<string, unknown>) =>
-    ((await ctx.agent.invoke(`pangular:${id}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${id}`, args));
   const explain = (page?: string) => tool('explain-pipe', { name: 'async', page });
   return { ctx, invoke, explain, tool };
 }
@@ -425,7 +426,7 @@ describe('record-pipes agent tool', () => {
     expect(await tool('record-pipes', { action: 'start', page: 'gone' })).toMatch(
       /^No page `gone` is reporting pipe usage\. Pages that report pipe usage: `tab-1`/,
     );
-    expect(await tool('record-pipes', {})).toBe('Pass `action`: "start" or "stop".');
+    expect(await tool('record-pipes', {})).toBe('Pass `action`: one of `start`, `stop`.');
     expect(recordings(broadcast)).toEqual([]);
   });
 

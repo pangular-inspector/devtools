@@ -15,6 +15,7 @@ import { decodePayload, sanitizePayload } from '../http-payload.ts';
 import { lintAnalog, scanAnalog, serverFnId, serverFnsOf } from '../rpc/analog-scan.ts';
 import { nameServerFns } from '../rpc/analog-register.ts';
 import { BASE_FILES, makeProject } from './analog-fixture.ts';
+import { answerText } from './tool-answer.ts';
 
 const USERS = `import { serverFn } from '@analogjs/router/server';
 import * as v from 'valibot';
@@ -176,7 +177,7 @@ export const ping = serverFn(() => 1);
       file: '/src/app/users/users.server.ts',
     });
     const call = async (tool: string, args: Record<string, unknown> = {}) =>
-      ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+      await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
     recordCall({
       at: 1000,
       kind: 'fn',

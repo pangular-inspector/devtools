@@ -6,6 +6,7 @@ import {
   type PanelTab,
   type ResolvedPangularConfig,
 } from '../config.ts';
+import { refusal } from './refusal.ts';
 
 /** The broadcast that asks connected panels to open a link, without the `pangular:` prefix. */
 export const OPEN_IN_PANEL_EVENT = 'open-in-panel';
@@ -57,9 +58,13 @@ export function openInPanel(args: OpenInPanelArgs, context: OpenInPanelContext):
   const tab = tabs.find((candidate) => candidate.id === args?.tab);
   if (!tab) {
     const known = tabs.map((candidate) => `\`${candidate.id}\``).join(', ');
-    const asked = typeof args?.tab === 'string' ? `\`${args.tab.slice(0, 40)}\`` : 'no tab';
+    const asked = typeof args?.tab === 'string' && args.tab.trim() ? args.tab.slice(0, 40) : '';
     return {
-      markdown: `There is no panel tab ${asked}, or its inspector is turned off. Pass one of: ${known}.`,
+      markdown: refusal(
+        asked
+          ? `There is no panel tab \`${asked}\`, or its inspector is turned off. Pass one of: ${known}.`
+          : `Pass \`tab\`, the panel tab to open: one of ${known}.`,
+      ),
     };
   }
   const id = text(args?.id);

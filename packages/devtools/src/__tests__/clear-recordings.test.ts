@@ -1,8 +1,9 @@
 import { createHostContext } from 'devframe/node';
 import { beforeEach, describe, expect, it } from 'vitest';
 import pangular, { createPangular } from '../devframe.ts';
-import { actionBlockedMessage, type PangularConfig } from '../config.ts';
+import { agentToolOffered, resolvePangularConfig, type PangularConfig } from '../config.ts';
 import { clearCalls, recordCall, recentCalls } from '../analog-server-log.ts';
+import { answerText, toolAnswer } from './tool-answer.ts';
 
 async function boot(options?: PangularConfig) {
   const host = {
@@ -15,10 +16,17 @@ async function boot(options?: PangularConfig) {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (tool: string, args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
+  const answer = (tool: string, args: Record<string, unknown> = {}) =>
+    toolAnswer(ctx.agent.invoke(`pangular:${tool}`, args));
   const manifest = ctx.agent.list();
   const tools = manifest.tools.map((t) => t.id.replace(/^pangular:/, ''));
-  return { ctx, push, call, tools };
+  const targets = () => {
+    const tool = manifest.tools.find((t) => t.id === 'pangular:clear-recordings');
+    return (tool?.inputSchema as { properties: { target: { enum: string[] } } } | undefined)
+      ?.properties.target.enum;
+  };
+  return { ctx, push, call, answer, tools, targets };
 }
 
 function routerReport(pageId: string, navigations: unknown[] = []) {
@@ -49,14 +57,25 @@ describe('clear-recordings agent tool', () => {
     clearCalls();
   });
 
-  it('rejects missing or invalid target arguments', async () => {
-    const { call } = await boot();
-    await expect(call('clear-recordings', {})).rejects.toThrow(
-      'Provide a valid target: "http", "router", "analog", or "all".',
+  it('rejects missing or invalid target arguments with isError', async () => {
+    const { answer } = await boot();
+    const missing = await answer('clear-recordings', {});
+    expect(missing.isError).toBe(true);
+    expect(missing.markdown).toMatch(/^Pass `target`/);
+    const invalid = await answer('clear-recordings', { target: 'invalid' });
+    expect(invalid.isError).toBe(true);
+    expect(invalid.markdown).toContain(
+      '`target` must be one of `http`, `router`, `analog`, `all`, not a string ("invalid").',
     );
-    await expect(call('clear-recordings', { target: 'invalid' })).rejects.toThrow(
-      'Provide a valid target: "http", "router", "analog", or "all".',
-    );
+  });
+
+  it('never clears every page for a page that is not a string', async () => {
+    const { push, answer } = await boot();
+    await push('push-router', routerReport('p1'));
+    const result = await answer('clear-recordings', { target: 'all', page: 12345 });
+    expect(result.isError).toBe(true);
+    expect(result.markdown).toMatch(/^`page` must be a string, not the number \(12345\)\./);
+    expect(result.markdown).not.toContain('Cleared');
   });
 
   it('clears recorded HTTP calls when target is http', async () => {
@@ -222,21 +241,42 @@ describe('clear-recordings agent tool', () => {
     expect(recentCalls().length).toBe(0);
   });
 
-  it('enforces safety gating when actions.* are disabled', async () => {
+  it('offers only the targets whose action is on, and refuses the others', async () => {
     const httpBlocked = await boot({ actions: { http: false } });
-    await expect(httpBlocked.call('clear-recordings', { target: 'http' })).rejects.toThrow(
-      actionBlockedMessage('http'),
-    );
+    expect(httpBlocked.targets()).toEqual(['router', 'analog', 'all']);
+    const http = await httpBlocked.answer('clear-recordings', { target: 'http' });
+    expect(http.isError).toBe(true);
+    expect(http.markdown).toContain('`target` must be one of `router`, `analog`, `all`');
 
     const routerBlocked = await boot({ actions: { router: false } });
-    await expect(routerBlocked.call('clear-recordings', { target: 'router' })).rejects.toThrow(
-      actionBlockedMessage('router'),
+    expect(routerBlocked.targets()).toEqual(['http', 'analog', 'all']);
+    expect((await routerBlocked.answer('clear-recordings', { target: 'router' })).isError).toBe(
+      true,
     );
 
     const analogBlocked = await boot({ actions: { analog: false } });
-    await expect(analogBlocked.call('clear-recordings', { target: 'analog' })).rejects.toThrow(
-      actionBlockedMessage('analog'),
+    expect(analogBlocked.targets()).toEqual(['http', 'router', 'all']);
+    expect((await analogBlocked.answer('clear-recordings', { target: 'analog' })).isError).toBe(
+      true,
     );
+  });
+
+  it('is offered exactly when agentToolOffered says so', async () => {
+    const configs: PangularConfig[] = [
+      {},
+      { inspectors: { http: false } },
+      { inspectors: { http: false, router: false } },
+      { inspectors: { http: false, router: false, analog: false } },
+      { actions: { http: false, router: false } },
+      { agent: { tools: { http: false } } },
+      { agent: { readOnly: true } },
+    ];
+    for (const config of configs) {
+      const { tools } = await boot(config);
+      expect(tools.includes('clear-recordings'), JSON.stringify(config)).toBe(
+        agentToolOffered('clear-recordings', resolvePangularConfig(config)),
+      );
+    }
   });
 
   it('partially skips disabled targets and reports them when target is all', async () => {
@@ -269,13 +309,14 @@ describe('clear-recordings agent tool', () => {
   });
 
   it('blocks target when agent.tools is false even if action is true', async () => {
-    const { call } = await boot({
+    const { answer, targets } = await boot({
       actions: { http: true, router: true },
       agent: { tools: { http: false, router: true } },
     });
-    await expect(call('clear-recordings', { target: 'http' })).rejects.toThrow(
-      'HTTP recording is disabled in the devtools config (agent.tools.http is turned off).',
-    );
+    expect(targets()).not.toContain('http');
+    const result = await answer('clear-recordings', { target: 'http' });
+    expect(result.isError).toBe(true);
+    expect(result.markdown).toMatch(/^`target` must be one of `router`/);
   });
 
   it('returns unknown page text when requested router page is absent', async () => {

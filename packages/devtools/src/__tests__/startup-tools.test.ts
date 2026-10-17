@@ -10,6 +10,7 @@ import {
 } from '../config.ts';
 import { startupTimingText, toStartupPage, type StartupState } from '../rpc/startup-register.ts';
 import type { StartupReport } from '../startup-timing.ts';
+import { answerText } from './tool-answer.ts';
 
 const JWT = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
 
@@ -24,7 +25,7 @@ async function boot(config: PangularConfig = {}) {
   const call = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const invoke = async (id: string, args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke(`pangular:${id}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${id}`, args));
   const state = async () =>
     (
       await (

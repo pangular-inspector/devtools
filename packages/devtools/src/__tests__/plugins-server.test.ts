@@ -24,6 +24,7 @@ import {
 } from '../rpc/plugins-register.ts';
 import { travelView, type TravelSource } from '../../../../src/app/devtools/travel-plugin.ts';
 import { travelServerPlugin } from '../../../../src/app/devtools/travel-plugin.server.ts';
+import { answerText } from './tool-answer.ts';
 
 const JWT = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
 
@@ -38,11 +39,7 @@ async function boot(config: PangularConfig = {}, serverPlugins: PangularServerPl
   const call = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const invoke = async (id: string, args: Record<string, unknown> = {}) =>
-    (
-      (await ctx.agent.invoke(id.includes(':') ? id : `pangular:${id}`, args)) as {
-        markdown: string;
-      }
-    ).markdown;
+    answerText(ctx.agent.invoke(id.includes(':') ? id : `pangular:${id}`, args));
   const sharedState = (
     ctx.rpc as unknown as {
       sharedState: { get: (key: string) => Promise<{ value: () => unknown }> };

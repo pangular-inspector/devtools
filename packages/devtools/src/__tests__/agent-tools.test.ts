@@ -2,6 +2,8 @@ import { createHostContext } from 'devframe/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pangular from '../devframe.ts';
 import { UNTRUSTED } from '../rpc/forms-tools.ts';
+import { answerText } from './tool-answer.ts';
+import { ToolRefusal } from '../rpc/refusal.ts';
 
 async function boot() {
   const host = {
@@ -14,11 +16,7 @@ async function boot() {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (tool: string, selector: string, extra: Record<string, unknown> = {}) =>
-    (
-      (await ctx.agent.invoke(`pangular:${tool}`, { selector, ...extra })) as {
-        markdown: string;
-      }
-    ).markdown;
+    answerText(ctx.agent.invoke(`pangular:${tool}`, { selector, ...extra }));
   const injectorState = async () =>
     (
       await (
@@ -278,7 +276,7 @@ describe('agent tools', () => {
   it('lists the component outline with routed markers through list-components', async () => {
     const { ctx, push } = await boot();
     const list = async (args: Record<string, unknown> = {}) =>
-      ((await ctx.agent.invoke('pangular:list-components', args)) as { markdown: string }).markdown;
+      await answerText(ctx.agent.invoke('pangular:list-components', args));
     expect(ctx.agent.list().tools.map((tool) => tool.id)).toContain('pangular:list-components');
     expect(await list()).toMatch(/No component tree has been reported/);
     await push('push-component-tree', {
@@ -869,7 +867,7 @@ describe('agent tools', () => {
   });
 
   it('picks a page for inspect-signals and inspect-providers and refuses an unknown one', async () => {
-    const { push, call } = await boot();
+    const { ctx, push, call } = await boot();
     const graph = (pageId: string, name: string) => ({
       pageId,
       nodes: [{ id: 'a', kind: 'signal', label: name, epoch: 0 }],
@@ -886,6 +884,10 @@ describe('agent tools', () => {
     expect(await call('inspect-signals', 'Card', { page: 'gone' })).toMatch(
       /^No page `gone` is reporting a signal graph\. Pages that report a signal graph: `p\d`/,
     );
+    // An unknown page is a refusal, so MCP sends it with isError.
+    await expect(
+      ctx.agent.invoke('pangular:inspect-signals', { selector: 'Card', page: 'gone' }),
+    ).rejects.toBeInstanceOf(ToolRefusal);
 
     await push('push-injector-tree', { pageId: 'p1', roots: [injectorRoot('A')], environment: [] });
     expect(await call('inspect-providers', 'app-root', { page: 'p1' })).toMatch(/`p1`/);
@@ -939,7 +941,7 @@ describe('agent tools', () => {
     const tool = ctx.agent.list().tools.find((t) => t.id === 'pangular:list-http-calls');
     expect(tool?.safety).toBe('read');
     const list = async (args: Record<string, unknown> = {}) =>
-      ((await ctx.agent.invoke('pangular:list-http-calls', args)) as { markdown: string }).markdown;
+      await answerText(ctx.agent.invoke('pangular:list-http-calls', args));
     expect(await list()).toMatch(/No HttpClient calls recorded/);
     await push('push-http', {
       pageId: 'p1',

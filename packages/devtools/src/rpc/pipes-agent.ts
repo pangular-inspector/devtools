@@ -3,6 +3,7 @@ import { callerPage } from './page-scope.ts';
 import { byRecency, unknownPageText } from './pages.ts';
 import { explainPipeText } from './pipe-explain.ts';
 import { currentPipes, type PipePageReport, type PipesState } from './pipes-tools.ts';
+import { refusal } from './refusal.ts';
 
 type PipePages = Map<string, PipePageReport & { reportedAt: number }>;
 
@@ -54,7 +55,7 @@ export function pipeRecordRequest(
   page: string | undefined,
 ): { request: { pageId?: string; on: boolean } } | { markdown: string } {
   if (action !== 'start' && action !== 'stop') {
-    return { markdown: 'Pass `action`: "start" or "stop".' };
+    return { markdown: refusal('Pass `action`: "start" or "stop".') };
   }
   if (page && !pages.has(page)) {
     return { markdown: unknownPageText(page, [...pages.values()], WHAT) };

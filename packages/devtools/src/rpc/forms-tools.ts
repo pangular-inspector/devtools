@@ -20,6 +20,7 @@ import {
 import { fixedTtl, type PageTtl } from './page-ttl.ts';
 import { clip } from '../text.ts';
 import { RESOURCE_UNTRUSTED, withUntrustedNotice } from './resource-text.ts';
+import { refusal } from './refusal.ts';
 
 export interface FormsState {
   forms: CollectedForm[];
@@ -102,8 +103,10 @@ export function matchForms(forms: CollectedForm[], query?: string, page?: string
 }
 
 export function noMatch(forms: CollectedForm[], query: string): string {
+  if (!forms.length)
+    return refusal(`No form matches ${code(query)}: the page reports no forms right now.`);
   const list = forms.map((f) => `${code(f.label)} (${f.id})`).join(', ');
-  return `No form matches ${code(query)}. Forms on the page: ${list}.`;
+  return refusal(`No form matches ${code(query)}. Forms on the page: ${list}.`);
 }
 
 function pruneTree(node: FormFieldNode, args: InspectFormsArgs): FormFieldNode | null {

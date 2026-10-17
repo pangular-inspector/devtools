@@ -2,6 +2,7 @@ import { createHostContext } from 'devframe/node';
 import { describe, expect, it, vi } from 'vitest';
 import pangular from '../devframe.ts';
 import { RPC_INSPECTOR } from '../config.ts';
+import { answerText } from './tool-answer.ts';
 
 async function boot() {
   const host = {
@@ -18,7 +19,7 @@ async function boot() {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (args: Record<string, unknown>) =>
-    ((await ctx.agent.invoke('pangular:change-detection', args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke('pangular:change-detection', args));
   const options = () => sent.filter((s) => s.method === 'pangular:change-detection-options');
   return { push, call, sent, options };
 }
@@ -73,9 +74,11 @@ describe('change detection views', () => {
     const { call, options } = await boot();
     expect(await call({ angularProfiling: true })).toContain('stays on until the page reloads');
     expect(options().at(-1)!.args[0]).toEqual({ pageId: undefined, angularProfiling: true });
+    const sent = options().length;
+    // `angularProfiling` only takes true, so false is refused before anything is sent.
     const off = await call({ angularProfiling: false });
     expect(off).toContain('cannot be turned off');
-    expect(options().at(-1)!.args[0]).toEqual({ pageId: undefined });
+    expect(options()).toHaveLength(sent);
   });
 
   it('combines views with record, but not with export', async () => {

@@ -10,6 +10,7 @@ import {
   waitUntil,
 } from '../rpc/wait-for.ts';
 import type { ComponentPage, LiveComponentNode } from '../types.ts';
+import { answerText } from './tool-answer.ts';
 
 async function boot(config: PangularConfig = {}) {
   const host = {
@@ -22,7 +23,7 @@ async function boot(config: PangularConfig = {}) {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (args: Record<string, unknown>) =>
-    ((await ctx.agent.invoke('pangular:wait-for', args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke('pangular:wait-for', args));
   const tools = ctx.agent.list().tools.map((tool) => tool.id);
   return { push, call, tools, ctx };
 }
@@ -228,8 +229,8 @@ describe('wait-for agent tool', () => {
 
   it('validates its arguments', async () => {
     const { push, call } = await boot();
-    expect(await call({})).toMatch(/^Pass `condition`: `component`, `component-gone`/);
-    expect(await call({ condition: 'stable' })).toMatch(/^Pass `condition`/);
+    expect(await call({})).toMatch(/^Pass `condition`: one of `component`, `component-gone`/);
+    expect(await call({ condition: 'stable' })).toMatch(/^`condition` must be one of `component`/);
     await push('push-component-tree', tree('p1'));
     expect(await call({ condition: 'component' })).toMatch(/^Pass `selector`/);
     expect(await call({ condition: 'component', selector: '   ' })).toMatch(/^Pass `selector`/);
@@ -247,10 +248,10 @@ describe('wait-for agent tool', () => {
   it('offers only the conditions whose inspector is on, and is left out when none is', async () => {
     const some = await boot({ inspectors: { components: false, http: false } });
     expect(some.tools).toContain('pangular:wait-for');
-    expect(await some.call({ condition: 'component', selector: 'App' })).toBe(
-      "`component` needs the Components inspector, which is turned off for agents in this server's config.",
+    expect(await some.call({ condition: 'component', selector: 'App' })).toMatch(
+      /^`condition` must be one of `navigation`, `error`, not a string \("component"\)\./,
     );
-    expect(await some.call({})).toBe('Pass `condition`: `navigation`, `error`.');
+    expect(await some.call({})).toMatch(/^Pass `condition`: one of `navigation`, `error`\./);
 
     const none = await boot({
       inspectors: { components: false, router: false, http: false, errors: false },

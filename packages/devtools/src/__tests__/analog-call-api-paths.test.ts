@@ -6,6 +6,7 @@ import { setDevOrigin } from '../analog-server-log.ts';
 import { scanAnalog } from '../rpc/analog-scan.ts';
 import { apiPathRefusal } from '../rpc/analog-register.ts';
 import { BASE_FILES, makeProject } from './analog-fixture.ts';
+import { toolAnswer } from './tool-answer.ts';
 
 const project = scanAnalog(
   makeProject(BASE_FILES, {
@@ -105,10 +106,10 @@ describe('analog-call-api paths', () => {
 
   it('never sends a Vite file request from the agent tool or the panel RPC', async () => {
     const ctx = await boot();
-    const tool = (await ctx.agent.invoke('pangular:analog-call-api', {
-      path: '/@fs/etc/passwd',
-    })) as { markdown: string };
-    expect(tool.markdown).toContain('Refused');
+    const tool = await toolAnswer(
+      ctx.agent.invoke('pangular:analog-call-api', { path: '/@fs/etc/passwd' }),
+    );
+    expect(tool.isError).toBe(true);
     const rpc = (await ctx.rpc.invokeLocal(
       'pangular:analog-call-api' as never,
       ...([{ path: '/src/main.ts?raw' }] as never),

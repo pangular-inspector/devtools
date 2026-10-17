@@ -12,6 +12,7 @@ import {
   type CapacitorPage,
   type CapacitorReport,
 } from '../rpc/capacitor-tools.ts';
+import { answerText } from './tool-answer.ts';
 
 async function boot(definition = pangular) {
   const host = {
@@ -24,7 +25,7 @@ async function boot(definition = pangular) {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const invoke = async (id: string, args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke(`pangular:${id}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${id}`, args));
   const tool = (args: Record<string, unknown> = {}) => invoke('list-capacitor-calls', args);
   const plugins = (args: Record<string, unknown> = {}) => invoke('list-capacitor-plugins', args);
   const state = async () =>
@@ -409,8 +410,7 @@ describe('capacitor tools across pages and long answers', () => {
     const { ctx, push } = await boot();
     await push('push-capacitor', report());
     await push('push-capacitor', report({ pageId: 'desk', info: webInfo }));
-    const text = ((await ctx.agent.invoke('pangular:list-pages', {})) as { markdown: string })
-      .markdown;
+    const text = await answerText(ctx.agent.invoke('pangular:list-pages', {}));
     expect(text).toMatch(/\| `cap1` \|.*\| Capacitor \(android\) \|/);
     expect(text).toMatch(/\| `desk` \|.*\| browser \|/);
   });

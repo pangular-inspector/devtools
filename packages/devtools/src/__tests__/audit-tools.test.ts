@@ -6,6 +6,7 @@ import { agentSafety, resolvePangularConfig } from '../config.ts';
 import type { AxeReport } from '../axe-runner.ts';
 import { AXE_TIMEOUT_MS, createAxeRequests } from '../rpc/audit-axe.ts';
 import type { ErrorsReport } from '../rpc/errors-tools.ts';
+import { answerText } from './tool-answer.ts';
 
 const JWT = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
 
@@ -21,7 +22,7 @@ async function boot(config?: PangularConfig) {
   const call = (name: string, payload?: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never)) as Promise<any>;
   const audit = async (args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke('pangular:audit', args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke('pangular:audit', args));
   const tool = () => ctx.agent.list().tools.find((t) => t.id === 'pangular:audit');
   return { ctx, call, audit, tool };
 }
@@ -216,7 +217,11 @@ describe('the audit agent tool', () => {
     expect(Object.keys((readOnly.tool()?.inputSchema as any).properties)).not.toContain('axe');
     const broadcast = vi.spyOn(readOnly.ctx.rpc, 'broadcast');
     await readOnly.call('push-component-tree', tree('tab1'));
-    expect(await readOnly.audit({ axe: true })).toContain('Audit of page');
+    // A read-only agent may not load axe-core into the page, so `axe` is refused, not ignored.
+    expect(await readOnly.audit({ axe: true })).toMatch(
+      /^The agent is read-only .*can't run axe-core/,
+    );
+    expect(await readOnly.audit({})).toContain('Audit of page');
     expect(
       broadcast.mock.calls.some(([options]) => String((options as any).method).endsWith('axe-run')),
     ).toBe(false);

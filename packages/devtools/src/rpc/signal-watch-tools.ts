@@ -2,6 +2,7 @@ import { MAX_WATCHED, type SignalWatchRequest } from '../signal-watch.ts';
 import type { SignalGraph } from '../types.ts';
 import { code, untrusted } from './forms-tools.ts';
 import { byRecency, unknownPageText } from './pages.ts';
+import { refusal } from './refusal.ts';
 
 type SignalPages = ReadonlyMap<
   string,
@@ -68,7 +69,9 @@ export function watchSignalRequests(
   }
   if (!args.node && typeof args.stacks !== 'boolean') {
     return {
-      markdown: 'Pass `node` (a node id or label) to watch, `stacks` (true or false), or both.',
+      markdown: refusal(
+        'Pass `node` (a node id or label) to watch, `stacks` (true or false), or both.',
+      ),
     };
   }
   const requests: SignalWatchRequest[] = [];

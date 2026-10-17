@@ -17,6 +17,8 @@ import { scanAnalog } from '../rpc/analog-scan.ts';
 import type { AnalogRuntimeReport } from '../analog-runtime.ts';
 import { redactAnalogReport } from '../analog-redact.ts';
 import { BASE_FILES, BROKEN_FILES, makeProject } from './analog-fixture.ts';
+import { answerText } from './tool-answer.ts';
+import { toolAnswer } from './tool-answer.ts';
 
 function local(ctx: { rpc: unknown }, name: string): Promise<unknown> {
   return (ctx.rpc as { invokeLocal: (name: string) => Promise<unknown> }).invokeLocal(name);
@@ -33,7 +35,7 @@ async function boot(cwd: string) {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (tool: string, args: Record<string, unknown> = {}) =>
-    ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
   return { ctx, push, call };
 }
 
@@ -329,7 +331,7 @@ describe('Analog MCP tools', () => {
   });
 
   it('analog-api-routes and analog-call-api reach the dev server with a confirm gate', async () => {
-    const { call } = await boot(makeProject(BASE_FILES));
+    const { ctx, call } = await boot(makeProject(BASE_FILES));
     const api = await call('analog-api-routes');
     expect(api).toContain(
       'DELETE `/api/v1/products/:id` `/src/server/routes/api/v1/products/[id].delete.ts`',
@@ -359,9 +361,13 @@ describe('Analog MCP tools', () => {
       body: '{"a":1}',
       devtools: '1',
     });
-    expect(await call('analog-call-api', { path: '//evil.test/x' })).toContain('Refused');
-    expect(await call('analog-call-api', { path: '/x', method: 'TRACE' })).toContain(
-      'Unsupported method',
+    const evil = await toolAnswer(
+      ctx.agent.invoke('pangular:analog-call-api', { path: '//evil.test/x' }),
+    );
+    expect(evil.isError).toBe(true);
+    expect(evil.markdown).toMatch(/^Pass a path that starts with \//);
+    expect(await call('analog-call-api', { path: '/x', method: 'TRACE' })).toMatch(
+      /^`method` must be one of `GET`, `POST`/,
     );
   });
 

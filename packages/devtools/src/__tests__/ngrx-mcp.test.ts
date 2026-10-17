@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import pangular, { createPangular } from '../devframe.ts';
 import type { NgrxPageReport } from '../ngrx-shared.ts';
 import type { PangularConfig } from '../config.ts';
+import { answerText } from './tool-answer.ts';
 
 async function boot(config?: PangularConfig) {
   const host = {
@@ -17,7 +18,7 @@ async function boot(config?: PangularConfig) {
   const read = async (id: string) =>
     ((await ctx.agent.read(`pangular:${id}`)) as { text: string }).text;
   const call = async (tool: string, args: Record<string, unknown>) =>
-    ((await ctx.agent.invoke(`pangular:${tool}`, args)) as { markdown: string }).markdown;
+    await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
   return { ctx, push, read, call };
 }
 
@@ -163,7 +164,9 @@ describe('dispatch-ngrx-action tool', () => {
     expect(await call('dispatch-ngrx-action', { type: '[A] B', payload: { type: 'x' } })).toMatch(
       /"type" key/,
     );
-    expect(await call('dispatch-ngrx-action', { seq: 'x' })).toMatch(/log entry number/);
+    expect(await call('dispatch-ngrx-action', { seq: 'x' })).toMatch(
+      /^`seq` must be a whole number/,
+    );
     expect(
       broadcast.mock.calls.filter(([o]) =>
         (o as unknown as Broadcast).method.endsWith('ngrx-action'),
