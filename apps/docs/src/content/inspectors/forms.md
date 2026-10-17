@@ -88,6 +88,17 @@ Check **Record details** to add the calling code of each change, validator chang
 
 What submit does, and why it might do nothing. It also shows what the form sends. **Copy test fixture** copies a fixture for your tests.
 
+Each submit lands in the timeline with its outcome and the reason:
+
+| Outcome    | When                                                                     | The event says                                                                                                          |
+| ---------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `ran`      | A Signal Forms action started, or a reactive or template form submitted. | For reactive and template forms, the status at submit and each invalid or pending control with its error keys.          |
+| `blocked`  | `submit()` did not run a Signal Forms action.                            | Each invalid field with its validator kinds, errors left by the last submission, and fields still validating.           |
+| `rejected` | The Signal Forms action returned errors.                                 | Each field the action rejected, with the error kind and message.                                                        |
+| `threw`    | The Signal Forms action threw.                                           | The error message. A throw from the action set in `form(..., { submission })` is recorded even when the app catches it. |
+
+Messages go through the same redaction as field values.
+
 ### Lint view
 
 Form bugs and model-aware accessibility checks, each with a fix. For generic accessibility checks, run axe on the page.

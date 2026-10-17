@@ -127,7 +127,7 @@ export interface FormEvent {
   caller?: string;
   prev?: string;
   count?: number;
-  outcome?: 'ran' | 'blocked' | 'threw' | 'busy';
+  outcome?: 'ran' | 'blocked' | 'rejected' | 'threw' | 'busy';
   ms?: number;
   renders?: number;
   rendered?: string[];

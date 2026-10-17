@@ -36,7 +36,13 @@ import {
   type RenderCounter,
 } from './forms-instrument.ts';
 import { redactMessage } from './forms-privacy.ts';
-import { fieldPath, probeEveryTime } from './forms-read.ts';
+import { fieldPath, probeEveryTime, submitSetup } from './forms-read.ts';
+import {
+  controlSubmitBlockers,
+  signalSubmissionRejections,
+  signalSubmitBlockers,
+  wrapSubmitAction,
+} from './forms-submit.ts';
 import { watchWebMcp } from './forms-webmcp.ts';
 import { FORMLESS_FORM_ACTIONS } from './config.ts';
 import { tapConsole } from './console-tap.ts';
@@ -214,6 +220,9 @@ export function attachForms(
   let sendTimer: ReturnType<typeof setTimeout> | undefined;
   let pendingReport: Record<string, unknown> | null = null;
   let submittingForm: string | null = null;
+  // The last error a wrapped submission action threw, so `unhandledrejection` doesn't log it twice.
+  let thrownByAction: { reason: unknown } | null = null;
+  const actionThrew = new WeakSet<object>();
   let instrumentation: Instrumentation | null = null;
   let renders: RenderCounter | null = null;
   let renderSince: number | null = null;
@@ -357,11 +366,39 @@ export function attachForms(
       for (const child of children.slice(0, 200)) visit(child, depth + 1);
     };
     visit(form.root, 0);
+    wrapAction(form.root, unwrap, reached);
     for (const [flag, restore] of unwrap) {
       if (reached.has(flag)) continue;
       restore();
       unwrap.delete(flag);
     }
+  }
+
+  function wrapAction(root: AnyRecord, unwrap: Map<object, () => void>, reached: Set<object>) {
+    const options = read(() => root['structure']['fieldManager']['submitOptions'], null);
+    if (options && typeof options === 'object' && unwrap.has(options)) {
+      reached.add(options);
+      return;
+    }
+    const wrapped = wrapSubmitAction(root, (error) => {
+      actionThrew.add(root);
+      thrownByAction = { reason: error };
+      const formId = idOf(root);
+      recordFormEvent({
+        formId,
+        path: '',
+        type: 'submit',
+        outcome: 'threw',
+        detail: `the submission action threw: ${String(
+          (error as { message?: unknown } | null)?.message ?? error ?? 'error',
+        ).slice(0, 200)}`,
+        timestamp: Date.now(),
+      });
+      schedulePush();
+    });
+    if (!wrapped) return;
+    reached.add(wrapped.options);
+    unwrap.set(wrapped.options, wrapped.restore);
   }
 
   function wrapSubmitFlag(
@@ -397,15 +434,30 @@ export function attachForms(
         });
       } else {
         if (!started) {
+          const ignore = read(() => submitSetup(root).ignoreValidators, undefined);
+          const why = read(() => signalSubmitBlockers(node, ignore), '');
           recordFormEvent({
             formId,
             path,
             type: 'submit',
             outcome: 'blocked',
-            detail: 'invalid, so the action did not run',
+            detail: `invalid, so the action did not run${why ? `: ${why}` : ''}`,
             timestamp: Date.now(),
           });
+        } else if (!actionThrew.has(root)) {
+          const rejected = read(() => signalSubmissionRejections(node), '');
+          if (rejected) {
+            recordFormEvent({
+              formId,
+              path,
+              type: 'submit',
+              outcome: 'rejected',
+              detail: `the submission action returned errors: ${rejected}`,
+              timestamp: Date.now(),
+            });
+          }
         }
+        actionThrew.delete(root);
         started = false;
         if (submittingForm === formId) setTimeout(() => (submittingForm = null), 0);
       }
@@ -671,6 +723,7 @@ export function attachForms(
     for (const [formId, form] of foundById) {
       if (form.formElement !== target || form.kind === 'signal') continue;
       const status = String(read(() => form.root['status'], ''));
+      const why = status === 'VALID' ? '' : read(() => controlSubmitBlockers(form.root), '');
       setTimeout(() => {
         afterPaint(() => {
           const focus = describeElement(document.activeElement);
@@ -679,7 +732,7 @@ export function attachForms(
             path: '',
             type: 'submit',
             outcome: 'ran',
-            detail: `status ${status} at submit${focus ? `, focus on ${focus}` : ''}`,
+            detail: `status ${status} at submit${why ? ` (${why})` : ''}${focus ? `, focus on ${focus}` : ''}`,
             origin: isDevtoolsAction() ? 'devtools' : 'user',
             timestamp: Date.now(),
           });
@@ -690,6 +743,10 @@ export function attachForms(
   }
 
   const onRejection = (event: PromiseRejectionEvent) => {
+    if (thrownByAction && thrownByAction.reason === event.reason) {
+      thrownByAction = null;
+      return;
+    }
     if (!submittingForm) return;
     recordFormEvent({
       formId: submittingForm,
