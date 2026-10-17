@@ -164,11 +164,57 @@ export function controlSubmitBlockers(root: AnyRecord): string {
   return parts.join('; ');
 }
 
+interface ActionWatch {
+  root: AnyRecord;
+  onThrow: (error: unknown) => void;
+}
+
+interface SharedAction {
+  original: (...args: unknown[]) => unknown;
+  wrapped: (...args: unknown[]) => unknown;
+  watches: Set<ActionWatch>;
+}
+
+/**
+ * The wrapper on each `submission` object. Apps can share one object between
+ * forms (a module-level `{ action }`), so it is wrapped once and every form
+ * that uses it registers here instead of wrapping the wrapper.
+ */
+const sharedActions = new WeakMap<object, SharedAction>();
+
+/** The root field tree of a form, which Angular passes to the action as `detail.root`. */
+function rootTreeOf(root: AnyRecord): unknown {
+  return read(() => root['structure']['root']['fieldProxy'] ?? root['fieldProxy'], undefined);
+}
+
+/** The watches a throw belongs to: the form Angular says it submitted, or the only one. */
+function watchesFor(shared: SharedAction, args: unknown[]): ActionWatch[] {
+  const detail = args[1] as AnyRecord | undefined;
+  const submitted = read(() => detail?.['root'], undefined) ?? args[0];
+  const all = [...shared.watches];
+  const own = submitted === undefined ? [] : all.filter((w) => rootTreeOf(w.root) === submitted);
+  if (own.length) return own;
+  return all.length === 1 ? all : [];
+}
+
+function notifyThrow(shared: SharedAction, args: unknown[], error: unknown) {
+  for (const watch of watchesFor(shared, args)) {
+    try {
+      watch.onThrow(error);
+    } catch {
+      // A listener never changes what the app's action does.
+    }
+  }
+}
+
 /**
  * Wraps the submission action given to `form(..., { submission })` so a throw is
  * tied to its form even when the app catches the `submit()` promise. The wrapper
- * returns what the action returns, so the app sees no difference. Returns the
- * restore function, or null when there is no action to wrap.
+ * returns what the action returns, so the app sees no difference. A
+ * `submission` object shared by several forms is wrapped once; a throw goes to
+ * the form Angular submitted, and the original action comes back when the
+ * last form using it restores. Returns the restore function, or null when
+ * there is no action to wrap.
  */
 export function wrapSubmitAction(
   root: AnyRecord,
@@ -179,31 +225,59 @@ export function wrapSubmitAction(
     undefined,
   );
   if (!options || typeof options !== 'object') return null;
-  const original = options['action'];
-  if (typeof original !== 'function') return null;
-  const wrapped = function (this: unknown, ...args: unknown[]) {
-    let result: unknown;
-    try {
-      result = original.apply(this, args);
-    } catch (error) {
-      onThrow(error);
-      throw error;
-    }
-    if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
-      (result as PromiseLike<unknown>).then(undefined, onThrow);
-    }
-    return result;
-  };
-  try {
-    options['action'] = wrapped;
-  } catch {
-    return null;
+  let shared = sharedActions.get(options);
+  // The app put its own action in since; leave that one alone.
+  if (shared && read(() => options['action'], undefined) !== shared.wrapped) {
+    sharedActions.delete(options);
+    shared = undefined;
   }
-  if (options['action'] !== wrapped) return null;
+  if (!shared) {
+    const original = read(() => options['action'] as unknown, undefined);
+    if (typeof original !== 'function') return null;
+    const entry: SharedAction = {
+      original: original as SharedAction['original'],
+      wrapped: () => undefined,
+      watches: new Set(),
+    };
+    entry.wrapped = function (this: unknown, ...args: unknown[]) {
+      let result: unknown;
+      try {
+        result = entry.original.apply(this, args);
+      } catch (error) {
+        notifyThrow(entry, args, error);
+        throw error;
+      }
+      if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
+        (result as PromiseLike<unknown>).then(undefined, (error) =>
+          notifyThrow(entry, args, error),
+        );
+      }
+      return result;
+    };
+    try {
+      options['action'] = entry.wrapped;
+    } catch {
+      return null;
+    }
+    if (options['action'] !== entry.wrapped) return null;
+    sharedActions.set(options, entry);
+    shared = entry;
+  }
+  const entry = shared;
+  const watch: ActionWatch = { root, onThrow };
+  entry.watches.add(watch);
   return {
     options,
     restore: () => {
-      if (options['action'] === wrapped) options['action'] = original;
+      if (!entry.watches.delete(watch) || entry.watches.size) return;
+      if (sharedActions.get(options) === entry) sharedActions.delete(options);
+      if (read(() => options['action'], undefined) === entry.wrapped) {
+        try {
+          options['action'] = entry.original;
+        } catch {
+          // A frozen options object keeps the wrapper, which only forwards.
+        }
+      }
     },
   };
 }
