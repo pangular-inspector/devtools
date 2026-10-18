@@ -4,6 +4,7 @@ import { isRedactedKey, redactMessage } from './forms-privacy.ts';
 import { createHydrationScanner } from './http-overlay.ts';
 import { httpRegistry } from './http-rules.ts';
 import { tapConsole } from './console-tap.ts';
+import { setTimeoutOutside } from './outside-angular.ts';
 import {
   findRouters,
   redactText,
@@ -314,7 +315,8 @@ export function attachAnalog(
             event?.['type'] === 1 ||
             read(() => String(event?.['constructor']?.name ?? ''), '').includes('NavigationEnd')
           ) {
-            setTimeout(push, 50);
+            // The router emits inside the Angular zone; a timer there would make the app tick.
+            setTimeoutOutside(push, 50);
           }
         }) as { unsubscribe(): void },
       null,

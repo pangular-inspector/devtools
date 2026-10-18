@@ -1,17 +1,14 @@
 name: Release
 
 # Publishes @pangular-inspector/devtools to npm from a version tag, with provenance, after checking
-# the exact tarball it publishes. Push a tag such as v1.0.0 on a commit of main, or run it from the
-# Actions tab with that tag. See apps/docs/src/content/contributing/publishing.md#releasing.
+# the exact tarball it publishes. Push a tag such as v1.0.0 on a commit of main whose CI passed, or
+# run it from the Actions tab with that tag picked as the ref. See
+# apps/docs/src/content/contributing/publishing.md#releasing.
 on:
   push:
     tags: ['v*']
+  # Run with "Use workflow from" set to the tag; a branch is refused.
   workflow_dispatch:
-    inputs:
-      tag:
-        description: The version tag to release, such as v1.0.0. It must already be pushed.
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -23,7 +20,7 @@ concurrency:
 
 jobs:
   release:
-    name: Publish ${{ inputs.tag || github.ref_name }}
+    name: Publish ${{ github.ref_name }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     # Protect this environment (required reviewers, tags only) in the repository settings. It holds
@@ -34,12 +31,21 @@ jobs:
       contents: write
       # npm publish --provenance signs the attestation with the workflow's OIDC token.
       id-token: write
+      # gh run list reads the CI runs of the tagged commit.
+      actions: read
     env:
-      TAG: ${{ inputs.tag || github.ref_name }}
+      # Both triggers run on the tag itself: a tag push, or a manual run with the tag as the ref.
+      TAG: ${{ github.ref_name }}
     steps:
+      - name: Check the run is for a tag
+        if: github.ref_type != 'tag'
+        run: |
+          echo "::error::Release runs only on a version tag, not on ${GITHUB_REF}. Pick the tag in \"Use workflow from\"."
+          exit 1
+
       - uses: actions/checkout@v7
         with:
-          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          ref: ${{ github.ref }}
           # The whole history, so the tagged commit can be checked against main.
           fetch-depth: 0
           persist-credentials: false
@@ -48,6 +54,21 @@ jobs:
         run: |
           if ! git merge-base --is-ancestor HEAD origin/main; then
             echo "::error::$TAG points at $(git rev-parse --short HEAD), which is not on main. Release from main only."
+            exit 1
+          fi
+
+      # The full CI (ci.yml) must have passed on main for this exact commit, so a commit whose CI
+      # failed, or is still running, is never published.
+      - name: Check CI passed on the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          passed=$(gh run list --workflow ci.yml --commit "$sha" --branch main --event push \
+            --status success --json databaseId -q 'length > 0')
+          if [ "$passed" != "true" ]; then
+            echo "::error::CI has no successful run on main for $sha. Wait for it to pass, or fix main and tag again."
             exit 1
           fi
 

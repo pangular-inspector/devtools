@@ -363,9 +363,9 @@ describe('agent tool and RPC registration', () => {
     const answer = await toolAnswer(
       readOnly.ctx.agent.invoke('pangular:change-detection', { record: 'start' }),
     );
-    // `record` is not an argument of the read tool, so it only reads.
-    expect(answer.isError).toBe(false);
-    expect(answer.markdown).toMatch(/No change detection recording yet/);
+    // `record` moved to record-change-detection, so the read refuses it instead of ignoring it.
+    expect(answer.isError).toBe(true);
+    expect(answer.markdown).toContain('`pangular:record-change-detection`');
   });
 
   it('keeps record-guards and drops navigate and probe-route when actions.router is off', async () => {

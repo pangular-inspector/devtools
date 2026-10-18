@@ -122,6 +122,36 @@ describe('checkToolArgs', () => {
     );
   });
 
+  it('refuses an argument 1.0 moved to another tool, naming that tool', () => {
+    const none = { type: 'object', properties: { page: { type: 'string' } } };
+    const moved = (tool: string, args: Record<string, unknown>) => {
+      const checked = checkToolArgs(none, args, `pangular:${tool}`);
+      return 'error' in checked ? checked.error : undefined;
+    };
+    for (const key of ['record', 'flash', 'track', 'angularProfiling']) {
+      expect(moved('change-detection', { [key]: true })).toBe(
+        `There is no \`${key}\` argument; use \`pangular:record-change-detection\`.`,
+      );
+    }
+    expect(moved('hydration', { overlay: true })).toBe(
+      'There is no `overlay` argument; use `pangular:highlight` with `hydration`.',
+    );
+    expect(moved('navigate', { routeId: 'r1' })).toBe(
+      'There is no `routeId` argument; use `pangular:list-routes` with `resolveLazy`.',
+    );
+    expect(moved('navigate', { on: true })).toBe(
+      'There is no `on` argument; use `pangular:record-guards` with `on`.',
+    );
+    // Only on the tool the argument left, and only while its schema lacks the key.
+    expect(moved('list-routes', { routeId: 'r1' })).toBeUndefined();
+    expect(
+      checkToolArgs(SCHEMA, { selector: 'x', record: 'start' }, 'pangular:change-detection'),
+    ).toEqual({
+      args: { selector: 'x', record: 'start' },
+    });
+    expect(error({ selector: 'x', overlay: true })).toBeUndefined();
+  });
+
   it('treats null and an empty page as left out', () => {
     expect(checkToolArgs(SCHEMA, { selector: 'x', limit: null, page: '' })).toEqual({
       args: { selector: 'x' },

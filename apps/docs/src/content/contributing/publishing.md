@@ -99,7 +99,7 @@ Releases publish from CI, not from a laptop. `.github/workflows/release.yml` pub
     In one pull request, set <code>version</code> in <code>packages/devtools/package.json</code> and add a <code>## 1.2.3</code> section to <code>packages/devtools/CHANGELOG.md</code>. List every removed or renamed export, option and tool under Upgrade notes. Merge it to <code>main</code>.
   </ngmd-step>
   <ngmd-step title="Tag the merged commit">
-    Run <code>git tag v1.2.3</code> on that commit of <code>main</code> and <code>git push origin v1.2.3</code>. The tag starts the workflow. To rerun a release, start <strong>Release</strong> from the <strong>Actions</strong> tab with the same tag.
+    Wait for CI to pass on that commit of <code>main</code>. Then run <code>git tag v1.2.3</code> on it and <code>git push origin v1.2.3</code>. The tag starts the workflow. To rerun a release, start <strong>Release</strong> from the <strong>Actions</strong> tab and pick the tag, not a branch, under <strong>Use workflow from</strong>.
   </ngmd-step>
   <ngmd-step title="Approve the npm environment">
     The job runs in the <code>npm</code> environment, which holds the <code>NPM_TOKEN</code> secret. Approve it when the run asks.
@@ -108,7 +108,7 @@ Releases publish from CI, not from a laptop. `.github/workflows/release.yml` pub
 
 The workflow stops at the first check that fails, before anything reaches npm:
 
-1. The tag is on `main`, and it equals `v` plus the package version. The changelog has a non-empty section for that version (`scripts/release-notes.mjs`).
+1. The run is for a tag, and the tag is on `main`. The CI workflow (`ci.yml`) has a successful run on `main` for the tagged commit. The tag equals `v` plus the package version. The changelog has a non-empty section for that version (`scripts/release-notes.mjs`).
 2. `pnpm typecheck`, `pnpm test:devtools` and `pnpm test:panel` pass.
 3. `pnpm --filter @pangular-inspector/devtools pack` builds one tarball. The root `.pnpmfile.cjs` drops `devDependencies`, `scripts` and the `nx` block from the packed `package.json`.
 4. `pnpm verify:publish` (Angular CLI and Analog) and a few cells of `pnpm e2e:install` install that exact tarball from a local registry into fresh apps, open them in Chromium and run the package audit.

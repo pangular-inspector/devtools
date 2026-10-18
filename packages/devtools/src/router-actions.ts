@@ -685,7 +685,7 @@ async function followRedirect(
       const next = navigations.find((n) => n.redirectedFrom === record.id);
       if (next && next.outcome !== 'pending') return resolve(next);
       if (Date.now() - started > WAIT_MS) return resolve(next);
-      setTimeout(tick, 50);
+      setTimeoutOutside(tick, 50);
     };
     tick();
   });

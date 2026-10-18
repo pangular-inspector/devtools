@@ -8,6 +8,7 @@ import { TestBed } from '@angular/core/testing';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { QueryClient } from '@tanstack/query-core';
 import { afterEach, describe, expect, it } from 'vitest';
+import { ANALOG_META_DESCRIPTION, attachAnalog } from '../analog-runtime.ts';
 import { attachErrors } from '../errors-collector.ts';
 import { attachForms } from '../forms-collector.ts';
 import { attachNgrx } from '../ngrx-overlay.ts';
@@ -223,6 +224,40 @@ describe('collectors under zone.js', () => {
       () => ctx?.push({ summary: `n ${++n}`, sections: [] }),
     );
     expect(calls.filter((c) => c === 'push-plugins').length).toBeGreaterThan(1);
+    expect(result.withCollector).toEqual(result.without);
+    expect(result.withCollector.stable).toBe(true);
+  });
+
+  it('Analog: a NavigationEnd from the router adds no tick', async () => {
+    document.body.innerHTML = '<app-root ng-version="22"></app-root>';
+    const listeners: ((event: unknown) => void)[] = [];
+    const router = {
+      url: '/',
+      config: [
+        {
+          path: '',
+          [Symbol(ANALOG_META_DESCRIPTION)]: { endpointKey: '/src/app/pages/index.page.ts' },
+        },
+      ],
+      routerState: { snapshot: { root: { routeConfig: null, data: {}, firstChild: null } } },
+      events: {
+        subscribe: (fn: (event: unknown) => void) => {
+          listeners.push(fn);
+          return { unsubscribe: () => listeners.splice(listeners.indexOf(fn), 1) };
+        },
+      },
+    };
+    const ng = { getInjector: () => ({}), ɵgetRouterInstance: () => router };
+    const { my, calls } = fakeRpc();
+    let n = 0;
+    const result = await compare(
+      () => attachAnalog(my, 'tab1', () => ng, 60_000),
+      () => {
+        router.url = `/trips/${++n}`;
+        for (const listener of [...listeners]) listener({ type: 1 });
+      },
+    );
+    expect(calls.filter((c) => c === 'push-analog').length).toBeGreaterThan(1);
     expect(result.withCollector).toEqual(result.without);
     expect(result.withCollector.stable).toBe(true);
   });

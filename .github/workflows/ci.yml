@@ -95,8 +95,9 @@ jobs:
       - name: Check the panel with axe
         run: pnpm test:axe
 
-  # The e2e jobs below are slow, so they run only when the package, the panel or the scripts and
-  # fixtures they use change. A diff that cannot be computed (a new branch, a force push) runs them.
+  # The e2e jobs below are slow, so they run only when the package, the panel, the SSR demo, the
+  # tools docs (e2e:mcp reads them) or the scripts and fixtures they use change. A diff that cannot
+  # be computed (a new branch, a force push) runs them.
   changes:
     name: Changed paths
     runs-on: ubuntu-latest
@@ -113,7 +114,8 @@ jobs:
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
-          paths=(packages/devtools app e2e scripts/e2e-security.mjs scripts/e2e-mcp.mjs pnpm-lock.yaml .github/workflows/ci.yml)
+          paths=(packages/devtools app e2e src apps/docs/src/content/agents angular.json package.json
+            scripts/e2e-security.mjs scripts/e2e-mcp.mjs pnpm-lock.yaml .github/workflows/ci.yml)
           if git diff --quiet "$BASE" HEAD -- "${paths[@]}"; then
             echo "e2e=false" >> "$GITHUB_OUTPUT"
           else

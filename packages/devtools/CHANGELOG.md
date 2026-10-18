@@ -35,7 +35,7 @@ These changes can break a 0.0.7 setup without an error.
 
 ### Agent tools renamed
 
-1.0 renames tools and arguments so that each name follows one pattern: an optional library prefix (`ngrx-`, `redux-`, `tanstack-`, `capacitor-`, `analog-`), then a verb that says whether the tool reads source (`scan`), reads the page (`list`, `inspect`, `explain`, `lint`) or writes (`run`, `set`, `record`). There are no aliases. A call to an old tool name is an unknown tool. An old argument is refused with `isError` and the name to use instead, such as ``There is no `selector` argument; pass `component`.`` Tool ids are `pangular:<name>` on the server and `pangular_<name>` for MCP clients; the tables leave the prefix out.
+1.0 renames tools and arguments so that each name follows one pattern: an optional library prefix (`ngrx-`, `redux-`, `tanstack-`, `capacitor-`, `analog-`), then a verb that says whether the tool reads source (`scan`), reads the page (`list`, `inspect`, `explain`, `lint`) or writes (`run`, `set`, `record`). There are no aliases. A call to an old tool name is an unknown tool. An old argument is refused with `isError` and the name to use instead, such as ``There is no `selector` argument; pass `component`.`` An argument that moved to another tool (`record` on `change-detection`, `overlay` on `hydration`, `routeId` and `on` on `navigate`) is refused with `isError` and the tool to use. Tool ids are `pangular:<name>` on the server and `pangular_<name>` for MCP clients; the tables leave the prefix out.
 
 | 0.0.7                                                                                    | 1.0.0                                                                                                           |
 | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -153,7 +153,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 #### Agents and MCP
 
-- 97 agent tools. New tools include `audit`, `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
+- 98 agent tools. New tools include `audit`, `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
 - One naming scheme for tools and arguments, and plain markdown answers. See **Agent tools renamed**.
 - Tool titles, inspector tags and safety tiers (`action` and `destructive`).
 - Every answer names the page it read, and one rule picks the default page for every tool.

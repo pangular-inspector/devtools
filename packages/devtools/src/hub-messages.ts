@@ -111,7 +111,13 @@ const pageOf = (args: unknown) => {
 /** Lines that frame an answer instead of saying what happened: the untrusted-data notices, code fences and bare JSON brackets. */
 const FRAME_LINE = /^(?:_.*_|```[\w-]*|[[\]{}(),\s]*)$/;
 
-/** The lines of a tool's answer that say something, with headings and JSON keys made plain. */
+/**
+ * The line a live tool's answer starts with to name the page it read
+ * (`withPageLine` in rpc/page-read-scope.ts). The feed names the page itself.
+ */
+const PAGE_LINE = /^Page `[^`]*`(?: \(`[^`]*`\))?\.$/;
+
+/** The lines of a tool's answer that say something, with headings and JSON keys made plain; framing and page lines are left out. */
 function answerLines(result: unknown): string[] {
   const record = result as { markdown?: unknown } | null | undefined;
   const text =
@@ -123,7 +129,7 @@ function answerLines(result: unknown): string[] {
   return text
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line && !FRAME_LINE.test(line))
+    .filter((line) => line && !FRAME_LINE.test(line) && !PAGE_LINE.test(line))
     .map((line) =>
       line
         .replace(/^#+\s*/, '')

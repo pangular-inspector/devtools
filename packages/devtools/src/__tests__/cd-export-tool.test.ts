@@ -111,8 +111,10 @@ describe('change-detection export', () => {
     expect(await call({ export: 'json' })).toContain('```json');
 
     const full = await boot();
-    // `record` belongs to record-change-detection, so the read ignores it and exports.
-    expect(await full.call({ export: 'json', record: 'clear' })).toContain('```json');
+    // `record` moved to record-change-detection, so the read refuses it and clears nothing.
+    expect(await full.call({ export: 'json', record: 'clear' })).toBe(
+      'There is no `record` argument; use `pangular:record-change-detection`.',
+    );
     expect(await full.call({ export: 'csv' })).toMatch(
       /^`export` must be one of `json`, `trace`, not a string \("csv"\)\./,
     );

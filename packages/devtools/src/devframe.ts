@@ -453,6 +453,7 @@ const pangular = defineDevframe({
                     pageUrl,
                   )
                 : leased(() => interest, tool.handler),
+              tool.id,
             ),
           ),
         }),

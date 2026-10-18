@@ -169,8 +169,11 @@ describe('hydration tool', () => {
     const tool = ctx.agent.list().tools.find((t) => t.id === 'pangular:hydration')!;
     expect(tool.safety).toBe('read');
     expect(Object.keys((tool.inputSchema as { properties: object }).properties)).toEqual(['page']);
-    // `overlay` is not an argument of the read, so it only reads.
-    expect(await call('hydration', { overlay: true })).toContain('hydrated from server HTML');
+    // `overlay` moved to highlight, so the read refuses it and draws nothing.
+    expect(await call('hydration', { overlay: true })).toContain(
+      '`pangular:highlight` with `hydration`',
+    );
+    expect(await call('hydration', {})).toContain('hydrated from server HTML');
     expect(sent.some((entry) => entry.method.endsWith('hydration-overlay'))).toBe(false);
     // The outline is a page drawing like any highlight, so read-only mode keeps it.
     expect(await call('highlight', { hydration: true })).toMatch(

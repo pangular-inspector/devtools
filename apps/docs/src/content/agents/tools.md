@@ -83,6 +83,8 @@ The argument names are the same in every tool:
 
 A call that sends an argument name a tool no longer takes, such as `selector` for `inspect-component` or `storeId` for `ngrx-history`, is refused with the name to use instead.
 
+An argument that moved to another tool is refused with the tool to use: `record`, `flash`, `track` and `angularProfiling` on `change-detection` (use `record-change-detection`), `overlay` on `hydration` (use `highlight` with `hydration`), and `routeId` and `on` on `navigate` (use `list-routes` with `resolveLazy`, and `record-guards` with `on`).
+
 A tool that refuses a call answers with `isError: true`. That covers a wrong or missing argument, a `page` that reports no such data, an action turned off in the config or under `agent.readOnly`, a form or action the page refuses, and a write that would have to guess the tab. The text starts with `Refused:` or `Invalid arguments:` and says what to change.
 
 An action or destructive tool that does nothing also answers `isError: true`: no page to send it to, a target that matches nothing, a navigation the app cancelled or that failed, or a recording no page confirmed. An empty result of a read, such as no HTTP calls yet, is an ordinary answer.

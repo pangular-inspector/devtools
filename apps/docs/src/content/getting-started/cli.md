@@ -194,15 +194,15 @@ Your agent client runs this command for you. [MCP server](../agents/mcp-server.m
 npx @pangular-inspector/devtools mcp --print-config --port 4000 --base /__devframes/
 ```
 
-| Flag             | What it does                                                                                                                 |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `--print-config` | Print the client config and exit.                                                                                            |
-| `--host <host>`  | Host of the server that runs your app, for the HTTP config. The default is `localhost`.                                      |
-| `--port <port>`  | Port of that server, from 1 to 65535. The default is 9999, the standalone CLI.                                               |
-| `--base <path>`  | The hub base, such as `/__devframes/` for the Express hub and the Vite plugin. With it, the HTTP config sends the MCP token. |
-| `--https`        | The server is behind TLS, so the HTTP config uses `https://`.                                                                |
+| Flag             | What it does                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `--print-config` | Print the client config and exit.                                                                                  |
+| `--host <host>`  | Host of the server that runs your app, for the HTTP config. The default is `localhost`.                            |
+| `--port <port>`  | Port of that server, from 1 to 65535. The default is 9999, the standalone CLI.                                     |
+| `--base <path>`  | The hub base, such as `/__devframes/` for the Express hub and the Vite plugin. The HTTP URL becomes `<base>__mcp`. |
+| `--https`        | The server is behind TLS, so the HTTP config uses `https://`.                                                      |
 
-`--root`, `--config` and `--read-only` go into the printed stdio command, with absolute paths. The stdio server is named `pangular` and the HTTP server `pangular-live`, so a client can hold both. With `--base` and a `--host` that is not a loopback address, the output warns that the token travels in clear text over `http`; pass `--https` when the server is behind TLS.
+`--root`, `--config` and `--read-only` go into the printed stdio command, with absolute paths. The stdio server is named `pangular` and the HTTP server `pangular-live`, so a client can hold both. The HTTP config always sends the MCP token, for the hub and for the standalone CLI. With a `--host` that is not a loopback address and no `--https`, the output warns that the token travels in clear text over `http`; pass `--https` when the server is behind TLS.
 
 ### Source scan only
 

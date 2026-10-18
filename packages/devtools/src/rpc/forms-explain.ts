@@ -77,8 +77,11 @@ function exactForm(forms: CollectedForm[], query: string | undefined): Collected
   return short.length === 1 ? short[0] : null;
 }
 
+/** A refusal (`isError`): the short form id matches forms on several pages. */
 function ambiguous(forms: CollectedForm[]): string {
-  return `${forms.length} forms match; pass the full \`form\` id: ${forms.map((f) => `${f.id} ${code(f.label)}`).join(', ')}.`;
+  return refusal(
+    `${forms.length} forms match; pass the full \`form\` id: ${forms.map((f) => `${f.id} ${code(f.label)}`).join(', ')}.`,
+  );
 }
 
 export function resolveForm(

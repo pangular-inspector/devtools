@@ -1058,3 +1058,30 @@ describe('agent tools', () => {
     expect(await call('inspect-providers', '')).toMatch(/no injector data/i);
   });
 });
+
+describe('arguments moved to another tool', () => {
+  it('refuses them with isError and the tool to use', async () => {
+    const { ctx } = await boot();
+    const refused = async (tool: string, args: Record<string, unknown>) => {
+      try {
+        await ctx.agent.invoke(`pangular:${tool}`, args);
+      } catch (error) {
+        if (error instanceof ToolRefusal) return error.message;
+        throw error;
+      }
+      return undefined;
+    };
+    expect(await refused('change-detection', { record: 'start' })).toContain(
+      '`pangular:record-change-detection`',
+    );
+    expect(await refused('change-detection', { angularProfiling: true })).toContain(
+      '`pangular:record-change-detection`',
+    );
+    expect(await refused('hydration', { overlay: true })).toContain(
+      '`pangular:highlight` with `hydration`',
+    );
+    expect(await refused('navigate', { action: 'go', url: '/', routeId: 'r1' })).toContain(
+      '`pangular:list-routes` with `resolveLazy`',
+    );
+  });
+});

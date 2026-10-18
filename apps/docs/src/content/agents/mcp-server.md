@@ -37,19 +37,19 @@ Run `pangular mcp --print-config` in your project folder. It prints the config f
 npx @pangular-inspector/devtools mcp --print-config --port 4000 --base /__devframes/
 ```
 
-| Flag            | Effect on the output                                                                                        |
-| --------------- | ----------------------------------------------------------------------------------------------------------- |
-| `--root <dir>`  | The project folder in the stdio config, as an absolute path. The default is the working directory.          |
-| `--host <host>` | Host in the HTTP URL and the `Origin` header. The default is `localhost`.                                   |
-| `--port <port>` | Port in the HTTP URL. The default is 9999, the [standalone CLI](../getting-started/cli.md).                 |
-| `--base <path>` | The hub base, such as `/__devframes/`. The URL becomes `<base>__mcp` and the config sends the bearer token. |
-| `--https`       | The server is behind TLS. The URL and the `Origin` header use `https://`.                                   |
+| Flag            | Effect on the output                                                                               |
+| --------------- | -------------------------------------------------------------------------------------------------- |
+| `--root <dir>`  | The project folder in the stdio config, as an absolute path. The default is the working directory. |
+| `--host <host>` | Host in the HTTP URL and the `Origin` header. The default is `localhost`.                          |
+| `--port <port>` | Port in the HTTP URL. The default is 9999, the [standalone CLI](../getting-started/cli.md).        |
+| `--base <path>` | The hub base, such as `/__devframes/`. The URL becomes `<base>__mcp`.                              |
+| `--https`       | The server is behind TLS. The URL and the `Origin` header use `https://`.                          |
 
-`--config` and `--read-only` are added to the stdio command. The output never holds the token. It reads the token from `PANGULAR_MCP_TOKEN` (VS Code asks for it) and prints the `export` line that sets it from the [token file](#send-a-token). Without `--base`, the HTTP config targets the standalone CLI, which asks for the same token.
+`--config` and `--read-only` are added to the stdio command. The output never holds the token. It reads the token from `PANGULAR_MCP_TOKEN` (VS Code asks for it) and prints the `export` line that sets it from the [token file](#send-a-token). The HTTP config always sends the bearer token. Without `--base`, it targets the standalone CLI, which asks for the same token.
 
 The stdio server is named `pangular` and the HTTP one `pangular-live`, so you can add both. Claude Code prefers a local server over a project server of the same name, so with one name the HTTP server would never load.
 
-With `--base` and a `--host` that is not a loopback address, such as `192.168.1.20`, the output starts the HTTP part with a warning: the URL is `http`, so the token travels in clear text on your network. Serve the hub over TLS and pass `--https`, or keep it to a network you trust. `localhost`, `127.0.0.1` and `::1` get no warning.
+With a `--host` that is not a loopback address, such as `192.168.1.20`, and no `--https`, the output starts the HTTP part with a warning: the URL is `http`, so the token travels in clear text on your network. Serve the hub over TLS and pass `--https`, or keep it to a network you trust. `localhost`, `127.0.0.1` and `::1` get no warning.
 
 ## Connect over stdio
 
