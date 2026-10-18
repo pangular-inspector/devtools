@@ -168,8 +168,6 @@ describe('list-components description', () => {
     );
     expect(text).toContain('Page `p1`');
     expect(text).toContain('Other pages report a component tree too: `p3`');
-    expect(LIST_COMPONENTS_DESCRIPTION).toContain('most recent page that has a component tree');
-    expect(LIST_COMPONENTS_DESCRIPTION).toContain('names the other tabs');
-    expect(LIST_COMPONENTS_DESCRIPTION).toContain('(+N below)');
+    expect(LIST_COMPONENTS_DESCRIPTION).toContain('`depth` limits nesting');
   });
 });

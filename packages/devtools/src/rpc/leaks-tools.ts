@@ -1,3 +1,4 @@
+import { defaultPage } from './default-page.ts';
 import { RETAINED_AFTER_MS, RETAINED_AFTER_NAVIGATIONS } from '../config.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import { redactText } from '../serialize.ts';
@@ -269,7 +270,7 @@ export function leakTrackingRequest(
     return { pageId: asked, on };
   }
   if (!on) return { on };
-  const latest = byRecency(pages)[0];
+  const latest = defaultPage(pages);
   return latest ? { pageId: latest.pageId, on } : { on };
 }
 
@@ -313,7 +314,7 @@ export function findLeaksText(
   if (args.page && !state.pages[args.page]) {
     return unknownPageText(args.page, pages, 'leak data');
   }
-  const page = args.page ? state.pages[args.page]! : pages[0];
+  const page = args.page ? state.pages[args.page]! : defaultPage(pages);
   if (!page) return NO_PAGE;
   const limit = Math.min(Math.max(Math.floor(num(args.limit, 20)), 1), MAX_LEAK_COMPONENTS);
   const wanted = args.component?.trim().toLowerCase();

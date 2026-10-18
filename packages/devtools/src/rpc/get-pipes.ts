@@ -46,7 +46,7 @@ export const getPipes = defineRpcFunction({
   returns: describable(v.array(PipeSchema)),
   agent: {
     description:
-      'Discover Angular pipes: custom pipes declared with @Pipe by scanning source files, and built-in pipes from @angular/common (DatePipe, CurrencyPipe, AsyncPipe, etc.) found in use in templates. Returns each pipe name, its class, purity and standalone status, and where it is declared or used. Call this to understand what data-transformation logic is available to templates.',
+      'Source scan of pipes: custom @Pipe classes and the @angular/common pipes templates use, with name, class, purity, standalone and where each is declared or used.',
     title: 'List Angular pipes',
   },
   setup: (ctx) => ({

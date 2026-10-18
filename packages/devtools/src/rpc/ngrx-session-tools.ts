@@ -15,7 +15,7 @@ import {
   type NgrxRequest,
   type NgrxRequestResult,
 } from '../ngrx-shared.ts';
-import { untrusted } from './forms-tools.ts';
+import { UNTRUSTED, untrusted } from './forms-tools.ts';
 import type { NgrxPageRecord } from './ngrx-tools.ts';
 import { callerPage } from './page-scope.ts';
 import { pageArgument, unknownPageText } from './pages.ts';
@@ -331,7 +331,14 @@ export function entryDetailText(
   entry?: Partial<NgrxLogEntry> | Omit<NgrxSession['entries'][number], 'changes'>,
 ): string {
   if (!answer.ok || !answer.detail) {
-    return untrusted(`Could not read entry state ${where}. ${answer.error ?? ''}`.trim());
+    const error = (answer.error ?? '').replace(/^_[^\n]*_\n\n/, '');
+    const place = where ? ` ${where}` : '';
+    // Nothing was read, so it is a refusal; an imported session reads without a page.
+    return refusal(
+      untrusted(
+        `Could not read entry state${place}. ${error} To read a recorded session without a page, import it with pangular:import-ngrx-session and pass its id as \`session\`.`.trim(),
+      ),
+    );
   }
   const { detail } = answer;
   const lines = [`## Entry #${detail.seq} on \`${detail.storeId}\` ${where}`];
@@ -424,15 +431,15 @@ const RANGE = {
 } as const;
 
 export const INSPECT_NGRX_ENTRY_DESCRIPTION =
-  'The State, Diff and Action of one past NgRx entry: the full redacted state of its store right after it, every change from the state before it (up to 500), and the action, method arguments, origin and causing event. Pass `seq` from pangular:signal-store-history or the NgRx Store page. Reads the live page, which keeps the raw states of its most recent entries (the change log limit), or an imported session with `session`. Events have no state of their own.';
+  "One past NgRx entry (`seq`): the store's state right after it, the diff from before it and the action or method call. Reads the live page or an imported `session`.";
 export const EXPORT_NGRX_SESSION_DESCRIPTION =
-  'Export a recorded NgRx session of one store as JSON: the redacted state before the first entry, then each action or method call with the state changes it made, so it can be imported again later (pangular:import-ngrx-session, or the NgRx Store page) and turned into a test. Pass `storeId`, and `from`/`to` (log entry seqs) to cut the range. The page keeps its most recent entries only. Answers with the JSON when it fits in 60,000 characters.';
+  "Export one store's recorded NgRx session as JSON (`storeId`, optional `from`/`to`) to import later or turn into a test. Answers with the JSON up to 60,000 characters.";
 export const IMPORT_NGRX_SESSION_DESCRIPTION =
-  'Import an NgRx session that pangular:export-ngrx-session or the NgRx Store page exported, to read it with pangular:inspect-ngrx-entry and pangular:generate-ngrx-test. Pass the JSON text as `session`. It is checked first: the format and version, at most 1000 entries and 4,000,000 characters, and change paths that cannot reach a prototype. Nothing in the app changes; the server keeps the session in memory for an hour after its last use, at most 5 at a time.';
+  'Import an exported NgRx session (`session`, JSON text) to read with inspect-ngrx-entry and generate-ngrx-test. Checked first; kept in server memory for an hour, 5 at most. Changes nothing in the app.';
 export const GENERATE_NGRX_TEST_DESCRIPTION =
-  'Generate a Vitest spec from a range of recorded NgRx entries: the state before the range, the dispatched actions (an @ngrx/store reducer spec, for one feature reducer when only one top-level key changed) or store method calls (a signalStore spec through TestBed, unprotected() and getState()), and the state after the range as the expectation. Pass `storeId` and `from`/`to`, from the live page or an imported `session`. The answer says which imports to point and which recorded values were cut or redacted.';
+  'Generate a Vitest spec from recorded NgRx entries (`storeId`, `from`/`to`, live or `session`): the state before, the actions or method calls, and the state after as the expectation.';
 export const RESTORE_NGRX_STATE_DESCRIPTION =
-  'Restore a past NgRx state in the running app (development only). Pass `seq` of a restorable log entry: a signal store gets its state keys set back to their values after that entry; @ngrx/store jumps Store DevTools to the state after that action (needs provideStoreDevtools(); new actions are logged but do not change the state until you go back). `latest: true` sends Store DevTools back to the latest state. Adds a Restore entry to the log. Without `page` it uses the one page that reports NgRx state; with several, it restores nothing and lists them. Needs actions.ngrx.';
+  'Restore a past NgRx state (dev only): `seq` sets a signal store back, or jumps Store DevTools for @ngrx/store; `latest: true` returns to the latest. Needs `page` when several tabs report NgRx, and actions.ngrx.';
 
 /** The input schemas of the NgRx history tools. */
 export const NGRX_HISTORY_SCHEMAS = {
@@ -472,7 +479,13 @@ export const NGRX_HISTORY_SCHEMAS = {
 
 /** The restore-ngrx-state answer. The page writes the message, so it sits behind the notice. */
 export function restoreText(result: NgrxRequestResult): string {
-  if (result.error) return untrusted(`Not restored: ${result.error}`);
+  if (result.error) {
+    // A refusal from the request may carry the notice already; it is shown once.
+    const error = result.error.startsWith(UNTRUSTED)
+      ? result.error.slice(UNTRUSTED.length).trimStart()
+      : result.error;
+    return refusal(untrusted(`Not restored: ${error}`));
+  }
   return untrusted(
     `${result.message ?? 'Restored.'}\n\nRead pangular:signal-store-history for the new Restore entry.`,
   );

@@ -57,12 +57,13 @@ The package ships a `pangular` binary. Its `mcp` command starts an MCP server on
 
 ### Add the stdio server to your client
 
+Claude Code takes a command. Cursor reads `.cursor/mcp.json` and VS Code reads `.vscode/mcp.json` in the workspace.
+
 ```bash group="stdio" name="Claude Code" active
 claude mcp add pangular -- npx @pangular-inspector/devtools mcp --root /path/to/your-app
 ```
 
 ```json group="stdio" name="Cursor"
-// .cursor/mcp.json
 {
   "mcpServers": {
     "pangular": {
@@ -74,7 +75,6 @@ claude mcp add pangular -- npx @pangular-inspector/devtools mcp --root /path/to/
 ```
 
 ```json group="stdio" name="VS Code"
-// .vscode/mcp.json
 {
   "servers": {
     "pangular": {
@@ -90,7 +90,7 @@ claude mcp add pangular -- npx @pangular-inspector/devtools mcp --root /path/to/
 
 The server scans the folder it starts in, and your client picks that folder. Some clients start servers in `/`. Pass `--root` with the root of your Angular or Analog project, the folder with `package.json` and `angular.json`, or set `PANGULAR_ROOT`. Cursor and VS Code expand `${workspaceFolder}` to the open folder.
 
-If the folder has no `angular.json` and no `package.json` that depends on `@angular/core`, the server prints a warning on stderr. Your client shows it in the MCP server log.
+If the folder has no `angular.json` and no `package.json` that depends on `@angular/core`, the server prints a warning on stderr, which your client shows in the MCP server log. The agent never reads that log, so every source tool also refuses with `isError: true` and names the folder, instead of answering an empty list.
 
 ### Configure the stdio server
 
@@ -156,8 +156,9 @@ The stdio server never needs a token.
 
 ### Add the HTTP endpoint to your client
 
+Claude Code reads `.mcp.json`, Cursor reads `.cursor/mcp.json` and VS Code reads `.vscode/mcp.json` in the workspace.
+
 ```json group="http" name="Claude Code" active
-// .mcp.json
 {
   "mcpServers": {
     "pangular-live": {
@@ -173,7 +174,6 @@ The stdio server never needs a token.
 ```
 
 ```json group="http" name="Cursor"
-// .cursor/mcp.json
 {
   "mcpServers": {
     "pangular-live": {
@@ -188,7 +188,6 @@ The stdio server never needs a token.
 ```
 
 ```json group="http" name="VS Code"
-// .vscode/mcp.json
 {
   "inputs": [
     {
@@ -314,7 +313,7 @@ Your client can ask you before it runs them. To drop them from the server, set `
 
 ### Pages and tabs
 
-Each browser tab reports on its own and gets a page id, and so does an [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app. `list-pages` lists them with their platform. Most tools that read live data use the most recent page by default, and [Agent tools](./tools.md) names the ones that don't. Pass `page` to pick another tab (`inspect-providers`, `highlight`, `inspect-component` and `defer-blocks` also accept `pageId`). An id that no tab reports gets an answer that lists the tabs that do, instead of data from another tab. The server drops pages that stop reporting after a short time.
+Each browser tab reports on its own and gets a page id, and so does an [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app. `list-pages` lists them with their platform. Without `page`, every tool that reads live data uses the same default page, the first row of `list-pages`, and names it in its answer. [The page argument](./tools.md#the-page-argument) gives the rule and the tools that pick a page another way. Pass `page` to pick another tab (`inspect-providers`, `highlight`, `inspect-component` and `defer-blocks` also accept `pageId`). An id that no tab reports gets an answer that lists the tabs that do, instead of data from another tab. The server drops pages that stop reporting after a short time.
 
 ## Where to next
 

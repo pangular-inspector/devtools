@@ -102,7 +102,7 @@ describe('clear-recordings agent tool', () => {
 
     const after = await call('list-http-calls');
     expect(after).not.toContain('/api/data');
-    expect(after).toContain('No HttpClient calls recorded');
+    expect(after).toMatch(/No HttpClient calls recorded|has made no HttpClient calls yet/);
   });
 
   it('clears router navigations across all pages when target is router without page', async () => {
@@ -237,7 +237,7 @@ describe('clear-recordings agent tool', () => {
     expect(result).toBe('Cleared recorded HTTP calls, router navigations, Analog server calls.');
 
     const httpAfter = await call('list-http-calls');
-    expect(httpAfter).toContain('No HttpClient calls recorded');
+    expect(httpAfter).toMatch(/No HttpClient calls recorded|has made no HttpClient calls yet/);
     expect(recentCalls().length).toBe(0);
   });
 

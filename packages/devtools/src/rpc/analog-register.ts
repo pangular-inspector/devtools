@@ -422,7 +422,7 @@ export async function registerAnalog(
     title: 'List Analog server calls',
     outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
-      'Recent server calls seen by the dev server: page renders (with render mode), load() fetches (GET /_analog/pages), form action submissions (other methods on /_analog/pages, with success, redirect or validation error outcome), server functions by name (including reads that ran during server rendering, seen through their TransferState seed) and API routes, with status, time, size, who called (ssr or browser) and a redacted response preview. Flags load() fetched twice and seeded server function reads called again in the browser.',
+      'Recent Analog server calls: page renders, load() fetches, form actions, server functions and API routes, with status, time, size, caller and a masked preview. Flags load() fetched twice and server reads repeated in the browser.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -439,7 +439,7 @@ export async function registerAnalog(
     title: 'List Analog server functions',
     outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
-      'List Analog server functions (serverFn exports in src/**/*.server.ts) with name, HTTP method, file and the id Analog routes them under (/_analog/fn/<id>), how often each was called over HTTP and during server rendering, and reads called again in the browser right after hydration. Empty when no .server.ts file exports serverFn.',
+      'Analog server functions (serverFn in *.server.ts): name, method, file, route id, call counts over HTTP and during SSR, and reads repeated after hydration.',
     inputSchema: { type: 'object', properties: {} },
     handler: async () => text(analogServerFnsText(project(), current())),
   });
@@ -492,7 +492,7 @@ export async function registerAnalog(
     id: 'pangular:analog-render-modes',
     title: 'Show Analog render modes',
     description:
-      'For each Analog page: how it is rendered (server rendered per request, prerendered, cached, redirected or client only) with the routeRules entry, prerender.routes or build output that decides it, and what the last request to that page (including dynamic and catch-all URLs) actually did. Ends with a "Config read in part" note when vite.config builds analog() options from variables, spreads or other non-literals the scan cannot read.',
+      'How each Analog page is rendered (SSR, prerendered, cached, redirected or client only), the config that decides it, and what the last request did.',
     inputSchema: { type: 'object', properties: {} },
     handler: async () => text(analogRenderModesText(project(), current())),
   });
@@ -517,7 +517,7 @@ export async function registerAnalog(
     id: 'pangular:analog-lint',
     title: 'Lint the Analog project',
     description:
-      'Analog checks: two files for one URL, sibling [param] files, missing default export, layout without router-outlet, .server.ts without load, action or server functions, or without a page, redirect mistakes, bad API method suffix, duplicate API routes, routes outside the API prefix, prerender entries that match nothing, partly read config, frontmatter errors, duplicate slugs, plus live problems (load fetched twice, seeded server function read called again, hydration errors, restart needed, API 404/405). Hydration errors and restart hints come from one page: `page`, or the most recent one.',
+      'Analog checks: conflicting page files, missing exports, layouts without router-outlet, server file mistakes, API route issues, prerender entries matching nothing, content frontmatter, plus live problems from the default page.',
     inputSchema: { type: 'object', properties: { page } },
     handler: async (args: { page?: string }) =>
       text(analogLintText(project(), current(), args?.page)),

@@ -109,7 +109,7 @@ describe('inspect-signal-store', () => {
   });
 
   it('exposes a description that explains the live @ngrx/signals state', () => {
-    expect(INSPECT_SIGNAL_STORE_DESCRIPTION).toMatch(/live @ngrx\/signals state/i);
+    expect(INSPECT_SIGNAL_STORE_DESCRIPTION).toMatch(/live NgRx state: @ngrx\/signals stores/i);
   });
 
   it('includes the classic @ngrx/store state, not just its scope and devtools status', () => {
@@ -242,10 +242,7 @@ describe('signal-store-history', () => {
 
   it('exposes a description that explains the change log and tagged events', () => {
     expect(SIGNAL_STORE_HISTORY_DESCRIPTION).toMatch(/change log/i);
-    expect(SIGNAL_STORE_HISTORY_DESCRIPTION).toMatch(/withReducer/);
-    expect(SIGNAL_STORE_HISTORY_DESCRIPTION).toMatch(
-      /from the method.s start to that specific patch/,
-    );
+    expect(SIGNAL_STORE_HISTORY_DESCRIPTION).toMatch(/causing event/);
   });
 
   it('keeps the newest rows when the log exceeds the budget and notes the dropped count', () => {

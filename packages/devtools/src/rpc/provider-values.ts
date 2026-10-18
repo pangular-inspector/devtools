@@ -208,7 +208,10 @@ function flatten(nodes: InjectorTreeNode[], out: InjectorTreeNode[] = []): Injec
 export interface ProviderTarget {
   injectorId: string;
   injectorName: string;
+  /** The token as the page reported it, which the page matches. */
   token: string;
+  /** The name the server gave it (a signal store's declared name), when it differs. */
+  name?: string;
   index: number;
 }
 
@@ -245,12 +248,18 @@ export function findProvider(
     };
   }
   for (const node of candidates) {
-    const index = node.providers.findIndex((p) => p.token.toLowerCase() === want);
+    // A signal store is found by its name or by `SignalStore`, the class name it has.
+    const index = node.providers.findIndex(
+      (p) => p.token.toLowerCase() === want || p.tokenClass?.toLowerCase() === want,
+    );
     if (index >= 0) {
+      const provider = node.providers[index]!;
       return {
         injectorId: node.injector.id,
         injectorName: node.injector.name,
-        token: node.providers[index].token,
+        // The page matches the class name it reported.
+        token: provider.tokenClass ?? provider.token,
+        ...(provider.tokenClass ? { name: provider.token } : {}),
         index,
       };
     }
@@ -275,7 +284,7 @@ export function providerValueText(
   target: ProviderTarget,
   pageId: string,
 ): string {
-  const where = `\`${target.token}\` from ${target.injectorName} (\`${target.injectorId}\`) on page \`${pageId}\``;
+  const where = `\`${target.name ?? target.token}\` from ${target.injectorName} (\`${target.injectorId}\`) on page \`${pageId}\``;
   if (!result.ok) return untrusted(`Could not read ${where}. ${result.error}`);
   const json = (value: unknown) => {
     try {
@@ -313,4 +322,4 @@ export function providerValueText(
 }
 
 export const READ_PROVIDER_VALUE_DESCRIPTION =
-  'Read the current value of a provider an injector on the running page already created: its own fields, first level only (signals and resources unwrapped, methods left out). Nothing is created: only an instance the injector already holds is read. Getters never run; secret-looking names are redacted. Pass `token` (class name or InjectionToken description) and, when several injectors provide it, `injector` (id, Root, Platform, `Route: admin`, tag or class). `path` reads deeper, with `depth` (1 to 5) and `limit` (up to 1000). Uses `page` or the most recent page with injectors.';
+  'Read the fields of a provider instance an injector already holds (`token`; `injector` when several provide it). Nothing is created and getters never run. `path`, `depth` and `limit` read deeper. Masked.';

@@ -1,6 +1,6 @@
 import { createHostContext } from 'devframe/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import pangular, { createPangular } from '../devframe.ts';
+import { createPangular } from '../devframe.ts';
 import {
   capacitorState,
   expireCapacitorPages,
@@ -14,7 +14,8 @@ import {
 } from '../rpc/capacitor-tools.ts';
 import { answerText } from './tool-answer.ts';
 
-async function boot(definition = pangular) {
+// The demo project does not depend on @capacitor/core, so the tools are turned on here.
+async function boot(definition = createPangular({ inspectors: { capacitor: true } })) {
   const host = {
     mountStatic: () => {},
     resolveOrigin: () => 'http://localhost',
@@ -176,7 +177,9 @@ describe('list-capacitor-calls', () => {
   });
 
   it("masks a value stored under a key the server's secretNames name, in arguments and result", async () => {
-    const { push, tool } = await boot(createPangular({ redaction: { secretNames: ['voucher'] } }));
+    const { push, tool } = await boot(
+      createPangular({ inspectors: { capacitor: true }, redaction: { secretNames: ['voucher'] } }),
+    );
     await push(
       'push-capacitor',
       report({
@@ -226,7 +229,9 @@ describe('list-capacitor-calls', () => {
   });
 
   it("masks secrets with the server's own redaction, even when the page did not", async () => {
-    const { push, tool } = await boot(createPangular({ redaction: { secretNames: ['voucher'] } }));
+    const { push, tool } = await boot(
+      createPangular({ inspectors: { capacitor: true }, redaction: { secretNames: ['voucher'] } }),
+    );
     await push(
       'push-capacitor',
       report({ calls: [call(1, { args: { voucher: 'SAVE-50', quality: 90 } })] }),
@@ -238,7 +243,7 @@ describe('list-capacitor-calls', () => {
 
   it("keeps each listener's last event, masked again with the server's redaction", async () => {
     const { push, tool, state } = await boot(
-      createPangular({ redaction: { secretNames: ['voucher'] } }),
+      createPangular({ inspectors: { capacitor: true }, redaction: { secretNames: ['voucher'] } }),
     );
     await push(
       'push-capacitor',

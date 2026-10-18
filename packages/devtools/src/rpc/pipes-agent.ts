@@ -1,3 +1,4 @@
+import { defaultPage } from './default-page.ts';
 import { code } from './forms-tools.ts';
 import { callerPage } from './page-scope.ts';
 import { byRecency, unknownPageText } from './pages.ts';
@@ -20,7 +21,7 @@ export function pipePageFor(
   if (page && !pages.has(page)) {
     return { markdown: unknownPageText(page, [...pages.values()], WHAT) };
   }
-  const pageId = page ?? byRecency(pages.values())[0]?.pageId;
+  const pageId = page ?? defaultPage(pages.values())?.pageId;
   const one: PipePages = new Map();
   const report = pageId ? pages.get(pageId) : undefined;
   if (pageId && report) one.set(pageId, report);
@@ -62,19 +63,51 @@ export function pipeRecordRequest(
   }
   if (!pages.size) {
     return {
-      markdown:
+      markdown: refusal(
         'No page reports pipe usage, so there is nothing to record. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser.',
+      ),
     };
   }
   const on = action === 'start';
+  if (!on && !page && ![...pages.values()].some((entry) => entry.instrumented)) {
+    return { markdown: refusal('No page is recording pipe calls, so there is nothing to stop.') };
+  }
   return { request: page ? { pageId: page, on } : { on } };
 }
 
-/** The answer once `request-instrument-pipes` has sent the request. */
-export function pipeRecordText(request: { pageId?: string; on: boolean }, reached: number): string {
-  const where = request.pageId ? `page ${code(request.pageId)}` : `${reached} page(s)`;
+/**
+ * The pages a `record-pipes` request is for: the page it names; else, to
+ * start, the default page; to stop, every page that records.
+ */
+export function pipeRecordTargets(request: { pageId?: string; on: boolean }, pages: PipePages) {
+  if (request.pageId) return [request.pageId];
   if (request.on) {
-    return `Recording pipe calls on ${where}. Use the app, then call pangular:explain-pipe with the pipe name${request.pageId ? ' and the same `page`' : ''} for call counts, the last input, output and caller, and stale-argument checks. Recording wraps each pipe's transform(), so stop it when you are done.`;
+    const page = defaultPage(pages.values());
+    return page ? [page.pageId] : [];
   }
-  return `Recording stopped on ${where}. The calls recorded so far stay until recording starts again.`;
+  return [...pages.values()].filter((entry) => entry.instrumented).map((entry) => entry.pageId);
+}
+
+/**
+ * The answer once the pages confirmed (`done`, by pushing their pipe report
+ * with recording on or off). No page confirming is a refusal.
+ */
+export function pipeRecordText(
+  on: boolean,
+  targets: readonly string[],
+  done: readonly string[],
+): string {
+  const list = (ids: readonly string[]) =>
+    `${ids.length === 1 ? 'page' : 'pages'} ${ids.map(code).join(', ')}`;
+  if (!done.length) {
+    return refusal(
+      `Recording was not ${on ? 'started' : 'stopped'}: ${list(targets)} did not confirm within 3s. The tab may be in the background or closed.`,
+    );
+  }
+  const silent = targets.filter((id) => !done.includes(id));
+  const missing = silent.length ? ` ${list(silent)} did not confirm within 3s.` : '';
+  if (on) {
+    return `Recording pipe calls on ${list(done)}.${missing} Use the app, then call pangular:explain-pipe with the pipe name for call counts, the last input, output and caller, and stale-argument checks. Recording wraps each pipe's transform(), so stop it when you are done.`;
+  }
+  return `Recording stopped on ${list(done)}.${missing} The calls recorded so far stay until recording starts again.`;
 }

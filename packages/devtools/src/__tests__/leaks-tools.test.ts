@@ -233,9 +233,27 @@ describe('the leaks registration', () => {
   it('turns tracking on for one page through the page-side event, and off for every page', async () => {
     const { ctx, call, invoke } = await boot();
     expect(await invoke('track-subscriptions', { action: 'start' })).toMatch(/nothing to track/);
-    await call('push-leaks', report());
+    const off = {
+      retention: true,
+      effects: true,
+      subscriptions: 'off',
+      instances: true,
+      detached: true,
+    } as const;
+    await call('push-leaks', report({ support: off }));
     await call('push-leaks', report({ pageId: 'tab2' }));
-    const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
+    // A page confirms by pushing its report with tracking on or off.
+    const broadcast = vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: {
+      method: string;
+      args: [{ pageId: string; on: boolean }];
+    }) => {
+      if (options.method !== 'pangular:leak-tracking') return;
+      const [{ pageId, on }] = options.args;
+      await call(
+        'push-leaks',
+        report({ pageId, support: { ...off, subscriptions: on ? 'on' : 'off' } }),
+      );
+    }) as never);
     expect(await invoke('track-subscriptions', { action: 'start', page: 'tab1' })).toMatch(
       /Tracking subscriptions on page `tab1`/,
     );
@@ -246,7 +264,9 @@ describe('the leaks registration', () => {
       }),
     );
     broadcast.mockClear();
-    expect(await invoke('track-subscriptions', { action: 'stop' })).toMatch(/every page/);
+    expect(await invoke('track-subscriptions', { action: 'stop' })).toMatch(
+      /Stopped tracking subscriptions on page `tab1`[\s\S]*on page `tab2`/,
+    );
     const args = broadcast.mock.calls.map(([options]) => (options as { args: unknown[] }).args[0]);
     expect(args).toEqual(
       expect.arrayContaining([

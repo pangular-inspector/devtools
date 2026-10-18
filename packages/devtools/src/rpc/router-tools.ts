@@ -1,3 +1,4 @@
+import { defaultPage } from './default-page.ts';
 import type { ActiveRoute, NavigationRecord, RouterSnapshot } from '../router.ts';
 import type { RouteNode } from '../router-config.ts';
 import type { RouterSetup } from '../router-setup.ts';
@@ -449,7 +450,8 @@ export function freshness(page: RouterPage, now: number): string {
 
 export function pickPage(state: RouterState, pageId?: string): RouterPage | undefined {
   if (pageId) return state.pages.find((p) => p.pageId === pageId);
-  return state.pages.find((p) => p.snapshot) ?? state.pages[0];
+  // The default page among those with a router snapshot (see default-page.ts).
+  return defaultPage(state.pages.filter((p) => p.snapshot)) ?? defaultPage(state.pages);
 }
 
 export function otherPages(state: RouterState, page: RouterPage): string {

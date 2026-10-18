@@ -5,12 +5,13 @@ import { truncationText } from './component-tools.ts';
 import { code } from './forms-tools.ts';
 import { callerPage } from './page-scope.ts';
 import { byRecency, unknownPageText } from './pages.ts';
+import { defaultPage } from './default-page.ts';
 
 /** Longest outline the list-components tool returns, in characters. */
 export const OUTLINE_MAX_CHARS = 20_000;
 
 export const LIST_COMPONENTS_DESCRIPTION =
-  'List live component tree as an outline: class name, host tag, instance id, `[routed]` info, directives, directive hosts, hydration status. Filter by text, tag (`<tag>`), or directive (`[dir]`). Limit depth with `depth` (hidden noted as `(+N below)`). Uses most recent page that has a component tree unless `page` names another tab, and names the other tabs. Reports when no component tree has been reported or output is cut at 20,000 chars.';
+  'The live component tree as an outline: class, tag, instance id, routed marker, directives and hydration. Filter by text, `<tag>` or `[dir]`; `depth` limits nesting. Says when no component tree has been reported; cut at 20,000 characters.';
 
 export interface OutlineOptions {
   filter?: string;
@@ -193,7 +194,7 @@ export function componentOutlineText(
 }
 
 const NO_TREE =
-  'No component tree has been reported. This is what a page that has never connected reports, and also what a connected page reports when its components are not readable. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.';
+  'No component tree has been reported. This is what a page that has never connected reports, and also what a connected page reports when its components are not readable. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio MCP server has no page, so there it always answers this.';
 
 /**
  * Answer of the list-components agent tool: the outline of the requested
@@ -210,7 +211,7 @@ export function listComponentsText(
   }
   const page = args.page
     ? all.find((entry) => entry.pageId === args.page)
-    : all.find((entry) => entry.roots.length);
+    : defaultPage(all.filter((entry) => entry.roots.length));
   if (!page || !page.roots.length) return NO_TREE;
   const others = all.filter((entry) => entry.pageId !== page.pageId && entry.roots.length);
   // A page tool answers for its own page only, so it names no other tab.

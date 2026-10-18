@@ -40,12 +40,17 @@ import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
 import { templateLintTool } from './rpc/template-lint-tool.ts';
-import { explainPipeOnPage, pipeRecordRequest, pipeRecordText } from './rpc/pipes-agent.ts';
+import {
+  explainPipeOnPage,
+  pipeRecordRequest,
+  pipeRecordTargets,
+  pipeRecordText,
+} from './rpc/pipes-agent.ts';
 import { createPageOwners, type OwnerBroadcast } from './rpc/page-owners.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
 import { getBuildMeta } from './rpc/build-meta.ts';
 import { createOpenInEditor, defaultLauncher } from './rpc/open-in-editor.ts';
-import { servedAnalogRoot } from './rpc/analog-scan.ts';
+import { isAnalogProject, servedAnalogRoot } from './rpc/analog-scan.ts';
 import { getSignals } from './rpc/get-signals.ts';
 import { SIGNAL_TOOL_MAX, signalGraphText, type InspectSignalsArgs } from './rpc/signal-tools.ts';
 import { createSignalPeeks } from './rpc/signal-peeks.ts';
@@ -160,7 +165,6 @@ import {
   isRouterReport,
   mergeRouterReport,
   noPage,
-  routerActionText,
   routerResourceText,
   touchRouterPage,
   type RouterPage,
@@ -243,6 +247,7 @@ import {
   unknownPageText,
 } from './rpc/pages.ts';
 import { LIVE_RESOURCE_NOTE, liveResourceText } from './rpc/resource-text.ts';
+import { injectorResourceText } from './rpc/injector-resource.ts';
 import { trackHubDocks } from './hub-dock-status.ts';
 import { createHubFeed } from './hub-messages.ts';
 import { PANEL_COMMAND_EVENT, registerHubCommands } from './hub-commands.ts';
@@ -266,6 +271,8 @@ import {
   angularUnavailableText,
   enabledPanelTabs,
   isPageAgentEntry,
+  sharedStateExposed,
+  autoLibraries,
   pangularConfigWarning,
   resolvePangularConfig,
   rpcAllowed,
@@ -306,7 +313,22 @@ import {
 import { MARKDOWN_OUTPUT_SCHEMA } from './rpc/agent-output.ts';
 import { createWaitForTool } from './rpc/wait-for.ts';
 import { guardHandler } from './rpc/tool-input.ts';
-import { refusal } from './rpc/refusal.ts';
+import {
+  createPageOrder,
+  defaultPage,
+  notePageRead,
+  rankPages,
+  setPageOrder,
+} from './rpc/default-page.ts';
+import { namingPageRead } from './rpc/page-read-scope.ts';
+import { routerActionAnswer } from './rpc/router-action-answer.ts';
+import { nameStoreTokens } from './rpc/store-tokens.ts';
+import { notAProjectText, readsSource, refusingTool } from './rpc/project-root.ts';
+import { STATE_READ_BY, stateReadTool } from './rpc/state-read-tool.ts';
+import { createLibraryGate, usedLibraries } from './rpc/library-tools.ts';
+import { createPushAcks } from './rpc/push-acks.ts';
+import { cdRecordAnswer } from './rpc/cd-record-tool.ts';
+import { refusal, refusedAnswer, ToolRefusal } from './rpc/refusal.ts';
 import { ROUTER_ACTIONS, unknownRouterActionText } from './router-actions.ts';
 
 type CapacitorToolArgs = {
@@ -333,6 +355,9 @@ type SetupInfo = DevframeSetupInfo & {
   config?: ResolvedPangularConfig;
   pageTools?: boolean;
   serverPlugins?: readonly PangularServerPlugin[];
+  notAProject?: string;
+  /** Library inspectors the given config leaves to the project (`autoLibraries`). */
+  autoLibraries?: readonly PangularInspector[];
 };
 
 const pangular = defineDevframe({
@@ -357,8 +382,18 @@ const pangular = defineDevframe({
     const limits = config.limits;
     const my = ctx.scope('pangular');
     (ctx.staticConfig as Record<string, unknown>)[PANGULAR_CONFIG_KEY] = config;
+    const rootRefusal = info?.notAProject && notAProjectText(info.notAProject);
     const register: typeof my.rpc.register = (definition) => {
       if (!rpcAllowed(definition.name, config)) return;
+      // A source scan of a folder without an Angular project refuses and names the folder.
+      if (rootRefusal && definition.agent) {
+        definition = {
+          ...definition,
+          handler: () => {
+            throw new ToolRefusal(rootRefusal);
+          },
+        } as typeof definition;
+      }
       const exposed = !definition.agent || agentAllowed({ id: definition.name }, config);
       if (!exposed) return my.rpc.register({ ...definition, agent: undefined });
       const agent = definition.agent && { ...definition.agent, tags: agentTags(definition.name) };
@@ -366,30 +401,57 @@ const pangular = defineDevframe({
     };
     // Agent writes, NG errors and hydration mismatches, posted to the hub's messages.
     const feed = createHubFeed(ctx, config);
+    // The URL of a page, for the line that names it in a tool answer. Set once the reports exist.
+    let pageUrl: (pageId: string) => string | undefined = () => undefined;
+    type AgentToolInput = Parameters<typeof ctx.agent.registerTool>[0];
+    // Analog, Capacitor and TanStack Query tools wait until the app uses the library.
+    const libraryGate = createLibraryGate<AgentToolInput>({
+      auto: info?.autoLibraries ?? autoLibraries(),
+      used: usedLibraries(
+        info?.autoLibraries ?? autoLibraries(),
+        [ctx.cwd, ctx.workspaceRoot],
+        () => isAnalogProject(ctx.cwd),
+      ),
+      reporting: {
+        analog: () => on.analog && analogPages().length > 0,
+        capacitor: () => capacitorPages.size > 0,
+        tanstackQuery: () => (tanstackQuery?.pages().length ?? 0) > 0,
+      },
+      register: (tool) => registerAgentTool(tool),
+    });
     const agent = {
-      registerTool: (tool: Parameters<typeof ctx.agent.registerTool>[0]) => {
-        // The tier and the tags come from the tool's entry in AGENT_ENTRIES, so
-        // the config is the one place that sets them.
-        if (agentExposed(tool))
-          ctx.agent.registerTool(
-            feed.wrapTool({
-              ...tool,
-              safety: agentSafety(tool.id, config),
-              tags: agentTags(tool.id),
-              // Arguments are checked against `inputSchema` before the lease
-              // wakes any page, and refusals go out with `isError`.
-              handler: guardHandler(
-                tool.inputSchema,
-                leased(() => interest, tool.handler),
-              ),
-            }),
-          );
+      registerTool: (tool: AgentToolInput) => {
+        if (agentExposed(tool) && !libraryGate.hold(tool)) registerAgentTool(tool);
       },
       registerResource: (resource: Parameters<typeof ctx.agent.registerResource>[0]) => {
         if (agentExposed(resource))
           ctx.agent.registerResource({ ...resource, read: leased(() => interest, resource.read) });
       },
     };
+    function registerAgentTool(input: AgentToolInput) {
+      const tool = rootRefusal && readsSource(input.id) ? refusingTool(input, rootRefusal) : input;
+      // The tier and the tags come from the tool's entry in AGENT_ENTRIES, so
+      // the config is the one place that sets them.
+      ctx.agent.registerTool(
+        feed.wrapTool({
+          ...tool,
+          safety: agentSafety(tool.id, config),
+          tags: agentTags(tool.id),
+          // Arguments are checked against `inputSchema` before the lease
+          // wakes any page, and refusals go out with `isError`.
+          handler: guardHandler(
+            tool.inputSchema,
+            // A live tool's answer names the page it read.
+            isPageAgentEntry(tool.id)
+              ? namingPageRead(
+                  leased(() => interest, tool.handler),
+                  pageUrl,
+                )
+              : leased(() => interest, tool.handler),
+          ),
+        }),
+      );
+    }
 
     register(getRoutes);
     register(getComponents);
@@ -426,8 +488,14 @@ const pangular = defineDevframe({
     // One connection owns each page id, so one tab (or a stray client) can't
     // overwrite or forget the pages another one reports.
     const owners = createPageOwners(ctx.rpc, liveTtl);
-    const owns = (pageId: unknown): pageId is string =>
-      typeof pageId === 'string' && owners.write(pageId);
+    // The default page of every tool: foreground first, then the newest connection.
+    const pageOrder = createPageOrder(() => visibility.list());
+    setPageOrder(pageOrder.rank);
+    const owns = (pageId: unknown): pageId is string => {
+      if (typeof pageId !== 'string' || !owners.write(pageId)) return false;
+      pageOrder.seen(pageId);
+      return true;
+    };
     // A request is settled only by the page it was sent to, from the connection
     // that owns that page, so another client can't answer for it.
     const answersFor = (target: string | undefined, pageId: unknown) =>
@@ -473,6 +541,7 @@ const pangular = defineDevframe({
     const mayForget = (pageId: unknown): pageId is string => {
       if (typeof pageId !== 'string' || !owners.forget(pageId)) return false;
       interest.forget(pageId);
+      pageOrder.forget(pageId);
       return true;
     };
 
@@ -649,8 +718,7 @@ const pangular = defineDevframe({
         applyInjectorPages();
       },
     );
-    const latestInjectorPage = () =>
-      [...injectorPages.values()].sort((a, b) => b.reportedAt - a.reportedAt)[0];
+    const latestInjectorPage = () => rankPages(injectorPages.values())[0];
     const applyInjectorPages = () =>
       injectorTreeState.mutate((draft) => {
         const latest = latestInjectorPage();
@@ -665,6 +733,9 @@ const pangular = defineDevframe({
       initialValue: { pages: [] } as NgrxState,
     });
     const ngrxPages: NgrxPages = new Map();
+    /** The page an NgRx read tool reads: `page`; else, unless `storeId` names a store, the default page. */
+    const ngrxReadPage = (args: { page?: string; storeId?: string } | undefined) =>
+      args?.page || (args?.storeId ? undefined : defaultPage(ngrxPages.values())?.pageId);
     let ngrxDeclarations: { at: number; list: NgrxDeclaration[] } = { at: 0, list: [] };
     const ngrxNames = () => {
       if (Date.now() - ngrxDeclarations.at > 10_000) {
@@ -764,6 +835,7 @@ const pangular = defineDevframe({
         if (!isPipePageReport(report) || !owns(report.pageId)) return;
         pipeSessions.bind(report.pageId);
         applyPipes(mergePipePageReport(pipePages, report, Date.now(), liveTtl));
+        pipeAcks.notify(report.pageId, report);
       },
     });
 
@@ -781,6 +853,8 @@ const pangular = defineDevframe({
     });
 
     // Shared by the panel's Record calls button and the record-pipes agent tool.
+    // A page confirms a recording request by pushing its pipe report again.
+    const pipeAcks = createPushAcks<PipePageReport>();
     const requestPipeRecording = (message: unknown) => {
       const request = pipeInstrumentRequest(message, pipePages);
       // No page has reported yet: starting now would patch every connected tab.
@@ -993,7 +1067,8 @@ const pangular = defineDevframe({
 
     const defaultPageId = () => {
       const state = routerState.value() as RouterState;
-      return (state.pages.find((p) => p.snapshot) ?? state.pages[0])?.pageId;
+      return (defaultPage(state.pages.filter((p) => p.snapshot)) ?? defaultPage(state.pages))
+        ?.pageId;
     };
 
     const requestRouterAction = (page: string | undefined, request: unknown) => {
@@ -1056,7 +1131,7 @@ const pangular = defineDevframe({
       const state = routerState.value() as RouterState;
       return typeof pageId === 'string'
         ? state.pages.find((p) => p.pageId === pageId)
-        : (state.pages.find((p) => p.snapshot) ?? state.pages[0]);
+        : (defaultPage(state.pages.filter((p) => p.snapshot)) ?? defaultPage(state.pages));
     };
 
     register({
@@ -1337,7 +1412,9 @@ const pangular = defineDevframe({
         for (const id of ids) delete draft.pages[id];
         const ownerId = draft.graph?.pageId;
         if (ownerId && ids.includes(ownerId)) {
-          const latest = [...signalPages.values()].sort((a, b) => b.reportedAt - a.reportedAt)[0];
+          const latest = rankPages(
+            [...signalPages].map(([pageId, entry]) => ({ ...entry, pageId })),
+          )[0];
           draft.graph = latest?.graph ?? null;
         }
       });
@@ -1417,7 +1494,7 @@ const pangular = defineDevframe({
       title: 'List SSR requests',
       outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'Recent document requests that the Angular SSR server answered, traced by `devtools.ssrMiddleware` or `withPangularSsr()`: id, URL, status, render mode read from the HTML (Server, Prerender, Client), render time, how many server HttpClient calls the render made, and whether a connected page reported loading that response. Empty when neither is installed.',
+        'Recent document requests the SSR server answered: id, URL, status, render mode, render time, server HttpClient calls and whether a page loaded the response. Needs ssrMiddleware or withPangularSsr(); empty otherwise.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1434,7 +1511,7 @@ const pangular = defineDevframe({
       id: 'pangular:explain-ssr-request',
       title: 'Explain an SSR request',
       description:
-        'One SSR request from start to finish: status, render mode, render and fetch times, kept response headers, each server HttpClient call, then the browser page that loaded the response with its hydration result and any call the browser made again instead of reading the transfer cache. Picks the request by `id` (from list-ssr-requests), else the newest one for `url`, else the newest one.',
+        "One SSR request end to end (`id`, else newest for `url`, else newest): status, render mode, timings, headers, server HttpClient calls, then the page's hydration and any call it repeated instead of using the transfer cache.",
       inputSchema: {
         type: 'object',
         properties: {
@@ -1458,7 +1535,7 @@ const pangular = defineDevframe({
       title: 'List HTTP calls',
       outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        "The app's HttpClient calls recorded by `withPangular()`, newest first: side (SSR or client), method, URL, status, duration and flags (mocked or faulted by a rule, cancelled, transfer cache hit or skip, the matched rule). Without `page` it lists every reporting tab and the server; with `page` only that tab and the server render that served it. Secrets in URLs, errors, previews and headers are masked; `headers` adds each call's request and response headers. Empty when no page uses the interceptor.",
+        'HttpClient calls recorded by withPangular(), newest first: side (SSR or client), method, URL, status, duration, rule and cache flags, and the response preview (failed calls included). `headers` adds headers. Masked. Empty without the interceptor.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1487,16 +1564,19 @@ const pangular = defineDevframe({
         limit?: number;
         preview?: boolean;
         headers?: boolean;
-      }) => ({
-        markdown: listHttpCallsText(httpSnapshot(), { ...args, page: pageArgument(args) }),
-      }),
+      }) => {
+        const snapshot = httpSnapshot();
+        // Without `page`, the default page and the server render that served it, like every live tool.
+        const page = pageArgument(args) ?? defaultPage(snapshot.pages ?? [])?.pageId;
+        return { markdown: listHttpCallsText(snapshot, { ...args, page }) };
+      },
     });
 
     agent.registerTool({
       id: 'pangular:http-waterfall',
       title: 'Show an HTTP waterfall',
       description:
-        "One page's client HttpClient calls as a waterfall, grouped by navigation (a new group each time the page URL changes), newest navigation first: each call's start offset in its navigation, duration, status and a text bar. With `headers`, each call's request headers (as they reached `withPangular()`) and the response headers the app could read; `Authorization`, cookies, secret-looking names, JWTs and bearer tokens are masked. Empty when no page uses the interceptor.",
+        "One page's client HttpClient calls as a text waterfall, grouped by navigation: start offset, duration and status. `headers` adds request and response headers (masked).",
       inputSchema: {
         type: 'object',
         properties: {
@@ -1521,7 +1601,7 @@ const pangular = defineDevframe({
       title: 'List Capacitor plugin calls',
       outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'List Capacitor plugin calls made by the app, newest first: plugin, method, bridge target (native vs web), arguments, result/error, and duration. Also includes active listeners and event counts. Filter by `plugin`, `failed` calls, or `slowMs`. Calls a web implementation answers are logged only when `@pangular-inspector/devtools/capacitor-hook` loads before @capacitor/core. Arguments, results, and errors are masked for privacy. Empty when no Capacitor app reports.',
+        'Capacitor plugin calls, newest first: plugin, method, native or web target, arguments, result or error and duration, plus listeners. Filter by `plugin`, `failed` or `slowMs`. Masked.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1545,7 +1625,7 @@ const pangular = defineDevframe({
       title: 'List Capacitor plugins',
       outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'The Capacitor environment of the app and its plugins: platform, server URL, whether CapacitorHttp and native logging are on, the WebView user agent, and each plugin with whether it is available on this platform, imported by the app, installed natively, and its native methods. Flags plugins the app imports that are not available (run `npx cap sync`) and native plugins the app does not import. Empty when no Capacitor app reports.',
+        'The Capacitor environment (platform, server URL, CapacitorHttp, user agent) and each plugin: available, imported, installed natively, methods. Flags imported plugins that are missing natively.',
       inputSchema: { type: 'object', properties: { page: PAGE_ARGUMENT } },
       handler: async (args: { page?: string }) => ({
         markdown: capacitorPluginsText(capacitorPages, { page: pageArgument(args) }),
@@ -1587,7 +1667,7 @@ const pangular = defineDevframe({
       title: 'List HTTP mock rules',
       outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'The HTTP fault and mock rules the panel or an agent set, in match order: id, on or off, method, URL pattern, whether it applies to browser calls, SSR calls or both, and its effect (fail with a status, answer with a status and mock body, delay). Rules apply to every connected tab and to the server. Patterns and bodies are masked like recorded calls. Empty when no rule is set.',
+        'The HTTP fault and mock rules, in match order: id, on or off, method, URL pattern, browser or SSR scope and effect. Empty when no rule is set.',
       inputSchema: { type: 'object', properties: {} },
       handler: async () => ({
         markdown: httpRulesText(registry.rules ?? [], config.actions.http),
@@ -1598,7 +1678,7 @@ const pangular = defineDevframe({
       id: 'pangular:set-http-rule',
       title: 'Set an HTTP mock rule',
       description:
-        "Adds an HTTP fault or mock rule, or replaces the rule with `id`, the same way the panel's Fault injection form does (development only). `pattern` plus at least one of `status`, `delayMs` or `body`. The rule applies to every connected tab right away and to SSR on the next page load. Returns the saved rule list. Needs the HTTP write action (actions.http).",
+        'Add or replace (`id`) an HTTP fault or mock rule (dev only): `pattern` plus `status`, `delayMs` or `body`. Applies to every tab now and to SSR on the next load. Needs actions.http.',
       inputSchema: { type: 'object', properties: ruleInput, required: ['pattern'] },
       handler: async (args: SetHttpRuleArgs) => {
         const rules = registry.rules ?? [];
@@ -1627,7 +1707,7 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:clear-recordings',
       title: 'Clear recordings',
-      description: `Clears recorded HTTP calls, router navigations, or Analog server calls between reproduction runs (development only). \`target\` is one of ${clearTargetList}: only the recordings whose inspector, agent tools and action are turned on. An optional \`page\` clears only the navigations of that specific page.`,
+      description: `Clear recorded HTTP calls, router navigations or Analog server calls between runs (\`target\`: ${clearTargetList}). \`page\` clears one page's navigations only.`,
       inputSchema: {
         type: 'object',
         required: ['target'],
@@ -1979,6 +2059,8 @@ const pangular = defineDevframe({
       cdState.mutate((draft) => {
         draft.pages = Object.fromEntries(cdPages);
       });
+    // The pages confirm a recording request by pushing their recording again.
+    const cdAcks = createPushAcks<CdPage>();
     const requestCdRecord = (message: { pageId?: unknown; on?: unknown; clear?: unknown }) => {
       const pageId = typeof message?.pageId === 'string' ? message.pageId.slice(0, 50) : undefined;
       const on = typeof message?.on === 'boolean' ? message.on : undefined;
@@ -2009,6 +2091,7 @@ const pangular = defineDevframe({
         cdPages.set(page.pageId, page);
         cdSeen(page.pageId);
         applyCd();
+        cdAcks.notify(page.pageId, page);
         return true;
       }),
     });
@@ -2303,7 +2386,7 @@ const pangular = defineDevframe({
       id: 'pangular:watch-signal',
       title: 'Watch a signal',
       description:
-        'Watch a signal on the running page and toggle write stack recording. Watched signals log changes to the console; pangular:inspect-signals includes them in `watch`. When write stacks are enabled, exact history entries include the top app call frames. Pass `node` (id or label) to watch, `watch: false` to unwatch, or `stacks: true|false` to toggle stack traces. Resets on reload. Uses `page` or the most recent page with a signal graph.',
+        'Watch a signal (`node`, id or label) so its changes log to the console and show in inspect-signals, or unwatch with `watch: false`; `stacks` toggles write stacks. Resets on reload.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -2436,7 +2519,7 @@ const pangular = defineDevframe({
         } | null;
         const pageId = report?.pageId;
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return false;
-        if (!owners.write(pageId)) return false;
+        if (!owns(pageId)) return false;
         const zone = ZONE_MODES.find((mode) => mode === report?.zone);
         const tree = sanitizeInjectorTree(report?.roots, report?.environment);
         const names = frameworkNames.current();
@@ -2448,7 +2531,9 @@ const pangular = defineDevframe({
           ...(zone ? { zone } : {}),
           reportedAt: Date.now(),
         };
-        injectorPages.set(pageId, withFramework(page, names ?? new Set()));
+        // Signal stores get the names the NgRx tools use (rpc/store-tokens.ts).
+        const named = on.ngrx ? nameStoreTokens(page, ngrxNames()) : page;
+        injectorPages.set(pageId, withFramework(named, names ?? new Set()));
         cdSeen(pageId);
         applyInjectorPages();
         return true;
@@ -2482,7 +2567,7 @@ const pangular = defineDevframe({
     // The value of a provider an injector already created: the Injectors view and read-provider-value.
     const providerValues = createProviderValues({
       pages: () => injectorPages.values(),
-      latest: () => latestInjectorPage(),
+      latest: () => defaultPage(injectorPages.values()),
       broadcast: (method, message) =>
         void my.rpc.broadcast({ method, args: [message], optional: true }),
       answersFor,
@@ -2523,6 +2608,7 @@ const pangular = defineDevframe({
     });
 
     // The URL and title of each page, from its router, HTTP or component report.
+    pageUrl = (pageId) => livePageDetails().get(pageId)?.url;
     const livePageDetails = () =>
       pageDetails({
         router: [...routerPages.values()].map((page) => ({
@@ -2573,7 +2659,7 @@ const pangular = defineDevframe({
               : 'No page reports NgRx state. Open the app in a browser, or pass the page id.',
           });
         }
-        const pageId = typeof page === 'string' ? page : pages[0].pageId;
+        const pageId = typeof page === 'string' ? page : defaultPage(pages)!.pageId;
         const requestId = `n${++ngrxSeq}`;
         const timer = setTimeout(() => {
           pendingNgrx.delete(requestId);
@@ -2631,7 +2717,7 @@ const pangular = defineDevframe({
       id: 'pangular:component-tree',
       name: 'Angular Component Tree',
       description:
-        'Live component instances per page as JSON: roots has rendered instances (id, name, tag, directives, hydration), directive-only hosts, counts, and detail for selected instance (inputs, outputs, properties, dependencies, source location). Empty when no page is connected. ' +
+        'Live component instances per page as JSON: rendered instances, directive hosts, counts and the selected instance detail. Empty when no page is connected. ' +
         LIVE_RESOURCE_NOTE,
       mimeType: 'application/json',
       read: () => ({
@@ -2646,7 +2732,7 @@ const pangular = defineDevframe({
       id: 'pangular:signal-graph',
       name: 'Angular Signal Graph',
       description:
-        'Live signal dependency graph per connected page: nodes (signal, computed, effect, linkedSignal), producer-to-consumer edges, component/injector contexts, resources, and recent value history. Empty when no page is connected. ' +
+        'Live signal graph per page as JSON: nodes, edges, contexts, resources and value history. Empty when no page is connected. ' +
         LIVE_RESOURCE_NOTE,
       mimeType: 'application/json',
       read: () => ({
@@ -2658,11 +2744,10 @@ const pangular = defineDevframe({
       id: 'pangular:injector-tree',
       name: 'Angular Injector Tree',
       description:
-        'DI injector hierarchy per connected page (element and environment injectors with providers, injected dependencies, and zone change detection mode). Empty when no page is connected. ' +
-        LIVE_RESOURCE_NOTE,
+        'DI injectors per page as JSON: element and environment injectors with providers and dependencies, and the zone mode. Empty when no page is connected. Past 100,000 characters an outline with provider counts.',
       mimeType: 'application/json',
       read: () => ({
-        text: liveResourceText(injectorTreeState.value(), 'pangular:inspect-providers'),
+        text: injectorResourceText(injectorTreeState.value(), Object.fromEntries(injectorPages)),
       }),
     });
 
@@ -2670,7 +2755,7 @@ const pangular = defineDevframe({
       id: 'pangular:ngrx-store',
       name: 'NgRx Store State',
       description:
-        'Live NgRx state per connected page: @ngrx/signals stores (state, computed, methods) and classic @ngrx/store state, plus a change log with per-entry state diffs and action origin (dispatch, effect, reactive). Empty when no page is connected. ' +
+        'Live NgRx state per page as JSON: signal stores, classic Store state and the change log with diffs and action origins. Empty when no page is connected. ' +
         LIVE_RESOURCE_NOTE,
       mimeType: 'application/json',
       read: () => ({
@@ -2738,7 +2823,7 @@ const pangular = defineDevframe({
       },
       handler: async (args: { page?: string; storeId?: string }) => ({
         markdown: withUntrustedPreamble(
-          inspectSignalStoreText(ngrxPages, args?.page, args?.storeId),
+          inspectSignalStoreText(ngrxPages, ngrxReadPage(args), args?.storeId),
         ),
       }),
     });
@@ -2765,14 +2850,14 @@ const pangular = defineDevframe({
       },
       handler: async (args: { page?: string; storeId?: string; since?: number }) => ({
         markdown: withUntrustedPreamble(
-          signalStoreHistoryText(ngrxPages, args?.page, args?.storeId, args?.since),
+          signalStoreHistoryText(ngrxPages, ngrxReadPage(args), args?.storeId, args?.since),
         ),
       }),
     });
 
     // Agent tools
     const noComponentTree = (outcome: string) =>
-      `No component tree has been reported${outcome}. This is what a page that has never connected reports, and also what a connected page reports when its components are not readable. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.`;
+      `No component tree has been reported${outcome}. This is what a page that has never connected reports, and also what a connected page reports when its components are not readable. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio MCP server has no page, so there it always answers this.`;
     const componentPageProperty = {
       type: 'string',
       description:
@@ -2811,7 +2896,7 @@ const pangular = defineDevframe({
       id: 'pangular:highlight',
       title: 'Highlight a component',
       description:
-        'Highlight a component in the running Angular app and select it: the pangular:component-tree resource then carries its live `detail` and pangular:inspect-signals targets it. Pass an instance id from the pangular:component-tree resource (targets that exact instance, e.g. the second card of a list), a class name, a host tag, or any CSS selector. A class name or tag resolves on the most recent page unless `page` names another tab. When it matches several instances, it picks the first and lists the ids of all of them.',
+        'Outline a component in the page and select it, so component-tree and inspect-signals follow it. `selector`: instance id, class, tag or CSS selector; several matches pick the first and list the rest.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -2833,12 +2918,10 @@ const pangular = defineDevframe({
         }
         const pages = page ? all.filter((entry) => entry.pageId === page) : all;
         if (!pages.some((entry) => entry.roots.length)) {
-          return {
-            markdown: noComponentTree(', so nothing was highlighted'),
-          };
+          return refusedAnswer(noComponentTree(', so nothing was highlighted'));
         }
         if (typeof args.selector !== 'string' || !args.selector.trim()) {
-          return { markdown: 'Pass `selector`: an instance id, class name or host tag.' };
+          return { markdown: refusal('Pass `selector`: an instance id, class name or host tag.') };
         }
         const hits = componentHits(args.selector, page);
         const [hit] = hits;
@@ -2870,7 +2953,7 @@ const pangular = defineDevframe({
         return {
           markdown: hit
             ? `Sent a highlight request for \`${hit.node.name}\` (\`<${hit.node.tag}>\`, instance \`${hit.node.id}\` on page \`${hit.pageId}\`) and selected it.${also}${others ? `\n\n${others}` : ''}`
-            : `Sent a highlight request for \`${args.selector}\`${page ? ` to page \`${page}\`` : ''}. It only shows if the selector matches an element on the page. No component instance matched, so the selection did not change.${cut ? ` ${cut}` : ''}`,
+            : `No component instance matches \`${args.selector}\`, so the selection did not change. Sent it as a CSS selector to ${page ? `page \`${page}\`` : `every page (${pages.map((entry) => `\`${entry.pageId}\``).join(', ')})`}; the page outlines it only if an element matches, which the page does not confirm.${cut ? ` ${cut}` : ''}`,
         };
       },
     });
@@ -2880,7 +2963,7 @@ const pangular = defineDevframe({
       title: 'Inspect a component',
       outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'Get live details of a component instance: inputs, outputs, properties (signals unwrapped), listeners, host directives, DI dependencies, change detection, and source location. Pass `selector` (instance id, class name, or host tag); without `page` it searches every page. It selects the instance on its page (the panel follows); several matches answer for the first and list the other ids. Fields carry `edit` (for pangular:set-component-property or pangular:set-signal) or `locked`. `path` reads a nested value without changing the selection. Secrets are redacted; cut past 20,000 characters.',
+        'Live details of a component instance (`selector`: id, class or tag): inputs, outputs, properties, listeners, host directives, DI dependencies, change detection and source. Fields say `edit` or `locked`. `path` reads a nested value. Masked; cut at 20,000 characters.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3027,7 +3110,7 @@ const pangular = defineDevframe({
       id: 'pangular:defer-blocks',
       title: 'List @defer blocks',
       description:
-        'List live `@defer` blocks rendered on the page: owning component, state (placeholder, loading, complete, error), triggers, and incremental hydration status. Flags blocks needing attention (failed loads, stuck placeholders, dehydrated). Lists every page unless `page` names one. Requires an Angular development build with debug APIs enabled.',
+        'Live @defer blocks: owning component, state, triggers and incremental hydration, flagging failed loads, stuck placeholders and dehydrated blocks. Every page unless `page` names one.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3059,7 +3142,7 @@ const pangular = defineDevframe({
       id: 'pangular:for-blocks',
       title: 'List @for blocks',
       description:
-        'List live `@for` blocks rendered on the running page (Angular 22+ dev builds): owning component, item count, `track` expression target (`$index`, item, or expression), and `@empty` block status. Flags empty blocks lacking `@empty`. Lists every page unless `page` names one. Returns up to 50 blocks per page; results cut at 20,000 chars.',
+        'Live @for blocks (Angular 22+ dev builds): owning component, item count, what `track` uses, and @empty status. Every page unless `page` names one. Up to 50 blocks per page.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3130,12 +3213,13 @@ const pangular = defineDevframe({
           };
         }
         if (typeof args.overlay !== 'boolean') {
-          return { markdown: '`overlay` must be true or false.' };
+          return { markdown: refusal('`overlay` must be true or false.') };
         }
         const done = hydrationOverlayText(args.overlay, pages);
-        if (!args.overlay || pages.some((entry) => entry.hydration)) {
-          requestHydrationOverlay({ pageId: page, on: args.overlay });
-        }
+        const sent = args.overlay ? pages.some((entry) => entry.hydration) : pages.length > 0;
+        // Nothing to send the request to is a refusal, not a request sent.
+        if (!sent) return { markdown: refusal(`${done}\n\n${hydrationText(pages)}`) };
+        requestHydrationOverlay({ pageId: page, on: args.overlay });
         return { markdown: `${done}\n\n${hydrationText(pages)}` };
       },
     });
@@ -3143,12 +3227,12 @@ const pangular = defineDevframe({
     // Read-only mode keeps this tool as a read tool, without `record`.
     const cdRecordAllowed = !config.agent.readOnly;
     const cdActionDesc = cdRecordAllowed
-      ? 'Recording is off until started: pass `record: "start"`, use the app, then call again; `stop` keeps it, `clear` empties it. `flash`, `track` (Chrome Performance panel) and `angularProfiling` turn on extra views.'
-      : 'Recording is off until the panel starts it: under agent.readOnly this tool cannot record or turn on views.';
+      ? '`record`: start, stop or clear. `flash`, `track` and `angularProfiling` turn on extra views.'
+      : 'Read-only: the panel starts recordings.';
     agent.registerTool({
       id: 'pangular:change-detection',
       title: 'Record change detection',
-      description: `Inspect change detection cycles from Angular's profiler (Angular 20+, dev build): slowest components, check counts, cycle durations, hooks and outputs, and the mode (zoneless or zone.js). ${cdActionDesc} \`export: "json"\` returns the panel file, \`"trace"\` a Perfetto trace (only counts past 100,000 characters). Uses \`page\` or the page that is recording.`,
+      description: `Change detection cycles from Angular's profiler (Angular 20+ dev builds): slowest components, checks, durations and the zone mode. ${cdActionDesc} \`export\`: json or trace.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -3259,17 +3343,29 @@ const pangular = defineDevframe({
           if (args.record === undefined) return { markdown: views };
         }
         if (args?.record === 'start' || args?.record === 'stop' || args?.record === 'clear') {
-          requestCdRecord({
-            pageId: args.page,
-            on: args.record === 'clear' ? undefined : args.record === 'start',
-            clear: args.record === 'clear',
+          const record = args.record;
+          const cdNow = cdState.value() as CdState;
+          const answer = await cdRecordAnswer({
+            record,
+            page: args.page,
+            connected: rankPages(
+              [...componentPages.values(), ...injectorPages.values(), ...Object.values(cdNow.pages)]
+                .filter((page) => !goneCdPages.has(page.pageId))
+                .filter((page, i, all) => all.findIndex((p) => p.pageId === page.pageId) === i),
+            ).map((page) => page.pageId),
+            recording: Object.values(cdNow.pages)
+              .filter((page) => page.recording && !goneCdPages.has(page.pageId))
+              .map((page) => page.pageId),
+            send: () =>
+              requestCdRecord({
+                pageId: args.page,
+                on: record === 'clear' ? undefined : record === 'start',
+                clear: record === 'clear',
+              }),
+            acks: cdAcks,
           });
-          const next =
-            args.record === 'start'
-              ? 'Recording started on every connected page unless you passed `page`. Use the app, then call this tool again without `record`.'
-              : args.record === 'stop'
-                ? 'Recording stopped. The cycles recorded so far stay available.'
-                : 'Recording cleared.';
+          if ('refused' in answer) return answer;
+          const next = answer.markdown;
           if (noViews) return { markdown: `${noViews}\n\n${next}` };
           return { markdown: views ? `${next}\n\n${views}` : next };
         }
@@ -3289,7 +3385,7 @@ const pangular = defineDevframe({
       id: 'pangular:diagnose-change-detection',
       title: 'Diagnose change detection',
       description:
-        'Why change detection ran and what it wasted, from the recording pangular:change-detection or the panel started (Angular 20+, dev build). Lists what started each cycle (DOM event, signal write, HTTP response, timer, markForCheck, setInput, effect, an app `ApplicationRef.tick()`, or a zone.js tick nothing asked for), components that change only in zone.js ticks, checks that changed nothing, inputs mutated in place or given an equal new reference, and OnPush hints. `limit` sets rows per list. Uses `page` or the page that is recording. Only reads. Empty until a recording ran.',
+        'Why change detection ran and what it wasted, from a recording: what started each cycle, components changed only in zone ticks, checks that changed nothing, mutated or same-value inputs, and OnPush hints. Empty until a recording ran.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3322,7 +3418,7 @@ const pangular = defineDevframe({
       title: 'Inspect signals',
       outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        "Get the signal graph the running page last reported: signal nodes (signal, computed, linkedSignal, effect), dependency edges, resources, and value history. Only signals a template or an effect has read appear. `selector` names a component (tag, class, id), `root` for root service effects, or a route path. The page reports one component graph: for another component, call pangular:highlight first, or you get the graph available. Use `node` for a single node with its direct producers and consumers; `framework: false` excludes Angular's own nodes; `history: false` omits history.",
+        'The signal graph the page last reported: nodes, edges, resources and value history. `selector` names a component, `root` for root effects, or a route; `node` narrows to one node. Only signals something read appear.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3404,7 +3500,7 @@ const pangular = defineDevframe({
         if (!graph && signalSupport) return { markdown: signalSupport };
         if (!graph) {
           return {
-            markdown: `No signal graph available. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.`,
+            markdown: `No signal graph available. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio MCP server has no page, so there it always answers this.`,
           };
         }
         if (graph.unsupported) {
@@ -3442,7 +3538,7 @@ const pangular = defineDevframe({
       title: 'Inspect injectors and providers',
       outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'Get dependency injection injectors from a running page. Without arguments, returns the injector tree (element and environment injectors with providers). Use `selector` to filter by component tag, class, or environment injector (e.g. Root, Platform, Route: admin). Use `token` to find where a service or token is provided and injected. Supports `page` selection across multiple tabs.',
+        'DI injectors on the page: without arguments the injector tree with providers; `selector` narrows to one injector (component, Root, Platform, Route: x); `token` finds where a token is provided and injected.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3472,7 +3568,7 @@ const pangular = defineDevframe({
             markdown: unknownPageText(requested, [...injectorPages.values()], 'an injector tree'),
           };
         }
-        const page = requested ? injectorPages.get(requested) : latestInjectorPage();
+        const page = requested ? injectorPages.get(requested) : defaultPage(injectorPages.values());
         const angular = angularPages.pick(page?.pageId ?? requested);
         const noTree = unsupportedToolText(angular, 'debugApi');
         if (noTree && !page?.roots.length) return { markdown: noTree };
@@ -3500,13 +3596,13 @@ const pangular = defineDevframe({
             error: unknownPageText(requested, [...injectorPages.values()], 'an injector tree'),
           };
         }
-        const page = requested ? injectorPages.get(requested) : latestInjectorPage();
+        const page = requested ? injectorPages.get(requested) : defaultPage(injectorPages.values());
         const angular = angularPages.pick(page?.pageId ?? requested);
         return { page, reduced: angular?.capabilities.injectorProviders === false };
       },
     });
 
-    const noRouter = `No router state has been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.`;
+    const noRouter = `No router state has been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio MCP server has no page, so there it always answers this.`;
     const pageProperty = PAGE_ARGUMENT;
 
     agent.registerTool({
@@ -3514,7 +3610,7 @@ const pangular = defineDevframe({
       title: 'Inspect the active route',
       outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'Inspect current route state on the running page: URL, query params, fragment, document title, in-flight navigation, active route tree (component, params, data, guards, resolvers), and outlet tree. Pass `selector` (component class, tag, or link text) to inspect the route for a specific component or check if a link is active. Secret values are redacted.',
+        "The current route: URL, query params, fragment, title, in-flight navigation, the active route tree and outlets. `selector` (component or link text) checks one component's route or whether a link is active.",
       inputSchema: {
         type: 'object',
         properties: {
@@ -3537,7 +3633,7 @@ const pangular = defineDevframe({
       id: 'pangular:explain-navigation',
       title: 'Explain a navigation',
       description:
-        'Detailed breakdown of recent navigations, newest first: source trigger, redirect chains, redirect loops, phase timing, guards, resolvers, lazy loads, HTTP calls, and cancellation/error explanations with NG0 error details. Filter with `url` or `id`. Set `perf: true` to summarize slowest navigations and preloads.',
+        'Recent navigations, newest first: trigger, redirect chain and loops, phase timing, guards, resolvers, lazy loads, HTTP calls and why one was cancelled or failed. Filter by `url` or `id`; `perf: true` summarizes the slowest.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3577,7 +3673,7 @@ const pangular = defineDevframe({
       title: 'List live routes',
       outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        "The router's live route config (not just the active route): every route with its full path, component or redirect, lazy state, outlet, guards, resolvers, title, the source file it is declared in and an example URL, with the active routes marked. Pass `match` to predict which route a URL matches (or the nearest routes when it matches none), `audit` for the guards protecting each page, or `filter` to narrow by path or component.",
+        "The router's live config: every route with full path, component or redirect, lazy state, guards, resolvers, title and source file, active routes marked. `match` predicts the route for a URL; `audit` lists guards per page.",
       inputSchema: {
         type: 'object',
         properties: {
@@ -3615,7 +3711,7 @@ const pangular = defineDevframe({
       id: 'pangular:lint-routes',
       title: 'Lint routes',
       description:
-        "Checks the live route config for common issues: routes after '**', shadowed param routes, missing pathMatch 'full' on empty paths, runtime redirect loops, deprecated guards, title issues, and security flags (e.g. emails or open redirects). Findings indicate severity (throws, warns, or silent) and remediation steps. Link checks cover the first 100 RouterLinks on the page (property-bound [routerLink] included); the answer says how many more were not checked.",
+        "Checks the live route config: routes after '**', shadowed params, empty paths without pathMatch full, redirect loops, deprecated guards, title and security issues, and the first 100 RouterLinks on the page.",
       inputSchema: { type: 'object', properties: { page: pageProperty } },
       handler: async (args: { page?: string }) => {
         const state = routerState.value() as RouterState;
@@ -3628,7 +3724,7 @@ const pangular = defineDevframe({
       id: 'pangular:router-config',
       title: 'Show the router setup',
       description:
-        'How the router is set up on the running page: provideRouter, forRoot or other, or unknown when the build cannot tell, Angular version, effective options with which are set and which are defaults (onSameUrlNavigation, paramsInheritanceStrategy, urlUpdateStrategy, canceledNavigationResolution, scrolling, initial navigation), enabled features (input binding, view transitions, error handler, preloading strategy, scroller, resources), strategies (location, title, reuse, URL handling), base href, hydration and whether per-guard instrumentation is on.',
+        'How the router is set up: provideRouter or forRoot, effective options (set or default), features, strategies, base href, hydration and whether guard instrumentation is on.',
       inputSchema: { type: 'object', properties: { page: pageProperty } },
       handler: async (args: { page?: string }) => {
         const state = routerState.value() as RouterState;
@@ -3641,7 +3737,7 @@ const pangular = defineDevframe({
       id: 'pangular:export-navigation',
       title: 'Export a navigation',
       description:
-        'A markdown repro for one navigation (default: the latest that did not succeed): Angular version, router options and features, how it started, the full redirect chain with every detail from explain-navigation, any redirect loop it is part of, and the relevant slice of the route config. Secret-looking values stay redacted.',
+        'A markdown repro of one navigation (default: the latest that did not succeed): version, router options, trigger, redirect chain, loops and the relevant route config. Values stay redacted.',
       inputSchema: {
         type: 'object',
         properties: { page: pageProperty, id: { type: 'integer', description: 'Navigation id.' } },
@@ -3681,7 +3777,7 @@ const pangular = defineDevframe({
       id: 'pangular:navigate',
       title: 'Navigate the app',
       description:
-        'Performs router actions in the running app (dev only). Actions: `navigate` (navigates to `url` or `pattern` with `params`), `abort` (cancels in-flight navigation), `replay` (re-runs navigation by `id`), `probe` (runs the matcher without navigating; runs canMatch guards and may load lazy chunks), `instrument` (toggles guard/resolver logging), and `resolve-lazy` (inspects lazy routes). Actions `navigate`, `abort`, `replay`, and `probe` require `actions.router` permission.',
+        'Router actions in the running app (dev only): `navigate` (`url` or `pattern` + `params`), `abort`, `replay` (`id`), `probe` (match without navigating; runs canMatch), `instrument` and `resolve-lazy`. Needs `page` when several tabs report a router; the result names the page.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3725,15 +3821,22 @@ const pangular = defineDevframe({
         if (!config.actions.router && ROUTER_WRITE_ACTIONS.includes(args.action))
           return { markdown: refusal(actionBlockedMessage('router')) };
         const state = routerState.value() as RouterState;
+        const routed = state.pages.filter((p) => p.snapshot);
+        // Every action runs in one page; one the caller did not choose only when it is the only one.
+        if (!args.page && routed.length > 1) {
+          return { markdown: choosePageText(withPageUrls(routed), 'a router') };
+        }
         const target = args.page
           ? state.pages.find((p) => p.pageId === args.page)
-          : state.pages.find((p) => p.snapshot);
+          : defaultPage(routed);
         if (args.page && !target) return { markdown: noPage(args.page, state) };
         if (!target?.snapshot) {
           return {
-            markdown: args.page
-              ? `Page \`${args.page}\` reports no Router, so there is nothing to navigate. The app may not use the Angular router, or it is not a development build.`
-              : noRouter,
+            ...refusedAnswer(
+              args.page
+                ? `Page \`${args.page}\` reports no Router, so there is nothing to navigate. The app may not use the Angular router, or it is not a development build.`
+                : noRouter,
+            ),
           };
         }
         if (args.action === 'resolve-lazy' && typeof args.routeId !== 'string')
@@ -3761,7 +3864,8 @@ const pangular = defineDevframe({
                     ? { action: 'resolve-lazy', id: args.routeId }
                     : { action: args.action };
         const result = await requestRouterAction(target.pageId, request);
-        return { markdown: routerActionText(result) };
+        const navigations = routerPages.get(target.pageId)?.navigations;
+        return { markdown: routerActionAnswer(args.action, target.pageId, result, navigations) };
       },
     });
 
@@ -3769,7 +3873,7 @@ const pangular = defineDevframe({
       id: 'pangular:dispatch-ngrx-action',
       title: 'Dispatch an NgRx action',
       description:
-        'Dispatches an action to the @ngrx/store Store in the running app (dev only) and returns the action log entry with origin and state diff. Pass `type` with optional `payload`, or `seq` to redispatch an action from the log. Without `page` it uses the one page with a Store; with several, it dispatches nothing and lists them. Requires `actions.ngrx` write permission.',
+        'Dispatch an action (`type`, `payload`) or redispatch a logged one (`seq`) to the @ngrx/store Store (dev only); returns the log entry with origin and diff. Needs `page` when several tabs have a Store, and actions.ngrx.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3801,21 +3905,24 @@ const pangular = defineDevframe({
         if (!page && stores.length > 1) {
           return { markdown: choosePageText(withPageUrls(stores), 'an @ngrx/store Store') };
         }
-        const target = page ? ngrxPages.get(page) : stores[0];
+        const target = page ? ngrxPages.get(page) : defaultPage(stores);
         if (!target?.classic) {
           return {
-            markdown: page
-              ? `Page \`${page}\` has no @ngrx/store Store, so there is nothing to dispatch to.`
-              : 'No connected page has an @ngrx/store Store. Open the app in a browser; the Store shows up once provideStore() or StoreModule.forRoot() runs.',
+            markdown: refusal(
+              page
+                ? `Page \`${page}\` has no @ngrx/store Store, so there is nothing to dispatch to.`
+                : 'No connected page has an @ngrx/store Store. Open the app in a browser; the Store shows up once provideStore() or StoreModule.forRoot() runs.',
+            ),
           };
         }
         let request: NgrxRequest;
         if (args.seq !== undefined) {
-          if (!Number.isInteger(args.seq)) return { markdown: 'seq must be a log entry number.' };
+          if (!Number.isInteger(args.seq))
+            return { markdown: refusal('seq must be a log entry number.') };
           request = { type: 'dispatch-again', seq: args.seq as number };
         } else {
           const problem = dispatchProblem(args.type, args.payload);
-          if (problem) return { markdown: problem };
+          if (problem) return { markdown: refusal(problem) };
           request = {
             type: 'dispatch',
             action: args.type as string,
@@ -3830,7 +3937,23 @@ const pangular = defineDevframe({
 
     for (const tool of ngrxHistory.tools) agent.registerTool(tool);
 
-    const noForms = `No forms have been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser, on a page that renders a form. The stdio server has no page attached and only ever reports this.`;
+    const noForms = `No forms have been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser, on a page that renders a form. The stdio MCP server has no page, so there it always answers this.`;
+    /**
+     * `args` with `page` set to the default page (`default-page.ts`) when the
+     * call names neither a page nor a form, so a form tool reads one tab like
+     * every other tool. A `form` names its page itself.
+     */
+    const onDefaultFormPage = <A>(args: A): A => {
+      const record = (args ?? {}) as { page?: unknown; form?: unknown };
+      if (pageArgument(record as Record<string, unknown>)) return args;
+      if (typeof record.form === 'string' && record.form) return args;
+      const forms = (formsState.value() as FormsState).forms;
+      const reporting = [...formPages.values()].filter((page) =>
+        forms.some((form) => form.id.endsWith(`@${page.pageId}`)),
+      );
+      const page = defaultPage(reporting);
+      return page ? ({ ...record, page: page.pageId } as A) : args;
+    };
     const unknownFormPage = (args: unknown) => {
       const page = pageArgument(args as Record<string, unknown> | undefined);
       if (!page || formPages.has(page)) return undefined;
@@ -3847,7 +3970,7 @@ const pangular = defineDevframe({
       title: 'Inspect forms',
       outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'Inspect forms on the running page (Signal Forms, reactive, and template-driven). Without arguments, lists all forms with status and error counts. Pass `form` for the full field tree (values, status, touched/dirty, errors, webMcp tool status). Filter using `path`, `onlyInvalid`, or `includeValues`. Secret values are redacted; large results are truncated past 20,000 characters.',
+        'Forms on the page (Signal Forms, reactive, template-driven). Without `form`: each form with status and error counts. With `form`: the field tree; narrow with `path`, `onlyInvalid`, `includeValues`. Masked; cut at 20,000 characters.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3877,7 +4000,7 @@ const pangular = defineDevframe({
         if (!state.forms.length) return { markdown: noForms };
         const elsewhere = unknownFormPage(args);
         if (elsewhere) return elsewhere;
-        return { markdown: inspectFormsText(state, args) };
+        return { markdown: inspectFormsText(state, onDefaultFormPage(args)) };
       },
     });
 
@@ -3885,7 +4008,7 @@ const pangular = defineDevframe({
       id: 'pangular:explain-form-invalid',
       title: 'Explain invalid forms',
       description:
-        'Explain why forms on the running page are invalid: each failing field with its current value, the validator that failed, its message and whether it was touched, plus fields waiting on async validators and disabled reasons. Without `form` it covers every form that is invalid or waiting on async validation. Lists at most 100 problems per form; pass `path` to explain one group.',
+        'Why forms are invalid: each failing field with value, validator, message and touched state, plus pending async validators and disabled reasons. Without `form`, every invalid form.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3906,7 +4029,7 @@ const pangular = defineDevframe({
         if (!state.forms.length) return { markdown: noForms };
         const elsewhere = unknownFormPage(args);
         if (elsewhere) return elsewhere;
-        return { markdown: explainFormsText(state, args) };
+        return { markdown: explainFormsText(state, onDefaultFormPage(args)) };
       },
     });
 
@@ -3926,7 +4049,7 @@ const pangular = defineDevframe({
         if (!state.forms.length) return { markdown: noForms };
         const elsewhere = unknownFormPage(args);
         if (elsewhere) return elsewhere;
-        return { markdown: fn(state, args ?? ({} as A)) };
+        return { markdown: fn(state, onDefaultFormPage(args ?? ({} as A))) };
       };
     const str = (value: unknown) => (typeof value === 'string' ? value : undefined);
 
@@ -3934,7 +4057,7 @@ const pangular = defineDevframe({
       id: 'pangular:explain-field',
       title: 'Explain a form field',
       description:
-        'Explain one form field: value, flags, every error with where it comes from (validator, template attribute, cross-field rule and which ancestor, async, parse, server/submission, setErrors), why validation is skipped (hidden, disabled, readonly), inherited disabled reasons, uncommitted or debounced input, stale validity, rules and validator names, the binding (accessor or [formField]) and DOM facts (label, visible error text, drift). Pass `selector` instead of form/path to start from a CSS selector.',
+        'One form field in depth (`form` + `path`, or `selector`): value, flags, each error and where it comes from, why validation is skipped, pending input, the binding and DOM facts.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3974,7 +4097,7 @@ const pangular = defineDevframe({
       id: 'pangular:explain-submit',
       title: 'Explain a form submit',
       description:
-        'Explain what submitting a form will do and why it might do nothing: Signal Forms submit() dry-run (action present, ignoreValidators, already submitting), ngSubmit semantics for reactive and template forms, DOM reasons (no submit button, type="button", disabled button, directive not on a <form>, native validation), blocking and pending fields, and recent submits with their outcome (ran, blocked, rejected, threw) and the fields and validators behind it.',
+        'What submitting a form will do and why it might do nothing: submit setup, DOM reasons, blocking and pending fields, and recent submits with their outcome.',
       inputSchema: { type: 'object', properties: { form: formProperty, page: formPageProperty } },
       handler: withForms(explainSubmitText),
     });
@@ -3983,7 +4106,7 @@ const pangular = defineDevframe({
       id: 'pangular:form-payload',
       title: 'Show a form payload',
       description:
-        'Show what a form would send: form.value vs getRawValue() with the disabled fields form.value drops (reactive), or the hidden/disabled/readonly fields Signal Forms keeps in the value without validating them, plus which fields the user changed. Each value is cut at 8,000 characters; pass `path` for one group.',
+        'What a form would send: form.value against getRawValue() and the fields each drops or keeps, plus what the user changed. `path` narrows to one group.',
       inputSchema: {
         type: 'object',
         properties: { form: formProperty, path: pathProperty, page: formPageProperty },
@@ -3995,7 +4118,7 @@ const pangular = defineDevframe({
       id: 'pangular:form-history',
       title: 'Show form history',
       description:
-        'Timeline of form changes: value (with previous value and repeat count), status, submit (ran, blocked, rejected, threw, with the fields and validators that blocked or rejected it), added and removed fields, each tagged with its origin (user, code, devtools, binding, or agent for a WebMCP tool call). Filter by form, path, type, origin or `since` (a marker from an earlier call). Returns the current marker.',
+        'Timeline of form changes (value, status, submit, fields added or removed) tagged with origin (user, code, devtools, binding, agent). Filter by form, path, type, origin or `since`; returns the current marker.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4048,14 +4171,14 @@ const pangular = defineDevframe({
       id: 'pangular:lint-forms',
       title: 'Lint forms',
       description:
-        'Deterministic checks on live forms: stale validity after validator changes, stuck PENDING, unreachable submit, missing submission action, hidden fields still rendered, view out of sync with the model, [disabled] on reactive controls, required-but-unbound fields, NG01xxx setup errors, and model-aware accessibility (missing label, aria-invalid desync, required not exposed, error text not shown or not linked, no focus after invalid submit).',
+        'Checks live forms: stale validity, stuck PENDING, unreachable submit, hidden fields still rendered, view and model out of sync, [disabled] on reactive controls, unbound required fields, NG01xxx errors and accessibility.',
       inputSchema: { type: 'object', properties: { form: formProperty, page: formPageProperty } },
       handler: async (args: { form?: string; page?: string }) => {
         const state = formsState.value() as FormsState;
         if (!state.forms.length && !state.setupErrors?.length) return { markdown: noForms };
         const elsewhere = unknownFormPage(args);
         if (elsewhere) return elsewhere;
-        return { markdown: lintFormsText(state, args ?? {}) };
+        return { markdown: lintFormsText(state, onDefaultFormPage(args ?? {})) };
       },
     });
 
@@ -4063,7 +4186,7 @@ const pangular = defineDevframe({
       id: 'pangular:lint-pipes',
       title: 'Lint pipes',
       description:
-        'Deterministic checks on pipes found in source: an impure pipe used inside an @for block (runs every check, potentially once per row), `| json` left in a template (a debugging aid), a pure pipe whose transform() reads a signal (its memoization only tracks its own arguments, not signals it reads; zero-argument calls on injected services are reported at info level), and a method call piped to `| async`, like `getData() | async` (a new Observable per check makes AsyncPipe resubscribe every time).',
+        'Source checks of pipes: impure pipes inside @for, `| json` left in templates, pure pipes that read signals, and method calls piped to `| async`.',
       inputSchema: { type: 'object', properties: {} },
       handler: async () => ({ markdown: lintPipesText(ctx.cwd) }),
     });
@@ -4072,7 +4195,7 @@ const pangular = defineDevframe({
       id: 'pangular:explain-pipe',
       title: 'Explain a pipe',
       description:
-        'Explain one pipe by name: where it is declared or used, whether it is pure, live instance/call counts, time spent in transform, errors thrown and last input/output when instrumentation is on, an experimental stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage (for `async`), and any lint findings. Use this to answer "why is this pipe slow or stale?"',
+        'One pipe by name: where it is declared and used, purity, live instances and calls, time, errors and last input and output while recording, async misuse and lint findings.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4091,7 +4214,7 @@ const pangular = defineDevframe({
       id: 'pangular:record-pipes',
       title: 'Record pipe calls',
       description:
-        "Start or stop recording pipe calls on the running page, the same switch as Record calls in the Pipes panel. Recording wraps each pipe's transform() to count and time calls, count errors and keep the last input, output and caller, and turns on the experimental stale-argument check; pangular:explain-pipe then shows them. `start` records on the page `page` names, or on the most recent page; `stop` stops that page, or every page without `page`. Calls recorded so far stay after a stop.",
+        'Start or stop recording pipe calls (`action`), like Record calls in the Pipes panel; explain-pipe then shows counts, time, inputs and stale-argument checks. `start` uses the default page; `stop` without `page` stops every page that records.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4103,8 +4226,23 @@ const pangular = defineDevframe({
       handler: async (args: { action?: string; page?: string }) => {
         const asked = pipeRecordRequest(args?.action, pipePages, pageArgument(args));
         if ('markdown' in asked) return asked;
-        const sent = requestPipeRecording(asked.request);
-        return { markdown: pipeRecordText(sent.request, sent.pages.pages) };
+        const { on } = asked.request;
+        const targets = pipeRecordTargets(asked.request, pipePages);
+        // A page already in the asked state pushes nothing new; it counts as confirmed.
+        const already = targets.filter((id) => (pipePages.get(id)?.instrumented ?? false) === on);
+        const pending = targets.filter((id) => !already.includes(id));
+        const confirmed = pipeAcks.wait(pending, (report) => (report.instrumented ?? false) === on);
+        if (pending.length) {
+          requestPipeRecording(targets.length === 1 ? { pageId: targets[0], on } : { on });
+        }
+        const done = new Set([...already, ...(await confirmed)]);
+        return {
+          markdown: pipeRecordText(
+            on,
+            targets,
+            targets.filter((id) => done.has(id)),
+          ),
+        };
       },
     });
 
@@ -4179,6 +4317,21 @@ const pangular = defineDevframe({
       },
     });
 
+    /**
+     * The forms state once the page pushed the events of a write, so the
+     * marker an answer gives includes them. Waits at most 1s.
+     */
+    const formsAfter = async (marker: number, result: Record<string, unknown>) => {
+      // A refused write changed nothing, so there is nothing to wait for.
+      if (!result['ok']) return formsState.value() as FormsState;
+      for (let waited = 0; waited < 1000; waited += 50) {
+        const state = formsState.value() as FormsState;
+        if (latestMarker(state) > marker) return state;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return formsState.value() as FormsState;
+    };
+
     const actionText = (result: Record<string, unknown>, state: FormsState) => {
       const lines = [
         result['ok']
@@ -4209,7 +4362,7 @@ const pangular = defineDevframe({
       id: 'pangular:form-action',
       title: 'Run a form action',
       description:
-        'Perform actions on a live form in dev mode. Actions include `set-value` (modes: code/user), `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`, `touch-all`, `revalidate`, `reset`, `enable`, `disable`, `submit`, `focus`, `focus-first-invalid`, `store-as-global`, `snapshot`, `restore`, and `instrument`. Actions `reset`, `submit`, and `restore` require `confirm: true`. Secret, hidden and readonly fields are never written; disabled reactive fields require `force: true`.',
+        'Act on a live form (dev only): set-value, mark-touched/untouched/dirty/pristine, touch-all, revalidate, reset, enable, disable, submit, focus, focus-first-invalid, store-as-global, snapshot, restore, instrument. reset, submit and restore need `confirm: true`.',
       inputSchema: {
         type: 'object',
         required: ['action', 'form'],
@@ -4247,12 +4400,15 @@ const pangular = defineDevframe({
       },
       handler: async (args: Record<string, unknown>) => {
         const state = formsState.value() as FormsState;
-        if (!state.forms.length) return { markdown: noForms };
+        if (!state.forms.length) return refusedAnswer(noForms);
         const match = resolveForm(state.forms, str(args?.['form']));
         if (typeof match === 'string') return { markdown: match };
         const { form: _form, ...rest } = args;
+        // A form id ends with its page id, after the @.
+        notePageRead(match.id.split('@')[1]);
+        const before = latestMarker(state);
         const result = await requestFormAction({ ...rest, formId: match.id });
-        return { markdown: actionText(result, formsState.value() as FormsState) };
+        return { markdown: actionText(result, await formsAfter(before, result)) };
       },
     });
 
@@ -4260,7 +4416,7 @@ const pangular = defineDevframe({
       id: 'pangular:fill-form',
       title: 'Fill a form',
       description:
-        'Fill several fields at once, by dotted path, through the inputs like a user would (so parsing, dirty and touched run for real). Reports written and skipped fields (secret, hidden, readonly, disabled, missing, or a <select> with no option for the value) and the resulting status. A <select> value must equal the value of one of its options ([ngValue] or value); a multiple select takes an array. Optionally submits afterwards (needs confirm: true).',
+        'Fill several fields by dotted path through the inputs like a user would. Reports written and skipped fields (secret, hidden, readonly, disabled, missing) and the status. `submit` submits afterwards (needs `confirm: true`).',
       inputSchema: {
         type: 'object',
         required: ['form', 'values'],
@@ -4274,9 +4430,11 @@ const pangular = defineDevframe({
       },
       handler: async (args: Record<string, unknown>) => {
         const state = formsState.value() as FormsState;
-        if (!state.forms.length) return { markdown: noForms };
+        if (!state.forms.length) return refusedAnswer(noForms);
         const match = resolveForm(state.forms, str(args?.['form']));
         if (typeof match === 'string') return { markdown: match };
+        notePageRead(match.id.split('@')[1]);
+        const before = latestMarker(state);
         const result = await requestFormAction({
           action: 'fill',
           formId: match.id,
@@ -4285,7 +4443,7 @@ const pangular = defineDevframe({
           submit: args['submit'],
           confirm: args['confirm'],
         });
-        return { markdown: actionText(result, formsState.value() as FormsState) };
+        return { markdown: actionText(result, await formsAfter(before, result)) };
       },
     });
 
@@ -4330,6 +4488,22 @@ const pangular = defineDevframe({
         visibility.list(),
       );
     };
+
+    // Replaces devframe's built-in shared-state reader with a capped one (rpc/state-read-tool.ts).
+    const stateHost = ctx.rpc.sharedState as unknown as {
+      keys(): string[];
+      get(key: string): Promise<{ value(): unknown }>;
+    };
+    const stateRead = stateReadTool({
+      keys: () => stateHost.keys(),
+      value: async (key) => (await stateHost.get(key)).value(),
+      exposed: (key) => sharedStateExposed(key, config),
+      readBy: (key) => STATE_READ_BY[key],
+    });
+    ctx.agent.registerTool({
+      ...stateRead,
+      handler: guardHandler(stateRead.inputSchema, stateRead.handler),
+    });
 
     agent.registerTool({
       id: 'pangular:list-pages',
@@ -4492,6 +4666,12 @@ export interface PangularHostOptions {
   authTokens?: string[];
   /** Server plugins: agent tools and shared state of Pangular plugins (`plugin.ts`). */
   serverPlugins?: readonly PangularServerPlugin[];
+  /**
+   * The folder the server scans, when it holds no Angular project (a wrong
+   * `--root`). Source scan tools then refuse and name it, so the agent sees
+   * why they would come back empty.
+   */
+  notAProject?: string;
 }
 
 export function createPangular(options: PangularConfig = {}, host: PangularHostOptions = {}) {
@@ -4506,6 +4686,8 @@ export function createPangular(options: PangularConfig = {}, host: PangularHostO
         config,
         pageTools: host.pageTools,
         serverPlugins: host.serverPlugins,
+        notAProject: host.notAProject,
+        autoLibraries: autoLibraries(options),
       };
       if (host.authTokens?.length && !registerAuthTokens(ctx, host.authTokens)) {
         console.warn(

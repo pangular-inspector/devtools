@@ -77,15 +77,25 @@ async function stateKeys(call: ReturnType<typeof mcpClient>): Promise<string[]> 
     name: 'devframe_state_read',
     arguments: {},
   });
-  return (JSON.parse(listed.result!.content[0]!.text) as { keys: string[] }).keys;
+  // Pangular's own devframe_state_read answers a markdown table, a key per row.
+  const text = JSON.parse(listed.result!.content[0]!.text) as { markdown: string };
+  return [...text.markdown.matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1]!);
 }
 
 describe('sharedStateExposed', () => {
   it('follows agent.tools for each inspector key', () => {
-    const config = resolvePangularConfig({ agent: { tools: { forms: false } } });
-    expect(sharedStateExposed('pangular:forms', config)).toBe(false);
-    expect(sharedStateExposed('pangular:router', config)).toBe(true);
+    const config = resolvePangularConfig({ agent: { tools: { http: false } } });
+    expect(sharedStateExposed('pangular:http', config)).toBe(false);
+    expect(sharedStateExposed('pangular:errors', config)).toBe(true);
     expect(sharedStateExposed('pangular:page-visibility', config)).toBe(true);
+  });
+
+  it('hides the keys a resource serves, routes, and devframe keys', () => {
+    const config = resolvePangularConfig();
+    for (const key of ['forms', 'router', 'component-tree', 'injector-tree', 'routes']) {
+      expect(sharedStateExposed(`pangular:${key}`, config), key).toBe(false);
+    }
+    expect(sharedStateExposed('devframe:user-settings', config)).toBe(false);
   });
 
   it('hides the keys of an inspector that is off', () => {
@@ -108,7 +118,7 @@ describe('sharedStateExposed', () => {
 });
 
 describe('pangularMcp', () => {
-  const config = resolvePangularConfig({ agent: { tools: { forms: false } } });
+  const config = resolvePangularConfig({ agent: { tools: { http: false } } });
 
   it('keeps the route off when the setting is false', () => {
     expect(pangularMcp(false, config)).toBe(false);
@@ -122,19 +132,19 @@ describe('pangularMcp', () => {
     const own = pangularMcp({ authorization: 'secret', path: '__agents' }, config);
     expect(own).toMatchObject({ authorization: 'secret', path: '__agents' });
     const filter = (own as { exposeSharedState: (key: string) => boolean }).exposeSharedState;
-    expect(filter('pangular:forms')).toBe(false);
-    expect(filter('pangular:router')).toBe(true);
+    expect(filter('pangular:http')).toBe(false);
+    expect(filter('pangular:errors')).toBe(true);
   });
 
   it("keeps the caller's instructions and narrows the caller's filter", () => {
     const mcp = pangularMcp(
-      { instructions: 'Own text.', exposeSharedState: (key) => !key.endsWith(':router') },
+      { instructions: 'Own text.', exposeSharedState: (key) => !key.endsWith(':leaks') },
       config,
     ) as { instructions: string; exposeSharedState: (key: string) => boolean };
     expect(mcp.instructions).toBe('Own text.');
-    expect(mcp.exposeSharedState('pangular:router')).toBe(false);
-    expect(mcp.exposeSharedState('pangular:forms')).toBe(false);
-    expect(mcp.exposeSharedState('pangular:http')).toBe(true);
+    expect(mcp.exposeSharedState('pangular:leaks')).toBe(false);
+    expect(mcp.exposeSharedState('pangular:http')).toBe(false);
+    expect(mcp.exposeSharedState('pangular:errors')).toBe(true);
     expect(pangularMcp({ exposeSharedState: false }, config)).toMatchObject({
       exposeSharedState: false,
     });
@@ -164,62 +174,65 @@ describe('Pangular Inspector hub MCP instructions and shared state', () => {
     for (const key of keys) expect(known).toContain(key.replace(/^pangular:/, ''));
   });
 
-  it('hides the forms state from agents with agent.tools.forms off', async () => {
-    const { ctx, call } = await bootHub({ agent: { tools: { forms: false } } });
+  it('hides the HTTP state from agents with agent.tools.http off', async () => {
+    const { ctx, call } = await bootHub({ agent: { tools: { http: false } } });
     // The panel still gets the key.
-    expect(ctx.rpc.sharedState.keys()).toContain('pangular:forms');
+    expect(ctx.rpc.sharedState.keys()).toContain('pangular:http');
 
     const keys = await stateKeys(call);
-    expect(keys).not.toContain('pangular:forms');
-    expect(keys).toContain('pangular:router');
+    expect(keys).not.toContain('pangular:http');
+    expect(keys).toContain('pangular:errors');
 
-    const forms = await call<StateKeys>('tools/call', {
+    const http = await call<StateKeys>('tools/call', {
       name: 'devframe_state_read',
-      arguments: { key: 'pangular:forms' },
+      arguments: { key: 'pangular:http' },
     });
-    expect(forms.error ?? forms.result?.isError).toBeTruthy();
-    const router = await call<StateKeys>('tools/call', {
+    expect(http.error ?? http.result?.isError).toBeTruthy();
+    const errors = await call<StateKeys>('tools/call', {
       name: 'devframe_state_read',
-      arguments: { key: 'pangular:router' },
+      arguments: { key: 'pangular:errors' },
     });
-    expect(router.result?.isError).toBeFalsy();
-    expect(JSON.parse(router.result!.content[0]!.text)).toMatchObject({ key: 'pangular:router' });
+    expect(errors.result?.isError).toBeFalsy();
+    expect(errors.result!.content[0]!.text).toContain('`pangular:errors`');
 
     const uris = (
       await call<{ resources: { uri: string }[] }>('resources/list')
     ).result!.resources.map((resource) => resource.uri);
-    expect(uris).not.toContain(`devframe://state/${encodeURIComponent('pangular:forms')}`);
-    expect(uris).toContain(`devframe://state/${encodeURIComponent('pangular:router')}`);
+    expect(uris).not.toContain(`devframe://state/${encodeURIComponent('pangular:http')}`);
+    expect(uris).toContain(`devframe://state/${encodeURIComponent('pangular:errors')}`);
 
-    const formsResource = await call('resources/read', {
-      uri: `devframe://state/${encodeURIComponent('pangular:forms')}`,
+    const httpResource = await call('resources/read', {
+      uri: `devframe://state/${encodeURIComponent('pangular:http')}`,
     });
-    expect(formsResource.error).toBeDefined();
-    const routerResource = await call<{ contents: unknown[] }>('resources/read', {
-      uri: `devframe://state/${encodeURIComponent('pangular:router')}`,
+    expect(httpResource.error).toBeDefined();
+    const errorsResource = await call<{ contents: unknown[] }>('resources/read', {
+      uri: `devframe://state/${encodeURIComponent('pangular:errors')}`,
     });
-    expect(routerResource.result?.contents).toHaveLength(1);
+    expect(errorsResource.result?.contents).toHaveLength(1);
   });
 
-  it('keeps the forms state readable by default', async () => {
+  it('keeps the HTTP state readable by default, and offers no key a resource serves', async () => {
     const { call } = await bootHub({});
-    expect(await stateKeys(call)).toContain('pangular:forms');
+    const keys = await stateKeys(call);
+    expect(keys).toContain('pangular:http');
+    expect(keys).not.toContain('pangular:forms');
+    expect(keys.some((key) => key.startsWith('devframe:'))).toBe(false);
   });
 
   it('applies to an explicit mcp setting too', async () => {
     const { call } = await bootHub({
       mcp: { authorization: false },
-      agent: { tools: { forms: false } },
+      agent: { tools: { http: false } },
     });
     const init = await call<{ instructions?: string }>('initialize', INITIALIZE);
     expect(init.result?.instructions).toContain('pangular_list-pages');
-    expect(await stateKeys(call)).not.toContain('pangular:forms');
+    expect(await stateKeys(call)).not.toContain('pangular:http');
   });
 });
 
 describe('pangular dev MCP route', () => {
   it('sends the instructions and filters shared state', async () => {
-    const config = resolvePangularConfig({ agent: { tools: { forms: false } } });
+    const config = resolvePangularConfig({ agent: { tools: { http: false } } });
     const server = await createDevServer(createPangular(config), {
       host: '127.0.0.1',
       port: 0,
@@ -231,8 +244,8 @@ describe('pangular dev MCP route', () => {
     const init = await call<{ instructions?: string }>('initialize', INITIALIZE);
     expect(init.result?.instructions).toBe(pangularMcpInstructions(config));
     const keys = await stateKeys(call);
-    expect(keys).not.toContain('pangular:forms');
-    expect(keys).toContain('pangular:router');
+    expect(keys).not.toContain('pangular:http');
+    expect(keys).toContain('pangular:errors');
   });
 });
 

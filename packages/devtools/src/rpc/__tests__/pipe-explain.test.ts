@@ -48,7 +48,7 @@ describe('explainPipeText', () => {
     expect(text).toContain('`PricePipe`');
     const live = liveLine(text);
     expect(live).toContain('no page is connected');
-    expect(live).toContain('stdio server');
+    expect(live).toContain('stdio MCP server');
     expect(live).not.toContain('Record calls');
     expect(live).not.toContain('—');
   });

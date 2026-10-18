@@ -30,6 +30,41 @@ async function boot() {
   return { ctx, push, call, injectorState };
 }
 
+/**
+ * Answers change detection record requests the way the overlay does: each
+ * page it reaches pushes its recording again. `pages` are the tabs that are
+ * open and listening.
+ */
+function answerCdRecords(ctx: Awaited<ReturnType<typeof boot>>['ctx'], pages: string[]) {
+  const push = (name: string, payload: unknown) =>
+    ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
+  const original = ctx.rpc.broadcast.bind(ctx.rpc);
+  vi.spyOn(ctx.rpc, 'broadcast').mockImplementation(((options: {
+    method: string;
+    args: [{ pageId?: string; on?: boolean }];
+  }) => {
+    if (!options.method.endsWith('change-detection-record')) return original(options as never);
+    const [{ pageId, on }] = options.args;
+    for (const id of pages.filter((page) => !pageId || page === pageId)) {
+      setTimeout(
+        () =>
+          void push('push-change-detection', {
+            pageId: id,
+            supported: true,
+            recording: on === true,
+            startedAt: 1,
+            dropped: 0,
+            cycles: [],
+            components: [],
+            hosts: {},
+          }),
+        5,
+      );
+    }
+    return Promise.resolve(undefined);
+  }) as never);
+}
+
 const injectorRoot = (name: string) => ({
   injector: { id: 'inj-1', type: 'element', name, providerCount: 0 },
   providers: [],
@@ -51,7 +86,10 @@ describe('agent tools', () => {
   it('record change detection through the page and report what it pushed', async () => {
     const { push, call } = await boot();
     expect(await call('change-detection', '')).toMatch(/No change detection recording yet/);
-    expect(await call('change-detection', '', { record: 'start' })).toMatch(/Recording started/);
+    // No page is connected, so nothing starts.
+    expect(await call('change-detection', '', { record: 'start' })).toMatch(
+      /^No page reports change detection, so no recording was started/,
+    );
     await push('push-change-detection', {
       pageId: 'p1',
       supported: true,
@@ -69,7 +107,7 @@ describe('agent tools', () => {
   });
 
   it('answer change detection for an unknown page with the connected tabs', async () => {
-    const { push, call } = await boot();
+    const { ctx, push, call } = await boot();
     await push('push-injector-tree', {
       pageId: 'live',
       roots: [injectorRoot('app-root')],
@@ -85,12 +123,12 @@ describe('agent tools', () => {
     expect(recording).toMatch(/^No page `gone` is reporting change detection/);
     expect(recording).not.toMatch(/Recording started/);
     // A connected tab that has not recorded yet can still start a recording.
+    answerCdRecords(ctx, ['live']);
     expect(await call('change-detection', '', { page: 'live', record: 'start' })).toMatch(
-      /Recording started/,
+      /^Recording started on page `live`/,
     );
-    expect(await call('change-detection', '', { page: 'live' })).toContain(
-      'Page `live` has no change detection recording yet.',
-    );
+    // The page confirmed with a recording that has no cycles yet.
+    expect(await call('change-detection', '', { page: 'live' })).toMatch(/^Page `live` /);
   });
 
   it('treat a tab whose connection dropped as unknown to change detection', async () => {
@@ -130,8 +168,9 @@ describe('agent tools', () => {
     // Once it reports again on a new connection, it is known again.
     host.getCurrentRpcSession = () => ({ meta: { id: 3 } });
     await push('ping-injector-tree', 'tab-1');
+    answerCdRecords(ctx, ['tab-1']);
     expect(await call('change-detection', '', { page: 'tab-1', record: 'start' })).toMatch(
-      /Recording started/,
+      /^Recording started on page `tab-1`/,
     );
   });
 
@@ -268,7 +307,9 @@ describe('agent tools', () => {
     await push('push-component-tree', { pageId: 'bad' });
     expect(await call('highlight', 'Card')).toMatch(/instance `c2` on page `p1`/);
     expect(await call('highlight', 'c3')).toMatch(/instance `c3`/);
-    expect(await call('highlight', '.promo')).toMatch(/only shows if the selector matches/);
+    expect(await call('highlight', '.promo')).toMatch(
+      /Sent it as a CSS selector to every page \(`p1`/,
+    );
     await push('forget-component-page', 'p1');
     expect(await call('highlight', 'Card')).toMatch(/no component tree has been reported/i);
   });

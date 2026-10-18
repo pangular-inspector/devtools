@@ -1,3 +1,4 @@
+import { defaultPage, rankPages } from './default-page.ts';
 import * as v from 'valibot';
 import type {
   MutationInfo,
@@ -103,14 +104,14 @@ const NO_DATA =
   'No page reports a TanStack Query `QueryClient`. The overlay finds the client the app provides with `provideTanStackQuery()` once something has injected it. Open the app in a browser with the overlay loaded. The stdio server has no page attached.';
 
 function byRecency(state: QueryState): QueryPage[] {
-  return Object.values(state.pages).sort((a, b) => b.reportedAt - a.reportedAt);
+  return rankPages(Object.values(state.pages));
 }
 
 /** The page `page` names, or the most recent; a string is the answer when there is none. */
 export function queryPageOf(state: QueryState, page?: string): QueryPage | string {
   const pages = byRecency(state);
   if (!pages.length) return NO_DATA;
-  if (!page) return pages[0];
+  if (!page) return defaultPage(pages)!;
   return state.pages[page] ?? unknownPageText(page, pages, 'TanStack Query');
 }
 

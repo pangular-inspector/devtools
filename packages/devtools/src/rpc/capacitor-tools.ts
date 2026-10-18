@@ -11,6 +11,7 @@ import { clip } from '../text.ts';
 import { code } from './forms-tools.ts';
 import { unknownPageText } from './pages.ts';
 import { capped } from './router-tools.ts';
+import { defaultPage, rankPages } from './default-page.ts';
 
 export type { CapacitorCall, CapacitorInfo, CapacitorListener, CapacitorPluginInfo };
 
@@ -419,7 +420,7 @@ function pickPage(
   pageId: string | undefined,
   what: string,
 ): PickedPage | string {
-  const all = [...pages.values()].sort((a, b) => b.reportedAt - a.reportedAt);
+  const all = rankPages(pages.values());
   if (!all.length) return NO_PAGES;
   if (pageId) {
     const page = pages.get(pageId);
@@ -430,7 +431,7 @@ function pickPage(
       what,
     );
   }
-  const page = all.find((entry) => entry.info.bridge) ?? all[0];
+  const page = defaultPage(all.filter((entry) => entry.info.bridge)) ?? defaultPage(all)!;
   const rest = all.filter((entry) => entry !== page);
   const others = rest.length
     ? `Other pages report too: ${rest

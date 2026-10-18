@@ -1,3 +1,4 @@
+import { defaultPage } from './default-page.ts';
 import { createSharedState } from 'devframe/utils/shared-state';
 import {
   MAX_MCP_TOOL_NAME,
@@ -481,7 +482,7 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
     }
     const pages = pluginPages(state(), pluginId);
     const pageId =
-      typeof options.page === 'string' && options.page ? options.page : pages[0]?.pageId;
+      typeof options.page === 'string' && options.page ? options.page : defaultPage(pages)?.pageId;
     const page = pages.find((p) => p.pageId === pageId);
     if (!page) {
       return Promise.resolve({
@@ -565,7 +566,7 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
     title: 'List plugins',
     outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
-      'List the Pangular plugins: the page plugins each connected page runs (id, version, status, which pages) and the server plugins with their agent tools (`pangular:plugin:<plugin>:<tool>`, with their tier). Page plugins are libraries that registered a view with `registerPangularPlugin()`; read one with pangular:inspect-plugin. Plugins whose tools the devtools config turns off (`plugins.<id>.tools: false`) are left out. Empty when no page runs a plugin and no server plugin is set.',
+      'Page plugins each connected page runs (id, version, status) and server plugins with their agent tools. Plugins whose tools the config turns off are left out. Empty when there are none.',
     inputSchema: { type: 'object', properties: {} },
     handler: async () => ({ markdown: listPluginsText(agentState()) }),
   });
@@ -575,7 +576,7 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
     title: 'Inspect a plugin',
     outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
-      "Read one Pangular plugin's view of the running page, the same sections its Plugins tab shows (tables, lists, stats, key and value trees) as markdown, with its status, page actions and agent tools. The values come from the library's plugin code on the page and are masked like other live data. Pass the plugin id (from pangular:list-plugins) as `plugin`. A plugin whose tools the devtools config turns off (`plugins.<id>.tools: false`) reads as not reported.",
+      "One page plugin's view of the page (`plugin` from list-plugins): its tables, lists, stats and trees as markdown, with its status, actions and tools. Values are masked.",
     inputSchema: {
       type: 'object',
       required: ['plugin'],
@@ -619,7 +620,7 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
       pages: () => pluginPages(state(), plugin.id),
       page: (pageId) => {
         const pages = pluginPages(state(), plugin.id);
-        return pageId ? pages.find((page) => page.pageId === pageId) : pages[0];
+        return pageId ? pages.find((page) => page.pageId === pageId) : defaultPage(pages);
       },
       state: {
         get: () => pluginState['value'](),

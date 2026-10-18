@@ -605,6 +605,9 @@ class App {
 // ---------------------------------------------------------------------------
 // Valid arguments for each read tool, and the route the page should be on.
 
+/** Tools of a library the demo does not use, which the server lists only for an app that uses it. */
+const LIBRARY_TOOL = /^(analog-|list-capacitor-|list-queries$|inspect-query$|query-action$)/;
+
 const READ_PLAN = [
   // [tool, route, args(ctx)]
   ['list-pages', null, () => ({})],
@@ -887,6 +890,16 @@ async function runHttp(opts, sdk, browser, state) {
     outputSchema: Boolean(tool.outputSchema),
   }));
   log(`${tools.length} tools over HTTP`);
+  report.counts.httpToolListBytes = JSON.stringify(tools).length;
+  log(`tools/list is ${report.counts.httpToolListBytes} bytes`);
+  const libraryListed = tools
+    .map((tool) => short(tool.name))
+    .filter((name) => LIBRARY_TOOL.test(name));
+  check(
+    !libraryListed.length,
+    'http tools/list',
+    `lists tools of libraries the demo does not use: ${libraryListed.join(', ')}`,
+  );
   for (const tool of tools) {
     if (!tool.title && !tool.annotations?.title)
       warning(`http ${short(tool.name)}`, 'tool has no title');
@@ -1027,6 +1040,8 @@ async function runReadPlan(client, app, state, ctx) {
   for (const [name, wanted, buildArgs] of READ_PLAN) {
     const tool = state.tools.get(name);
     if (!tool) {
+      // The demo uses no Analog, Capacitor or TanStack Query, so their tools stay out of the list.
+      if (LIBRARY_TOOL.test(name)) continue;
       failure(`http ${name}`, 'tool is in the harness plan but not in tools/list');
       continue;
     }
@@ -1390,8 +1405,8 @@ async function runActions(state) {
   const act = async (name, args, expect = 'ok') => {
     const tool = tools.get(name);
     if (!tool) {
-      failure(`http ${name}`, 'action tool missing from tools/list');
-      return { markdown: '', isError: true, failures: [] };
+      if (!LIBRARY_TOOL.test(name)) failure(`http ${name}`, 'action tool missing from tools/list');
+      return { markdown: '', isError: true, failures: [], skipped: true };
     }
     const record = await callTool(
       client,
@@ -1462,14 +1477,23 @@ async function runActions(state) {
   await act('navigate', { action: 'instrument', on: true });
   const navs = await read('explain-navigation', { limit: 3 });
   const navId = Number(navs.match(/^- #(\d+)/m)?.[1] ?? 1);
-  r = await act('navigate', { action: 'replay', id: navId });
+  // Replaying the navigation to the current URL is skipped by the router: a no-op, so isError.
+  r = await act('navigate', { action: 'replay', id: navId }, 'any');
+  write(
+    'navigate',
+    'a replay that the router skipped or that ran names its page',
+    r.markdown.includes(`"page": "${state.pageId}"`) &&
+      (r.isError ? /"outcome": "(skipped|cancelled|failed)"/.test(r.markdown) : true),
+    r.markdown.slice(0, 400),
+  );
   await act('navigate', { action: 'abort' }, 'any');
   const routesMd = await read('list-routes', {});
   const lazyId = routesMd.match(/`(r?\d+|[\w-]*examples[\w-]*)`[^\n]*(?:lazy|not loaded)/i)?.[1];
   r = await act(
     'navigate',
     { action: 'resolve-lazy', routeId: lazyId ?? 'examples' },
-    lazyId ? 'ok' : 'any',
+    // A name that is not a route id is refused by the page.
+    lazyId && /^r?\d+(\.\d+)*$/.test(lazyId) ? 'ok' : 'any',
   );
   state.resolveLazyRouteId = lazyId;
   await act('navigate', { action: 'navigate', url: 'https://example.com/' }, 'refusal');
@@ -2249,9 +2273,14 @@ async function runStdio(sdk, state, config) {
     const tools = await listAll(client, 'listTools', 'tools');
     report.counts.stdioTools = tools.length;
     const names = new Set(tools.map((tool) => short(tool.name)));
+    // The repository is no Analog app, so the Analog source tools stay out (library tools).
     const expected = Object.entries(config.AGENT_ENTRIES)
       .filter(([, entry]) => entry.kind !== 'resource' && !entry.page)
-      .map(([name]) => name);
+      .map(([name]) => name)
+      .filter((name) => !LIBRARY_TOOL.test(name));
+    for (const name of names)
+      if (LIBRARY_TOOL.test(name))
+        failure('stdio tools/list', `${name} is listed although the project is not an Analog app`);
     report.stdio.tools = [...names];
     for (const name of expected)
       check(names.has(name), 'stdio tools/list', `source tool ${name} is missing over stdio`);
@@ -2266,7 +2295,8 @@ async function runStdio(sdk, state, config) {
       const args = { ...validFor(name, state) };
       delete args.page;
       const record = await callTool(client, 'stdio', tool.name, args, 'valid');
-      checkAnswer(record, tool, 'ok');
+      // No page reaches stdio, so reading a live NgRx entry reads nothing: a refusal.
+      checkAnswer(record, tool, name === 'inspect-ngrx-entry' ? 'error' : 'ok');
     }
     await runNegative(client, 'stdio', tools, state);
     const resources = await listAll(client, 'listResources', 'resources').catch((error) => {
@@ -2872,8 +2902,10 @@ function runDocs(state) {
     'replaceurl',
     'skiplocationchange',
   ]);
+  // Library tools are documented but not listed for the demo, which uses none of the libraries.
   docs.phantomTools = [...documented].filter(
-    (name) => !state.tools.has(name) && !notTools.has(name.toLowerCase()),
+    (name) =>
+      !state.tools.has(name) && !notTools.has(name.toLowerCase()) && !LIBRARY_TOOL.test(name),
   );
   // Argument names: the `| Argument |` table under each `### tool` heading, and
   // the last cell of `| Tool | ... | Arguments |` tables.
@@ -2951,7 +2983,7 @@ function runDocs(state) {
     (name) => !name.startsWith('plugin_') && !tierTable.some((row) => row.name === name),
   );
   docs.tierTableExtra = tierTable
-    .filter((row) => !actionLive.includes(row.name))
+    .filter((row) => !actionLive.includes(row.name) && !LIBRARY_TOOL.test(row.name))
     .map((row) => row.name);
   for (const row of tierTable) {
     const tool = state.tools.get(row.name);

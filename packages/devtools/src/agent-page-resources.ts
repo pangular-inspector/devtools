@@ -3,6 +3,7 @@ import { agentResourceOffered, type ResolvedPangularConfig } from './config.ts';
 import type { NgrxState } from './ngrx-shared.ts';
 import { code, formsResourceText, type FormsState } from './rpc/forms-tools.ts';
 import { LIVE_RESOURCE_NOTE, liveResourceText } from './rpc/resource-text.ts';
+import { injectorResourceText } from './rpc/injector-resource.ts';
 import { routerResourceText, type RouterState } from './rpc/router-tools.ts';
 import type { ComponentPage, InjectorPage } from './types.ts';
 
@@ -48,7 +49,8 @@ const INFO: Record<PageResourceName, PageResourceInfo> = {
   'injector-tree': {
     title: 'Angular Injector Tree of one page',
     what: 'an injector tree',
-    description: `The pangular:injector-tree resource for one page: element and environment injectors with their providers, and the zone mode, as JSON. ${LIVE_RESOURCE_NOTE}`,
+    description:
+      'The pangular:injector-tree resource for one page: element and environment injectors with their providers, and the zone mode, as JSON. Past 100,000 characters an outline with provider counts.',
   },
   'ngrx-store': {
     title: 'NgRx Store State of one page',
@@ -156,7 +158,7 @@ export function pageResourceText(name: PageResourceName, state: unknown, pageId:
     }
     case 'injector-tree': {
       const page = (value['pages'] as Pages<InjectorPage>)[pageId]!;
-      return liveResourceText(
+      return injectorResourceText(
         {
           roots: page.roots,
           environment: page.environment,
@@ -164,7 +166,7 @@ export function pageResourceText(name: PageResourceName, state: unknown, pageId:
           truncated: page.truncated === true,
           zone: page.zone ?? null,
         },
-        'pangular:inspect-providers',
+        { [pageId]: page },
       );
     }
     case 'ngrx-store':

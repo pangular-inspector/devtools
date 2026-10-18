@@ -1,3 +1,4 @@
+import { defaultPage } from './default-page.ts';
 import { createSharedState } from 'devframe/utils/shared-state';
 import { redactMessage, redactUrl } from '../router.ts';
 import type {
@@ -140,7 +141,7 @@ export function startupTimingText(
   if (!pages.length) {
     return 'No page reports its startup timing. Open the app with the overlay loaded. For provider construction times, load `@pangular-inspector/devtools/startup-hook` from the polyfills of the development build.';
   }
-  const page = args.page ? pages.find((p) => p.pageId === args.page) : pages[0];
+  const page = args.page ? pages.find((p) => p.pageId === args.page) : defaultPage(pages);
   if (!page) return unknownPageText(args.page!, pages, 'startup timing');
   const limit =
     typeof args.limit === 'number' && Number.isFinite(args.limit)
@@ -297,7 +298,7 @@ export async function registerStartup(host: StartupHost): Promise<StartupRegistr
     id: 'pangular:startup-timing',
     title: 'Show startup timing',
     description:
-      "How the running app started, from navigation start: DOM content loaded, first contentful paint, when Angular started, the root component's creation (Angular 20+), and the first time `ApplicationRef.isStable` was true (an upper bound unless it was watched), then the slowest providers to construct with own and total time and instance count (`limit`, default 10). Root component and provider timing need `@pangular-inspector/devtools/startup-hook` loaded from the polyfills of an Angular 20+ dev build; the answer says when it is not. Uses `page` or the most recent page. Only reads.",
+      'How the app started: DOM content loaded, first paint, Angular start, root component creation, first stable, and the slowest providers to construct (`limit`). Provider timing needs the startup-hook in an Angular 20+ dev build. Only reads.',
     inputSchema: {
       type: 'object',
       properties: {

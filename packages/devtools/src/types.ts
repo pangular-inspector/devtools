@@ -343,6 +343,17 @@ export interface ProviderInfo {
   importPath?: string[];
   /** Set by the server: the token comes from an installed `@angular/*` package. */
   framework?: boolean;
+  /**
+   * The state keys of an @ngrx/signals store instance the injector holds.
+   * Every `signalStore()` class is named `SignalStore`, so the server names
+   * the store from these, the way the NgRx tools do (`rpc/store-tokens.ts`).
+   */
+  stateKeys?: string[];
+  /**
+   * Set by the server when it renamed `token` (a signal store gets its
+   * declared name): the class name the page reports, which the page matches.
+   */
+  tokenClass?: string;
 }
 
 export interface DependencyInfo {

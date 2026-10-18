@@ -1,6 +1,7 @@
 import type { NgrxPageRecord, NgrxPages } from './ngrx-tools.ts';
 import { moreChangesText, type NgrxLogEntry, type NgrxSignalStoreInfo } from '../ngrx-shared.ts';
 import { unknownPageText } from './pages.ts';
+import { rankPages } from './default-page.ts';
 
 /**
  * `inspectSignalStoreText`/`signalStoreHistoryText` output is capped to this
@@ -11,7 +12,7 @@ import { unknownPageText } from './pages.ts';
 export const NGRX_LIVE_TOOL_MAX = 15_000;
 
 const NO_DATA =
-  'No NgRx state has been reported yet. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser and at least one `signalStore`/`signalState` instance or a classic `@ngrx/store` `Store` discovered. The stdio server has no page attached and only ever reports this.';
+  'No NgRx state has been reported yet. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser and at least one `signalStore`/`signalState` instance or a classic `@ngrx/store` `Store` discovered. The stdio MCP server has no page, so there it always answers this.';
 
 function code(text: string): string {
   return `\`${text}\``;
@@ -23,7 +24,7 @@ function json(value: unknown): string {
 
 /** Pages newest first, optionally narrowed to one `pageId`. */
 function pagesOf(pages: NgrxPages, pageId?: string): NgrxPageRecord[] {
-  const all = [...pages.values()].sort((a, b) => b.reportedAt - a.reportedAt);
+  const all = rankPages(pages.values());
   return pageId ? all.filter((p) => p.pageId === pageId) : all;
 }
 
@@ -240,10 +241,10 @@ export function signalStoreHistoryText(
 }
 
 export const INSPECT_SIGNAL_STORE_DESCRIPTION =
-  'Read the live @ngrx/signals state reported by a connected page: state, computed values, entities, and methods with call count and duration. Pass `storeId` to inspect a specific store; without it, lists all discovered signal stores and classic @ngrx/store state. Supports `page` filtering across tabs. Requires a running app in a connected browser tab.';
+  'Live NgRx state: @ngrx/signals stores (state, computed, entities, methods with call counts) and classic @ngrx/store state. `storeId` picks one store.';
 
 export const SIGNAL_STORE_HISTORY_DESCRIPTION =
-  "Live change log for connected NgRx stores, oldest first: @ngrx/signals state diffs (methods and patchState writes), classic actions and events. A method entry's `durationMs` is its synchronous time, not async work; with watchState, each patch gets an entry timed from the method's start to that specific patch. Changes during an event dispatch carry `causedByEvent` (such as a `withReducer()` case; best effort). Filter by `storeId` and `page` (every page without it). Poll with `since` (a `seq` from a previous call); it needs `page` when several pages connect.";
+  'NgRx change log, oldest first: signal store state diffs, classic actions and events, with timing and causing event. Filter by `storeId`; poll with `since` (a `seq`).';
 
 /**
  * Prefixes an untrusted-data preamble to the live-tool text and caps the body

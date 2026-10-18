@@ -94,6 +94,15 @@ function fakeNg() {
   };
 }
 
+describe('tokenName', () => {
+  it('names a plain object token instead of printing [object Object]', () => {
+    class Marker {}
+    expect(tokenName({})).toBe('(unnamed object token)');
+    expect(tokenName(new Marker())).toBe('Marker instance');
+    expect(tokenName(API_URL)).toBe('API_URL');
+  });
+});
+
 describe('collectInjectorTree', () => {
   it('only lists elements that carry a component or directive', () => {
     const { ng } = fakeNg();
@@ -351,6 +360,38 @@ describe('collectInjectorTree', () => {
     expect(asked).toEqual([Api, Http]);
     collectInjectorTree(ng);
     expect(asked).toEqual([Api, Http]);
+  });
+
+  it('reports the state keys of a signal store an environment injector already made, and never creates one', () => {
+    const { ng } = fakeNg();
+    // Every signalStore() class is named SignalStore in @ngrx/signals; its state sits behind STATE_SOURCE.
+    const STATE_SOURCE = Symbol('STATE_SOURCE');
+    const storeClass = () => class SignalStore {};
+    const Travel = storeClass();
+    const Packing = storeClass();
+    const travel = Object.assign(new Travel(), {
+      [STATE_SOURCE]: { trips: () => [], query: () => '' },
+    });
+    let created = 0;
+    const rootEnv = ng.ɵgetInjectorResolutionPath({ kind: 'node' })[1];
+    rootEnv.records = new Map<unknown, unknown>([
+      [Travel, { factory: () => travel, value: travel }],
+      [Packing, { factory: () => (created++, new Packing()), value: {} }],
+    ]);
+    const providers = ng.ɵgetInjectorProviders;
+    ng.ɵgetInjectorProviders = (inj: any) =>
+      inj === rootEnv
+        ? [
+            { token: Travel, provider: Travel },
+            { token: Packing, provider: Packing },
+          ]
+        : providers(inj);
+    const root = collectInjectorTree(ng).environment[0].children[0];
+    expect(root.providers).toEqual([
+      { token: 'SignalStore', type: 'class', isViewProvider: false, stateKeys: ['trips', 'query'] },
+      { token: 'SignalStore', type: 'class', isViewProvider: false },
+    ]);
+    expect(created).toBe(0);
   });
 
   it('lists what InjectionTokens built by a factory inject, skipping multi and pending ones', () => {

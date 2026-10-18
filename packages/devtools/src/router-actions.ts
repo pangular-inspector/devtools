@@ -666,6 +666,36 @@ function summarize(record: NavigationRecord | undefined): Record<string, unknown
   };
 }
 
+/**
+ * The summary of a navigation, and where a redirect took the app: a guard or
+ * resolver that redirects ends the navigation as `redirected` with its own
+ * URL, and the router starts a new one. That one is waited for (within the
+ * same 10s), so `finalUrl` is where the app ended up, not the URL asked for.
+ */
+async function followRedirect(
+  navigations: NavigationRecord[],
+  record: NavigationRecord | undefined,
+  started: number,
+): Promise<Record<string, unknown>> {
+  const result = summarize(record);
+  if (!record || record.outcome !== 'redirected') return result;
+  const follower = await new Promise<NavigationRecord | undefined>((resolve) => {
+    const tick = () => {
+      const next = navigations.find((n) => n.redirectedFrom === record.id);
+      if (next && next.outcome !== 'pending') return resolve(next);
+      if (Date.now() - started > WAIT_MS) return resolve(next);
+      setTimeout(tick, 50);
+    };
+    tick();
+  });
+  if (!follower) return result;
+  return {
+    ...result,
+    finalUrl: follower.finalUrl ?? follower.url,
+    redirect: { id: follower.id, outcome: follower.outcome },
+  };
+}
+
 function findConfig(router: AnyRecord, id: string): AnyRecord | null {
   let routes = read(() => router['config'] as AnyRecord[], []);
   let found: AnyRecord | null = null;
@@ -856,7 +886,11 @@ export async function runAction(
       promise?.catch?.(() => {});
       const id = navigationIdOf(router);
       const started = Date.now();
-      const result = summarize(await waitForNavigation(navigations, id));
+      const result = await followRedirect(
+        navigations,
+        await waitForNavigation(navigations, id),
+        started,
+      );
       if (request.waitFor !== 'stable') return result;
       const stable = await waitForStable(router, WAIT_MS - (Date.now() - started));
       if (stable === null)

@@ -1,13 +1,14 @@
 import { createHostContext } from 'devframe/node';
 import { describe, expect, it, vi } from 'vitest';
-import pangular, { createPangular } from '../devframe.ts';
+import { createPangular } from '../devframe.ts';
 import type { QueryPageReport, QueryState } from '../query-shared.ts';
 import { ageText, staleQueryPages, toQueryReport } from '../rpc/query-tools.ts';
 import { answerText } from './tool-answer.ts';
 
 const JWT = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
 
-async function boot(definition = pangular) {
+// The demo project does not depend on TanStack Query, so the tools are turned on here.
+async function boot(definition = createPangular({ inspectors: { tanstackQuery: true } })) {
   const host = {
     mountStatic: () => {},
     resolveOrigin: () => 'http://localhost',
@@ -188,7 +189,9 @@ describe('the TanStack Query report on the server', () => {
       /2 pages report TanStack Query/,
     );
 
-    const blocked = await boot(createPangular({ actions: { tanstackQuery: false } }));
+    const blocked = await boot(
+      createPangular({ inspectors: { tanstackQuery: true }, actions: { tanstackQuery: false } }),
+    );
     await blocked.call('push-tanstack-query', report());
     expect(
       await blocked.call('request-tanstack-query', {

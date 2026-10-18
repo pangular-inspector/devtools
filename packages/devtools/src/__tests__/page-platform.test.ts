@@ -127,6 +127,6 @@ describe('list-pages details', () => {
     const text = listPagesText(pages, 121_000);
     expect(text).toContain('| `ab12` | `/` |  | browser | 120s ago (background) | components |');
     expect(text).toContain('| `cd34` | `/trips` |  | browser | 119s ago | components |');
-    expect(text).toMatch(/`\(background\)` is a tab the user switched away from/);
+    expect(text).toMatch(/A `\(background\)` page stops reporting until it is shown again/);
   });
 });

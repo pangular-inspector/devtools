@@ -41,6 +41,7 @@ const ProviderSchema = v.object({
   isViewProvider: v.boolean(),
   multi: v.optional(v.boolean()),
   importPath: v.optional(texts(50)),
+  stateKeys: v.optional(texts(200)),
 });
 
 const DependencySchema = v.object({

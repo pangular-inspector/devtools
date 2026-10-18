@@ -32,7 +32,8 @@ import type { LeaksState } from './leaks-tools.ts';
 import { PAGE_ARGUMENT, byRecency, needsDomText, pageArgument, unknownPageText } from './pages.ts';
 import type { PipeLintFinding } from './pipe-lint.ts';
 import type { RouterState } from './router-tools.ts';
-import { refusal } from './refusal.ts';
+import { refusal, refusedAnswer } from './refusal.ts';
+import { defaultPage } from './default-page.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -272,7 +273,7 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       }
       return { error: unknownPageText(asked, pages, 'live data') };
     }
-    const latest = pages[0];
+    const latest = defaultPage(pages);
     if (!latest) {
       return {
         error:
@@ -377,13 +378,11 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
   host.agent.registerTool({
     id: 'pangular:audit',
     title: 'Audit the running page',
-    description: `One ranked list of what is wrong on the running page: change detection (needs a pangular:change-detection recording), leaks, errors, hydration, route and form lint, failed HTTP calls and transfer cache misses, pipe lint and axe-core violations. Each finding has severity, area, target, why and the tool for detail, then key numbers. ${
+    description: `One ranked list of what is wrong on the page: change detection, leaks, errors, hydration, route and form lint, failed HTTP calls, pipe lint and axe. ${
       host.agentAxe ? '`axe: true` runs a fresh axe pass first. ' : ''
-    }\`session\`: \`before\` saves a baseline, \`after\` compares, \`clear\` drops it; kept per page 30 minutes.${
-      host.agentReadOnly
-        ? " Read-only: uses the panel's last axe pass (`axe: true` is refused); cannot clear or replace a baseline."
-        : ''
-    } Areas turned off are named under Coverage. Uses \`page\` or the most recent page.`,
+    }\`session\` before, after or clear compares runs.${
+      host.agentReadOnly ? " Read-only: uses the panel's last axe pass and keeps baselines." : ''
+    }`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -414,7 +413,11 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
     },
     handler: async (args: AnyRecord) => {
       const page = resolvePage(pageArgument(args));
-      if ('error' in page) return { markdown: page.error };
+      if ('error' in page) {
+        // Running axe or marking a session does nothing without a page, so it is a refusal.
+        const acts = args?.['axe'] === true || args?.['session'] !== undefined;
+        return acts ? refusedAnswer(page.error) : { markdown: page.error };
+      }
       const { pageId } = page;
       const session = args?.['session'] as SessionAction | undefined;
       if (session !== undefined && !MARKS.includes(session)) {

@@ -5,6 +5,7 @@ import { code } from './forms-tools.ts';
 import { callStatus as status, headersText, isFailedCall } from './http-tools.ts';
 import { byRecency, unknownPageText } from './pages.ts';
 import { capped } from './router-tools.ts';
+import { defaultPage } from './default-page.ts';
 
 export interface WaterfallCall {
   call: HttpCall;
@@ -80,7 +81,7 @@ export function httpWaterfallText(
   if (!pages.length) {
     return 'No page reports HTTP calls. Load the app with the overlay and add `withPangular()` to `provideHttpClient()`.';
   }
-  const page = args.page ? pages.find((p) => p.pageId === args.page) : byRecency(pages)[0];
+  const page = args.page ? pages.find((p) => p.pageId === args.page) : defaultPage(pages);
   if (!page) return unknownPageText(args.page!, pages, 'HTTP calls');
   const groups = waterfallGroups(page.calls.map(redactCall));
   if (!groups.length) return `Page ${code(page.pageId)} has made no HttpClient calls yet.`;

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createPangular } from '../../devframe.ts';
 import type { BrowserTool } from '../browser-tools.ts';
 import { PAGE_TOOL_SESSION_TEXT } from '../ngrx-session-tools.ts';
+import { toolAnswer } from '../../__tests__/tool-answer.ts';
 
 /** The data inspectors' tools (queries, Redux stores, NgRx history, waterfall, provider values) as page tools. */
 
@@ -13,7 +14,10 @@ async function boot() {
     getStorageDir: () => '',
   };
   const ctx = await createHostContext({ cwd: process.cwd(), mode: 'dev', host: host as never });
-  await createPangular({ agent: { browserTools: true } }).setup(ctx as never);
+  await createPangular({
+    agent: { browserTools: true },
+    inspectors: { tanstackQuery: true, capacitor: true },
+  }).setup(ctx as never);
   const invoke = ctx.rpc.invokeLocal.bind(ctx.rpc) as unknown as (
     name: string,
     ...args: unknown[]
@@ -109,10 +113,11 @@ describe('data inspector page tools', () => {
       });
       expect(answer.text).toBe(PAGE_TOOL_SESSION_TEXT);
     }
-    const mcp = (await ctx.agent.invoke('pangular:inspect-ngrx-entry', {
-      seq: 1,
-      session: 'session-1',
-    })) as { markdown: string };
+    // Over MCP the session is looked up, and a session no longer kept is a refusal.
+    const mcp = await toolAnswer(
+      ctx.agent.invoke('pangular:inspect-ngrx-entry', { seq: 1, session: 'session-1' }),
+    );
+    expect(mcp.isError).toBe(true);
     expect(mcp.markdown).not.toBe(PAGE_TOOL_SESSION_TEXT);
     expect(mcp.markdown).toMatch(/no longer kept/);
   });

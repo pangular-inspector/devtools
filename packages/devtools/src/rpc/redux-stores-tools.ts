@@ -1,3 +1,4 @@
+import { defaultPage, rankPages } from './default-page.ts';
 import * as v from 'valibot';
 import { moreChangesText } from '../ngrx-shared.ts';
 import type {
@@ -98,7 +99,7 @@ const NO_DATA =
   'No page reports a store through the Redux DevTools API. Stores such as NGXS (`withNgxsReduxDevtoolsPlugin()`), Elf (`devTools()` from `@ngneat/elf-devtools`) and MiniRx (`ReduxDevtoolsExtension`) show up once their devtools integration is on and the page loads `@pangular-inspector/devtools/store-hook` before the app starts. The stdio server has no page attached.';
 
 function newest(state: ReduxStoresState): ReduxStoresPage[] {
-  return Object.values(state.pages).sort((a, b) => b.reportedAt - a.reportedAt);
+  return rankPages(Object.values(state.pages));
 }
 
 function cell(text: string): string {
@@ -131,7 +132,7 @@ export function inspectReduxStoresText(
 ): string {
   const pages = newest(state);
   if (!pages.length) return NO_DATA;
-  const page = args.page ? state.pages[args.page] : pages[0];
+  const page = args.page ? state.pages[args.page] : defaultPage(pages);
   if (!page) return unknownPageText(args.page!, pages, 'Redux DevTools stores');
   const limit =
     typeof args.limit === 'number' && Number.isFinite(args.limit)

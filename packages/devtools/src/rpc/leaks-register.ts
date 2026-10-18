@@ -10,7 +10,10 @@ import {
 import { PAGE_ARGUMENT, pageArgument } from './pages.ts';
 import { trackPageSessions } from './page-sessions.ts';
 import type { PageTtl } from './page-ttl.ts';
-import { refusal } from './refusal.ts';
+import { refusal, refusedAnswer } from './refusal.ts';
+import { defaultPage } from './default-page.ts';
+import { code } from './forms-tools.ts';
+import { createPushAcks } from './push-acks.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -65,6 +68,8 @@ export async function registerLeaks(host: LeaksHost): Promise<LeaksRegistration>
     });
   };
   const sessions = trackPageSessions(host.rpcHost, drop);
+  // A page confirms a tracking request by pushing its report with tracking on or off.
+  const acks = createPushAcks<{ support: { subscriptions?: string } }>();
 
   host.register({
     name: 'push-leaks',
@@ -77,6 +82,7 @@ export async function registerLeaks(host: LeaksHost): Promise<LeaksRegistration>
       shared['mutate']((draft: LeaksState) => {
         draft.pages[report.pageId] = { ...report, reportedAt: Date.now() };
       });
+      acks.notify(report.pageId, report);
       return { known: true };
     },
   });
@@ -128,7 +134,7 @@ export async function registerLeaks(host: LeaksHost): Promise<LeaksRegistration>
     id: 'pangular:find-leaks',
     title: 'Find memory leaks',
     description:
-      'Leak hints for one page (`page`, or the most recent that reports leaks): destroyed components still in memory after 2 navigations and 10 seconds (class, instance id, route, age), detached views apart; subscriptions still open after destroy, only while pangular:track-subscriptions is on; and live effects and subscriptions per component (Angular 20.1+). GC timing is up to the browser, so retained rows are hints to check in the Chrome Memory panel. Dev builds of Angular 16.2+ keep destroyed components in DI debug data, so retention is not judged there. Names and routes are masked.',
+      'Leak hints for one page: destroyed components still in memory, subscriptions open after destroy (while track-subscriptions is on), and live effects and subscriptions per component. GC-dependent, so treat rows as hints.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -153,7 +159,7 @@ export async function registerLeaks(host: LeaksHost): Promise<LeaksRegistration>
     id: 'pangular:track-subscriptions',
     title: 'Track subscriptions',
     description:
-      'Start or stop tracking RxJS subscriptions on the running page (`action`: `start` or `stop`). While on, the overlay wraps `Observable.prototype.subscribe` to record which component made each subscription, so pangular:find-leaks can count open ones per component and flag those still open after destroy; stopping restores `subscribe`. Subscriptions made before tracking started are not seen, and the choice survives a reload. `start` tracks the page `page` names, or the most recent page; `stop` stops that page, or every page without `page`.',
+      'Start or stop tracking RxJS subscriptions (`action`), so find-leaks can count them per component. Wraps `Observable.prototype.subscribe` until stopped; survives a reload. `start` uses the default page; `stop` without `page` stops every page that tracks.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -173,8 +179,40 @@ export async function registerLeaks(host: LeaksHost): Promise<LeaksRegistration>
           markdown: findLeaksText(state(), { page }),
         };
       }
-      const sent = requestTracking({ on: action === 'start', ...(page ? { pageId: page } : {}) });
-      return { markdown: trackSubscriptionsText(sent.request, sent.pages) };
+      const on = action === 'start';
+      const pages = Object.values(state().pages);
+      const targets = page
+        ? [page]
+        : on
+          ? [defaultPage(pages)?.pageId].filter((id): id is string => !!id)
+          : pages.filter((entry) => entry.support.subscriptions === 'on').map((e) => e.pageId);
+      if (!targets.length) {
+        return refusedAnswer(
+          on
+            ? trackSubscriptionsText({ on }, 0)
+            : 'No page is tracking subscriptions, so there is nothing to stop.',
+        );
+      }
+      const wanted = on ? 'on' : 'off';
+      const already = targets.filter((id) => state().pages[id]?.support.subscriptions === wanted);
+      const pending = targets.filter((id) => !already.includes(id));
+      const confirmed = acks.wait(pending, (report) =>
+        on ? report.support.subscriptions !== 'off' : report.support.subscriptions === 'off',
+      );
+      if (pending.length) {
+        requestTracking(targets.length === 1 ? { on, pageId: targets[0] } : { on });
+      }
+      const done = [...already, ...(await confirmed)];
+      const working = done.filter((id) => !on || state().pages[id]?.support.subscriptions === 'on');
+      if (!working.length) {
+        const failed = done.length
+          ? `RxJS could not be loaded on page ${code(done[0]!)}, so subscriptions are not tracked.`
+          : `Page ${targets.map(code).join(', ')} did not confirm within 3s. The tab may be in the background or closed.`;
+        return refusedAnswer(`Tracking was not ${on ? 'started' : 'stopped'}: ${failed}`);
+      }
+      return {
+        markdown: working.map((id) => trackSubscriptionsText({ on, pageId: id }, 1)).join('\n\n'),
+      };
     },
   });
 

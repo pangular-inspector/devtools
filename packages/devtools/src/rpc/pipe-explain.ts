@@ -79,7 +79,7 @@ export function explainPipeText(
 }
 
 const NO_PAGE =
-  '**Live:** no page is connected, so there is no live data. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.';
+  '**Live:** no page is connected, so there is no live data. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio MCP server has no page, so there it always answers this.';
 
 const NOT_IN_USE =
   '**Live:** not in use on the connected page(s). No rendered component uses this pipe right now. Pipe discovery is always on, so this does not depend on recording.';

@@ -10,7 +10,7 @@ export const MAX_TOOL_CHARS = 20_000;
 /** Longest `selector` or `token` taken; answers echo them, so they must stay short. */
 export const MAX_ARG_CHARS = 500;
 
-export const NO_INJECTORS = `No injector data available. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.`;
+export const NO_INJECTORS = `No injector data available. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio MCP server has no page, so there it always answers this.`;
 
 const NARROW = 'pass `selector` or `token` to narrow it down';
 
@@ -107,6 +107,61 @@ function fitLists<T extends unknown[][]>(lists: T, render: (lists: T) => string)
     lists.map((list) => list.slice(0, Math.ceil((list.length * step) / steps))) as T;
   const fitted = render(take(largestFitting(steps, (step) => fits(render(take(step))))));
   return fits(fitted) ? fitted : TOO_LONG;
+}
+
+/** Tokens a `lookupPath` or `parents` entry lists before it only counts the rest. */
+const MAX_PATH_TOKENS = 20;
+
+interface InjectorDetail {
+  providers: unknown[];
+  dependencies: unknown[];
+  lookupPath?: { provides: string[] }[];
+  parents?: { provides: string[] }[];
+}
+
+/**
+ * One matched injector cut to `budget` characters: the tokens each lookup
+ * path entry provides stop at {@link MAX_PATH_TOKENS}, then `providers` and
+ * `dependencies` keep their first items, with `providersTotal` and
+ * `dependenciesTotal` giving the full counts. A large injector such as Root
+ * then still shows, instead of dropping out of the answer whole.
+ */
+export function trimDetail<T extends InjectorDetail>(entry: T, budget: number): T {
+  if (JSON.stringify(entry).length <= budget) return entry;
+  const shortPath = (path: { provides: string[] }[] | undefined) =>
+    path?.map((step) =>
+      step.provides.length > MAX_PATH_TOKENS
+        ? {
+            ...step,
+            provides: step.provides.slice(0, MAX_PATH_TOKENS),
+            providesTotal: step.provides.length,
+          }
+        : step,
+    );
+  const base = {
+    ...entry,
+    ...(entry.lookupPath ? { lookupPath: shortPath(entry.lookupPath) } : {}),
+    ...(entry.parents ? { parents: shortPath(entry.parents) } : {}),
+  } as T;
+  const longest = Math.max(entry.providers.length, entry.dependencies.length);
+  const cut = (kept: number): T => ({
+    ...base,
+    providers: entry.providers.slice(0, kept),
+    dependencies: entry.dependencies.slice(0, kept),
+    ...(entry.providers.length > kept ? { providersTotal: entry.providers.length } : {}),
+    ...(entry.dependencies.length > kept ? { dependenciesTotal: entry.dependencies.length } : {}),
+  });
+  return cut(largestFitting(longest, (kept) => JSON.stringify(cut(kept)).length <= budget));
+}
+
+/** Room for the matched injectors, out of {@link MAX_TOOL_CHARS}, after the text around them. */
+const DETAIL_BUDGET = MAX_TOOL_CHARS - 3000;
+
+/** Each entry cut so that all of them share {@link DETAIL_BUDGET}. */
+function trimDetails<T extends InjectorDetail>(entries: T[], others: number): T[] {
+  if (!entries.length) return entries;
+  const each = Math.floor(DETAIL_BUDGET / (entries.length + others));
+  return entries.map((entry) => trimDetail(entry, Math.max(each, 2000)));
 }
 
 /** ` Showing 3 of 40; narrow ...` when a list lost items to the budget. */
@@ -242,7 +297,10 @@ export function inspectProvidersText(
   const providedBy = want
     ? all.flatMap((node) =>
         node.providers
-          .filter((provider) => provider.token.toLowerCase() === want)
+          .filter(
+            (provider) =>
+              provider.token.toLowerCase() === want || provider.tokenClass?.toLowerCase() === want,
+          )
           .map((provider) => ({
             id: node.injector.id,
             name: node.injector.name,
@@ -284,18 +342,27 @@ export function inspectProvidersText(
     }`;
   }
 
+  // A single large injector is cut inside, so it is never dropped whole.
+  const detailCount = elementDetail.length + environmentDetail.length;
+  const cutInside = (entry: object) => 'providersTotal' in entry || 'dependenciesTotal' in entry;
+  const elementCut = trimDetails(elementDetail, environmentDetail.length);
+  const environmentCut = trimDetails(environmentDetail, elementDetail.length);
+  const insideNote =
+    detailCount && [...elementCut, ...environmentCut].some(cutInside)
+      ? ` Long lists are cut: \`providersTotal\` and \`dependenciesTotal\` give the full counts, and \`providesTotal\` the tokens of a lookup step; pass \`token\` to look for one.`
+      : '';
   return fitLists(
-    [elementDetail, environmentDetail, providedBy, injectedBy],
+    [elementCut, environmentCut, providedBy, injectedBy],
     ([elementShown, environmentShown, providedShown, injectedShown]) => {
       const sections: string[] = [];
       if (matchedElements.length) {
         sections.push(
-          `Element injectors on page \`${pageId}\` matching \`${selector}\` (${matchedElements.length}). \`lookupPath\` lists the injectors Angular asks, in order, with the tokens each one provides.${shown(elementShown, elementDetail)}\n\n${JSON.stringify(elementShown)}`,
+          `Element injectors on page \`${pageId}\` matching \`${selector}\` (${matchedElements.length}). \`lookupPath\` lists the injectors Angular asks, in order, with the tokens each one provides.${shown(elementShown, elementCut)}\n\n${JSON.stringify(elementShown)}`,
         );
       }
       if (matchedEnvironments.length) {
         sections.push(
-          `Environment injectors on page \`${pageId}\` matching \`${selector}\` (${matchedEnvironments.length}). \`dependencies\` lists what the services this injector already created inject (\`from\` is the service, \`providedBy\` the injector that supplied it). \`parents\` lists the environment injectors Angular asks next, nearest first, with the tokens each one provides.${shown(environmentShown, environmentDetail)}\n\n${JSON.stringify(environmentShown)}`,
+          `Environment injectors on page \`${pageId}\` matching \`${selector}\` (${matchedEnvironments.length}). \`dependencies\` lists what the services this injector already created inject (\`from\` is the service, \`providedBy\` the injector that supplied it). \`parents\` lists the environment injectors Angular asks next, nearest first, with the tokens each one provides.${shown(environmentShown, environmentCut)}\n\n${JSON.stringify(environmentShown)}`,
         );
       }
       if (missingToken) sections.push(missingToken);
@@ -304,7 +371,7 @@ export function inspectProvidersText(
           `Token \`${token}\` on page \`${pageId}\`. \`providedBy\` lists the injectors whose own providers include it; \`injectedBy\` lists what injects it${where} and which injector supplied it (\`providedBy\` null means none did).${shown(providedShown, providedBy)}${shown(injectedShown, injectedBy)}\n\n${JSON.stringify({ providedBy: providedShown, injectedBy: injectedShown })}`,
         );
       }
-      return untrusted(`${sections.join('\n\n')}${notes}`);
+      return untrusted(`${sections.join('\n\n')}${insideNote}${notes}`);
     },
   );
 }

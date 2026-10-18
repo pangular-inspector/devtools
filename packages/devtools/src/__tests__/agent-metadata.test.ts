@@ -51,7 +51,12 @@ async function registered(config: PangularConfig = {}, host: PangularHostOptions
       getStorageDir: () => '',
     } as never,
   });
-  await createPangular(config, host).setup(ctx as never);
+  // The demo project uses none of the library inspectors, so they are turned on here.
+  const libraries = { analog: true, capacitor: true, tanstackQuery: true };
+  await createPangular(
+    { ...config, inspectors: { ...libraries, ...config?.inspectors } },
+    host,
+  ).setup(ctx as never);
   const definitions = (ctx.rpc as unknown as { definitions: Map<string, { agent?: unknown }> })
     .definitions;
   const rpc = new Set(

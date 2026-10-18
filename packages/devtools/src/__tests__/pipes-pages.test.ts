@@ -388,7 +388,17 @@ describe('record-pipes agent tool', () => {
     vi.useFakeTimers();
     try {
       const { ctx, invoke, tool } = await boot();
-      const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
+      // Each page confirms by pushing its pipe report with recording on or off.
+      const broadcast = vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: {
+        method: string;
+        args: [{ pageId?: string; on: boolean }];
+      }) => {
+        if (options.method !== 'pangular:instrument-pipes') return;
+        const [{ pageId, on }] = options.args;
+        for (const id of pageId ? [pageId] : ['tab-1', 'tab-2']) {
+          await invoke('push-pipes', { ...page(id), instrumented: on });
+        }
+      }) as never);
       await invoke('push-pipes', page('tab-1'));
       await vi.advanceTimersByTimeAsync(1000);
       await invoke('push-pipes', page('tab-2'));
@@ -402,14 +412,18 @@ describe('record-pipes agent tool', () => {
       expect(await tool('record-pipes', { action: 'stop', page: 'tab-1' })).toMatch(
         /^Recording stopped on page `tab-1`\./,
       );
+      // Only tab-2 still records, so the stop names only it.
       expect(await tool('record-pipes', { action: 'stop' })).toMatch(
-        /^Recording stopped on 2 page\(s\)\./,
+        /^Recording stopped on page `tab-2`\./,
+      );
+      expect(await tool('record-pipes', { action: 'stop' })).toMatch(
+        /^No page is recording pipe calls/,
       );
       expect(recordings(broadcast)).toEqual([
         { pageId: 'tab-2', on: true },
         { pageId: 'tab-1', on: true },
         { pageId: 'tab-1', on: false },
-        { on: false },
+        { pageId: 'tab-2', on: false },
       ]);
     } finally {
       vi.useRealTimers();

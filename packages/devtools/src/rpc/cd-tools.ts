@@ -9,6 +9,7 @@ import { droppedNote } from '../timeline-limits.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
 import { unknownPageText, type ReportingPage } from './pages.ts';
+import { defaultPage } from './default-page.ts';
 
 export interface CdPage extends CdReport {
   reportedAt: number;
@@ -158,7 +159,12 @@ export function cdUnknownPageText(
 export function pickCdPage(state: CdState, pageId?: string): CdPage | undefined {
   const pages = Object.values(state.pages);
   if (pageId) return state.pages[pageId];
-  return pages.find((p) => p.recording) ?? pages.sort((a, b) => b.reportedAt - a.reportedAt)[0];
+  // The default page among the pages that record, else among those with a recording.
+  return (
+    defaultPage(pages.filter((p) => p.recording)) ??
+    defaultPage(pages.filter((p) => p.cycles.length)) ??
+    defaultPage(pages)
+  );
 }
 
 /**

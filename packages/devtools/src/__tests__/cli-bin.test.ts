@@ -76,9 +76,16 @@ async function mcp(args: string[], cwd: string) {
   const tools = (replies.find((reply) => reply.id === 2)?.result?.['tools'] ?? []) as {
     name: string;
   }[];
-  const meta = replies.find((reply) => reply.id === 3)?.result?.['structuredContent'] as
-    { projectName?: string } | undefined;
-  return { ...result, tools: tools.map((tool) => tool.name.replace(/^pangular_/, '')), meta };
+  const metaReply = replies.find((reply) => reply.id === 3)?.result;
+  const meta = metaReply?.['structuredContent'] as { projectName?: string } | undefined;
+  const metaText = ((metaReply?.['content'] as { text?: string }[] | undefined) ?? [])[0]?.text;
+  return {
+    ...result,
+    tools: tools.map((tool) => tool.name.replace(/^pangular_/, '')),
+    meta,
+    metaText,
+    metaRefused: metaReply?.['isError'] === true,
+  };
 }
 
 describe('pangular binary', () => {
@@ -136,9 +143,15 @@ describe('pangular binary', () => {
       join(elsewhere, 'devtools.json'),
       JSON.stringify({ inspectors: { analog: false, pipes: false } }),
     );
-    const { tools, meta, stderr } = await mcp(['--config', 'devtools.json'], elsewhere);
-    expect(meta?.projectName).toBe('unknown');
+    const { tools, metaRefused, metaText, stderr } = await mcp(
+      ['--config', 'devtools.json'],
+      elsewhere,
+    );
     expect(stderr).toContain('source scans find nothing');
+    // The agent never sees stderr, so a source scan refuses and names the folder too.
+    expect(metaRefused).toBe(true);
+    expect(metaText).toContain('no angular.json');
+    expect(metaText).toContain('--root');
     expect(tools.some((tool) => tool.startsWith('analog-'))).toBe(false);
     expect(tools).not.toContain('get-pipes');
     expect(tools).toContain('get-components');

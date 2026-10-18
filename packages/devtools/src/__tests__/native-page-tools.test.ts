@@ -13,11 +13,25 @@ async function boot() {
   const ctx = await createHostContext({ cwd: process.cwd(), mode: 'dev', host: host as never });
   await pangular.setup(ctx as never);
   const sent: { method: string; args: [Record<string, unknown>] }[] = [];
-  vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: (typeof sent)[number]) => {
-    sent.push(options);
-  }) as never);
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
+  vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: (typeof sent)[number]) => {
+    sent.push(options);
+    // The page confirms a record request by pushing its recording.
+    const { pageId, on } = options.args[0] as { pageId?: string; on?: boolean };
+    if (options.method.endsWith('change-detection-record') && pageId && typeof on === 'boolean') {
+      await push('push-change-detection', {
+        pageId,
+        supported: true,
+        recording: on,
+        startedAt: 1,
+        dropped: 0,
+        cycles: [],
+        components: [],
+        hosts: {},
+      });
+    }
+  }) as never);
   const tool = async (id: string, args: Record<string, unknown>) =>
     await answerText(ctx.agent.invoke(`pangular:${id}`, args));
   return { push, tool, sent };

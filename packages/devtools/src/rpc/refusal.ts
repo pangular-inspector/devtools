@@ -23,6 +23,16 @@ export function refusal(text: string): string {
   return text;
 }
 
+/**
+ * A refusal answer whose text other answers share, such as "no page
+ * reports". {@link refusal} marks the text itself, so a read tool that
+ * answers the same text would turn into a refusal too; this marks only
+ * this answer.
+ */
+export function refusedAnswer(text: string): { markdown: string; refused: true } {
+  return { markdown: text, refused: true };
+}
+
 /** Whether `text` was built with {@link refusal}. */
 export function isRefusal(text: unknown): text is string {
   return typeof text === 'string' && refused.has(text);
@@ -35,8 +45,9 @@ export function isRefusal(text: unknown): text is string {
 export function refusalOf(result: unknown): string | undefined {
   if (isRefusal(result)) return result;
   if (!result || typeof result !== 'object') return undefined;
-  const record = result as { markdown?: unknown; mcpContent?: unknown };
+  const record = result as { markdown?: unknown; mcpContent?: unknown; refused?: unknown };
   if (isRefusal(record.markdown)) return record.markdown;
+  if (record.refused === true && typeof record.markdown === 'string') return record.markdown;
   const blocks = record.mcpContent;
   if (Array.isArray(blocks) && blocks.length === 1) {
     const text = (blocks[0] as { text?: unknown } | null)?.text;

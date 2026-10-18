@@ -485,6 +485,33 @@ describe.runIf(angularAtLeast('16.0'))('interceptor', () => {
     expect(call.mocked).toBeUndefined();
   });
 
+  it('keeps the response body of a failing call as its preview, and none for a network error', async () => {
+    const failing =
+      (error: unknown, status: number): HttpHandlerFn =>
+      () =>
+        new Observable<HttpEvent<unknown>>((subscriber) => {
+          subscriber.error(new HttpErrorResponse({ status, error, url: '/api/products' }));
+        });
+    for (const [error, status] of [
+      [{ error: 'Simulated 503 from the demo API' }, 503],
+      ['Bad Request: name is required', 400],
+      [new ProgressEvent('error'), 0],
+    ] as const) {
+      await new Promise<void>((resolve) =>
+        run(new HttpRequest('GET', '/api/products'), failing(error, status)).subscribe({
+          error: () => resolve(),
+        }),
+      );
+    }
+    const [server, invalid, network] = httpRegistry().calls ?? [];
+    expect(server).toMatchObject({
+      status: 503,
+      preview: '{"error":"Simulated 503 from the demo API"}',
+    });
+    expect(invalid).toMatchObject({ status: 400, preview: 'Bad Request: name is required' });
+    expect(network?.preview).toBeUndefined();
+  });
+
   it('tags delayed, mocked and faulted calls apart', async () => {
     vi.useFakeTimers();
     storeRules([

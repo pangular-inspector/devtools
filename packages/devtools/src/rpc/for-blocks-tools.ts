@@ -31,7 +31,7 @@ export function forBlocksText(
   angularOf: (pageId: string) => AngularPageInfo | undefined = () => undefined,
 ): string {
   if (!pages.length) {
-    return 'No component tree has been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.';
+    return 'No component tree has been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio MCP server has no page, so there it always answers this.';
   }
   const cell = (text: string) => text.replace(/\|/g, '\\|');
   const narrow = `${pages.length > 1 ? ' Pass `page` to read one tab.' : ''} ${PANEL}.`;

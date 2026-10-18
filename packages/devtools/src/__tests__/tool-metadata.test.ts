@@ -145,7 +145,7 @@ const TEXT_BEFORE = {
   'pangular_list-components': JSON.stringify(
     {
       markdown:
-        'No component tree has been reported. This is what a page that has never connected reports, and also what a connected page reports when its components are not readable. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.',
+        'No component tree has been reported. This is what a page that has never connected reports, and also what a connected page reports when its components are not readable. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio MCP server has no page, so there it always answers this.',
     },
     null,
     2,
@@ -225,7 +225,7 @@ describe('agent tool output schemas', () => {
         .filter(documented)
         .sort(),
     );
-    expect(withSchema.length).toBeGreaterThan(25);
+    expect(withSchema.length).toBeGreaterThan(20);
     for (const tool of withSchema) expect(tool.outputSchema?.['type'], tool.name).toBe('object');
     // Array answers and image answers carry no structured content, so they advertise no schema.
     for (const name of [

@@ -98,7 +98,7 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
     title: 'List errors',
     outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
-      "Errors the running page hit, grouped by message, most recent first: id, how many times, when last, the Angular error code with a link to its page in Angular's error reference, the message, the owning component (class name and instance id) when it can be found, and where it came from (`handler`: Angular's ErrorHandler, which the overlay wraps without changing it; `window`: an uncaught error; `promise`: an unhandled rejection). Messages and stacks are masked like other live values and capped (100 groups per page). Empty when the page had no error since it loaded or no page is connected.",
+      'Errors the page hit, grouped by message, newest first: id, count, last seen, Angular code with reference link, owning component and source (ErrorHandler, window or promise). Masked; 100 groups per page. Empty when there were none.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -123,7 +123,7 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
     id: 'pangular:explain-error',
     title: 'Explain an error',
     description:
-      "Explain an error from pangular:list-errors (`id`) or an Angular code (`code`, such as NG0100). With `id`: message, count, sources, owning component id, first stack and Angular's reference entry. Explainers: NG0100 gives the binding, old and new value (hidden for secret-looking names) and signals written just before; NG0500 to NG0503 diff the expected server HTML with the client DOM; NG0201 gives the missing token and path for pangular:explain-injection. With `code`: the reference entry and matching errors on connected pages. Without `page`, `id` is looked up on every page.",
+      "Explain an error from list-errors (`id`) or an Angular code (`code`, e.g. NG0100): message, stack, owning component and Angular's reference entry, with explainers for NG0100, NG0201 and NG0500-NG0503.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -146,7 +146,7 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
     title: 'List console messages',
     outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
-      'Console calls on the running page (log, info, warn, error and debug), newest first: when, level, the text of the arguments, and the Angular error code it mentions. Filter by `level`, `search` text and `since` (such as 5m, to see what one reproduction logged). Calls repeated in a row show once with a count. The page keeps its last 200 calls from when the overlay connected, and sends them while a panel or an agent watches. Values are masked like other live values. Empty when no page is connected.',
+      'Console calls on the page, newest first: level, text and Angular code. Filter by `level`, `search` and `since` (e.g. 5m). Repeats collapse; the page keeps its last 200 calls. Masked. Empty when no page is connected.',
     inputSchema: {
       type: 'object',
       properties: {

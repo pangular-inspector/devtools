@@ -252,7 +252,11 @@ export const PLUGIN_ID = /^[a-z][a-z0-9-]{0,39}$/;
 
 export interface ResolvedPangularConfig {
   inspectors: Record<PangularInspector, boolean>;
-  agent: { readOnly: boolean; tools: Record<PangularInspector, boolean>; browserTools: boolean };
+  agent: {
+    readOnly: boolean;
+    tools: Record<PangularInspector, boolean>;
+    browserTools: boolean;
+  };
   actions: Record<PangularAction, boolean>;
   redaction: { secretNames: string[]; unmask: string[] };
   limits: Record<PangularLimit, number>;
@@ -588,6 +592,29 @@ function flags<K extends string>(
 }
 
 /** Fills in the defaults. Accepts untrusted input, and its own output unchanged. */
+/** Inspectors for a library an app may not use; see `agent.autoLibraries`. */
+export const LIBRARY_INSPECTORS: readonly PangularInspector[] = [
+  'analog',
+  'capacitor',
+  'tanstackQuery',
+];
+
+/**
+ * The library inspectors (`analog`, `capacitor`, `tanstackQuery`) a config
+ * leaves to the project: neither `inspectors.<name>` nor `agent.tools.<name>`
+ * is set. Their agent tools are offered only once the project or a page uses
+ * the library (`rpc/library-tools.ts`). Read from the config as given, since
+ * the resolved config sets every switch.
+ */
+export function autoLibraries(config?: unknown): PangularInspector[] {
+  const input = record(config);
+  const inspectorInput = record(input['inspectors']);
+  const toolInput = record(record(input['agent'])['tools']);
+  return LIBRARY_INSPECTORS.filter(
+    (key) => inspectorInput[key] === undefined && toolInput[key] === undefined,
+  );
+}
+
 export function resolvePangularConfig(config?: unknown): ResolvedPangularConfig {
   const input = record(config);
   const agent = record(input['agent']);
@@ -1428,6 +1455,21 @@ export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
   plugins: 'plugins',
 };
 
+/**
+ * Shared-state keys an agent resource serves (`pangular:component-tree` and
+ * so on), and `routes`, which no collector fills. MCP clients don't get them
+ * as shared state, so the same data is not listed three times.
+ */
+export const RESOURCE_STATE_KEYS: readonly string[] = [
+  'component-tree',
+  'signal-graph',
+  'injector-tree',
+  'ngrx-store',
+  'forms',
+  'router',
+  'routes',
+];
+
 /** Shared-state keys that belong to no inspector, without the `pangular:` prefix. */
 export const SHARED_STATE_KEYS: readonly string[] = [
   'page-visibility',
@@ -1443,8 +1485,12 @@ export const SHARED_STATE_KEYS: readonly string[] = [
  * Keys of the hub and of other devframes are left to them.
  */
 export function sharedStateExposed(key: string, config: ResolvedPangularConfig): boolean {
+  // Devframe's own settings, docks and commands are the panel's, not the app's.
+  if (key.startsWith('devframe:')) return false;
   if (!key.startsWith('pangular:')) return true;
   const name = agentName(key);
+  // A resource serves the same data, so agents read it once, from there.
+  if (RESOURCE_STATE_KEYS.includes(name)) return false;
   if (SHARED_STATE_KEYS.includes(name)) return true;
   // Every page plugin's view, in one key: shown only while no plugin has its
   // tools turned off, since a key can't be filtered per plugin.

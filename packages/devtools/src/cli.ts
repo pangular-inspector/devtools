@@ -178,10 +178,11 @@ function copyCommand(cli: CAC, from: Command, name: string, description: string)
 }
 
 /** What `createPangular()` gets for a command: pairing tokens only for the dev server. */
-export function cliHostOptions(command: string, access: CliAccess) {
+export function cliHostOptions(command: string, access: CliAccess, notAProject?: string) {
   return {
     pageTools: command !== 'mcp',
     authTokens: command === 'dev' ? access.authTokens : [],
+    ...(notAProject ? { notAProject } : {}),
   };
 }
 
@@ -311,13 +312,15 @@ export function createPangularCli(options: PangularCliOptions = {}) {
       access = { ...access, authTokens: [] };
     }
     if (root !== process.cwd()) process.chdir(root);
-    if (!looksLikeAngularProject(root)) {
+    const angular = looksLikeAngularProject(root);
+    if (!angular) {
       console.error(
         `[pangular] ${root} has no angular.json and no package.json that depends on @angular/core, so the source scans find nothing. Pass --root <dir> or set PANGULAR_ROOT to your project folder.`,
       );
     }
     resolved = resolvePangularConfig(config);
-    current = createPangular(config, cliHostOptions(command, access));
+    // The agent never sees stderr, so the source scan tools say it too.
+    current = createPangular(config, cliHostOptions(command, access, angular ? undefined : root));
   };
 
   const configureCli = (cli: CAC) => {

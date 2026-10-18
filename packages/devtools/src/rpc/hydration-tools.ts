@@ -7,13 +7,12 @@ import { capped } from './router-tools.ts';
 export const HYDRATION_ROWS = 30;
 
 export const HYDRATION_DESCRIPTION =
-  'Live SSR hydration stats (Angular dev builds): hydrated, skipped (`ngSkipHydration`), mismatched (with a diff of the server HTML Angular expected and the client DOM it found) and client-created component hosts, plus dehydrated `@defer` blocks, by instance id (up to 30 each). Says when a page was not rendered on the server or has no hydrated host. Each tab reports its own; `page` picks one. Truncated at 20,000 chars.';
+  'Live SSR hydration per page: hydrated, skipped, mismatched (with a diff of expected server HTML and client DOM) and client-created hosts, plus dehydrated @defer blocks (up to 30 each). Cut at 20,000 characters.';
 
-export const HYDRATION_OVERLAY_DESCRIPTION =
-  ' `overlay: true|false` toggles visual outlines for hydrated (solid), skipped (dashed), mismatched (double), and dehydrated blocks (dotted).';
+export const HYDRATION_OVERLAY_DESCRIPTION = ' `overlay: true|false` toggles outlines on the page.';
 
 const NO_TREE =
-  'No component tree has been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio server has no page attached and only ever reports this.';
+  'No component tree has been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio MCP server has no page, so there it always answers this.';
 
 function hostsWith(
   roots: LiveComponentNode[],

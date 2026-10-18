@@ -40,7 +40,7 @@ export const getComponents = defineRpcFunction({
   returns: describable(v.array(ComponentSchema)),
   agent: {
     description:
-      'Discover Angular components and directives by scanning source files for @Component and @Directive decorators. Returns one entry per decorated class: its class name, selector (empty when it has none, as with routed components), `kind` (component or directive), inputs, outputs, file and line. Count `kind` to tell components from directives. Call this to understand the component architecture.',
+      'Source scan of @Component and @Directive classes: class, selector (empty for routed components), `kind`, inputs, outputs, file and line.',
     title: 'List Angular components',
   },
   setup: (ctx) => ({

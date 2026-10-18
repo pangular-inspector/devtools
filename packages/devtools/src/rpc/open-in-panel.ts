@@ -12,7 +12,7 @@ import { refusal } from './refusal.ts';
 export const OPEN_IN_PANEL_EVENT = 'open-in-panel';
 
 export const OPEN_IN_PANEL_DESCRIPTION =
-  'Gives the user a link that opens the devtools panel on one tab, optionally with one item selected, and switches open panels to it. `tab`: dashboard, components, routes, signals, injectors, store, queries, forms, pipes, network, errors, audit, analog or capacitor. `id` selects a component instance (components), the component whose injector to show (injectors) or a form id (forms). Pass `page` when more than one tab reports. Returns a markdown link: a full URL in hub mode, otherwise a hash.';
+  'A link that opens the devtools panel on one `tab` (and selects `id` there), and switches open panels to it. Returns a markdown link: a full URL in hub mode, otherwise a hash.';
 
 export interface OpenInPanelArgs {
   tab?: unknown;

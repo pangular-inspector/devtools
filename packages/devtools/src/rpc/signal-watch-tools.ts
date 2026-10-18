@@ -3,6 +3,7 @@ import type { SignalGraph } from '../types.ts';
 import { code, untrusted } from './forms-tools.ts';
 import { byRecency, unknownPageText } from './pages.ts';
 import { refusal } from './refusal.ts';
+import { defaultPage } from './default-page.ts';
 
 type SignalPages = ReadonlyMap<
   string,
@@ -34,8 +35,9 @@ export function signalWatchRequest(
   const target =
     typeof pageId === 'string' && pageId && pageId.length < 50
       ? pageId
-      : byRecency([...pages].map(([page, entry]) => ({ page, reportedAt: entry.reportedAt })))[0]
-          ?.page;
+      : defaultPage(
+          [...pages].map(([page, entry]) => ({ pageId: page, reportedAt: entry.reportedAt })),
+        )?.pageId;
   return target ? { ...request, pageId: target } : undefined;
 }
 
@@ -60,11 +62,12 @@ export function watchSignalRequests(
 ): { pageId: string; requests: SignalWatchRequest[]; labels: string[] } | { markdown: string } {
   const all = byRecency([...pages].map(([pageId, entry]) => ({ pageId, ...entry })));
   if (page && !pages.has(page)) return { markdown: unknownPageText(page, all, WHAT) };
-  const entry = page ? all.find((p) => p.pageId === page) : all[0];
+  const entry = page ? all.find((p) => p.pageId === page) : defaultPage(all);
   if (!entry) {
     return {
-      markdown:
+      markdown: refusal(
         'No page reports a signal graph, so there is nothing to watch. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser.',
+      ),
     };
   }
   if (!args.node && typeof args.stacks !== 'boolean') {
@@ -83,7 +86,11 @@ export function watchSignalRequests(
     if (!found.length) {
       const names = nodes.slice(0, 30).map((n) => code(n.label ?? n.id));
       const known = names.length ? ` The graph has ${names.join(', ')}.` : '';
-      return { markdown: untrusted(`No signal node ${code(args.node)} on this page.${known}`) };
+      return {
+        markdown: refusal(
+          untrusted(`No signal node ${code(args.node)} on page ${code(entry.pageId)}.${known}`),
+        ),
+      };
     }
     for (const node of found.slice(0, MAX_WATCHED)) {
       requests.push({ id: node.id, watch: args.watch !== false });

@@ -37,17 +37,41 @@ Each tool reads from one of three places. The stdio server registers only the to
   </ngmd-card>
 </ngmd-card-grid>
 
+### Analog, Capacitor and TanStack Query tools
+
+The `analog-` tools, `list-capacitor-calls`, `list-capacitor-plugins`, `list-queries`, `inspect-query` and `query-action` are listed only when the app uses the library: the project's `package.json` lists `@capacitor/core` or an `@tanstack/angular-query` package, the project is an Analog app, or a page reports the library's data. In the last case the server adds the tools and sends `notifications/tools/list_changed`. A client that doesn't follow it sees them when it reconnects. Setting `inspectors.<name>` or `agent.tools.<name>` in the [configuration](../getting-started/configuration.md#inspectors-and-agent-tools) turns them on or off for good. If the server can't read a `package.json`, it lists them all.
+
+### A wrong project folder
+
+If the server scans a folder with no Angular project in it (no `angular.json`, and no `package.json` that depends on `@angular/core`), every source tool refuses with `isError: true` and names the folder, instead of answering an empty list. Restart the server with `--root` or `PANGULAR_ROOT` set to the project folder. See [Connect over stdio](./mcp-server.md#connect-over-stdio).
+
 ### The page argument
 
-Most page tools take an optional `page` argument to pick a browser tab. It defaults to the most recent one. `dispatch-ngrx-action`, `set-component-property` and `set-signal` refuse to guess when more than one tab could take the action. `form-action` and `fill-form` take the tab from the form id instead (the part after `@`, as in `Checkout.form@ab12`). `highlight` and `inspect-component` search every tab without it, newest first, and `defer-blocks`, `for-blocks` and `hydration` list every tab. `inspect-providers`, `highlight`, `inspect-component`, `defer-blocks`, `for-blocks`, `hydration` and `snapshot` also accept `pageId`. The tables below leave `page` out.
+Most page tools take an optional `page` argument to pick a browser tab. Without it, every tool reads the same default page: among the tabs that report the tool's data, a tab in the foreground before one in the background, then the tab that connected last. `list-pages` lists pages in that order, so its first row is the default page. The answer names the page it read on its first line (`Page <id>.`), unless its text or JSON already names it.
 
-If `page` names a tab that doesn't report that data, the tool answers `No page <id> is reporting ...` and lists the tabs that do, newest first. It never falls back to another tab. A `page` or `pageId` that is not a string, such as a number, is refused the same way, and an empty string counts as left out. Without `page`, a class name or tag resolves on the most recent tab that has it, and `highlight` names the other tabs where it also matches.
+Some calls name their page another way:
+
+| Call                                                           | Page                                                                    |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `form-action`, `fill-form`, a form tool given `form`           | The tab in the form id (the part after `@`, as in `Checkout.form@ab12`) |
+| `set-signal`, `set-component-property`                         | The one tab that has the instance `component` names                     |
+| `inspect-signal-store`, `signal-store-history` given `storeId` | The tab of that store                                                   |
+| `highlight`, `inspect-component`                               | Every tab is searched for the instance, default page first              |
+| `defer-blocks`, `for-blocks`, `hydration`                      | Every tab is listed                                                     |
+
+Tools that change app state never pick one of several tabs on their own: `navigate`, `dispatch-ngrx-action`, `restore-ngrx-state`, `query-action`, `set-signal` and `set-component-property` refuse and list the tabs when more than one could take the call. `inspect-providers`, `highlight`, `inspect-component`, `defer-blocks`, `for-blocks`, `hydration`, `screenshot-component` and `snapshot` also accept `pageId`. The tables below leave `page` out.
+
+If `page` names a tab that doesn't report that data, the tool answers `No page <id> is reporting ...` and lists the tabs that do. It never falls back to another tab. A `page` or `pageId` that is not a string, such as a number, is refused the same way, and an empty string counts as left out.
 
 ### Arguments and refusals
 
 The server checks each call's arguments against the tool's input schema before the tool runs: types, required arguments, allowed values and ranges. A wrong argument is answered with `Invalid arguments:` and a line for each argument that names what it takes, as in `` `limit` must be at most 50, not 1000000. ``. A `null` for an optional argument counts as left out.
 
-A tool that refuses a call answers with `isError: true`. That covers a wrong or missing argument, a `page` that reports no such data, an action turned off in the config or under `agent.readOnly`, a form or action the page refuses, and a write that would have to guess the tab. The text starts with `Refused:` or `Invalid arguments:` and says what to change. An empty result, such as no HTTP calls yet, is an ordinary answer.
+A tool that refuses a call answers with `isError: true`. That covers a wrong or missing argument, a `page` that reports no such data, an action turned off in the config or under `agent.readOnly`, a form or action the page refuses, and a write that would have to guess the tab. The text starts with `Refused:` or `Invalid arguments:` and says what to change.
+
+An action or destructive tool that does nothing also answers `isError: true`: no page to send it to, a target that matches nothing, a navigation the app cancelled or that failed, or a recording no page confirmed. An empty result of a read, such as no HTTP calls yet, is an ordinary answer.
+
+Tools that start or stop a recording (`change-detection` with `record`, `record-pipes`, `track-subscriptions`) wait up to 3 seconds for each page to confirm, and name the pages that did.
 
 ### Older Angular versions
 
@@ -55,7 +79,7 @@ When the page's Angular lacks the debug API a tool needs, the tool answers **Uns
 
 ### list-pages
 
-Lists the tabs, [Angular Native](../getting-started/angular-native.md) apps, [NativeScript](../getting-started/nativescript.md) apps and [Capacitor](../guides/capacitor.md) apps that report to the server, newest first: page id, URL, title, platform (`browser`, `Angular Native`, `NativeScript`, or `Capacitor (android)` and `Capacitor (ios)` for an app in a native WebView, followed by the page's Angular version when it reported one, as in `browser, Angular 15.2`), seconds since the last report or heartbeat, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
+Lists the tabs, [Angular Native](../getting-started/angular-native.md) apps, [NativeScript](../getting-started/nativescript.md) apps and [Capacitor](../guides/capacitor.md) apps that report to the server, default page first (see [The page argument](#the-page-argument)): page id, URL, title, platform (`browser`, `Angular Native`, `NativeScript`, or `Capacitor (android)` and `Capacitor (ios)` for an app in a native WebView, followed by the page's Angular version when it reported one, as in `browser, Angular 15.2`), seconds since the last report or heartbeat, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
 
 The URL comes from the HTTP or router report. A page that sends neither (no router, and no [HTTP setup](../getting-started/express.md)) still shows the URL its component tree reports, which also stands in when the other reports are more than 15 seconds older. A tab in the background stops reporting until it is shown again, so its last report is marked `(background)`: an old time there means the data is the last known state, not that the page is gone.
 
@@ -205,7 +229,7 @@ Markers follow the id:
 | `[hydration: skipped]`                | In a page rendered on the server, the host was `skipped`, `mismatched` or created on the `client`.          |
 | `(+3 below)`                          | `depth` hides 3 instances under this one.                                                                   |
 
-Without `page`, it lists the most recent tab that has a component tree and names the other tabs that have one. The outline carries no input or property values. Pass an id to `inspect-component` for those, or to `highlight` to show the instance. The answer stops at 20,000 characters and says how to narrow it, and it says when the page's tree stopped at a [limit](../inspectors/components.md#selection).
+Without `page`, it lists the default page among the tabs that have a component tree and names the other tabs that have one. The outline carries no input or property values. Pass an id to `inspect-component` for those, or to `highlight` to show the instance. The answer stops at 20,000 characters and says how to narrow it, and it says when the page's tree stopped at a [limit](../inspectors/components.md#selection).
 
 ### defer-blocks
 
@@ -261,7 +285,7 @@ Checks the component templates in your source, inline `template` and `templateUr
 
 Each finding gives its severity, rule, `file:line` and a fix. Errors come first. A template whose text has not changed since the last call is not parsed again. A backtick template built with `${}` is skipped. If the project has no `@angular/compiler` installed, the answer says so and lists nothing.
 
-### hydration <ngmd-badge variant="alpha">Action</ngmd-badge>
+### hydration <ngmd-badge variant="action">Action</ngmd-badge>
 
 Hydration of each page that was rendered on the server: how many component hosts were hydrated, skipped with `ngSkipHydration`, mismatched or created on the client, and how many `@defer` blocks are still dehydrated. It names the skipped and client-created hosts and the dehydrated blocks, at most 30 of each, and each mismatch with a line diff of the server HTML Angular expected (`-`) and the client DOM it found (`+`). Reads: page.
 
@@ -272,7 +296,7 @@ Hydration of each page that was rendered on the server: how many component hosts
 
 A page that was not rendered on the server gets an answer that says so. A page with server HTML but no hydrated host gets a note that client hydration is off or the build is a production build. The overlay draws in its own layer over the page, ignores the pointer and changes nothing in the app. It is the **Outline on page** button of the [Hydration](../inspectors/components.md#hydration) section. With `agent.readOnly`, the tool has no `overlay` argument and is marked read-only. The whole answer stops at 20,000 characters.
 
-### change-detection <ngmd-badge variant="alpha">Action</ngmd-badge>
+### change-detection <ngmd-badge variant="action">Action</ngmd-badge>
 
 Change detection cycles recorded with Angular's profiler: the slowest components by self time, the most often checked components, lifecycle hook time per class and hook, output listener time, `afterRender` callback time, and the latest cycles with their duration, component checks, sync passes, hook and afterRender time and the output that ran before each one. Reads: page. Needs Angular 20 or later.
 
@@ -285,7 +309,7 @@ Change detection cycles recorded with Angular's profiler: the slowest components
 | `track`            | no       | `true` writes each component check, lifecycle hook and output listener to a **Pangular** track in the Chrome Performance panel. `false` turns it off.                            |
 | `angularProfiling` | no       | `true` calls `ng.enableProfiling()` for Angular's own Performance panel track. It stays on until the page reloads, so `false` is refused.                                        |
 
-Without `page`, it reads the page that is recording, and `record` goes to every connected page. A `page` that names no connected tab gets the list of connected tabs. A connected tab that has not recorded yet gets a hint to start a recording there. The answer starts with the change detection mode of the page it reports on: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. With `agent.readOnly`, the tool has no `record` argument and is marked read-only, so start the recording from the panel. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many. A recording lists at most 100 component classes and counts checks for up to 2000 instances. When it checked more, the answer says how many were left out.
+Without `page`, it reads the default page among the pages that are recording, and `record` goes to every connected page (`stop` only to the pages that record). `record` waits up to 3 seconds for each page to confirm and names the pages that did; when none does, or no page is connected, it refuses with `isError`. A `page` that names no connected tab gets the list of connected tabs. A connected tab that has not recorded yet gets a hint to start a recording there. The answer starts with the change detection mode of the page it reports on: zoneless, zone.js, or zoneless with zone.js still loaded. Recording is off until the panel or this tool starts it. Call it with `record: "start"`, use the app, then call it again without `record`. With `agent.readOnly`, the tool has no `record` argument and is marked read-only, so start the recording from the panel. When older cycles were dropped at [`limits.cdCycles`](../getting-started/configuration.md#limits), the answer says how many. A recording lists at most 100 component classes and counts checks for up to 2000 instances. When it checked more, the answer says how many were left out.
 
 `flash`, `track` and `angularProfiling` go to the page in `page`, or to every connected page, and can be combined with `record`, but not with `export`. An [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app has no live views. The tool says there is no DOM when `page` names such an app, or when `page` is left out and every page that reports is one. `record` works on these apps as on a browser page. They are the **Live views** toggles of the panel; see [Watch checks live](../inspectors/components.md#watch-checks-live). Once a page reports them, the answer ends with a line that says which views are on. With `agent.readOnly`, the tool has none of these three arguments.
 
@@ -301,7 +325,7 @@ Why change detection ran and what it wasted, from the recording that `change-det
 | -------- | -------- | -------------------------------------- |
 | `limit`  | no       | Rows per list. Default 10, at most 50. |
 
-Without `page`, it reads the page that is recording, like `change-detection`. The answer starts with the page's change detection mode, then has these parts:
+Without `page`, it reads the same page as `change-detection`. The answer starts with the page's change detection mode, then has these parts:
 
 | Part                                  | What it lists                                                                                                                                                                                                                                                                                                                                                                   |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -313,7 +337,7 @@ Without `page`, it reads the page that is recording, like `change-detection`. Th
 
 It only reads, so it stays with `agent.readOnly`. With no recording yet, it says to start one with `change-detection`. See [Why it ran and what it wasted](../inspectors/components.md#why-it-ran-and-what-it-wasted) for how the page finds causes and wasted checks.
 
-### Edit a component <ngmd-badge variant="alpha">Action</ngmd-badge>
+### Edit a component <ngmd-badge variant="action">Action</ngmd-badge>
 
 `set-component-property` and `set-signal` write a JSON value to one live component instance, in development only, and answer with the value it now holds, redacted like the component detail. Reads: page.
 
@@ -355,14 +379,14 @@ Leak hints for one page, in three parts. Reads: page.
 
 Garbage collection runs when the browser decides, so the answer says "still retained" and points to the retainers in the Chrome Memory panel rather than calling it a leak. It also says what the page can't report: no `WeakRef` or debug API, no signal graph, or tracking off. Routes and call sites are masked like other live values. See [Leaks](../inspectors/components.md#leaks).
 
-### Track subscriptions <ngmd-badge variant="alpha">Action</ngmd-badge>
+### Track subscriptions <ngmd-badge variant="action">Action</ngmd-badge>
 
 `track-subscriptions` starts or stops subscription tracking on a page, the same switch as **Track subscriptions** in the Components panel. Reads: page.
 
-| Argument | Required | Value                                                                                      |
-| -------- | -------- | ------------------------------------------------------------------------------------------ |
-| `action` | yes      | `start` or `stop`.                                                                         |
-| `page`   | no       | The tab to track. Defaults to the most recent page for `start`, and every page for `stop`. |
+| Argument | Required | Value                                                                                              |
+| -------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `action` | yes      | `start` or `stop`.                                                                                 |
+| `page`   | no       | The tab to track. Defaults to the default page for `start`, and every page that tracks for `stop`. |
 
 While on, the overlay wraps `Observable.prototype.subscribe` and records which component made each subscription. `stop` puts `subscribe` back. Subscriptions made before tracking started are not seen, so reload the tab or go to the screen again after `start`, then call `find-leaks`. Tracking patches the page, so `track-subscriptions` is an `action` tool and `agent.readOnly` drops it. No action covers it, so `actions` leaves it in place. `agent.tools.components: false` hides both tools.
 
@@ -370,13 +394,13 @@ While on, the overlay wraps `Observable.prototype.subscribe` and records which c
 
 An image of one component's host element as the page renders it now. The answer is an MCP image content block (PNG, or JPEG when the PNG is large) with a short note: the size in CSS pixels, what was masked and what could not be drawn. Reads: page.
 
-| Argument   | Required | Value                                                                                                                                                         |
-| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `selector` | yes      | An instance id from the `component-tree` resource (like `c12`), a class name, a host tag or any CSS selector.                                                 |
-| `page`     | no       | The page id, from `list-pages`. Without it, ids, class names and tags are searched on every page, newest first, and a CSS selector uses the most recent page. |
-| `pageId`   | no       | Same as `page`.                                                                                                                                               |
+| Argument   | Required | Value                                                                                                                                                           |
+| ---------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `selector` | yes      | An instance id from the `component-tree` resource (like `c12`), a class name, a host tag or any CSS selector.                                                   |
+| `page`     | no       | The page id, from `list-pages`. Without it, ids, class names and tags are searched on every page, default page first, and a CSS selector uses the default page. |
+| `pageId`   | no       | Same as `page`.                                                                                                                                                 |
 
-The page draws a copy of the element, not the screen: it copies the element's DOM with every computed style written inline into an SVG, and draws that on a canvas that is never added to the page. Nothing in the app changes, no app code runs, and a component scrolled out of view or behind a dialog is drawn all the same. A class name or tag that matches several instances captures the first and lists the ids of all of them. A CSS selector captures the first element it matches on the most recent page, or on `page`.
+The page draws a copy of the element, not the screen: it copies the element's DOM with every computed style written inline into an SVG, and draws that on a canvas that is never added to the page. Nothing in the app changes, no app code runs, and a component scrolled out of view or behind a dialog is drawn all the same. A class name or tag that matches several instances captures the first and lists the ids of all of them. A CSS selector captures the first element it matches on the default page, or on `page`.
 
 The copy masks what the [redaction](../security.md) masks in form values: password fields, fields where any of `formControlName`, `ng-reflect-name`, `name` or `id` looks secret (plus `redaction.secretNames`), and fields with a secret `autocomplete`. Any other element named that way, such as a custom form control `<app-pin formControlName="pin">`, becomes a grey block with everything inside it, its inputs included. Elements marked `data-private`, `.sentry-mask`, `.rr-mask` or `data-pangular="mask"` become grey blocks, and `data-pangular="unmask"` keeps a field. JWTs, bearer tokens and secret `key=value` pairs in text are masked too.
 
@@ -424,7 +448,7 @@ With `root` or a route path, the tool asks the page for the effects of that inje
   The page reports one graph: the component picked on the Signals page or with <code>highlight</code>, otherwise the deepest component in the primary router outlet. Call <code>highlight</code> first to switch the graph to another component. Only signals a template or an effect has read appear.
 </ngmd-callout>
 
-### watch-signal <ngmd-badge variant="alpha">Action</ngmd-badge>
+### watch-signal <ngmd-badge variant="action">Action</ngmd-badge>
 
 Watches a signal on the page, and turns write stacks on or off, the same switches as **Watch** and **Record write stacks** on the Signals page. Acts on: page.
 
@@ -452,7 +476,7 @@ A `selector` that names an element injector returns it with its lookup path reso
 
 An element injector that belongs to a component carries `componentId`, the instance id that `inspect-component`, `list-components` and the `component-tree` resource use. `framework: true` marks the injectors and providers that come from the installed `@angular/*` packages; see [Framework injectors](../inspectors/injectors.md#framework-injectors).
 
-Without `selector` or `token`, the answer is the whole tree and says which change detection mode the page runs. The answer stays within 20,000 characters and its JSON always parses. A larger tree shows element injectors as an outline (id, name, type, component, and provider and dependency counts), and when that is still too long it leaves out the deepest injectors and says how many. The environment injectors are always there, as an outline when they are large, and without their deepest injectors when even that outline is too long. A `selector` or `token` answer that is too long keeps whole entries and says how many it shows. `selector` and `token` take at most 500 characters each. When the page reported only part of its injector tree (it keeps at most 2000 element injectors and 2500 in all, and leaves out injectors nested more than 1000 levels deep), the answer says so.
+Without `selector` or `token`, the answer is the whole tree and says which change detection mode the page runs. The answer stays within 20,000 characters and its JSON always parses. A larger tree shows element injectors as an outline (id, name, type, component, and provider and dependency counts), and when that is still too long it leaves out the deepest injectors and says how many. The environment injectors are always there, as an outline when they are large, and without their deepest injectors when even that outline is too long. A `selector` or `token` answer that is too long cuts each injector's `providers` and `dependencies` lists, with `providersTotal` and `dependenciesTotal` giving the full counts, so a large injector such as `Root` still shows. An `@ngrx/signals` store that an environment injector created carries the name the NgRx tools use, such as `TravelStore`, in `token`, and its class name `SignalStore` in `tokenClass`; `token` finds it by either name, and so do `read-provider-value` and `explain-injection`. `selector` and `token` take at most 500 characters each. When the page reported only part of its injector tree (it keeps at most 2000 element injectors and 2500 in all, and leaves out injectors nested more than 1000 levels deep), the answer says so.
 
 ### read-provider-value
 
@@ -523,7 +547,7 @@ The State, Diff and Action of one past entry: the full redacted state of its sto
 | Argument  | Required | Value                                                                       |
 | --------- | -------- | --------------------------------------------------------------------------- |
 | `seq`     | yes      | The entry number, from `signal-store-history` or the NgRx Store page.       |
-| `page`    | no       | The tab to read. Defaults to the most recent page that reports NgRx.        |
+| `page`    | no       | The tab to read. Defaults to the default page among those that report NgRx. |
 | `session` | no       | The id `import-ngrx-session` returned, to read an imported session instead. |
 
 ### export-ngrx-session
@@ -597,7 +621,7 @@ Use `explain-navigation` for "why was I redirected". Pass `perf: true` for "why 
 | `audit`  | Set to `true` to list the guards that protect each page.                                                   |
 | `filter` | Only routes whose path or component contains this text.                                                    |
 
-### Act on the router <ngmd-badge variant="alpha">Action</ngmd-badge>
+### Act on the router <ngmd-badge variant="action">Action</ngmd-badge>
 
 `navigate` acts on the running app's router, in development only. Reads: page.
 
@@ -610,7 +634,9 @@ Use `explain-navigation` for "why was I redirected". Pass `perf: true` for "why 
 | `instrument`   | Turns per-guard and per-resolver recording on or off.                                            | `on`                                                                                                    |
 | `resolve-lazy` | Reads the routes of an unloaded lazy route without registering them.                             | `routeId`, from `list-routes`                                                                           |
 
-The page's result comes back as a JSON block cut at 15,000 characters. A cut result ends with a note saying so.
+The page's result comes back as a JSON block cut at 15,000 characters. A cut result ends with a note saying so. The result names the tab it ran on in `page`. After a guard or resolver redirect, `outcome` is `redirected`, `finalUrl` is where the app ended up, `redirect` holds the id and outcome of the navigation that followed, and `decidedBy` names the guard when guard recording (`instrument`) is on.
+
+Without `page`, `navigate` uses the one tab that reports a router. When several do, it does nothing and lists them, so call it again with `page`. A refused URL, a navigation the app cancelled or that failed, and an `abort` with nothing in flight answer with `isError: true`.
 
 `action` is required. Only same-origin URLs that start with `/` are accepted. With `actions.router` set to `false`, `navigate`, `abort`, `replay` and `probe` answer **Navigating and clearing navigations is turned off in the devtools config (actions.router).** `instrument` and `resolve-lazy` still work. `navigate` is an `action` tool, so `agent.readOnly` drops the whole tool.
 
@@ -623,9 +649,9 @@ The page's result comes back as a JSON block cut at 15,000 characters. A cut res
 
 If a `canMatch` guard or the navigation error handler redirects a `probe`, the probe stops the redirected navigation before it matches or renders anything, and the result names the target in `redirectedTo`.
 
-## NgRx
+## NgRx actions
 
-### Dispatch an action <ngmd-badge variant="alpha">Action</ngmd-badge>
+### Dispatch an action <ngmd-badge variant="action">Action</ngmd-badge>
 
 `dispatch-ngrx-action` dispatches an action to the `@ngrx/store` Store of the running app, in development only, and returns the new log entry: the action, its origin and the state diff. Reads: page.
 
@@ -637,7 +663,7 @@ If a `canMatch` guard or the navigation error handler redirects a `probe`, the p
 
 Without `page`, the tool uses the one page that has an `@ngrx/store` Store. If more than one page has a Store, it dispatches nothing and lists those pages with their URLs, so you can call it again with `page`. While a restore holds Store DevTools on a past state, the action is logged but does not change the state, and the answer says so. Set [`actions.ngrx`](../getting-started/configuration.md#actions) to `false` to drop the tool. Read the live state and log with the [`ngrx-store` resource](./resources.md#ngrx-store).
 
-### Restore a state <ngmd-badge variant="alpha">Action</ngmd-badge>
+### Restore a state <ngmd-badge variant="action">Action</ngmd-badge>
 
 `restore-ngrx-state` restores a past state in the running app, in development only, the way **Restore this state** does on the [NgRx Store](../inspectors/ngrx-store.md#restore-an-earlier-state) page. A signal store gets every state key set back to its value right after the entry. `@ngrx/store` jumps Store DevTools to the state after that action, which needs `provideStoreDevtools()`, and stays paused there until you go back. The log gets a `Restore #N` entry. Reads: page.
 
@@ -659,7 +685,7 @@ These tools read the `QueryClient` the app provides, through the page. See [TanS
 
 `status` is one of `pending`, `error`, `success`, `idle`, `fetching` or `paused`, and matches a status or a fetch status. `search` keeps keys that contain the text, ignoring case. `limit` sets the rows per table, 1 to 300 (default 50). Keys, errors and data are masked like other live values.
 
-### Invalidate or refetch a query <ngmd-badge variant="alpha">Action</ngmd-badge>
+### Invalidate or refetch a query <ngmd-badge variant="action">Action</ngmd-badge>
 
 `query-action` calls the app's own `QueryClient` for one query. `invalidate` marks it stale through `invalidateQueries()`, and a query with an active observer refetches at once. `refetch` fetches it again through `refetchQueries()`. Both run the query function, so the app sends its request again.
 
@@ -755,12 +781,12 @@ It finds impure pipes used inside `@for`, `| json` left in templates, pure pipes
 
 `explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the time spent in `transform` and the errors it threw, the last input and output, a stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage, and lint findings. Reads: source, plus the page for live counts.
 
-| Argument | Required | Value                                              |
-| -------- | -------- | -------------------------------------------------- |
-| `name`   | yes      | The pipe name as used after `\|` in a template.    |
-| `page`   | no       | The tab to read. Defaults to the most recent page. |
+| Argument | Required | Value                                           |
+| -------- | -------- | ----------------------------------------------- |
+| `name`   | yes      | The pipe name as used after `\|` in a template. |
+| `page`   | no       | The tab to read. Defaults to the default page.  |
 
-Live data comes from one tab: the one `page` names, or the most recent. When more than one tab reports pipes, the answer starts with the tab it read. Live counts, times, errors, input and output appear while recording is on. Start it with [`record-pipes`](#record-pipe-calls) or with **Record calls** in the [Pipes inspector](../inspectors/pipes.md).
+Live data comes from one tab: the one `page` names, or the default page. When more than one tab reports pipes, the answer starts with the tab it read. Live counts, times, errors, input and output appear while recording is on. Start it with [`record-pipes`](#record-pipe-calls) or with **Record calls** in the [Pipes inspector](../inspectors/pipes.md).
 
 The **Live** line tells these cases apart:
 
@@ -771,35 +797,35 @@ The **Live** line tells these cases apart:
 | Pipe in use, recording off          | Instance count and components, plus a hint to start recording.     |
 | Pipe in use, recording on, no calls | Instance count and components, and that no calls are recorded yet. |
 
-### Record pipe calls <ngmd-badge variant="alpha">Action</ngmd-badge>
+### Record pipe calls <ngmd-badge variant="action">Action</ngmd-badge>
 
 `record-pipes` starts or stops call recording on a page, the same switch as **Record calls** in the panel. Reads: page.
 
-| Argument | Required | Value                                                                                          |
-| -------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `action` | yes      | `start` or `stop`.                                                                             |
-| `page`   | no       | The tab to record on. Defaults to the most recent page for `start`, and every page for `stop`. |
+| Argument | Required | Value                                                                                                   |
+| -------- | -------- | ------------------------------------------------------------------------------------------------------- |
+| `action` | yes      | `start` or `stop`.                                                                                      |
+| `page`   | no       | The tab to record on. Defaults to the default page for `start`, and every page that records for `stop`. |
 
-`start` records on the tab `page` names, or on the most recent tab. Other tabs stay unpatched. `stop` stops that tab, or every tab without `page`. Each recording starts from zero, and the calls recorded so far stay after a stop. Call `record-pipes` with `action: "start"`, use the app, then call `explain-pipe`. Recording patches the page, so `record-pipes` is an `action` tool and `agent.readOnly` drops it. No action covers pipes, so `actions` leaves it in place. `agent.tools.pipes: false` hides it.
+`start` records on the tab `page` names, or on the default page. Other tabs stay unpatched. `stop` stops that tab, or every tab that records without `page`; with none recording it refuses. The answer names the tabs that confirmed within 3 seconds. Each recording starts from zero, and the calls recorded so far stay after a stop. Call `record-pipes` with `action: "start"`, use the app, then call `explain-pipe`. Recording patches the page, so `record-pipes` is an `action` tool and `agent.readOnly` drops it. No action covers pipes, so `actions` leaves it in place. `agent.tools.pipes: false` hides it.
 
 ## SSR & HTTP
 
 These tools read the HttpClient calls that `withPangular()` recorded and the SSR requests that `ssrMiddleware` or `withPangularSsr()` traced in your server. See [SSR & HTTP](../inspectors/ssr-http.md). Reads: page.
 
-| Tool                  | What it answers                                                                                                                                                                                                                        | Arguments                                      |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                 | `limit`                                        |
-| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again. | `id`, `url`                                    |
-| `list-http-calls`     | The app's HttpClient calls, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, transfer cache hit and the matched rule.                                                      | `url`, `failed`, `limit`, `preview`, `headers` |
-| `http-waterfall`      | One tab's client calls as a waterfall, grouped by navigation, newest first: each call's start offset in its navigation, duration, status and a text bar.                                                                               | `limit`, `headers`                             |
+| Tool                  | What it answers                                                                                                                                                                                                                                                                             | Arguments                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                                                                      | `limit`                                        |
+| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again.                                                      | `id`, `url`                                    |
+| `list-http-calls`     | The HttpClient calls of one tab and the server render that served it, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, transfer cache hit and the matched rule. With `preview`, the masked response body, for failed calls too. | `url`, `failed`, `limit`, `preview`, `headers` |
+| `http-waterfall`      | One tab's client calls as a waterfall, grouped by navigation, newest first: each call's start offset in its navigation, duration, status and a text bar.                                                                                                                                    | `limit`, `headers`                             |
 
 `explain-ssr-request` picks the request by `id`, else the newest one for `url`, else the newest one.
 
-`list-http-calls` lists every tab and the server when you leave out `page`. With `page`, it lists that tab and the server calls of the SSR request that served it. `url` keeps calls whose URL contains the text. `failed` keeps calls with a status of 400 or more, no response, an error, or a cancel. `limit` defaults to 30 (at most 200). `preview` adds each call's response preview. `headers` adds each call's request and response headers. Secrets in URLs, errors, previews and headers are masked, and `url` matches the masked URL.
+`list-http-calls` lists one tab and the server calls of the SSR request that served it: the tab `page` names, or the default page. With no tab connected, it lists the server calls. `url` keeps calls whose URL contains the text. `failed` keeps calls with a status of 400 or more, no response, an error, or a cancel. `limit` defaults to 30 (at most 200). `preview` adds each call's response preview, including the body a failed call got back, such as a validation message or `problem+json`. `headers` adds each call's request and response headers. Secrets in URLs, errors, previews and headers are masked, and `url` matches the masked URL.
 
-`http-waterfall` reads the tab `page` names, or the most recent tab. A new navigation starts each time the page URL a call was made on changes. `limit` sets how many navigations it shows, 5 by default (at most 50). `headers` adds each call's headers. `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` are always masked, as are names that look secret or match `redaction.secretNames`, and JWTs and bearer tokens in any value.
+`http-waterfall` reads the tab `page` names, or the default page. A new navigation starts each time the page URL a call was made on changes. `limit` sets how many navigations it shows, 5 by default (at most 50). `headers` adds each call's headers. `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` are always masked, as are names that look secret or match `redaction.secretNames`, and JWTs and bearer tokens in any value.
 
-### Fault rules <ngmd-badge variant="alpha">Action</ngmd-badge>
+### Fault rules <ngmd-badge variant="action">Action</ngmd-badge>
 
 These tools read and change the rules of [Fault injection](../inspectors/ssr-http.md#fault-injection), the same rules the panel shows. Rules live on the devtools server and apply to every connected tab, so the tools take no `page`. Reads: page.
 
@@ -813,7 +839,7 @@ These tools read and change the rules of [Fault injection](../inspectors/ssr-htt
 
 With [`actions.http`](../getting-started/configuration.md#actions) set to `false`, `set-http-rule` and `remove-http-rule` are dropped, and `list-http-rules` says that no rule applies.
 
-### TransferState and SSR overrides <ngmd-badge variant="alpha">Action</ngmd-badge>
+### TransferState and SSR overrides <ngmd-badge variant="action">Action</ngmd-badge>
 
 These tools read the [TransferState payload](../inspectors/ssr-http.md#transferstate-payload) a page was served with, and read and change the [SSR overrides](../inspectors/ssr-http.md#ssr-overrides), the same overrides the panel shows. Overrides live on the devtools server and apply to every page load that matches, so the override tools take no `page`. Reads: page.
 
@@ -834,11 +860,11 @@ These tools read the [TransferState payload](../inspectors/ssr-http.md#transfers
 
 `set-ssr-override` checks its input the way the panel's form does. `pattern` matches the page path and query like a fault rule's, up to 500 characters. `message` is up to 300 characters. `key` is up to 200 characters, with no spaces at either end, and a key with a masked part is refused because it can never match. `value` is JSON text or a JSON value, up to 100,000 characters. There can be at most 20 overrides. An override applies from the next full page load. Patterns, messages and values in the answers are masked like recorded calls.
 
-`inspect-transfer-state` reads the most recent page that reported a payload unless `page` names another. `search` keeps keys and cached URLs that contain the text, and `limit` defaults to 50 (at most 500). The values are the masked and clipped copy the panel shows, so read them to find a key, and type the full value for `state-edit`. An HttpClient entry holds `b` (body), `s` (status), `st` (status text), `u` (URL) and `rt` (response type).
+`inspect-transfer-state` reads the default page among those that reported a payload unless `page` names another. `search` keeps keys and cached URLs that contain the text, and `limit` defaults to 50 (at most 500). The values are the masked and clipped copy the panel shows, so read them to find a key, and type the full value for `state-edit`. An HttpClient entry holds `b` (body), `s` (status), `st` (status text), `u` (URL) and `rt` (response type).
 
 With [`actions.http`](../getting-started/configuration.md#actions) set to `false`, `set-ssr-override` and `remove-ssr-override` are dropped, and `list-ssr-overrides` says that no override applies.
 
-### Clear recordings <ngmd-badge variant="alpha">Destructive</ngmd-badge>
+### Clear recordings <ngmd-badge variant="destructive">Destructive</ngmd-badge>
 
 Resets recorded data between reproduction runs: recorded HTTP calls, router navigations, and Analog server calls. Reads: page.
 
@@ -859,7 +885,7 @@ These tools read what a Capacitor app reported: its platform, its plugins and th
 | `list-capacitor-calls`   | Plugin calls, newest first: plugin and method, `native` or `web`, arguments, the result or the error with its code, and the duration. Marks **not implemented** calls and streams, and ends with the active listeners, their event counts and the masked payload of each one's last event. | `plugin`, `failed`, `slowMs`, `limit` |
 | `list-capacitor-plugins` | The platform, the server URL, whether CapacitorHttp and native logging are on, the WebView user agent, and each plugin: available, imported, installed natively, its native methods, and a hint when they disagree.                                                                        | none                                  |
 
-`plugin` keeps calls to one plugin, ignoring case. `failed` keeps calls that failed. `slowMs` keeps calls that took at least that many milliseconds, counting a pending call's time so far. `limit` defaults to 30 (at most 200). Without `page`, both tools answer for the most recent page with a native bridge, so a desktop tab of the same app doesn't hide the device, and they name the other pages that report. A long answer is cut at about 20,000 characters with a note on how to narrow it, and a plugin lists its first 20 methods. Native calls are logged on iOS and Android. Calls a web implementation answers are logged only when the app loads `@pangular-inspector/devtools/capacitor-hook` before `@capacitor/core`, and the answer says so when it doesn't. Arguments, results and errors are masked with the server's redaction too.
+`plugin` keeps calls to one plugin, ignoring case. `failed` keeps calls that failed. `slowMs` keeps calls that took at least that many milliseconds, counting a pending call's time so far. `limit` defaults to 30 (at most 200). Without `page`, both tools answer for the default page among those with a native bridge, so a desktop tab of the same app doesn't hide the device, and they name the other pages that report. A long answer is cut at about 20,000 characters with a note on how to narrow it, and a plugin lists its first 20 methods. Native calls are logged on iOS and Android. Calls a web implementation answers are logged only when the app loads `@pangular-inspector/devtools/capacitor-hook` before `@capacitor/core`, and the answer says so when it doesn't. Arguments, results and errors are masked with the server's redaction too.
 
 ## Errors
 
@@ -877,7 +903,7 @@ The explainers are the ones the [Errors](../inspectors/errors.md#explainers) tab
 
 ## Audit
 
-### audit <ngmd-badge variant="alpha">Action</ngmd-badge>
+### audit <ngmd-badge variant="action">Action</ngmd-badge>
 
 One ranked list of what is wrong on the page, gathered from the other inspectors, with an axe pass over the app on request. See [Audit](../inspectors/audit.md). Reads: page.
 
@@ -925,7 +951,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 | `analog-render-modes`   | For each page: server rendered, prerendered, cached, redirected or client only, the route rule or config that decides it, and what the last request actually did. Says when `vite.config` could not be read in full. | none      |
 | `analog-prerender-plan` | `prerender.routes` and `routeRules` with `prerender: true`, compared with the page files and the build output. Says when `vite.config` could not be read in full.                                                    | none      |
 
-### Call a server route <ngmd-badge variant="alpha">Destructive</ngmd-badge>
+### Call a server route <ngmd-badge variant="destructive">Destructive</ngmd-badge>
 
 `analog-call-api` sends a request to a route on the running dev server, like `GET /api/v1/hello`, and returns the status, time and body. `path` is a path on the dev server that starts with a single `/`, not a full URL. `POST`, `PUT`, `PATCH` and `DELETE` need `confirm: true`. Secret keys, tokens and `Bearer` values in the body are masked. Reads: Vite plugin.
 
@@ -940,7 +966,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 ### Lint
 
-`analog-lint` finds Analog mistakes: two files for one URL, a missing default export, a layout without `router-outlet`, bad API method suffixes, prerender entries that match nothing, frontmatter errors, and a `vite.config` it could not read in full (`config-partial`). It also reports live problems, like a `load()` fetched twice, a server function read that runs again after hydration, or a restart needed. Hydration errors and restart hints come from one page: pass `page` to pick it, or leave it out for the most recent. If no page with that id sends Analog data, the answer says so and lists the pages that do.
+`analog-lint` finds Analog mistakes: two files for one URL, a missing default export, a layout without `router-outlet`, bad API method suffixes, prerender entries that match nothing, frontmatter errors, and a `vite.config` it could not read in full (`config-partial`). It also reports live problems, like a `load()` fetched twice, a server function read that runs again after hydration, or a restart needed. Hydration errors and restart hints come from one page: pass `page` to pick it, or leave it out for the default page. If no page with that id sends Analog data, the answer says so and lists the pages that do.
 
 <ngmd-alert severity="helpful">
   <code>analog-server-calls</code> and <code>analog-call-api</code> need the <a href="../getting-started/vite.md">Vite plugin</a>. The plugin records the calls and knows the dev server address.
@@ -961,7 +987,7 @@ A server plugin adds tools named `plugin:<plugin id>:<tool>`, which your client 
 
 ## Shared state
 
-`devframe_state_read` reads the devtools' live shared state. Call it without arguments to list the keys, then with `key` to read a value as JSON. Over HTTP, it leaves out the keys of an inspector whose agent tools are hidden (`agent.tools.<name>: false`).
+`devframe_state_read` reads the devtools' live shared state, for data no other tool covers. Call it without arguments to list the keys with their size and the tool that reads each one, then with `key` to read a value as compact JSON. It answers at most `maxChars` characters (default 20,000, at most 50,000) from `offset` and says where the next part starts. It leaves out the keys a [resource](./resources.md#shared-state) serves and the keys of an inspector whose agent tools are hidden (`agent.tools.<name>: false`).
 
 Use it for data that has no dedicated tool, such as hydration data and TransferState payloads (`pangular:http`, `pangular:http-payloads`) or live pipe usage (`pangular:pipe-usage`). See [Resources](./resources.md) for every key.
 

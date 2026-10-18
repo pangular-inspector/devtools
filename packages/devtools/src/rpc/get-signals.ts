@@ -30,7 +30,7 @@ export const getSignals = defineRpcFunction({
   returns: describable(v.array(SignalEntrySchema)),
   agent: {
     description:
-      'Scan source files for signal(), computed(), linkedSignal(), effect(), toSignal() and resource declarations (resource, httpResource, rxResource), plus signal inputs, models and queries. Returns name, kind, file, and line number. Call this to understand the reactive architecture before suggesting changes.',
+      'Source scan of signal(), computed(), linkedSignal(), effect(), toSignal(), resources, signal inputs, models and queries: name, kind, file and line.',
     title: 'List Angular signals from source',
   },
   setup: (ctx) => ({

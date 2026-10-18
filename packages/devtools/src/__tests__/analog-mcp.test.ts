@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import { createHostContext } from 'devframe/node';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import pangular from '../devframe.ts';
+import pangular, { createPangular } from '../devframe.ts';
 import { clearCalls, recordCall, setDevOrigin } from '../analog-server-log.ts';
 import {
   analogEndpoint,
@@ -24,14 +24,14 @@ function local(ctx: { rpc: unknown }, name: string): Promise<unknown> {
   return (ctx.rpc as { invokeLocal: (name: string) => Promise<unknown> }).invokeLocal(name);
 }
 
-async function boot(cwd: string) {
+async function boot(cwd: string, definition: { setup: typeof pangular.setup } = pangular) {
   const host = {
     mountStatic: () => {},
     resolveOrigin: () => 'http://localhost',
     getStorageDir: () => '',
   };
   const ctx = await createHostContext({ cwd, mode: 'dev', host: host as never });
-  await pangular.setup(ctx as never);
+  await definition.setup(ctx as never);
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const call = async (tool: string, args: Record<string, unknown> = {}) =>
@@ -107,8 +107,22 @@ beforeEach(() => {
 });
 
 describe('Analog MCP tools', () => {
+  it('are left out of a project that is not an Analog app, and come with a page that reports Analog', async () => {
+    const { ctx, push } = await boot(makeProject({ 'package.json': '{}' }));
+    const listed = () => ctx.agent.list().tools.map((tool) => tool.id);
+    expect(listed()).not.toContain('pangular:analog-routes');
+    // A page that reports Analog data brings the tools in (devframe sends tools/list_changed).
+    await push('push-analog', report);
+    // The server looks for newly reporting libraries every 2 seconds.
+    await new Promise((resolve) => setTimeout(resolve, 2200));
+    expect(listed()).toContain('pangular:analog-routes');
+  });
+
   it('say when the workspace is not an Analog app', async () => {
-    const { call } = await boot(makeProject({ 'package.json': '{}' }));
+    const { call } = await boot(
+      makeProject({ 'package.json': '{}' }),
+      createPangular({ inspectors: { analog: true } }),
+    );
     expect(await call('analog-current-page')).toContain('not an Analog app');
     for (const tool of [
       'analog-routes',

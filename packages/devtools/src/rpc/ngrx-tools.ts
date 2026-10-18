@@ -13,7 +13,9 @@ import type { SignalStoreMembers } from './get-ngrx-store.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import { REDACTED } from '../forms-privacy.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
-import { untrusted } from './forms-tools.ts';
+import { UNTRUSTED, untrusted } from './forms-tools.ts';
+import { refusal } from './refusal.ts';
+import { rankPages } from './default-page.ts';
 
 export const NGRX_PAGE_EXPIRES_MS = PAGE_TTL_MS;
 const MAX_LOG = 200;
@@ -194,9 +196,7 @@ export function expireNgrxPages(
 
 export function ngrxStateOf(pages: NgrxPages): NgrxState {
   return {
-    pages: [...pages.values()]
-      .sort((a, b) => b.reportedAt - a.reportedAt)
-      .map(({ session: _session, ...page }) => page),
+    pages: rankPages(pages.values()).map(({ session: _session, ...page }) => page),
   };
 }
 
@@ -205,7 +205,12 @@ export function ngrxStateOf(pages: NgrxPages): NgrxState {
  * error, the message and the entry, so all of it sits behind the notice.
  */
 export function dispatchResultText(result: NgrxRequestResult): string {
-  if (result.error) return untrusted(`Not dispatched: ${result.error}`);
+  if (result.error) {
+    const error = result.error.startsWith(UNTRUSTED)
+      ? result.error.slice(UNTRUSTED.length).trimStart()
+      : result.error;
+    return refusal(untrusted(`Not dispatched: ${error}`));
+  }
   const lines = [result.message ?? 'Dispatched.'];
   if (result.entry) {
     lines.push(

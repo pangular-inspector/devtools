@@ -86,6 +86,23 @@ function preview(body: unknown): string | undefined {
   }
 }
 
+/**
+ * The body of a failed response worth previewing: text, or parsed JSON. A
+ * network failure carries a ProgressEvent (or an Error), which says nothing.
+ */
+function errorBody(body: unknown): unknown {
+  if (typeof body === 'string') return body || undefined;
+  if (Array.isArray(body)) return body;
+  if (body && typeof body === 'object' && Object.getPrototypeOf(body) === Object.prototype)
+    return body;
+  return undefined;
+}
+
+function optionalPreview(body: unknown): { preview?: string } {
+  const text = preview(body);
+  return text === undefined ? {} : { preview: text };
+}
+
 function record(call: HttpCall) {
   const registry = httpRegistry();
   // The devframe server takes the call right away, so its headers are read now.
@@ -330,6 +347,8 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
             status: failed ? error.status : 0,
             cacheHit: false,
             error: message.slice(0, 500),
+            // The body the server sent with the error, such as validation messages.
+            ...(failed ? optionalPreview(errorBody(error.error)) : {}),
             ...serverCache(null),
           },
           failed ? error.headers : null,

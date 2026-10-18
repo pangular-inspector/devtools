@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHostContext } from 'devframe/node';
 import { expect, it } from 'vitest';
-import pangular from '../devframe.ts';
+import { createPangular } from '../devframe.ts';
 
 const WORDS = [
   'Forty-eight',
@@ -66,8 +66,13 @@ it('states on the tools page how many tools the server registers', async () => {
     getStorageDir: () => '',
   };
   const ctx = await createHostContext({ cwd: process.cwd(), mode: 'dev', host: host as never });
-  await pangular.setup(ctx as never);
-  const registered = ctx.agent.list().tools.length;
+  // Every tool, with the library ones the demo project does not use.
+  await createPangular({
+    inspectors: { analog: true, capacitor: true, tanstackQuery: true },
+  }).setup(ctx as never);
+  const registered = ctx.agent
+    .list()
+    .tools.filter((tool) => tool.id.startsWith('pangular:')).length;
   const page = readFileSync(
     join(__dirname, '../../../../apps/docs/src/content/agents/tools.md'),
     'utf-8',

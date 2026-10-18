@@ -1,3 +1,4 @@
+import { defaultPage } from './default-page.ts';
 import {
   shortAngularVersion,
   type PangularInspector,
@@ -329,7 +330,7 @@ export function snapshotText(
   if (args.page && !pages.some((entry) => entry.pageId === args.page)) {
     return unknownPageText(args.page, pages, 'live data');
   }
-  const page = args.page ? pages.find((entry) => entry.pageId === args.page) : pages[0];
+  const page = args.page ? pages.find((entry) => entry.pageId === args.page) : defaultPage(pages);
   if (!page) return listPagesText([]);
 
   const limit = bounded(args.limit, SNAPSHOT_DEFAULT_LIMIT, 1, SNAPSHOT_MAX_LIMIT);
@@ -394,7 +395,7 @@ export function snapshotText(
 }
 
 export const SNAPSHOT_DESCRIPTION =
-  'Everything the server knows about one page in one bounded markdown answer, for a full picture or a bug report: page info, component outline, current route, recent navigations, HttpClient calls, errors, console, forms, signal graph, stores and TanStack Query. Sections whose inspector or agent tools are off are named as skipped. Pick sections with `sections`; `limit` caps items per section, `maxChars` the whole answer. Defaults to the most recent page.';
+  'Everything known about one page in one bounded answer: page info, components, route, navigations, HTTP calls, errors, console, forms, signals, stores and queries. `sections`, `limit` and `maxChars` narrow it.';
 
 type AnyRecord = Record<string, any>;
 

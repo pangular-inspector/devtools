@@ -1,3 +1,4 @@
+import { defaultPage } from './default-page.ts';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
@@ -249,7 +250,7 @@ export function analogExplainUrlText(
 }
 
 function pickPage(state: AnalogState, page?: string): AnalogRuntimeReport | undefined {
-  return page ? state.pages.find((p) => p.pageId === page) : state.pages[0];
+  return page ? state.pages.find((p) => p.pageId === page) : defaultPage(state.pages);
 }
 
 const CONFIG_PATH_CAP = 500;

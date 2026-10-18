@@ -22,6 +22,11 @@ import { makeProject } from './analog-fixture.ts';
 import { isSecretKey, setRedaction } from '../forms-privacy.ts';
 import { toolAnswer } from './tool-answer.ts';
 
+const withLibraries = (config: PangularConfig = {}): PangularConfig => ({
+  ...config,
+  inspectors: { analog: true, capacitor: true, tanstackQuery: true, ...config.inspectors },
+});
+
 async function boot(config?: PangularConfig) {
   const host = {
     mountStatic: () => {},
@@ -29,12 +34,15 @@ async function boot(config?: PangularConfig) {
     getStorageDir: () => '',
   };
   const ctx = await createHostContext({ cwd: process.cwd(), mode: 'dev', host: host as never });
-  await createPangular(config).setup(ctx as never);
+  // The demo project uses none of the library inspectors, so they are turned on unless the test sets them.
+  await createPangular(withLibraries(config)).setup(ctx as never);
   const definitions = (ctx.rpc as unknown as { definitions: Map<string, unknown> }).definitions;
   const rpc = [...definitions.keys()]
     .filter((name) => name.startsWith('pangular:'))
     .map((name) => name.slice('pangular:'.length));
-  const manifest = ctx.agent.list();
+  // Pangular's own tools; `devframe:state:read` belongs to devframe's shared-state reader.
+  const all = ctx.agent.list();
+  const manifest = { ...all, tools: all.tools.filter((tool) => tool.id.startsWith('pangular:')) };
   const strip = (id: string) => id.replace(/^pangular:/, '');
   return {
     ctx,

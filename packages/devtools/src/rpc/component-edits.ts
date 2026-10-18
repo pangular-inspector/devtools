@@ -3,7 +3,7 @@ import { MAX_EDIT_JSON } from '../component-edit.ts';
 import { actionBlockedMessage, type ResolvedPangularConfig } from '../config.ts';
 import type { ComponentPage } from '../types.ts';
 import { findComponents, otherMatchesText, truncationText } from './component-tools.ts';
-import { untrusted } from './forms-tools.ts';
+import { code, untrusted } from './forms-tools.ts';
 import { byRecency, choosePageText, pageArgument, unknownPageText } from './pages.ts';
 import { refusal } from './refusal.ts';
 
@@ -131,8 +131,8 @@ export function createComponentEdits(deps: Deps) {
       title: kind === 'signal' ? 'Set a signal' : 'Set a component property',
       description:
         kind === 'signal'
-          ? 'Sets a writable signal of a live component instance via `.set()` (dev only). Returns updated redacted value. Pass property name or path within signal value (e.g. `filters.query`). Supports signal(), linkedSignal(), model(); rejects inputs, computed, readonly signals, non-JSON values and redacted names. Specify an instance id, or a class name or host tag matching one instance. Multi-tab setups require `page`. Requires `actions.components` write permission.'
-          : 'Sets a property or input of a live component instance and triggers change detection (dev only). Returns updated redacted value. Accepts property names or nested paths (e.g. `user.name`). Rejects signals (use pangular:set-signal), methods, getters without setters, non-JSON values and redacted names. Specify an instance id, or a class name or host tag matching one instance. Multi-tab setups require `page`. Requires `actions.components` write permission.',
+          ? 'Set a writable signal (signal, linkedSignal, model) on a live component instance with `.set()` (dev only), or a nested `path` in its value. `component` must match one instance. Needs actions.components.'
+          : 'Set a property or input (or a nested `path`) on a live component instance and run change detection (dev only). Not for signals (use set-signal). `component` must match one instance. Needs actions.components.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -164,28 +164,41 @@ export function createComponentEdits(deps: Deps) {
         }
         if (!live.length) {
           return {
-            markdown:
+            markdown: refusal(
               'No page reports a component tree, so nothing was written. Open the app in a browser with the devtools connected.',
+            ),
           };
-        }
-        if (!page && live.length > 1) {
-          return { markdown: choosePageText(live, 'a component tree') };
         }
         const selector = typeof args['component'] === 'string' ? args['component'] : '';
         if (!selector)
           return { markdown: refusal('Pass `component`: an instance id, class name or tag.') };
         const scope = page ? live.filter((entry) => entry.pageId === page) : live;
         const hits = findComponents(scope, selector);
+        // Without `page`, the write goes to the one page that has the target;
+        // when several pages do, the caller picks one.
+        const hitPages = new Set(hits.map((hit) => hit.pageId));
+        if (!page && live.length > 1 && hitPages.size !== 1) {
+          return {
+            markdown: choosePageText(
+              hitPages.size ? live.filter((entry) => hitPages.has(entry.pageId)) : live,
+              hitPages.size ? `a component that matches ${code(selector)}` : 'a component tree',
+            ),
+          };
+        }
         if (!hits.length) {
           const cut = truncationText(scope);
           return {
-            markdown: `No component instance matches \`${selector}\`, so nothing was written. Pass an instance id, class name or host tag from the pangular:component-tree resource.${cut ? ` ${cut}` : ''}`,
+            markdown: refusal(
+              `No component instance matches \`${selector}\`${page ? ` on page \`${page}\`` : ''}, so nothing was written. Pass an instance id, class name or host tag from the pangular:component-tree resource.${cut ? ` ${cut}` : ''}`,
+            ),
           };
         }
         if (hits.length > 1) {
           return {
-            markdown: untrusted(
-              `${otherMatchesText(hits, selector).replace(/ This used the first one; pass an instance id to pick another\.$/, '')} A write needs one instance, so nothing was written. Pass an instance id.`,
+            markdown: refusal(
+              untrusted(
+                `${otherMatchesText(hits, selector).replace(/ This used the first one; pass an instance id to pick another\.$/, '')} A write needs one instance, so nothing was written. Pass an instance id.`,
+              ),
             ),
           };
         }
@@ -230,8 +243,8 @@ function toResult(result: unknown): ComponentEditResult {
 /** The answer of set-component-property and set-signal, as markdown. */
 export function editResultText(result: ComponentEditResult, id: string, pageId: string): string {
   if (!result.ok) {
-    return untrusted(
-      `Nothing was written to instance \`${id}\` on page \`${pageId}\`. ${result.error}`,
+    return refusal(
+      untrusted(`Nothing was written to instance \`${id}\` on page \`${pageId}\`. ${result.error}`),
     );
   }
   const how =

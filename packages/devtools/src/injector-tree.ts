@@ -70,7 +70,14 @@ export function tokenName(token: unknown): string {
     const desc = (token as { _desc?: unknown })._desc;
     if (typeof desc === 'string' && desc) return desc;
     const text = String(token);
-    return text.startsWith('InjectionToken ') ? text.slice('InjectionToken '.length) : text;
+    if (text.startsWith('InjectionToken ')) return text.slice('InjectionToken '.length);
+    // A plain object used as a token (no InjectionToken, no toString) has no name of its own.
+    if (text === '[object Object]') {
+      const ctor = (token as { constructor?: unknown }).constructor;
+      const name = typeof ctor === 'function' && ctor !== Object ? className(ctor) : '';
+      return name ? `${name} instance` : '(unnamed object token)';
+    }
+    return text;
   }
   return String(token);
 }
@@ -116,6 +123,33 @@ function recordReader<H extends object>(ng: DebugNg<H>): RecordReader {
   };
 }
 
+/** The class name every `signalStore()` class has in @ngrx/signals (`class SignalStore`). */
+const SIGNAL_STORE = /^SignalStore\d*$/;
+
+/**
+ * The state keys of the @ngrx/signals store an environment injector already
+ * holds for `token`, read from its `STATE_SOURCE` symbol (@ngrx/signals 19+).
+ * `R3Injector.records` keeps the instance as the record's `value` once it is
+ * made (an empty `NOT_YET` object before). Element injectors are not asked,
+ * since `get` would create a store nothing injected yet.
+ */
+function signalStoreKeys(injector: unknown, token: unknown): string[] | undefined {
+  try {
+    const records = (injector as { records?: unknown } | null)?.records;
+    if (!(records instanceof Map)) return undefined;
+    const value = (records.get(token) as { value?: unknown } | undefined)?.value;
+    if (!value || typeof value !== 'object') return undefined;
+    const key = Object.getOwnPropertySymbols(value).find((s) => s.description === 'STATE_SOURCE');
+    const source = key ? (value as Record<symbol, unknown>)[key] : undefined;
+    if (!source || typeof source !== 'object') return undefined;
+    return Reflect.ownKeys(source)
+      .filter((k): k is string => typeof k === 'string')
+      .slice(0, 200);
+  } catch {
+    return undefined;
+  }
+}
+
 function toProviders(injector: unknown, records: RecordReader): ProviderInfo[] {
   return records(injector)
     .filter((record) => !isBuiltInElementToken(record))
@@ -128,6 +162,10 @@ function toProviders(injector: unknown, records: RecordReader): ProviderInfo[] {
       const multi = (record.provider as { multi?: unknown } | null)?.multi;
       if (multi === true) info.multi = true;
       if (record.importPath?.length) info.importPath = record.importPath.map(tokenName);
+      if (SIGNAL_STORE.test(info.token)) {
+        const keys = signalStoreKeys(injector, record.token);
+        if (keys) info.stateKeys = keys;
+      }
       return info;
     });
 }

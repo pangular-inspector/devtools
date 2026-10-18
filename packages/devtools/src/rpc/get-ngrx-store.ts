@@ -52,7 +52,7 @@ export const getNgrxStore = defineRpcFunction({
   returns: describable(v.array(NgrxStoreEntrySchema)),
   agent: {
     description:
-      'Scan source files for NgRx declarations: @ngrx/store (actions, reducers, effects, selectors, features, store setup) and @ngrx/signals (signalStore, signalState, signalMethod). Returns name, kind, file, line, action type literals, and store members. Read the pangular:ngrx-store resource for live state.',
+      'Source scan of @ngrx/store (actions, reducers, effects, selectors, features) and @ngrx/signals (signalStore, signalState, signalMethod): name, kind, file, line and members.',
     title: 'List NgRx store entries from source',
   },
   setup: (ctx) => ({

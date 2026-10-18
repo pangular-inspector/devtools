@@ -295,7 +295,10 @@ describe('forms MCP tools', () => {
     expect(reactive).toContain('- `email`: email (validator)');
     expect(reactive).toMatch(/Recent submits:\n- #3 .*\(user, ran\)/);
     expect(await call('explain-submit', { form: 'Profile' })).toContain('throws NG01915');
-    expect(await call('explain-submit', {})).toContain('2 forms match');
+    // Without `form` or `page`, the default page: pg2 connected last, and has only Profile.
+    const fallback = await call('explain-submit', {});
+    expect(fallback).toContain('Profile');
+    expect(fallback).not.toContain('Signup');
   });
 
   it('explain-form-invalid and form-payload narrow to a path', async () => {
@@ -423,7 +426,8 @@ describe('forms MCP tools', () => {
 
   it('lint-forms reports model-aware findings and setup errors', async () => {
     const { call } = await withForms();
-    const text = await call('lint-forms', {});
+    // Each page is linted on its own; the fixture spreads the findings over both.
+    const text = `${await call('lint-forms', { page: 'pg1' })}\n${await call('lint-forms', { page: 'pg2' })}`;
     for (const rule of [
       'setup-error',
       'formroot-no-submission',
@@ -545,6 +549,7 @@ describe('forms MCP tools', () => {
     const { ctx, call } = await withForms();
     const seen: any[] = [];
     vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: any) => {
+      if (!options.method.endsWith('form-action')) return;
       const { requestId, pageId, request } = options.args[0];
       seen.push({ pageId, request });
       const result =

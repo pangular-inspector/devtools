@@ -1,3 +1,4 @@
+import { defaultPage } from './default-page.ts';
 // The `wait-for` agent tool: blocks until a condition holds on data the
 // collectors already pushed (component tree, router, HTTP calls, errors), so
 // an agent that clicked or navigated does not have to poll other tools in a
@@ -206,7 +207,7 @@ function navigationProbe(sources: WaitForSources, args: Args, page: string | und
   const target = () => {
     const now = pick(sources.router!(), page, 'the router');
     if (!('pages' in now)) return undefined;
-    return now.pages.find((entry) => entry.snapshot) ?? now.pages[0];
+    return defaultPage(now.pages.filter((entry) => entry.snapshot)) ?? defaultPage(now.pages);
   };
   const pending = (entry: RouterPage) =>
     Boolean(entry.snapshot?.pending) || entry.navigations.at(-1)?.outcome === 'pending';
@@ -322,7 +323,7 @@ function conditionLabel(condition: WaitCondition, args: Args): string {
 
 /** What the tool tells an agent, under 600 characters. */
 export const WAIT_FOR_DESCRIPTION =
-  'Wait, after a click or navigation, until a condition holds on the running page instead of polling other tools. `condition`: `component` or `component-gone` (a component matching `selector` is rendered, or none is), `navigation` (no navigation in progress, at a URL matching `url` when given), `http-call` (an HttpClient call matching `url`, or any, finished after the call), `error` (a new error, with Angular code `code` when given). Reads what the collectors report and never changes the page. Answers once it holds, or after `timeoutMs` (default 5000, max 30000) with the last state.';
+  'Wait until a condition holds instead of polling: `component` or `component-gone` (`selector`), `navigation` (`url`), `http-call` (`url`) or `error` (`code`). Returns once it holds or after `timeoutMs` (default 5000, max 30000). Only reads.';
 
 /**
  * The `pangular:wait-for` tool, offering only the conditions whose inspector
@@ -406,7 +407,7 @@ export function createWaitForTool(sources: WaitForSources) {
         page: {
           type: 'string',
           description:
-            'Page id, when more than one tab reports (see pangular:list-pages). Without it, every page counts; `navigation` uses the most recent.',
+            'Page id, when more than one tab reports (see pangular:list-pages). Without it, every page counts; `navigation` uses the default page.',
         },
         pageId: { type: 'string', description: 'Same as `page`.' },
       },

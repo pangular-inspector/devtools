@@ -155,8 +155,9 @@ describe('set-component-property and set-signal', () => {
     await push('push-component-tree', tree('p1'));
     await push('push-component-tree', tree('p2'));
     const sent = answerEdits(ctx, push, () => ({ ok: true }));
-    expect(await call('set-signal', { component: 'p1-a', signal: 'count', value: 1 })).toMatch(
-      /2 pages report a component tree/,
+    // `Card` renders on both pages, so the caller picks one.
+    expect(await call('set-signal', { component: 'Card', signal: 'count', value: 1 })).toMatch(
+      /2 pages report a component that matches `Card`/,
     );
     expect(
       await call('set-signal', { component: 'p1-a', signal: 'count', value: 1, page: 'p9' }),

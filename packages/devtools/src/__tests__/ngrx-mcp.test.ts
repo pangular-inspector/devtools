@@ -39,7 +39,8 @@ describe('live-state resource descriptions', () => {
     const { ctx } = await boot();
     for (const id of ['component-tree', 'signal-graph', 'injector-tree', 'ngrx-store']) {
       const description = ctx.agent.getResource(`pangular:${id}`)?.description ?? '';
-      expect(description, id).toContain('`_untrusted`');
+      // The injector tree falls back to an outline, the others to a summary with the notice.
+      if (id !== 'injector-tree') expect(description, id).toContain('`_untrusted`');
       expect(description, id).toContain('Past 100,000 characters');
     }
   });
@@ -335,7 +336,8 @@ describe('inspect-signal-store and signal-store-history tools', () => {
     expect(history).toContain('#2 ');
     expect(history).toContain('#3 ');
     expect(history).toContain('(2ms)');
-    expect(await call('signal-store-history', { since: 1 })).toMatch(/Pass `page`/);
+    // Without `page`, the default page: p2 connected last.
+    expect(await call('signal-store-history', { since: 1 })).toMatch(/`p2`/);
     expect(await call('signal-store-history', { page: 'p9' })).toMatch(/No page `p9`/);
   });
 });

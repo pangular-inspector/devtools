@@ -52,7 +52,7 @@ const WORKFLOWS: readonly WorkflowPrompt[] = [
       'Find the connected page and summarize its state in one pass: route, components, errors, HTTP calls and forms.',
     argument: {
       name: 'page',
-      description: 'A page id from list-pages. Default: the most recent page.',
+      description: 'A page id from list-pages. Default: the first row of list-pages.',
     },
     requires: ['list-pages', 'snapshot'],
     steps: (_has, page) => [

@@ -14,7 +14,7 @@ export function templateLintTool(cwd: string, options: { compiler?: TemplateComp
     title: 'Lint templates',
     outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
-      "Checks component templates in source (inline `template` and `templateUrl` files) with the project's own Angular template parser: parse errors (including `@for` without `track`), `@for` tracking objects by `$index`, `<img>` without `alt`, `(click)` on a non-interactive element without a key handler, `*ngIf`/`*ngFor`/`*ngSwitchCase` instead of `@if`/`@for`/`@switch`, and `[ngClass]`/`[ngStyle]`. Each finding has rule, severity, file:line and a fix. Filter by `rule`, `file` or `severity`.",
+      "Source checks of component templates with the project's Angular parser: parse errors, @for tracking by $index, img without alt, click without key handler, structural directives and ngClass/ngStyle. Filter by `rule`, `file` or `severity`.",
     inputSchema: {
       type: 'object',
       properties: {

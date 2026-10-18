@@ -1,3 +1,4 @@
+import { defaultPage } from './default-page.ts';
 import { CONSOLE_LEVELS, type ConsoleLevel } from '../console-tap.ts';
 import { ERROR_REFERENCE_URL, ngCodeInfo, ngCodeUrl, normalizeNgCode } from '../ng-error-codes.ts';
 import { redactMessage, redactUrl } from '../router.ts';
@@ -6,6 +7,7 @@ import { clip } from '../text.ts';
 import { explainSection, toErrorExplain, type ErrorExplain } from './error-explain-tools.ts';
 import { code, untrusted } from './forms-tools.ts';
 import { byRecency, unknownPageText } from './pages.ts';
+import { refusal } from './refusal.ts';
 
 /** Where an error came from on the page. */
 export type ErrorSource = 'handler' | 'window' | 'promise';
@@ -273,7 +275,7 @@ function pickPage(
   if (page && !state.pages[page]) {
     return { markdown: unknownPageText(page, pages, 'errors') };
   }
-  const picked = page ? state.pages[page]! : pages[0];
+  const picked = page ? state.pages[page]! : defaultPage(pages);
   if (!picked) return { markdown: NO_PAGE };
   const note =
     pages.length > 1 && !page
@@ -427,11 +429,15 @@ export function sinceTime(value: unknown, now = Date.now()): number | string | u
     }
   }
   if (at === undefined) {
-    return `\`since\` must be a duration such as \`30s\`, \`5m\` or \`1h\`, an ISO date, or epoch milliseconds.`;
+    return refusal(
+      `\`since\` must be a duration such as \`30s\`, \`5m\` or \`1h\`, an ISO date, or epoch milliseconds.`,
+    );
   }
   // A Date holds ±8.64e15 ms; past that, toISOString() throws.
   if (!(Math.abs(at) <= MAX_DATE_MS)) {
-    return `\`since\` is out of range: it must name a time within ±${MAX_DATE_MS} epoch milliseconds (a duration back from now, an ISO date, or epoch milliseconds).`;
+    return refusal(
+      `\`since\` is out of range: it must name a time within ±${MAX_DATE_MS} epoch milliseconds (a duration back from now, an ISO date, or epoch milliseconds).`,
+    );
   }
   return at;
 }
