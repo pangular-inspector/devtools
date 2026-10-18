@@ -10,8 +10,11 @@
 // The harness bundles `scripts/e2e-resilience-app.mjs` (a generated Angular app
 // sized by query parameters) into the demo's browser folder, starts the demo
 // server on `--port` (default 5401), drives headless Chromium with Playwright
-// and reads the hub over MCP (`/__devframes/__mcp`) and its shared state
-// (`devframe_state_read`). Results go to stdout and, with `--json <file>`, to a
+// and reads the hub over MCP (`/__devframes/__mcp`): its shared state through
+// `devframe_state_read` (a markdown answer with a fenced JSON part, read part by
+// part with `offset`), and the keys that tool hides (RESOURCE_KEYS below)
+// through the `pangular:<key>` and `pangular://pages/{pageId}/<key>`
+// resources. Results go to stdout and, with `--json <file>`, to a
 // JSON file. Exit code 1 when a check fails. A check that fails on an open issue
 // prints XFAIL with the issue number and does not fail the run (`knownFailure`).
 //
@@ -229,37 +232,68 @@ const mcp = {
     if (msg.error) throw new Error(`${method}: ${JSON.stringify(msg.error)}`);
     return msg.result;
   },
-  /** A pangular tool's answer: its markdown, or the parsed JSON. */
+  /** A tool's answer: the text of its content. Every Pangular answer is plain text. */
+  async text(name, args = {}) {
+    const result = await this.rpc('tools/call', { name, arguments: args });
+    return (result.content ?? []).map((c) => c.text ?? '').join('\n');
+  },
+  /** A pangular tool's answer, as markdown. */
   async tool(name, args = {}) {
-    const result = await this.rpc('tools/call', { name: `pangular_${name}`, arguments: args });
-    const text = (result.content ?? []).map((c) => c.text ?? '').join('\n');
-    try {
-      const json = JSON.parse(text);
-      return typeof json.markdown === 'string' ? json.markdown : text;
-    } catch {
-      return text;
-    }
+    return this.text(`pangular_${name}`, args);
   },
-  /** The value of a `pangular:<key>` shared state. */
+  /**
+   * The value of a `pangular:<key>` shared state, through `devframe_state_read`.
+   * Each answer is a banner and a fenced JSON part of at most `maxChars`; a
+   * longer value is read part by part with `offset` and joined before parsing.
+   * The keys in RESOURCE_KEYS are not readable this way: use `resourceState`.
+   */
   async state(key) {
-    const result = await this.rpc('tools/call', {
-      name: 'devframe_state_read',
-      arguments: { key: `pangular:${key}` },
-    });
-    const text = (result.content ?? []).map((c) => c.text ?? '').join('');
-    return JSON.parse(text).value;
+    let json = '';
+    for (let offset = 0, parts = 0; ; parts++) {
+      const md = await this.text('devframe_state_read', {
+        key: `pangular:${key}`,
+        offset,
+        maxChars: 50_000,
+      });
+      const start = md.indexOf('```json\n');
+      const end = md.lastIndexOf('\n```');
+      if (start < 0 || end < start) throw new Error(`state ${key}: ${md.slice(0, 200)}`);
+      json += md.slice(start + '```json\n'.length, end);
+      const next = /Pass `offset: (\d+)`/.exec(md)?.[1];
+      if (next === undefined) break;
+      offset = Number(next);
+      if (parts > 400) throw new Error(`state ${key}: more than 400 parts`);
+    }
+    return JSON.parse(json);
   },
+  /** The `pangular:` shared-state keys agents may read, from the key table. */
   async stateKeys() {
-    const result = await this.rpc('tools/call', { name: 'devframe_state_read', arguments: {} });
-    return JSON.parse(result.content[0].text)
-      .keys.filter((k) => k.startsWith('pangular:'))
-      .map((k) => k.slice('pangular:'.length));
+    const md = await this.text('devframe_state_read', {});
+    return [...md.matchAll(/^\| `pangular:([^`]+)` \|/gm)].map((m) => m[1]);
   },
   async resource(id) {
-    const result = await this.rpc('resources/read', {
-      uri: `devframe://resource/${encodeURIComponent(id)}`,
-    });
+    return this.resourceUri(`devframe://resource/${encodeURIComponent(id)}`);
+  },
+  async resourceUri(uri) {
+    const result = await this.rpc('resources/read', { uri });
     return result.contents?.[0]?.text ?? '';
+  },
+  /**
+   * The all-pages resource `pangular:<name>` parsed, for the keys that
+   * `devframe_state_read` hides (RESOURCE_KEYS). Past 100,000 characters it
+   * holds `truncated: true` and the page ids instead of the data.
+   */
+  async resourceState(name) {
+    return JSON.parse(await this.resource(`pangular:${name}`));
+  },
+  /** `pangular://pages/{pageId}/<name>` parsed, or undefined when that page does not report it. */
+  async pageResource(name, pageId) {
+    const text = await this.resourceUri(`pangular://pages/${encodeURIComponent(pageId)}/${name}`);
+    try {
+      return JSON.parse(text);
+    } catch {
+      return undefined;
+    }
   },
   /** `list-pages` parsed into rows. */
   async pages() {
@@ -284,12 +318,39 @@ const mcp = {
   },
 };
 
-/** Every shared state, as `{key: json}`. */
+/**
+ * Shared-state keys that `devframe_state_read` hides because a resource serves
+ * them (`RESOURCE_STATE_KEYS` in packages/devtools/src/config.ts, without
+ * `routes`, which no collector fills). They are read through
+ * `devframe://resource/pangular:<key>` (every page) or
+ * `pangular://pages/{pageId}/<key>` (one page).
+ */
+const RESOURCE_KEYS = [
+  'component-tree',
+  'signal-graph',
+  'injector-tree',
+  'ngrx-store',
+  'forms',
+  'router',
+];
+
+/**
+ * Every shared state, as `{key: json}`: the keys `devframe_state_read` lists,
+ * plus the RESOURCE_KEYS through their all-pages resources (led by an
+ * `_untrusted` notice).
+ */
 async function allStates() {
   const out = {};
   for (const key of await mcp.stateKeys()) {
     try {
       out[key] = JSON.stringify(await mcp.state(key));
+    } catch (error) {
+      out[key] = `error: ${error.message}`;
+    }
+  }
+  for (const key of RESOURCE_KEYS) {
+    try {
+      out[key] = await mcp.resource(`pangular:${key}`);
     } catch (error) {
       out[key] = `error: ${error.message}`;
     }
@@ -301,8 +362,9 @@ async function allStates() {
 function pageSlice(key, value, pageId) {
   if (!value || typeof value !== 'object') return undefined;
   if (key === 'forms') {
-    const forms = (value.forms ?? []).filter((f) => f.pageId === pageId);
-    const events = (value.events ?? []).filter((e) => e.pageId === pageId);
+    // Form ids end with `@<pageId>`.
+    const forms = (value.forms ?? []).filter((f) => f.id?.endsWith(`@${pageId}`));
+    const events = (value.events ?? []).filter((e) => e.formId?.endsWith(`@${pageId}`));
     return forms.length || events.length ? { forms, events } : undefined;
   }
   const pages = value.pages;
@@ -555,6 +617,21 @@ async function checkMultitab() {
       }
       for (const [other, o] of Object.entries(tabs)) {
         if (other !== name && text.includes(`@${o.id}`)) leaks.push(`${key}[${name}] has @${o.id}`);
+      }
+    }
+  }
+  // The per-page resources serve the hidden keys one page at a time: the same check.
+  for (const key of RESOURCE_KEYS) {
+    for (const [name, t] of Object.entries(tabs)) {
+      const value = await mcp.pageResource(key, t.id);
+      if (!value) continue;
+      const text = JSON.stringify(value);
+      for (const [other, m] of Object.entries(marks)) {
+        if (other !== name && text.includes(m))
+          leaks.push(`pages/${name}/${key} has ${other}'s ${m}`);
+      }
+      for (const [other, o] of Object.entries(tabs)) {
+        if (other !== name && text.includes(o.id)) leaks.push(`pages/${name}/${key} has ${o.id}`);
       }
     }
   }
@@ -946,9 +1023,16 @@ async function checkStress() {
   await sleep(5000);
   const id = S.id;
 
-  const tree = await mcp.state('component-tree');
-  const own = tree.pages?.[id] ?? {};
+  // The component tree is read through the page's resource (state reads hide it).
+  // Past 100,000 characters the resource holds only `truncated: true`, so the
+  // page's own flag is then read from list-components, which prints
+  // `truncatedBy` as "stops at the first <n> component instances".
+  const tree = await mcp.pageResource('component-tree', id);
+  const own = tree?.pages?.[id] ?? {};
+  const list = await mcp.tool('list-components', { page: id });
+  const listNote = list.split('\n').filter((l) => /trunc|limit|stops at|more|cut/i.test(l));
   record('component-tree page', {
+    resource: tree?.truncated ? 'past 100,000 characters' : 'whole',
     count: own.count,
     directiveHostCount: own.directiveHostCount,
     truncated: own.truncated,
@@ -956,14 +1040,15 @@ async function checkStress() {
     deferBlocks: Array.isArray(own.deferBlocks) ? own.deferBlocks.length : own.deferBlocks,
     bytes: JSON.stringify(own).length,
   });
+  const flagged = tree?.truncated
+    ? listNote.some((l) => l.includes(`page \`${id}\` stops at the first 2000 `))
+    : own.truncated === true;
   assert(
     'component-tree flags truncation at 2000 instances',
-    own.truncated === true,
-    own.truncatedBy,
+    flagged,
+    tree?.truncated ? 'from list-components' : JSON.stringify(own.truncatedBy),
   );
 
-  const list = await mcp.tool('list-components', { page: id });
-  const listNote = list.split('\n').filter((l) => /trunc|limit|stops at|more|cut/i.test(l));
   record('list-components chars', list.length);
   record('list-components notes', listNote.slice(0, 4));
   assert(
@@ -995,8 +1080,8 @@ async function checkStress() {
       .filter((l) => /trunc|more|limit|cut|10000|10,000/i.test(l))
       .slice(0, 4),
   );
-  const ngrx = await mcp.state('ngrx-store');
-  const ngrxPage = (ngrx.pages ?? []).find((p) => p.pageId === id);
+  const ngrx = await mcp.pageResource('ngrx-store', id);
+  const ngrxPage = (ngrx?.pages ?? []).find((p) => p.pageId === id);
   record('ngrx-store page bytes', JSON.stringify(ngrxPage ?? {}).length);
 
   const formsList = await mcp.tool('inspect-forms', { page: id });
@@ -1057,18 +1142,18 @@ async function checkStress() {
     .filter((l) => /dropped|older|latest|limit|showing/i.test(l));
   record('list-form-changes notes', historyNote.slice(0, 3));
   assert('list-form-changes says older events were dropped', historyNote.length > 0);
-  const formsState = await mcp.state('forms');
+  const formsState = await mcp.resourceState('forms');
   record(
     'forms state: events kept / dropped',
-    `${formsState.events?.length} / ${formsState.dropped}`,
+    `${formsState.events?.length} / ${JSON.stringify(formsState.dropped)}`,
   );
   assert('forms timeline keeps at most 200 events', (formsState.events?.length ?? 0) <= 200);
 
   const log = await mcp.tool('ngrx-history', { page: id });
   const logRows = log.split('\n').filter((l) => /^\|\s*\d+/.test(l) || /^- /.test(l)).length;
   record('ngrx-history chars / rows', `${log.length} / ${logRows}`);
-  const ngrx2 = await mcp.state('ngrx-store');
-  const p2 = (ngrx2.pages ?? []).find((p) => p.pageId === id) ?? {};
+  const ngrx2 = await mcp.pageResource('ngrx-store', id);
+  const p2 = (ngrx2?.pages ?? []).find((p) => p.pageId === id) ?? {};
   const changeLog = p2.log ?? p2.changeLog ?? p2.entries ?? [];
   record(
     'ngrx change log kept / dropped',
@@ -1265,24 +1350,29 @@ async function soakSample(server, tabs, panel, minute, prev) {
 
 async function capsSnapshot(ids) {
   const caps = {};
-  const router = await mcp.state('router');
+  // The hidden keys come from their all-pages resources.
+  const router = await mcp.resourceState('router');
   for (const id of ids) {
     const p = (router.pages ?? []).find((x) => x.pageId === id);
     caps[`navigations ${id}`] = p?.navigations?.length;
   }
-  const forms = await mcp.state('forms');
+  const forms = await mcp.resourceState('forms');
   caps.formEvents = forms.events?.length;
   caps.formDropped = forms.dropped;
-  const ngrx = await mcp.state('ngrx-store');
+  const ngrx = await mcp.resourceState('ngrx-store');
   for (const p of ngrx.pages ?? []) {
     const log = p.log ?? p.changeLog ?? p.entries;
     caps[`ngrx log ${p.pageId}`] =
       `${Array.isArray(log) ? log.length : '?'} (dropped ${p.dropped ?? 0})`;
   }
-  const signals = await mcp.state('signal-graph');
+  const signals = await mcp.resourceState('signal-graph');
   const lengths = [];
+  // `history` is a record of change lists by node id (an array in older shapes).
   JSON.stringify(signals, (k, v) => {
-    if (k === 'history' && Array.isArray(v)) lengths.push(v.length);
+    if (k !== 'history' || !v || typeof v !== 'object') return v;
+    for (const list of Array.isArray(v) ? [v] : Object.values(v)) {
+      if (Array.isArray(list)) lengths.push(list.length);
+    }
     return v;
   });
   caps.signalHistoryMax = Math.max(0, ...lengths);

@@ -122,7 +122,7 @@ export default defineConfig(async () => ({
             defaultColor: false,
           },
           highlighter: {
-            additionalLangs: ['bash', 'md', 'json'],
+            additionalLangs: ['bash', 'md', 'json', 'yaml'],
           },
         },
       },

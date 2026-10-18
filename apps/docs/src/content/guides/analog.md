@@ -60,6 +60,22 @@ yarn add -D @pangular-inspector/devtools
 bun add -D @pangular-inspector/devtools
 ```
 
+### If the build fails under pnpm
+
+With pnpm, `vite build` or the dev server can stop with `SyntaxError: The requested module 'h3' does not provide an export named 'createEvent'`. `@analogjs/vite-plugin-nitro` imports `h3` without listing it as a dependency, so pnpm resolves the import to whichever `h3` it hoists. Analog's server needs `h3` 1, and this package brings `h3` 2 through *Devframe.
+
+Declare the missing dependency in `pnpm-workspace.yaml` at the root of your app (create the file if there is none), then run `pnpm install` again:
+
+```yaml
+# pnpm-workspace.yaml
+packageExtensions:
+  '@analogjs/vite-plugin-nitro':
+    dependencies:
+      h3: ^1.15.0
+```
+
+Before pnpm 10, put the same entry under `pnpm.packageExtensions` in `package.json`. Adding `h3` 1 to your own dependencies does not help, because the plugin's import still resolves to the hoisted copy.
+
 ## Step 2: Add the Vite plugin
 
 Add the plugin after `analog()`:

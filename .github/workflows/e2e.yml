@@ -38,9 +38,11 @@ jobs:
           pnpm devtools:build-pkg
           pnpm build --configuration development
 
+      # The demo keeps the one-time code on unless PANGULAR_AUTH is false, and the panel check
+      # needs a connected panel.
       - name: Start the SSR demo on port 4000
         run: |
-          PORT=4000 node dist/pangular-inspector/server/server.mjs > "$RUNNER_TEMP/demo.log" 2>&1 &
+          PANGULAR_AUTH=false PORT=4000 node dist/pangular-inspector/server/server.mjs > "$RUNNER_TEMP/demo.log" 2>&1 &
           for _ in $(seq 60); do
             curl -sf http://localhost:4000/ > /dev/null && exit 0
             sleep 1

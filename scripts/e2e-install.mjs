@@ -621,6 +621,23 @@ async function analog(cell) {
   const app = path.join(cell.dir, 'analog');
   cell.app = app;
   useRegistry(app);
+  if (cell.pm === 'pnpm') {
+    // The workaround in analog.md ("If the build fails under pnpm"). @analogjs/vite-plugin-nitro
+    // (2.7.0 to 2.8.1 at least) imports `h3` without declaring it; with this package's h3 2 (from
+    // devframe) in the tree, pnpm can hoist h3 2 and `vite build` fails on the missing
+    // `createEvent`. Remove this once the plugin declares h3.
+    await step(cell, 'pnpm-workspace.yaml: declare h3 for @analogjs/vite-plugin-nitro', () => {
+      const file = path.join(app, 'pnpm-workspace.yaml');
+      const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+      if (/^packageExtensions:/m.test(text)) {
+        throw new Error(`${file} already has packageExtensions:\n${text}`);
+      }
+      writeFileSync(
+        file,
+        `${text}${text && !text.endsWith('\n') ? '\n' : ''}packageExtensions:\n  '@analogjs/vite-plugin-nitro':\n    dependencies:\n      h3: ^1.15.0\n`,
+      );
+    });
+  }
   await step(cell, `${cell.pm} install`, () => pmRun(cell, PM[cell.pm].install(), app));
   // vite.md: "Add @pangular-inspector/devtools as a dev dependency."
   await step(cell, 'install the package', () => {

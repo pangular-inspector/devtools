@@ -1641,6 +1641,17 @@ async function gatingChecks() {
         !read.text.includes('ReactiveSecrets'),
         read.text.slice(0, 100),
       );
+      // devframe_state_read hides pangular:forms in every config (RESOURCE_STATE_KEYS), so the
+      // resource that serves it is the read that can leak.
+      const resource = await client
+        .readResource({ uri: `devframe://resource/${encodeURIComponent('pangular:forms')}` })
+        .then((r) => r.contents?.map((c) => c.text ?? '').join('\n') ?? '')
+        .catch((error) => String(error?.message ?? error));
+      g(
+        'pangular:forms resource not readable',
+        !resource.includes('ReactiveSecrets'),
+        resource.slice(0, 100),
+      );
     }
     if (label === 'agent.tools.forms false') {
       g(

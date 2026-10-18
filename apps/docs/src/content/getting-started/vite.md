@@ -225,6 +225,9 @@ Start Vite on every interface too, with `server.host: true`. A request from anot
   <ngmd-accordion-item title="Why do I get a 403 from the devtools?">
     The request did not come from your machine, or its origin or the host it was sent to is not trusted. The terminal names a refused origin or host. Open the app on <code>localhost</code>, list your hostname in <code>server.allowedHosts</code>, or add the origin to <code>allowedOrigins</code>.
   </ngmd-accordion-item>
+  <ngmd-accordion-item title="Why does vite build fail with an h3 error under pnpm?">
+    <code>&#64;analogjs/vite-plugin-nitro</code> imports <code>h3</code> without declaring it, so pnpm can resolve it to the <code>h3</code> 2 that this package brings instead of the <code>h3</code> 1 Analog needs. The build stops with <code>The requested module 'h3' does not provide an export named 'createEvent'</code>. Declare <code>h3</code> for the plugin with <code>packageExtensions</code>, as <a href="../guides/analog.md#if-the-build-fails-under-pnpm">Set up Analog</a> shows.
+  </ngmd-accordion-item>
   <ngmd-accordion-item title="The Analog tab shows no server calls">
     The plugin records server calls made through the Vite dev server. Check that the plugin is registered and that <code>apiPrefix</code> matches your server routes. The <a href="../guides/analog.md">Analog guide</a> walks through a full setup.
   </ngmd-accordion-item>

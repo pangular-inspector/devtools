@@ -7,9 +7,10 @@
 //   node scripts/e2e-panel.mjs --base http://localhost:4000 [--out dir] [--route tab=/path ...]
 //     [--auth-log file]
 //
-// --auth-log reads the one-time code from the dev server's output (the Vite
-// plugin asks for it; the Express hub in the demo does not) and opens the
-// magic link once per browser context.
+// --auth-log reads the one-time code from the server's output and opens the
+// magic link once per browser context. The Vite plugin and the SSR demo both
+// ask for the code; start the demo with PANGULAR_AUTH=false to skip it, as
+// .github/workflows/e2e.yml does, or pass its log here.
 //
 // Set CHROMIUM_PATH to use a Chromium other than Playwright's default.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
