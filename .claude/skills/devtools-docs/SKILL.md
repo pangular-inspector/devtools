@@ -94,7 +94,7 @@ Raw HTML in markdown. Always write explicit closing tags; never self-close custo
 | `ngmd-workflow` > `ngmd-step`            | Ordered steps.                           | step `title`                                                           |
 | `ngmd-accordion` > `ngmd-accordion-item` | FAQ.                                     | item `title`, `open`                                                   |
 | `ngmd-pill-row` > `ngmd-pill`            | Related links at the end of a page.      | pill `href`, `title`                                                   |
-| `ngmd-badge`                             | Status chip next to a heading.           | `variant`: new, updated, alpha, beta, stable, deprecated               |
+| `ngmd-badge`                             | Status chip next to a heading.           | `variant`: new, updated, alpha, beta, stable, deprecated, action, destructive               |
 | `ngmd-tabs` > `ngmd-tab`                 | Alternatives a code group can't express. | tab `title`, `icon`, `image`                                           |
 | `ngmd-image`, `ngmd-video`               | Screenshots, YouTube or Vimeo.           | image `src`, `alt`, `caption`, `width`. video `src`, `title`           |
 

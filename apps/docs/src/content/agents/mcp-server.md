@@ -45,7 +45,7 @@ npx @pangular-inspector/devtools mcp --print-config --port 4000 --base /__devfra
 | `--base <path>` | The hub base, such as `/__devframes/`. The URL becomes `<base>__mcp` and the config sends the bearer token. |
 | `--https`       | The server is behind TLS. The URL and the `Origin` header use `https://`.                                   |
 
-`--config` and `--read-only` are added to the stdio command. The output never holds the token. It reads the token from `PANGULAR_MCP_TOKEN` (VS Code asks for it) and prints the `export` line that sets it from the [token file](#send-a-token). Without `--base`, the HTTP config targets the standalone CLI, which asks for no token.
+`--config` and `--read-only` are added to the stdio command. The output never holds the token. It reads the token from `PANGULAR_MCP_TOKEN` (VS Code asks for it) and prints the `export` line that sets it from the [token file](#send-a-token). Without `--base`, the HTTP config targets the standalone CLI, which asks for the same token.
 
 The stdio server is named `pangular` and the HTTP one `pangular-live`, so you can add both. Claude Code prefers a local server over a project server of the same name, so with one name the HTTP server would never load.
 
@@ -140,6 +140,7 @@ If the hub asks for the one-time code, the HTTP endpoint also asks for a bearer 
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | [Express hub](../getting-started/express.md) | Yes, unless you pass `auth: false` or your own `mcp` option.                                           |
 | [Vite plugin](../getting-started/vite.md)    | Yes, unless you pass `auth: false`. See the plugin's [`auth` option](../getting-started/vite.md#auth). |
+| [Standalone CLI](../getting-started/cli.md)  | Yes, unless you pass `--no-auth`.                                                                      |
 
 The hub writes a generated token to `~/.pangular-inspector/mcp-token` when it first starts, with mode `0600` so only your user can read it. It prints the path of that file, never the token. Later starts read the same file, so the token stays the same across restarts and across projects. Read it from your client, for example with `cat ~/.pangular-inspector/mcp-token`.
 

@@ -103,10 +103,22 @@ describe('agent tools', () => {
     expect(await call('change-detection', '')).toContain('`Cart`: 1 check(s)');
     expect(await call('change-detection', '')).toContain('Recording is on.');
     // Right after a stop, before the page pushed again, the summary already says it is off.
-    expect(await call('change-detection', '', { record: 'stop' })).toMatch(/Recording stopped/);
+    const stopping = call('change-detection', '', { record: 'stop' });
     const after = await call('change-detection', '');
     expect(after).toContain('Recording is off.');
     expect(after).toContain('`Cart`: 1 check(s)');
+    // The stop itself answers once the page confirms it.
+    await push('push-change-detection', {
+      pageId: 'p1',
+      supported: true,
+      recording: false,
+      startedAt: 1,
+      dropped: 0,
+      cycles: [{ id: 1, at: 1, ms: 2, passes: 1, checks: 1, components: [] }],
+      components: [{ name: 'Cart', checks: 1, ms: 2, maxMs: 2, cycles: 1 }],
+      hosts: {},
+    });
+    expect(await stopping).toMatch(/Recording stopped/);
     expect(await push('ping-change-detection', 'p1')).toEqual({ known: true });
     await push('forget-change-detection-page', 'p1');
     expect(await push('ping-change-detection', 'p1')).toEqual({ known: false });

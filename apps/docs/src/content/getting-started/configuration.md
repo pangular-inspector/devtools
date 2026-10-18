@@ -9,7 +9,7 @@ description: Turn inspectors, agent tools and panel actions on or off, add secre
 
 # Configuration
 
-Everything is on when you leave the options out. You set them once, on the server. The server enforces them, and the overlay and the panel read them from the connection info.
+Everything is on when you leave the options out. The one exception is the Analog, Capacitor and TanStack Query agent tools, which are listed only for apps that use those libraries (see [library tools](../agents/tools.md#analog-capacitor-and-tanstack-query-tools)). You set them once, on the server. The server enforces them, and the overlay and the panel read them from the connection info.
 
 ## Where to set them
 

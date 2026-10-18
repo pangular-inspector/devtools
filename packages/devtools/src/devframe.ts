@@ -2767,7 +2767,7 @@ const pangular = defineDevframe({
       id: 'pangular:signal-graph',
       name: 'Angular Signal Graph',
       description:
-        'Live signal graph per page as JSON: nodes, edges (`consumer` reads `producer`, by node id), contexts, resources and value history. Empty when no page is connected. ' +
+        'Live signal graph per page as JSON: nodes, edges (`consumer` reads `producer`, by node id), contexts, resources, value history. Empty with no page. ' +
         LIVE_RESOURCE_NOTE,
       mimeType: 'application/json',
       read: () => ({

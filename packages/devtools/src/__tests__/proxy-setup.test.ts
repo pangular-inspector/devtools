@@ -15,7 +15,7 @@ interface ProxyEntry {
 }
 
 function documentedProxy(): Record<string, ProxyEntry> {
-  const block = /```json[^\n]*\n\/\/ proxy\.conf\.json\n([\s\S]*?)```/.exec(docs);
+  const block = /```json[^\n]*name="Client-only Angular CLI"[^\n]*\n([\s\S]*?)```/.exec(docs);
   if (!block) throw new Error('installation.md has no proxy.conf.json sample');
   return JSON.parse(block[1]!) as Record<string, ProxyEntry>;
 }
