@@ -105,6 +105,19 @@ export class SecretCard {
     ['sessionId', C.cmpMapSession.value],
   ]);
   tokens = new Set<string>([C.cmpSetJwt.value]);
+  // 1.0 security review probes.
+  'пароль' = C.uniKeyPw.value;
+  uniHolder = { password: C.uniValPw.value };
+  deep = [[[[{ token: C.deepArrTok.value }]]]];
+  keyed = new Map<string, number>([[`token=${C.mapKeyPair.value}`, 1]]);
+  byJwt = { [C.objKeyJwt.value]: true };
+  long250 = 'a'.repeat(250) + C.cut250.value;
+  long290 = 'b'.repeat(290) + C.cut290.value;
+  long480 = 'c'.repeat(480) + C.cut480.value;
+  long990 = 'd'.repeat(990) + C.cut990.value;
+  header2 = C.b64Basic.value;
+  openai = C.llmKey.value;
+  readonly longSig = signal('e'.repeat(280) + C.sigCut.value);
 
   readonly authToken = signal(C.sigAuthToken.value);
   readonly profile = signal({

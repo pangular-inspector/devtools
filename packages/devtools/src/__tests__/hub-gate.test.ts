@@ -1,6 +1,7 @@
 import { Server } from 'node:http';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  allowedHostsWarning,
   hubRequestGate,
   hubUpgradeListener,
   isAllowedHubHost,
@@ -49,6 +50,24 @@ describe('the Host check', () => {
       }),
     ).toBe(true);
     expect(isAllowedHubHost('evil.test', { isAllowedOrigin: () => false })).toBe(false);
+  });
+
+  it('reads allowedHosts: true as any Host, never as any Origin', () => {
+    const policy: HubOriginPolicy = { allowedHosts: true };
+    // Another website, to the dev server's own address.
+    expect(status({ host: 'localhost:5173', origin: 'https://evil.example' }, policy)).toBe(403);
+    // A DNS rebind, same-origin with the Host it sends: what allowedHosts: true lets in, as in Vite.
+    expect(status({ host: 'evil.example:5173', origin: 'http://evil.example:5173' }, policy)).toBe(
+      'next',
+    );
+    // A tunnel page, and the dev server's own pages.
+    expect(
+      status({ host: 'abc.trycloudflare.com', origin: 'https://abc.trycloudflare.com' }, policy),
+    ).toBe('next');
+    expect(status({ host: 'abc.trycloudflare.com', origin: 'http://localhost:5173' }, policy)).toBe(
+      'next',
+    );
+    expect(status({ host: 'a.test', origin: 'https://b.test' }, policy)).toBe(403);
   });
 
   it('refuses a Host header that is not a plain host and port', () => {
@@ -115,5 +134,32 @@ describe('the upgrade gate', () => {
     );
     expect(socket.destroy).toHaveBeenCalled();
     expect(hub).not.toHaveBeenCalled();
+  });
+});
+
+describe('remote requests (allowLan)', () => {
+  const policy: HubOriginPolicy = { remote: true };
+  it('takes an IP address or a .local name, and refuses a rebound DNS name', () => {
+    expect(status({ host: '192.168.1.20:4000' }, policy, '192.168.1.30')).toBe('next');
+    expect(status({ host: '[fe80::1]:4000' }, policy, 'fe80::2')).toBe('next');
+    expect(status({ host: 'my-mac.local:4000' }, policy, '192.168.1.30')).toBe('next');
+    expect(status({}, policy, '192.168.1.30')).toBe('next');
+    expect(status({ host: 'evil.example:4000' }, policy, '192.168.1.30')).toBe(403);
+    expect(
+      status(
+        { host: 'dev.example:4000' },
+        { ...policy, allowedHosts: ['dev.example'] },
+        '10.0.0.5',
+      ),
+    ).toBe('next');
+  });
+});
+
+describe('allowedHostsWarning', () => {
+  it('warns about allowedHosts: true, louder with auth off', () => {
+    expect(allowedHostsWarning(['myapp.test'], true)).toBeUndefined();
+    expect(allowedHostsWarning(undefined, false)).toBeUndefined();
+    expect(allowedHostsWarning(true, true)).toContain('still refuse other websites');
+    expect(allowedHostsWarning(true, false)).toContain('WARNING');
   });
 });

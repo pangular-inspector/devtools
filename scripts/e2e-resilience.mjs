@@ -127,7 +127,8 @@ function startServer() {
   }
   const proc = spawn(process.execPath, [SERVER], {
     cwd: ROOT,
-    env: { ...START_ENV, PORT: String(PORT) },
+    // The demo keeps the one-time code on unless PANGULAR_AUTH is false.
+    env: { ...START_ENV, PANGULAR_AUTH: 'false', PORT: String(PORT) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const log = [];

@@ -27,6 +27,7 @@ import { PANGULAR_LOGO_DATA_URI, PANGULAR_PRIMARY_COLOR } from './brand.ts';
 import { createSsrMiddleware } from './ssr-middleware.ts';
 import { releaseServerState } from './server-state.ts';
 import { disabledHub, hubEnabled, type PangularHub } from './hub-off.ts';
+import { hubStorageDir } from './auth-store.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 export const PANGULAR_HUB_BASE = DEVFRAMES_HUB_BASE;
@@ -200,6 +201,8 @@ export function startPangularHub(
     version: pkg.version,
     base: PANGULAR_HUB_BASE,
     ...rest,
+    // Trusted tokens go to a private, per-project store (`auth-store.ts`).
+    getStorageDir: rest.getStorageDir ?? hubStorageDir(rest.cwd ?? process.cwd()),
     ...(auth === undefined ? {} : { auth }),
     allowedOrigins: hubAllowedOrigins(rest.allowedOrigins),
     mcp: pangularMcp(hubMcpFor({ ...rest, auth }), resolvePangularConfig(config)),

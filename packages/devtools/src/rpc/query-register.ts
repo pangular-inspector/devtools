@@ -169,7 +169,7 @@ export async function registerTanstackQuery(host: QueryHost): Promise<QueryRegis
     title: 'List TanStack queries',
     outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
-      'TanStack Query on the page: the QueryClients, then cached queries and mutations with id, key, status, freshness, observers and error. Filter with `status` and `search`; `limit` caps rows. Masked.',
+      'TanStack Query on the page: the QueryClients, then cached queries and mutations with id, key, status, freshness, observers and error. Filter with `status` and `search`; `limit` caps rows. Secret fields and token-like key parts are masked.',
     inputSchema: {
       type: 'object',
       properties: {

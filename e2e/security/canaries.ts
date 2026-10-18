@@ -59,6 +59,12 @@ function email(id: string, where: string): Canary {
   return { value, needle: value, expect: 'info', where };
 }
 
+/** A JWT whose needle is its payload segment, to catch a cut that keeps the start. */
+function jwtHead(id: string, where: string, expect: CanaryExpect = 'masked'): Canary {
+  const value = jwt(id);
+  return { value, needle: value.split('.')[1], expect, where };
+}
+
 export const C = {
   // Components: inputs, properties, nested, arrays, Map and Set.
   cmpInputPassword: plain('cmpInputPassword', 'component input `password`'),
@@ -217,6 +223,66 @@ export const C = {
   srcRouteApiKey: plain('srcRouteApiKey', 'source literal route data `apiKey`'),
   // A password input whose name looks harmless.
   rfPwType: plain('rfPwType', 'reactive form `userWord` with type=password'),
+  // 1.0 security review probes.
+  uniKeyPw: plain('uniKeyPw', 'component property `пароль` (non-English secret name)', 'info'),
+  uniValPw: {
+    value: 'pässwört-ÿ-CNRY_uniValPw_q7Zx',
+    needle: 'CNRY_uniValPw_q7Zx',
+    expect: 'masked',
+    where: 'component property `password` with a unicode value',
+  },
+  deepArrTok: plain('deepArrTok', 'component property `deep[0][0][0][0].token` (nested arrays)'),
+  mapKeyPair: plain('mapKeyPair', 'component Map key `token=…`'),
+  objKeyJwt: token('objKeyJwt', 'component property object key holding a JWT'),
+  cut250: jwtHead('cut250', 'component string, JWT after 250 chars (cut inside the JWT?)'),
+  cut290: jwtHead('cut290', 'component string, JWT after 290 chars'),
+  cut480: jwtHead('cut480', 'component string, JWT after 480 chars'),
+  cut990: jwtHead('cut990', 'component string, JWT after 990 chars'),
+  sigCut: jwtHead('sigCut', 'signal string, JWT after 280 chars'),
+  b64Basic: {
+    value: btoa('ada:CNRY_b64Basic_q7Zx'),
+    needle: btoa('ada:CNRY_b64Basic_q7Zx'),
+    expect: 'info',
+    where: 'component property `header2` holding base64 user:pass without the Basic scheme',
+  },
+  llmKey: {
+    value: 'sk-proj-CNRYllmKey0123456789abcdefABCDEF',
+    needle: 'CNRYllmKey0123456789',
+    expect: 'masked',
+    where: 'component property `openai` holding an OpenAI-style key',
+  },
+  errColon: plain('errColon', 'uncaught error `apiKey: …`'),
+  errAmp: {
+    value: 'Tr0ub&CNRYerrAmpTail',
+    needle: 'CNRYerrAmpTail',
+    expect: 'masked',
+    where: 'uncaught error `password=Tr0ub&…` (special char in password)',
+  },
+  conPhrase: {
+    value: 'correct CNRYconPhraseHorse battery',
+    needle: 'CNRYconPhraseHorse',
+    expect: 'masked',
+    where: 'console.log `password: correct … battery` (passphrase with spaces)',
+  },
+  conQuote: {
+    value: 'abc\\"CNRYconQuoteTail',
+    needle: 'CNRYconQuoteTail',
+    expect: 'masked',
+    where: 'console.log JSON text with an escaped quote in the password',
+  },
+  errAxios: bearer('errAxios', 'console.error of an Error with config.headers.Authorization'),
+  errObjKey: plain('errObjKey', 'console.error of an object with `apiKey` next to an Error'),
+  httpFormBody: plain('httpFormBody', 'POST form-urlencoded body `password=`'),
+  httpXmlResp: plain('httpXmlResp', 'XML response `<password>`'),
+  httpLongResp: plain('httpLongResp', 'JSON response with `token` past 1990 chars'),
+  httpUrlEncAuth: plain('httpUrlEncAuth', 'request URL `?redirect=…Authorization%3A%20Bearer%20…`'),
+  qData: plain('qData', 'TanStack Query data `accessToken`'),
+  qKeyObj: plain('qKeyObj', 'TanStack Query key `{ token }`'),
+  qKeyPlain: plain('qKeyPlain', 'TanStack Query key plain string', 'info'),
+  qErr: plain('qErr', 'TanStack Query error `password=…`'),
+  qMutVar: plain('qMutVar', 'TanStack mutation variables `password`'),
+  qMutPos: plain('qMutPos', 'TanStack mutation variables positional array (token-like string)'),
+  qDataJwt: token('qDataJwt', 'TanStack Query data `note` holding a JWT'),
   // Write-back probes: values agents try to write into secret fields.
   writeProbe: plain('writeProbe', 'value an agent tries to write into a secret field'),
 } satisfies Record<string, Canary>;

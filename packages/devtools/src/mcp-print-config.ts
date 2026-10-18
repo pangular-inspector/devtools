@@ -29,7 +29,8 @@ export interface McpPrintConfigOptions {
   https?: boolean;
   /**
    * The hub base, such as `/__devframes/`. Without it, the endpoint is the
-   * standalone CLI's `/__mcp`, which asks for no token.
+   * standalone CLI's `/__mcp`. Both ask for the MCP token while the one-time
+   * code is on.
    */
   base?: string;
   env?: Record<string, string | undefined>;
@@ -78,7 +79,7 @@ export function isLoopbackHost(host: string): boolean {
   );
 }
 
-/** The HTTP endpoint, its `Origin` and whether it asks for the bearer token. */
+/** The HTTP endpoint, its `Origin`, whether it asks for the bearer token and whether it is a hub's. */
 export function mcpEndpoint(
   options: Pick<McpPrintConfigOptions, 'host' | 'port' | 'base' | 'https'>,
 ) {
@@ -86,7 +87,8 @@ export function mcpEndpoint(
   const origin = `${scheme}://${clientHost(options.host ?? DEFAULT_HOST)}:${options.port ?? DEFAULT_PORT}`;
   const hub = options.base !== undefined && normalizeBase(options.base) !== '/';
   const base = hub ? normalizeBase(options.base as string) : '/';
-  return { url: `${origin}${base}__mcp`, origin, token: hub };
+  // Every server asks for the token while the one-time code is on (the CLI too, since 1.0).
+  return { url: `${origin}${base}__mcp`, origin, token: true, hub };
 }
 
 function json(value: unknown): string {
@@ -103,7 +105,7 @@ export function mcpPrintConfig(options: McpPrintConfigOptions): string {
     ...(options.config ? ['--config', options.config] : []),
     ...(options.readOnly ? ['--read-only'] : []),
   ];
-  const { url, origin, token } = mcpEndpoint(options);
+  const { url, origin, token, hub } = mcpEndpoint(options);
   const clearText =
     token && !options.https && !isLoopbackHost(clientHost(options.host ?? DEFAULT_HOST));
   const bearer = (variable: string) => `Bearer ${variable}`;
@@ -173,17 +175,14 @@ export function mcpPrintConfig(options: McpPrintConfigOptions): string {
     }),
     '',
   ];
-  if (token) {
-    lines.push(
-      `The hub keeps its MCP token in ${mcpTokenFile(options.env)}. Claude Code and Cursor read it from ${PANGULAR_MCP_TOKEN_ENV}:`,
-      `  export ${PANGULAR_MCP_TOKEN_ENV}="$(cat ${shellQuote(mcpTokenFile(options.env))})"`,
-      `If the server sets ${PANGULAR_MCP_TOKEN_ENV} itself, use that value. VS Code asks for the token once.`,
-      'Leave the Authorization header out when the hub runs with auth: false.',
-    );
-  } else {
-    lines.push(
-      'The standalone CLI asks for no token. For the Express hub or the Vite plugin, pass --base /__devframes/ and their port.',
-    );
+  lines.push(
+    `The server keeps its MCP token in ${mcpTokenFile(options.env)}. Claude Code and Cursor read it from ${PANGULAR_MCP_TOKEN_ENV}:`,
+    `  export ${PANGULAR_MCP_TOKEN_ENV}="$(cat ${shellQuote(mcpTokenFile(options.env))})"`,
+    `If the server sets ${PANGULAR_MCP_TOKEN_ENV} itself, use that value. VS Code asks for the token once.`,
+    'Leave the Authorization header out when the server runs with auth: false or --no-auth.',
+  );
+  if (!hub) {
+    lines.push('For the Express hub or the Vite plugin, pass --base /__devframes/ and their port.');
   }
   return `${lines.join('\n')}\n`;
 }

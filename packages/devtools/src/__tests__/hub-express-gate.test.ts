@@ -218,6 +218,14 @@ describe('the Express hub in production', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('is off in a production Angular build without NODE_ENV, where ngDevMode is false', () => {
+    const warn = vi.fn();
+    expect(hubEnabled(undefined, {}, warn, false)).toBe(false);
+    expect(hubEnabled(undefined, {}, warn, true)).toBe(true);
+    expect(hubEnabled(true, {}, warn, false)).toBe(true);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('production build'));
+  });
+
   it('starts when forced on in production, with the warning', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

@@ -101,7 +101,7 @@ With `ws: {sidecar: true}`, the WebSocket runs on its own port, picked automatic
 | ---------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `base`           | `'/__devframes/'`                         | Where the hub is mounted. The devtools panel lives at `<base>pangular/`.                                                                                                                                                            |
 | `ws`             |                                           | `false` uses server-sent events only. `{ sidecar: true }` runs the WebSocket on its own port.                                                                                                                                       |
-| `enabled`        | on unless `NODE_ENV` is `production`      | `false` mounts nothing: the middlewares only call `next()`. `true` mounts the hub in production too, with a warning. See [Production](#production).                                                                                 |
+| `enabled`        | on unless this is production              | `false` mounts nothing: the middlewares only call `next()`. `true` mounts the hub in production too, with a warning. See [Production](#production).                                                                                 |
 | `auth`           | on                                        | `false` turns off the one-time code. `{tokens: [...]}` keeps it on and trusts clients that send one of the [pairing tokens](../security.md#pairing-tokens).                                                                         |
 | `allowedOrigins` | loopback origins and the Chrome extension | Extra origins allowed to reach the hub, such as a tunnel. `false` turns the origin check and the request gate off.                                                                                                                  |
 | `allowLan`       | `false`                                   | Answer other machines, such as a phone on Wi-Fi. Needs the one-time code on.                                                                                                                                                        |
@@ -133,8 +133,10 @@ The demo app in this repository mounts the hub like this:
 
 ```ts
 // src/server.ts
-const auth = process.env['PANGULAR_AUTH'] === 'true';
+const auth = process.env['PANGULAR_AUTH'] !== 'false';
 const devtools = initPangularHub({
+  enabled:
+    (typeof ngDevMode === 'undefined' || !!ngDevMode) && process.env['NODE_ENV'] !== 'production',
   ws: {sidecar: true},
   auth,
 });
@@ -144,16 +146,16 @@ if (devtools.enabled) {
 }
 ```
 
-It turns the one-time code off unless `PANGULAR_AUTH` is `true`. Don't copy that setting. Keep the one-time code on for your own apps. The demo keeps the default origin check.
+It keeps the one-time code on unless `PANGULAR_AUTH` is `false`, and keeps the default origin check. The `enabled` check turns the hub off in a production build.
 
 ### Production
 
-The hub is off when `NODE_ENV` is `production`. `initPangularHub()` then mounts nothing: `nodeMiddleware` and `ssrMiddleware` only call `next()`, and `devtools.enabled` is `false`. Check `enabled` to skip the `app.use()` calls, as the demo does.
+The hub is off in production: when `NODE_ENV` is `production`, or when the server is a production Angular build, where `ngDevMode` is `false`. `initPangularHub()` then mounts nothing: `nodeMiddleware` and `ssrMiddleware` only call `next()`, and `devtools.enabled` is `false`. Check `enabled` to skip the `app.use()` calls, as the demo does.
 
 Pass `enabled: true` to mount the hub in production anyway, for example on a staging server only you can reach. The hub prints a warning when it starts. Pass `enabled: false` to keep it off in any environment.
 
 <ngmd-alert severity="warning">
-  The switch reads <code>NODE_ENV</code> when <code>initPangularHub()</code> runs. If your production server does not set <code>NODE_ENV=production</code>, the hub stays on. Set it, or pass <code>enabled</code> yourself.
+  The switch reads <code>NODE_ENV</code> and <code>ngDevMode</code> when <code>initPangularHub()</code> runs. A server that is not an Angular build, or that loads the package without bundling it, and does not set <code>NODE_ENV=production</code>, keeps the hub on. Pass <code>enabled</code> yourself, as the demo does.
 </ngmd-alert>
 
 ## Load the overlay

@@ -23,6 +23,7 @@ import {
   type ResolvedPangularConfig,
 } from './config.ts';
 import { pangularMcp } from './agent-mcp.ts';
+import { PANGULAR_MCP_TOKEN_ENV, loadMcpToken } from './mcp-token.ts';
 import { registerSkillsCommand } from './skills-install.ts';
 import { registerLintCommand } from './lint-export.ts';
 import pkg from '../package.json' with { type: 'json' };
@@ -215,6 +216,21 @@ export function proxyAuth(panelUrl: string) {
     createInteractiveAuth(ctx, { serverUrl: () => panelUrl });
 }
 
+/**
+ * The dev server's MCP setting: the MCP token on `/__mcp` while the one-time
+ * code is on, as on the Express hub and the Vite plugin. Without it a local
+ * process, or a request through a tunnel, would get every agent tool with no
+ * code. `--no-auth` drops both, and `--no-mcp` turns the route off.
+ */
+export function cliMcpSetting(
+  mcp: boolean | undefined,
+  authOn: boolean,
+  token: () => string = () => process.env[PANGULAR_MCP_TOKEN_ENV] || loadMcpToken(),
+): boolean | { authorization: string } {
+  if (mcp === false) return false;
+  return authOn ? { authorization: token() } : true;
+}
+
 /** The lines the dev server prints once it listens. */
 export function startupLines(
   origin: string,
@@ -352,7 +368,10 @@ export function createPangularCli(options: PangularCliOptions = {}) {
             cliGatePolicy(access.allowedOrigins, listenHost, proxyUrl),
           )) as never,
           flags: flags as Record<string, unknown>,
-          mcp: pangularMcp(flags.mcp ?? true, resolved),
+          mcp: pangularMcp(
+            cliMcpSetting(flags.mcp, (flags as { auth?: boolean }).auth !== false),
+            resolved,
+          ),
           ...(access.allowedOrigins.length ? { allowedOrigins: access.allowedOrigins } : {}),
           // devframe builds the handler from a function too; its dev server
           // types only list the handler object. `--no-auth` still turns it off.

@@ -293,6 +293,8 @@ export {
 } from './plugin.ts';
 
 import { registerAuthTokens } from './auth-tokens.ts';
+import { registerCodeGuard } from './auth-guard.ts';
+import { expireAuthTokens, protectAuthFile, scopeAuthStore } from './auth-store.ts';
 import {
   BROWSER_TOOLS_CHANGED,
   BROWSER_TOOLS_STATE,
@@ -4689,6 +4691,9 @@ export function createPangular(options: PangularConfig = {}, host: PangularHostO
         notAProject: host.notAProject,
         autoLibraries: autoLibraries(options),
       };
+      // First, so devframe opens its token store in the private folder.
+      // The stdio MCP server (no page tools) has no clients to trust.
+      if (host.pageTools !== false) guardAuth(ctx);
       if (host.authTokens?.length && !registerAuthTokens(ctx, host.authTokens)) {
         console.warn(
           '[pangular] The pairing tokens could not be registered, so clients need the one-time code.',
@@ -4697,6 +4702,19 @@ export function createPangular(options: PangularConfig = {}, host: PangularHostO
       return pangular.setup(ctx, withConfig);
     },
   });
+}
+
+/** Rate-limits the one-time code and expires old tokens (`auth-guard.ts`, `auth-store.ts`). */
+function guardAuth(ctx: Parameters<typeof pangular.setup>[0]): void {
+  const dir = scopeAuthStore(ctx);
+  // devframe writes the token file 100 ms after a change, with the default mode.
+  const protect = () => {
+    if (dir) setTimeout(() => protectAuthFile(dir), 500).unref?.();
+  };
+  if (!registerCodeGuard(ctx, { onTrusted: protect })) {
+    console.warn('[pangular] The one-time code guard could not be registered.');
+  }
+  expireAuthTokens(ctx, protect);
 }
 
 /**

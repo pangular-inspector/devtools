@@ -22,8 +22,9 @@ export interface HubOriginPolicy {
   lan?: boolean;
   /**
    * Answer requests from other machines whose `Origin` passes the origin
-   * check, or that send none (the Express hub's `allowLan`). Their `Host` is
-   * this machine's network address, so it is not checked.
+   * check, or that send none (the Express hub's `allowLan`). Their `Host`
+   * must be an IP address, a `.local` name or an allowed host, which refuses
+   * a DNS rebinding name.
    */
   remote?: boolean;
 }
@@ -43,9 +44,18 @@ function hostAllowed(hostname: string, allowedHosts: HubOriginPolicy['allowedHos
   });
 }
 
+/**
+ * Whether an `Origin` may reach the hub: a loopback origin, one listed in
+ * `allowedOrigins`, or one whose host is listed in `allowedHosts`.
+ * `allowedHosts: true` lets any `Host` through but is no origin wildcard: it
+ * only adds a same-origin request, whose `Origin` names the `Host` it was sent
+ * to (`requestHost`), as a page served through a tunnel does. A website on
+ * another origin still gets refused.
+ */
 export function isAllowedHubOrigin(
   origin: string | undefined,
   policy: HubOriginPolicy = {},
+  requestHost?: string,
 ): boolean {
   if (origin === undefined) return true;
   try {
@@ -60,7 +70,12 @@ export function isAllowedHubOrigin(
     if (policy.allowedOrigins?.includes(webOrigin(origin))) return true;
     if (policy.isAllowedOrigin?.(origin)) return true;
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
-    return isLoopbackHostname(url.hostname) || hostAllowed(url.hostname, policy.allowedHosts);
+    if (isLoopbackHostname(url.hostname)) return true;
+    if (policy.allowedHosts === true) {
+      if (requestHost === undefined || !HOST_HEADER.test(requestHost)) return false;
+      return url.host === new URL(`${url.protocol}//${requestHost}`).host;
+    }
+    return hostAllowed(url.hostname, policy.allowedHosts);
   } catch {
     return false;
   }
@@ -88,12 +103,46 @@ export function allowsRemoteOrigins(policy: HubOriginPolicy = {}): boolean {
   );
 }
 
-export function hubOriginRegistryFor(policy: HubOriginPolicy = {}): WsOriginRegistry {
+/**
+ * The origin check for the hub's WebSocket server. It sees no `Host`, so with
+ * `allowedHosts: true` it refuses every origin that isn't loopback or listed,
+ * unless `gated`: the request gate already checked the upgrade against its
+ * `Host` (`isAllowedHubRequest`), so a same-origin tunnel page passes.
+ */
+export function hubOriginRegistryFor(
+  policy: HubOriginPolicy = {},
+  gated = false,
+): WsOriginRegistry {
   return {
     token: '',
     registerFromUrl: () => undefined,
-    isAllowed: (origin: string | undefined) => isAllowedHubOrigin(origin, policy),
+    isAllowed: (origin: string | undefined) => {
+      if (isAllowedHubOrigin(origin, policy)) return true;
+      if (!gated || policy.allowedHosts !== true || origin === undefined) return false;
+      try {
+        const { protocol } = new URL(origin);
+        return protocol === 'http:' || protocol === 'https:';
+      } catch {
+        return false;
+      }
+    },
   };
+}
+
+/**
+ * The startup warning for Vite's `server.allowedHosts: true`, or undefined.
+ * Vite then stops checking `Host`, so DNS rebinding reaches the dev server.
+ * The devtools still check `Origin`, and the one-time code still guards the
+ * data, unless `auth` is off.
+ */
+export function allowedHostsWarning(
+  allowedHosts: HubOriginPolicy['allowedHosts'],
+  authOn: boolean,
+): string | undefined {
+  if (allowedHosts !== true) return undefined;
+  return authOn
+    ? '[pangular] server.allowedHosts is true, so any Host reaches the dev server. The devtools still refuse other websites by their Origin, and ask for the one-time code. List your hosts in server.allowedHosts instead, such as [".ngrok-free.app"].'
+    : '[pangular] WARNING: server.allowedHosts is true and auth is false. Any Host reaches the dev server, and a website that rebinds its DNS name to this machine can read the devtools with no code. Turn the one-time code back on, or list your hosts in server.allowedHosts.';
 }
 
 function requestPath(url: string | undefined): string {
@@ -179,6 +228,22 @@ function isEmulatorHost(host: string | undefined): boolean {
   return hostname !== undefined && EMULATOR_HOSTS.has(hostname);
 }
 
+/**
+ * The `Host` of a request from another machine (`allowLan`, or the CLI on a
+ * network address): an IP address, a `.local` name, or a host the config
+ * allows. A DNS rebinding page always sends its own DNS name, so a page in
+ * the developer's browser pointed at this machine's LAN address by a
+ * rebound name gets refused, while a device that types the IP passes.
+ */
+function isAllowedRemoteHost(host: string | undefined, policy: HubOriginPolicy): boolean {
+  if (host === undefined) return true;
+  const hostname = hostnameOf(host);
+  if (hostname === undefined) return false;
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) || hostname.startsWith('[')) return true;
+  if (hostname.endsWith('.local')) return true;
+  return isAllowedHubHost(host, policy);
+}
+
 /** What the gate refused: an `Origin`, or the `Host` a request was sent to. */
 export type BlockedRequest = (value: string, kind?: 'origin' | 'host') => void;
 
@@ -195,8 +260,12 @@ export function isAllowedHubRequest(
     if (host !== undefined) onBlocked?.(host, 'host');
     return false;
   }
+  if (!local && !isAllowedRemoteHost(host, policy)) {
+    if (host !== undefined) onBlocked?.(host, 'host');
+    return false;
+  }
   const origin = req.headers?.origin;
-  if (isAllowedHubOrigin(origin, policy)) return true;
+  if (isAllowedHubOrigin(origin, policy, host)) return true;
   if (origin !== undefined) onBlocked?.(origin, 'origin');
   return false;
 }

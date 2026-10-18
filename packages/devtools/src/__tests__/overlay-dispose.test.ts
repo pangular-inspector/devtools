@@ -305,6 +305,20 @@ describe.sequential('overlay dispose', () => {
     vi.restoreAllMocks();
   });
 
+  it('does not start in a production build, where ngDevMode is false', async () => {
+    vi.stubEnv('VITEST', '');
+    vi.stubGlobal('ngDevMode', false);
+    const { disposeOverlay } = await loadAutoOverlay();
+    await vi.advanceTimersByTimeAsync(0);
+    await flush();
+
+    expect(clients).toHaveLength(0);
+    expect(document.getElementById('pangular-popup-root')).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+    // The API still works, and has nothing to stop.
+    await disposeOverlay();
+  });
+
   it('stops the auto-started overlay and removes the floating button', async () => {
     vi.stubEnv('VITEST', '');
     const { disposeOverlay } = await loadAutoOverlay();

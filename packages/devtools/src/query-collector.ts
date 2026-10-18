@@ -3,6 +3,8 @@ import { documentTree, type HostTree } from './host-tree.ts';
 import { serialize } from './ngrx-shared.ts';
 import { redactText } from './serialize.ts';
 import { redactMessage, redactUrl } from './router.ts';
+import { isOpaqueToken } from './text-redact.ts';
+import { REDACTED } from './forms-privacy.ts';
 import { createScanBackoff } from './router-attach.ts';
 import {
   QUERY_WRITE_REQUESTS,
@@ -138,6 +140,35 @@ function keyText(key: unknown): string {
   return text.length > 200 ? `${text.slice(0, 199)}…` : text;
 }
 
+/**
+ * Positional parts carry no name to mask them by: a query key such as
+ * `['session', token]` or mutation variables such as `[user, password]`.
+ * Strings in arrays that look like random tokens are masked: from 24
+ * characters in keys (shorter ids, such as database ids, stay readable), from
+ * 12 in positional variables. Named fields are masked by name in `serialize`.
+ */
+const KEY_TOKEN_MIN = 24;
+const VARIABLE_TOKEN_MIN = 12;
+
+export function maskPositional(value: unknown, min: number, depth = 0): unknown {
+  if (typeof value === 'string') {
+    return value.length >= min && !/\s/.test(value) && isOpaqueToken(value) ? REDACTED : value;
+  }
+  if (!Array.isArray(value) || depth > 3) return value;
+  return value.map((item) => maskPositional(item, min, depth + 1));
+}
+
+function shownKeyOf(key: unknown): unknown {
+  return serialize(maskPositional(key, KEY_TOKEN_MIN), KEY);
+}
+
+function variablesOf(variables: unknown, limits: typeof PREVIEW | typeof FULL): unknown {
+  return serialize(
+    Array.isArray(variables) ? maskPositional(variables, VARIABLE_TOKEN_MIN) : variables,
+    limits,
+  );
+}
+
 function number(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
@@ -158,7 +189,7 @@ function staleTimeOf(query: AnyRecord): number | 'static' | undefined {
 function describeQuery(query: AnyRecord, clientId: string): QueryInfo {
   const state = read(() => (query['state'] as AnyRecord) ?? {}, {} as AnyRecord);
   const key = read(() => query['queryKey'], undefined);
-  const shownKey = serialize(key, KEY);
+  const shownKey = shownKeyOf(key);
   const call = <T>(name: string, fallback: T): T =>
     read(() => (typeof query[name] === 'function' ? (query[name]() as T) : fallback), fallback);
   const status = String(state['status']);
@@ -196,7 +227,7 @@ function describeMutation(mutation: AnyRecord, clientId: string): MutationInfo {
   const key = read(() => mutation['options']?.['mutationKey'], undefined);
   const status = String(state['status']);
   const error = errorText(state['error']);
-  const shownKey = key === undefined ? undefined : serialize(key, KEY);
+  const shownKey = key === undefined ? undefined : shownKeyOf(key);
   return {
     id: idOf(mutation, 'm'),
     clientId,
@@ -207,7 +238,7 @@ function describeMutation(mutation: AnyRecord, clientId: string): MutationInfo {
     failureCount: number(state['failureCount']),
     ...(error ? { error } : {}),
     ...(state['variables'] !== undefined
-      ? { variables: serialize(state['variables'], PREVIEW) }
+      ? { variables: variablesOf(state['variables'], PREVIEW) }
       : {}),
   };
 }
@@ -354,10 +385,10 @@ export function createQueryCollector<H extends object = Element>(
       const detail: QueryDetail = {
         id: request.id,
         kind: mutation ? 'mutation' : 'query',
-        ...(key !== undefined ? { key: serialize(key, KEY) } : {}),
+        ...(key !== undefined ? { key: shownKeyOf(key) } : {}),
         ...(state['data'] !== undefined ? { data: serialize(state['data'], FULL) } : {}),
         ...(mutation && state['variables'] !== undefined
-          ? { variables: serialize(state['variables'], FULL) }
+          ? { variables: variablesOf(state['variables'], FULL) }
           : {}),
         ...(state['error'] !== null && state['error'] !== undefined
           ? { error: serialize(state['error'], { ...FULL, budget: 2000 }) }
@@ -366,12 +397,7 @@ export function createQueryCollector<H extends object = Element>(
       return { ok: true, detail };
     }
     const predicate = (query: unknown) => query === item;
-    const label = keyText(
-      serialize(
-        read(() => item['queryKey'], undefined),
-        KEY,
-      ),
-    );
+    const label = keyText(shownKeyOf(read(() => item['queryKey'], undefined)));
     if (request.type === 'invalidate') {
       void read(() => client['invalidateQueries']({ predicate }), undefined)?.catch?.(() => {});
       return {

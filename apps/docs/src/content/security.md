@@ -22,10 +22,10 @@ The devtools read your running app and send what they find to a server on your m
     Loopback requests only, unless <code>allowLan</code> is on, sent to a loopback or allowed <code>Host</code>. A request that sends an <code>Origin</code> must come from a loopback host, the Pangular Inspector extension, an entry in <code>allowedOrigins</code> or Vite's <code>server.allowedHosts</code>. Asks for a one-time code by default.
   </ngmd-card>
   <ngmd-card icon="layers" title="Express hub">
-    The same request gate as the Vite plugin, a one-time code, and an origin check that accepts loopback origins and the Pangular Inspector extension. All on by default, and the hub is off when <code>NODE_ENV</code> is <code>production</code>.
+    The same request gate as the Vite plugin, a one-time code, and an origin check that accepts loopback origins and the Pangular Inspector extension. All on by default, and the hub is off in production: with <code>NODE_ENV=production</code> or in a production Angular build.
   </ngmd-card>
   <ngmd-card icon="terminal" title="Standalone CLI">
-    Binds to <code>localhost</code> and asks for a one-time code by default.
+    Binds to <code>localhost</code>, and asks for a one-time code and an MCP token by default.
   </ngmd-card>
   <ngmd-card icon="compass" title="Chrome extension">
     Reaches loopback hosts out of the box. Any other host needs a click on <strong>Allow access</strong>, for that host only.
@@ -42,7 +42,7 @@ In detail, a request to the devtools must:
 
 - come from a loopback address (any `127.x.x.x` address or `::1`),
 - be sent to a `Host` that is a loopback host, a host that Vite's `server.allowedHosts` accepts, the host of an entry in `allowedOrigins`, or the address an Android emulator reaches this machine at (`10.0.2.2`, or `10.0.3.2` on Genymotion), and
-- have an origin that is a loopback host, the [Pangular Inspector extension](#chrome-extension), an entry in `allowedOrigins`, or a host that Vite's `server.allowedHosts` accepts, or
+- have an origin that is a loopback host, the [Pangular Inspector extension](#chrome-extension), an entry in `allowedOrigins`, or a host listed in Vite's `server.allowedHosts`, or
 - have no `Origin` header, and a `Sec-Fetch-Site` header of `same-origin`, `same-site` or `none`, or no `Sec-Fetch-Site` header at all.
 
 The `Host` check stops DNS rebinding: a website that points its own name at `127.0.0.1` still sends that name as the `Host`. Clients that send neither `Origin` nor `Sec-Fetch-Site`, such as curl or a native app, are not browsers, so they pass the last check. A request without a `Host` header passes the `Host` check, since browsers always send one. The emulator addresses are IP literals, which DNS rebinding cannot send, and the emulator forwards them to your machine's loopback interface, so only the emulator can send them from a loopback address.
@@ -65,6 +65,8 @@ export default defineConfig({
 });
 ```
 
+`server.allowedHosts: true` lets any `Host` through, as it does for Vite, but the devtools don't read it as "any origin". A request that sends an `Origin` must still come from a loopback origin, the extension or `allowedOrigins`, or be same-origin with the `Host` it was sent to, as a page opened through a tunnel is. Another website gets `403`. The plugin prints a warning when it starts with `allowedHosts: true`, and a louder one with `auth: false` too: Vite no longer checks `Host` then, so a website that points its own name at your machine (DNS rebinding) can read the devtools without a code. List your hosts instead, such as `['.ngrok-free.app']`.
+
 #### One-time code
 
 The plugin's `auth` option decides whether the devtools also ask for the one-time code. The server prints the code in the terminal, and a browser reads data only after it exchanges that code. If the server later revokes a page's access, the page stops reporting and logs one warning in the console. It doesn't try to connect again until you reload it and enter a new code, or until a code entered in another tab of the same app trusts it again.
@@ -78,6 +80,22 @@ The plugin's `auth` option decides whether the devtools also ask for the one-tim
   A tunnel client runs on your machine, so the requests it forwards come from a loopback address. Only the one-time code tells them apart from you. Don't pass <code>auth: false</code> while a tunnel is allowed.
 </ngmd-callout>
 
+Every server that asks for the code (the Vite plugin, the Express hub and the CLI) limits wrong guesses:
+
+| Limit          | What happens                                                                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Per connection | After 3 wrong codes, each next attempt waits twice as long: 1 s, 2 s, 4 s, up to 60 s. A code sent too early is refused without being checked. |
+| All clients    | At most 10 wrong codes a minute. Further codes are refused without being checked, and the terminal prints a warning.                           |
+| Lock           | After 50 wrong codes since the last right one, the server accepts no code until it restarts. Pages that already connected stay connected.      |
+
+A refused code is never compared with the real one. devframe gives you a new code after 5 wrong ones, so a client that keeps guessing can change the code you are typing at most twice a minute. If the terminal says the server stopped accepting codes and you didn't type them, something on your machine or network is guessing the code. Restart the dev server to get a new code.
+
+#### Trusted browsers
+
+A browser that exchanges the code gets a session token, so it doesn't need the code again after a reload. The server keeps those tokens in `~/.pangular-inspector/auth/<project>/auth.json`, one folder per project (named after a hash of its path), so a token from one project doesn't open another project's server. The folder is readable by you only (mode `0700`), and the file too (`0600`). A token expires 7 days after the code was exchanged. To sign out every browser, delete the project's folder, or all of `~/.pangular-inspector/auth`, and restart the server.
+
+Versions before 1.0 kept the tokens in `~/.devframes/devframe/auth.json` (the Express hub and the Vite plugin) or `~/.pangular/devframe/auth.json` (the CLI), readable by other users and without expiry. Pangular Inspector 1.0 doesn't read those files. Delete them if no other devframe tool uses them.
+
 ### Express hub
 
 `initPangularHub()` has three checks, all on by default:
@@ -88,9 +106,9 @@ The plugin's `auth` option decides whether the devtools also ask for the one-tim
 | One-time code | `auth`           | The server prints a code. A browser can read data only after it exchanges that code.                                                                                                            |
 | Origin check  | `allowedOrigins` | Only loopback origins, the Pangular Inspector extension, or clients that send no `Origin`, can reach the hub. Pass a list to allow more origins.                                                |
 
-The request gate covers `nodeMiddleware`, `handler`, `handleUpgrade`, and the upgrades of a Node server passed to `attach(server)` or to the `server` option. A web request reaches `handler` without the address it came from, so `handler` applies the `Host`, `Origin` and `Sec-Fetch-Site` checks only. With `allowLan: true` and the one-time code on, a request from another machine passes when its `Origin` passes the origin check, or when it sends none. `allowLan` needs the code: with `auth: false`, the hub ignores it and prints a warning. `allowedOrigins: false` turns the request gate off along with the origin check.
+The request gate covers `nodeMiddleware`, `handler`, `handleUpgrade`, and the upgrades of a Node server passed to `attach(server)` or to the `server` option. A web request reaches `handler` without the address it came from, so `handler` applies the `Host`, `Origin` and `Sec-Fetch-Site` checks only. With `allowLan: true` and the one-time code on, a request from another machine passes when its `Origin` passes the origin check, or when it sends none, and when its `Host` is an IP address, a `.local` name or a host the origin check allows. A DNS rebinding name pointed at your network address is refused. `allowLan` needs the code: with `auth: false`, the hub ignores it and prints a warning. `allowedOrigins: false` turns the request gate off along with the origin check.
 
-The hub is off when `NODE_ENV` is `production`: its middlewares only call `next()`. Pass `enabled: true` to mount it anyway. The hub then prints a warning when it starts.
+The hub is off in production: when `NODE_ENV` is `production`, or when the server is a production Angular build, where `ngDevMode` is `false`. Its middlewares then only call `next()`. Pass `enabled: true` to mount it anyway. The hub then prints a warning when it starts. A server that is neither, such as one that loads the package without bundling it, keeps the hub on: pass `enabled` yourself, as in [Production](./getting-started/express.md#production).
 
 ```ts {8}
 // src/server.ts
@@ -115,7 +133,9 @@ A list keeps loopback origins and the Pangular Inspector extension. So does a cu
 
 The CLI server binds to `localhost` and asks for a one-time code. `--host` changes the bind address and `--no-auth` turns the code off. `--allowed-origin` adds an origin to the loopback origins it accepts, and `--auth-token` adds [pairing tokens](#pairing-tokens). See [Standalone CLI](./getting-started/cli.md).
 
-It runs the same request gate as the Vite plugin and the Express hub in front of every route, the panel and `__connection.json` included: a foreign `Origin`, `Origin: null`, a `Host` that is not this machine and a cross-site request without `Origin` get a `403`. With `--host` set to a network address, other machines get through when their `Origin` is allowed or they send none, such as a device app.
+It runs the same request gate as the Vite plugin and the Express hub in front of every route, the panel and `__connection.json` included: a foreign `Origin`, `Origin: null`, a `Host` that is not this machine and a cross-site request without `Origin` get a `403`. With `--host` set to a network address, other machines get through when their `Origin` is allowed or they send none, such as a device app, and their `Host` is an IP address, a `.local` name or an allowed host.
+
+While the one-time code is on, `/__mcp` asks for the [MCP token](#mcp-endpoint) too. `--no-auth` turns both off.
 
 ### Pairing tokens
 
@@ -142,7 +162,7 @@ The page sends the token as the `authToken` option of [`initOverlay`](./getting-
 
 The HTTP MCP endpoint answers only requests that carry a loopback `Origin` header. In the Vite plugin, the request must also come from a loopback address, like every devtools request.
 
-While the one-time code is on, the endpoint also asks for a bearer token. That is the default for the Express hub and the Vite plugin. The hub writes a generated token to `~/.pangular-inspector/mcp-token`, a file only you can read (mode `0600`), and prints the path, not the token. It keeps that token across restarts. Set `PANGULAR_MCP_TOKEN` to choose the token yourself, or `PANGULAR_MCP_TOKEN_FILE` to use another file. Requests without the right `Authorization: Bearer <token>` header get `401`. The stdio server needs no token. See [Send a token](./agents/mcp-server.md#send-a-token).
+While the one-time code is on, the endpoint also asks for a bearer token. That is the default for the Express hub, the Vite plugin and the standalone CLI. The server writes a generated token to `~/.pangular-inspector/mcp-token`, a file only you can read (mode `0600`), and prints the path, not the token. It keeps that token across restarts. Set `PANGULAR_MCP_TOKEN` to choose the token yourself, or `PANGULAR_MCP_TOKEN_FILE` to use another file. Requests without the right `Authorization: Bearer <token>` header get `401`. The stdio server needs no token. See [Send a token](./agents/mcp-server.md#send-a-token).
 
 The Express hub answers MCP requests from other addresses only with `allowLan: true`, and then only those that send the right token and a loopback `Origin`. Any client can set that header, so treat the token like a password. Over plain `http`, the token crosses the network in clear text: serve the hub over TLS for other machines, or keep it to a network you trust. `pangular mcp --print-config` warns about this for a non-loopback `--host` and takes `--https` for a server behind TLS.
 
@@ -249,18 +269,21 @@ The values that `form-action` and `fill-form` write, and the values of component
 
 Some credentials are hidden wherever they appear in a string, whatever the key is called. Every inspector, the panel and the agent tools get the same masking:
 
-| Value                                                                                                                                   | Shown as                          |
-| --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| A URL with a password, such as `https://alice:pw@host`                                                                                  | `https://alice:[redacted]@host`   |
-| `Basic` followed by base64 of `user:password`                                                                                           | `Basic [redacted]`                |
-| `Digest` followed by its `name="value"` parameters                                                                                      | `Digest [redacted]`               |
-| `Token` followed by an opaque token with letters and digits                                                                             | `Token [redacted]`                |
-| `Bearer` followed by a token                                                                                                            | `Bearer [redacted]`               |
-| Any of `Basic`, `Bearer`, `Digest`, `Token`, `Negotiate`, `NTLM`, `ApiKey` and similar after `Authorization:` or `Proxy-Authorization:` | the scheme, then `[redacted]`     |
-| A JWT                                                                                                                                   | `[redacted]`                      |
-| A Stripe secret or restricted key, a GitHub or Slack token, an AWS access key ID or a Google API key, such as `sk_live_…`               | the prefix, then `[redacted]`     |
-| A PEM private key block                                                                                                                 | its first line, then `[redacted]` |
-| A DSN with a 32-character hex key, such as `https://<key>@o1.ingest.sentry.io/42`                                                       | `https://[redacted]@…`            |
+| Value                                                                                                                                   | Shown as                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| A URL with a password, such as `https://alice:pw@host`                                                                                  | `https://alice:[redacted]@host`           |
+| `Basic` followed by base64 of `user:password`                                                                                           | `Basic [redacted]`                        |
+| `Digest` followed by its `name="value"` parameters                                                                                      | `Digest [redacted]`                       |
+| `Token` followed by an opaque token with letters and digits                                                                             | `Token [redacted]`                        |
+| `Bearer` followed by a token                                                                                                            | `Bearer [redacted]`                       |
+| Any of `Basic`, `Bearer`, `Digest`, `Token`, `Negotiate`, `NTLM`, `ApiKey` and similar after `Authorization:` or `Proxy-Authorization:` | the scheme, then `[redacted]`             |
+| A JWT                                                                                                                                   | `[redacted]`                              |
+| A Stripe secret or restricted key, a GitHub or Slack token, an AWS access key ID or a Google API key, such as `sk_live_…`               | the prefix, then `[redacted]`             |
+| An OpenAI (`sk-`, `sk-proj-`) or Anthropic (`sk-ant-`) key, a GitLab (`glpat-`), npm (`npm_`) or Hugging Face (`hf_`) token             | the prefix, then `[redacted]`             |
+| A SendGrid key (`SG.…`)                                                                                                                 | `SG.[redacted]`                           |
+| A Slack webhook URL, `https://hooks.slack.com/services/…`                                                                               | the URL up to the path, then `[redacted]` |
+| A PEM private key block                                                                                                                 | its first line, then `[redacted]`         |
+| A DSN with a 32-character hex key, such as `https://<key>@o1.ingest.sentry.io/42`                                                       | `https://[redacted]@…`                    |
 
 The URL user stays visible, so you can tell which account a call uses. Ordinary words are left alone: `Basic plan`, `Token expired` and `Digest of the week` don't match.
 
@@ -268,7 +291,7 @@ The URL user stays visible, so you can tell which account a call uses. Ordinary 
 
 These are replaced with `[redacted]` in URLs, params, data and messages:
 
-- query, matrix and fragment keys that look secret (token, password, api key, code, sig, session, jwt and similar), including inside encoded return URLs,
+- query, matrix and fragment keys that look secret (token, password, api key, code, code verifier, sig, session, jwt and similar), including inside encoded return URLs,
 - URL passwords, `Authorization` credentials, JWTs, bearer tokens and long opaque tokens,
 - route params with secret-looking names.
 
@@ -282,7 +305,9 @@ A secret route param is known from the route config before a navigation is recog
 
 Component inputs, signal values, NgRx state, and pipe inputs, outputs and async values use the same secret names and the same `mask` and `unmask` lists as forms. A value whose name looks secret is replaced with `[redacted]`. JWTs, bearer tokens and `key=value` pairs under secret keys (such as `token=abc123` or `password=…&user=a`) inside strings and error messages are replaced too, NgRx strings and errors included, and so are tokens used as object keys.
 
-A pair counts anywhere in a sentence, such as `retry with token=abc123` or `(api_key=…, user=7)`, and in the `password: hunter2` and `"token":"abc123"` forms. A `key: value` pair counts only for the secret words, and an unquoted lowercase word after the colon is read as prose, so `Invalid token: expired` and `status code: 404` stay readable. After a name that rarely starts a sentence (`password`, `passwd`, `pwd`, `passphrase`, `passcode`, `secret` and names with it such as `client_secret`, and `api_key`, `private_key`, `secret_key` or `access_key`), that word is masked too: `password: correcthorse` shows as `password: [redacted]`. Errors, console messages, snapshots, audit results and WebMCP tool descriptions use the same rule.
+A pair counts anywhere in a sentence, such as `retry with token=abc123` or `(api_key=…, user=7)`, and in the `password: hunter2` and `"token":"abc123"` forms. A `key: value` pair counts only for the secret words, and an unquoted lowercase word after the colon is read as prose, so `Invalid token: expired` and `status code: 404` stay readable. After a name that rarely starts a sentence (`password`, `passwd`, `pwd`, `passphrase`, `passcode`, `secret` and names with it such as `client_secret`, and `api_key`, `private_key`, `secret_key` or `access_key`), that word is masked too: `password: correcthorse` shows as `password: [redacted]`. After such a name, an unquoted value also runs past separators: to the next space or the next `&key=` pair after `=` (`password=Tr0ub&r` is masked whole, `&user=ada` after it stays) and to the end of the line after `:` (`password: correct horse battery`). A quoted value runs to its closing quote, past escaped quotes (`"abc\"def"`). Errors, console messages, snapshots, audit results and WebMCP tool descriptions use the same rule.
+
+TanStack Query keys and mutation variables have positional parts with no name to mask them by. A string in a key that looks like a random token (mixed case with digits, or long hex) and has 24 characters or more is masked, so `['session', token]` hides the token while a database id stays readable. In mutation variables passed as an array, such as `[user, password]`, the same holds from 12 characters. A plain word, such as a short password, is sent as it is.
 
 Component values follow the form masks of the fields in the component, not only their names. When a form field in the component's template is masked by its element (a password field, a credential `autocomplete`, `data-pangular="mask"` or another mask marker), its value is replaced with `[redacted]` wherever it shows in the component's inputs and properties: the `FormGroup` that holds it, the `ngModel` model object and the Signal Forms model. Values such a field held earlier stay masked too (the last 50 on the page).
 
@@ -302,7 +327,7 @@ Server call previews and URLs are redacted: keys in JSON bodies that the forms r
 
 Request URLs, page URLs and error messages in the [SSR & HTTP tab](./inspectors/ssr-http.md) are redacted like router URLs, in the page and again on the devtools server. This covers SSR and client calls, and `devframe_state_read`.
 
-The page title, the hydration warnings and mismatch details, and the TransferState parse error are redacted too. Response previews are redacted on the devtools server: keys that the forms rules treat as secret, JWTs, bearer tokens and secret query pairs, also in a preview that was cut inside a nested object or array. Request and response headers are redacted on the page and again on the devtools server: `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` always, whatever `redaction.unmask` says, names that look secret or match `redaction.secretNames`, and JWTs, bearer tokens and credentials inside any other value. The same holds for TransferState entries: their values, keys and request URLs are redacted on the page, before the payload is sent to the devtools server, and again on the server. A custom key with a secret-looking name, such as `makeStateKey('password')`, has its whole value masked. Large payload values are still cut, so a long value can end in `[Truncated]`.
+The page title, the hydration warnings and mismatch details, and the TransferState parse error are redacted too. Response previews are redacted on the devtools server: keys that the forms rules treat as secret, JWTs, bearer tokens and secret query pairs, also in a preview that was cut inside a nested object or array. XML and other text previews are masked by name too: the content of an element with a secret name, such as `<password>…</password>`, and attributes such as `password="…"`. Request and response headers are redacted on the page and again on the devtools server: `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie` and `Ocp-Apim-Subscription-Key` always, whatever `redaction.unmask` says, names that look secret or match `redaction.secretNames`, and JWTs, bearer tokens and credentials inside any other value. The same holds for TransferState entries: their values, keys and request URLs are redacted on the page, before the payload is sent to the devtools server, and again on the server. A custom key with a secret-looking name, such as `makeStateKey('password')`, has its whole value masked. Large payload values are still cut, so a long value can end in `[Truncated]`.
 
 ## Page text in agent answers
 

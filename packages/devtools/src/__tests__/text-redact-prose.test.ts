@@ -31,6 +31,22 @@ describe('redactText in messages', () => {
     );
   });
 
+  it('hides the whole of a password that holds a separator, a space or an escaped quote', () => {
+    expect(redactText('Login rejected password=Tr0ub&rest-of-it now')).toBe(
+      'Login rejected password=[redacted] now',
+    );
+    expect(redactText('password=abc,def123')).toBe('password=[redacted]');
+    expect(redactText('password=Tr0ub&rest&user=ada')).toBe('password=[redacted]&user=ada');
+    expect(redactText('retry password: correct horse battery\nnext line')).toBe(
+      'retry password: [redacted]\nnext line',
+    );
+    expect(redactText('payload {"password":"abc\\"tail-part","page":2}')).toBe(
+      'payload {"password":"[redacted]","page":2}',
+    );
+    // Weaker names still stop at the separator, as in a query string.
+    expect(redactText('token=abc&page=2')).toBe('token=[redacted]&page=2');
+  });
+
   it('keeps ordinary prose and non-secret pairs', () => {
     for (const text of [
       'the token is valid',

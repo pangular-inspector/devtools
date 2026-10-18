@@ -219,6 +219,33 @@ describe('hub origin policy', () => {
     expect(isAllowedHubOrigin('http://myapp.test.evil.example', policy)).toBe(false);
     expect(isAllowedHubOrigin('https://evil.example', policy)).toBe(false);
     expect(isAllowedHubOrigin('http://myapp.test:5173')).toBe(false);
-    expect(isAllowedHubOrigin('https://evil.example', { allowedHosts: true })).toBe(true);
+    // allowedHosts: true lets any Host through, but is no origin wildcard.
+    expect(isAllowedHubOrigin('https://evil.example', { allowedHosts: true })).toBe(false);
+    expect(
+      isAllowedHubOrigin('https://evil.example', { allowedHosts: true }, 'localhost:5173'),
+    ).toBe(false);
+    // A page served through a tunnel is same-origin with the Host it was sent to.
+    expect(
+      isAllowedHubOrigin(
+        'https://abc.ngrok-free.app',
+        { allowedHosts: true },
+        'abc.ngrok-free.app',
+      ),
+    ).toBe(true);
+    expect(
+      isAllowedHubOrigin('http://localhost:5173', { allowedHosts: true }, 'evil.example'),
+    ).toBe(true);
+  });
+
+  it('keeps the WebSocket origin check strict for allowedHosts: true without a gate', async () => {
+    const { hubOriginRegistryFor } = await import('../vite.ts');
+    expect(hubOriginRegistryFor({ allowedHosts: true }).isAllowed('https://evil.example')).toBe(
+      false,
+    );
+    // Behind the gate, which checked Origin against Host already.
+    const gated = hubOriginRegistryFor({ allowedHosts: true }, true);
+    expect(gated.isAllowed('https://abc.ngrok-free.app')).toBe(true);
+    expect(gated.isAllowed('null')).toBe(false);
+    expect(gated.isAllowed('chrome-extension://abcdefghijklmnopabcdefghijklmnop')).toBe(false);
   });
 });

@@ -375,14 +375,13 @@ process.on('SIGINT', () => {
 
 /**
  * Starts the SSR demo with the devtools hub on a free port. The hub is off in
- * production, and the demo turns the one-time code off unless PANGULAR_AUTH is true.
+ * production, and the demo keeps the one-time code on unless PANGULAR_AUTH is false.
  */
 async function startSsr(auth = false) {
   const port = await freePort();
   const env = { ...process.env, PORT: String(port) };
   delete env.NODE_ENV;
-  delete env.PANGULAR_AUTH;
-  if (auth) env.PANGULAR_AUTH = 'true';
+  env.PANGULAR_AUTH = auth ? 'true' : 'false';
   const child = start('node', ['dist/pangular-inspector/server/server.mjs'], { env });
   const base = `http://localhost:${port}`;
   try {

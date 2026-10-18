@@ -25,14 +25,32 @@ const TOKEN = /\b(Token)([ \t]+)([\w.~+/-]{8,}=*)/g;
 
 /**
  * High-confidence key shapes that are secret whatever key holds them: Stripe
- * secret and restricted keys, GitHub tokens, Slack tokens, AWS access key IDs
- * and Google API keys. The prefix is kept so the kind of key stays visible.
+ * secret and restricted keys, GitHub tokens, Slack tokens, AWS access key IDs,
+ * Google API keys, OpenAI and Anthropic keys, GitLab and npm tokens, and
+ * Hugging Face tokens. The prefix is kept so the kind of key stays visible.
  */
 const PREFIXED =
-  /\b(sk_live_|sk_test_|rk_live_|rk_test_|whsec_|gh[pousr]_|github_pat_|xox[abpors]-|AKIA|ASIA|AIza)([A-Za-z\d_-]+)/g;
+  /\b(sk_live_|sk_test_|rk_live_|rk_test_|whsec_|gh[pousr]_|github_pat_|xox[abpors]-|AKIA|ASIA|AIza|sk-ant-|sk-proj-|sk-|glpat-|npm_|hf_)([A-Za-z\d_-]+)/g;
 
 /** The minimum length after each prefix, so `sk_live_` in prose or code stays readable. */
-const PREFIX_MIN: Record<string, number> = { AKIA: 16, ASIA: 16, AIza: 30 };
+const PREFIX_MIN: Record<string, number> = {
+  AKIA: 16,
+  ASIA: 16,
+  AIza: 30,
+  'sk-': 32,
+  'sk-ant-': 32,
+  'sk-proj-': 32,
+  'glpat-': 20,
+  npm_: 36,
+  hf_: 30,
+};
+
+/** A SendGrid key, `SG.<id>.<secret>`. */
+const SENDGRID = /\bSG\.[\w-]{16,}\.[\w-]{16,}/g;
+
+/** A Slack incoming webhook URL: its path is the secret. */
+const SLACK_WEBHOOK =
+  /\b(https?:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/)[\w/-]+/gi;
 
 /** A PEM private key block; an unterminated one is hidden to the end of the text. */
 const PEM_PRIVATE_KEY =
@@ -73,5 +91,7 @@ export function redactCredentials(text: string, mask: string): string {
     .replace(DSN_KEY, (_, scheme: string) => `${scheme}${mask}@`)
     .replace(PREFIXED, (whole, prefix: string, rest: string) =>
       rest.length >= (PREFIX_MIN[prefix] ?? 16) ? `${prefix}${mask}` : whole,
-    );
+    )
+    .replace(SENDGRID, `SG.${mask}`)
+    .replace(SLACK_WEBHOOK, (_, head: string) => `${head}${mask}`);
 }

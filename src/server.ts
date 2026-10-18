@@ -14,9 +14,13 @@ const browserDistFolder = join(import.meta.dirname, '../browser');
 const app = express();
 const angularApp = new AngularNodeAppEngine();
 
-const auth = process.env['PANGULAR_AUTH'] === 'true';
-// Off when NODE_ENV is production, so a production start serves the app only.
+// The one-time code stays on. PANGULAR_AUTH=false turns it off for a local demo.
+const auth = process.env['PANGULAR_AUTH'] !== 'false';
+// Off in a production build (ngDevMode is false there) and when NODE_ENV is
+// production, so a production start serves the app only.
 const devtools = initPangularHub({
+  enabled:
+    (typeof ngDevMode === 'undefined' || !!ngDevMode) && process.env['NODE_ENV'] !== 'production',
   ws: { sidecar: true },
   auth,
   // Lets an SSR override serve index.csr.html to force a Client render.

@@ -215,16 +215,19 @@ When the server refuses the token, the overlay logs a warning in the console and
 
 ## Stop the overlay
 
-Call `disposeOverlay` to turn the overlay off:
+Call `disposeOverlay` to turn the overlay off. Import it inside a development check, as for `initOverlay`, so production builds leave the overlay out:
 
 ```ts
 // src/app/devtools-toggle.ts
-import {disposeOverlay} from '@pangular-inspector/devtools/overlay';
-
 export async function stopDevtools() {
-  await disposeOverlay();
+  if (typeof ngDevMode === 'undefined' || ngDevMode) {
+    const {disposeOverlay} = await import('@pangular-inspector/devtools/overlay-manual');
+    await disposeOverlay();
+  }
 }
 ```
+
+A static import of `@pangular-inspector/devtools/overlay` starts nothing in a production build, where `ngDevMode` is `false`, but it still adds the overlay's code to the bundle.
 
 `disposeOverlay` stops whichever overlay is running, including the one that importing `@pangular-inspector/devtools/overlay` started. It closes the connection, clears its timers, listeners and observers, and removes the floating button.
 

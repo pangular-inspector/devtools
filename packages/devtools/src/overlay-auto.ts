@@ -8,8 +8,13 @@ import { insideDevtoolsPanel } from './panel-frame.ts';
 
 export * from './overlay.ts';
 
-// Skipped in tests, and inside the devtools panel's own frame.
+declare const ngDevMode: unknown;
+
+// Skipped in production builds, which set ngDevMode to false (so a static
+// import, such as one for disposeOverlay, starts nothing there), in tests,
+// and inside the devtools panel's own frame.
 if (
+  (typeof ngDevMode === 'undefined' || !!ngDevMode) &&
   typeof document !== 'undefined' &&
   !(typeof process !== 'undefined' && process.env?.['VITEST']) &&
   !insideDevtoolsPanel()

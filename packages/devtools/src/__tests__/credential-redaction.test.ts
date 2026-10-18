@@ -105,16 +105,29 @@ describe('Authorization credentials', () => {
 });
 
 describe('well-known secret shapes', () => {
+  // Built at run time, so secret scanners don't take the made-up values for leaked keys.
+  const fake = (prefix: string, rest: string) => prefix + rest;
   // Every value below is made up. They only match the provider formats so the redaction
   // patterns can be tested; none of them is a real or working key.
   const secrets: [string, string][] = [
-    ['sk_live_51Hx9QaLkdW3n4bZ0Tq8YxF2', `sk_live_${REDACTED}`],
-    ['rk_test_51Hx9QaLkdW3n4bZ0Tq8YxF2', `rk_test_${REDACTED}`],
-    ['ghp_1234567890abcdefghijABCDEFGHIJklmnop', `ghp_${REDACTED}`],
-    ['github_pat_11ABCDEFG0123456789_abcdefghij', `github_pat_${REDACTED}`],
-    ['xoxb-1234567890-0987654321-AbCdEfGhIjKl', `xoxb-${REDACTED}`],
-    ['AKIAIOSFODNN7EXAMPLE', `AKIA${REDACTED}`],
-    ['AIzaSyA1234567890abcdefghijklmnopqrstu', `AIza${REDACTED}`],
+    [fake('sk_live_', '51Hx9QaLkdW3n4bZ0Tq8YxF2'), `sk_live_${REDACTED}`],
+    [fake('rk_test_', '51Hx9QaLkdW3n4bZ0Tq8YxF2'), `rk_test_${REDACTED}`],
+    [fake('ghp_', '1234567890abcdefghijABCDEFGHIJklmnop'), `ghp_${REDACTED}`],
+    [fake('github_pat_', '11ABCDEFG0123456789_abcdefghij'), `github_pat_${REDACTED}`],
+    [fake('xoxb-', '1234567890-0987654321-AbCdEfGhIjKl'), `xoxb-${REDACTED}`],
+    [fake('AKIA', 'IOSFODNN7EXAMPLE'), `AKIA${REDACTED}`],
+    [fake('AIza', 'SyA1234567890abcdefghijklmnopqrstu'), `AIza${REDACTED}`],
+    [fake('sk-proj-', 'Ab12Cd34Ef56Gh78Ij90Kl12Mn34Op56Qr78'), `sk-proj-${REDACTED}`],
+    [fake('sk-ant-', 'api03-Ab12Cd34Ef56Gh78Ij90Kl12Mn34Op56'), `sk-ant-${REDACTED}`],
+    [fake('sk-', 'Ab12Cd34Ef56Gh78Ij90Kl12Mn34Op56Qr78St90'), `sk-${REDACTED}`],
+    [fake('glpat-', 'Ab12Cd34Ef56Gh78Ij90'), `glpat-${REDACTED}`],
+    [fake('npm_', 'Ab12Cd34Ef56Gh78Ij90Kl12Mn34Op56Qr78'), `npm_${REDACTED}`],
+    [fake('hf_', 'Ab12Cd34Ef56Gh78Ij90Kl12Mn34Op56Qr'), `hf_${REDACTED}`],
+    [fake('SG.', 'Ab12Cd34Ef56Gh78Ij90.Kl12Mn34Op56Qr78St90Uv12'), `SG.${REDACTED}`],
+    [
+      fake('https://hooks.slack.com/services/', 'T0000AAAA/B0000BBBB/Ab12Cd34Ef56Gh78Ij90'),
+      `https://hooks.slack.com/services/${REDACTED}`,
+    ],
     [
       'https://0123456789abcdef0123456789abcdef@o1.ingest.sentry.io/42',
       `https://${REDACTED}@o1.ingest.sentry.io/42`,
@@ -145,6 +158,8 @@ describe('well-known secret shapes', () => {
       'Use an sk_live_ key in production',
       'ghp_ tokens are personal',
       'AKIA keys belong to IAM users',
+      'pip install scikit-learn and sk-learn-models',
+      'run npm_config_cache before hf_hub',
       'mailto:someone@example.com',
       'https://user@example.com/repo.git',
     ]) {
@@ -243,6 +258,20 @@ describe('secret key names', () => {
     expect(serialize({ author: 'Ada', authorName: 'Ada Lovelace' })).toEqual({
       author: 'Ada',
       authorName: 'Ada Lovelace',
+    });
+  });
+});
+
+describe('more secret names', () => {
+  it('masks the Azure API Management key header and the PKCE code verifier', () => {
+    expect(
+      redactCall({
+        url: '/x?code_verifier=v3r1f13r-abc',
+        requestHeaders: { 'Ocp-Apim-Subscription-Key': 'k3y-abc' },
+      } as unknown as HttpCall),
+    ).toMatchObject({
+      url: `/x?code_verifier=${REDACTED}`,
+      requestHeaders: { 'ocp-apim-subscription-key': REDACTED },
     });
   });
 });

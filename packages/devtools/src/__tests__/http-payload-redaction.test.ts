@@ -57,3 +57,24 @@ describe('unsigned JWTs', () => {
     expect(redactPreview(`{"x":"${unsigned}"}`)).not.toContain('eyJ');
   });
 });
+
+describe('XML previews', () => {
+  it('masks elements and attributes with secret names, and keeps the rest', () => {
+    expect(redactPreview('<login><user>ada</user><password>s3cr3t-xml</password></login>')).toBe(
+      '<login><user>ada</user><password>[redacted]</password></login>',
+    );
+    expect(redactPreview('<auth:apiKey xmlns:auth="urn:a">k3y-value</auth:apiKey>')).toBe(
+      '<auth:apiKey xmlns:auth="urn:a">[redacted]</auth:apiKey>',
+    );
+    expect(redactPreview('<cfg><secret><![CDATA[c-d-a-t-a]]></secret></cfg>')).not.toContain(
+      'c-d-a-t-a',
+    );
+    expect(redactPreview('<login password="attr-s3cr3t" user="ada"/>')).toBe(
+      '<login password="[redacted]" user="ada"/>',
+    );
+  });
+
+  it('masks a secret element a clipped preview cuts short', () => {
+    expect(redactPreview('<login><password>s3cr3t-cut')).toBe('<login><password>[redacted]');
+  });
+});

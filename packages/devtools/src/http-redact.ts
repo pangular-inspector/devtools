@@ -9,7 +9,14 @@ import { clip } from './text.ts';
 const PREVIEW_MAX = 2001;
 
 /** Headers whose value is always hidden, whatever `redaction.unmask` says. */
-const ALWAYS_MASKED = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie']);
+const ALWAYS_MASKED = new Set([
+  'authorization',
+  'proxy-authorization',
+  'cookie',
+  'set-cookie',
+  // Azure API Management's key header.
+  'ocp-apim-subscription-key',
+]);
 
 export function redactStrings(value: unknown): unknown {
   if (typeof value === 'string') return redactText(value);
@@ -19,9 +26,26 @@ export function redactStrings(value: unknown): unknown {
 }
 
 /**
+ * An XML or HTML element and its text (or CDATA) content, up to its closing
+ * tag or the end of a clipped preview. Group 2 is the local name, without a
+ * namespace prefix.
+ */
+const XML_ELEMENT =
+  /<((?:[\w.-]+:)?([\w.-]+))(\s[^<>]*)?>(<!\[CDATA\[[\s\S]*?(?:\]\]>|$)|[^<]*)(?=<\/\1\s*>|$)/g;
+
+/** Masks the content of elements with secret names: `<password>…</password>`. */
+export function redactXmlText(text: string): string {
+  if (!text.includes('<')) return text;
+  return text.replace(XML_ELEMENT, (match, tag: string, local: string, attrs = '', content) =>
+    content && isRedactedKey(local) ? `<${tag}${attrs}>${REDACTED}` : match,
+  );
+}
+
+/**
  * Hides secrets in a recorded body preview. A complete JSON preview is walked
- * by key and value; a clipped one falls back to masking `"key": value` pairs
- * and token-shaped text.
+ * by key and value; a clipped or other one (XML, form data, text) falls back
+ * to masking `"key": value` pairs, elements with secret names and
+ * token-shaped text. Attributes such as `password="…"` are pairs too.
  */
 export function redactPreview(preview: string): string {
   try {
@@ -39,7 +63,7 @@ export function redactPreview(preview: string): string {
   } catch {
     /* clipped or not JSON: fall through to text masking */
   }
-  return clip(redactText(redactJsonText(preview, isRedactedKey)), PREVIEW_MAX);
+  return clip(redactText(redactXmlText(redactJsonText(preview, isRedactedKey))), PREVIEW_MAX);
 }
 
 /**

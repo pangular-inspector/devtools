@@ -174,6 +174,27 @@ describe('the TanStack Query collector', () => {
     expect(detail.detail).toMatchObject({ kind: 'mutation', data: 7 });
   });
 
+  it('masks token-like strings in positional keys and variables, and keeps ordinary ones', async () => {
+    const queryClient = client();
+    const { ng, tree } = page(queryClient);
+    const session = 'Xk9fQ2mL7pR4tW8zB3nV6cY1';
+    queryClient.setQueryData(['session', session], { ok: true });
+    queryClient.setQueryData(['user', 'aB3dE5fG7hJ9kL1mN2pQ'], { ok: true });
+    const mutation = new MutationObserver(queryClient, {
+      mutationFn: async (input: string[]) => input.length,
+    });
+    await mutation.mutate(['ada', 'Tr0ub4dor-Secret']);
+    const collector = createQueryCollector(() => ng, { tree });
+    const report = collector.collect();
+    const texts = report.queries.map((query) => query.keyText).sort();
+    // A 20-character id stays readable in a key; a longer token does not.
+    expect(texts).toEqual(['["session","[redacted]"]', '["user","aB3dE5fG7hJ9kL1mN2pQ"]']);
+    expect(report.mutations[0].variables).toEqual(['ada', '[redacted]']);
+    const detail = collector.run({ type: 'detail', id: report.mutations[0].id }, false);
+    expect(detail.detail).toMatchObject({ variables: ['ada', '[redacted]'] });
+    expect(JSON.stringify(report)).not.toContain(session);
+  });
+
   it('reads the full data on request, and invalidates or refetches only when writes are on', async () => {
     const queryClient = client();
     const { ng, tree } = page(queryClient);

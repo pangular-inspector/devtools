@@ -22,17 +22,33 @@ function processEnv(): Record<string, string | undefined> {
   );
 }
 
-/** `enabled`, or on unless `NODE_ENV` is `production`. */
+declare const ngDevMode: unknown;
+
+/**
+ * Whether Angular runs in development mode. A production Angular build sets
+ * `ngDevMode` to `false` in the server bundle it builds, this package's code
+ * included, and `enableProdMode()` sets it at runtime.
+ */
+function angularDevMode(): boolean {
+  return typeof ngDevMode === 'undefined' || !!ngDevMode;
+}
+
+/**
+ * `enabled`, or on unless this is production: `NODE_ENV` is `production`, or
+ * the server is a production Angular build (`ngDevMode` is `false`), which
+ * the Angular CLI's SSR server is even without `NODE_ENV`.
+ */
 export function hubEnabled(
   enabled: boolean | undefined,
   env: Record<string, string | undefined> = processEnv(),
   warn: (message: string) => void = console.warn,
+  devMode: boolean = angularDevMode(),
 ): boolean {
-  const production = env['NODE_ENV'] === 'production';
+  const production = env['NODE_ENV'] === 'production' || !devMode;
   if (enabled === undefined) return !production;
   if (enabled && production) {
     warn(
-      '\n  [pangular] WARNING: the Pangular Inspector hub is on in production (enabled: true with NODE_ENV=production).\n' +
+      '\n  [pangular] WARNING: the Pangular Inspector hub is on in production (enabled: true in a production build or with NODE_ENV=production).\n' +
         '  It exposes your app state, source and agent tools to anyone who can pass its checks.\n' +
         '  Remove enabled: true unless this server only runs on your machine.\n',
     );

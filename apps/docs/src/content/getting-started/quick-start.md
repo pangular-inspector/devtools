@@ -64,7 +64,7 @@ const devtools = initPangularHub({ws: false});
 app.use(devtools.nodeMiddleware);
 ```
 
-Leave the rest of the file as it is. `ws: false` connects the browser over server-sent events on the same port, which works under `ng serve`. When `NODE_ENV` is `production`, the hub is off and the middleware only calls `next()`.
+Leave the rest of the file as it is. `ws: false` connects the browser over server-sent events on the same port, which works under `ng serve`. When `NODE_ENV` is `production`, or in a production build, the hub is off and the middleware only calls `next()`.
 
 ## Load the overlay
 

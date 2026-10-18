@@ -9,6 +9,7 @@ import { analogConfig, setAnalogRoot } from './rpc/analog-scan.ts';
 import { releaseServerState } from './server-state.ts';
 import { normalizeAllowedOrigins } from './allowed-origins.ts';
 import {
+  allowedHostsWarning,
   allowsRemoteOrigins,
   blockedOriginReporter,
   hubOriginRegistryFor,
@@ -148,6 +149,8 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
       };
       const authOn = isAuthTokens(options.auth) || hubAuthFor(options.auth);
       policy.lan = lanAllowed(options.allowLan, authOn, policy, (message) => logger?.warn(message));
+      const hostsWarning = allowedHostsWarning(policy.allowedHosts, authOn);
+      if (hostsWarning) logger?.warn(hostsWarning);
       const blocked = blockedOriginReporter((message) => logger?.warn(message));
       server.middlewares.use(hubRequestGate(base, policy, blocked));
       if (analog) {
@@ -162,7 +165,8 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
         base,
         ...(httpServer ? {} : { ws: { sidecar: true } }),
         auth: isAuthTokens(options.auth) ? options.auth : hubAuthFor(options.auth),
-        allowedOrigins: hubOriginRegistryFor(policy),
+        // The gate in front checks upgrades on the dev server; a side-car socket has none.
+        allowedOrigins: hubOriginRegistryFor(policy, !!httpServer),
         terminals: terminalsEnabled(options.terminals, { remote: policy.lan }, (message) =>
           logger?.warn(message),
         ),

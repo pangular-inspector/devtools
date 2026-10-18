@@ -837,7 +837,10 @@ const ACTION_SCENARIO_TOOLS = new Set([
 async function runHttp(opts, sdk, browser, state) {
   const port = opts.port;
   const origin = `http://localhost:${port}`;
-  const server = await startServer('demo SSR server', [SERVER_ENTRY], port);
+  // The demo keeps the one-time code on unless PANGULAR_AUTH is false.
+  const server = await startServer('demo SSR server', [SERVER_ENTRY], port, {
+    PANGULAR_AUTH: 'false',
+  });
   state.stoppers.push(() => server.stop());
 
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });

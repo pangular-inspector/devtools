@@ -61,7 +61,7 @@ Roles for delegating work live in `.claude/agents/`: `ui-engineer`, `inspector-e
 
 ## Serving Locally
 
-- **Demo app (SSR):** `pnpm build --configuration development && node dist/pangular-inspector/server/server.mjs` → http://localhost:4000
+- **Demo app (SSR):** `pnpm build --configuration development && node dist/pangular-inspector/server/server.mjs` → http://localhost:4000 (the panel asks for the one-time code the server prints; `PANGULAR_AUTH=false` turns it off for a local check. A production build serves no devtools)
 - **Devtools SPA (hot reload):** `pnpm devtools:dev` → http://localhost:5173 (serves its own RPC, so source-scan data works; live tabs need an app page connected, so use the SSR server on 4000 for those)
 - **Demo app (SPA, no SSR):** `pnpm start` → http://localhost:4200 (runs `ng serve` with SSR and hot reload; devtools popup + RPC work without a separate server)
 - The devtools popup appears on the demo app page; click it to open the inspector panel

@@ -30,11 +30,12 @@ afterEach(() => {
 });
 
 describe('mcpEndpoint', () => {
-  it('points at the standalone CLI by default, which asks for no token', () => {
+  it('points at the standalone CLI by default, which asks for the token too', () => {
     expect(mcpEndpoint({})).toEqual({
       url: 'http://localhost:9999/__mcp',
       origin: 'http://localhost:9999',
-      token: false,
+      token: true,
+      hub: false,
     });
   });
 
@@ -43,8 +44,9 @@ describe('mcpEndpoint', () => {
       url: 'http://localhost:4000/__devframes/__mcp',
       origin: 'http://localhost:4000',
       token: true,
+      hub: true,
     });
-    expect(mcpEndpoint({ base: '/' }).token).toBe(false);
+    expect(mcpEndpoint({ base: '/' }).hub).toBe(false);
   });
 
   it('turns a wildcard bind host into one a client can reach', () => {
@@ -70,17 +72,20 @@ describe('mcpPrintConfig', () => {
     });
 
     expect(http).toContain(
-      "claude mcp add --transport http --scope project pangular-live http://localhost:9999/__mcp --header 'Origin: http://localhost:9999'\n",
+      "claude mcp add --transport http --scope project pangular-live http://localhost:9999/__mcp --header 'Origin: http://localhost:9999' --header 'Authorization: Bearer ${PANGULAR_MCP_TOKEN}'\n",
     );
     expect(block(http, 'Cursor')).toEqual({
       mcpServers: {
         'pangular-live': {
           url: 'http://localhost:9999/__mcp',
-          headers: { Origin: 'http://localhost:9999' },
+          headers: {
+            Authorization: 'Bearer ${env:PANGULAR_MCP_TOKEN}',
+            Origin: 'http://localhost:9999',
+          },
         },
       },
     });
-    expect(http).not.toContain('Authorization');
+    expect(http).toContain('--base /__devframes/');
     expect(text).not.toContain('Warning');
   });
 
@@ -113,8 +118,8 @@ describe('mcpPrintConfig', () => {
       'Warning: http://192.168.1.20:4000 is not a loopback address and the URL is http, so the MCP token travels in clear text on the network.',
     );
     expect(http.indexOf('Warning')).toBeLessThan(http.indexOf('claude mcp add'));
-    // The standalone CLI asks for no token, so there is nothing to leak.
-    expect(mcpPrintConfig({ root: '/work/app', host: '192.168.1.20', env: {} })).not.toContain(
+    // The standalone CLI asks for the token too.
+    expect(mcpPrintConfig({ root: '/work/app', host: '192.168.1.20', env: {} })).toContain(
       'Warning',
     );
   });

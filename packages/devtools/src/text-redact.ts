@@ -8,7 +8,7 @@ import { JWT, REDACTED, isRedactedKey, wordsOf } from './forms-privacy.ts';
  */
 
 const URL_SECRET_KEY =
-  /^(code|key|sig|signature|session|session_?id|sid|auth|authorization|jwt|credentials?|x-amz-(signature|credential|security-token)|x-goog-(signature|credential))$/i;
+  /^(code|code_?verifier|key|sig|signature|session|session_?id|sid|auth|authorization|jwt|credentials?|x-amz-(signature|credential|security-token)|x-goog-(signature|credential))$/i;
 const BEARER = /Bearer\s+[\w.~+/-]+=*/gi;
 const LONG_TOKEN = /(?<=[/=])[A-Za-z0-9_-]{32,}(?=[/?#&;]|$)/g;
 const UUID_OR_ULID =
@@ -16,8 +16,18 @@ const UUID_OR_ULID =
 // The `=` can arrive percent-encoded (`#access_token%3D…`), so the first `%3D` ends a key too.
 // In text a key starts anywhere a word does (after a space, `:`, `(`, `,`, a quote,
 // `?&#;` or the start), may be quoted (`"token":"…"`), and is followed by `=` or `:`.
+// A quoted value honours backslash escapes, so `"abc\"def"` is one value.
 const TEXT_PAIR =
-  /(?<![\w$%.[\]-])(["']?)((?:(?!%3D)[\w$%.[\]-])+)\1(\s*(?:=|%3D)\s*|\s*:\s*)("[^"]*"|'[^']*'|[^&#;\s"',)}\]<>]*)/gi;
+  /(?<![\w$%.[\]-])(["']?)((?:(?!%3D)[\w$%.[\]-])+)\1(\s*(?:=|%3D)\s*|\s*:\s*)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^&#;\s"',)}\]<>]*)/gi;
+/**
+ * What else an unquoted value under a strong secret name hides: the rest of a
+ * `key=value` token up to the next space or `&key=` (`password=Tr0ub&rest`), or the rest
+ * of the line after `key:` (`password: correct horse battery`).
+ */
+// It stops where the next `key=` pair of a query string starts (`&user=a`).
+const STRONG_TAIL_EQ = /^(?:(?![&;][\w.$%[\]-]+=)\S)*/;
+const STRONG_TAIL_COLON = /^[^\r\n]*/;
+const TRAILING_PUNCTUATION = /[\s,;.!?)}\]>"']+$/;
 /** Values a `key: value` text pair keeps, so `token: null` in a log stays readable. */
 const PLAIN_VALUE = /^(?:null|undefined|true|false|)$/;
 /**
@@ -57,7 +67,8 @@ export function rememberSecret(secret: string) {
   }
 }
 
-function isOpaqueToken(token: string): boolean {
+/** Whether a string looks like a random token: hex, or mixed-case letters with digits (not a UUID). */
+export function isOpaqueToken(token: string): boolean {
   if (UUID_OR_ULID.test(token)) return false;
   if (/^[0-9a-f]{32,}$/i.test(token)) return true;
   return (
@@ -116,6 +127,47 @@ function nested(
   return inner === decoded ? match : `${head}${encodeURIComponent(inner)}`;
 }
 
+type PairReplacer = (
+  match: string,
+  quote: string,
+  key: string,
+  eq: string,
+  value: string,
+  at: number,
+  whole: string,
+) => string;
+
+/**
+ * `text.replace(TEXT_PAIR, pair)`, except that a masked unquoted value under a
+ * strong secret name also takes the rest of its token (`=`) or line (`:`),
+ * so a separator inside a password doesn't leave its tail readable.
+ */
+function replacePairs(text: string, pair: PairReplacer): string {
+  const re = new RegExp(TEXT_PAIR.source, TEXT_PAIR.flags);
+  let out = '';
+  let last = 0;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    const [match, quote, key, eq, value] = m as unknown as [string, string, string, string, string];
+    const at = m.index;
+    let end = at + match.length;
+    const replaced = pair(match, quote, key, eq, value, at, text);
+    if (
+      replaced !== match &&
+      replaced.endsWith(REDACTED) &&
+      !/^["']/.test(value) &&
+      isStrongSecretKey(decode(key))
+    ) {
+      const tail = (eq.trim() === ':' ? STRONG_TAIL_COLON : STRONG_TAIL_EQ).exec(text.slice(end));
+      // Punctuation that ends the sentence or the list stays: `(api_key=x, user=7)`.
+      end += (tail?.[0] ?? '').replace(TRAILING_PUNCTUATION, '').length;
+    }
+    out += text.slice(last, at) + replaced;
+    last = end;
+    re.lastIndex = Math.max(end, at + 1);
+  }
+  return out + text.slice(last);
+}
+
 /**
  * Hides the values of secret-looking query, matrix and fragment keys
  * (`?token=…`, `;api_key=…`, `#access_token=…`), URL passwords, `Authorization`
@@ -124,8 +176,10 @@ function nested(
  * a message. In `url` mode a value runs to the next separator and long opaque
  * tokens (not UUIDs or ULIDs) are hidden too. In messages a pair starts at any
  * word (`retry with token=abc`), may use `:` (`password: hunter2`) or JSON-ish
- * quotes (`"token":"abc"`), and a value stops at quotes, spaces and `,)}]`;
- * `key: value` only counts for the secret names, so `Invalid key: x` stays.
+ * quotes (`"token":"abc"`), and a value stops at quotes, spaces and `,)}]`,
+ * except after a strong name such as `password`, where it runs to the next
+ * space (`=`) or the end of the line (`:`); `key: value` only counts for the
+ * secret names, so `Invalid key: x` stays.
  */
 export function redactText(
   text: string,
@@ -179,7 +233,7 @@ export function redactText(
       }
       return colon ? match : nested(match, head, value, secrets, mode, depth);
     };
-    out = out.replace(TEXT_PAIR, pair);
+    out = replacePairs(out, pair);
   }
   for (const secret of secrets) {
     if (secret.length < 3) continue;
