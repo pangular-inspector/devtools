@@ -1,3 +1,4 @@
+import { queueMicrotaskOutside } from './outside-angular.ts';
 import * as angularCore from '@angular/core';
 import { isRedactedKey, REDACTED, withRedactionScope } from './forms-privacy.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
@@ -332,6 +333,8 @@ export function createNgrxCollector<H extends object = Element>(
   let seq = 0;
   let classic: Classic | null = null;
   let classicMisses = 0;
+  /** Environment injectors already searched for a classic Store. */
+  const classicEnvs = new WeakSet<object>();
   let dispatcher: AnyRecord | null = null;
   let dispatcherUndo: (() => void) | null = null;
   // Tracks per-element cleanup for component-scoped Dispatcher instances.
@@ -475,7 +478,7 @@ export function createNgrxCollector<H extends object = Element>(
     if (t.watched) return;
     if (t.depth > 0 || t.pendingBefore) return;
     t.pendingBefore = snapshot(t);
-    queueMicrotask(() => {
+    queueMicrotaskOutside(() => {
       const before = t.pendingBefore;
       t.pendingBefore = null;
       if (before) finish(t, 'patchState', undefined, before);
@@ -757,8 +760,14 @@ export function createNgrxCollector<H extends object = Element>(
         const name = stripped(token);
         const accept = want[name];
         if (!accept || out[name]) continue;
-        const from = (rootInjector ?? env) as AnyRecord;
-        const value = read(() => from['get'](token, null), null) as AnyRecord | null;
+        // From the injector that lists the token: a Store provided in a route's environment
+        // injector is not visible from the root. The root's element injector stays the
+        // fallback for an environment injector that can't be read directly.
+        const value = (read(() => env['get'](token, null), null) ??
+          read(
+            () => (rootInjector as AnyRecord | null)?.['get'](token, null),
+            null,
+          )) as AnyRecord | null;
         if (value && typeof value === 'object' && accept(value)) {
           out[name] = value;
           if (name === 'Store') scope = envName;
@@ -1098,7 +1107,7 @@ export function createNgrxCollector<H extends object = Element>(
               first = false;
               return;
             }
-            queueMicrotask(() => record(action));
+            queueMicrotaskOutside(() => record(action));
           }),
         undefined,
       );
@@ -1207,6 +1216,14 @@ export function createNgrxCollector<H extends object = Element>(
       }
     }
 
+    // A lazy route can bring its own Store later: a new environment injector earns new tries.
+    let newEnv = false;
+    for (const env of envs.keys()) {
+      if (classicEnvs.has(env)) continue;
+      classicEnvs.add(env);
+      newEnv = true;
+    }
+    if (newEnv) classicMisses = 0;
     if (!classic && classicMisses < 5) {
       const found = findClassic(ng, envs, rootInjector);
       if (found) classic = attachClassic(found);

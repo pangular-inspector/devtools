@@ -94,6 +94,7 @@ export function redactCall(call: HttpCall): HttpCall {
     ...call,
     url: redactUrl(call.url),
     ...(call.pageUrl === undefined ? {} : { pageUrl: redactUrl(call.pageUrl) }),
+    ...(call.redirectedTo === undefined ? {} : { redirectedTo: redactUrl(call.redirectedTo) }),
     ...(call.rulePattern === undefined ? {} : { rulePattern: redactUrl(call.rulePattern) }),
     ...(call.error === undefined ? {} : { error: clip(redactText(call.error), 500) }),
     ...(call.preview === undefined ? {} : { preview: redactPreview(call.preview) }),

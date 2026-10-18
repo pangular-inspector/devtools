@@ -156,6 +156,21 @@ export function cdUnknownPageText(
 }
 
 /** The page the change-detection tool reports: the one asked for, else recording, else latest. */
+/**
+ * Marks the recording stopped on `pageId` (every page without one) as soon as
+ * a stop is asked for, so the next summary doesn't say "Recording is on" from
+ * the push before the stop. The page's next push confirms it. True when a page changed.
+ */
+export function markCdPagesStopped(pages: Map<string, CdPage>, pageId?: string): boolean {
+  let changed = false;
+  for (const [id, page] of pages) {
+    if ((pageId && id !== pageId) || !page.recording) continue;
+    pages.set(id, { ...page, recording: false });
+    changed = true;
+  }
+  return changed;
+}
+
 export function pickCdPage(state: CdState, pageId?: string): CdPage | undefined {
   const pages = Object.values(state.pages);
   if (pageId) return state.pages[pageId];

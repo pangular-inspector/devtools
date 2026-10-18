@@ -102,7 +102,9 @@ export function matchForms(forms: CollectedForm[], query?: string, page?: string
   );
 }
 
-export function noMatch(forms: CollectedForm[], query: string): string {
+/** Refuses a form query; pass the forms of the asked page only (`onPage`), never every page's. */
+export function noMatch(forms: CollectedForm[], query: string, page?: string): string {
+  if (!forms.length && page) return refusal(`Page ${code(page)} reports no forms right now.`);
   if (!forms.length)
     return refusal(`No form matches ${code(query)}: the page reports no forms right now.`);
   const list = forms.map((f) => `${code(f.label)} (${f.id})`).join(', ');
@@ -256,7 +258,7 @@ export function inspectFormsText(
   now = Date.now(),
 ): string {
   const forms = matchForms(state.forms, args.form, args.page);
-  if (!forms.length) return noMatch(state.forms, args.form ?? '');
+  if (!forms.length) return noMatch(onPage(state.forms, args.page), args.form ?? '', args.page);
   const stale = freshness(state, now, forms);
   if (!args.form && !args.path && !args.onlyInvalid) {
     const lines = forms.map((f) => {
@@ -372,7 +374,7 @@ export function explainFormsText(
   now = Date.now(),
 ): string {
   const forms = matchForms(state.forms, args.form, args.page);
-  if (!forms.length) return noMatch(state.forms, args.form ?? '');
+  if (!forms.length) return noMatch(onPage(state.forms, args.page), args.form ?? '', args.page);
   const stale = freshness(state, now, forms);
   const failing = args.form
     ? forms

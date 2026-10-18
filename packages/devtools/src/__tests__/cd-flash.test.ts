@@ -111,6 +111,7 @@ function setup(options: { reduced?: boolean } = {}) {
   const check = (instance: object, times = 1) => {
     for (let i = 0; i < times; i++) {
       ng.emit(E.ComponentStart);
+      ng.emit(E.TemplateUpdateStart, instance);
       ng.emit(E.ComponentEnd, instance);
     }
   };
@@ -174,6 +175,28 @@ describe('flash overlay', () => {
     win.frame();
     expect(cartHost.getBoundingClientRect).toHaveBeenCalledTimes(1);
     expect(priceHost.getBoundingClientRect).toHaveBeenCalledTimes(1);
+  });
+
+  it('flashes only components whose template ran, and not the checkNoChanges pass', () => {
+    const { ng, flash, check, win, labels } = setup();
+    const cart = new Cart();
+    const price = new _Price();
+    hostFor(ng, cart);
+    hostFor(ng, price, { top: 200 });
+    flash.set(true);
+    ng.emit(E.ChangeDetectionStart);
+    ng.emit(E.ChangeDetectionSyncStart);
+    check(cart);
+    // A clean OnPush child: Angular walks past it without running its template.
+    ng.emit(E.ComponentStart);
+    ng.emit(E.ComponentEnd, price);
+    ng.emit(E.ChangeDetectionSyncEnd);
+    // The dev-mode checkNoChanges pass runs the template again.
+    check(cart);
+    check(price);
+    ng.emit(E.ChangeDetectionEnd);
+    win.frame();
+    expect(labels.map((l) => l.text)).toEqual(['Cart ×1']);
   });
 
   it('labels each box with the class name and the checks since it appeared', () => {

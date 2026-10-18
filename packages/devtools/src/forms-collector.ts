@@ -1,3 +1,4 @@
+import { nextFrameOutside, setTimeoutOutside } from './outside-angular.ts';
 import {
   collectForms,
   controlPathOf,
@@ -119,8 +120,7 @@ export function setupErrorOf(args: unknown[]): string | null {
 }
 
 function afterPaint(fn: () => void) {
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fn);
-  else setTimeout(fn, 16);
+  nextFrameOutside(fn);
 }
 
 export interface FormsCollector {
@@ -466,7 +466,7 @@ export function attachForms(
         }
         actionThrew.delete(root);
         started = false;
-        if (submittingForm === formId) setTimeout(() => (submittingForm = null), 0);
+        if (submittingForm === formId) setTimeoutOutside(() => (submittingForm = null), 0);
       }
       schedulePush();
       return result;
@@ -487,7 +487,7 @@ export function attachForms(
     const wait = sentAt + LEASED_PUSH_MS - Date.now();
     if (paced && wait > 0) {
       pendingReport = report;
-      sendTimer ??= setTimeout(() => {
+      sendTimer ??= setTimeoutOutside(() => {
         sendTimer = undefined;
         const next = pendingReport;
         pendingReport = null;
@@ -590,7 +590,7 @@ export function attachForms(
 
   function schedulePush() {
     if (pushTimer) return;
-    pushTimer = setTimeout(() => {
+    pushTimer = setTimeoutOutside(() => {
       pushTimer = undefined;
       void pushForms(false, true);
     }, PUSH_DELAY_MS);
@@ -641,7 +641,7 @@ export function attachForms(
     }
     if (!text) return;
     pendingCaller = { formId, text };
-    setTimeout(() => {
+    setTimeoutOutside(() => {
       if (pendingCaller?.text === text) pendingCaller = null;
     }, 0);
   }
@@ -708,7 +708,10 @@ export function attachForms(
       const onKey = (event: KeyboardEvent) => {
         if (event.key === 'Escape') finish(failed('Picking cancelled.'));
       };
-      const timer = setTimeout(() => finish(failed('No field was picked.')), PICK_TIMEOUT_MS);
+      const timer = setTimeoutOutside(
+        () => finish(failed('No field was picked.')),
+        PICK_TIMEOUT_MS,
+      );
       cancelPick = () => finish(failed('Picking cancelled.'));
       document.addEventListener('click', onClick, true);
       document.addEventListener('mouseover', onHover, true);
@@ -725,7 +728,7 @@ export function attachForms(
     }
     userActive = true;
     clearTimeout(userTimer);
-    userTimer = setTimeout(() => (userActive = false), 0);
+    userTimer = setTimeoutOutside(() => (userActive = false), 0);
     if (event.type === 'submit') onSubmit(event);
     if (event.type !== 'click' && event.type !== 'keydown') schedulePush();
   };
@@ -736,7 +739,7 @@ export function attachForms(
       if (form.formElement !== target || form.kind === 'signal') continue;
       const status = String(read(() => form.root['status'], ''));
       const why = status === 'VALID' ? '' : read(() => controlSubmitBlockers(form.root), '');
-      setTimeout(() => {
+      setTimeoutOutside(() => {
         afterPaint(() => {
           const focus = describeElement(document.activeElement);
           recordFormEvent({

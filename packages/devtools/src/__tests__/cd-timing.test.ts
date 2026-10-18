@@ -50,7 +50,9 @@ describe('lifecycle hook timing', () => {
     const shell = new Shell();
     const row = new Row();
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.TemplateUpdateStart, shell);
     recorder.onEvent(E.LifecycleHookStart, row, rememberChangeHistoryAndInvokeOnChangesHook);
     clock.advance(1);
     recorder.onEvent(E.LifecycleHookEnd, row, rememberChangeHistoryAndInvokeOnChangesHook);
@@ -65,6 +67,7 @@ describe('lifecycle hook timing', () => {
     recorder.onEvent(E.ChangeDetectionEnd);
 
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.LifecycleHookStart, row, Row.prototype.ngDoCheck);
     clock.advance(1.5);
     recorder.onEvent(E.LifecycleHookEnd, row, Row.prototype.ngDoCheck);
@@ -102,11 +105,14 @@ describe('lifecycle hook timing', () => {
     const row = new Row();
     const outlet = new Row();
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.TemplateUpdateStart, shell);
     clock.advance(0.5);
     recorder.onEvent(E.LifecycleHookStart, outlet, Row.prototype.ngOnInit);
     clock.advance(1);
     recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.TemplateUpdateStart, row);
     clock.advance(2);
     recorder.onEvent(E.ComponentEnd, row);
     recorder.onEvent(E.LifecycleHookEnd, outlet, Row.prototype.ngOnInit);
@@ -130,6 +136,7 @@ describe('lifecycle hook timing', () => {
     const { clock, recorder, snap } = recorderAt();
     const row = new Row();
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.LifecycleHookStart, row, Row.prototype.ngAfterViewChecked);
     recorder.onEvent(E.LifecycleHookStart, row, Row.prototype.ngDoCheck);
     clock.advance(1);
@@ -181,6 +188,7 @@ describe('output timing', () => {
     recorder.onEvent(E.OutputEnd, picker, Picker.prototype.onPick);
     clock.advance(1);
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     clock.advance(1);
     recorder.onEvent(E.ChangeDetectionEnd);
 
@@ -206,6 +214,7 @@ describe('output timing', () => {
     recorder.onEvent(E.OutputEnd, picker, Picker.prototype.onPick);
     clock.advance(OUTPUT_TRIGGER_MS + 1);
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.ChangeDetectionEnd);
     const cycle = snap().cycles[0]!;
     expect(cycle.trigger).toBeUndefined();
@@ -242,6 +251,7 @@ describe('afterRender timing', () => {
   it('forgets timings on clear', () => {
     const { clock, recorder, snap } = recorderAt();
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.AfterRenderHooksStart);
     clock.advance(1);
     recorder.onEvent(E.AfterRenderHooksEnd);
@@ -261,8 +271,10 @@ describe('cycle spans', () => {
     const { clock, recorder, snap } = recorderAt();
     const rows = Array.from({ length: 100 }, () => new Row());
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     rows.forEach((row, i) => {
       recorder.onEvent(E.ComponentStart);
+      recorder.onEvent(E.TemplateUpdateStart, row);
       clock.advance(i % 2 ? 2 : 1);
       recorder.onEvent(E.ComponentEnd, row);
     });

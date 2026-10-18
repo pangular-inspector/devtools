@@ -68,6 +68,48 @@ Component({
     '<button type="button" (click)="bump()">Bump</button><app-hook-badge [count]="count()"></app-hook-badge>',
 })(HookShell);
 
+/** Template runs per class, counted by the templates themselves: the ground truth. */
+const runs: Record<string, number> = {};
+const ran = (name: string) => {
+  runs[name] = (runs[name] ?? 0) + 1;
+  return '';
+};
+
+class QuietChild {
+  label = 'static';
+  ran = ran;
+}
+Component({
+  ...STANDALONE,
+  selector: 'app-quiet-child',
+  inputs: ['label'],
+  changeDetection: 0, // OnPush
+  template: '{{ ran("QuietChild") }}{{ label }}',
+})(QuietChild);
+
+class EagerChild {
+  ran = ran;
+}
+Component({
+  ...STANDALONE,
+  selector: 'app-eager-child',
+  changeDetection: 1, // Eager (Default before 22)
+  template: '{{ ran("EagerChild") }}eager',
+})(EagerChild);
+
+class CountingShell {
+  readonly n = writableSignal(0);
+  ran = ran;
+}
+Component({
+  ...STANDALONE,
+  selector: 'app-root',
+  imports: [QuietChild, EagerChild],
+  changeDetection: 1,
+  template:
+    '{{ ran("CountingShell") }}{{ n() }}<app-quiet-child label="a"></app-quiet-child><app-quiet-child label="b"></app-quiet-child><app-quiet-child label="c"></app-quiet-child><app-eager-child></app-eager-child>',
+})(CountingShell);
+
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const ngOf = () => (globalThis as { ng?: unknown }).ng;
 
@@ -229,5 +271,36 @@ describe('change detection recorder with a real app', () => {
       expect.arrayContaining(['c:HookBadge', 'h:HookBadge.ngDoCheck', 'r:afterRender']),
     );
     expect(kinds.some((kind) => kind.startsWith('o:HookShell'))).toBe(true);
+  });
+
+  it('counts a check only when the template ran, never a skipped OnPush child or checkNoChanges', async () => {
+    document.body.innerHTML = '<app-root></app-root>';
+    app = await bootstrapRoot(CountingShell, { declarations: [QuietChild, EagerChild] });
+    app.appRef.tick();
+    const { my, handlers, reports } = fakeRpc();
+    const cd = attachChangeDetection(my, 'pg3', ngOf, 50);
+    cleanup = () => cd.stop();
+    handlers.get('change-detection-record')!({ pageId: 'pg3', on: true });
+    await wait(0);
+    if (!angularAtLeast('20.0')) return;
+    for (const key of Object.keys(runs)) delete runs[key];
+    const shell = app.appRef.components[0]!.instance as CountingShell;
+    for (let i = 0; i < 3; i++) {
+      shell.n.update((v) => v + 1);
+      app.appRef.tick();
+    }
+    await cd.push(true);
+    const report = reports.at(-1)!;
+    const checks = (name: string) => report.components.find((c) => c.name === name)?.checks ?? 0;
+    // The OnPush children were walked past, never refreshed.
+    expect(runs['QuietChild'] ?? 0).toBe(0);
+    expect(checks('QuietChild')).toBe(0);
+    // One refresh per tick; the dev-mode checkNoChanges pass (if any) is not a check.
+    expect(checks('CountingShell')).toBe(3);
+    expect(checks('EagerChild')).toBe(3);
+    expect(runs['EagerChild']).toBeGreaterThanOrEqual(3);
+    const quiet = document.querySelector('app-quiet-child')!;
+    expect(report.hosts[elementId(quiet)] ?? 0).toBe(0);
+    expect(report.hosts[elementId(document.querySelector('app-eager-child')!)]).toBe(3);
   });
 });

@@ -180,11 +180,14 @@ describe.runIf(functionalRouter)('real Router', () => {
       code: 'GuardRejected',
       guards: { names: ['denyGuard'], passed: false },
     });
+    // The browser stays where it was, so there is no URL the navigation ended on.
+    expect(last()).not.toHaveProperty('finalUrl');
   });
 
   it('records a resolver error', async () => {
     await router.navigateByUrl('/broken').catch(() => {});
     expect(last()).toMatchObject({ url: '/broken', outcome: 'failed' });
+    expect(last()).not.toHaveProperty('finalUrl');
     expect(last().reason).toContain('user service is down');
   });
 

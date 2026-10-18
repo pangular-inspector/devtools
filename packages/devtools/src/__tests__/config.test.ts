@@ -538,6 +538,8 @@ describe('panel actions', () => {
 
   it('refuses a panel probe with router actions off and lets record and resolve lazy through', async () => {
     const { ctx, invoke } = await boot({ actions: { router: false } });
+    // A connected page, so the requests go out instead of being answered at once.
+    await invoke('push-component-tree', { pageId: 'p1', roots: [], count: 0 });
     const broadcast = vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: never) => {
       const { requestId } = (options as { args: [{ requestId: string }] }).args[0];
       await invoke('router-action-result', { requestId, pageId: 'p1', result: { ok: true } });

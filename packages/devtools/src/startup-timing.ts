@@ -263,6 +263,16 @@ export function attachStartup(
   const now = options.now ?? Date.now;
   const clock = () => (typeof performance === 'undefined' ? 0 : performance.now());
   const overlayStart = round(clock());
+  // The URL the app started on: the document's navigation entry, else the URL now. A client
+  // navigation later must not relabel the startup.
+  const startUrl =
+    typeof location === 'undefined'
+      ? undefined
+      : read(() => {
+          const entry = performance.getEntriesByType?.('navigation')[0] as
+            { name?: unknown } | undefined;
+          return typeof entry?.name === 'string' && entry.name ? entry.name : location.href;
+        }, location.href);
   let stable: StartupTiming['firstStable'];
   let stopStable: (() => void) | null = null;
   let lastJson = '';
@@ -298,7 +308,7 @@ export function attachStartup(
       ...(options.describe
         ? options.describe()
         : {
-            ...(typeof location === 'undefined' ? {} : { url: redactUrl(location.href) }),
+            ...(startUrl === undefined ? {} : { url: redactUrl(startUrl) }),
             ...(typeof document === 'undefined' ? {} : { title: redactMessage(document.title) }),
           }),
       ...readStartupTiming(overlayStart, stable, { ...options.env, buffer }),

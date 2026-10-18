@@ -139,11 +139,6 @@ export function forgetDevframeConnection(
   delete win['__DEVFRAME_CONNECTION_META__'];
 }
 
-/** For tests: lets the next missing config warn again. */
-export function resetConnectionWarnings() {
-  warnedNoConfig = false;
-}
-
 interface ConnectionEvents {
   events: {
     on(event: 'connection:error', listener: (error: Error) => void): (() => void) | void;

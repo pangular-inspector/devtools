@@ -1,4 +1,5 @@
 import { keepaliveDue } from './change-detection.ts';
+import { setTimeoutOutside } from './outside-angular.ts';
 import { CONSOLE_LEVELS, tapConsole, type ConsoleLevel } from './console-tap.ts';
 import { elementById, elementId } from './element-id.ts';
 import type { HostTree } from './host-tree.ts';
@@ -265,7 +266,8 @@ export function attachErrors(
 
   const schedulePush = () => {
     if (left || stopped || pushTimer) return;
-    pushTimer = setTimeout(() => {
+    // Console calls and handled errors come from app code inside the Angular zone.
+    pushTimer = setTimeoutOutside(() => {
       pushTimer = undefined;
       void push().catch(() => {});
     }, PUSH_DELAY_MS);

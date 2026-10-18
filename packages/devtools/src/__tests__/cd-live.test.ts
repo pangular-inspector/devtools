@@ -46,8 +46,10 @@ describe('Performance panel track', () => {
     const ng = fakeNg();
     const stamp = vi.fn();
     createCdPerfTrack({ getNg: () => ng, console: { timeStamp: stamp } as unknown as Console });
+    const checked1 = new Cart();
     ng.emit(E.ComponentStart);
-    ng.emit(E.ComponentEnd, new Cart());
+    ng.emit(E.TemplateUpdateStart, checked1);
+    ng.emit(E.ComponentEnd, checked1);
     expect(ng.profilers).toHaveLength(0);
     expect(stamp).not.toHaveBeenCalled();
   });
@@ -70,6 +72,7 @@ describe('Performance panel track', () => {
     time.advance(1);
     ng.emit(E.OutputEnd, cart, onAdd);
     ng.emit(E.ComponentStart, cart);
+    ng.emit(E.TemplateUpdateStart, cart);
     time.advance(2);
     ng.emit(E.LifecycleHookStart, cart, cart.ngOnInit);
     time.advance(3);
@@ -86,8 +89,35 @@ describe('Performance panel track', () => {
     track.set(false);
     expect(ng.profilers).toHaveLength(0);
     ng.emit(E.ComponentStart);
+    ng.emit(E.TemplateUpdateStart, cart);
     ng.emit(E.ComponentEnd, cart);
     expect(stamp).toHaveBeenCalledTimes(3);
+  });
+
+  it('writes no entry for a component Angular walked past or for the checkNoChanges pass', () => {
+    page();
+    const ng = fakeNg();
+    const stamp = vi.fn();
+    const track = createCdPerfTrack({
+      getNg: () => ng,
+      console: { timeStamp: stamp } as unknown as Console,
+    });
+    track.set(true);
+    const cart = new Cart();
+    ng.emit(E.ChangeDetectionStart);
+    ng.emit(E.ChangeDetectionSyncStart);
+    ng.emit(E.ComponentStart);
+    ng.emit(E.ComponentEnd, cart);
+    ng.emit(E.ComponentStart);
+    ng.emit(E.TemplateUpdateStart, cart);
+    ng.emit(E.ComponentEnd, cart);
+    ng.emit(E.ChangeDetectionSyncEnd);
+    ng.emit(E.ComponentStart);
+    ng.emit(E.TemplateUpdateStart, cart);
+    ng.emit(E.ComponentEnd, cart);
+    ng.emit(E.ChangeDetectionEnd);
+    expect(stamp.mock.calls.map((call) => call[0])).toEqual(['Cart']);
+    track.set(false);
   });
 
   it('does nothing where the console has no timeStamp', () => {

@@ -1,3 +1,4 @@
+import { outsideAngular } from './outside-angular.ts';
 import { resendDue } from './page-heartbeat.ts';
 
 export type Profiler = (event: number, instance?: unknown, hook?: unknown) => void;
@@ -5,10 +6,6 @@ export type Profiler = (event: number, instance?: unknown, hook?: unknown) => vo
 interface ProfilerApi {
   ɵsetProfiler?: (profiler: Profiler | null) => unknown;
   enableProfiling?: unknown;
-}
-
-interface ZoneLike {
-  root?: { run<T>(fn: () => T): T };
 }
 
 /** Angular's `ProfilerEvent.TemplateCreateStart` and `TemplateUpdateStart`. */
@@ -50,14 +47,7 @@ export interface RefreshScheduler {
   stop(): void;
 }
 
-/**
- * Runs `fn` in the root zone when zone.js is loaded, so timers created there do
- * not make the app run change detection, which would call the profiler again.
- */
-export function outsideAngular<T>(fn: () => T): T {
-  const root = (globalThis as { Zone?: ZoneLike }).Zone?.root;
-  return root ? root.run(fn) : fn();
-}
+export { outsideAngular };
 
 /** The major version from the `ng-version` attribute, or 0 when there is none. */
 export function angularMajor(doc: Document = document): number {

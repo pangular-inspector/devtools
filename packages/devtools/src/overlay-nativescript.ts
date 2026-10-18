@@ -6,6 +6,7 @@
 // give the runtime a `WebSocket` global first (for example by importing
 // `@valor/nativescript-websockets` in `polyfills.ts`).
 
+import { outsideAngular, setTimeoutOutside } from './outside-angular.ts';
 import { Application, isAndroid } from '@nativescript/core';
 import { connectDevframe } from 'devframe/client';
 import { keepaliveDue } from './change-detection.ts';
@@ -107,7 +108,7 @@ export function initNativeScriptOverlay(options: NativeScriptOverlayOptions = {}
     session?.();
     session = undefined;
     if (disposed || retry) return;
-    retry = setTimeout(() => {
+    retry = setTimeoutOutside(() => {
       retry = undefined;
       start();
     }, retryMs);
@@ -136,7 +137,8 @@ export function initNativeScriptOverlay(options: NativeScriptOverlayOptions = {}
       },
     );
   };
-  start();
+  // Called from app code, maybe inside the Angular zone: the sessions and their timers must not make zone.js apps tick.
+  outsideAngular(start);
 
   return () => {
     disposed = true;

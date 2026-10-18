@@ -34,6 +34,8 @@ export interface HttpCall {
   delayMs?: number;
   /** Unsubscribed before a response, such as by `switchMap` or a destroy. */
   cancelled?: boolean;
+  /** The response came from this other URL: the server redirected the request there. */
+  redirectedTo?: string;
   ruleId?: string;
   rulePattern?: string;
   pageUrl?: string;
@@ -180,6 +182,7 @@ export function sanitizeCalls(input: unknown, max = MAX_CALLS): HttpCall[] {
       ...(c.mocked === true ? { mocked: true } : {}),
       ...(num(c.delayMs) ? { delayMs: num(c.delayMs) } : {}),
       ...(c.cancelled === true ? { cancelled: true } : {}),
+      ...(str(c.redirectedTo, 2000) ? { redirectedTo: str(c.redirectedTo, 2000) } : {}),
       ruleId: str(c.ruleId, 40),
       rulePattern: str(c.rulePattern, 500),
       pageUrl: str(c.pageUrl, 2000),

@@ -1,3 +1,4 @@
+import { cliErrorText } from './cli-error.ts';
 import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import process from 'node:process';
@@ -456,12 +457,8 @@ export function createPangularCli(options: PangularCliOptions = {}) {
         cli.parse(argv, { run: false });
         await cli.runMatchedCommand();
       } catch (error) {
-        const message = (error as Error).message ?? String(error);
-        console.error(
-          message.startsWith('[pangular]')
-            ? message
-            : `[pangular] ${message}. Run pangular --help for the commands and flags.`,
-        );
+        const text = cliErrorText(error);
+        if (text) console.error(text);
         process.exitCode = 1;
       }
     },

@@ -274,6 +274,8 @@ describe('native diagnostics', () => {
     // A template listener asked for the tick.
     f.scheduler.notify(5);
     f.fire(12);
+    // A synchronization pass, where checks count (not the checkNoChanges pass after it).
+    f.fire(14);
     f.fire(18, f.rows[0]);
     f.fire(2, f.rows[0]);
     f.fire(19, f.rows[0]);

@@ -106,6 +106,7 @@ import { COMPONENT_TREE_SHAPE, INJECTOR_TREE_SHAPE } from './push-delta.ts';
 import { createDomDirty } from './dom-dirty.ts';
 import { domTree } from './host-tree.ts';
 import { LEASED_PUSH_MS, createPageLease, throttle } from './page-lease.ts';
+import { setTimeoutOutside } from './outside-angular.ts';
 import { createPageHeartbeat, keepaliveAfter } from './page-heartbeat.ts';
 
 declare global {
@@ -748,7 +749,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
 
   function scheduleRouterPush() {
     clearTimeout(routerPushTimer);
-    routerPushTimer = setTimeout(() => void pushRouter(), 50);
+    routerPushTimer = setTimeoutOutside(() => void pushRouter(), 50);
   }
 
   // The leased reports go out at most once a second; forced pushes don't wait.

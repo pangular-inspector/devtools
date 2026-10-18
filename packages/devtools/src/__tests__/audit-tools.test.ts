@@ -30,6 +30,7 @@ async function boot(config?: PangularConfig) {
 const tree = (pageId: string) => ({
   pageId,
   url: `/${pageId}`,
+  title: `Trips ${pageId}`,
   count: 1,
   detail: null,
   roots: [{ id: `${pageId}-root`, name: 'App', tag: 'app-root', children: [] }],
@@ -389,7 +390,10 @@ describe('the audit RPC functions for the panel', () => {
     await call('forget-errors-page', 'tab1');
     expect(await call('audit-session', { pageId: 'tab1', action: 'after' })).toEqual({ ok: true });
     const result = await call('get-audit', { pageId: 'tab1' });
-    expect(result.pages).toEqual([expect.objectContaining({ pageId: 'tab1', url: '/tab1' })]);
+    // The page picker shows the title first.
+    expect(result.pages).toEqual([
+      expect.objectContaining({ pageId: 'tab1', url: '/tab1', title: 'Trips tab1' }),
+    ]);
     expect(result.report.findings.map((f: { area: string }) => f.area)).toEqual(['accessibility']);
     expect(result.session.diff.resolved).toEqual([expect.objectContaining({ area: 'errors' })]);
     expect(result.axe.violations).toHaveLength(1);

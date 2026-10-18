@@ -26,7 +26,7 @@ import type { Subscription } from 'rxjs';
 import { redactMessage } from './forms-privacy.ts';
 import { transferCacheKeys } from './http-cache-key.ts';
 import { cacheSkipReason, requestSkipReason, type CacheSkip } from './http-cache-reason.ts';
-import { appIdOf, isHydrationMessage } from './http-hydration.ts';
+import { isHydrationMessage } from './http-hydration.ts';
 import { captureHeaders, withCapturedHeaders, type HeaderSource } from './http-headers.ts';
 
 import {
@@ -52,29 +52,12 @@ import { watchSsrNavigations } from './ssr-navigation.ts';
 import { tapConsole } from './console-tap.ts';
 
 export * from './http-rules.ts';
+import { redirectOf } from './http-redirect.ts';
+import { claimTransferEntry, mockContentType, parseBody } from './http-internals.ts';
 export { decodePayload, type PayloadEntry, type PayloadSummary } from './http-payload.ts';
 
 const MAX_WARNINGS = 50;
 const PREVIEW_CHARS = 2000;
-
-function mockContentType(responseType = 'json'): string {
-  if (responseType === 'text') return 'text/plain';
-  if (responseType === 'blob' || responseType === 'arraybuffer') return 'application/octet-stream';
-  return 'application/json';
-}
-
-export function parseBody(body: string | undefined, responseType = 'json'): unknown {
-  if (responseType === 'text') return body ?? '';
-  if (responseType === 'blob') return new Blob([body ?? ''], { type: mockContentType('blob') });
-  if (responseType === 'arraybuffer')
-    return Uint8Array.from(new TextEncoder().encode(body ?? '')).buffer;
-  if (body === undefined || body === '') return null;
-  try {
-    return JSON.parse(body);
-  } catch {
-    return body;
-  }
-}
 
 function preview(body: unknown): string | undefined {
   if (body === null || body === undefined) return undefined;
@@ -118,72 +101,13 @@ function record(call: HttpCall) {
 
 let seq = 0;
 
-function pathOf(url: string): string {
-  try {
-    const parsed = new URL(url, 'http://x');
-    return parsed.pathname + parsed.search;
-  } catch {
-    return url;
-  }
-}
-
-interface TransferEntry {
-  key: string;
-  url?: string;
-}
-
-let transferEntries: TransferEntry[] | null = null;
-const claimedTransfer = new Set<number>();
-
-function readTransferEntries(doc: Document): TransferEntry[] {
-  const script = doc.getElementById(`${appIdOf(doc)}-state`);
-  try {
-    const data = JSON.parse(script?.textContent || '{}') as Record<string, unknown>;
-    return Object.entries(data).flatMap(([key, raw]) => {
-      if (!raw || typeof raw !== 'object') return [];
-      if (!key.startsWith('analog_')) return [{ key }];
-      const url = (raw as Record<string, unknown>)['url'];
-      return typeof url === 'string' ? [{ key, url: pathOf(url) }] : [];
-    });
-  } catch {
-    return [];
-  }
-}
-
-/**
- * True the first time a GET or HEAD response, or a POST that opted into the
- * transfer cache, matches a TransferState entry, so hits are detected even
- * when another interceptor sits between this one and the transfer cache.
- * HttpClient entries match on Angular's cache key (method, response type,
- * URL, body and params); Analog entries on the URL, for GET and HEAD only,
- * since a URL alone can't tell POST bodies apart.
- */
-export function claimTransferEntry(req: HttpRequest<unknown>): boolean {
-  const post = req.method === 'POST' && !!req.transferCache;
-  if (req.method !== 'GET' && req.method !== 'HEAD' && !post) return false;
-  if (typeof document === 'undefined') return false;
-  transferEntries ??= readTransferEntries(document);
-  const keys = new Set(transferCacheKeys(req));
-  const urls = new Set([pathOf(req.url), pathOf(req.urlWithParams)]);
-  const index = transferEntries.findIndex(
-    (entry, i) =>
-      !claimedTransfer.has(i) &&
-      (entry.url === undefined ? keys.has(entry.key) : !post && urls.has(entry.url)),
-  );
-  if (index < 0) return false;
-  claimedTransfer.add(index);
-  return true;
-}
-
-export function resetTransferEntries() {
-  transferEntries = null;
-  claimedTransfer.clear();
-}
-
 const stableApps = new WeakSet<object>();
 const watchedApps = new WeakSet<object>();
 
 function transferWindowOpen(): boolean {
+  // Angular turns its transfer cache off once the app is stable. `timeUntilStable` notes that
+  // from the start; the first request after it would otherwise still claim a payload entry.
+  if (httpRegistry().stableMs !== undefined) return false;
   const appRef = inject(ApplicationRef, { optional: true });
   if (!appRef) return true;
   if (!watchedApps.has(appRef)) {
@@ -328,6 +252,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
           done(
             {
               status: event.status,
+              ...redirectOf(url, event.url),
               // Only the browser reads the transfer cache. On the server, cacheStored says what it kept.
               cacheHit: cacheable && (sync || fromPayload),
               preview: preview(mocked ? rule?.body : event.body),
@@ -345,6 +270,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
         done(
           {
             status: failed ? error.status : 0,
+            ...(failed ? redirectOf(url, error.url) : {}),
             cacheHit: false,
             error: message.slice(0, 500),
             // The body the server sent with the error, such as validation messages.

@@ -4,6 +4,7 @@
 // asked recently). The server says when that changes; an idle page only keeps
 // itself alive and sends everything again when interest comes back.
 
+import { setTimeoutOutside } from './outside-angular.ts';
 import { heartbeatRunning } from './page-heartbeat.ts';
 
 interface Rpc {
@@ -132,7 +133,7 @@ export function throttle(fn: () => void, ms: number, now: () => number = () => D
     if (timer) return;
     const wait = last + ms - now();
     if (wait <= 0) run();
-    else timer = setTimeout(run, wait);
+    else timer = setTimeoutOutside(run, wait);
   };
   call.cancel = () => {
     clearTimeout(timer);

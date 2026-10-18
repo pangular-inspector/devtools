@@ -1,3 +1,4 @@
+import { setTimeoutOutside } from './outside-angular.ts';
 import { keepaliveAfter } from './page-heartbeat.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
 import { serialize } from './ngrx-shared.ts';
@@ -459,7 +460,7 @@ export function attachTanstackQuery<H extends object = Element>(
   let pushing = false;
   const schedule = () => {
     if (timer) return;
-    timer = setTimeout(() => {
+    timer = setTimeoutOutside(() => {
       timer = undefined;
       void push();
     }, SETTLE_MS);

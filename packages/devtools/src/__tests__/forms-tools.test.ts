@@ -103,6 +103,32 @@ describe('explainForm', () => {
   });
 });
 
+describe('forms tools on one page of several', () => {
+  const onA = form(group([control('name')], 'INVALID'), {
+    id: 'form-1@pageA',
+    label: 'Profile.form',
+  });
+  const state = { forms: [onA], events: [], reportedAt: 1000 };
+
+  it("never answers a page with no forms with another tab's forms", () => {
+    for (const text of [
+      inspectFormsText(state, { page: 'pageB' }, 1000),
+      inspectFormsText(state, { page: 'pageB', form: 'Profile' }, 1000),
+      explainFormsText(state, { page: 'pageB' }, 1000),
+      explainFormsText(state, { page: 'pageB', form: 'Profile' }, 1000),
+    ]) {
+      expect(text).toContain('`pageB` reports no forms');
+      expect(text).not.toContain('pageA');
+      expect(text).not.toContain('Profile.form');
+    }
+  });
+
+  it('lists only the forms of the asked page when none matches', () => {
+    const text = inspectFormsText(state, { page: 'pageA', form: 'Nope' }, 1000);
+    expect(text).toContain('Profile.form');
+  });
+});
+
 describe('MCP tool text', () => {
   const invalid = form(
     group([

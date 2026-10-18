@@ -52,7 +52,12 @@ import { getBuildMeta } from './rpc/build-meta.ts';
 import { createOpenInEditor, defaultLauncher } from './rpc/open-in-editor.ts';
 import { isAnalogProject, servedAnalogRoot } from './rpc/analog-scan.ts';
 import { getSignals } from './rpc/get-signals.ts';
-import { SIGNAL_TOOL_MAX, signalGraphText, type InspectSignalsArgs } from './rpc/signal-tools.ts';
+import {
+  SIGNAL_TOOL_MAX,
+  signalGraphText,
+  signalStateForAgents,
+  type InspectSignalsArgs,
+} from './rpc/signal-tools.ts';
 import { createSignalPeeks } from './rpc/signal-peeks.ts';
 import {
   signalWatchRequest,
@@ -215,6 +220,7 @@ import {
   cdViewsText,
   changeDetectionText,
   expireCdPages,
+  markCdPagesStopped,
   pickCdPage,
   toCdPage,
   type CdPage,
@@ -1083,6 +1089,18 @@ const pangular = defineDevframe({
     const sendRouterAction = (page: string | undefined, request: unknown) =>
       new Promise<unknown>((resolve) => {
         const pageId = page || defaultPageId();
+        // No page could answer: say so now instead of after the 15 s wait.
+        const routed = (routerState.value() as RouterState).pages;
+        const known = page
+          ? routed.some((p) => p.pageId === page) || componentPages.has(page) || owners.alive(page)
+          : routed.length > 0 || componentPages.size > 0 || owners.live().length > 0;
+        if (!known) {
+          return resolve({
+            error: page
+              ? `Page \`${page.slice(0, 50)}\` is not connected. pangular:list-pages lists the pages that are.`
+              : 'No page is connected. Open the app in a browser, or the device app in the foreground.',
+          });
+        }
         const requestId = `a${++actionSeq}`;
         const timer = setTimeout(() => {
           pendingActions.delete(requestId);
@@ -2027,6 +2045,9 @@ const pangular = defineDevframe({
     const cdPages = new Map<string, CdPage>();
     const goneCdPages = new Set<string>();
     let applyCd = () => {};
+    const markCdStopped = (pageId?: string) => {
+      if (markCdPagesStopped(cdPages, pageId)) applyCd();
+    };
     const cdSessions = trackPageSessions(ctx.rpc, (pageIds) => {
       let removed = false;
       for (const pageId of pageIds) {
@@ -2066,6 +2087,8 @@ const pangular = defineDevframe({
     const requestCdRecord = (message: { pageId?: unknown; on?: unknown; clear?: unknown }) => {
       const pageId = typeof message?.pageId === 'string' ? message.pageId.slice(0, 50) : undefined;
       const on = typeof message?.on === 'boolean' ? message.on : undefined;
+      // The summary must not say "Recording is on" from the last push before the stop.
+      if (on === false) markCdStopped(pageId);
       void my.rpc.broadcast({
         method: 'change-detection-record',
         args: [{ pageId, on, clear: message?.clear === true }],
@@ -2623,11 +2646,16 @@ const pangular = defineDevframe({
       });
     const withPageUrls = <T extends { pageId: string; reportedAt: number }>(pages: T[]) => {
       const details = livePageDetails();
-      return pages.map((page) => ({
-        pageId: page.pageId,
-        reportedAt: page.reportedAt,
-        url: details.get(page.pageId)?.url,
-      }));
+      return pages.map((page) => {
+        const detail = details.get(page.pageId);
+        return {
+          pageId: page.pageId,
+          reportedAt: page.reportedAt,
+          url: detail?.url,
+          // The Audit page picker names a page by its title before its URL.
+          ...(detail?.title ? { title: detail.title } : {}),
+        };
+      });
     };
 
     const pendingNgrx = new Map<string, { pageId: string; settle: (result: unknown) => void }>();
@@ -2659,6 +2687,11 @@ const pangular = defineDevframe({
             error: pages.length
               ? choosePageText(withPageUrls(pages), 'NgRx state')
               : 'No page reports NgRx state. Open the app in a browser, or pass the page id.',
+          });
+        }
+        if (typeof page === 'string' && !all.some((p) => p.pageId === page)) {
+          return resolve({
+            error: `Page \`${page.slice(0, 50)}\` reports no NgRx state. pangular:list-pages lists the pages that do.`,
           });
         }
         const pageId = typeof page === 'string' ? page : defaultPage(pages)!.pageId;
@@ -2734,11 +2767,14 @@ const pangular = defineDevframe({
       id: 'pangular:signal-graph',
       name: 'Angular Signal Graph',
       description:
-        'Live signal graph per page as JSON: nodes, edges, contexts, resources and value history. Empty when no page is connected. ' +
+        'Live signal graph per page as JSON: nodes, edges (`consumer` reads `producer`, by node id), contexts, resources and value history. Empty when no page is connected. ' +
         LIVE_RESOURCE_NOTE,
       mimeType: 'application/json',
       read: () => ({
-        text: liveResourceText(signalGraphState.value(), 'pangular:inspect-signals'),
+        text: liveResourceText(
+          signalStateForAgents(signalGraphState.value()),
+          'pangular:inspect-signals',
+        ),
       }),
     });
 
@@ -3420,7 +3456,7 @@ const pangular = defineDevframe({
       title: 'Inspect signals',
       outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'The signal graph the page last reported: nodes, edges, resources and value history. `selector` names a component, `root` for root effects, or a route; `node` narrows to one node. Only signals something read appear.',
+        'The signal graph the page last reported: nodes, edges (`consumer` reads `producer`, by node id), resources and value history. `selector` names a component, `root` for root effects, or a route; `node` narrows to one node. Only signals something read appear.',
       inputSchema: {
         type: 'object',
         properties: {

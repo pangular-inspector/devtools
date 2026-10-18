@@ -5,6 +5,7 @@ import { code, formsResourceText, type FormsState } from './rpc/forms-tools.ts';
 import { LIVE_RESOURCE_NOTE, liveResourceText } from './rpc/resource-text.ts';
 import { injectorResourceText } from './rpc/injector-resource.ts';
 import { routerResourceText, type RouterState } from './rpc/router-tools.ts';
+import { withIdEdges } from './rpc/signal-tools.ts';
 import type { ComponentPage, InjectorPage } from './types.ts';
 
 /** One MCP resource template, as the patched `@devframes/agentic` server takes it. */
@@ -153,7 +154,7 @@ export function pageResourceText(name: PageResourceName, state: unknown, pageId:
       );
     }
     case 'signal-graph': {
-      const graph = (value['pages'] as Pages<unknown>)[pageId];
+      const graph = withIdEdges((value['pages'] as Pages<unknown>)[pageId]);
       return liveResourceText({ graph, pages: { [pageId]: graph } }, 'pangular:inspect-signals');
     }
     case 'injector-tree': {

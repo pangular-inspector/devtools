@@ -42,6 +42,7 @@ function flags(call: HttpCall): string {
   if (call.mocked) out.push('mocked');
   if (call.faulted) out.push('faulted');
   if (call.cancelled) out.push('cancelled');
+  if (call.redirectedTo) out.push(`redirected to ${code(clip(call.redirectedTo, 200))}`);
   if (call.cacheHit) out.push('cache hit');
   if (call.delayMs) out.push(`delayed ${call.delayMs} ms`);
   const cache = cacheNote(call);

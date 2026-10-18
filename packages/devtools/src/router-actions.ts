@@ -1,3 +1,4 @@
+import { queueMicrotaskOutside, setTimeoutOutside } from './outside-angular.ts';
 import { isRouterLink } from './router-links.ts';
 import {
   CANCEL_CODES,
@@ -163,8 +164,8 @@ export function captureCallers(
     if (!link) return;
     fromClick = true;
     setCaller(`RouterLink ${describeElement(link)}`, true);
-    queueMicrotask(() => {
-      setTimeout(() => (fromClick = false));
+    queueMicrotaskOutside(() => {
+      setTimeoutOutside(() => (fromClick = false));
     });
   };
   if (typeof document !== 'undefined') document.addEventListener('click', onClick, true);
@@ -595,7 +596,7 @@ function waitForNavigation(
       const record = navigations.find((n) => n.id === id);
       if (record && record.outcome !== 'pending') return resolve(record);
       if (Date.now() - started > WAIT_MS) return resolve(record);
-      setTimeout(tick, 50);
+      setTimeoutOutside(tick, 50);
     };
     tick();
   });
@@ -635,10 +636,10 @@ export function waitForStable(router: AnyRecord, ms: number): Promise<boolean | 
       if (done) return;
       done = true;
       clearTimeout(timer);
-      queueMicrotask(() => subscription?.unsubscribe());
+      queueMicrotaskOutside(() => subscription?.unsubscribe());
       resolve(stable);
     };
-    const timer = setTimeout(() => finish(false), Math.max(0, ms));
+    const timer = setTimeoutOutside(() => finish(false), Math.max(0, ms));
     subscription = read(
       () =>
         pending['subscribe']((busy: unknown) => {
@@ -795,7 +796,7 @@ function probe(router: AnyRecord, navigations: NavigationRecord[], url: string):
         );
       }
     });
-    timer = setTimeout(() => {
+    timer = setTimeoutOutside(() => {
       subscription.unsubscribe();
       abortCurrent();
       markProbe(targetId);

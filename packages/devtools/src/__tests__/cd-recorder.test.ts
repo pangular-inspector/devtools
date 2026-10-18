@@ -22,6 +22,7 @@ describe('change detection recorder', () => {
     const shell = new Shell();
     const cart = new Cart();
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.ChangeDetectionEnd);
     expect(recorder.snapshot(() => null).cycles).toEqual([]);
 
@@ -31,14 +32,17 @@ describe('change detection recorder', () => {
     recorder.onEvent(E.ChangeDetectionStart);
     recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.TemplateUpdateStart, shell);
     clock.advance(1);
     recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.TemplateUpdateStart, cart);
     clock.advance(3);
     recorder.onEvent(E.ComponentEnd, cart);
     clock.advance(1);
     recorder.onEvent(E.ComponentEnd, shell);
     recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.TemplateUpdateStart, cart);
     clock.advance(2);
     recorder.onEvent(E.ComponentEnd, cart);
     recorder.onEvent(E.ChangeDetectionEnd);
@@ -70,11 +74,42 @@ describe('change detection recorder', () => {
     expect(snap.hosts).toEqual({ c1: 2 });
   });
 
+  it('counts only components whose template ran, outside the checkNoChanges pass', () => {
+    const recorder = createCdRecorder({ maxCycles: 10 });
+    recorder.start();
+    const shell = new Shell();
+    const cart = new Cart();
+    const price = new Price();
+    recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
+    recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.TemplateUpdateStart, shell);
+    // A clean OnPush child: walked past, its template never ran.
+    recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.ComponentEnd, price);
+    // A child whose embedded view ran but not its own template.
+    recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.TemplateUpdateStart, {});
+    recorder.onEvent(E.ComponentEnd, cart);
+    recorder.onEvent(E.ComponentEnd, shell);
+    recorder.onEvent(E.ChangeDetectionSyncEnd);
+    // The dev-mode checkNoChanges pass.
+    recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.TemplateUpdateStart, shell);
+    recorder.onEvent(E.ComponentEnd, shell);
+    recorder.onEvent(E.ChangeDetectionEnd);
+    const snap = recorder.snapshot((instance) => (instance === shell ? 's1' : 'other'));
+    expect(snap.cycles[0]).toMatchObject({ checks: 1, components: [{ name: 'Shell', checks: 1 }] });
+    expect(snap.components.map((c) => c.name)).toEqual(['Shell']);
+    expect(snap.hosts).toEqual({ s1: 1 });
+  });
+
   it('keeps the latest cycles at the limit and counts the rest', () => {
     const recorder = createCdRecorder({ maxCycles: 3 });
     recorder.start();
     for (let i = 0; i < 5; i++) {
       recorder.onEvent(E.ChangeDetectionStart);
+      recorder.onEvent(E.ChangeDetectionSyncStart);
       recorder.onEvent(E.ChangeDetectionEnd);
     }
     const snap = recorder.snapshot(() => null);
@@ -92,9 +127,11 @@ describe('change detection recorder', () => {
     const classes = Array.from({ length: 1005 }, () => class {});
     const check = (instance: object) => {
       recorder.onEvent(E.ComponentStart);
+      recorder.onEvent(E.TemplateUpdateStart, instance);
       recorder.onEvent(E.ComponentEnd, instance);
     };
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     // 2005 instances of 1005 classes, and the last class checked twice.
     const instances = [...classes, ...classes.slice(0, 1000)].map((Ctor) => new Ctor());
     for (const instance of instances) check(instance);
@@ -129,23 +166,27 @@ describe('change detection recorder', () => {
       recorder.start();
       const check = (instance: object) => {
         recorder.onEvent(E.ComponentStart);
+        recorder.onEvent(E.TemplateUpdateStart, instance);
         recorder.onEvent(E.ComponentEnd, instance);
       };
       const kept = Array.from({ length: 2000 }, () => new Cart());
       const late = new Price();
       const other = new Price();
       recorder.onEvent(E.ChangeDetectionStart);
+      recorder.onEvent(E.ChangeDetectionSyncStart);
       for (const instance of kept) check(instance);
       check(late);
       check(other);
       recorder.onEvent(E.ChangeDetectionEnd);
       recorder.onEvent(E.ChangeDetectionStart);
+      recorder.onEvent(E.ChangeDetectionSyncStart);
       check(late);
       recorder.onEvent(E.ChangeDetectionEnd);
       expect(recorder.snapshot(() => null).droppedHosts).toBe(2);
 
       collected.add(kept[0]!);
       recorder.onEvent(E.ChangeDetectionStart);
+      recorder.onEvent(E.ChangeDetectionSyncStart);
       check(late);
       recorder.onEvent(E.ChangeDetectionEnd);
       const snap = recorder.snapshot((instance) => (instance === late ? 'late' : null));
@@ -161,8 +202,11 @@ describe('change detection recorder', () => {
     const recorder = createCdRecorder({ maxCycles: 10 });
     recorder.start();
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
+    const checked1 = new Cart();
     recorder.onEvent(E.ComponentStart);
-    recorder.onEvent(E.ComponentEnd, new Cart());
+    recorder.onEvent(E.TemplateUpdateStart, checked1);
+    recorder.onEvent(E.ComponentEnd, checked1);
     recorder.onEvent(E.ChangeDetectionEnd);
     const snap = recorder.snapshot(() => null);
     expect(snap).not.toHaveProperty('droppedClasses');
@@ -173,9 +217,11 @@ describe('change detection recorder', () => {
     const recorder = createCdRecorder({ maxCycles: 10 });
     recorder.start();
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.OutputStart, new Price(), () => {});
     recorder.onEvent(E.ChangeDetectionEnd);
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.ChangeDetectionEnd);
     expect(recorder.snapshot(() => null).cycles.map((c) => c.trigger)).toEqual([
       undefined,
@@ -191,12 +237,14 @@ describe('change detection recorder', () => {
     recorder.onEvent(E.OutputEnd);
     clock.advance(OUTPUT_TRIGGER_MS + 1);
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.ChangeDetectionEnd);
     recorder.onEvent(E.OutputStart, new Price(), function onPick() {});
     clock.advance(OUTPUT_TRIGGER_MS * 2);
     recorder.onEvent(E.OutputEnd);
     clock.advance(4);
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.ChangeDetectionEnd);
     expect(recorder.snapshot(() => null).cycles.map((c) => c.trigger)).toEqual([
       undefined,
@@ -208,10 +256,14 @@ describe('change detection recorder', () => {
     const recorder = createCdRecorder({ maxCycles: 10 });
     recorder.start();
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
+    const checked2 = new Shell();
     recorder.onEvent(E.ComponentStart);
+    recorder.onEvent(E.TemplateUpdateStart, checked2);
     recorder.onEvent(E.ChangeDetectionStart);
+    recorder.onEvent(E.ChangeDetectionSyncStart);
     recorder.onEvent(E.ChangeDetectionEnd);
-    recorder.onEvent(E.ComponentEnd, new Shell());
+    recorder.onEvent(E.ComponentEnd, checked2);
     recorder.onEvent(E.ChangeDetectionEnd);
     const cycles = recorder.snapshot(() => null).cycles;
     expect(cycles.map((c) => [c.id, c.checks])).toEqual([
@@ -232,7 +284,9 @@ describe('change detection recorder', () => {
         refs.push(new WeakRef(cart));
         recorder.onEvent(E.OutputStart, cart, () => {});
         recorder.onEvent(E.ChangeDetectionStart);
+        recorder.onEvent(E.ChangeDetectionSyncStart);
         recorder.onEvent(E.ComponentStart);
+        recorder.onEvent(E.TemplateUpdateStart, cart);
         recorder.onEvent(E.ComponentEnd, cart);
         recorder.onEvent(E.ChangeDetectionEnd);
       }
@@ -295,8 +349,11 @@ describe('change detection in the overlay', () => {
     handlers.get('change-detection-record')!({ pageId: 'p1', on: true });
     expect(profilers).toHaveLength(1);
     emit(E.ChangeDetectionStart);
+    emit(E.ChangeDetectionSyncStart);
+    const checked3 = new Shell();
     emit(E.ComponentStart);
-    emit(E.ComponentEnd, new Shell());
+    emit(E.TemplateUpdateStart, checked3);
+    emit(E.ComponentEnd, checked3);
     emit(E.ChangeDetectionEnd);
     await cd.push();
     const report = sent.filter((s) => s.name === 'push-change-detection').at(-1)!.args[0] as {
@@ -317,6 +374,7 @@ describe('change detection in the overlay', () => {
     const { cd, sent, handlers, emit } = setup('22.1.0');
     handlers.get('change-detection-record')!({ pageId: 'p1', on: true });
     emit(E.ChangeDetectionStart);
+    emit(E.ChangeDetectionSyncStart);
     emit(E.ChangeDetectionEnd);
     handlers.get('change-detection-record')!({ on: true });
     await cd.push(true);
@@ -336,8 +394,11 @@ describe('change detection in the overlay', () => {
     ng.getHostElement = () => (ready ? document.querySelector('app-root') : null);
     handlers.get('change-detection-record')!({ pageId: 'p1', on: true });
     emit(E.ChangeDetectionStart);
+    emit(E.ChangeDetectionSyncStart);
+    const checked4 = new Shell();
     emit(E.ComponentStart);
-    emit(E.ComponentEnd, new Shell());
+    emit(E.TemplateUpdateStart, checked4);
+    emit(E.ComponentEnd, checked4);
     emit(E.ChangeDetectionEnd);
     const hosts = () =>
       (
@@ -356,8 +417,11 @@ describe('change detection in the overlay', () => {
     const { cd, sent, handlers, emit } = setup('22.1.0');
     handlers.get('change-detection-record')!({ pageId: 'p1', on: true });
     emit(E.ChangeDetectionStart);
+    emit(E.ChangeDetectionSyncStart);
+    const checked5 = new Shell();
     emit(E.ComponentStart);
-    emit(E.ComponentEnd, new Shell());
+    emit(E.TemplateUpdateStart, checked5);
+    emit(E.ComponentEnd, checked5);
     emit(E.ChangeDetectionEnd);
     handlers.get('change-detection-record')!({ pageId: 'p1', on: false });
     await Promise.resolve();
@@ -401,6 +465,7 @@ describe('change detection in the overlay', () => {
     expect(profilers).toHaveLength(1);
     expect(last()).toMatchObject({ pageId: 'p2', supported: true, recording: true });
     emit(E.ChangeDetectionStart);
+    emit(E.ChangeDetectionSyncStart);
     emit(E.ChangeDetectionEnd);
     await cd.push();
     expect(last()).toMatchObject({ cycles: [{ id: 1 }] });

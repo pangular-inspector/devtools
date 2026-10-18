@@ -1,3 +1,4 @@
+import { setTimeoutOutside } from './outside-angular.ts';
 import { keepaliveAfter } from './page-heartbeat.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
 import { createNgrxCollector, type NgrxDebugNg } from './ngrx-collector.ts';
@@ -44,7 +45,7 @@ export function attachNgrx<H extends object = Element>(
   const schedule = (rediscover = false) => {
     pendingRediscover ||= rediscover;
     clearTimeout(timer);
-    timer = setTimeout(() => {
+    timer = setTimeoutOutside(() => {
       const again = pendingRediscover;
       pendingRediscover = false;
       void push(again);

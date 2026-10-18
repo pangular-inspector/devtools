@@ -24,12 +24,8 @@ import { angularAtLeast } from './angular-version.ts';
 
 /** `@pangular-inspector/devtools/http` imports `REQUEST` and `provideEnvironmentInitializer`, which arrived in 19.0. */
 const httpEntry = angularAtLeast('19.0');
-import {
-  pangularHttpInterceptor,
-  parseBody,
-  providePangularHttp,
-  resetTransferEntries,
-} from '../http.ts';
+import { pangularHttpInterceptor, providePangularHttp } from '../http.ts';
+import { parseBody, resetTransferEntries } from '../http-internals.ts';
 import { appIdOf, isHydrationMessage, scanHydration } from '../http-hydration.ts';
 import { attachHttp } from '../http-overlay.ts';
 import {
@@ -589,6 +585,20 @@ describe.runIf(angularAtLeast('16.0'))('interceptor', () => {
     await get();
     await get();
     expect(httpRegistry().calls?.map((c) => c.cacheHit)).toEqual([true, false]);
+  });
+
+  it('counts no cache hit once the app was stable, when the transfer cache is off', async () => {
+    document.body.innerHTML = stateScript(new HttpRequest('GET', '/api/products'));
+    // `providePangularHttp()` notes when the app first became stable.
+    httpRegistry().stableMs = 400;
+    try {
+      await new Promise<void>((resolve) =>
+        run(new HttpRequest('GET', '/api/products'), later([])).subscribe({ complete: resolve }),
+      );
+      expect(httpRegistry().calls?.map((c) => c.cacheHit)).toEqual([false]);
+    } finally {
+      delete httpRegistry().stableMs;
+    }
   });
 
   it('counts an opted-in POST delivered later as a cache hit only for the same body', async () => {

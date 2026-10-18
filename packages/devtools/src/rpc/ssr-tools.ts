@@ -340,7 +340,13 @@ export function explainSsrRequestText(
     const h = p.hydration;
     if (h?.enabled) {
       lines.push(
-        `- Hydration: ${h.nodes?.hydrated ?? h.hydratedNodes ?? 0} nodes hydrated, ${h.nodes?.mismatched ?? 0} mismatched, ${h.componentsSkippedHydration ?? h.nodes?.skipped ?? 0} skipped.`,
+        // Angular's own counters (`ngDevMode`) first: the DOM scan sees only the nodes still on
+        // the page, and its skipped count is of nodes, not components.
+        `- Hydration: ${h.hydratedNodes ?? h.nodes?.hydrated ?? 0} nodes${h.hydratedComponents !== undefined ? ` in ${h.hydratedComponents} components` : ''} hydrated, ${h.nodes?.mismatched ?? 0} mismatched, ${
+          h.componentsSkippedHydration !== undefined
+            ? `${h.componentsSkippedHydration} components skipped`
+            : `${h.nodes?.skipped ?? 0} nodes skipped`
+        }.`,
       );
       for (const m of h.mismatches.slice(0, 10)) {
         lines.push(`  - Mismatch in ${code(m.component)}`);

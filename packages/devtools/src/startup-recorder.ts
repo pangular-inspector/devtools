@@ -14,7 +14,10 @@
 //   turns profiling off again;
 // - when the app was first stable, from `ApplicationRef.isStable`.
 //
-// No import: the hook entry stays small and runs before anything else.
+// One tiny import only: the hook entry stays small and runs before anything
+// else. The recorder runs from Angular's bootstrap, inside the Angular zone,
+// and its timers must not make the app tick.
+import { queueMicrotaskOutside, setTimeoutOutside } from './outside-angular.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -163,12 +166,12 @@ export function watchFirstStable(
         }
         done = true;
         onStable({ at: round(now()), exact: !first });
-        queueMicrotask(() => subscription?.unsubscribe?.());
+        queueMicrotaskOutside(() => subscription?.unsubscribe?.());
       }) as { unsubscribe?: () => void },
     null,
   );
   first = false;
-  if (done) queueMicrotask(() => subscription?.unsubscribe?.());
+  if (done) queueMicrotaskOutside(() => subscription?.unsubscribe?.());
   return () => {
     done = true;
     subscription?.unsubscribe?.();
@@ -218,7 +221,7 @@ interface Clock {
 
 const realClock: Clock = {
   now: () => performance.now(),
-  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  setTimeout: (fn, ms) => setTimeoutOutside(fn, ms),
   clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
 
@@ -366,7 +369,7 @@ export function installStartupRecorder(
       if (typeof remover === 'function') removeProfiler = remover as () => void;
       else read(() => setProfiler(null), undefined);
     }
-    queueMicrotask(() => startProviders(enable));
+    queueMicrotaskOutside(() => startProviders(enable));
     watchStable(ng);
     clock.clearTimeout(maxTimer);
     maxTimer = clock.setTimeout(stop, MAX_RECORD_MS);
@@ -410,7 +413,7 @@ export function installStartupRecorder(
     buffer.providerNote =
       'The startup hook loaded after Angular started. Load it from the polyfills of the development build.';
     const ng = current;
-    queueMicrotask(() => watchStable(ng));
+    queueMicrotaskOutside(() => watchStable(ng));
     return buffer;
   }
   // Stops waiting when Angular never publishes `enableProfiling` (before 20,

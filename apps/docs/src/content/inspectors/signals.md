@@ -27,7 +27,7 @@ The **Graph of** picker at the top selects whose graph you see. It appears when 
 
 - **Follow the routed component** is the default. It shows the deepest component rendered by a primary `<router-outlet>`.
 - **Root services** shows the effects registered on the root injector, such as an `effect()` in a `providedIn: 'root'` service, and the signals they read.
-- **Route: path** entries show the effects registered on the injector of a route with `providers`, on the active route chain. Other environment injectors on that chain, such as the one of a lazy `loadChildren`, show as **Environment**.
+- **Route: path** entries show the effects registered on the injector of a route with `providers`, on the active route chain. A route with an empty `path` is named by the path of its parent routes, such as **Route: review**, or **Route: /** at the top. Other environment injectors on that chain, such as the one of a lazy `loadChildren`, show as **Environment**.
 - Pick any live component to pin the graph to it. The picker numbers duplicates, for example `#2`.
 - Without a routed component, the tab shows the first component that has signals, among the first 50 on the page.
 

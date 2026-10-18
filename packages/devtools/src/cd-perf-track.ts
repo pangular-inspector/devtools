@@ -2,6 +2,7 @@
 // the `console.timeStamp` extensibility API.
 
 import { PROFILER_EVENT } from './cd-recorder.ts';
+import { createRefreshTracker } from './cd-refresh.ts';
 import { hookName, listenerName } from './cd-timing.ts';
 import { addProfilerListener, type Profiler } from './change-detection.ts';
 import { className } from './injector-tree.ts';
@@ -53,6 +54,8 @@ export function createCdPerfTrack(options: {
   let components: number[] = [];
   let hooks: Open[] = [];
   let outputs: Open[] = [];
+  // Only checks whose template ran, as the recorder counts them (`cd-refresh.ts`).
+  const refresh = createRefreshTracker();
 
   const push = <T>(stack: T[], entry: T) => {
     stack.push(entry);
@@ -68,13 +71,14 @@ export function createCdPerfTrack(options: {
   };
 
   const listener: Profiler = (event, instance, fn) => {
+    const refreshed = refresh.onEvent(event, instance);
     switch (event) {
       case PROFILER_EVENT.ComponentStart:
         push(components, now());
         return;
       case PROFILER_EVENT.ComponentEnd: {
         const start = components.pop();
-        if (start !== undefined && instance) emit(nameOf(instance), start, 'primary');
+        if (start !== undefined && instance && refreshed) emit(nameOf(instance), start, 'primary');
         return;
       }
       case PROFILER_EVENT.LifecycleHookStart:
@@ -120,6 +124,7 @@ export function createCdPerfTrack(options: {
         removeListener?.();
         removeListener = null;
         components = [];
+        refresh.reset();
         hooks = [];
         outputs = [];
         return true;

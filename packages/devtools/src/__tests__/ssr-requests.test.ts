@@ -435,3 +435,40 @@ describe('devframe SSR requests', () => {
     expect(tool('list-ssr-requests')).toBeUndefined();
   });
 });
+
+describe('explain-ssr-request hydration line', () => {
+  it("uses Angular's own hydration counters over the DOM scan", async () => {
+    const { explainSsrRequestText } = await import('../rpc/ssr-tools.ts');
+    const hydration = {
+      enabled: true,
+      hydratedComponents: 5,
+      hydratedNodes: 181,
+      componentsSkippedHydration: 0,
+      nodes: { hydrated: 166, skipped: 2, mismatched: 0 },
+      mismatches: [],
+      skipHydrationHosts: [],
+      warnings: [],
+      warningsCaptured: true,
+    };
+    const text = explainSsrRequestText([ssrRequest()], [], [page({ hydration })], { id: 'r1' });
+    expect(text).toContain(
+      '- Hydration: 181 nodes in 5 components hydrated, 0 mismatched, 0 components skipped.',
+    );
+    const scanOnly = explainSsrRequestText(
+      [ssrRequest()],
+      [],
+      [
+        page({
+          hydration: {
+            ...hydration,
+            hydratedComponents: undefined,
+            hydratedNodes: undefined,
+            componentsSkippedHydration: undefined,
+          },
+        }),
+      ],
+      { id: 'r1' },
+    );
+    expect(scanOnly).toContain('- Hydration: 166 nodes hydrated, 0 mismatched, 2 nodes skipped.');
+  });
+});

@@ -6,6 +6,7 @@
 // `sanitizePluginView()` before they leave the page, unchanged reports are
 // skipped, and a keepalive keeps the page from expiring on the server.
 
+import { setTimeoutOutside } from './outside-angular.ts';
 import { keepaliveDue } from './change-detection.ts';
 import {
   MAX_PLUGIN_ACTION_TIMEOUT_MS,
@@ -152,7 +153,7 @@ export function attachPlugins(
     if (soon && (soonPaced === paced || !soonPaced)) return;
     clearTimeout(soon);
     soonPaced = paced;
-    soon = setTimeout(
+    soon = setTimeoutOutside(
       () => {
         soon = undefined;
         const force = soonForce;
@@ -402,7 +403,7 @@ export function attachPlugins(
           : PLUGIN_ACTION_TIMEOUT_MS;
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(
+        timer = setTimeoutOutside(
           () => reject(new Error('The action did not finish in time.')),
           timeoutMs,
         );

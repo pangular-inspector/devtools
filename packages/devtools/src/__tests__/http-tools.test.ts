@@ -232,3 +232,33 @@ describe('list-http-calls text', () => {
     );
   });
 });
+
+describe('redirected calls', () => {
+  it('flags a call answered from another URL, with the target redacted', async () => {
+    const { redirectOf } = await import('../http-redirect.ts');
+    const { sanitizeCalls } = await import('../http-rules.ts');
+    const { redactCall } = await import('../http-redact.ts');
+    expect(
+      redirectOf('http://localhost:3000/api/products/2?delay=200', 'http://localhost:3000/'),
+    ).toEqual({
+      redirectedTo: '/',
+    });
+    expect(redirectOf('http://localhost:3000/api/a', 'http://localhost:3000/api/a')).toEqual({});
+    expect(redirectOf('/api/a', null)).toEqual({});
+    // A relative SSR request answered by its own server is not a redirect.
+    expect(redirectOf('/api/products', 'http://localhost:7110/api/products')).toEqual({});
+    expect(redirectOf('/api/products?x=1', 'http://localhost:7110/')).toEqual({
+      redirectedTo: '/',
+    });
+    expect(redirectOf('http://localhost:7110/api/a', 'https://login.example.com/sso')).toEqual({
+      redirectedTo: 'https://login.example.com/sso',
+    });
+    const [sent] = sanitizeCalls([
+      redactCall(call({ id: 'r', method: 'POST', redirectedTo: '/login?token=abc' })),
+    ]);
+    expect(sent!.redirectedTo).toMatch(/^\/login\?token=/);
+    expect(sent!.redirectedTo).not.toContain('abc');
+    const text = listHttpCallsText({ serverCalls: [], pages: [page({ calls: [sent!] })] }, {}, NOW);
+    expect(text).toMatch(/redirected to `\/login\?token=[^`]*`/);
+  });
+});

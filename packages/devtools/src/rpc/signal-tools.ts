@@ -25,6 +25,52 @@ type Graph = SignalGraph & {
 
 const NAMED_KINDS = new Set(['signal', 'computed', 'linkedSignal']);
 
+/** An edge as agents read it: `consumer` reads `producer`, both node ids. */
+export interface AgentSignalEdge {
+  consumer: string;
+  producer: string;
+}
+
+/**
+ * The graph with its edges naming node ids instead of positions in `nodes`.
+ * The page and the panel keep positions; an agent reading `"consumer": 2`
+ * next to nodes with ids `"1"`, `"2"`… would take it for an id, so everything
+ * agents read goes through here.
+ */
+export function withIdEdges<T>(graph: T): T {
+  const g = graph as { nodes?: unknown; edges?: unknown } | null;
+  if (!g || typeof g !== 'object' || !Array.isArray(g.nodes) || !Array.isArray(g.edges)) {
+    return graph;
+  }
+  const nodes = g.nodes as { id?: unknown }[];
+  const idAt = (index: unknown) => {
+    const id = typeof index === 'number' ? nodes[index]?.id : undefined;
+    return typeof id === 'string' ? id : undefined;
+  };
+  const edges: AgentSignalEdge[] = [];
+  for (const edge of g.edges as Partial<SignalGraphEdge>[]) {
+    const consumer = idAt(edge?.consumer);
+    const producer = idAt(edge?.producer);
+    if (consumer !== undefined && producer !== undefined) edges.push({ consumer, producer });
+  }
+  return { ...graph, edges } as T;
+}
+
+/** The `signal-graph` shared state (`{ graph, pages }`) with id edges, for the agent resources. */
+export function signalStateForAgents<T extends object>(state: T): T {
+  const value = state as { graph?: unknown; pages?: Record<string, unknown> };
+  const out: Record<string, unknown> = { ...value };
+  if ('graph' in value) out['graph'] = withIdEdges(value.graph);
+  if (value.pages && typeof value.pages === 'object') {
+    out['pages'] = Object.fromEntries(
+      Object.entries(value.pages).map(([id, graph]) => [id, withIdEdges(graph)]),
+    );
+  }
+  return out as T;
+}
+
+const json = (graph: Graph) => JSON.stringify(withIdEdges(graph), null, 2);
+
 const NARROW =
   'Pass `node` with a node id or label to see one node with its producers and consumers, or `history: false` to leave out value history.';
 
@@ -125,7 +171,7 @@ export function signalGraphText(
   }
   const unnamed = graph.nodes.filter((n) => NAMED_KINDS.has(n.kind) && !n.label).length;
   if (unnamed) view = { ...view, unnamedSignals: unnamed };
-  const full = JSON.stringify(view, null, 2);
+  const full = json(view);
   if (full.length <= budget) return full;
 
   // Leave room for the note that explains the cut. A budget smaller than the
@@ -138,7 +184,7 @@ export function signalGraphText(
   if (view.history) {
     for (const keep of HISTORY_STEPS) {
       fitted = { ...view, history: trimHistory(view.history, keep) };
-      text = JSON.stringify(fitted, null, 2);
+      text = json(fitted);
       historyKept = keep;
       if (text.length <= room) break;
     }
@@ -150,10 +196,10 @@ export function signalGraphText(
     const all = fitted.nodes.map((_, i) => i);
     let low = 0;
     let high = all.length;
-    let best = JSON.stringify(pick(fitted, []), null, 2);
+    let best = json(pick(fitted, []));
     while (low < high) {
       const mid = Math.ceil((low + high) / 2);
-      const attempt = JSON.stringify(pick(fitted, all.slice(0, mid)), null, 2);
+      const attempt = json(pick(fitted, all.slice(0, mid)));
       if (attempt.length <= room) {
         low = mid;
         best = attempt;

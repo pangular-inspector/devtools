@@ -2392,3 +2392,79 @@ function realCollectorWithInjector(store: object, injector: unknown) {
     () => {},
   );
 }
+
+describe('ngrx collector with a classic store in a route injector', () => {
+  /** A classic Store provided only in a lazy route's environment injector. */
+  function routeStore() {
+    document.body.innerHTML = '<app-root ng-version="22"></app-root>';
+    const root = document.querySelector('app-root')!;
+    // The lazy route's component, rendered once the route loads.
+    const page = document.createElement('app-page');
+    let state = { n: 0 };
+    const listeners: ((a: unknown) => void)[] = [];
+    class _Store {
+      source = { getValue: () => state };
+      dispatch(action: { type: string }) {
+        state = { n: state.n + 1 };
+        for (const l of listeners) l(action);
+      }
+      select() {}
+    }
+    class ScannedActionsSubject {
+      subscribe(fn: (a: unknown) => void) {
+        listeners.push(fn);
+        return { unsubscribe: () => listeners.splice(listeners.indexOf(fn), 1) };
+      }
+    }
+    const store = new _Store();
+    const inRoute = new Map<unknown, unknown>([
+      [_Store, store],
+      [ScannedActionsSubject, new ScannedActionsSubject()],
+    ]);
+    const rootEnv = {
+      scopes: new Set(['root']),
+      records: new Map<unknown, { value: unknown }>([[class Router {}, { value: {} }]]),
+      get: () => null,
+    };
+    // The route injector resolves its own tokens; the root never sees them.
+    const routeEnv = {
+      scopes: new Set<string>(),
+      records: new Map([...inRoute.keys()].map((k) => [k, { value: undefined }])),
+      get: (token: unknown) => inRoute.get(token) ?? null,
+    };
+    const rootNode = { get: () => null };
+    const pageNode = { get: (token: unknown) => inRoute.get(token) ?? null };
+    const ng = {
+      getInjector: (el: Element) => (el === root ? rootNode : pageNode),
+      getComponent: (el: Element) => (el === root || el === page ? {} : null),
+      ɵgetInjectorMetadata: (inj: unknown) =>
+        inj === rootEnv || inj === routeEnv
+          ? { type: 'environment', source: inj === routeEnv ? 'Route: trips' : 'R3Injector' }
+          : { type: 'element' },
+      ɵgetInjectorResolutionPath: (inj: unknown) =>
+        inj === pageNode ? [pageNode, routeEnv, rootEnv] : [rootNode, rootEnv],
+      ɵgetInjectorProviders: () => [],
+    };
+    const collector = createNgrxCollector(
+      () => ng as any,
+      () => {},
+      domTree(),
+    );
+    return { store, collector, navigate: () => root.appendChild(page) };
+  }
+
+  it('finds the Store from the route injector that provides it and logs its actions', () => {
+    const { store, collector, navigate } = routeStore();
+    navigate();
+    expect(collector.collect().classic).not.toBeNull();
+    store.dispatch({ type: 'add' });
+    expect(collector.logSince(0).map((e) => e.type)).toEqual(['add']);
+  });
+
+  it('still finds it after many pushes before the lazy route loaded', () => {
+    const { collector, navigate } = routeStore();
+    for (let i = 0; i < 10; i++) expect(collector.collect().classic).toBeNull();
+    navigate();
+    expect(collector.collect().classic).not.toBeNull();
+  });
+});

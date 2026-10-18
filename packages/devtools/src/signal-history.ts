@@ -1,3 +1,4 @@
+import { queueMicrotaskOutside } from './outside-angular.ts';
 import { isLocatedNode, rawValueOf } from './signal-locator.ts';
 import { appFrames, captureStack } from './signal-stack.ts';
 import type { SignalChange, SignalGraphNode } from './types.ts';
@@ -186,7 +187,10 @@ export function createSignalHistory(
     dirty.add(track);
     if (!flushQueued) {
       flushQueued = true;
-      void Promise.resolve().then(flush);
+      // The write may run inside the Angular zone (an effect, a hook, a template): a
+      // microtask queued there would make a zone.js app tick again, for ever when the
+      // app writes on every check.
+      queueMicrotaskOutside(flush);
     }
   }
 

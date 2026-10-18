@@ -2,6 +2,7 @@
 // canvas in a shadow root this package owns, never in the app's own DOM.
 
 import { PROFILER_EVENT } from './cd-recorder.ts';
+import { createRefreshTracker } from './cd-refresh.ts';
 import { addProfilerListener, outsideAngular, type Profiler } from './change-detection.ts';
 import { className } from './injector-tree.ts';
 import { highlightBox } from './page-highlight.ts';
@@ -102,8 +103,18 @@ export function createCdFlash(options: CdFlashOptions) {
     frame = outsideAngular(() => win.requestAnimationFrame(tick));
   };
 
+  // Only checks whose template ran, as the recorder counts them (`cd-refresh.ts`).
+  const refresh = createRefreshTracker();
   const listener: Profiler = (event, instance) => {
-    if (event !== PROFILER_EVENT.ComponentEnd || !instance || typeof instance !== 'object') return;
+    const refreshed = refresh.onEvent(event, instance);
+    if (
+      event !== PROFILER_EVENT.ComponentEnd ||
+      !refreshed ||
+      !instance ||
+      typeof instance !== 'object'
+    ) {
+      return;
+    }
     const seen = pending.get(instance);
     if (seen !== undefined) pending.set(instance, seen + 1);
     else if (pending.size < MAX_PENDING) pending.set(instance, 1);
@@ -266,6 +277,7 @@ export function createCdFlash(options: CdFlashOptions) {
       if (!on) {
         removeListener?.();
         removeListener = null;
+        refresh.reset();
         if (frame) win.cancelAnimationFrame(frame);
         frame = 0;
         pending.clear();

@@ -1,3 +1,4 @@
+import { queueMicrotaskOutside } from './outside-angular.ts';
 import { domFacts, submitDom, type DomFacts, type SubmitDom } from './forms-dom.ts';
 import { clip, overflowKey } from './text.ts';
 import { childPath, joinPath, splitPath } from './forms-path.ts';
@@ -1357,7 +1358,7 @@ export function watchControlEvents(
         };
         const name = read(() => String(event['constructor']?.['name'] ?? ''), '');
         const bare = Object.keys(event).every((key) => key === 'source');
-        if (bare && !/Submit|Reset/.test(name)) queueMicrotask(emit);
+        if (bare && !/Submit|Reset/.test(name)) queueMicrotaskOutside(emit);
         else emit();
       }) as AnyRecord,
     null,

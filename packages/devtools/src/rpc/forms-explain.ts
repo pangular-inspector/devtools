@@ -54,7 +54,7 @@ function unmatchedForms(
 ): string | null {
   if (matched.length || (!args.form && !args.page)) return null;
   return state.forms.length
-    ? noMatch(onPage(state.forms, args.page), args.form ?? args.page ?? '')
+    ? noMatch(onPage(state.forms, args.page), args.form ?? args.page ?? '', args.page)
     : 'No forms have been reported.';
 }
 
@@ -62,7 +62,7 @@ function pickForm(state: FormsState, args: FieldArgs): CollectedForm | string {
   const forms = matchForms(state.forms, args.form, args.page);
   if (!forms.length) {
     return state.forms.length
-      ? noMatch(onPage(state.forms, args.page), args.form ?? '')
+      ? noMatch(onPage(state.forms, args.page), args.form ?? '', args.page)
       : 'No forms have been reported.';
   }
   if (forms.length === 1) return forms[0];

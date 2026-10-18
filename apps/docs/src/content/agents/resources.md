@@ -56,7 +56,7 @@ The instance ids here are what `highlight` and `inspect-component` accept.
 
 ### signal-graph
 
-The signal graph of each page, under `pages[pageId]`. `graph` is the latest one. It holds the nodes (`signal`, `computed`, `effect`, `linkedSignal`), producer to consumer edges, the component or injector it belongs to, the resources folded into one entry each, and recent value history per node and status history per resource. Only signals a template or an effect has read appear.
+The signal graph of each page, under `pages[pageId]`. `graph` is the latest one. It holds the nodes (`signal`, `computed`, `effect`, `linkedSignal`), edges (`{ consumer, producer }`, where `consumer` reads `producer`, both node ids), the component or injector it belongs to, the resources folded into one entry each, and recent value history per node and status history per resource. Only signals a template or an effect has read appear.
 
 ### injector-tree
 

@@ -70,6 +70,36 @@ describe('overlay link', () => {
     link.stop();
   });
 
+  it('backs off to a minute while the server stays down, and retries at once on focus', async () => {
+    const first = fakeClient();
+    const wakeTarget = new EventTarget();
+    const connect = vi.fn<() => Promise<LinkClient>>().mockRejectedValue(new Error('server down'));
+    const link = createOverlayLink(first as LinkClient, {
+      connect,
+      wakeTarget: wakeTarget as unknown as Window,
+    });
+    link.follow({ dropped: () => {}, restored: async () => {} });
+    first.set('disconnected');
+    // 500 + 1000 + 2000 + 4000 + 8000 + 15000 + 30000 + 60000 ms: eight attempts in 2 minutes.
+    await vi.advanceTimersByTimeAsync(120_500);
+    expect(connect).toHaveBeenCalledTimes(8);
+    // Then one a minute, not one every few seconds.
+    await vi.advanceTimersByTimeAsync(59_000);
+    expect(connect).toHaveBeenCalledTimes(8);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(connect).toHaveBeenCalledTimes(9);
+    // Coming back to the tab retries now and starts the backoff over.
+    wakeTarget.dispatchEvent(new Event('focus'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(connect).toHaveBeenCalledTimes(10);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(connect).toHaveBeenCalledTimes(11);
+    link.stop();
+    wakeTarget.dispatchEvent(new Event('online'));
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(connect).toHaveBeenCalledTimes(11);
+  });
+
   it('pauses on a drop, rejects calls quietly, and reconnects with backoff', async () => {
     const first = fakeClient();
     const second = fakeClient('connecting');

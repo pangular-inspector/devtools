@@ -16,6 +16,7 @@ import type {
   CdRecording,
   CdReport,
 } from './config.ts';
+import { createRefreshTracker } from './cd-refresh.ts';
 import { className } from './injector-tree.ts';
 
 /**
@@ -155,6 +156,8 @@ export function createCdRecorder(options: {
   let untrackedClassCount = 0;
   let untrackedHosts = new WeakMap<object, number>();
   let untrackedHostCount = 0;
+  // Which component pairs were real checks: the template ran, outside the checkNoChanges pass.
+  const refresh = createRefreshTracker();
 
   const addSpan = (span: Omit<RawSpan, 'start'> & { at: number }) => {
     if (!current) return;
@@ -168,6 +171,7 @@ export function createCdRecorder(options: {
 
   const onEvent = (event: number, instance?: unknown, hook?: unknown) => {
     if (!recording) return;
+    const refreshed = refresh.onEvent(event, instance);
     switch (event) {
       case PROFILER_EVENT.OutputStart:
         if (!current) lastOutput = { owner: instance, listener: hook };
@@ -296,6 +300,13 @@ export function createCdRecorder(options: {
       case PROFILER_EVENT.ComponentEnd: {
         const frame = current ? stack.pop() : undefined;
         if (!current || !frame || !instance || typeof instance !== 'object') return;
+        // Walked past (a clean OnPush view) or checkNoChanges: no check. The time of the
+        // checks under it moves up; the walk itself stays in the parent's own time.
+        if (!refreshed) {
+          const parent = stack.at(-1);
+          if (parent) parent.children += frame.children;
+          return;
+        }
         const total = now() - frame.start;
         const self = Math.max(0, total - frame.children);
         const parent = stack.at(-1);
@@ -383,6 +394,7 @@ export function createCdRecorder(options: {
   };
 
   const reset = () => {
+    refresh.reset();
     seq = 0;
     dropped = 0;
     cycles = [];

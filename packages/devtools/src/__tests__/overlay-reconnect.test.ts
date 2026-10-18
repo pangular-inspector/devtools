@@ -114,9 +114,9 @@ describe.sequential('overlay after a server restart', () => {
       expect(clients.length).toBeGreaterThan(2);
       expect(clients.slice(1).every((client) => client.calls.length === 0)).toBe(true);
 
-      // The server is back.
+      // The server is back; the next attempt, at most a minute later, finds it.
       nextStatus = 'connected';
-      await vi.advanceTimersByTimeAsync(6000);
+      await vi.advanceTimersByTimeAsync(60_000);
       const live = clients.at(-1)!;
       expect(live.status).toBe('connected');
       expect(named(live, 'claim-page')[0]?.args[0]).toMatchObject({ pageId });

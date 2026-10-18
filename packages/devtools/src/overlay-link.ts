@@ -49,6 +49,11 @@ export interface OverlayLinkOptions {
   /** How long a new connection may take to be trusted before it is dropped and tried again. */
   trustTimeoutMs?: number;
   warn?: (message: string) => void;
+  /**
+   * Where `online`, `focus` and `visibilitychange` come from: a waiting retry
+   * runs at once on them. The page's window by default; null for none.
+   */
+  wakeTarget?: Pick<Window, 'addEventListener' | 'removeEventListener'> | null;
 }
 
 export interface OverlayLink {
@@ -66,7 +71,14 @@ export class OverlayOfflineError extends Error {
   }
 }
 
-export const RECONNECT_DELAYS_MS: readonly number[] = [500, 1000, 2000, 4000, 5000];
+/**
+ * Waits between reconnect attempts. They grow to a minute, so a tab left open
+ * after the server stopped doesn't log a failed request every few seconds for
+ * ever; coming back to the tab or the network retries at once.
+ */
+export const RECONNECT_DELAYS_MS: readonly number[] = [
+  500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000,
+];
 const TRUST_TIMEOUT_MS = 10_000;
 
 const DROPPED = new Set(['disconnected', 'error']);
@@ -196,7 +208,7 @@ export function createOverlayLink(first: LinkClient, options: OverlayLinkOptions
 
   const schedule = () => {
     if (stopped || timer) return;
-    const delay = delays[Math.min(attempt++, delays.length - 1)] ?? 5000;
+    const delay = delays[Math.min(attempt++, delays.length - 1)] ?? 60_000;
     timer = setTimeout(() => {
       timer = undefined;
       void reconnect();
@@ -242,6 +254,24 @@ export function createOverlayLink(first: LinkClient, options: OverlayLinkOptions
     }
   };
 
+  // Back to the tab or online: a retry that waits runs now, and the backoff starts over.
+  const wakeTarget =
+    options.wakeTarget === undefined
+      ? typeof window === 'undefined'
+        ? null
+        : window
+      : options.wakeTarget;
+  const wake = () => {
+    if (stopped || !timer) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    clearTimeout(timer);
+    timer = undefined;
+    attempt = 0;
+    void reconnect();
+  };
+  const WAKE_EVENTS = ['online', 'focus', 'visibilitychange'] as const;
+  for (const name of WAKE_EVENTS) wakeTarget?.addEventListener(name, wake);
+
   adopt(first);
   // A client that already dropped before the link saw it.
   if (DROPPED.has(first.status)) queueMicrotask(() => live === first && drop());
@@ -267,6 +297,7 @@ export function createOverlayLink(first: LinkClient, options: OverlayLinkOptions
       stopped = true;
       clearTimeout(timer);
       timer = undefined;
+      for (const name of WAKE_EVENTS) wakeTarget?.removeEventListener(name, wake);
       release();
     },
   };

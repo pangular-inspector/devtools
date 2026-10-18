@@ -448,6 +448,19 @@ describe('attachStartup', () => {
     collector.stop();
   });
 
+  it('labels the report with the URL the app started on, not the one it navigated to', async () => {
+    root();
+    history.replaceState(null, '', '/trips?token=abc');
+    const rpc = fakeRpc();
+    const collector = attachStartup(rpc.my, 'tab1', () => undefined, { env: { doc: document } });
+    history.pushState(null, '', '/settings');
+    await collector.push();
+    expect(rpc.pushes()[0].url).toMatch(/\/trips\?token=/);
+    expect(rpc.pushes()[0].url).not.toContain('abc');
+    expect(rpc.pushes()[0].url).not.toContain('/settings');
+    collector.stop();
+  });
+
   it('gives an upper bound when the app was stable before the overlay looked', async () => {
     root();
     const rpc = fakeRpc();

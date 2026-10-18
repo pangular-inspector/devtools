@@ -1,3 +1,4 @@
+import { noteRouteInjectors } from './route-injector-names.ts';
 import { routerHeldOnPage } from './router-fallback.ts';
 import { REDACTED, serializeFormValue } from './forms.ts';
 import { decode, isSecretKey, knownSecrets, redactText, rememberSecret } from './text-redact.ts';
@@ -435,6 +436,7 @@ function browserUrlOf(router: AnyRecord): string | undefined {
 }
 
 export function snapshotRouter(router: AnyRecord): RouterSnapshot | null {
+  noteRouteInjectors(router);
   const root = read(() => router['routerState']['snapshot']['root'] as AnyRecord, null);
   if (!root) return null;
   const fragment = read(() => root['fragment'] as string | null, null);
@@ -1057,6 +1059,8 @@ export function applyRouterEvent(
           ? undefined
           : (CANCEL_CODES[code] ?? String(code));
       nav.outcome = nav.code === 'Redirect' ? 'redirected' : 'cancelled';
+      // The URL recognized before the cancel was never reached: the browser stays where it was.
+      delete nav.finalUrl;
       const byGuard = nav.code === 'Redirect' || nav.code === 'GuardRejected';
       if (byGuard && nav.guards && nav.guards.passed === undefined) {
         const end = now();
@@ -1075,6 +1079,7 @@ export function applyRouterEvent(
     }
     case EventType.NavigationError: {
       nav.outcome = 'failed';
+      delete nav.finalUrl;
       const error = read(() => event['error'], undefined);
       nav.reason = errorText(error, state.secrets);
       const code = errorCodeOf(error);

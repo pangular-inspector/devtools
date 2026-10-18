@@ -1,3 +1,4 @@
+import { setTimeoutOutside } from './outside-angular.ts';
 import { keepaliveAfter } from './page-heartbeat.ts';
 import { referenceDiff, serialize } from './ngrx-shared.ts';
 import {
@@ -101,7 +102,7 @@ export function attachReduxStores(my: RpcScope, pageId: string, options: ReduxSt
 
   const schedule = () => {
     clearTimeout(timer);
-    timer = setTimeout(() => void push(), 50);
+    timer = setTimeoutOutside(() => void push(), 50);
   };
   hook.listeners.add(schedule);
 

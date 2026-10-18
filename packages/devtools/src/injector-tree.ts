@@ -1,3 +1,4 @@
+import { routeInjectorName } from './route-injector-names.ts';
 import type {
   DependencyInfo,
   InjectorInfo,
@@ -174,7 +175,7 @@ function environmentName(injector: unknown, source: unknown): string {
   const scopes = (injector as { scopes?: Set<string> } | null)?.scopes;
   if (scopes?.has('platform')) return 'Platform';
   if (scopes?.has('root')) return 'Root';
-  if (typeof source === 'string' && source) return source;
+  if (typeof source === 'string' && source) return routeInjectorName(injector, source) ?? source;
   return 'Environment';
 }
 

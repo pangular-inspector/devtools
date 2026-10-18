@@ -1,3 +1,4 @@
+import { outsideAngular, setTimeoutOutside } from './outside-angular.ts';
 import { connectDevframe } from 'devframe/client';
 import { keepaliveDue } from './change-detection.ts';
 import { collectComponentTree, type ComponentDebugNg } from './component-tree.ts';
@@ -88,7 +89,7 @@ export function initAngularNativeOverlay(options: AngularNativeOverlayOptions): 
     session?.();
     session = undefined;
     if (disposed || retry) return;
-    retry = setTimeout(() => {
+    retry = setTimeoutOutside(() => {
       retry = undefined;
       start();
     }, retryMs);
@@ -117,7 +118,8 @@ export function initAngularNativeOverlay(options: AngularNativeOverlayOptions): 
       },
     );
   };
-  start();
+  // Called from app code, maybe inside the Angular zone: the sessions and their timers must not make zone.js apps tick.
+  outsideAngular(start);
 
   return () => {
     disposed = true;
