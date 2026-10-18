@@ -1464,7 +1464,18 @@ async function cliChecks() {
   const mcpToken = process.env.PANGULAR_MCP_TOKEN;
   const child = spawn(
     process.execPath,
-    [join(ROOT, 'bin.mjs'), 'dev', '--root', FIXTURE, '--port', String(PORTS.cli)],
+    // `--host 127.0.0.1`: the default `localhost` resolves to ::1 first on some
+    // runners, and the checks below address the server as 127.0.0.1.
+    [
+      join(ROOT, 'bin.mjs'),
+      'dev',
+      '--root',
+      FIXTURE,
+      '--port',
+      String(PORTS.cli),
+      '--host',
+      '127.0.0.1',
+    ],
     {
       cwd: ROOT,
       env: { ...process.env, HOME: home },
