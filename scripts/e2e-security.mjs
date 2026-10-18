@@ -1473,9 +1473,18 @@ async function cliChecks() {
   let out = '';
   child.stdout.on('data', (d) => (out += d));
   child.stderr.on('data', (d) => (out += d));
-  for (let i = 0; i < 150 && !/localhost|127\.0\.0\.1/.test(out); i++) await delay(100);
-  await delay(1000);
   const origin = `http://127.0.0.1:${PORTS.cli}`;
+  // Wait until the server answers, not until it prints: on a slow runner the
+  // banner can come before the socket listens.
+  let exited = false;
+  child.once('exit', () => (exited = true));
+  for (let i = 0; i < 300 && !exited; i++) {
+    if ((await raw(`${origin}/`)).status) break;
+    await delay(100);
+  }
+  if (exited || !(await raw(`${origin}/`)).status) {
+    throw new Error(`pangular dev did not answer on ${origin}:\n${out}`);
+  }
   const base = out.match(/https?:\/\/[^\s]+?(\/[^\s]*)/)?.[1] ?? '/';
   notes.push(`CLI dev printed: ${out.trim().split('\n').slice(0, 4).join(' / ')}`);
   const panelPath = base.endsWith('/') ? base : `${base}/`;
