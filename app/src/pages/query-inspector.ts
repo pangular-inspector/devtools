@@ -67,14 +67,14 @@ const FILTERS: SelectOption[] = [
       </div>
     } @else if (!pages().length) {
       <div class="state empty-card" role="status">
-        <p class="state-title">No page reports a QueryClient yet.</p>
         @if (connected()) {
+          <p class="state-title">The connected page has no QueryClient yet.</p>
           <p>
-            The connected page has no <code>QueryClient</code>. Add
-            <code>provideTanStackQuery(new QueryClient())</code> to the app's providers. The tab
+            Add <code>provideTanStackQuery(new QueryClient())</code> to the app's providers. The tab
             reads it once something in the app injects it, such as <code>injectQuery()</code>.
           </p>
         } @else {
+          <p class="state-title">No page reports a QueryClient yet.</p>
           <p>
             Open the app with the overlay loaded. The tab reads the <code>QueryClient</code> that
             <code>provideTanStackQuery()</code> registers, once something in the app injects it.
@@ -396,7 +396,7 @@ const FILTERS: SelectOption[] = [
       align-items: center;
       height: var(--control-h);
       padding: 0 12px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface);
       color: var(--text);
@@ -442,7 +442,7 @@ const FILTERS: SelectOption[] = [
       height: var(--control-h);
       padding: 0 12px 0 34px;
       background: var(--bg);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       font-size: 13px;
@@ -631,7 +631,7 @@ const FILTERS: SelectOption[] = [
       justify-self: start;
       height: var(--control-h);
       padding: 0 14px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);

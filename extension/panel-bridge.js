@@ -8,9 +8,10 @@ const triedList = document.getElementById('status-tried');
 const allowButton = document.getElementById('status-allow');
 const retryButton = document.getElementById('status-retry');
 const docsLink = document.getElementById('status-docs');
-const SETUP_DOCS = { href: docsLink.href, text: docsLink.textContent };
+const docsLabel = docsLink.firstChild;
+const SETUP_DOCS = { href: docsLink.href, text: docsLabel.textContent };
 const REFUSED_DOCS = {
-  href: 'https://github.com/pangular-inspector/devtools/blob/main/apps/docs/src/content/getting-started/vite.md#answers-only-your-machine',
+  href: 'https://pangular-inspector.dev/getting-started/vite/#answers-only-your-machine',
   text: 'Why the devtools server refuses requests',
 };
 
@@ -34,6 +35,9 @@ const PAGE_READ_RETRY_MS = 300;
 // code, never answers until the dialog closes.
 const EVAL_TIMEOUT_MS = 2000;
 const BUSY_RETRY_MS = 2000;
+// While no server answers, or it refuses, the panel looks again on its own, so it
+// connects once the dev server starts, like the panel does.
+const SERVER_RETRY_MS = 5000;
 const DETECTING = 'Detecting Angular app…';
 const BUSY =
   'The inspected page is not answering. If it shows a prompt for the one-time code, enter the code from the terminal of the dev server there, or close the prompt. The panel keeps checking.';
@@ -49,6 +53,7 @@ const STORED_PAGE_ID = `(() => {
 
 let detection = 0;
 let busyRetry;
+let serverRetry;
 let themeName = chrome.devtools.panels.themeName || 'dark';
 
 function applyTheme(name) {
@@ -106,6 +111,7 @@ function toURL(value) {
 async function detectConnection({ quiet = false } = {}) {
   const run = ++detection;
   clearTimeout(busyRetry);
+  clearTimeout(serverRetry);
   if (!quiet) showStatus(DETECTING, { help: false });
   const answer = await readPageOrigin(run);
   if (run !== detection) return;
@@ -164,6 +170,9 @@ async function detectConnection({ quiet = false } = {}) {
     } else {
       showStatus(`No devtools server answered on ${page.origin}. Tried:`, { tried, retry: true });
     }
+    serverRetry = setTimeout(() => {
+      if (run === detection) detectConnection({ quiet: true });
+    }, SERVER_RETRY_MS);
     return;
   }
 
@@ -252,7 +261,9 @@ function showStatus(
 ) {
   frame.style.display = 'none';
   status.classList.remove('hidden');
-  statusMessage.textContent = message;
+  // Only the message is a live region. Setting the same text again would make
+  // screen readers repeat it on every quiet retry.
+  if (statusMessage.textContent !== message) statusMessage.textContent = message;
   triedList.replaceChildren(
     ...tried.map((url) => Object.assign(document.createElement('li'), { textContent: url })),
   );
@@ -261,7 +272,7 @@ function showStatus(
   allowButton.hidden = !allow;
   retryButton.hidden = !retry;
   docsLink.href = docs.href;
-  docsLink.textContent = docs.text;
+  docsLabel.textContent = docs.text;
   docsLink.hidden = !help;
 }
 

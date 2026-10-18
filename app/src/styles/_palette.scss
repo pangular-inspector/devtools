@@ -7,6 +7,10 @@ $neutrals: (
   surface-3: #222229,
   border: #25252c,
   border-strong: #34343d,
+  // Boundaries that carry meaning, so 3:1 on every surface (WCAG 1.4.11):
+  // the outline of an input, button or toggle, and the signal graph's edges.
+  control-border: #70707b,
+  graph-edge: #7a7a85,
   text: #ececf1,
   text-strong: #fafafa,
   text-2: #a1a1aa,
@@ -20,6 +24,8 @@ $neutrals-light: (
   surface-3: #e8e8ec,
   border: #e2e2e7,
   border-strong: #c8c8d0,
+  control-border: #80808a,
+  graph-edge: #70707b,
   text: #18181b,
   text-strong: #0a0a0d,
   text-2: #52525b,
@@ -179,6 +185,27 @@ $hues-light: (
     line: #9333ea,
     text: #6b21a8,
   ),
+);
+
+// Signal kinds in the Signals tab: solid badge fills and graph dots. The badge
+// text is `ink`, which keeps 4.5:1 on every fill in both themes
+// (tint-contrast.test.ts checks it), so one map serves dark and light.
+$signal-kinds: (
+  ink: #0b0b0e,
+  signal: #facc15,
+  computed: #60a5fa,
+  linked: #34d399,
+  effect: #fb923c,
+  template: #94a3b8,
+  after-render: #f472b6,
+  child-prop: #fef08a,
+  input: #f59e0b,
+  output: #ec4899,
+  model: #14b8a6,
+  view-query: #a3e635,
+  content-query: #fda4af,
+  resource: #06b6d4,
+  unknown: #a1a1aa,
 );
 
 // Router timeline phases: the bar segments and legend dots. Graphics, so each

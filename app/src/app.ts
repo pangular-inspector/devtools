@@ -480,6 +480,7 @@ function readView(): View | null {
     </header>
     <main #main tabindex="-1" [attr.aria-label]="mainLabel()">
       <p class="background-note" role="status">{{ backgroundNote() }}</p>
+      <p class="sr-only" role="status">{{ connectedNote() }}</p>
       @if (tab() === 'settings') {
         <app-settings
           [tabs]="settingsTabs()"
@@ -613,7 +614,7 @@ function readView(): View | null {
 
     :host {
       --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
-      --accent-line: color-mix(in srgb, var(--accent) 45%, transparent);
+      --accent-line: color-mix(in srgb, var(--accent) var(--accent-line-amount), transparent);
       display: flex;
       flex-direction: column;
       height: 100vh;
@@ -817,7 +818,7 @@ function readView(): View | null {
       height: 28px;
       margin-left: auto;
       padding: 0 10px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: 8px;
       background: var(--surface);
       color: var(--text);
@@ -1005,7 +1006,7 @@ function readView(): View | null {
         align-items: center;
         height: var(--control-h);
         padding: 0 14px;
-        border: 1px solid var(--border-strong);
+        border: 1px solid var(--control-border);
         border-radius: var(--radius-sm);
         background: var(--surface-2);
         color: var(--text);
@@ -1172,17 +1173,19 @@ export class App implements OnInit, OnDestroy {
   readonly connectionFailed = signal(false);
   /** A client the server does not trust yet: the panel asks for the one-time code. */
   readonly pairing = signal<DevframeRpcClient | null>(null);
+  /** Says "Connected." once the one-time code is accepted. */
+  readonly connectedNote = signal('');
   private readonly hiddenPages = signal<string[]>([]);
   private readonly pageId = hostPageId();
   readonly backgroundNote = computed(() => {
     const hidden = this.hiddenPages();
     if (this.pageId) {
-      return hidden.includes(this.pageId) ? 'Tab in background, showing the last data.' : '';
+      return hidden.includes(this.pageId) ? 'Page in background, showing the last data.' : '';
     }
     if (!hidden.length) return '';
     return hidden.length === 1
-      ? 'A tab is in the background, showing its last data.'
-      : `${hidden.length} tabs are in the background, showing their last data.`;
+      ? 'A page is in the background, showing its last data.'
+      : `${hidden.length} pages are in the background, showing their last data.`;
   });
   private stopVisibility = () => {};
   private stopNative = () => {};
@@ -1324,11 +1327,19 @@ export class App implements OnInit, OnDestroy {
           }
           if (this.pendingClient === client && status !== 'connecting') this.pendingClient = null;
           if (status === 'connected') {
+            const paired = this.pairing() === client;
             this.pairing.set(null);
             // devframe says it is trusted before it stores the token it got for the code.
             setTimeout(() => auth.remember(client.connection?.authToken));
             this.ready(client);
             this.connected.set(this.rpc() === client);
+            // The code prompt that held focus is gone: say so and move to the tab bar.
+            if (paired) {
+              this.connectedNote.update((note) =>
+                note === 'Connected.' ? 'Connected.\u00a0' : 'Connected.',
+              );
+              this.focusCurrentTab();
+            }
           } else if (status === 'unauthorized') {
             this.connected.set(false);
             if (this.rpc() === client) this.rpc.set(null);

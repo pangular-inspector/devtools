@@ -195,7 +195,7 @@ export const FORMS_STYLES = `
     max-width: 100%;
     height: 34px;
     padding: 0 12px;
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
     background: var(--surface-2);
     color: var(--text);
@@ -215,7 +215,7 @@ export const FORMS_STYLES = `
   }
   .small:hover {
     background: var(--surface-3);
-    border-color: color-mix(in srgb, var(--text-3) 55%, var(--border-strong));
+    border-color: color-mix(in srgb, var(--text-3) 55%, var(--control-border));
   }
   .small:active {
     background: var(--border-strong);
@@ -239,12 +239,12 @@ export const FORMS_STYLES = `
     border-color: var(--accent-hover);
   }
   .small.danger {
-    border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+    border-color: var(--danger);
     color: var(--danger);
   }
   .small.danger:hover {
     background: color-mix(in srgb, var(--danger) 12%, transparent);
-    border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+    border-color: var(--danger);
   }
   .small.armed {
     box-shadow: 0 0 0 3px var(--accent-soft);
@@ -286,7 +286,7 @@ export const FORMS_STYLES = `
     min-width: 0;
     height: 34px;
     padding: 0 12px;
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
     background: var(--bg);
     color: var(--text);
@@ -301,7 +301,7 @@ export const FORMS_STYLES = `
     font-family: var(--font-sans);
   }
   .field-input:hover {
-    border-color: color-mix(in srgb, var(--text-3) 55%, var(--border-strong));
+    border-color: color-mix(in srgb, var(--text-3) 55%, var(--control-border));
   }
   .field-input:focus,
   .field-input:focus-visible {

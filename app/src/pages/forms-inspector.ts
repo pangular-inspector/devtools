@@ -105,6 +105,10 @@ function countFields(node: FormFieldNode): number {
   ],
   host: { '(keydown.escape)': 'cancelPick()' },
   template: `
+    <p class="page-intro">
+      Signal Forms, reactive and template-driven forms on the live page, with each field's state and
+      errors, a change timeline, submit explanations and a lint. Development builds only.
+    </p>
     @if (!rpc()) {
       <div class="empty" role="status">
         <span class="spinner" aria-hidden="true"></span>
@@ -175,7 +179,10 @@ function countFields(node: FormFieldNode): number {
                     <span class="sr-only">, {{ form.root.status }}</span></span
                   >
                   @if (counts().get(form.id)?.errors; as count) {
-                    <span class="count">{{ count }}<span class="sr-only"> errors</span></span>
+                    <span class="count"
+                      >{{ count
+                      }}<span class="sr-only"> {{ count === 1 ? 'error' : 'errors' }}</span></span
+                    >
                   }
                 </button>
               </li>
@@ -351,18 +358,24 @@ function countFields(node: FormFieldNode): number {
               @switch (tab_()) {
                 @case ('fields') {
                   <div class="filters">
-                    <input
-                      #fieldFilter
-                      class="filter"
-                      type="search"
-                      placeholder="Filter fields by path"
-                      aria-label="Filter fields by path"
-                      autocomplete="off"
-                      spellcheck="false"
-                      [value]="filter()"
-                      (input)="onFilter($event)"
-                      (keydown.escape)="filter.set('')"
-                    />
+                    <div class="search">
+                      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" />
+                      </svg>
+                      <input
+                        #fieldFilter
+                        class="filter"
+                        type="search"
+                        placeholder="Filter fields by path"
+                        aria-label="Filter fields by path"
+                        autocomplete="off"
+                        spellcheck="false"
+                        [value]="filter()"
+                        (input)="onFilter($event)"
+                        (keydown.escape)="filter.set('')"
+                      />
+                    </div>
                     <fieldset class="chips">
                       <legend class="sr-only">Show only fields that are</legend>
                       @for (chip of chips; track chip.id) {
@@ -600,6 +613,38 @@ function countFields(node: FormFieldNode): number {
   `,
   styles: `
     ${FORMS_STYLES}
+    .page-intro {
+      margin: 0 0 12px;
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+    .search {
+      position: relative;
+      display: flex;
+      flex: 1 1 220px;
+      min-width: 0;
+    }
+    .search > input {
+      flex: 1 1 auto;
+      width: 100%;
+      padding-left: 34px;
+    }
+    .search-icon {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      width: 14px;
+      height: 14px;
+      transform: translateY(-50%);
+      fill: none;
+      stroke: var(--text-3);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      pointer-events: none;
+    }
+    .search:focus-within .search-icon {
+      stroke: var(--accent);
+    }
     :host {
       display: block;
     }
@@ -1007,7 +1052,7 @@ function countFields(node: FormFieldNode): number {
       align-items: center;
       height: 28px;
       padding: 0 12px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--control-border);
       border-radius: 99px;
       background: var(--surface-2);
       color: var(--text-2);
@@ -1023,7 +1068,7 @@ function countFields(node: FormFieldNode): number {
     }
     .chips label:hover {
       color: var(--text);
-      border-color: var(--border-strong);
+      border-color: var(--text-3);
     }
     .chips input {
       position: absolute;
@@ -1048,12 +1093,8 @@ function countFields(node: FormFieldNode): number {
       min-width: 0;
       height: 34px;
       padding: 0 12px 0 34px;
-      background-color: var(--bg);
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e99' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: 12px center;
-      background-size: 14px;
-      border: 1px solid var(--border-strong);
+      background: var(--bg);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       font: inherit;
@@ -1066,7 +1107,7 @@ function countFields(node: FormFieldNode): number {
       color: var(--text-3);
     }
     .filter:hover {
-      border-color: color-mix(in srgb, var(--text-3) 55%, var(--border-strong));
+      border-color: color-mix(in srgb, var(--text-3) 55%, var(--control-border));
     }
     .filter:focus,
     .filter:focus-visible {

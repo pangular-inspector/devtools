@@ -112,7 +112,7 @@ let nextId = 0;
       gap: 4px;
       min-height: 28px;
       padding: 0 8px 0 4px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);

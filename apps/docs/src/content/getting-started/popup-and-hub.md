@@ -265,7 +265,7 @@ If the panel cannot reach the server when it opens, it says so and tries again a
 
 ### Tabs in the background
 
-A browser tab in the background runs its timers about once a minute. The app page stops reading itself while its tab is hidden and tells the server, and the server keeps its last data instead of dropping it. The panel then says **Tab in background, showing the last data.** When you switch back, the page sends fresh data. If a hidden tab stops answering for 5 minutes, the server drops it.
+A browser tab in the background runs its timers about once a minute. The app page stops reading itself while its tab is hidden and tells the server, and the server keeps its last data instead of dropping it. The panel then says **Page in background, showing the last data.** When you switch back, the page sends fresh data. If a hidden tab stops answering for 5 minutes, the server drops it.
 
 ## Troubleshooting
 

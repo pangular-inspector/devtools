@@ -159,9 +159,72 @@ describe('router timeline phase colours', () => {
   }
 });
 
+// Control outlines and signal graph edges are the only boundary of what they
+// draw, so they need 3:1 on every surface (WCAG 1.4.11).
+describe('control outlines and graph edges', () => {
+  const base = theme('amber');
+  for (const mode of ['dark', 'light'] as const) {
+    for (const token of ['control-border', 'graph-edge']) {
+      it(`${mode}: --${token} keeps 3:1 on every surface`, () => {
+        const tokens = base[mode];
+        expect(tokens[token], `--${token}`).toBeDefined();
+        for (const surface of ['bg', 'surface', 'surface-2', 'surface-3']) {
+          expect(
+            ratio(rgb(tokens[token]), rgb(tokens[surface])),
+            `on --${surface}`,
+          ).toBeGreaterThanOrEqual(3);
+        }
+      });
+    }
+  }
+});
+
+// Pressed and selected controls draw their border in --accent-line, a
+// percentage of the accent over the surface, so it needs 3:1 too.
+describe('accent borders', () => {
+  for (const accent of ACCENTS) {
+    const { css } = compileString(`@use 'theme' with ($accent: ${accent});`, {
+      loadPaths: [STYLES],
+    });
+    const themes = theme(accent);
+    const alphas = [...css.matchAll(/--accent-line-amount:\s*(\d+)%/g)];
+    for (const [index, mode] of (['dark', 'light'] as const).entries()) {
+      it(`${accent} ${mode}: --accent-line keeps 3:1 on every surface`, () => {
+        const amount = Number(alphas[index]?.[1]) / 100;
+        expect(amount).toBeGreaterThan(0);
+        const tokens = themes[mode];
+        for (const surface of ['bg', 'surface', 'surface-2', 'surface-3']) {
+          const under = rgb(tokens[surface]);
+          const line = mix(rgb(tokens['accent']), amount, under);
+          expect(ratio(line, under), `on --${surface}`).toBeGreaterThanOrEqual(3);
+        }
+      });
+    }
+  }
+});
+
+// Signal kind badges put --kind-ink on a solid --kind-<name> fill.
+describe('signal kind badges', () => {
+  const tokens = theme('amber').dark;
+  const kinds = Object.keys(tokens).filter(
+    (name) => name.startsWith('kind-') && name !== 'kind-ink',
+  );
+  it('has a fill for every kind', () => expect(kinds.length).toBeGreaterThan(10));
+  for (const kind of kinds) {
+    it(`--kind-ink keeps 4.5:1 on --${kind}`, () => {
+      expect(ratio(rgb(tokens['kind-ink']), rgb(tokens[kind]))).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
+
 // Pages that used hard-coded hex colors now take them from the tokens above, so
 // both themes get a value these tests check.
-const TOKEN_ONLY_PAGES = ['analog-inspector.ts', 'route-timeline.ts'];
+const TOKEN_ONLY_PAGES = [
+  'analog-inspector.ts',
+  'route-timeline.ts',
+  'signal-graph-view.ts',
+  'signal-inspector.ts',
+];
 
 describe('pages that use theme tokens only', () => {
   for (const file of TOKEN_ONLY_PAGES) {

@@ -115,7 +115,7 @@ The page reads nested values through own data properties only, so a getter never
 
 The field above **Inputs** filters the inputs, outputs, properties and directive inputs of the selected component by name. It also matches the keys of the nested levels already loaded, and opens the levels that lead to a match. It does not ask the page for levels you haven't opened.
 
-While you filter, the field counts the values that match, like **2 of 14**, and hides the blocks with no match. When nothing matches, **Clear filter** clears the field and moves focus back to it. Press Escape in the field to clear it. The filter stays when you select another component.
+While you filter, the field counts the values that match, like **2 of 14**, and hides the blocks with no match. When nothing matches, **Clear filters** clears the field and moves focus back to it. Press Escape in the field to clear it. The filter stays when you select another component.
 
 ### Editing values
 
@@ -443,7 +443,7 @@ Use the arrow keys, Home and End to move through the tree. The right arrow expan
 
 After **Collapse all**, the row you return to with Tab is the closest visible parent of the row you were on.
 
-Press Escape in the filter box to clear it. When the filter matches nothing, **Clear filter** clears it and moves focus back to the filter box.
+Press Escape in the filter box to clear it. When the filter matches nothing, **Clear filters** clears it and moves focus back to the filter box.
 
 ## Agent tools
 

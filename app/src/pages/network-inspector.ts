@@ -296,6 +296,10 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
   selector: 'app-network-inspector',
   imports: [JsonPipe, HttpHeadersView, LimitNote, NetworkWaterfall, RovingList, Select],
   template: `
+    <p class="page-intro">
+      HttpClient calls made while rendering on the server and in the browser, from the live page and
+      the devtools server, with hydration stats, the TransferState payload and fault injection.
+    </p>
     @if (loading()) {
       <div class="state" role="status">
         <span class="spinner" aria-hidden="true"></span>
@@ -348,7 +352,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                   <th scope="col">Notes</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody appRovingList="button.ssr-row">
                 @for (req of requests(); track req.id) {
                   <tr
                     [class.selected]="selectedRequest()?.id === req.id"
@@ -357,12 +361,15 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                     <td class="url">
                       <button
                         type="button"
-                        class="link"
+                        class="link ssr-row"
                         [title]="req.url"
                         [attr.aria-pressed]="selectedRequest()?.id === req.id"
                         aria-controls="ssr-detail"
                       >
                         <span class="method">{{ req.method }}</span> {{ req.url }}
+                        <span class="sr-only"
+                          >, {{ req.status }}, {{ renderModeLabel(req.renderMode) }}</span
+                        >
                       </button>
                     </td>
                     <td
@@ -1287,6 +1294,12 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
   styles: `
     @use 'mixins' as m;
 
+    .page-intro {
+      margin: 0 0 12px;
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+
     .toolbar[hidden],
     .grid[hidden] {
       display: none;
@@ -1442,7 +1455,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       width: 100%;
       min-width: 0;
       padding: 0 10px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background-color: var(--bg);
       transition:
@@ -1468,7 +1481,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     input:not([type='checkbox']):hover,
     select:hover,
     textarea:hover {
-      border-color: color-mix(in srgb, var(--border-strong) 60%, var(--text-3));
+      border-color: color-mix(in srgb, var(--control-border) 60%, var(--text-3));
     }
     input:not([type='checkbox']):focus-visible,
     select:focus-visible,
@@ -1492,7 +1505,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       justify-content: center;
       height: 34px;
       padding: 0 14px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       font-weight: 500;
@@ -1851,7 +1864,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     }
     .view-toggle {
       display: inline-flex;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       overflow: hidden;
     }

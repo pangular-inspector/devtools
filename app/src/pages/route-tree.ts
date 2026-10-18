@@ -22,6 +22,7 @@ import {
   type SourceRoute,
 } from './router-types';
 import { SourceLink } from '../ui/source-link';
+import { plural } from '../format';
 
 /** "3 of 12 routes": the filtered count, worded like the other panel pages. */
 export function routeCountText(matches: number, total: number): string {
@@ -126,12 +127,12 @@ interface TestedUrl {
             <span class="count">{{ countText() }}</span
             >.
           } @else {
-            {{ rows().length }} route(s).
+            {{ plural(rows().length, 'route') }}.
           }
           Lazy routes show their children once loaded.
           @if (page().configTruncated; as left) {
-            {{ left }} route(s) left out: the page lists at most 200 routes per level and 1000 in
-            total.
+            {{ plural(left, 'route') }} left out: the page lists at most 200 routes per level and
+            1000 in total.
           }
         </p>
       }
@@ -151,7 +152,7 @@ interface TestedUrl {
         <p class="empty-title">No routes match the filter.</p>
         <p class="muted">Try a shorter path or a component name.</p>
         <button type="button" class="small" (click)="setFilter(''); filterInput.focus()">
-          Clear filter
+          Clear filters
         </button>
       </div>
     } @else {
@@ -437,6 +438,7 @@ interface TestedUrl {
   `,
 })
 export class RouteTree {
+  protected readonly plural = plural;
   page = input.required<RouterPage>();
   rpc = input<DevframeRpcClient | null>(null);
   readonly navigationAllowed = computed(() => actionAllowed(this.rpc(), 'router'));
@@ -667,7 +669,7 @@ export class RouteTree {
     const routes = (result['routes'] as { path: string }[]) ?? [];
     this.rowResult.set({
       id: node.id,
-      text: `${node.fullPath} declares ${routes.length} route(s): ${routes.map((r) => `/${r.path}`).join(', ')}. The router loads them for real on the first navigation that needs them.`,
+      text: `${node.fullPath} declares ${plural(routes.length, 'route')}: ${routes.map((r) => `/${r.path}`).join(', ')}. The router loads them for real on the first navigation that needs them.`,
     });
   }
 }

@@ -118,7 +118,7 @@ const KEYS = new Set<string>(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
       content: '';
       width: 18px;
       height: 0;
-      border-top: 2px solid var(--border-strong);
+      border-top: 2px solid var(--graph-edge);
     }
     .key-selected::before {
       height: 10px;
@@ -154,7 +154,7 @@ const KEYS = new Set<string>(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
     }
     .edge {
       fill: none;
-      stroke: var(--border-strong);
+      stroke: var(--graph-edge);
       stroke-width: 1.5;
       transition: stroke 0.15s var(--ease);
     }
@@ -182,7 +182,7 @@ const KEYS = new Set<string>(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
       font: inherit;
       color: var(--text);
       background: var(--surface);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       cursor: pointer;
       transition:

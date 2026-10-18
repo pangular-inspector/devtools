@@ -19,7 +19,9 @@ $ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --accent-ink: #{p.accent($accent, ink)};
   --accent-text: #{p.accent($accent, text)};
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
-  --accent-line: color-mix(in srgb, var(--accent) 45%, transparent);
+  // Strong enough for 3:1 as a control's border on every surface, with every accent.
+  --accent-line-amount: 65%;
+  --accent-line: color-mix(in srgb, var(--accent) var(--accent-line-amount), transparent);
 
   @each $name, $value in p.$status {
     --#{$name}: #{$value};
@@ -36,6 +38,10 @@ $ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
   @each $name, $value in p.$phases {
     --phase-#{$name}: #{$value};
+  }
+
+  @each $name, $value in p.$signal-kinds {
+    --kind-#{$name}: #{$value};
   }
 
   --radius: #{$radius};
@@ -59,6 +65,7 @@ $ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --accent-hover: #{p.accent($accent, light, hover)};
   --accent-ink: #{p.accent($accent, light, ink)};
   --accent-text: #{p.accent($accent, light, text)};
+  --accent-line-amount: 70%;
 
   @each $name, $value in p.$status-light {
     --#{$name}: #{$value};

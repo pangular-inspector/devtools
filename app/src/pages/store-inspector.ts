@@ -116,16 +116,26 @@ const CLASSIC_KINDS = new Set([
     StoreSession,
   ],
   template: `
+    <p class="page-intro">
+      NgRx signal stores and &#64;ngrx/store state from the live page, with every change, plus NGXS,
+      Elf and MiniRx stores. Source declarations lists the stores your files declare.
+    </p>
     <div class="toolbar">
-      <input
-        #filterInput
-        type="search"
-        placeholder="Filter stores, changes and declarations…"
-        aria-label="Filter stores, changes and source declarations"
-        [value]="filter()"
-        (input)="filter.set($any($event.target).value)"
-        (keydown.escape)="filter.set('')"
-      />
+      <div class="search">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+        <input
+          #filterInput
+          type="search"
+          placeholder="Filter stores, changes and declarations…"
+          aria-label="Filter stores, changes and source declarations"
+          [value]="filter()"
+          (input)="filter.set($any($event.target).value)"
+          (keydown.escape)="filter.set('')"
+        />
+      </div>
       @if (allPages().length > 1) {
         <span class="visually-hidden" id="ngrx-page-label">Page</span>
         <app-select
@@ -948,6 +958,39 @@ const CLASSIC_KINDS = new Set([
   styles: `
     @use 'mixins' as m;
 
+    .page-intro {
+      margin: 0 0 12px;
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+    .search {
+      position: relative;
+      display: flex;
+      flex: 1 1 220px;
+      min-width: 0;
+    }
+    .search > input {
+      flex: 1 1 auto;
+      width: 100%;
+      padding-left: 34px;
+    }
+    .search-icon {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      width: 14px;
+      height: 14px;
+      transform: translateY(-50%);
+      fill: none;
+      stroke: var(--text-3);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      pointer-events: none;
+    }
+    .search:focus-within .search-icon {
+      stroke: var(--accent);
+    }
+
     :host {
       display: grid;
       gap: 24px;
@@ -982,7 +1025,7 @@ const CLASSIC_KINDS = new Set([
       height: 34px;
       padding: 0 12px;
       background: var(--bg);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       font: inherit;
@@ -1086,7 +1129,7 @@ const CLASSIC_KINDS = new Set([
     }
     .btn.copy {
       flex: none;
-      height: 26px;
+      height: var(--control-h);
       padding: 0 10px;
       font-size: 12px;
     }
@@ -1158,9 +1201,9 @@ const CLASSIC_KINDS = new Set([
       line-height: 1.5;
     }
     .btn {
-      height: 32px;
+      height: var(--control-h);
       padding: 0 14px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -1623,7 +1666,7 @@ const CLASSIC_KINDS = new Set([
       width: 100%;
       min-width: 0;
       padding: 8px 10px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--bg);
       color: var(--text);
@@ -1690,7 +1733,7 @@ const CLASSIC_KINDS = new Set([
       max-width: 100%;
       height: 28px;
       padding: 0 10px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--control-border);
       border-radius: 99px;
       background: var(--surface-2);
       color: var(--text-2);
@@ -1704,7 +1747,7 @@ const CLASSIC_KINDS = new Set([
         color 0.15s var(--ease);
     }
     .kind-chip:hover {
-      border-color: var(--border-strong);
+      border-color: var(--text-3);
       background: var(--surface-3);
       color: var(--text);
     }

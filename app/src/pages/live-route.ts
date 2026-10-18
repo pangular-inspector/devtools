@@ -24,7 +24,7 @@ import type { ComponentFocus } from '../types/component-focus.types';
 const TABS = [
   { id: 'current', label: 'Current' },
   { id: 'navigations', label: 'Navigations' },
-  { id: 'routes', label: 'Routes' },
+  { id: 'routes', label: 'Config' },
   { id: 'setup', label: 'Setup' },
   { id: 'lint', label: 'Lint' },
 ] as const;
@@ -171,7 +171,7 @@ type TabId = (typeof TABS)[number]['id'];
       height: 34px;
       margin-top: 8px;
       padding: 0 12px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);

@@ -376,6 +376,8 @@ describe('the Timeline tab', () => {
     expect(titles[0]).toBe('Navigation to /admin');
     expect(titles.at(-1)).toBe('GET /api/trips');
     expect(text(fixture)).toContain('9 of 9 events');
+    // The visible count is not a live region, so pushes never announce it.
+    expect(host(fixture).querySelector('.count')!.hasAttribute('role')).toBe(false);
     const chart = host(fixture).querySelector('[role="img"]')!;
     expect(chart.getAttribute('aria-label')).toContain('Router 2');
     expect(host(fixture).querySelectorAll('h2')[0].textContent).toBe('Time axis');

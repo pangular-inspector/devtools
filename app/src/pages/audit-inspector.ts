@@ -10,6 +10,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { filterAnnouncement } from '../ui/filter-status';
 import type { DevframeRpcClient } from 'devframe/client';
 import { time } from '../format';
 import { hostPageId } from '../page-id';
@@ -111,7 +112,8 @@ export const AUDIT_REFRESH_DELAY_MS = 150;
             (valueChange)="pickPage($event)"
           />
         }
-        <span class="count" role="status">{{ countText() }}</span>
+        <span class="count">{{ countText() }}</span>
+        <p class="sr-only" role="status">{{ countStatus() }}</p>
         <button type="button" class="small" [disabled]="axeRunning()" (click)="runAxe()">
           {{ axeRunning() ? 'Running axe…' : 'Run axe' }}
         </button>
@@ -311,7 +313,7 @@ export const AUDIT_REFRESH_DELAY_MS = 150;
       height: var(--control-h);
       padding: 0 12px 0 34px;
       background: var(--bg);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       font-size: 13px;
@@ -331,7 +333,7 @@ export const AUDIT_REFRESH_DELAY_MS = 150;
     .small {
       height: var(--control-h);
       padding: 0 12px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -601,8 +603,14 @@ export class AuditInspector {
           `${finding.subject ?? ''} ${finding.rule} ${finding.why}`.toLowerCase().includes(text)),
     );
   });
-  readonly countText = computed(
-    () => `${this.shown().length} of ${this.findings().length} findings`,
+  readonly countText = computed(() => {
+    const total = this.findings().length;
+    return `${this.shown().length} of ${total} ${total === 1 ? 'finding' : 'findings'}`;
+  });
+  /** Speaks the count only after the user changes the search, area, severity or page. */
+  readonly countStatus = filterAnnouncement(
+    () => [this.filter(), this.area(), this.severity(), this.pageId()],
+    () => this.countText(),
   );
   readonly numbers = computed(() => {
     const metrics = this.report()?.metrics ?? {};

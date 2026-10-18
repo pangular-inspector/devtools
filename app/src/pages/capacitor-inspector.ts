@@ -582,7 +582,7 @@ const FILTER_LABELS: Record<CallFilter, string> = {
       height: var(--control-h);
       padding: 0 12px 0 34px;
       background: var(--bg);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       font-size: 13px;
@@ -602,7 +602,7 @@ const FILTER_LABELS: Record<CallFilter, string> = {
     .small {
       height: var(--control-h);
       padding: 0 12px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -763,7 +763,7 @@ const FILTER_LABELS: Record<CallFilter, string> = {
     .copy {
       height: 26px;
       padding: 0 10px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);

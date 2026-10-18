@@ -93,18 +93,18 @@
   <body>
     <main>
       <h1 class="visually-hidden">Pangular Inspector</h1>
-      <div id="status" class="status" role="status">
-        <p id="status-message">Detecting Angular app…</p>
+      <div id="status" class="status">
+        <p id="status-message" role="status">Detecting Angular app…</p>
         <ul id="status-tried" aria-label="URLs tried" hidden></ul>
         <button id="status-allow" type="button" hidden>Allow access</button>
         <button id="status-retry" type="button" hidden>Try again</button>
         <a
           id="status-docs"
-          href="https://github.com/pangular-inspector/devtools#get-started"
+          href="https://pangular-inspector.dev/getting-started/installation/"
           target="_blank"
           rel="noreferrer"
           hidden
-          >Set up the devtools server</a
+          >Set up the devtools server<span class="visually-hidden"> (opens in a new tab)</span></a
         >
       </div>
       <iframe id="devtools-frame" title="Pangular Inspector" style="display: none"></iframe>

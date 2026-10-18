@@ -409,7 +409,7 @@ describe('ComponentTree value expansion', () => {
     type(filter, 'zzz');
     await settle(fixture);
     expect(el(fixture).textContent).toContain('No inputs, outputs or properties match “zzz”');
-    button(fixture, 'Clear filter').click();
+    button(fixture, 'Clear filters').click();
     await settle(fixture);
     expect(filter.value).toBe('');
     expect(document.activeElement).toBe(filter);

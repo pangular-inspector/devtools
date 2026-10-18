@@ -168,7 +168,7 @@ describe('the Errors tab', () => {
     search.dispatchEvent(new Event('input'));
     await settle(fixture);
     expect(text(fixture)).toContain('No error matches “zzz”.');
-    button(fixture, 'Clear filter').click();
+    button(fixture, 'Clear filters').click();
     await settle(fixture);
     expect(host(fixture).querySelectorAll('ol.errors > li')).toHaveLength(1);
     expect(document.activeElement).toBe(search);

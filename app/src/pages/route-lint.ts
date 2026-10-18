@@ -7,6 +7,7 @@ import {
   type LintResult,
   type RouterPage,
 } from './router-types';
+import { plural } from '../format';
 
 @Component({
   selector: 'app-route-lint',
@@ -22,10 +23,10 @@ import {
       @if (result()?.checked && findings().length) {
         <span class="summary">
           @if (counts().error) {
-            <span class="badge" data-tone="bad">{{ counts().error }} error(s)</span>
+            <span class="badge" data-tone="bad">{{ plural(counts().error, 'error') }}</span>
           }
           @if (counts().warning) {
-            <span class="badge" data-tone="warn">{{ counts().warning }} warning(s)</span>
+            <span class="badge" data-tone="warn">{{ plural(counts().warning, 'warning') }}</span>
           }
           @if (counts().info) {
             <span class="badge">{{ counts().info }} info</span>
@@ -223,6 +224,7 @@ import {
   `,
 })
 export class RouteLint {
+  protected readonly plural = plural;
   page = input.required<RouterPage>();
   rpc = input<DevframeRpcClient | null>(null);
 

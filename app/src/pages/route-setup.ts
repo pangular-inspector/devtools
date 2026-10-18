@@ -1,5 +1,6 @@
 import { Component, input } from '@angular/core';
 import { SHARED_STYLES, type RouterPage } from './router-types';
+import { plural } from '../format';
 
 @Component({
   selector: 'app-route-setup',
@@ -30,7 +31,7 @@ import { SHARED_STYLES, type RouterPage } from './router-types';
         }
         @if (setup.hydrated) {
           <dt>Hydration</dt>
-          <dd>{{ setup.hydrated }} component(s) hydrated from server HTML</dd>
+          <dd>{{ plural(setup.hydrated, 'component') }} hydrated from server HTML</dd>
         }
       </dl>
       <h3>Options</h3>
@@ -126,6 +127,7 @@ import { SHARED_STYLES, type RouterPage } from './router-types';
   `,
 })
 export class RouteSetup {
+  protected readonly plural = plural;
   page = input.required<RouterPage>();
 
   entries(value: Record<string, string>) {

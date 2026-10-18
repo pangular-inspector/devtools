@@ -15,6 +15,7 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
 import { SourceLink } from '../ui/source-link';
+import { plural } from '../format';
 
 interface UsageSite {
   file: string;
@@ -201,7 +202,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
           <path d="M12 11v5M12 8h.01" />
         </svg>
         <span>
-          <strong>Recording on {{ instrumentedPages().length }} page(s).</strong>
+          <strong>Recording on {{ plural(instrumentedPages().length, 'page') }}.</strong>
           Pipe prototypes are patched in the inspected page to count calls and keep the last input
           and output. Stop recording when you are done.
         </span>
@@ -667,7 +668,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       height: var(--control-h);
       padding: 0 12px 0 34px;
       background: var(--bg);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       font-size: 13px;
@@ -703,7 +704,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       gap: 8px;
       height: var(--control-h);
       padding: 0 14px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -1012,7 +1013,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
       gap: 6px;
       height: 24px;
       padding: 0 4px 0 10px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: 99px;
       background: var(--bg);
       font-size: 12px;
@@ -1241,6 +1242,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
   `,
 })
 export class PipesInspector {
+  protected readonly plural = plural;
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);

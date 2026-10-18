@@ -19,6 +19,10 @@ import { SourceLink } from '../ui/source-link';
   selector: 'app-route-inspector',
   imports: [LiveRoute, SourceLink],
   template: `
+    <p class="page-intro">
+      The live route, every navigation, the route config the router uses, the router setup and a
+      route lint, read from the live page. Below them, the routes your source files declare.
+    </p>
     <app-live-route
       [rpc]="rpc()"
       [sources]="routes()"
@@ -31,7 +35,7 @@ import { SourceLink } from '../ui/source-link';
         <span class="muted hint">
           Read from your source files.
           @if (liveHasConfig()) {
-            The Routes tab above shows what the router uses.
+            The Config view above shows what the router uses.
           }
         </span>
         @if (liveHasConfig()) {
@@ -82,7 +86,7 @@ import { SourceLink } from '../ui/source-link';
               <p class="empty-title">No routes match the filter.</p>
               <p class="muted">Search by path, component, guard, title or file name.</p>
               <button type="button" class="small" (click)="filter.set(''); filterInput.focus()">
-                Clear filter
+                Clear filters
               </button>
             </div>
           } @else {
@@ -168,6 +172,11 @@ import { SourceLink } from '../ui/source-link';
   `,
   styles: `
     ${SHARED_STYLES}
+    .page-intro {
+      margin: 0 0 12px;
+      color: var(--text-2);
+      line-height: 1.5;
+    }
     :host {
       display: block;
       min-width: 0;

@@ -52,3 +52,8 @@ export function prettyJson(text: string): string | null {
   }
   return out;
 }
+
+/** `1 route`, `3 routes`: the count and the noun in the matching number. */
+export function plural(count: number, one: string, many = `${one}s`): string {
+  return `${count} ${count === 1 ? one : many}`;
+}

@@ -98,7 +98,7 @@ type AuthClient = Pick<DevframeRpcClient, 'requestTrustWithCode' | 'requestAuthC
       max-width: 16ch;
       height: var(--control-h);
       padding: 0 10px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--bg);
       color: var(--text-strong);
@@ -117,7 +117,7 @@ type AuthClient = Pick<DevframeRpcClient, 'requestTrustWithCode' | 'requestAuthC
       align-items: center;
       height: var(--control-h);
       padding: 0 14px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -202,6 +202,11 @@ export class AuthCode {
 
   private async send() {
     const code = this.model().code.replace(/\s+/g, '');
+    // The server prints 6 digits. A shorter or longer entry can't match, so it doesn't use up a try.
+    if (!/^\d{6}$/.test(code)) {
+      this.fail('Enter the 6-digit code from the terminal.');
+      return;
+    }
     this.busy.set(true);
     this.notice.set('');
     try {

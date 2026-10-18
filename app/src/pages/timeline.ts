@@ -11,6 +11,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { filterAnnouncement } from '../ui/filter-status';
 import type { PanelLink } from '@pangular-inspector/devtools/internal/config';
 import type { DevframeRpcClient } from 'devframe/client';
 import { panelConfig } from '../devtools-config';
@@ -94,7 +95,8 @@ const DRAG_THRESHOLD = 4;
             (valueChange)="pageId.set($event ?? allPages)"
           />
         }
-        <span class="count" role="status">{{ countText() }}</span>
+        <span class="count">{{ countText() }}</span>
+        <p class="sr-only" role="status">{{ countStatus() }}</p>
       </div>
       <div class="controls">
         <div class="layers" role="group" aria-label="Layers">
@@ -347,7 +349,7 @@ const DRAG_THRESHOLD = 4;
       height: var(--control-h);
       padding: 0 12px 0 34px;
       background: var(--bg);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       font-size: 13px;
@@ -385,7 +387,7 @@ const DRAG_THRESHOLD = 4;
       align-items: center;
       height: var(--control-h);
       padding: 0 10px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--control-border);
       border-radius: 99px;
       background: var(--surface);
       color: var(--text-2);
@@ -407,7 +409,7 @@ const DRAG_THRESHOLD = 4;
     .check {
       width: 12px;
       height: 12px;
-      border: 1.5px solid var(--border-strong);
+      border: 1.5px solid var(--control-border);
       border-radius: 3px;
     }
     .layer[aria-pressed='true'] .check {
@@ -423,7 +425,7 @@ const DRAG_THRESHOLD = 4;
     .primary {
       height: var(--control-h);
       padding: 0 12px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -808,6 +810,11 @@ export class Timeline {
     const total = this.events().length;
     return `${this.shown().length} of ${total} ${total === 1 ? 'event' : 'events'}`;
   });
+  /** Speaks the count only after the user changes the search, layers, page or range. */
+  readonly countStatus = filterAnnouncement(
+    () => [this.query(), this.hidden(), this.pageId(), this.range()],
+    () => this.countText(),
+  );
   readonly viewText = computed(() => {
     const view = this.view();
     if (!view) return '';

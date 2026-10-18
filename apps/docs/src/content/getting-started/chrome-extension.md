@@ -85,7 +85,7 @@ If no path answers, the panel says "No devtools server answered" and lists every
 
 If any URL got `401` or `403`, the panel says the server refused the request instead, and shows the start of the response text. The Vite plugin answers `403` to requests that do not come from your machine, for example when you open the app by its LAN IP. The panel then links to [Answers only your machine](./vite.md#answers-only-your-machine).
 
-Both messages have a **Try again** button. Click it after you start or fix the server, and the panel looks for the server again without a page reload.
+Both messages have a **Try again** button. Click it after you start or fix the server, and the panel looks for the server again without a page reload. The panel also looks again by itself every 5 seconds, so it connects once the server starts.
 
 The panel only connects to pages served over `http` or `https`. On other pages it says so, with a **Try again** button.
 
@@ -118,7 +118,7 @@ The Vite plugin and the Express hub ask for a one-time code by default. Inside t
     The dev server prints a 6-digit code in its terminal. If you can't find it, click <strong>Print a new code</strong>.
   </ngmd-step>
   <ngmd-step title="Enter it in the panel">
-    Type the code in the <strong>One-time code</strong> field and click <strong>Connect</strong>.
+    Type the code in the <strong>One-time code</strong> field and click <strong>Connect</strong>. A code that is not 6 digits is refused in the panel, without using up one of the server's tries. Once the server accepts the code, the panel says "Connected" and moves focus to the selected tab.
   </ngmd-step>
 </ngmd-workflow>
 
@@ -207,7 +207,7 @@ The extension has no content scripts, so it runs nothing in the pages you browse
     The page waits on a dialog, usually the overlay's prompt for the one-time code. Enter the code in the page or close the prompt. The panel goes on by itself.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel lists the URLs it tried">
-    None of them served a connection file. The status next to each URL shows what the server answered. Check that the server of the page mounts the devtools and that the server accepts the request, then click <strong>Try again</strong>. See <a href="../security.md">Access and redaction</a>.
+    None of them served a connection file. The status next to each URL shows what the server answered. Check that the server of the page mounts the devtools and that the server accepts the request, then click <strong>Try again</strong> or wait a few seconds. See <a href="../security.md">Access and redaction</a>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel says the server refused the request">
     The server answered <code>401</code> or <code>403</code>. If you built the extension with another ID, the server refuses its origin until you add it to <code>allowedOrigins</code>. On <code>403</code>, the message names the origin to add. See <a href="#server-origin">Server origin</a>. The Vite plugin also refuses requests that do not come from your machine. Open the app on <code>localhost</code>, or see <a href="./vite.md#answers-only-your-machine">Answers only your machine</a>.

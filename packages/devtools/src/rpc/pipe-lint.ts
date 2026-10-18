@@ -242,7 +242,7 @@ function impurePipeInForFindings(template: TemplateSource, purity: PurityMap): P
         pipe: name,
         file: template.file,
         line: template.lineAt(template.baseOffset + block.start + index),
-        message: `Impure pipe ${JSON.stringify(name)} runs on every change-detection pass, inside ${block.loop} — potentially once per row, every check.`,
+        message: `Impure pipe ${JSON.stringify(name)} runs on every change-detection pass, inside ${block.loop}, so potentially once per row, every check.`,
         fix: 'Precompute the value on the item before the loop, use a pure pipe, or memoize the transform yourself.',
       });
     }
@@ -377,7 +377,7 @@ function signalInPurePipeFindings(content: string, relPath: string): PipeLintFin
           pipe: scope.pipeName,
           file: relPath,
           line,
-          message: `transform() reads this.${field}(), a signal — but a pure pipe only recomputes when its own arguments change, not when a signal it reads changes.`,
+          message: `transform() reads this.${field}(), a signal, but a pure pipe only recomputes when its own arguments change, not when a signal it reads changes.`,
           fix: "Pass the signal's value as a transform argument instead, or mark the pipe `pure: false`.",
         });
         continue;

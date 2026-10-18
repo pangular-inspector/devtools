@@ -132,7 +132,10 @@ describe('extension panel bridge', () => {
 
   it('announces detection in a status region without the setup link', () => {
     const panel = open();
-    expect(panel.status.getAttribute('role')).toBe('status');
+    // Only the message is live, so a screen reader doesn't read the tried URLs and buttons.
+    expect(panel.status.getAttribute('role')).toBeNull();
+    expect(document.getElementById('status-message')!.getAttribute('role')).toBe('status');
+    expect(panel.status.querySelectorAll('[role="status"]').length).toBe(1);
     expect(panel.message()).toBe('Detecting Angular app…');
     expect(panel.frame.style.display).toBe('none');
   });
@@ -380,8 +383,12 @@ describe('extension panel bridge', () => {
     );
     expect(panel.retry.hidden).toBe(false);
     expect(panel.docs.hidden).toBe(false);
-    expect(panel.docs.textContent).toBe('Why the devtools server refuses requests');
-    expect(panel.docs.href).toMatch(/getting-started\/vite\.md#answers-only-your-machine$/);
+    expect(panel.docs.textContent).toBe(
+      'Why the devtools server refuses requests (opens in a new tab)',
+    );
+    expect(panel.docs.href).toBe(
+      'https://pangular-inspector.dev/getting-started/vite/#answers-only-your-machine',
+    );
   });
 
   it('leaves out the allowedOrigins hint for the extension with the pinned ID', async () => {
@@ -410,8 +417,29 @@ describe('extension panel bridge', () => {
     panel.retry.click();
     await vi.advanceTimersByTimeAsync(0);
     expect(panel.message()).toBe('No devtools server answered on http://localhost:4200. Tried:');
-    expect(panel.docs.textContent).toBe('Set up the devtools server');
-    expect(panel.docs.href).toBe('https://github.com/pangular-inspector/devtools#get-started');
+    expect(panel.docs.textContent).toBe('Set up the devtools server (opens in a new tab)');
+    expect(panel.docs.href).toBe('https://pangular-inspector.dev/getting-started/installation/');
+  });
+
+  it('looks for the server again by itself until it answers, without repeating the message', async () => {
+    let up = false;
+    const panel = open({
+      pageId: () => 'page-1',
+      fetch: (url) => (up ? found('/__pangular/__devframe/__connection.json')(url) : offline()),
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    const message = document.getElementById('status-message')!;
+    expect(panel.message()).toBe('No devtools server answered on http://localhost:4200. Tried:');
+    const firstText = message.firstChild;
+    const calls = panel.fetch.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(panel.fetch.mock.calls.length).toBeGreaterThan(calls);
+    // The same text node stays, so the live region doesn't speak again.
+    expect(message.firstChild).toBe(firstText);
+
+    up = true;
+    await vi.advanceTimersByTimeAsync(5500);
+    expect(panel.frame.style.display).toBe('block');
   });
 
   it('drops a detection that finishes after a navigation and detects again', async () => {

@@ -260,7 +260,7 @@ export interface ComingSoonInfo {
       max-width: 100%;
       min-height: 44px;
       padding: 8px 16px 8px 8px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius);
       background: var(--surface);
       color: var(--text);

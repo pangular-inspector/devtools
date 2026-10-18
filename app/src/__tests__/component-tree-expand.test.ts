@@ -197,7 +197,7 @@ describe('ComponentTree Clear filter focus', () => {
     const fixture = await setup();
     fixture.componentInstance.setFilter('zzz');
     await settle(fixture);
-    const clear = button(fixture, 'Clear filter');
+    const clear = button(fixture, 'Clear filters');
     clear.focus();
     clear.click();
     await settle(fixture);
@@ -236,7 +236,7 @@ describe('ComponentTree Clear filter focus', () => {
     await settle(fixture);
     fixture.componentInstance.filter.set('zzz');
     await settle(fixture);
-    const clear = button(fixture, 'Clear filter');
+    const clear = button(fixture, 'Clear filters');
     clear.focus();
     clear.click();
     await settle(fixture);

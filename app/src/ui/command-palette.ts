@@ -142,7 +142,7 @@ let nextId = 0;
       width: 100%;
       height: var(--control-h);
       padding: 0 12px 0 36px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--bg);
       color: var(--text-strong);

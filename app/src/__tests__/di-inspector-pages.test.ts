@@ -310,7 +310,7 @@ describe('injector search box focus', () => {
     button.click();
   }
 
-  it('keeps focus on the search box after Clear search in the live tree', async () => {
+  it('keeps focus on the search box after Clear filters in the live tree', async () => {
     const fixture = await render({
       roots: [
         {
@@ -325,7 +325,7 @@ describe('injector search box focus', () => {
     document.body.append(host);
     fixture.componentInstance.query.set('zzz');
     await fixture.whenStable();
-    clickNamed(host, 'Clear search');
+    clickNamed(host, 'Clear filters');
     await fixture.whenStable();
     expect(fixture.componentInstance.query()).toBe('');
     expect(document.activeElement).toBe(
@@ -348,7 +348,7 @@ describe('injector search box focus', () => {
     ]);
     fixture.componentInstance.query.set('zzz');
     await fixture.whenStable();
-    clickNamed(host, 'Clear filter');
+    clickNamed(host, 'Clear filters');
     await fixture.whenStable();
     expect(host.textContent).toContain('CartService');
     expect(document.activeElement).toBe(

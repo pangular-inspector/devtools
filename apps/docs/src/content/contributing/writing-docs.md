@@ -27,7 +27,7 @@ Orient every page around what the reader is trying to do. Ask: _what does the de
 
 ### How pages read
 
-- Use second person and the imperative: "Open the Router tab", not "We can open the Router tab".
+- Use second person and the imperative: "Open the Routes tab", not "We can open the Routes tab".
 - Use present tense: "The tab shows", not "The tab will show".
 - Use active voice: "On Angular 20 and later, the overlay reads the page after change detection", not "The page is read after change detection".
 - One idea per sentence. Keep sentences short and plain.

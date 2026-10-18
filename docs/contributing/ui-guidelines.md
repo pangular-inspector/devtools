@@ -16,7 +16,7 @@ The palette lives in `app/src/styles/_palette.scss` and becomes CSS variables in
 
 Accents available: `amber` (default), `ember`, `gold`. Add one by extending `$accents` in `_palette.scss` with `base`, `hover`, `ink` and `text`, plus a `light` map with the same keys whose `base` passes 4.5:1 on `--surface-3` in the light theme. Light neutrals and status colors are `$neutrals-light` and `$status-light`. The text-on-tint colors are `$status-text` and `$status-text-light`, plus each accent's `text`.
 
-Category hues (`$hues` and `$hues-light`) label a kind of thing rather than a status, such as the Analog route kinds, render modes and server calls. Each has a `line` (border or tint) and a `text`. Router timeline phases are `$phases` and `$phases-light`. `app/src/__tests__/tint-contrast.test.ts` checks both themes: hue text keeps 4.5:1 on every surface and on its own tint, and phase colors keep 3:1 on every surface.
+Category hues (`$hues` and `$hues-light`) label a kind of thing rather than a status, such as the Analog route kinds, render modes and server calls. Each has a `line` (border or tint) and a `text`. Router timeline phases are `$phases` and `$phases-light`. `app/src/__tests__/tint-contrast.test.ts` checks both themes: hue text keeps 4.5:1 on every surface and on its own tint, and phase colors, `--control-border` and `--graph-edge` keep 3:1 on every surface. Signal kinds are `$signal-kinds`, solid fills with `ink` text at 4.5:1.
 
 Always use the variables, never hex values:
 
@@ -24,7 +24,9 @@ Always use the variables, never hex values:
 | ------------------------------------------------- | ----------------------------------------------------------------------- |
 | `--bg`                                            | Page background, input fields                                           |
 | `--surface`, `--surface-2`, `--surface-3`         | Cards and panels, hover, pressed or nested                              |
-| `--border`, `--border-strong`                     | Dividers, control borders                                               |
+| `--border`, `--border-strong`                     | Dividers, card and decorative borders                                   |
+| `--control-border`                                | The outline of an input, button, select or toggle chip (3:1)            |
+| `--graph-edge`                                    | Edges and their legend in the signal graph (3:1)                        |
 | `--text-strong`, `--text`, `--text-2`, `--text-3` | Headings, body, secondary, hints                                        |
 | `--accent`, `--accent-hover`, `--accent-ink`      | Primary actions and selection; `--accent-ink` is text on an accent fill |
 | `--accent-soft`, `--accent-line`                  | Selected backgrounds, focus glow, accent borders                        |
@@ -32,6 +34,7 @@ Always use the variables, never hex values:
 | `--ok-text`, `--warn-text`, `--danger-text`       | Text on a tint of the matching status color (pills, badges, chips)      |
 | `--hue-<name>`, `--hue-<name>-text`               | Category pills and chips (names in `$hues`)                             |
 | `--phase-<name>`                                  | Router timeline phases (`recognize`, `guards`, `resolve`, `activate`)   |
+| `--kind-<name>`, `--kind-ink`                     | Signal kind badges and dots (names in `$signal-kinds`)                  |
 | `--accent-text`                                   | Text on an accent tint; brand views set their own value                 |
 | `--radius`, `--radius-sm`                         | Cards, controls                                                         |
 | `--control-h`                                     | 34px, the height of every input, select and button                      |
@@ -66,6 +69,8 @@ Headings start at `h2` inside a page (the shell owns the `h1`) and never skip a 
 ## Accessibility checklist
 
 - Text contrast at least 4.5:1 (3:1 for large text and UI outlines). Check gradients at their darkest stop.
+- A boundary that is the only way to see a control (an input, a secondary button, a toggle chip) uses `--control-border`, not `--border` or `--border-strong`.
+- A count that changes with live data is not a live region. Announce it only when the user changes a filter, through `filterAnnouncement()` in `app/src/ui/filter-status.ts`.
 - Every control has a label (`<label>`, `aria-label` or `aria-labelledby`).
 - Visible focus on everything; use `m.focus-ring(-2px)` inside scroll containers so the ring isn't clipped.
 - Landmarks have unique names; don't nest interactive elements.

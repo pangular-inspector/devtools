@@ -221,7 +221,7 @@ interface Bar {
       height: var(--control-h);
       padding: 0 8px;
       background: var(--bg);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       font: inherit;
@@ -234,7 +234,7 @@ interface Bar {
       height: var(--control-h);
       padding: 0 12px;
       background: var(--surface-2);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       cursor: pointer;

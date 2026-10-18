@@ -244,6 +244,14 @@ describe('App before the server trusts it', () => {
     const input = form.querySelector<HTMLInputElement>('input')!;
     expect(document.activeElement).toBe(input);
 
+    input.value = '123';
+    input.dispatchEvent(new Event('input'));
+    form.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(fixture);
+    expect(form.querySelector('[role="alert"]')?.textContent).toContain(
+      'Enter the 6-digit code from the terminal.',
+    );
+
     input.value = '000000';
     input.dispatchEvent(new Event('input'));
     form.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
@@ -258,6 +266,11 @@ describe('App before the server trusts it', () => {
     expect(host(fixture).querySelector('app-auth-code')).toBeNull();
     expect(status(fixture)).toBe('Live');
     expect(host(fixture).querySelector('app-dashboard')).not.toBeNull();
+    expect(document.activeElement).toBe(host(fixture).querySelector('nav button.active'));
+    const statuses = [...host(fixture).querySelectorAll('main [role="status"]')].map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(statuses).toContain('Connected.');
     fixture.destroy();
   });
 });

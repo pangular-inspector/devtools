@@ -9,6 +9,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { filterAnnouncement } from '../ui/filter-status';
 import type { DevframeRpcClient } from 'devframe/client';
 import { time } from '../format';
 import { hostPageId } from '../page-id';
@@ -116,7 +117,8 @@ const LEVEL_TONE: Record<ConsoleLevel, string> = {
             (valueChange)="pageId.set($event ?? allPages)"
           />
         }
-        <span class="count" role="status">{{ countText() }}</span>
+        <span class="count">{{ countText() }}</span>
+        <p class="sr-only" role="status">{{ countStatus() }}</p>
       </div>
 
       @if (view() === 'errors') {
@@ -143,7 +145,7 @@ const LEVEL_TONE: Record<ConsoleLevel, string> = {
             <div class="empty">
               <p>No error matches “{{ filter() }}”.</p>
               <button type="button" class="small" (click)="filter.set(''); search.focus()">
-                Clear filter
+                Clear filters
               </button>
             </div>
           } @else {
@@ -309,7 +311,7 @@ const LEVEL_TONE: Record<ConsoleLevel, string> = {
       align-items: center;
       height: var(--control-h);
       padding: 0 12px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface);
       color: var(--text);
@@ -355,7 +357,7 @@ const LEVEL_TONE: Record<ConsoleLevel, string> = {
       height: var(--control-h);
       padding: 0 12px 0 34px;
       background: var(--bg);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       font-size: 13px;
@@ -524,7 +526,7 @@ const LEVEL_TONE: Record<ConsoleLevel, string> = {
     .small {
       height: var(--control-h);
       padding: 0 12px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -621,10 +623,17 @@ export class ErrorsInspector {
         (!text || entry.text.toLowerCase().includes(text)),
     );
   });
-  readonly countText = computed(() =>
-    this.view() === 'errors'
-      ? `${this.shownErrors().length} of ${this.errors().length} errors`
-      : `${this.shownEntries().length} of ${this.entries().length} calls`,
+  readonly countText = computed(() => {
+    const [shown, total, noun] =
+      this.view() === 'errors'
+        ? [this.shownErrors().length, this.errors().length, 'error']
+        : [this.shownEntries().length, this.entries().length, 'call'];
+    return `${shown} of ${total} ${total === 1 ? noun : `${noun}s`}`;
+  });
+  /** Speaks the count only after the user changes the view, search, level or page. */
+  readonly countStatus = filterAnnouncement(
+    () => [this.view(), this.filter(), this.level(), this.pageId()],
+    () => this.countText(),
   );
 
   constructor() {

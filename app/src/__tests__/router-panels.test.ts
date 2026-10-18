@@ -289,7 +289,7 @@ describe('RouteTree filter count', () => {
   it('shows "N of M routes" while a search filters the tree and says it once', async () => {
     const fixture = mount(RouteTree, page({ config: routes }), offline);
     await settle(fixture);
-    expect(summary(fixture)).toContain('3 route(s).');
+    expect(summary(fixture)).toContain('3 routes.');
     expect(el(fixture).querySelector('.summary .count')).toBeNull();
 
     type(fixture, 'users');
@@ -336,11 +336,11 @@ describe('RouteTree filter count', () => {
     await settle(fixture);
     type(fixture, 'zzz');
     await settle(fixture);
-    button(fixture, 'Clear filter').click();
+    button(fixture, 'Clear filters').click();
     await settle(fixture);
     expect(filterInput(fixture).value).toBe('');
     expect(document.activeElement).toBe(filterInput(fixture));
-    expect(summary(fixture)).toContain('3 route(s).');
+    expect(summary(fixture)).toContain('3 routes.');
     expect(filterStatus(fixture)).toBe('');
   });
 });

@@ -367,7 +367,7 @@ const STEP_TONE: Record<InjectionStep['status'], string> = {
       justify-self: start;
       height: var(--control-h);
       padding: 0 12px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);

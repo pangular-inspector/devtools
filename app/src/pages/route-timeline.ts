@@ -3,7 +3,7 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
 import { LimitNote } from '../ui/limit-note';
 import { rpcCall } from '../rpc';
-import { time } from '../format';
+import { plural, time } from '../format';
 import {
   SHARED_STYLES,
   isReplayableUrl,
@@ -111,7 +111,7 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
     @if (items().length) {
       <div class="meta-row">
         <span class="muted count"
-          >{{ items().length }} of {{ page().navigations.length }} navigation(s)</span
+          >{{ items().length }} of {{ plural(page().navigations.length, 'navigation') }}</span
         >
         <div class="legend" aria-hidden="true">
           @for (phase of phases; track phase) {
@@ -249,7 +249,9 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
               }
               @if (nav.requests) {
                 <dt>HTTP</dt>
-                <dd>{{ nav.requests.count }} request(s): {{ nav.requests.urls.join(', ') }}</dd>
+                <dd>
+                  {{ plural(nav.requests.count, 'request') }}: {{ nav.requests.urls.join(', ') }}
+                </dd>
               }
               @if (nav.scroll) {
                 <dt>Scroll</dt>
@@ -277,7 +279,7 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
               }
               @if (nav.earlier) {
                 <dt>Earlier</dt>
-                <dd>{{ nav.earlier }} navigation(s) before Pangular Inspector connected</dd>
+                <dd>{{ plural(nav.earlier, 'navigation') }} before Pangular Inspector connected</dd>
               }
             </dl>
             <div class="actions">
@@ -313,7 +315,8 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
         <div class="empty">
           <p class="empty-title">No navigations match the current filters.</p>
           <p class="muted">
-            {{ page().navigations.length }} navigation(s) are hidden. Clear the filters to see them.
+            {{ plural(page().navigations.length, 'navigation is', 'navigations are') }} hidden.
+            Clear the filters to see them.
           </p>
           <button type="button" class="small" (click)="clearFilters(); filterInput.focus()">
             Clear filters
@@ -578,6 +581,7 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
   `,
 })
 export class RouteTimeline {
+  protected readonly plural = plural;
   page = input.required<RouterPage>();
   rpc = input<DevframeRpcClient | null>(null);
   readonly maxNavigations = computed(() => panelConfig(this.rpc()).limits.navigations);

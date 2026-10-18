@@ -153,27 +153,27 @@ interface SourceSignal {
   component?: string;
 }
 
-const KIND_COLORS: Record<string, string> = {
-  signal: '#facc15',
-  computed: '#60a5fa',
-  linkedSignal: '#34d399',
-  effect: '#fb923c',
-  template: '#94a3b8',
-  afterRenderEffectPhase: '#f472b6',
-  childSignalProp: '#fef08a',
-  'input (signal)': '#f59e0b',
-  'input.required (signal)': '#f59e0b',
-  'output (signal)': '#ec4899',
-  'model (signal)': '#14b8a6',
-  'model.required (signal)': '#14b8a6',
-  'viewChild (signal)': '#a3e635',
-  'viewChild.required (signal)': '#a3e635',
-  'viewChildren (signal)': '#a3e635',
-  'contentChild (signal)': '#fda4af',
-  'contentChild.required (signal)': '#fda4af',
-  'contentChildren (signal)': '#fda4af',
-  resource: '#06b6d4',
-  unknown: '#a1a1aa',
+/** Each kind's `--kind-*` token from `_palette.scss` (`$signal-kinds`). */
+const KIND_TOKENS: Record<string, string> = {
+  signal: 'signal',
+  computed: 'computed',
+  linkedSignal: 'linked',
+  effect: 'effect',
+  template: 'template',
+  afterRenderEffectPhase: 'after-render',
+  childSignalProp: 'child-prop',
+  'input (signal)': 'input',
+  'input.required (signal)': 'input',
+  'output (signal)': 'output',
+  'model (signal)': 'model',
+  'model.required (signal)': 'model',
+  'viewChild (signal)': 'view-query',
+  'viewChild.required (signal)': 'view-query',
+  'viewChildren (signal)': 'view-query',
+  'contentChild (signal)': 'content-query',
+  'contentChild.required (signal)': 'content-query',
+  'contentChildren (signal)': 'content-query',
+  resource: 'resource',
 };
 
 @Component({
@@ -340,7 +340,7 @@ const KIND_COLORS: Record<string, string> = {
     }
 
     @if (!graph() && sourceSignals().length > 0) {
-      <p class="source-label">Signals from source scan (static analysis):</p>
+      <p class="source-label">Signals from the source scan:</p>
       <div class="nodes">
         @for (sig of filteredSourceSignals(); track sig.name + sig.file + sig.line) {
           <div class="node-card">
@@ -840,7 +840,7 @@ const KIND_COLORS: Record<string, string> = {
                   : 'Select a component that reads signals, or interact with the page to create some.'
               }}
             </p>
-            @if (hasAnySignals()) {
+            @if (hasAnySignals() || filter() || kind()) {
               <button type="button" class="reset" (click)="clearFilters()">Clear filters</button>
             }
           </li>
@@ -879,7 +879,7 @@ const KIND_COLORS: Record<string, string> = {
       height: 34px;
       padding: 0 12px;
       background: var(--bg);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       font: inherit;
@@ -893,7 +893,7 @@ const KIND_COLORS: Record<string, string> = {
       color: var(--text-3);
     }
     input:hover {
-      border-color: color-mix(in srgb, var(--text-3) 60%, var(--border-strong));
+      border-color: color-mix(in srgb, var(--text-3) 60%, var(--control-border));
     }
     input:focus-visible {
       @include m.field-focus;
@@ -940,7 +940,7 @@ const KIND_COLORS: Record<string, string> = {
       height: 34px;
       margin-top: 4px;
       padding: 0 14px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -991,7 +991,7 @@ const KIND_COLORS: Record<string, string> = {
       max-width: 100%;
       height: 28px;
       padding: 0 10px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--control-border);
       border-radius: 99px;
       background: var(--surface-2);
       color: var(--text-2);
@@ -1005,7 +1005,7 @@ const KIND_COLORS: Record<string, string> = {
         color 0.15s var(--ease);
     }
     .kind-chip:hover {
-      border-color: var(--border-strong);
+      border-color: var(--text-3);
       background: var(--surface-3);
       color: var(--text);
     }
@@ -1065,7 +1065,7 @@ const KIND_COLORS: Record<string, string> = {
       line-height: 18px;
       padding: 0 8px;
       border-radius: 99px;
-      color: #0b0b0e;
+      color: var(--kind-ink);
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.06em;
@@ -1211,6 +1211,11 @@ const KIND_COLORS: Record<string, string> = {
       display: block;
       min-width: 0;
       padding: 0;
+    }
+    /* The empty card keeps its centred column inside the list. */
+    .nodes > li.empty {
+      display: flex;
+      padding: 24px 16px;
     }
     button.node-card {
       cursor: pointer;
@@ -1453,13 +1458,9 @@ const KIND_COLORS: Record<string, string> = {
       color: var(--text);
     }
     .source-write {
-      color: #93c5fd;
-      background: color-mix(in srgb, #60a5fa 12%, transparent);
-      border-color: color-mix(in srgb, #60a5fa 30%, transparent);
-
-      @include m.light {
-        @include m.soft(#1d4ed8);
-      }
+      color: var(--hue-info-text);
+      background: color-mix(in srgb, var(--hue-info) 12%, transparent);
+      border-color: color-mix(in srgb, var(--hue-info) 30%, transparent);
     }
     .missed {
       color: var(--warn);
@@ -1468,7 +1469,7 @@ const KIND_COLORS: Record<string, string> = {
       margin-left: auto;
       height: 22px;
       padding: 0 8px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -1533,7 +1534,7 @@ const KIND_COLORS: Record<string, string> = {
       gap: 6px;
       height: var(--control-h);
       padding: 0 12px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -1955,8 +1956,6 @@ export class SignalInspector {
     return 'Every change here was sampled. Writes are matched by name, kind, version and value, so another live signal with the same name and value can hide them.';
   });
 
-  readonly kindLegend = Object.entries(KIND_COLORS).map(([kind, color]) => ({ kind, color }));
-
   filteredResources = computed(() => {
     const q = this.filter().toLowerCase();
     const kind = this.kind();
@@ -2312,7 +2311,7 @@ export class SignalInspector {
   }
 
   kindColor(kind: string) {
-    return KIND_COLORS[kind] ?? KIND_COLORS['unknown'];
+    return `var(--kind-${KIND_TOKENS[kind] ?? 'unknown'})`;
   }
 
   /** Producers and consumers of every node, built once per graph. */

@@ -10,7 +10,7 @@ import {
   untracked,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
-import { time } from '../format';
+import { plural, time } from '../format';
 import { hostPageId } from '../page-id';
 import { rpcCall, rpcTry as call } from '../rpc';
 import { actionAllowed, actionBlockedMessage } from '../devtools-config';
@@ -1029,7 +1029,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                     <dt>Build output</dt>
                     <dd class="tnum">
                       @if (p.built.length) {
-                        {{ p.built.length }} page(s) in dist/analog/public
+                        {{ plural(p.built.length, 'page') }} in dist/analog/public
                         @if (p.notBuilt.length) {
                           · missing
                           @for (r of p.notBuilt; track r) {
@@ -1102,8 +1102,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
           @case ('lint') {
             @if (findings().length) {
               <p class="muted">
-                {{ findings().length }} issue(s) in {{ lintCards().length }} group(s). Each card
-                says what is wrong, where, and how to fix it.
+                {{ plural(findings().length, 'issue') }} in
+                {{ plural(lintCards().length, 'group') }}. Each card says what is wrong, where, and
+                how to fix it.
               </p>
               <ul class="findings">
                 @for (card of lintCards(); track card.rule) {
@@ -1432,7 +1433,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       box-sizing: border-box;
       height: 34px;
       padding: 0 12px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background-color: var(--bg);
       color: var(--text);
@@ -1475,7 +1476,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
       box-sizing: border-box;
       height: 34px;
       padding: 0 14px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -1490,7 +1491,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
     }
     .btn:hover {
       background: var(--surface-3);
-      border-color: var(--border-strong);
+      border-color: var(--control-border);
     }
     .btn:active {
       transform: translateY(1px);
@@ -2152,6 +2153,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
   `,
 })
 export class AnalogInspector {
+  protected readonly plural = plural;
   rpc = input<DevframeRpcClient | null>(null);
   readonly canCall = computed(() => actionAllowed(this.rpc(), 'analog'));
   protected readonly callsOff = actionBlockedMessage('analog');

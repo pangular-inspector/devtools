@@ -23,7 +23,7 @@ The route the page is on:
 - The navigation in flight, with an **Abort** button.
 - The document title, query params and fragment.
 - **Active routes**: each active route with its component, params, data, and guards and resolvers. Tags mark lazy routes, inherited params, and whether a data value is static, resolved or inherited. The title row says when the title is inherited.
-- **Outlets**: the outlet tree, with the inputs the router binds to each component and the `routerOutletData` each outlet passes (what the routed component reads with `inject(ROUTER_OUTLET_DATA)`). The data shows as a redacted preview of at most 300 characters. Each activated outlet has a **Show in Components** button that opens the [Components tab](./components.md) on the page the Router tab shows, with the routed component selected and scrolled into view. If the component is no longer on that page, the Components tab says so. The button is hidden when the Components inspector is off or the page reports no element for the routed component.
+- **Outlets**: the outlet tree, with the inputs the router binds to each component and the `routerOutletData` each outlet passes (what the routed component reads with `inject(ROUTER_OUTLET_DATA)`). The data shows as a redacted preview of at most 300 characters. Each activated outlet has a **Show in Components** button that opens the [Components tab](./components.md) on the page the Routes tab shows, with the routed component selected and scrolled into view. If the component is no longer on that page, the Components tab says so. The button is hidden when the Components inspector is off or the page reports no element for the routed component.
 
 ### Navigations
 
@@ -56,11 +56,11 @@ When the view finds a loop, a **Loop detected** section appears above the list. 
 
 Each navigation in a loop gets a **loop** badge and a red edge. Its details gain a **Loop** row with the cycle and the hop this navigation caused.
 
-### Routes
+### Config
 
 The live route config. The tab merges lazy children in once they load, and marks the active branch.
 
-- Filter the routes by path, component or declaring file. While the filter is set, the summary shows the count, for example "2 of 14 routes", and a screen reader announces it as you type. If nothing matches, click **Clear filter**.
+- Filter the routes by path, component or declaring file. While the filter is set, the summary shows the count, for example "2 of 14 routes", and a screen reader announces it as you type. If nothing matches, click **Clear filters**.
 - **Test a URL** and click **Predict** to see which route matches it, or the nearest ones.
 - **Probe in app** runs the real matcher without navigating.
 - Fill in the params of a route and click **Go** to navigate to it. With a param left empty, **Go** marks the empty field and names the params to fill in.
@@ -229,7 +229,7 @@ The devtools replace query, matrix and fragment values with secret-looking keys 
 
 ### History and config caps
 
-The page keeps the last 50 navigations and 50 preloads. Set the navigation count with [`limits.navigations`](../getting-started/configuration.md#limits). Once older navigations are dropped, the **Navigations** view and `explain-navigation` say how many. The live config lists at most 200 routes per level (a route's children and its loaded lazy routes count as one level) and 1000 routes in total. The **Routes** view and `pangular:list-routes` say how many routes were left out. The page reports at most 100 router links. After each DOM change, it checks at most 2000 elements that could hold a link. `lint-routes` and `inspect-route` say how many links past the first 100 were not checked. If the page has more elements than the check limit, the count is a minimum, and both tools also say how many elements were left out.
+The page keeps the last 50 navigations and 50 preloads. Set the navigation count with [`limits.navigations`](../getting-started/configuration.md#limits). Once older navigations are dropped, the **Navigations** view and `explain-navigation` say how many. The live config lists at most 200 routes per level (a route's children and its loaded lazy routes count as one level) and 1000 routes in total. The **Config** view and `pangular:list-routes` say how many routes were left out. The page reports at most 100 router links. After each DOM change, it checks at most 2000 elements that could hold a link. `lint-routes` and `inspect-route` say how many links past the first 100 were not checked. If the page has more elements than the check limit, the count is a minimum, and both tools also say how many elements were left out.
 
 ## FAQ
 

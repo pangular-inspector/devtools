@@ -324,7 +324,7 @@ function storedDirectiveHosts(): boolean {
               @if (!showDirectiveHosts() && page()!.directiveHostCount) {
                 <p class="state-hint">Directive hosts are hidden, so they are not searched.</p>
               }
-              <button type="button" (click)="clearFilter()">Clear filter</button>
+              <button type="button" (click)="clearFilter()">Clear filters</button>
             </div>
           }
           @if (rowWindow.enabled()) {
@@ -543,7 +543,7 @@ function storedDirectiveHosts(): boolean {
                     <p class="state-hint">
                       The filter searches names, and the nested keys of values you opened.
                     </p>
-                    <button type="button" (click)="clearPropFilter()">Clear filter</button>
+                    <button type="button" (click)="clearPropFilter()">Clear filters</button>
                   </div>
                 }
 
@@ -908,7 +908,7 @@ function storedDirectiveHosts(): boolean {
       } @else if (!filteredSource().length) {
         <div class="state">
           <p class="state-title">No components match “{{ filter().trim() }}”</p>
-          <button type="button" (click)="clearFilter()">Clear filter</button>
+          <button type="button" (click)="clearFilter()">Clear filters</button>
         </div>
       } @else {
         <ul class="source-list" role="list">
@@ -1041,7 +1041,7 @@ function storedDirectiveHosts(): boolean {
       height: 34px;
       padding: 0 12px 0 34px;
       background: var(--bg);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       font: inherit;
@@ -1068,7 +1068,7 @@ function storedDirectiveHosts(): boolean {
       height: 34px;
       padding: 0 14px;
       background: var(--surface-2);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       cursor: pointer;

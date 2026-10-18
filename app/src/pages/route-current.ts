@@ -84,7 +84,7 @@ interface OutletRow {
 
       <h3>Active routes</h3>
       <div class="table-scroll" role="region" aria-label="Active routes" tabindex="0">
-        <table>
+        <table class="active-routes">
           <thead>
             <tr>
               <th scope="col">Route</th>
@@ -297,6 +297,15 @@ interface OutletRow {
     }
     .component {
       color: var(--text-strong);
+      white-space: nowrap;
+    }
+    /* On a narrow panel the table scrolls sideways inside its region instead of
+       squeezing every column into tall rows and breaking names mid-word. */
+    .active-routes {
+      min-width: 760px;
+    }
+    .active-routes .data {
+      min-width: 220px;
     }
     .entry + .entry {
       margin-top: 2px;

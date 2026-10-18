@@ -43,7 +43,7 @@ Destination photos are from Unsplash, credited in `public/destinations/CREDITS.m
 
 ### Routes lab
 
-`/examples/routes` has one link per router case, so the Router tab has something to show:
+`/examples/routes` has one link per router case, so the Routes tab has something to show:
 
 | Link                     | What it does                                                                                                                                |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |

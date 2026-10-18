@@ -211,7 +211,7 @@ Each step says **provides it**, **not provided**, **hidden** (only in `viewProvi
 
 Arrow keys, Home and End move the selection through the tree. The right arrow expands a row or moves to its first child. The left arrow collapses a row or moves to its parent. The first row is selected when nothing else is.
 
-Press Escape in the search box to clear it. When the search matches nothing, **Clear search** clears it and moves focus back to the search box. In the source scan view, **Clear filter** does the same.
+Press Escape in the search box to clear it. When the search matches nothing, **Clear filters** clears it and moves focus back to the search box. The source scan view works the same way.
 
 If the selected injector leaves the page because its component or directive was destroyed, the details say so and a screen reader announces it. The tab doesn't pick another injector for you. Click **Show** with the first injector's name, or select a row.
 

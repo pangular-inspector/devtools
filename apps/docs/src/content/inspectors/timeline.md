@@ -58,7 +58,7 @@ Without a range, the chart grows with each event that arrives.
 
 ### Keyboard
 
-The **Events** list is one <kbd>Tab</kbd> stop. <kbd>↑</kbd>, <kbd>↓</kbd>, <kbd>Home</kbd> and <kbd>End</kbd> move through it, and <kbd>Enter</kbd> selects an event. Every chart action has a button, and screen readers get a summary of the chart with the count of each layer. The list is the text version of the chart.
+The **Events** list is one <kbd>Tab</kbd> stop. <kbd>↑</kbd>, <kbd>↓</kbd>, <kbd>Home</kbd> and <kbd>End</kbd> move through it, and <kbd>Enter</kbd> selects an event. Every chart action has a button, and screen readers get a summary of the chart with the count of each layer. The list is the text version of the chart. The "12 of 40 events" count is announced after you change the search, a layer, the page or the range, not each time an event arrives.
 
 ## Where the data comes from
 

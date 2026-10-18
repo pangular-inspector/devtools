@@ -332,6 +332,18 @@ describe('SignalInspector', () => {
     expect(host.textContent).toContain('user');
   });
 
+  it('offers Clear filters when a filter is set on an empty graph', async () => {
+    const fixture = await render({ ...graph, nodes: [], edges: [], resources: [] });
+    const host = fixture.nativeElement as HTMLElement;
+    fixture.componentInstance.filter.set('zzz');
+    await fixture.whenStable();
+    expect(host.textContent).toContain('No signals in this graph.');
+    const clear = Array.from(host.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Clear filters',
+    );
+    expect(clear).toBeDefined();
+  });
+
   describe('filter box focus and Escape', () => {
     afterEach(() => {
       document.body.innerHTML = '';

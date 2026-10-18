@@ -301,7 +301,7 @@ export const SHARED_STYLES = `
     gap: 6px;
     height: 34px;
     padding: 0 12px;
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
     background: var(--surface-2);
     color: var(--text);
@@ -317,7 +317,7 @@ export const SHARED_STYLES = `
   }
   button.small:hover:not(:disabled) {
     background: var(--surface-3);
-    border-color: color-mix(in srgb, var(--text-3) 50%, var(--border-strong));
+    border-color: color-mix(in srgb, var(--text-3) 50%, var(--control-border));
   }
   button.small:active:not(:disabled) {
     transform: translateY(1px);
@@ -346,7 +346,7 @@ export const SHARED_STYLES = `
   select {
     height: 34px;
     padding: 0 12px;
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);
     background-color: var(--bg);
     color: var(--text);
@@ -364,7 +364,7 @@ export const SHARED_STYLES = `
   }
   input.field:hover:not(:focus),
   select:hover:not(:focus) {
-    border-color: color-mix(in srgb, var(--text-3) 50%, var(--border-strong));
+    border-color: color-mix(in srgb, var(--text-3) 50%, var(--control-border));
   }
   input.field:focus-visible,
   select:focus-visible {

@@ -109,7 +109,7 @@ let nextId = 0;
       min-width: 0;
       height: var(--control-h, 34px);
       padding: 0 10px 0 12px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--bg);
       color: var(--text);
@@ -123,7 +123,7 @@ let nextId = 0;
         background-color 150ms var(--ease);
     }
     .trigger:hover:not(:disabled) {
-      border-color: color-mix(in srgb, var(--border-strong) 55%, var(--text-3));
+      border-color: color-mix(in srgb, var(--control-border) 55%, var(--text-3));
     }
     .trigger:focus-visible,
     :host(.open) .trigger {

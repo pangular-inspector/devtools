@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { prettyJson, time } from '../format';
+import { plural, prettyJson, time } from '../format';
 
 describe('time', () => {
   it('formats a timestamp as the local time of day', () => {
@@ -26,5 +26,13 @@ describe('prettyJson', () => {
     expect(prettyJson('{"a":1}…')).toBeNull();
     expect(prettyJson('42')).toBeNull();
     expect(prettyJson('"text"')).toBeNull();
+  });
+});
+
+describe('plural', () => {
+  it('uses the singular for one and the plural otherwise', () => {
+    expect(plural(1, 'route')).toBe('1 route');
+    expect(plural(0, 'route')).toBe('0 routes');
+    expect(plural(2, 'navigation is', 'navigations are')).toBe('2 navigations are');
   });
 });

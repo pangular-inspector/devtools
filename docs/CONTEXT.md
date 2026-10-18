@@ -73,7 +73,7 @@ The floating button the overlay adds to the page, and the panel it opens in a fr
 _Avoid_: launcher, widget, modal
 
 **Tab**:
-One view in the panel, such as Components or Router. Most tabs belong to one inspector; the Dashboard summarises all of them.
+One view in the panel, such as Components or Routes. Most tabs belong to one inspector; the Dashboard summarises all of them.
 _Avoid_: page (a page is a browser tab), screen
 
 **RPC function**:

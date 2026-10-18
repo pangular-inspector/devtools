@@ -251,7 +251,7 @@ const THEMES: { value: ThemePreference; label: string; hint: string }[] = [
       gap: 2px 8px;
       align-items: center;
       padding: 10px 12px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--bg);
       cursor: pointer;
@@ -320,7 +320,7 @@ const THEMES: { value: ThemePreference; label: string; hint: string }[] = [
       align-items: center;
       height: var(--control-h);
       padding: 0 12px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -378,7 +378,7 @@ const THEMES: { value: ThemePreference; label: string; hint: string }[] = [
       width: 28px;
       height: 28px;
       padding: 0;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);

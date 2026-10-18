@@ -154,7 +154,8 @@ describe('QueryInspector', () => {
     } as unknown as DevframeRpcClient);
     await settle(fixture);
     const text = root(fixture).textContent!.replace(/\s+/g, ' ');
-    expect(text).toContain('The connected page has no QueryClient.');
+    expect(text).toContain('The connected page has no QueryClient yet.');
+    expect(text).not.toContain('No page reports a QueryClient');
     expect(text).toContain('provideTanStackQuery(new QueryClient())');
     expect(text).not.toContain('Open the app with the overlay loaded');
   });

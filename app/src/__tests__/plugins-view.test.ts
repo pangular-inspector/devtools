@@ -198,7 +198,7 @@ describe('the Plugins tab', () => {
     search.dispatchEvent(new Event('input'));
     await settle(fixture);
     expect(text(fixture)).toContain('No row or item matches “zzz”.');
-    button(fixture, 'Clear filter').click();
+    button(fixture, 'Clear filters').click();
     await settle(fixture);
     expect(host(fixture).querySelectorAll('tbody tr')).toHaveLength(2);
   });

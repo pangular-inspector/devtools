@@ -100,6 +100,14 @@ describe('NetworkInspector SSR requests', () => {
     );
     expect(host.querySelector('tr.selected .tag.server')!.textContent).toBe('this page');
 
+    // The requests are one Tab stop, named by method, path, status and render mode.
+    const rows = [...host.querySelectorAll<HTMLButtonElement>('button.ssr-row')];
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.filter((row) => row.tabIndex === 0)).toHaveLength(1);
+    expect(rows[0].textContent!.replace(/\s+/g, ' ').trim()).toMatch(
+      /^GET \/examples\/ssr , 200, \S/,
+    );
+
     inspector.selectedRequestId.set('r2');
     inspector.pages.update((pages) => pages.map((p) => ({ ...p, reportedAt: 2000 })));
     await fixture.whenStable();

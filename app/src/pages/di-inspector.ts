@@ -274,7 +274,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       } @else if (query().trim() && !rows().length) {
         <div class="where muted">
           Nothing here matches “{{ query().trim() }}”.
-          <button type="button" class="link" (click)="clearQuery()">Clear search</button>
+          <button type="button" class="link" (click)="clearQuery()">Clear filters</button>
         </div>
       }
 
@@ -629,7 +629,7 @@ function isTree(value: unknown): value is InjectorNode[] {
           <path d="M12 11v5M12 8h.01" />
         </svg>
         <span>
-          <strong>DI from source scan (static analysis).</strong>
+          <strong>DI from the source scan.</strong>
           Connect the overlay to a development build to see the live injector tree.
         </span>
       </p>
@@ -638,7 +638,7 @@ function isTree(value: unknown): value is InjectorNode[] {
         <div class="state">
           <p class="state-title">No providers match “{{ query() }}”</p>
           <p class="state-hint">Try part of a token name or a file path.</p>
-          <button type="button" (click)="clearQuery()">Clear filter</button>
+          <button type="button" (click)="clearQuery()">Clear filters</button>
         </div>
       } @else {
         <div class="source-providers">
@@ -728,9 +728,10 @@ function isTree(value: unknown): value is InjectorNode[] {
     .segmented {
       display: inline-flex;
       flex: none;
+      height: var(--control-h);
       padding: 3px;
       gap: 2px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--bg);
     }
@@ -738,7 +739,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      height: 26px;
+      height: 100%;
       padding: 0 10px;
       border: 0;
       border-radius: 6px;
@@ -806,7 +807,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       height: 34px;
       padding: 0 12px 0 34px;
       background: var(--bg);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       color: var(--text);
       font-size: 13px;
@@ -880,7 +881,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       max-width: 100%;
       height: 26px;
       padding: 0 10px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: 99px;
       background: var(--surface);
       color: var(--text);
@@ -1226,7 +1227,7 @@ function isTree(value: unknown): value is InjectorNode[] {
       align-items: center;
       height: var(--control-h);
       padding: 0 14px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
@@ -1353,7 +1354,7 @@ function isTree(value: unknown): value is InjectorNode[] {
     .provider-group button {
       height: 34px;
       padding: 0 14px;
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--control-border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--text);
