@@ -6,13 +6,16 @@
 
 import { builtinModules } from 'node:module';
 
+// An entry that would otherwise export internals points at a file in `src/entries`, which
+// re-exports only the documented API. The internals stay importable inside the package.
+
 /**
  * Entries a page, a NativeScript app or an Angular Native app imports, and the
  * ones that only hold types and plain code (`config`, `cd-data`, `plugin`).
  * They are built for the browser and must reach no Node builtin.
  */
 export const BROWSER_ENTRIES = {
-  config: 'src/config.ts',
+  config: 'src/entries/config.ts',
   'cd-data': 'src/cd-data.ts',
   popup: 'src/popup.ts',
   // `overlay` starts on import (`overlay-auto.ts`), `overlay-manual` waits
@@ -26,19 +29,19 @@ export const BROWSER_ENTRIES = {
   'overlay-nativescript': 'src/overlay-nativescript.ts',
   'overlay-angular-native': 'src/overlay-angular-native.ts',
   'signals-stub': 'src/signals-stub.ts',
-  http: 'src/http.ts',
+  http: 'src/entries/http.ts',
 } as const;
 
 /** Entries that only run in Node: the servers, the Vite plugin and the CLI. */
 export const NODE_ENTRIES = {
-  devframe: 'src/devframe.ts',
-  vite: 'src/vite.ts',
+  devframe: 'src/entries/devframe.ts',
+  vite: 'src/entries/vite.ts',
   // The published `hub` entry is a loader that imports no package, so an
   // app's server bundle never takes in the hub's server code (`hub-entry.ts`).
-  hub: 'src/hub-entry.ts',
+  hub: 'src/entries/hub.ts',
   'hub-server': 'src/hub.ts',
   ssr: 'src/ssr.ts',
-  cli: 'src/cli.ts',
+  cli: 'src/entries/cli.ts',
 } as const;
 
 /** Whether `id` names a Node builtin, such as `node:module`, `fs` or `fs/promises`. */

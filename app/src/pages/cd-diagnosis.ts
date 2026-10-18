@@ -1,6 +1,6 @@
 import { Component, computed, input } from '@angular/core';
 import { CD_CAUSE_KINDS, CD_CAUSE_LABEL, cdHints } from '@pangular-inspector/devtools/cd-data';
-import type { CdReport } from '@pangular-inspector/devtools/config';
+import type { CdReport } from '@pangular-inspector/devtools/internal/config';
 
 const SHOWN = 10;
 

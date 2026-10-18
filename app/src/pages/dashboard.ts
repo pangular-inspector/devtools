@@ -12,7 +12,7 @@ import type { DevframeRpcClient } from 'devframe/client';
 import {
   summarizePangularConfig,
   type ResolvedPangularConfig,
-} from '@pangular-inspector/devtools/config';
+} from '@pangular-inspector/devtools/internal/config';
 import { hostPageId } from '../page-id';
 import { injectorTreeFor, signalGraphFor } from '../live-pages';
 import { pageOf } from './forms-types';

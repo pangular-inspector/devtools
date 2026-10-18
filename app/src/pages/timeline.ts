@@ -11,7 +11,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import type { PanelLink } from '@pangular-inspector/devtools/config';
+import type { PanelLink } from '@pangular-inspector/devtools/internal/config';
 import type { DevframeRpcClient } from 'devframe/client';
 import { panelConfig } from '../devtools-config';
 import { hostPageId } from '../page-id';

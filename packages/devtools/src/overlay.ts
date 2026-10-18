@@ -4,6 +4,7 @@ import {
   forgetDevframeConnection,
   overlayConnectOptions,
   overlayReconnectOptions,
+  rememberBase,
   warnOnConnectionTrouble,
 } from './overlay-connection.ts';
 import { createOverlayLink, type LinkClient } from './overlay-link.ts';
@@ -303,6 +304,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   if (!own(link.stop)) return;
   if (!own(warnOnConnectionTrouble(rpc, options))) return;
   const metaUrl = rpc.connection?.metaBaseUrl;
+  // The next load tries this base first, so it logs no 404 for the ones before it.
+  const pageUrl = (globalThis as { location?: { href?: string } }).location?.href;
+  if (!options.baseURL && pageUrl) rememberBase(DEFAULT_BASES, metaUrl, pageUrl);
   if (metaUrl) {
     void overlayPopup()
       ?.then((m) => m.useDevtoolsBase(new URL('.', metaUrl).href))

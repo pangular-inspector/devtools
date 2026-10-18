@@ -1,5 +1,5 @@
 import { Component, input } from '@angular/core';
-import type { PangularLimit } from '@pangular-inspector/devtools/config';
+import type { PangularLimit } from '@pangular-inspector/devtools/internal/config';
 
 export const LIMITS_DOCS_URL =
   'https://pangular-inspector.dev/getting-started/configuration/#limits';

@@ -6,6 +6,8 @@ settings:
 
 packageExtensionsChecksum: sha256-pZ5Yb81CXMsN4lVTkqET1vwZkSfW0B8hDR3b6oB8KVw=
 
+pnpmfileChecksum: sha256-i4dX6oUtQ5fpnlOvszoub+bAsmeJV9P6sOw6CcJ4VO8=
+
 patchedDependencies:
   '@devframes/agentic@1.2.5':
     hash: cb2492340202dd7496f3903f523d04b3880c16c7acb87da996d5ee319fd1c81a
@@ -387,9 +389,6 @@ importers:
       devframe:
         specifier: ^1.2.5
         version: 1.2.5(patch_hash=a79d264e0ed1c42d99d847d5a873fbf5919ce5b5aae14d26518597683d637c54)(@devframes/agentic@1.2.5)(cac@7.0.0)(srvx@1.0.5)
-      h3:
-        specifier: ^1.15.11
-        version: 1.15.11
       valibot:
         specifier: ^1.5.0
         version: 1.5.0(typescript@6.0.3)
@@ -424,6 +423,9 @@ importers:
       '@tanstack/query-core':
         specifier: 5.104.2
         version: 5.104.2
+      h3:
+        specifier: ^1.15.11
+        version: 1.15.11
       hono:
         specifier: 4.13.8
         version: 4.13.8

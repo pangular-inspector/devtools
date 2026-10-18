@@ -64,7 +64,7 @@ import {
   parsePanelLink,
   type HubView,
   type PanelLink,
-} from '@pangular-inspector/devtools/config';
+} from '@pangular-inspector/devtools/internal/config';
 import { Settings } from './pages/settings';
 import { CommandPalette } from './ui/command-palette';
 import type { PaletteCommand } from './palette-filter';

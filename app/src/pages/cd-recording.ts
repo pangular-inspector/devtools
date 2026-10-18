@@ -10,7 +10,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import type { CdOptions, CdReport } from '@pangular-inspector/devtools/config';
+import type { CdOptions, CdReport } from '@pangular-inspector/devtools/internal/config';
 import type { DevframeRpcClient } from 'devframe/client';
 import { panelConfig } from '../devtools-config';
 import { time } from '../format';
@@ -19,7 +19,7 @@ import { LimitNote } from '../ui/limit-note';
 import { AngularUnavailable } from '../ui/angular-unavailable';
 import { angularPageFor, injectAngularPages } from '../angular-pages';
 import { cdCauseText } from '@pangular-inspector/devtools/cd-data';
-import type { CdCause } from '@pangular-inspector/devtools/config';
+import type { CdCause } from '@pangular-inspector/devtools/internal/config';
 import { aggregateComponents, cyclesInRange, type CdRange } from './cd-chart-data';
 import { CdDiagnosis } from './cd-diagnosis';
 import { CdCycleChart } from './cd-cycle-chart';
@@ -28,7 +28,11 @@ import { CdTiming } from './cd-timing';
 import { CdTransfer, type CdImported } from './cd-transfer';
 import { CdTreemap } from './cd-treemap';
 
-export type { CdCheck, CdComponentStat, CdCycle } from '@pangular-inspector/devtools/config';
+export type {
+  CdCheck,
+  CdComponentStat,
+  CdCycle,
+} from '@pangular-inspector/devtools/internal/config';
 
 /** How long Stop waits for the page's last report before it announces the count it has. */
 const STOP_REPORT_WAIT_MS = 3000;

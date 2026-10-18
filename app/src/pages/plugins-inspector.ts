@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import type { PluginView } from '@pangular-inspector/devtools/plugin';
-import { pluginSwitches } from '@pangular-inspector/devtools/config';
+import { pluginSwitches } from '@pangular-inspector/devtools/internal/config';
 import { panelConfig } from '../devtools-config';
 import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';

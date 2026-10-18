@@ -1,5 +1,5 @@
 import { Component, input, output } from '@angular/core';
-import type { AngularPageInfo } from '@pangular-inspector/devtools/config';
+import type { AngularPageInfo } from '@pangular-inspector/devtools/internal/config';
 import { AngularUnavailable } from '../ui/angular-unavailable';
 
 export interface ForBlock {

@@ -1,10 +1,12 @@
 name: Latest versions
 
-# The package declares `@angular/core >=20` and `vite >=5`, and this repository pins the versions
-# it tests on, so a new Angular, Analog or Vite release can break users between our releases
-# without CI noticing (#100). Each week this makes fresh apps the way users do, on whatever those
-# ranges resolve to that day, installs the package from a local registry, wires the documented
-# setup, builds it and checks the hub answers. See apps/docs/src/content/contributing/publishing.md.
+# The package declares `@angular/core >=12.2.0 <23.0.0` and `vite >=5`, and this repository pins
+# the versions it tests on, so a new Angular, Analog or Vite release can break users between our
+# releases without CI noticing (#100). Each week this makes fresh apps the way users do, on whatever
+# those ranges resolve to that day, installs the package from a local registry, wires the
+# documented setup, builds it and checks the hub answers (`pnpm verify:publish`). The release
+# runs the same check on the tarball it publishes. See
+# apps/docs/src/content/contributing/publishing.md#releasing.
 on:
   schedule:
     # Mondays at 06:00 UTC.

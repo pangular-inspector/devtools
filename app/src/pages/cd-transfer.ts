@@ -5,7 +5,7 @@ import {
   cdTraceFile,
   parseCdImport,
 } from '@pangular-inspector/devtools/cd-data';
-import type { CdReport } from '@pangular-inspector/devtools/config';
+import type { CdReport } from '@pangular-inspector/devtools/internal/config';
 
 /** A recording read from a file, checked like a page push. */
 export interface CdImported {

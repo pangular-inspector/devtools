@@ -5,7 +5,7 @@ import {
   shortAngularVersion,
   type AngularCapability,
   type AngularPageInfo,
-} from '@pangular-inspector/devtools/config';
+} from '@pangular-inspector/devtools/internal/config';
 
 export const ANGULAR_COMPAT_DOCS_URL =
   'https://pangular-inspector.dev/getting-started/installation/#supported-angular-versions';

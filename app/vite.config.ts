@@ -7,7 +7,14 @@ import pangular from '@pangular-inspector/devtools/devframe';
 export default defineConfig({
   base: './',
   root: import.meta.dirname,
-  build: { outDir: '../dist/devtools-ui', emptyOutDir: true },
+  build: {
+    outDir: '../dist/devtools-ui',
+    emptyOutDir: true,
+    // The bundle carries minified Angular, RxJS, tslib and the devframe client, whose licenses ask
+    // for their notices to travel with the copies. This writes them next to `index.html`, so they
+    // ship in the npm package (`dist/public`) and in the Chrome extension (`extension/ui`).
+    license: { fileName: 'THIRD_PARTY_LICENSES.md' },
+  },
   css: {
     preprocessorOptions: {
       scss: { loadPaths: [join(import.meta.dirname, 'src/styles')] },

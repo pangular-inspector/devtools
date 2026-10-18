@@ -1,4 +1,3 @@
-export { registerNgrxSignals } from './ngrx-register.ts';
 import { DEVTOOLS_BASES, POPUP_ROOT_ID, SETUP_URL, insideDevtoolsPanel } from './panel-frame.ts';
 import { DEFAULT_POPUP_HOTKEY, matchesHotkey, normalizeHotkey } from './config.ts';
 // In-page floating devtools popup. Renders an iframe pointing at the devtools SPA.
@@ -121,6 +120,8 @@ let rehotkey: (() => void) | undefined;
  * `popup.hotkey` takes it. An invalid one keeps the default; `false` turns
  * it off, which also shows a launcher that passive mode hid. The overlay
  * calls it with the server's config.
+ *
+ * @internal
  */
 export function setPopupHotkey(value: string | false) {
   hotkey = value === false ? false : (normalizeHotkey(value) ?? DEFAULT_POPUP_HOTKEY);
@@ -219,6 +220,8 @@ function changeTarget() {
 /**
  * Points the panel at the devtools the overlay connected to. `initOverlay`
  * calls it, so a custom `baseURL` also reaches the floating button.
+ *
+ * @internal
  */
 export function useDevtoolsBase(base: string) {
   const absolute = new URL(base, location.href).href;

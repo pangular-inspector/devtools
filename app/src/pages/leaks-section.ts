@@ -3,7 +3,7 @@ import {
   RETAINED_AFTER_MS,
   RETAINED_AFTER_NAVIGATIONS,
   type AngularPageInfo,
-} from '@pangular-inspector/devtools/config';
+} from '@pangular-inspector/devtools/internal/config';
 import type { DevframeRpcClient } from 'devframe/client';
 import { rpcCall } from '../rpc';
 import { AngularUnavailable } from '../ui/angular-unavailable';

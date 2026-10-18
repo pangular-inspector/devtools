@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolvePangularConfig } from '@pangular-inspector/devtools/config';
+import { resolvePangularConfig } from '@pangular-inspector/devtools/internal/config';
 import {
   componentsCard,
   dashboardStats,

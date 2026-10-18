@@ -189,7 +189,23 @@ pnpm commit:check                   # Commit messages on your branch
   </ngmd-step>
 </ngmd-workflow>
 
-A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`. A `node-22` job runs `pnpm test:devtools` on Node.js 22, the oldest version `engines.node` allows.
+A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`. A `node-22` job runs `pnpm test:devtools` on the newest Node.js 22, the oldest major `engines.node` (`>=22.12.0`) allows.
+
+Two more jobs run when a pull request or push changes `packages/devtools`, `app`, `e2e`, the lockfile or their scripts. `Security e2e` builds the package and runs `pnpm e2e:security`, the redaction and access checks. `MCP e2e` runs `pnpm e2e:mcp`, which builds the package and the SSR demo, then calls every agent tool, resource and prompt and compares the list with the agent tools page.
+
+### End-to-end scripts
+
+The `e2e:*` scripts drive real apps in Playwright's Chromium. Run `pnpm exec playwright install chromium` once first.
+
+| Script                | What it checks                                                                                                     | Needs                                                             | Runs                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- | ---------------------------------------- |
+| `pnpm e2e:security`   | Secrets planted in a fixture app never reach the panel, agents, logs or the static report; the access gates hold.  | `pnpm devtools:build-pkg`. Ports 5231 to 5236.                    | Pull requests                            |
+| `pnpm e2e:mcp`        | Every agent tool, resource and prompt over HTTP and stdio, with bad arguments and config variants.                 | Builds what it needs. Ports 5150 to 5154.                         | Pull requests                            |
+| `pnpm e2e:panel`      | Every panel view in both themes at 1280 and 360 px: axe, overflow and page errors.                                 | A running app, such as the SSR demo on 4000 (`--base`).           | Weekly                                   |
+| `pnpm e2e:resilience` | `multitab`, `expiry`, `lifecycle` and `stress`: tabs that close, crash or hide, server restarts and a large app.   | `pnpm devtools:build-pkg` and the development build. Port 5401.   | Weekly                                   |
+| `pnpm e2e:install`    | A packed tarball installed into fresh apps per setup, package manager and Angular version, plus the package audit. | Network for npm. A local registry on 4873 and the ports after it. | Weekly, and a few cells on every release |
+
+`.github/workflows/e2e.yml` runs the weekly ones on Mondays and opens an issue when one fails. In `e2e:resilience`, a check that fails on an open issue is marked as a known failure with the issue number: it prints `XFAIL` and does not fail the run, and it prints `XPASS` once it passes, so the mark can go. The `soak` check of `e2e:resilience` runs by hand only.
 
 ### Angular compatibility
 

@@ -325,14 +325,6 @@ export function createPangularCli(options: PangularCliOptions = {}) {
     cli.option('--root <dir>', 'Project folder to scan (default: the working directory)');
     cli.option('--config <file>', `Devtools config as JSON (default: ${PANGULAR_CONFIG_FILE})`);
     cli.option('--read-only', 'Drop the agent tools that act on the page or the server');
-    cli.option(
-      '--allowed-origin <origin>',
-      'An extra origin allowed to reach the server, such as http://192.168.1.20:8100 (repeat for more)',
-    );
-    cli.option(
-      '--auth-token <token>',
-      'A pairing token a client may send instead of the one-time code (repeat for more; prefer PANGULAR_AUTH_TOKEN)',
-    );
     registerSkillsCommand(cli, { cwd: (flags) => resolveCliRoot(flags, env), log });
     registerLintCommand(cli, { cwd: (flags) => resolveCliRoot(flags, env), log });
     const defaultCommand = cli.commands.find((command) => command.isDefaultCommand);
@@ -365,6 +357,20 @@ export function createPangularCli(options: PangularCliOptions = {}) {
           onReady,
         });
       };
+      // Only the dev server takes these: `build` writes files and `mcp` talks over stdio.
+      defaultCommand.option(
+        '--allowed-origin <origin>',
+        'An extra origin allowed to reach the server, such as http://192.168.1.20:8100 (repeat for more)',
+      );
+      defaultCommand.option(
+        '--auth-token <token>',
+        'A pairing token a client may send instead of the one-time code (repeat for more; prefer PANGULAR_AUTH_TOKEN)',
+      );
+      const mcpOption = defaultCommand.options.find((option) => option.name === 'mcp');
+      if (mcpOption) {
+        mcpOption.description =
+          'Serve the MCP route for agents (on by default; --no-mcp turns it off)';
+      }
       defaultCommand.option(
         '--proxy-origin <origin>',
         "Your app's dev server origin that proxies /__pangular/ to this server, such as http://localhost:4200, so the one-time code link opens there",

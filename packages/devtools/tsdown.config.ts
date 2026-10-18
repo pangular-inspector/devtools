@@ -9,7 +9,9 @@ import {
 const shared = {
   external: [/^@angular\//, /^@nativescript\//, /^rxjs/],
   format: 'esm',
-  dts: true,
+  // `@internal` declarations stay out of the published types: they are exported for the
+  // package's own modules, not for apps.
+  dts: { compilerOptions: { stripInternal: true } },
   // The package exports name `.mjs` files, which the browser build would
   // otherwise write as `.js`.
   outExtensions: () => ({ js: '.mjs', dts: '.d.mts' }),

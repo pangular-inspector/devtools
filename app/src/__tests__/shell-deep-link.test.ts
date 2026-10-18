@@ -1,7 +1,7 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { DevframeRpcClient } from 'devframe/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parsePanelLink } from '@pangular-inspector/devtools/config';
+import { parsePanelLink } from '@pangular-inspector/devtools/internal/config';
 
 const server = vi.hoisted(() => ({
   /** Events the panel registered, by name, to call as the server would broadcast. */

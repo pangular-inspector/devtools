@@ -48,7 +48,7 @@ app.use(devtools.nodeMiddleware);
 
 The full-page viewer is at `http://localhost:4000/__devframes/`. The hub is built on [`@devframes/hub`](https://github.com/devframes/devframe), so other devframe tools can join the same dock.
 
-The Angular CLI bundles `server.ts`, but not the hub. `initPangularHub()` loads the hub's server code from `node_modules/@pangular-inspector/devtools` when it starts, so the hub and its dependencies resolve from the package as they do under Vite, with any package manager. This needs Node.js 22.12 or later. When the hub is off, as in production, nothing is loaded.
+The Angular CLI bundles `server.ts`, but not the hub. `initPangularHub()` loads the hub's server code from `node_modules/@pangular-inspector/devtools` when it starts, so the hub and its dependencies resolve from the package as they do under Vite, with any package manager. This needs Node.js 22.12 or later. On an older Node.js the hub logs why and turns itself off, and your server runs on without it. When the hub is off, as in production, nothing is loaded.
 
 ### Middleware order
 

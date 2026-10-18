@@ -1,4 +1,4 @@
-import { hubDockId } from '@pangular-inspector/devtools/config';
+import { hubDockId } from '@pangular-inspector/devtools/internal/config';
 
 const CLIENT_CONTEXT_KEY = '__DEVFRAME_HUB_CLIENT_CONTEXT__';
 

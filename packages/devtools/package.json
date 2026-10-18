@@ -13,13 +13,25 @@
     "url": "https://github.com/pangular-inspector/devtools/issues"
   },
   "type": "module",
+  "sideEffects": [
+    "./dist/overlay.mjs",
+    "./dist/popup.mjs",
+    "./dist/capacitor-hook.mjs",
+    "./dist/store-hook.mjs",
+    "./dist/startup-hook.mjs",
+    "./src/overlay-auto.ts",
+    "./src/popup.ts",
+    "./src/capacitor-hook.ts",
+    "./src/store-hook.ts",
+    "./src/startup-hook.ts"
+  ],
   "bin": {
     "pangular": "./bin.mjs"
   },
   "exports": {
-    ".": "./src/devframe.ts",
-    "./devframe": "./src/devframe.ts",
-    "./config": "./src/config.ts",
+    ".": "./src/entries/devframe.ts",
+    "./devframe": "./src/entries/devframe.ts",
+    "./config": "./src/entries/config.ts",
     "./cd-data": "./src/cd-data.ts",
     "./overlay": "./src/overlay-auto.ts",
     "./overlay-manual": "./src/overlay.ts",
@@ -30,12 +42,13 @@
     "./overlay-angular-native": "./src/overlay-angular-native.ts",
     "./popup": "./src/popup.ts",
     "./overlay-nativescript": "./src/overlay-nativescript.ts",
-    "./cli": "./src/cli.ts",
-    "./http": "./src/http.ts",
-    "./hub": "./src/hub.ts",
+    "./cli": "./src/entries/cli.ts",
+    "./http": "./src/entries/http.ts",
+    "./hub": "./src/entries/hub-source.ts",
     "./ssr": "./src/ssr.ts",
     "./package.json": "./package.json",
-    "./vite": "./src/vite.ts"
+    "./vite": "./src/entries/vite.ts",
+    "./internal/config": "./src/config.ts"
   },
   "publishConfig": {
     "main": "./dist/devframe.mjs",
@@ -158,13 +171,12 @@
     "axe-core": "^4.13.0",
     "cac": "^7.0.0",
     "devframe": "^1.2.5",
-    "h3": "^1.15.11",
     "valibot": "^1.5.0"
   },
   "peerDependencies": {
     "@nativescript/core": ">=8",
-    "@angular/common": ">=12.2",
-    "@angular/core": ">=12.2",
+    "@angular/common": ">=12.2.0 <23.0.0",
+    "@angular/core": ">=12.2.0 <23.0.0",
     "rxjs": ">=7",
     "vite": ">=5"
   },
@@ -198,9 +210,10 @@
     "@tanstack/query-core": "5.104.2",
     "mini-rx-store": "6.1.2",
     "rxjs": "~7.8.0",
-    "tsdown": "^0.23.0"
+    "tsdown": "^0.23.0",
+    "h3": "^1.15.11"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12.0"
   }
 }

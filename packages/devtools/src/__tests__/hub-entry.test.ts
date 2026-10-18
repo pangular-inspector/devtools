@@ -129,4 +129,26 @@ describe('the hub entry', () => {
     expect(load).not.toHaveBeenCalled();
     expect(() => entry.initPangularHub({ enabled: true })).toThrow('loaded the hub');
   });
+
+  it('logs and turns itself off on a Node.js that cannot load the hub', async () => {
+    vi.resetModules();
+    // Node.js before 22.3 has no `process.getBuiltinModule`, so the loader cannot require().
+    const original = process.getBuiltinModule;
+    Object.defineProperty(process, 'getBuiltinModule', { value: undefined, configurable: true });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const entry = await import('../hub-entry.ts');
+      const hub = entry.initPangularHub({ enabled: true, base: 'tools' });
+      expect(hub.enabled).toBe(false);
+      expect(hub.base).toBe('/tools/');
+      const next = vi.fn();
+      hub.nodeMiddleware({} as never, {} as never, next);
+      expect(next).toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringMatching(/needs Node\.js 20\.19, 22\.12.*hub is off/s),
+      );
+    } finally {
+      Object.defineProperty(process, 'getBuiltinModule', { value: original, configurable: true });
+    }
+  });
 });

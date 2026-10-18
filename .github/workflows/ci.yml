@@ -29,8 +29,6 @@ jobs:
 
       - uses: nrwl/nx-set-shas@v4
 
-      - uses: nrwl/nx-set-shas@v4
-
       - name: Check formatting
         run: pnpm format:check
 
@@ -66,7 +64,7 @@ jobs:
 
   node-22:
     name: Package tests on Node.js 22
-    # `engines.node` allows 22, while the build job runs the `.nvmrc` version.
+    # `engines.node` allows 22.12 and later, while the build job runs the `.nvmrc` version.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -96,3 +94,89 @@ jobs:
 
       - name: Check the panel with axe
         run: pnpm test:axe
+
+  # The e2e jobs below are slow, so they run only when the package, the panel or the scripts and
+  # fixtures they use change. A diff that cannot be computed (a new branch, a force push) runs them.
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      e2e: ${{ steps.diff.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          paths=(packages/devtools app e2e scripts/e2e-security.mjs scripts/e2e-mcp.mjs pnpm-lock.yaml .github/workflows/ci.yml)
+          if git diff --quiet "$BASE" HEAD -- "${paths[@]}"; then
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  e2e-security:
+    name: Security e2e
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      # Playwright's own Chromium, as the axe job installs it.
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build the package
+        run: pnpm devtools:build-pkg
+
+      # Leak corpus, access gates and a production build, on ports 5231 to 5236.
+      - name: Check redaction and access
+        run: pnpm e2e:security
+
+      - name: Keep the captured channels
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-security
+          path: dist/e2e-security
+          if-no-files-found: ignore
+
+  e2e-mcp:
+    name: MCP e2e
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Builds the package and the SSR demo itself, then serves the demo on port 5150 (the variant
+      # hubs on 5151 to 5154) and checks every tool, resource and prompt, and agents/tools.md.
+      - name: Check the agent surface
+        run: pnpm e2e:mcp --report dist/e2e-mcp/report.json
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-mcp
+          path: dist/e2e-mcp
+          if-no-files-found: ignore

@@ -1,4 +1,4 @@
-import { PANEL_CACHED_RPC } from '@pangular-inspector/devtools/config';
+import { PANEL_CACHED_RPC } from '@pangular-inspector/devtools/internal/config';
 import type { DevframeRpcClient } from 'devframe/client';
 
 /**

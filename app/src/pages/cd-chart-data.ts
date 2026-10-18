@@ -1,4 +1,8 @@
-import type { CdComponentStat, CdCycle, CdSpanKind } from '@pangular-inspector/devtools/config';
+import type {
+  CdComponentStat,
+  CdCycle,
+  CdSpanKind,
+} from '@pangular-inspector/devtools/internal/config';
 
 /** One frame at 60 frames per second. A cycle longer than this can drop a frame. */
 export const FRAME_BUDGET_MS = 16.6;

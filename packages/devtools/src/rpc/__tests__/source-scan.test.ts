@@ -2,7 +2,7 @@ import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fixtureDir } from './fixture-dir.ts';
 import { scan } from './scan.ts';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { getComponents } from '../get-components.ts';
 import { getNgrxStore } from '../get-ngrx-store.ts';
 import { getProviders } from '../get-providers.ts';
@@ -309,5 +309,70 @@ describe('third review pass', () => {
       JSON.stringify({ projects: { a: { sourceRoot: 'apps/web/src' } } }),
     );
     expect(sourceRoots(dir)).toHaveLength(1);
+  });
+});
+
+describe('Nx workspaces', () => {
+  it('scans every project.json source root when there is no angular.json', async () => {
+    const dir = workspace({
+      'nx.json': '{}',
+      'apps/shop/project.json': JSON.stringify({ name: 'shop', sourceRoot: 'apps/shop/src' }),
+      'apps/shop/src/app.ts':
+        "@Component({ selector: 'app-root', template: '' }) export class App {}",
+      // No sourceRoot: Nx falls back to the project folder's src.
+      'libs/ui/project.json': JSON.stringify({ name: 'ui' }),
+      'libs/ui/src/lib/card.ts':
+        "@Component({ selector: 'ui-card', template: '' }) export class Card {}",
+      // A package-based project, found from its package.json in an Nx workspace.
+      'packages/shop/shared-ui/package.json': JSON.stringify({ name: '@org/shared-ui' }),
+      'packages/shop/shared-ui/src/lib/badge.ts':
+        "@Component({ selector: 'ui-badge', template: '' }) export class Badge {}",
+      'node_modules/dep/project.json': JSON.stringify({ sourceRoot: 'node_modules/dep/src' }),
+      'node_modules/dep/src/x.ts':
+        "@Component({ selector: 'dep-x', template: '' }) export class X {}",
+    });
+    expect(sourceRoots(dir).map((root) => relative(dir, root))).toEqual([
+      join('apps/shop/src'),
+      join('libs/ui/src'),
+      join('packages/shop/shared-ui/src'),
+    ]);
+    const components = await scan(getComponents, dir);
+    expect(components.map((c) => c.selector).sort()).toEqual(['app-root', 'ui-badge', 'ui-card']);
+  });
+
+  it('reads project.json without nx.json, but not every package.json', () => {
+    const dir = workspace({
+      'apps/web/project.json': JSON.stringify({ sourceRoot: 'apps/web/src' }),
+      'apps/web/src/a.ts': '',
+      'tools/script/package.json': '{}',
+      'tools/script/src/a.ts': '',
+    });
+    expect(sourceRoots(dir)).toEqual([join(dir, 'apps/web/src')]);
+  });
+
+  it('prefers angular.json when a workspace has one', () => {
+    const dir = workspace(
+      {
+        'nx.json': '{}',
+        'projects/a/src/a.ts': '',
+        'libs/b/project.json': JSON.stringify({ sourceRoot: 'libs/b/src' }),
+        'libs/b/src/b.ts': '',
+      },
+      { projects: { a: { sourceRoot: 'projects/a/src' } } },
+    );
+    expect(sourceRoots(dir)).toEqual([join(dir, 'projects/a/src')]);
+  });
+
+  it('warns once when it finds no source root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const dir = workspace({ 'lib/a.ts': '' });
+      expect(sourceRoots(dir)).toEqual([]);
+      expect(sourceRoots(dir)).toEqual([]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]![0]).toMatch(/Found no source folder to scan.*--root/);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

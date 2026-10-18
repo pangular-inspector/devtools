@@ -1,5 +1,5 @@
 import { Component, computed, input, model, signal } from '@angular/core';
-import type { CdCycle } from '@pangular-inspector/devtools/config';
+import type { CdCycle } from '@pangular-inspector/devtools/internal/config';
 import {
   FRAME_BUDGET_MS,
   chartMax,

@@ -1,4 +1,12 @@
-import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  type Dirent,
+} from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 // Helpers shared by the RPC functions that read information out of source
@@ -305,27 +313,86 @@ export function matchDelimiter(source: string, open: number, start: string, end:
   return source.length;
 }
 
+/** A JSON or JSONC file, or undefined when it is missing or unreadable. */
+function readJsonc(file: string): unknown {
+  try {
+    return JSON.parse(parseJsonc(readFileSync(file, 'utf-8')));
+  } catch {
+    return undefined;
+  }
+}
+
+/** A project's `sourceRoot`, or `<root>/src`, relative to the workspace. */
+function projectSourceRoot(project: unknown, fallbackRoot: string): string | undefined {
+  if (!project || typeof project !== 'object') return undefined;
+  const entry = project as Record<string, unknown>;
+  const root = entry['sourceRoot'] ?? join(String(entry['root'] ?? fallbackRoot), 'src');
+  return typeof root === 'string' && root ? root : undefined;
+}
+
+/** How deep the Nx project search goes below the workspace, and how many folders it reads. */
+const NX_PROJECT_DEPTH = 6;
+const NX_PROJECT_DIRS = 5000;
+
+/**
+ * The source roots of an Nx workspace: Nx has no `angular.json`, and finds its
+ * projects from every `project.json`, and from every `package.json` in a
+ * package-based workspace. Each gives its `sourceRoot` (relative to the
+ * workspace, as Nx writes it) or its folder's `src`. Only runs when `nx.json`
+ * or a `project.json` says this is Nx, and stops at a fixed depth and folder
+ * count, so a large tree costs a bounded walk.
+ */
+function nxSourceRoots(cwd: string): string[] {
+  const nx = existsSync(join(cwd, 'nx.json'));
+  const roots: string[] = [];
+  let read = 0;
+  const visit = (dir: string, depth: number): void => {
+    if (read++ >= NX_PROJECT_DIRS) return;
+    const rel = relative(cwd, dir);
+    const project = readJsonc(join(dir, 'project.json'));
+    if (project) {
+      const root = projectSourceRoot(project, rel);
+      if (root) roots.push(root);
+    } else if (nx && rel && existsSync(join(dir, 'package.json'))) {
+      roots.push(join(rel, 'src'));
+    }
+    if (depth >= NX_PROJECT_DEPTH) return;
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      if (IGNORED_DIRS.has(entry.name.toLowerCase()) || entry.name === 'src') continue;
+      visit(join(dir, entry.name), depth + 1);
+    }
+  };
+  visit(cwd, 0);
+  return roots;
+}
+
+/** Working directories already warned about, so a scan that runs often warns once. */
+const warnedEmpty = new Set<string>();
+
 /**
  * The directories to scan for source files: every `sourceRoot` in
- * `angular.json`, so a workspace with more than one project is covered, and
- * `src` for a project without one. Falls back to the working directory.
+ * `angular.json`, so a workspace with more than one project is covered, or
+ * every Nx project (`project.json`, and `package.json` in an Nx workspace)
+ * when there is no `angular.json`, and `src` for a project without one.
+ * Returns nothing, and warns once, when none of them exists.
  */
 export function sourceRoots(cwd: string): string[] {
   const roots: string[] = [];
-  try {
-    // The CLI accepts comments and trailing commas in `angular.json`, and a
-    // throw here would silently drop every declared project.
-    const workspace = JSON.parse(parseJsonc(readFileSync(join(cwd, 'angular.json'), 'utf-8')));
-    const projects = workspace?.projects;
-    for (const project of Object.values(projects ?? {})) {
-      if (!project || typeof project !== 'object') continue;
-      const entry = project as Record<string, unknown>;
-      const root = entry['sourceRoot'] ?? join(String(entry['root'] ?? ''), 'src');
-      if (typeof root === 'string' && root) roots.push(resolve(cwd, root));
-    }
-  } catch {
-    // no workspace file, or it is not readable
+  // The CLI accepts comments and trailing commas in `angular.json`, and a
+  // throw here would silently drop every declared project.
+  const workspace = readJsonc(join(cwd, 'angular.json')) as { projects?: unknown } | undefined;
+  for (const project of Object.values(workspace?.projects ?? {})) {
+    const root = projectSourceRoot(project, '');
+    if (root) roots.push(resolve(cwd, root));
   }
+  if (!workspace) for (const root of nxSourceRoots(cwd)) roots.push(resolve(cwd, root));
   const declared = new Set(roots);
   roots.push(join(cwd, 'src'));
 
@@ -383,6 +450,12 @@ export function sourceRoots(cwd: string): string[] {
     }
     kept.push(dir);
     cover = real;
+  }
+  if (!kept.length && !warnedEmpty.has(cwd)) {
+    warnedEmpty.add(cwd);
+    console.warn(
+      `[pangular] Found no source folder to scan in ${cwd}: no angular.json project, no Nx project.json and no src folder. The Components, Routes and other source tabs stay empty. Start the server from the workspace root, or pass --root <dir> to the CLI.`,
+    );
   }
   return kept;
 }

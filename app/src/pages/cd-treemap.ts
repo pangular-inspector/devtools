@@ -1,5 +1,5 @@
 import { Component, computed, input, output, signal } from '@angular/core';
-import type { CdComponentStat } from '@pangular-inspector/devtools/config';
+import type { CdComponentStat } from '@pangular-inspector/devtools/internal/config';
 import { formatMs, squarify } from './cd-chart-data';
 
 /** Components drawn as their own cell; the rest share one "other" cell. */

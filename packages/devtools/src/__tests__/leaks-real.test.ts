@@ -134,16 +134,23 @@ describe.runIf(angularAtLeast('17.0'))('the leaks collector with a real app', ()
     // Destroyed, not detached: Angular dropped its view.
     expect(report.destroyed[0]!.detached).toBeUndefined();
     const reasons = report.subscriptions.map((s) => [s.name, s.reason, s.count]);
-    expect(reasons).toEqual(
-      expect.arrayContaining(
-        profiler
-          ? [
-              ['LeakyCard', 'no-live-instance', 1],
-              ['LeakyCard', 'instance-destroyed', 1],
-            ]
-          : [['LeakyCard', 'no-live-instance', 2]],
-      ),
-    );
+    if (profiler) {
+      expect(reasons).toEqual(
+        expect.arrayContaining([
+          ['LeakyCard', 'no-live-instance', 1],
+          ['LeakyCard', 'instance-destroyed', 1],
+        ]),
+      );
+    } else {
+      // Without the profiler neither subscription is tied to the instance. The collector keeps one
+      // row per source line (the field initializer and `ngOnInit`), so two rows of one each (#430).
+      const rows = report.subscriptions.filter((s) => s.name === 'LeakyCard');
+      expect(rows.map((s) => [s.name, s.reason, s.count])).toEqual([
+        ['LeakyCard', 'no-live-instance', 1],
+        ['LeakyCard', 'no-live-instance', 1],
+      ]);
+      expect(new Set(rows.map((s) => s.source)).size).toBe(2);
+    }
     for (const sub of report.subscriptions) expect(sub.source).toMatch(/LeakyCard/);
 
     expect(Observable.prototype.subscribe).not.toBe(subscribe);

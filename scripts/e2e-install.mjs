@@ -33,6 +33,7 @@
  *   node scripts/e2e-install.mjs [--scenarios=a,b] [--pm=npm,pnpm] [--angular=20.0,22]
  *                                [--cells=angular-cli:pnpm:22,analog:npm] [--tarball=<file>]
  *                                [--report=<file.json>] [--no-audit] [--audit-only] [--keep]
+ *                                [--logs=<dir>]
  *                                [--list]
  * With no matrix flags it runs every scenario on npm (Analog on pnpm) with the newest Angular, plus
  * the audit.
@@ -42,6 +43,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import {
+  copyFileSync,
   createReadStream,
   existsSync,
   mkdirSync,
@@ -155,7 +157,14 @@ const registryPort = Number(process.env.VERIFY_PORT ?? 4873);
 const work = mkdtempSync(path.join(tmpdir(), 'pangular-e2e-install-'));
 const registry = createRegistry({ work, registryPort });
 const { REGISTRY, registryEnv, run, start, stop, stopAll, waitFor, newest } = registry;
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => process.exit(130));
+// An interrupted run removes its work folder too, so no multi-GB folder is left behind.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    stopAll();
+    if (!flag('keep')) rmSync(work, { recursive: true, force: true });
+    process.exit(130);
+  });
+}
 
 /** Each package manager's commands, and the cache it keeps inside this run's work folder. */
 const PM = {
@@ -1120,10 +1129,24 @@ if (reportFile) {
 }
 if (results.some((cell) => cell.status === 'fail')) exitCode = 1;
 stopAll();
-if (exitCode === 0 && !flag('keep')) {
-  rmSync(work, { recursive: true, force: true });
+if (exitCode !== 0) {
+  // The work folder holds every app and its node_modules, which can be gigabytes, so a failed run
+  // keeps only the logs, copied out first, unless --keep asks for the whole folder.
+  const logs = path.resolve(arg('logs') ?? mkdtempSync(path.join(tmpdir(), 'pangular-e2e-logs-')));
+  let copied = 0;
+  for (const file of results.flatMap((cell) => cell.logs ?? [])) {
+    if (!existsSync(file)) continue;
+    const to = path.join(logs, path.relative(work, file).replaceAll(path.sep, '__'));
+    mkdirSync(path.dirname(to), { recursive: true });
+    copyFileSync(file, to);
+    copied++;
+  }
+  console.log(`The logs of the run (${copied} files) are in ${logs}`);
+}
+if (flag('keep')) {
+  console.log(`The registry, the apps and their logs are left in ${work} (--keep)`);
 } else {
-  console.log(`The registry, the apps and their logs are left in ${work}`);
+  rmSync(work, { recursive: true, force: true });
 }
 console.log(`total ${report.seconds}s`);
 process.exit(exitCode);

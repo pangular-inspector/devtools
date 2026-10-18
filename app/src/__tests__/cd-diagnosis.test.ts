@@ -1,5 +1,5 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import type { CdDiagnosis as Diagnosis } from '@pangular-inspector/devtools/config';
+import type { CdDiagnosis as Diagnosis } from '@pangular-inspector/devtools/internal/config';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CdDiagnosis } from '../pages/cd-diagnosis';
 import { CdRecording, type CdPage } from '../pages/cd-recording';

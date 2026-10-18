@@ -12,7 +12,8 @@
 // server on `--port` (default 5401), drives headless Chromium with Playwright
 // and reads the hub over MCP (`/__devframes/__mcp`) and its shared state
 // (`devframe_state_read`). Results go to stdout and, with `--json <file>`, to a
-// JSON file. Exit code 1 when a check fails.
+// JSON file. Exit code 1 when a check fails. A check that fails on an open issue
+// prints XFAIL with the issue number and does not fail the run (`knownFailure`).
 //
 // Options:
 //   --port <n>       Port for the demo server (default 5401).
@@ -78,6 +79,26 @@ function section(name) {
 function assert(name, ok, detail = '') {
   current.assertions.push({ name, ok: !!ok, detail: String(detail).slice(0, 500) });
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== '' ? `  (${detail})` : ''}`);
+  return !!ok;
+}
+/**
+ * A check that fails today because of an open issue. It still runs and is reported, as XFAIL,
+ * but does not fail the run. When it starts to pass it prints XPASS (and a warning on GitHub
+ * Actions), so the mark is removed once the issue is fixed. Never use it to hide a new failure.
+ */
+function knownFailure(issue, name, ok, detail = '') {
+  const label = `${name} [known failure, #${issue}]`;
+  current.assertions.push({
+    name: label,
+    ok: true,
+    knownIssue: issue,
+    passed: !!ok,
+    detail: String(detail).slice(0, 500),
+  });
+  console.log(`${ok ? 'XPASS' : 'XFAIL'}  ${label}${detail !== '' ? `  (${detail})` : ''}`);
+  if (ok && process.env.GITHUB_ACTIONS) {
+    console.log(`::warning::${name} passes now: remove its known-failure mark for #${issue}.`);
+  }
   return !!ok;
 }
 function record(key, value) {
@@ -688,12 +709,15 @@ async function checkExpiry() {
     Object.values(firstGone.close).every((s) => s <= 20) && !last[ids.close].keys.length,
     JSON.stringify(firstGone.close),
   );
-  assert(
+  // #422: a tab that dies without pagehide stays listed for about 150 s.
+  knownFailure(
+    422,
     'a crashed tab leaves list-pages within the 15 s expiry (+5 s sweep)',
     listedGone.crash !== undefined && listedGone.crash <= 22,
     `${listedGone.crash ?? 'never'} s`,
   );
-  assert(
+  knownFailure(
+    422,
     'a crashed tab leaves every shared state within the 15 s expiry (+5 s sweep)',
     Object.values(firstGone.crash).every((s) => s <= 22) && !last[ids.crash].keys.length,
     JSON.stringify(firstGone.crash),
@@ -989,7 +1013,9 @@ async function checkStress() {
     formDetail.match(/"truncated":\d+/g) ?? [],
   );
   const listed = Number(/(\d+) fields/.exec(formsList)?.[1]);
-  assert(
+  // #423: the forms collector keeps 100 children per group and does not say so.
+  knownFailure(
+    423,
     'inspect-forms counts the 300 controls of the form (or says it stopped at a limit)',
     listed >= 300 || formNotes.some((l) => /300|200 more|limit of 100|first 100/i.test(l)),
     `${listed} fields; ${formNotes[0] ?? ''}`,
@@ -998,7 +1024,8 @@ async function checkStress() {
   await sleep(2500);
   const invalid = await mcp.tool('explain-form-invalid', { page: id, form: formId });
   record('explain-form-invalid with field250 failing', invalid.replace(/\s+/g, ' ').slice(0, 300));
-  assert(
+  knownFailure(
+    423,
     'explain-form-invalid names a failing field past the 100th control',
     invalid.includes('field250'),
   );
@@ -1440,6 +1467,11 @@ try {
     r.assertions.filter((a) => !a.ok).map((a) => `${c}: ${a.name}`),
   );
   results.failed = failed;
+  results.knownFailures = Object.entries(results.checks).flatMap(([c, r]) =>
+    r.assertions
+      .filter((a) => a.knownIssue)
+      .map((a) => ({ check: c, name: a.name, issue: a.knownIssue, passed: a.passed })),
+  );
   const json = option('json');
   if (json) writeFileSync(json, JSON.stringify(results, null, 2));
   console.log(

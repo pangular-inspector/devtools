@@ -12,6 +12,56 @@ export interface OverlayConnectionInput {
 
 let warnedNoConfig = false;
 
+/** Where the overlay keeps the default base that answered last on this origin. */
+export const LAST_BASE_KEY = 'pangular:devtools-base';
+
+type BaseStorage = Pick<Storage, 'getItem' | 'setItem'>;
+
+function localStore(): BaseStorage | undefined {
+  try {
+    return (globalThis as { localStorage?: BaseStorage }).localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The default bases with the one that answered last on this origin first.
+ * Each base the overlay tries before the right one is a 404 the browser logs,
+ * so a setup on a later base (the `pangular dev` proxy path, or a custom
+ * `initDevframe` mount) logs it on the first load only.
+ */
+export function orderedBases(defaults: string[], storage = localStore()): string[] {
+  let last: string | null | undefined;
+  try {
+    last = storage?.getItem(LAST_BASE_KEY);
+  } catch {
+    last = undefined;
+  }
+  if (!last || last === defaults[0] || !defaults.includes(last)) return defaults;
+  return [last, ...defaults.filter((base) => base !== last)];
+}
+
+/**
+ * Remembers which default base the overlay connected through, when it is one
+ * of them on this page's origin. `metaUrl` is the connection file's URL.
+ */
+export function rememberBase(
+  defaults: string[],
+  metaUrl: string | undefined,
+  pageUrl: string,
+  storage = localStore(),
+): void {
+  if (!metaUrl) return;
+  try {
+    const found = new URL('.', metaUrl).href;
+    const base = defaults.find((candidate) => new URL(candidate, pageUrl).href === found);
+    if (base) storage?.setItem(LAST_BASE_KEY, base);
+  } catch {
+    // Storage off or full, or an unparsable URL: the next load probes in the default order.
+  }
+}
+
 /**
  * The options the overlay passes to `connectDevframe()`.
  *
@@ -44,7 +94,7 @@ export function overlayConnectOptions(
   }
   const webFetch = win.CapacitorWebFetch;
   return {
-    baseURL: options.baseURL ?? defaultBases,
+    baseURL: options.baseURL ?? orderedBases(defaultBases),
     ...(meta ? { connectionMeta: meta as ConnectionMeta } : {}),
     ...(options.authToken ? { authToken: options.authToken } : {}),
     ...(typeof webFetch === 'function'

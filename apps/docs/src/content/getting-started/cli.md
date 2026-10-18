@@ -35,9 +35,7 @@ If the project folder has no `angular.json` and no `package.json` that depends o
 
 ### Nx workspaces
 
-The source scan reads the projects listed in `angular.json`, plus the `src` folder of the project folder. It does not read Nx `project.json` files. In an Nx workspace without `angular.json`, run the CLI from the workspace root and the scan finds no components or routes, with no warning.
-
-Point `--root` at the app instead, such as `--root apps/shop`. The scan then covers that app's `src` folder, but not the libraries the app imports from other folders. The live tabs are not affected: they read the running app. The Express hub scans the server's working directory the same way, so in an Nx workspace started from the root its source-scan data is empty too.
+The scans read the `sourceRoot` of every project in `angular.json`. In an Nx workspace, which has no `angular.json`, they read the `sourceRoot` of every `project.json`, and the `src` folder of every package that has a `package.json`, so apps and libraries are both covered. Run the CLI from the workspace root for that. When the scans find no source folder at all, the CLI, the hub and the Vite plugin print a warning once.
 
 ### Config file
 

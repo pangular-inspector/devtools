@@ -3,7 +3,7 @@ import type {
   PangularInspector,
   PanelLink,
   ResolvedPangularConfig,
-} from '@pangular-inspector/devtools/config';
+} from '@pangular-inspector/devtools/internal/config';
 import type { FormEvent } from './forms-types';
 import { pageOf } from './forms-types';
 import type { NavigationRecord, RouterPage } from './router-types';

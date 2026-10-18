@@ -1,0 +1,167 @@
+name: E2E
+
+# The slow end-to-end checks that do not fit a pull request: every panel view in a real browser,
+# multi-tab and lifecycle resilience, and the install matrix from a packed tarball. Pull requests
+# run the security and MCP checks (ci.yml), and the release runs a slice of the install matrix on
+# the tarball it publishes (release.yml). See apps/docs/src/content/contributing/development.md.
+on:
+  schedule:
+    # Mondays at 07:00 UTC, an hour after latest.yml and compat.yml.
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  panel:
+    name: Panel views
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # The SSR demo serves the panel built into packages/devtools/dist/public.
+      - name: Build the package and the demo
+        run: |
+          pnpm devtools:build-pkg
+          pnpm build --configuration development
+
+      - name: Start the SSR demo on port 4000
+        run: |
+          PORT=4000 node dist/pangular-inspector/server/server.mjs > "$RUNNER_TEMP/demo.log" 2>&1 &
+          for _ in $(seq 60); do
+            curl -sf http://localhost:4000/ > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/demo.log"
+          exit 1
+
+      # Every tab and sub-view, dark and light, at 1280 and 360 px: axe, overflow and page errors.
+      - name: Check every panel view
+        run: pnpm e2e:panel --base http://localhost:4000 --out dist/e2e-panel
+
+      - name: Keep the screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-panel
+          path: dist/e2e-panel
+          if-no-files-found: ignore
+
+  resilience:
+    name: Resilience
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build the package and the demo
+        run: |
+          pnpm devtools:build-pkg
+          pnpm build --configuration development
+
+      # Starts the demo on port 5401 itself. Two checks fail today on open issues and are marked
+      # as known failures in the script, so they print XFAIL and do not fail the job:
+      # - expiry: a crashed tab stays listed for about 150 s (#422);
+      # - stress: the forms collector keeps 100 children per group and does not say so (#423).
+      # The soak check (`soak --minutes 30`) is manual only.
+      - name: Check multitab, expiry, lifecycle and stress
+        run: pnpm e2e:resilience multitab expiry lifecycle stress --json dist/e2e-resilience.json
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-resilience
+          path: dist/e2e-resilience.json
+          if-no-files-found: ignore
+
+  install:
+    name: Install ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      # Every cell reports, so one week's failures are all visible at once.
+      fail-fast: false
+      matrix:
+        include:
+          - name: angular-cli
+            args: --scenarios=angular-cli --pm=npm,pnpm --angular=20.3,21,22 --no-audit
+          - name: angular-cli-serve
+            args: --scenarios=angular-cli-serve --pm=npm,pnpm --angular=20.3,21,22 --no-audit
+          - name: angular-cli-nossr
+            args: --scenarios=angular-cli-nossr --pm=npm,pnpm --angular=20.3,21,22 --no-audit
+          - name: analog
+            args: --scenarios=analog --pm=pnpm --no-audit
+          - name: cli
+            args: --scenarios=cli --pm=npm,pnpm --no-audit
+          - name: package-audit
+            args: --audit-only
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Packs the package, publishes it to a throwaway local registry (port 4873, the apps on the
+      # ports after it) and installs it into fresh apps. A failed run keeps only the logs.
+      - name: Run the cells
+        run: >-
+          pnpm e2e:install ${{ matrix.args }}
+          --report=dist/e2e-install/report.json --logs=dist/e2e-install/logs
+
+      - name: Keep the report and the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-install-${{ matrix.name }}
+          path: dist/e2e-install
+          if-no-files-found: ignore
+
+  report:
+    name: Report the failure
+    needs: [panel, resilience, install]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # One open issue for the weekly run, found by its title.
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="ci: the weekly e2e run fails"
+          body="A job of the weekly E2E workflow failed: $RUN. The run's artifacts hold the reports and logs."
+          number=$(gh issue list --state open --search "\"$title\" in:title" --json number,title \
+            | jq -r --arg title "$title" 'map(select(.title == $title)) | .[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "Still failing: $RUN"
+          else
+            gh issue create --title "$title" --body "$body" --label bug --label 'area: ci'
+          fi

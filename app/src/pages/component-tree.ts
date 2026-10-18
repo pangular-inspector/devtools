@@ -17,7 +17,10 @@ import {
 import type { DevframeRpcClient } from 'devframe/client';
 import { ExtensionBridge, type SourceLocation } from '../extension-bridge';
 import { hostPageId } from '../page-id';
-import { angularVersionAtLeast, lacksCapability } from '@pangular-inspector/devtools/config';
+import {
+  angularVersionAtLeast,
+  lacksCapability,
+} from '@pangular-inspector/devtools/internal/config';
 import { angularPageFor, injectAngularPages } from '../angular-pages';
 import { AngularUnavailable } from '../ui/angular-unavailable';
 import { pickPage } from '../live-pages';

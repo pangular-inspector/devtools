@@ -23,7 +23,7 @@ import {
   HTTP_RULE_STATUSES,
   isHttpRuleStatus,
   type CacheSkip,
-} from '@pangular-inspector/devtools/config';
+} from '@pangular-inspector/devtools/internal/config';
 import { prettyJson } from '../format';
 import { LimitNote } from '../ui/limit-note';
 import { RovingList } from '../ui/roving-list';

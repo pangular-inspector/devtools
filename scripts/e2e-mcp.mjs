@@ -3020,7 +3020,7 @@ async function main() {
   }
 
   const sdk = await loadSdk();
-  const config = await import('@pangular-inspector/devtools/config');
+  const config = await import('@pangular-inspector/devtools/internal/config');
   const state = { stoppers: [] };
   const needsBrowser = ['http', 'actions', 'negative', 'variants', 'docs'].some((phase) =>
     opts.only.has(phase),

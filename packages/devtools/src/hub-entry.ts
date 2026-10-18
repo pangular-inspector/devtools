@@ -45,9 +45,18 @@ export interface HubLoaderHost {
   nodeVersion?: string;
 }
 
+/** The `code` of the error `loadHubServer` throws when this Node.js cannot load the hub. */
+const NODE_TOO_OLD = 'PANGULAR_NODE_TOO_OLD';
+
 /** Why the hub cannot load on this Node.js, with the versions it needs. */
-function nodeTooOld(version: string | undefined): string {
-  return `[pangular] The hub needs Node.js 20.19, 22.12 or later, which can require() ES modules. This is ${version ? `v${version.replace(/^v/, '')}` : 'an older version'}.`;
+function nodeTooOld(version: string | undefined, cause?: unknown): Error {
+  return Object.assign(
+    new Error(
+      `[pangular] The hub needs Node.js 20.19, 22.12 or later, which can require() ES modules. This is ${version ? `v${version.replace(/^v/, '')}` : 'an older version'}.`,
+      cause === undefined ? undefined : { cause },
+    ),
+    { code: NODE_TOO_OLD },
+  );
 }
 
 function nodeHost(): HubLoaderHost {
@@ -78,7 +87,7 @@ function nodeHost(): HubLoaderHost {
 export function loadHubServer(host: HubLoaderHost = nodeHost()): typeof HubServer {
   if (!host.createRequire) {
     // Node.js before 22.3 (and 20.16) has no `process.getBuiltinModule`.
-    if (host.nodeVersion) throw new Error(nodeTooOld(host.nodeVersion));
+    if (host.nodeVersion) throw nodeTooOld(host.nodeVersion);
     throw new Error('[pangular] initPangularHub() runs in Node.js only.');
   }
   const requireHere = host.createRequire(host.from);
@@ -97,11 +106,9 @@ export function loadHubServer(host: HubLoaderHost = nodeHost()): typeof HubServe
   } catch (error) {
     const code = (error as { code?: string }).code;
     if (code === 'ERR_REQUIRE_ESM') {
-      throw new Error(
-        nodeTooOld(
-          host.nodeVersion ?? (globalThis as { process?: { version?: string } }).process?.version,
-        ),
-        { cause: error },
+      throw nodeTooOld(
+        host.nodeVersion ?? (globalThis as { process?: { version?: string } }).process?.version,
+        error,
       );
     }
     throw error;
@@ -127,10 +134,21 @@ function hubBase(base: string): string {
  */
 export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
   // The hub warns about `enabled: true` in production itself.
-  if (!hubEnabled(options.enabled, undefined, () => undefined)) {
-    return disabledHub(hubBase(options.base ?? PANGULAR_HUB_BASE));
+  const base = hubBase(options.base ?? PANGULAR_HUB_BASE);
+  if (!hubEnabled(options.enabled, undefined, () => undefined)) return disabledHub(base);
+  let loaded: typeof HubServer;
+  try {
+    loaded = hubServer();
+  } catch (error) {
+    // A Node.js that cannot load the hub must not take the app's server down with it: the app
+    // runs on without the devtools, and the log says why.
+    if ((error as { code?: string }).code !== NODE_TOO_OLD) throw error;
+    console.warn(
+      `\n  ${(error as Error).message}\n  The devtools hub is off; the app runs without it.\n`,
+    );
+    return disabledHub(base);
   }
-  return hubServer().initPangularHub(options);
+  return loaded.initPangularHub(options);
 }
 
 /** @internal */

@@ -2,7 +2,7 @@ import {
   isEmptyTreeQuery,
   matchesTreeQuery,
   parseTreeQuery,
-} from '@pangular-inspector/devtools/config';
+} from '@pangular-inspector/devtools/internal/config';
 
 export type HydrationStatus = 'hydrated' | 'skipped' | 'mismatched' | 'client';
 

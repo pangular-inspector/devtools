@@ -1,5 +1,5 @@
 import { Component, computed, input, output, signal } from '@angular/core';
-import type { CdCycle } from '@pangular-inspector/devtools/config';
+import type { CdCycle } from '@pangular-inspector/devtools/internal/config';
 import {
   FLAME_MAX_CYCLES,
   SPAN_KIND,

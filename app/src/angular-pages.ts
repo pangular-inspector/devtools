@@ -1,6 +1,6 @@
 import { DestroyRef, effect, inject, signal, untracked, type Signal } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
-import type { AngularPageInfo } from '@pangular-inspector/devtools/config';
+import type { AngularPageInfo } from '@pangular-inspector/devtools/internal/config';
 
 export interface AngularPage extends AngularPageInfo {
   pageId: string;

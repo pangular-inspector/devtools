@@ -71,7 +71,7 @@ The overlay looks for the devframe connection under these paths, in order, and u
 3. Next to the page
 4. `/__devframe/`
 
-The browser logs each path that doesn't answer as a failed request, so the Express hub and the Vite plugin come first and connect without one.
+The browser logs each path that doesn't answer as a failed request, so the Express hub and the Vite plugin come first and connect without one. The overlay remembers the path that answered in the page's `localStorage` and tries it first on the next load, so a setup on a later path, such as `pangular dev` next to `ng serve`, logs the failed requests on the first load only.
 
 It also adds the [floating button](./popup-and-hub.md). With the hub mounted, the button opens the whole hub, with every dock in a side rail.
 

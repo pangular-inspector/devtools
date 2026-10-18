@@ -1,5 +1,5 @@
 import { Component, computed, input } from '@angular/core';
-import type { CdReport } from '@pangular-inspector/devtools/config';
+import type { CdReport } from '@pangular-inspector/devtools/internal/config';
 
 const SHOWN = 10;
 
