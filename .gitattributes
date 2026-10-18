@@ -5,3 +5,4 @@
 *.zip binary
 extension/ui/** linguist-generated=true
 pnpm-lock.yaml linguist-generated=true
+extension/ui/THIRD_PARTY_LICENSES.md -text
