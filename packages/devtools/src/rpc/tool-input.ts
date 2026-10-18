@@ -26,7 +26,7 @@ export type CheckedArgs = { args: Record<string, unknown> } | { error: string };
 const PAGE_KEYS = new Set(['page']);
 
 /**
- * Argument names that 1.0 renamed, with the names that took their place. A
+ * Argument names that were renamed after 0.0.7, with the names that took their place. A
  * call that sends an old name the schema does not list is refused with the
  * new one, instead of the value being dropped without a word.
  */
@@ -39,7 +39,7 @@ const RENAMED_ARGUMENTS: Readonly<Record<string, readonly string[]>> = {
 };
 
 /**
- * Arguments that 1.0 moved to another tool, by the tool they left: each names
+ * Arguments that moved to another tool after 0.0.7, by the tool they left: each names
  * where to go instead. Checked only while that tool's schema lacks the key, as
  * for {@link RENAMED_ARGUMENTS}, so the value is refused instead of dropped.
  */
@@ -225,8 +225,8 @@ function describe(schema: ToolInputSchema | undefined): string {
  * `additionalProperties: false`, or are checked against `additionalProperties`
  * when it is a schema, as for a listed argument. A `page` must be a string,
  * so a wrong one is refused instead of falling back to another tab; an empty
- * one counts as left out. An argument name 1.0 renamed is refused with the
- * name that replaced it (see {@link RENAMED_ARGUMENTS}), and one 1.0 moved off
+ * one counts as left out. An argument name renamed after 0.0.7 is refused with the
+ * name that replaced it (see {@link RENAMED_ARGUMENTS}), and one moved off
  * `toolId` with the tool to use instead (see {@link MOVED_ARGUMENTS}).
  */
 export function checkToolArgs(schema: unknown, input: unknown, toolId?: string): CheckedArgs {
@@ -286,7 +286,7 @@ function renamedTo(key: string, properties: Record<string, ToolInputSchema>): st
   return RENAMED_ARGUMENTS[key]!.find((name) => Object.hasOwn(properties, name));
 }
 
-/** The arguments 1.0 moved off the tool `toolId` (`pangular:<name>`). */
+/** The arguments moved off the tool `toolId` (`pangular:<name>`). */
 function movedFrom(toolId: string): Readonly<Record<string, string>> | undefined {
   const name = toolId.replace(/^pangular:/, '');
   return Object.hasOwn(MOVED_ARGUMENTS, name) ? MOVED_ARGUMENTS[name] : undefined;

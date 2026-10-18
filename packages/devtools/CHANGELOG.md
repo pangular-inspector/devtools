@@ -2,9 +2,9 @@
 
 All notable changes to `@pangular-inspector/devtools` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com).
 
-## 1.0.0
+## Unreleased
 
-The first stable release. From 1.0, the agent tool names, their arguments and answers, and the exports of each entry point follow semver. Most setups need changes when they come from 0.0.7, so read **Upgrading from 0.0.7** first.
+Most setups need changes when they come from 0.0.7, so read **Upgrading from 0.0.7** first.
 
 ### Upgrading from 0.0.7
 
@@ -25,7 +25,7 @@ These changes can break a 0.0.7 setup without an error.
 - **`initDevframe()` hosts need `ws: false`** (or a `server`) to connect. Without it, Devframe advertises a WebSocket that `nodeMiddleware` alone does not serve, and the page never connects. Import `initDevframe` from `@pangular-inspector/devtools/devframe`. See "Mount only the panel" in the Express docs.
 - **Don't install `devframe` yourself.** The 0.0.7 README said `npm install @pangular-inspector/devtools devframe`. The package depends on the Devframe version it needs, and a second copy at another version can split the panel from the definition. Remove a direct `devframe` dependency unless your own code uses it.
 - **`pangular dev` asks for the MCP token.** While the one-time code is on, its `/__mcp` route needs the same bearer token as the Vite plugin and the Express hub. Send it as for those servers, or pass `--no-auth` to turn both the code and the token off.
-- **Trusted browsers sign in again once.** Session tokens moved to `~/.pangular-inspector/auth/<project>/auth.json`, one folder per project, readable by you only. They expire 7 days after the code was exchanged. 1.0 doesn't read the old files, `~/.devframes/devframe/auth.json` and `~/.pangular/devframe/auth.json`. Delete them if no other devframe tool uses them.
+- **Trusted browsers sign in again once.** Session tokens moved to `~/.pangular-inspector/auth/<project>/auth.json`, one folder per project, readable by you only. They expire 7 days after the code was exchanged. This release doesn't read the old files, `~/.devframes/devframe/auth.json` and `~/.pangular/devframe/auth.json`. Delete them if no other devframe tool uses them.
 - **Wrong one-time codes lock the server.** After 3 wrong codes on a connection, each attempt waits longer, up to 60 seconds. All clients together get at most 10 wrong codes a minute. After 50 wrong codes since the last right one, the server accepts no code until it restarts. Pages that already connected stay connected. If you didn't type those codes, something on your machine or network is guessing. Restart the dev server to get a new code.
 - **The Analog, Capacitor and TanStack Query agent tools are listed only for apps that use them:** the project's `package.json` lists the library, the project is an Analog app, or a page reports the library's data. To list them anyway, set `inspectors.<name>` or `agent.tools.<name>` to `true`.
 - **Analog on pnpm needs one setting.** `@analogjs/vite-plugin-nitro` imports `h3` without declaring it, so under pnpm it can resolve to the h3 2 that this package brings in, and `vite build` fails with "does not provide an export named 'createEvent'". Declare `h3@^1` for the plugin with pnpm `packageExtensions`, as the Analog guide shows.
@@ -35,9 +35,9 @@ These changes can break a 0.0.7 setup without an error.
 
 ### Agent tools renamed
 
-1.0 renames tools and arguments so that each name follows one pattern: an optional library prefix (`ngrx-`, `redux-`, `tanstack-`, `capacitor-`, `analog-`), then a verb that says whether the tool reads source (`scan`), reads the page (`list`, `inspect`, `explain`, `lint`) or writes (`run`, `set`, `record`). There are no aliases. A call to an old tool name is an unknown tool. An old argument is refused with `isError` and the name to use instead, such as ``There is no `selector` argument; pass `component`.`` An argument that moved to another tool (`record` on `change-detection`, `overlay` on `hydration`, `routeId` and `on` on `navigate`) is refused with `isError` and the tool to use. Tool ids are `pangular:<name>` on the server and `pangular_<name>` for MCP clients; the tables leave the prefix out.
+This release renames tools and arguments so that each name follows one pattern: an optional library prefix (`ngrx-`, `redux-`, `tanstack-`, `capacitor-`, `analog-`), then a verb that says whether the tool reads source (`scan`), reads the page (`list`, `inspect`, `explain`, `lint`) or writes (`run`, `set`, `record`). There are no aliases. A call to an old tool name is an unknown tool. An old argument is refused with `isError` and the name to use instead, such as ``There is no `selector` argument; pass `component`.`` An argument that moved to another tool (`record` on `change-detection`, `overlay` on `hydration`, `routeId` and `on` on `navigate`) is refused with `isError` and the tool to use. Tool ids are `pangular:<name>` on the server and `pangular_<name>` for MCP clients; the tables leave the prefix out.
 
-| 0.0.7                                                                                    | 1.0.0                                                                                                           |
+| 0.0.7                                                                                    | Now                                                                                                             |
 | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `get-routes`, `get-components`, `get-pipes`, `get-signals`, `get-providers`              | `scan-routes`, `scan-components`, `scan-pipes`, `scan-signals`, `scan-providers`                                |
 | `get-ngrx-store`, `build-meta`                                                           | `ngrx-scan`, `scan-build`                                                                                       |
@@ -55,7 +55,7 @@ These changes can break a 0.0.7 setup without an error.
 
 Some tools are merged or split:
 
-| 0.0.7                                                                    | 1.0.0                                                                            |
+| 0.0.7                                                                    | Now                                                                              |
 | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
 | `wait-for-form` (`since`)                                                | `wait-for` with `condition: "form"` (`after`)                                    |
 | `navigate` with `action: "navigate"`                                     | `navigate` with `action: "go"`                                                   |
@@ -69,7 +69,7 @@ Some tools are merged or split:
 
 Arguments and resources:
 
-| 0.0.7                                                                                               | 1.0.0                                                                                                  |
+| 0.0.7                                                                                               | Now                                                                                                    |
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `pageId` on any tool                                                                                | `page`                                                                                                 |
 | `selector` naming a component (`inspect-component`, `inspect-signals`, `inspect-route`, `wait-for`) | `component`                                                                                            |
@@ -87,7 +87,7 @@ Answers changed too. Every tool answers with one plain text block that holds the
 
 ### Removed exports
 
-Each entry point exports only its documented API, which semver covers from 1.0. The values below were internals, and their types are gone with them. If you used one, open an issue with the use case.
+Each entry point exports only its documented API. The values below were internals, and their types are gone with them. If you used one, open an issue with the use case.
 
 | Entry point                    | Removed                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -181,7 +181,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 ### Fixes
 
-- Fixes from the audit of every inspector, the panel shell, the hub, the extension and the native overlays (#361, #362, #363, #364), the follow-ups in #418, and the 1.0.0 release blockers (#432).
+- Fixes from the audit of every inspector, the panel shell, the hub, the extension and the native overlays (#361, #362, #363, #364), the follow-ups in #418, and the release blockers found by the test campaign (#432).
 - One malformed component report no longer breaks the agent tools for every page. Reports are checked when they reach the server.
 - Change detection counts only template runs, not skipped children or the `checkNoChanges` pass.
 - The forms tools answer with the forms of the tab they were asked about.
@@ -202,12 +202,12 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - A quick start, and a panel screenshot on every inspector page.
 - Pages for the command palette, settings, terminals, the popup and hub, configuration, other servers (Hono, h3, Fastify), Capacitor, the timeline, errors, audit, TanStack Query, agent skills, browser agents and writing a plugin.
 - A roadmap page.
-- A **Names before 1.0** table in the agent tools page, and the release steps, the public API and the supported versions in the publishing guide.
-- Corrected guides and samples from the 1.0 review: the Vite auth default in the Analog guide and the glossary, JSON samples without a path comment, no separate devframe install in the package README, and `ws: false` for a panel-only devframe host.
+- A **Renamed tools** table in the agent tools page, and the public API and the supported versions in the publishing guide.
+- Corrected guides and samples from the readiness review: the Vite auth default in the Analog guide and the glossary, JSON samples without a path comment, no separate devframe install in the package README, and `ws: false` for a panel-only devframe host.
 
 ### Release and CI
 
-- A tag publishes the package from CI with npm provenance (`.github/workflows/release.yml`). The workflow checks that the tag, the version and this changelog agree, runs the tests, and installs the exact tarball into fresh apps with `verify:publish` and `e2e:install` before it publishes (#430).
+- The `leaks-real` test expects the rows the collector really reports (#430).
 - Pull requests run the security and MCP end-to-end checks, and a weekly job runs the rest.
 - The packed `package.json` leaves out `devDependencies`, `scripts` and the `nx` block, and declares `sideEffects`.
 - Dependencies: devframe and `@devframes/*` 1.2.5 (was 1.2.0). `@devframes/plugin-messages`, `@devframes/plugin-terminals` and `axe-core` are added. `h3` is no longer a dependency.

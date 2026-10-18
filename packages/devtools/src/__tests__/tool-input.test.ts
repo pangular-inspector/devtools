@@ -93,7 +93,7 @@ describe('checkToolArgs', () => {
     );
   });
 
-  it('refuses the argument names 1.0 renamed, naming the new one', () => {
+  it('refuses the renamed argument names, naming the new one', () => {
     // `pageId` was the second page argument; it is refused even where the tool has no `page`.
     expect(error({ selector: 'x', pageId: 'p1' })).toBe(
       'There is no `pageId` argument; pass `page`.',
@@ -122,7 +122,7 @@ describe('checkToolArgs', () => {
     );
   });
 
-  it('refuses an argument 1.0 moved to another tool, naming that tool', () => {
+  it('refuses an argument that moved to another tool, naming that tool', () => {
     const none = { type: 'object', properties: { page: { type: 'string' } } };
     const moved = (tool: string, args: Record<string, unknown>) => {
       const checked = checkToolArgs(none, args, `pangular:${tool}`);

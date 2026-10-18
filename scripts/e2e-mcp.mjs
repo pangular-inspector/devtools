@@ -2270,7 +2270,7 @@ async function runNegative(client, transport, tools, state) {
     checkAnswer(record, undefined, 'error');
   }
 
-  // 1.0 is a clean break: the names before it are gone, not aliased.
+  // The rename is a clean break: the old names are gone, not aliased.
   const listed = new Set(tools.map((tool) => short(tool.name)));
   for (const old of RETIRED_TOOLS) {
     if (listed.has(old)) failure(`${transport} tools/list`, `retired tool ${old} is still listed`);
@@ -2294,7 +2294,7 @@ async function runNegative(client, transport, tools, state) {
   }
 }
 
-/** Tool names 1.0 retired (see apps/docs/src/content/agents/tools.md, Names before 1.0). */
+/** Retired tool names (see apps/docs/src/content/agents/tools.md, Renamed tools). */
 const RETIRED_TOOLS = [
   'get-routes',
   'get-components',
@@ -2829,9 +2829,9 @@ async function runVariants(opts, sdk, browser, config, state) {
 
 function runDocs(state) {
   const docsDir = join(ROOT, 'apps/docs/src/content');
-  // The table of names before 1.0 lists names that are gone on purpose.
+  // The renamed tools table lists names that are gone on purpose.
   const toolsMd = readFileSync(join(docsDir, 'agents/tools.md'), 'utf8').split(
-    /^## Names before 1\.0$/m,
+    /^## Renamed tools$/m,
   )[0];
   const serverMd = readFileSync(join(docsDir, 'agents/mcp-server.md'), 'utf8');
   const configMd = readFileSync(join(docsDir, 'getting-started/configuration.md'), 'utf8');

@@ -2,8 +2,8 @@ name: E2E
 
 # The slow end-to-end checks that do not fit a pull request: every panel view in a real browser,
 # multi-tab and lifecycle resilience, and the install matrix from a packed tarball. Pull requests
-# run the security and MCP checks (ci.yml), and the release runs a slice of the install matrix on
-# the tarball it publishes (release.yml). See apps/docs/src/content/contributing/development.md.
+# run the security and MCP checks (ci.yml), and a release can run a slice of the install matrix on
+# its tarball. See apps/docs/src/content/contributing/development.md.
 on:
   schedule:
     # Mondays at 07:00 UTC, an hour after latest.yml and compat.yml.

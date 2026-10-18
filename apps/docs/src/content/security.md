@@ -94,7 +94,7 @@ A refused code is never compared with the real one. devframe gives you a new cod
 
 A browser that exchanges the code gets a session token, so it doesn't need the code again after a reload. The server keeps those tokens in `~/.pangular-inspector/auth/<project>/auth.json`, one folder per project (named after a hash of its path), so a token from one project doesn't open another project's server. The folder is readable by you only (mode `0700`), and the file too (`0600`). A token expires 7 days after the code was exchanged. To sign out every browser, delete the project's folder, or all of `~/.pangular-inspector/auth`, and restart the server.
 
-Versions before 1.0 kept the tokens in `~/.devframes/devframe/auth.json` (the Express hub and the Vite plugin) or `~/.pangular/devframe/auth.json` (the CLI), readable by other users and without expiry. Pangular Inspector 1.0 doesn't read those files. Delete them if no other devframe tool uses them.
+Version 0.0.7 and earlier kept the tokens in `~/.devframes/devframe/auth.json` (the Express hub and the Vite plugin) or `~/.pangular/devframe/auth.json` (the CLI), readable by other users and without expiry. Newer versions don't read those files. Delete them if no other devframe tool uses them.
 
 ### Express hub
 

@@ -87,7 +87,7 @@ export function mcpEndpoint(
   const origin = `${scheme}://${clientHost(options.host ?? DEFAULT_HOST)}:${options.port ?? DEFAULT_PORT}`;
   const hub = options.base !== undefined && normalizeBase(options.base) !== '/';
   const base = hub ? normalizeBase(options.base as string) : '/';
-  // Every server asks for the token while the one-time code is on (the CLI too, since 1.0).
+  // Every server asks for the token while the one-time code is on (the CLI too).
   return { url: `${origin}${base}__mcp`, origin, token: true, hub };
 }
 
