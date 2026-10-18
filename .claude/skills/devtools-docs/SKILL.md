@@ -114,6 +114,7 @@ Rules:
 ## 6. Code samples
 
 - Always set the language. Put the file path in a comment on the first line: `// src/app/app.config.ts`.
+- JSON samples get no path comment: JSON has no comments and the copy button copies the whole block. Name the file in the sentence above the sample instead.
 - Highlight lines with `{3}` or `{2,5-7}` after the language. Count the path comment as line 1.
 - Install commands use a code group: ` ```bash group="install" name="pnpm" active ` then npm, yarn, bun.
 - `file="path#L5-L20"` imports a real file (relative to `apps/docs`, nothing outside it). It is not a title.

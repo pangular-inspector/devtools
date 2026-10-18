@@ -127,10 +127,9 @@ Below the live tree, the **Startup** section shows how the shown page started, f
 
 The first stable time is exact when the overlay or the startup hook watched the app become stable. Sometimes the overlay loads after that, as when `main.ts` imports it after `whenStable()`. The overlay then checks an app that is already stable, so it knows only that the app became stable before this time. The row reads **First stable, at the latest**.
 
-**Slowest providers** lists the providers that took longest to construct, by own time (without the providers each one created while it ran), with total time and instance count. Components and directives show up in it too, since Angular creates them through injectors. Angular reports provider construction only through its own profiling (`ng.enableProfiling()`, Angular 20 or later, development builds), so this list needs the startup hook loaded before Angular, from the polyfills of your development build. A configuration's `polyfills` replaces the build target's list, so repeat the polyfills the target already has and add the hook after them:
+**Slowest providers** lists the providers that took longest to construct, by own time (without the providers each one created while it ran), with total time and instance count. Components and directives show up in it too, since Angular creates them through injectors. Angular reports provider construction only through its own profiling (`ng.enableProfiling()`, Angular 20 or later, development builds), so this list needs the startup hook loaded before Angular, from the polyfills of your development build. A configuration's `polyfills` replaces the build target's list, so repeat the polyfills the target already has and add the hook after them. In the build target of `angular.json` (or `project.json`):
 
 ```json
-// angular.json (or project.json), build target
 "configurations": {
   "development": {
     "polyfills": ["zone.js", "@pangular-inspector/devtools/startup-hook"]

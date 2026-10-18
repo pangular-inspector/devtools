@@ -13,24 +13,28 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`, from `pack
 
 ## What ships
 
-The package publishes `dist/` and `bin.mjs`. On publish, `publishConfig.exports` points every entry point at the built files:
+The package publishes `dist/`, `skills/` (the [agent skills](../agents/skills.md), one folder per skill) and `bin.mjs`. On publish, `publishConfig.exports` points every entry point at the built files:
 
-| Import                                        | Published file            |
-| --------------------------------------------- | ------------------------- |
-| `@pangular-inspector/devtools`                | `dist/devframe.mjs`       |
-| `@pangular-inspector/devtools/devframe`       | `dist/devframe.mjs`       |
-| `@pangular-inspector/devtools/config`         | `dist/config.mjs`         |
-| `@pangular-inspector/devtools/overlay`        | `dist/overlay.mjs`        |
-| `@pangular-inspector/devtools/overlay-manual` | `dist/overlay-manual.mjs` |
-| `@pangular-inspector/devtools/capacitor-hook` | `dist/capacitor-hook.mjs` |
-| `@pangular-inspector/devtools/store-hook`     | `dist/store-hook.mjs`     |
-| `@pangular-inspector/devtools/startup-hook`   | `dist/startup-hook.mjs`   |
-| `@pangular-inspector/devtools/plugin`         | `dist/plugin.mjs`         |
-| `@pangular-inspector/devtools/popup`          | `dist/popup.mjs`          |
-| `@pangular-inspector/devtools/http`           | `dist/http.mjs`           |
-| `@pangular-inspector/devtools/hub`            | `dist/hub.mjs`            |
-| `@pangular-inspector/devtools/ssr`            | `dist/ssr.mjs`            |
-| `@pangular-inspector/devtools/vite`           | `dist/vite.mjs`           |
+| Import                                                | Published file                    |
+| ----------------------------------------------------- | --------------------------------- |
+| `@pangular-inspector/devtools`                        | `dist/devframe.mjs`               |
+| `@pangular-inspector/devtools/devframe`               | `dist/devframe.mjs`               |
+| `@pangular-inspector/devtools/config`                 | `dist/config.mjs`                 |
+| `@pangular-inspector/devtools/cd-data`                | `dist/cd-data.mjs`                |
+| `@pangular-inspector/devtools/overlay`                | `dist/overlay.mjs`                |
+| `@pangular-inspector/devtools/overlay-manual`         | `dist/overlay-manual.mjs`         |
+| `@pangular-inspector/devtools/capacitor-hook`         | `dist/capacitor-hook.mjs`         |
+| `@pangular-inspector/devtools/store-hook`             | `dist/store-hook.mjs`             |
+| `@pangular-inspector/devtools/startup-hook`           | `dist/startup-hook.mjs`           |
+| `@pangular-inspector/devtools/overlay-angular-native` | `dist/overlay-angular-native.mjs` |
+| `@pangular-inspector/devtools/overlay-nativescript`   | `dist/overlay-nativescript.mjs`   |
+| `@pangular-inspector/devtools/plugin`                 | `dist/plugin.mjs`                 |
+| `@pangular-inspector/devtools/popup`                  | `dist/popup.mjs`                  |
+| `@pangular-inspector/devtools/cli`                    | `dist/cli.mjs`                    |
+| `@pangular-inspector/devtools/http`                   | `dist/http.mjs`                   |
+| `@pangular-inspector/devtools/hub`                    | `dist/hub.mjs`                    |
+| `@pangular-inspector/devtools/ssr`                    | `dist/ssr.mjs`                    |
+| `@pangular-inspector/devtools/vite`                   | `dist/vite.mjs`                   |
 
 The `pangular` binary is `bin.mjs`. In the workspace, the exports point at the TypeScript sources instead.
 
@@ -61,6 +65,13 @@ Run the checks from [Development setup](./development.md), then build the packag
 
 ```bash
 pnpm devtools:build-pkg
+```
+
+Then check what npm users get. `pnpm verify:publish` publishes the package to a throwaway local registry, creates a fresh Angular CLI app, installs the package from that registry and checks that the hub answers. Pass `--scenario=analog` for an Analog app:
+
+```bash
+pnpm verify:publish
+pnpm verify:publish --scenario=analog
 ```
 
 ### 3. Refresh the extension UI

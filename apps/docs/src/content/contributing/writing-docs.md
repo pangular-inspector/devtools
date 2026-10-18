@@ -170,7 +170,7 @@ node scripts/docs-screenshots.mjs --only components,signals
 
 ### Fences
 
-Always set the language. When the code belongs in a specific file, put the path in a comment on the first line. Highlight the lines that matter with `{...}` after the language.
+Always set the language. When the code belongs in a specific file, put the path in a comment on the first line. JSON has no comments and the copy button copies the whole block, so for a JSON sample name the file in the sentence above it instead. Highlight the lines that matter with `{...}` after the language.
 
 ````md
 ```ts {6}

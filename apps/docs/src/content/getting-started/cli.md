@@ -33,12 +33,17 @@ The package installs a `pangular` binary. Run it from the root of your Angular w
 
 If the project folder has no `angular.json` and no `package.json` that depends on `@angular/core`, the CLI prints a warning on stderr, because the scans find nothing there.
 
+### Nx workspaces
+
+The source scan reads the projects listed in `angular.json`, plus the `src` folder of the project folder. It does not read Nx `project.json` files. In an Nx workspace without `angular.json`, run the CLI from the workspace root and the scan finds no components or routes, with no warning.
+
+Point `--root` at the app instead, such as `--root apps/shop`. The scan then covers that app's `src` folder, but not the libraries the app imports from other folders. The live tabs are not affected: they read the running app. The Express hub scans the server's working directory the same way, so in an Nx workspace started from the root its source-scan data is empty too.
+
 ### Config file
 
-The file holds the same options as `createPangular()`, as JSON:
+The file holds the same options as `createPangular()`, as JSON. Save this as `pangular.config.json`:
 
 ```json
-// pangular.config.json
 {
   "inspectors": {"analog": false},
   "agent": {"readOnly": true},
@@ -48,10 +53,9 @@ The file holds the same options as `createPangular()`, as JSON:
 
 A missing `--config` file or invalid JSON stops the command with an error.
 
-The file can also list `allowedOrigins` for `pangular dev`, like `--allowed-origin`. They stay on the server and are not part of the config pages receive:
+The file can also list `allowedOrigins` for `pangular dev`, like `--allowed-origin`. They stay on the server and are not part of the config pages receive. In `pangular.config.json`:
 
 ```json
-// pangular.config.json
 {
   "allowedOrigins": ["http://192.168.1.20:8100"]
 }
@@ -98,10 +102,10 @@ The default command starts a local server with the devtools UI. `dev` is optiona
 npx @pangular-inspector/devtools dev --port 9999 --open
 ```
 
-When the server is ready, it prints the version, the panel URL, the panel URL for [Angular Native](./angular-native.md) apps and the MCP endpoint:
+When the server is ready, it prints the package version, the panel URL, the panel URL for [Angular Native](./angular-native.md) apps and the MCP endpoint:
 
 ```text
-  pangular v0.0.7
+  pangular v<version>
   Panel: http://localhost:9999/
   Angular Native apps: http://localhost:9999/?view=angular-native
   MCP:   http://localhost:9999/__mcp
@@ -115,7 +119,7 @@ When the server listens on your network (`--host 0.0.0.0` or a network address),
 
 | Flag                        | What it does                                                                                                                                                                                                                                                                                                                 |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--port <port>`             | Port to listen on. The default is 9999. If it is taken, a random free port is used.                                                                                                                                                                                                                                          |
+| `--port <port>`             | Port to listen on. The default is 9999. Without `--port`, if 9999 is taken, a free port is used. With `--port`, a taken port stops the server with an error.                                                                                                                                                                 |
 | `--host <host>`             | Host to bind to. The default is `localhost`.                                                                                                                                                                                                                                                                                 |
 | `--open`, `--no-open`       | Open the browser on start, or not.                                                                                                                                                                                                                                                                                           |
 | `--no-auth`                 | Turn off the one-time code the server asks for.                                                                                                                                                                                                                                                                              |
@@ -155,11 +159,11 @@ npx @pangular-inspector/devtools build --outDir dist-report
 
 ### Report flags
 
-| Flag             | What it does                                                              |
-| ---------------- | ------------------------------------------------------------------------- |
-| `--outDir <dir>` | Output directory. The default is `dist-static`. It is emptied first.      |
-| `--pretty`       | Pretty-print the data files. They get larger on disk.                     |
-| `--force`        | Empty `--outDir` even when it holds files that are not a previous report. |
+| Flag             | What it does                                                                                                                           |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `--outDir <dir>` | Output directory, relative to the project folder (`--root`). The default is `dist-static`. It is emptied first. `--out-dir` works too. |
+| `--pretty`       | Pretty-print the data files. They get larger on disk.                                                                                  |
+| `--force`        | Empty `--outDir` even when it holds files that are not a previous report.                                                              |
 
 ### Output folder checks
 

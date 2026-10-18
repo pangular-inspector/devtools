@@ -212,10 +212,9 @@ Any other library that calls `window.__REDUX_DEVTOOLS_EXTENSION__.connect()` rep
 
 ### Set it up
 
-These libraries look for the extension once, when the app starts, and the overlay usually connects later. Load `@pangular-inspector/devtools/store-hook` before your app, from the polyfills of your development configuration. A configuration's `polyfills` replace the list in the build's `options`, so copy that list and add the hook to it:
+These libraries look for the extension once, when the app starts, and the overlay usually connects later. Load `@pangular-inspector/devtools/store-hook` before your app, from the polyfills of your development configuration. A configuration's `polyfills` replace the list in the build's `options`, so copy that list and add the hook to it. In `angular.json` (excerpt):
 
 ```json
-// angular.json (excerpt)
 {
   "projects": {
     "my-app": {

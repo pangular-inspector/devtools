@@ -277,7 +277,7 @@ Subscription tracking is off by default. **Track subscriptions** turns it on for
 
 A subscription is flagged when it is still open and either its instance was destroyed, or no instance of its class is left on the page and one was destroyed after it opened. Fix it with `takeUntilDestroyed()`, `DestroyRef.onDestroy` or the `async` pipe.
 
-**Stop tracking subscriptions** puts `subscribe` back. Subscriptions made before tracking started are not seen, so reload the page or go to the screen again after you start. Tracking stays on across a reload of the tab. The [`track-subscriptions`](../agents/tools.md#track-subscriptions) tool is the same switch.
+Press **Track subscriptions** again to put `subscribe` back. Subscriptions made before tracking started are not seen, so reload the page or go to the screen again after you start. Tracking stays on across a reload of the tab. The [`track-subscriptions`](../agents/tools.md#track-subscriptions) tool is the same switch.
 
 ### Source mode
 

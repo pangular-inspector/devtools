@@ -69,7 +69,7 @@ export default defineConfig({
 
 The default export of `@pangular-inspector/devtools/devframe` uses the defaults. Call `createPangular()` to pass options:
 
-```ts {6-8}
+```ts {6-9}
 // src/server.ts
 import express from 'express';
 import {createPangular, initDevframe} from '@pangular-inspector/devtools/devframe';
@@ -77,9 +77,12 @@ import {createPangular, initDevframe} from '@pangular-inspector/devtools/devfram
 const app = express();
 const devtools = initDevframe(createPangular({agent: {readOnly: true}}), {
   base: '/__pangular/',
+  ws: false,
 });
 app.use(devtools.nodeMiddleware);
 ```
+
+`ws: false` serves the connection over server-sent events on the same Express app. See [Mount only the panel](./express.md#mount-only-the-panel).
 
 ## The options
 

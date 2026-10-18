@@ -93,8 +93,10 @@ The peer range is `@angular/core` and `@angular/common` `>=12.2` with no upper b
 | 17.3                    | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
 | 19.2                    | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
 | 20.0                    | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
+| 20.3 (latest 20.x)      | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
 | 21 (latest 21.x)        | 22      | The page-side tests against a real Angular app                            | Every push to `main`, and weekly      |
 | 22 (latest 22.x)        | 22      | The page-side tests, including Signal Forms                               | Every push to `main`, and weekly      |
+| `next` (prerelease)     | 22      | The page-side tests. A failure is reported but does not fail the run      | Every push to `main`, and weekly      |
 | 22 (repository version) | 24      | Every package and panel test, the type checks and axe                     | Every pull request and push to `main` |
 | Newest the ranges allow | 24      | A fresh Angular CLI app and a fresh Analog app with the package installed | Weekly                                |
 
@@ -194,7 +196,6 @@ npx @pangular-inspector/devtools
 ```
 
 ```json group="setup" name="Client-only Angular CLI" image="https://cdn.simpleicons.org/angular/DD0031"
-// proxy.conf.json
 {
   "/__pangular": {
     "target": "http://localhost:9999",
@@ -204,7 +205,7 @@ npx @pangular-inspector/devtools
 }
 ```
 
-A client-only app (no SSR) has no server of its own to mount the devtools in. See [Client-only Angular CLI app](#client-only-angular-cli-app).
+A client-only app (no SSR) has no server of its own to mount the devtools in. Its tab shows `proxy.conf.json`, which forwards `/__pangular` to the standalone CLI. See [Client-only Angular CLI app](#client-only-angular-cli-app).
 
 ### Browser part
 
@@ -252,8 +253,9 @@ An app created with `ng new --ssr=false` only runs `ng serve`. Run the standalon
   </ngmd-step>
 </ngmd-workflow>
 
+Point the dev server at the proxy file in `angular.json` (excerpt):
+
 ```json
-// angular.json (excerpt)
 {
   "projects": {
     "my-app": {

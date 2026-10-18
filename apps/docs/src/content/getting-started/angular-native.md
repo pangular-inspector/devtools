@@ -63,7 +63,7 @@ The overlay marks its component reports with `platform: 'angular-native'`, and t
 ## Requirements
 
 - A development build. Angular publishes its debug API on `globalThis.ng` only when `ngDevMode` is on, which is the default in a Metro development build.
-- An app started with `mount()` from `@ng-native/platform`. The overlay needs the root node it returns.
+- An app started with `mount()` from `@ng-native/platform`. The overlay needs the root node it returns. The demo uses `@ng-native/*` 0.2.0, the version the overlay is written against.
 - A `WebSocket` global and a standards-compliant `URL`. React Native provides `WebSocket`. Expo provides `URL`. React Native's own `URL` is read-only, and the client sets the `protocol` of the socket URL, so a bare React Native app needs a polyfill such as `react-native-url-polyfill`.
 
 ## Set up

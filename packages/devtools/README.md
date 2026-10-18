@@ -5,10 +5,10 @@ Pangular Inspector, the unified Angular devtools. Inspect component trees, signa
 ## Install
 
 ```sh
-npm install @pangular-inspector/devtools devframe
+npm install -D @pangular-inspector/devtools
 ```
 
-Then pick the setup for your app in the [installation guide](https://pangular-inspector.dev/getting-started/installation/).
+Devframe comes with the package, so don't install it separately. Install the package as a regular dependency instead if your SSR `server.ts` imports the hub. Then pick the setup for your app in the [installation guide](https://pangular-inspector.dev/getting-started/installation/).
 
 ## Try it without installing
 

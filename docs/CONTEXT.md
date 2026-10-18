@@ -109,7 +109,7 @@ Masking values before they reach the panel or an agent: field names that look se
 _Avoid_: sanitizing, scrubbing, hiding
 
 **One-time code**:
-The code the server prints in the terminal, which a browser exchanges before it can read any data. It is on by default for the Express hub and turned on by the Vite plugin when a non-loopback host or origin is allowed. `auth: false` turns it off.
+The code the server prints in the terminal, which a browser exchanges before it can read any data. It is on by default for the Express hub and the Vite plugin. `auth: false` turns it off.
 _Avoid_: token (the MCP endpoint's bearer token is a different thing), password, PIN
 
 **Lint**:

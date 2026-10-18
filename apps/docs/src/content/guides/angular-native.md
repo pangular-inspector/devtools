@@ -120,7 +120,7 @@ The server listens on `localhost` only, which the iOS simulator reaches directly
 When it is ready, the server prints the Angular Native view on its own line:
 
 ```text
-  pangular v0.0.7
+  pangular v<version>
   Panel: http://localhost:9999/
   Angular Native apps: http://localhost:9999/?view=angular-native
   MCP:   http://localhost:9999/__mcp
@@ -150,7 +150,7 @@ If the app reports to a hub (Express or the Vite plugin) instead, pick the **Ang
 
 ## Try the demo
 
-`examples/angular-native` is an Expo app wired up this way, with a root service, an `@ngrx/signals` store and components with signals to inspect. It is outside the pnpm workspace and installs with npm, using a tarball of the devtools package built from this repository:
+`examples/angular-native` is an Expo app wired up this way, with a root service, an `@ngrx/signals` store and components with signals to inspect. It is outside the pnpm workspace and installs with npm, using a tarball of the devtools package built from this repository. It uses `@ng-native/*` 0.2.0. The overlay's tests run against a simulated view tree and connection, and no automated test runs the demo on a simulator or device:
 
 ```bash
 cd examples/angular-native

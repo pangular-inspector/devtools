@@ -4,7 +4,7 @@ description: Add the devtools to an Analog app, step by step.
 ---
 
 <ngmd-hero title="Set up Analog" logo="https://analogjs.org/img/logos/analog-logo.svg" gradient>
-  One Vite plugin and one dynamic import. You get the Angular inspectors, the NgRx dock, the Analog dock and an MCP endpoint on the Vite dev server.
+  One Vite plugin. You get the Angular inspectors, the NgRx dock, the Analog dock and an MCP endpoint on the Vite dev server.
 </ngmd-hero>
 
 # Set up Analog
@@ -79,16 +79,7 @@ The plugin runs on the dev server only (`apply: 'serve'`). Production builds do 
 
 ### Plugin options
 
-All four are optional.
-
-| Option           | Default                                        | What it does                                           |
-| ---------------- | ---------------------------------------------- | ------------------------------------------------------ |
-| `base`           | `/__devframes/`                                | Where the hub is mounted.                              |
-| `apiPrefix`      | Read from your Analog config                   | The API prefix used to tell API calls from page calls. |
-| `allowedOrigins` | none                                           | Extra page origins accepted next to localhost.         |
-| `auth`           | on if a non-loopback host or origin is allowed | Whether the devtools ask for the one-time code.        |
-
-The plugin also takes the devtools options. See [Vite and Analog](../getting-started/vite.md#options) and [Configuration](../getting-started/configuration.md).
+Every option is optional. `apiPrefix` is read from your Analog config, and the one-time code (`auth`) is on by default. The plugin also takes the devtools options. See [Vite and Analog options](../getting-started/vite.md#options) for the full list and [Configuration](../getting-started/configuration.md) for the devtools options.
 
 ### Custom hostnames
 
@@ -100,7 +91,7 @@ The plugin adds the overlay to the pages the dev server serves, so `src/main.ts`
 
 ## Step 3: Open the devtools
 
-Start the dev server as usual. Then:
+Start the dev server as usual. The terminal prints a one-time code. Enter it when the page or the panel asks for it. Then:
 
 | What            | Where                                       |
 | --------------- | ------------------------------------------- |
@@ -111,7 +102,7 @@ Start the dev server as usual. Then:
 Open the **Analog** dock to see file routes, server calls, render modes, content and lint. See [the Analog inspector](../inspectors/analog.md) for each view.
 
 <ngmd-callout type="tip" title="Connect your agent">
-  Point your MCP client at <code>http://localhost:5173/__devframes/__mcp</code> with an <code>Origin</code> header. See <a href="../agents/mcp-server.md">MCP server</a>. The <code>analog-server-calls</code> and <code>analog-call-api</code> tools only work through the Vite plugin.
+  Point your MCP client at <code>http://localhost:5173/__devframes/__mcp</code> with an <code>Origin</code> header and the bearer token. See <a href="../agents/mcp-server.md">MCP server</a>. The <code>analog-server-calls</code> and <code>analog-call-api</code> tools only work through the Vite plugin.
 </ngmd-callout>
 
 ## Catch hydration errors from the first load

@@ -195,7 +195,7 @@ The extension has no content scripts, so it runs nothing in the pages you browse
 
 <ngmd-accordion>
   <ngmd-accordion-item title="The panel does not appear" open>
-    The page did not look like an Angular app within about five seconds of opening DevTools. Check that it renders an <code>ng-version</code> attribute or exposes <code>window.ng</code>, which development builds do. Then close and reopen DevTools, or reload the page.
+    The page did not look like an Angular app within about five seconds of opening DevTools. Check that it renders an <code>ng-version</code> attribute or exposes <code>window.ng</code>, which development builds do. If the page shows a prompt for the one-time code, the extension cannot check the page until you answer or close the prompt. Then close and reopen DevTools, or reload the page.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The panel asks me to allow access">
     The page is not on a loopback host. Click <strong>Allow access</strong> to let the extension reach that host. Chrome asks you to confirm.

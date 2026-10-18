@@ -48,6 +48,24 @@ These tabs read the running page through Angular's debug API. They need a develo
   <ngmd-card icon="search" title="SSR & HTTP" link="/inspectors/ssr-http" cta="SSR & HTTP">
     An HTTP timeline for SSR and client calls, fault injection, hydration stats and the TransferState payload.
   </ngmd-card>
+  <ngmd-card icon="lightbulb" title="TanStack Query" link="/inspectors/tanstack-query" cta="TanStack Query">
+    The queries and mutations of your TanStack Query client, with status, freshness, observers, errors and data, plus invalidate and refetch.
+  </ngmd-card>
+  <ngmd-card icon="shield" title="Errors" link="/inspectors/errors" cta="Errors">
+    Errors from Angular's <code>ErrorHandler</code>, uncaught errors, unhandled rejections and the console, with NG0xxx codes explained.
+  </ngmd-card>
+  <ngmd-card icon="compass" title="Timeline" link="/inspectors/timeline" cta="Timeline">
+    Navigations, HTTP calls, NgRx actions, change detection, form events and signal changes on one time axis.
+  </ngmd-card>
+  <ngmd-card icon="search" title="Audit" link="/inspectors/audit" cta="Audit">
+    One ranked list of what the inspectors found, an axe pass over the app, and a before and after comparison of a change.
+  </ngmd-card>
+  <ngmd-card icon="rocket" title="Capacitor" link="/inspectors/capacitor" cta="Capacitor">
+    The platform, plugins, plugin calls and listeners of a Capacitor app, as its WebView reports them.
+  </ngmd-card>
+  <ngmd-card icon="box" title="Plugin tabs" link="/guides/write-a-plugin" cta="Write a plugin">
+    Libraries add their own tab and agent tools through the Pangular plugin API.
+  </ngmd-card>
 </ngmd-card-grid>
 
 ### Project overview
@@ -140,7 +158,7 @@ The devtools are a <a href="https://devfra.me" target="_blank" rel="noopener nor
     Not if you follow the setup guides. They load the overlay with a dynamic import that only runs in development builds.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Can other people on my network reach it?">
-    By default, no. The Vite plugin only answers requests from your machine, and the Express hub asks for a one-time code. See <a href="../security.md">Access and redaction</a>.
+    By default, no. The Vite plugin and the Express hub only answer requests from your machine, and both ask for a one-time code. Another device needs <code>allowLan: true</code> and its origin in <code>allowedOrigins</code>. See <a href="../security.md">Access and redaction</a>.
   </ngmd-accordion-item>
 </ngmd-accordion>
 

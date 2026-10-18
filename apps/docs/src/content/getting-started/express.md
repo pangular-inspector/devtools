@@ -216,10 +216,9 @@ NG_ALLOWED_HOSTS=localhost node dist/<your-app>/server/server.mjs
 
 To test the real Express process, build with the development configuration and start `server.mjs`. Replace `<your-app>` with your project name.
 
-From Angular 22.2, the built server answers only the hosts in its allowed list, which a new app leaves empty, so every page returns an error. Name the host in the `NG_ALLOWED_HOSTS` environment variable, as above, or in `security.allowedHosts` under the build options in `angular.json`:
+From Angular 22.2, the built server answers only the hosts in its allowed list, which a new app leaves empty, so every page returns an error. Name the host in the `NG_ALLOWED_HOSTS` environment variable, as above, or in `security.allowedHosts` under the build options in `angular.json` (`projects.<your-app>.architect.build.options`):
 
 ```json
-// angular.json (projects.<your-app>.architect.build.options)
 "security": {
   "allowedHosts": ["localhost"]
 }
@@ -284,9 +283,11 @@ To mount only the devtools panel without the dock, use `initDevframe()`. The dev
 // src/server.ts
 import pangular, {initDevframe} from '@pangular-inspector/devtools/devframe';
 
-const devtools = initDevframe(pangular, {base: '/__pangular/'});
+const devtools = initDevframe(pangular, {base: '/__pangular/', ws: false});
 app.use(devtools.nodeMiddleware);
 ```
+
+`ws: false` makes the page and the panel connect over server-sent events on the same Express app. Without it, Devframe advertises a WebSocket that `nodeMiddleware` alone does not serve, and the page never connects. To serve a WebSocket instead, pass the HTTP server as `server`. See the `ws` and `server` options of `initDevframe`.
 
 The overlay looks for `/__pangular/` too. Without the hub, every tab sits in one tab bar.
 

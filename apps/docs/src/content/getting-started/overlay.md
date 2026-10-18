@@ -185,8 +185,9 @@ Keep the real token in a second file that git ignores, and swap it in with a bui
 export const devtoolsToken: string | undefined = 'the value of PANGULAR_AUTH_TOKEN on your machine';
 ```
 
+In `angular.json`, under `projects.my-app.architect.build.configurations` (excerpt):
+
 ```json
-// angular.json (excerpt, under projects.my-app.architect.build.configurations)
 {
   "device": {
     "fileReplacements": [
