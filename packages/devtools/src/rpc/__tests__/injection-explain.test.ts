@@ -262,7 +262,7 @@ describe('the explain-injection RPC function and agent tool', () => {
     // Only `true` turns a flag on.
     expect(answer.flags).toEqual([]);
     const { markdown } = await tools.get('pangular:explain-injection')!({
-      selector: 'TripCard',
+      injector: 'TripCard',
       token: 'Missing',
     });
     expect(markdown).toContain('NG0201');

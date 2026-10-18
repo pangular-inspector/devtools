@@ -23,7 +23,20 @@ export interface ToolInputSchema {
 
 export type CheckedArgs = { args: Record<string, unknown> } | { error: string };
 
-const PAGE_KEYS = new Set(['page', 'pageId']);
+const PAGE_KEYS = new Set(['page']);
+
+/**
+ * Argument names that 1.0 renamed, with the names that took their place. A
+ * call that sends an old name the schema does not list is refused with the
+ * new one, instead of the value being dropped without a word.
+ */
+const RENAMED_ARGUMENTS: Readonly<Record<string, readonly string[]>> = {
+  pageId: ['page'],
+  selector: ['component', 'injector'],
+  storeId: ['store'],
+  signal: ['property', 'node'],
+  since: ['after'],
+};
 const PAGE_HINT =
   'Pass a page id from pangular:list-pages, or leave it out for the most recent page.';
 /** Problems named in one answer; the rest wait for the next call. */
@@ -190,9 +203,10 @@ function describe(schema: ToolInputSchema | undefined): string {
  * that allows `null` keeps it, required or not.
  * Keys the schema does not list pass through, unless it sets
  * `additionalProperties: false`, or are checked against `additionalProperties`
- * when it is a schema, as for a listed argument. A `page` or `pageId` must be a string, even
- * when the schema leaves the alias out, so a wrong one is refused instead of
- * falling back to another tab; an empty one counts as left out.
+ * when it is a schema, as for a listed argument. A `page` must be a string,
+ * so a wrong one is refused instead of falling back to another tab; an empty
+ * one counts as left out. An argument name 1.0 renamed is refused with the
+ * name that replaced it (see {@link RENAMED_ARGUMENTS}).
  */
 export function checkToolArgs(schema: unknown, input: unknown): CheckedArgs {
   if (input !== undefined && input !== null && !isRecord(input)) {
@@ -224,9 +238,12 @@ export function checkToolArgs(schema: unknown, input: unknown): CheckedArgs {
       if (property && nullIsMissing(property)) delete args[key];
       continue;
     }
-    if (property) problems.push(...problemsOf(key, value, property));
+    const renamed = properties[key] ? undefined : renamedTo(key, properties);
+    if (renamed) problems.push(`There is no \`${key}\` argument; pass \`${renamed}\`.`);
+    // The old page argument never passes unnoticed, even on a tool without `page`.
+    else if (key === 'pageId' && !properties[key]) problems.push('There is no `pageId` argument.');
+    else if (property) problems.push(...problemsOf(key, value, property));
     else if (PAGE_KEYS.has(key) && typeof value !== 'string')
-      // An alias such as `pageId` that the schema leaves out still never falls back.
       problems.push(...problemsOf(key, value, { type: 'string' }));
     else if (shape.additionalProperties === false)
       problems.push(`There is no \`${key}\` argument.`);
@@ -236,6 +253,12 @@ export function checkToolArgs(schema: unknown, input: unknown): CheckedArgs {
   const shown = problems.slice(0, MAX_PROBLEMS);
   if (problems.length > shown.length) shown.push(`…and ${problems.length - shown.length} more.`);
   return { error: shown.join('\n') };
+}
+
+/** The argument that replaced the retired name `key` in this schema, if any. */
+function renamedTo(key: string, properties: Record<string, ToolInputSchema>): string | undefined {
+  if (!Object.hasOwn(RENAMED_ARGUMENTS, key)) return undefined;
+  return RENAMED_ARGUMENTS[key]!.find((name) => Object.hasOwn(properties, name));
 }
 
 /**

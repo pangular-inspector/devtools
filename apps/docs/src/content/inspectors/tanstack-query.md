@@ -76,11 +76,11 @@ Select a query, then select **Invalidate** or **Refetch**. **Invalidate** calls 
 
 ## Agent tools
 
-| Tool            | Tier     | What it does                                                                                |
-| --------------- | -------- | ------------------------------------------------------------------------------------------- |
-| `list-queries`  | `read`   | The clients, queries and mutations of a page, with status, freshness, observers and errors. |
-| `inspect-query` | `read`   | One query or mutation with its data, read from the page when the tool runs.                 |
-| `query-action`  | `action` | Invalidates or refetches one query.                                                         |
+| Tool                     | Tier     | What it does                                                                                |
+| ------------------------ | -------- | ------------------------------------------------------------------------------------------- |
+| `tanstack-list-queries`  | `read`   | The clients, queries and mutations of a page, with status, freshness, observers and errors. |
+| `tanstack-inspect-query` | `read`   | One query or mutation with its data, read from the page when the tool runs.                 |
+| `tanstack-run-query`     | `action` | Invalidates or refetches one query.                                                         |
 
 See [TanStack Query tools](../agents/tools.md#tanstack-query).
 
@@ -104,7 +104,7 @@ The [Angular Native](../getting-started/angular-native.md) and [NativeScript](..
 
 ### Write actions
 
-**Invalidate**, **Refetch** and the `query-action` tool need [`actions.tanstackQuery`](../getting-started/configuration.md#actions). With it off, the panel disables them, says why, and the server refuses them. Turn the whole tab off with [`inspectors.tanstackQuery`](../getting-started/configuration.md#inspectors-and-agent-tools).
+**Invalidate**, **Refetch** and the `tanstack-run-query` tool need [`actions.tanstackQuery`](../getting-started/configuration.md#actions). With it off, the panel disables them, says why, and the server refuses them. Turn the whole tab off with [`inspectors.tanstackQuery`](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ## Where to next
 

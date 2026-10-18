@@ -473,9 +473,7 @@ describe('withPangularSsr with the devframe server', () => {
       ).sharedState.get('pangular:http')
     ).value() as HttpState;
     expect(state.requests.map((r) => r.url)).toEqual(['/trips']);
-    const text = (await ctx.agent.invoke('pangular:list-ssr-requests', {})) as {
-      markdown: string;
-    };
-    expect(text.markdown).toContain('/trips');
+    const text = (await ctx.agent.invoke('pangular:list-ssr-requests', {})) as string;
+    expect(text).toContain('/trips');
   });
 });

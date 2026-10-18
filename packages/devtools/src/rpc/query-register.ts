@@ -17,7 +17,6 @@ import {
   staleQueryPages,
   toQueryReport,
 } from './query-tools.ts';
-import { MARKDOWN_OUTPUT_SCHEMA } from './agent-output.ts';
 import { refusal, refusedAnswer } from './refusal.ts';
 
 type AnyRecord = Record<string, any>;
@@ -56,8 +55,8 @@ export interface QueryRegistration {
 
 /**
  * The TanStack Query inspector on the server: the `tanstack-query` shared
- * state, the push, forget and request RPC functions, and the `list-queries`,
- * `inspect-query` and `query-action` agent tools.
+ * state, the push, forget and request RPC functions, and the `tanstack-list-queries`,
+ * `tanstack-inspect-query` and `tanstack-run-query` agent tools.
  */
 export async function registerTanstackQuery(host: QueryHost): Promise<QueryRegistration> {
   const shared = await host.my.rpc.sharedState('tanstack-query', {
@@ -165,9 +164,8 @@ export async function registerTanstackQuery(host: QueryHost): Promise<QueryRegis
   });
 
   host.agent.registerTool({
-    id: 'pangular:list-queries',
+    id: 'pangular:tanstack-list-queries',
     title: 'List TanStack queries',
-    outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
       'TanStack Query on the page: the QueryClients, then cached queries and mutations with id, key, status, freshness, observers and error. Filter with `status` and `search`; `limit` caps rows. Secret fields and token-like key parts are masked.',
     inputSchema: {
@@ -201,9 +199,8 @@ export async function registerTanstackQuery(host: QueryHost): Promise<QueryRegis
   };
 
   host.agent.registerTool({
-    id: 'pangular:inspect-query',
+    id: 'pangular:tanstack-inspect-query',
     title: 'Inspect a TanStack query',
-    outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
       'One TanStack Query query or mutation (`id`, or `key` text) with its data read from the page now: status, freshness, observers, failures and the serialized data. Masked; only reads.',
     inputSchema: {
@@ -223,7 +220,7 @@ export async function registerTanstackQuery(host: QueryHost): Promise<QueryRegis
   });
 
   host.agent.registerTool({
-    id: 'pangular:query-action',
+    id: 'pangular:tanstack-run-query',
     title: 'Invalidate or refetch a query',
     description:
       "`invalidate` or `refetch` one TanStack Query query through the app's QueryClient; both run the query function again. Pass `id` or `key`. Needs actions.tanstackQuery.",

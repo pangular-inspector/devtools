@@ -200,7 +200,7 @@ describe('watch-signal tool and set-signal-watch', () => {
     ]);
 
     await push('push-signal-graph', { ...graph('p1'), watch: { ids: ['2'], stacks: true } });
-    const graphText = await call('inspect-signals', { selector: 'app-root' });
+    const graphText = await call('inspect-signals', { component: 'app-root' });
     expect(graphText).toContain('"stacks": true');
   });
 

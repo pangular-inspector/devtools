@@ -43,20 +43,21 @@ describe('list-browser-tools', () => {
       expect.arrayContaining([
         'pangular_inspect-component',
         'pangular_list-components',
-        'pangular_explain-form-invalid',
-        'pangular_get-routes',
+        'pangular_explain-invalid-forms',
+        'pangular_scan-routes',
         'pangular_list-errors',
       ]),
     );
     for (const action of [
       'pangular_navigate',
-      'pangular_form-action',
+      'pangular_run-form-action',
       'pangular_fill-form',
       'pangular_set-signal',
       'pangular_clear-recordings',
-      'pangular_change-detection',
-      'pangular_hydration',
-      'pangular_analog-call-api',
+      'pangular_record-change-detection',
+      'pangular_probe-route',
+      'pangular_record-guards',
+      'pangular_analog-run-api',
     ]) {
       expect(list).not.toContain(action);
     }
@@ -68,7 +69,7 @@ describe('list-browser-tools', () => {
       'pangular_explain-ssr-request',
       'pangular_list-ssr-overrides',
       'pangular_list-http-rules',
-      'pangular_analog-server-calls',
+      'pangular_analog-list-server-calls',
       'pangular_screenshot-component',
       'pangular_highlight',
       'pangular_open-in-panel',
@@ -78,8 +79,8 @@ describe('list-browser-tools', () => {
     // Every listed tool is scoped to one page, or reads the workspace source.
     for (const tool of tools) {
       const properties = tool.inputSchema['properties'] as Record<string, unknown>;
-      if ('page' in properties || 'pageId' in properties) continue;
-      expect(tool.name).toMatch(/^pangular_(get-|build-meta|lint-pipes|analog-)/);
+      if ('page' in properties) continue;
+      expect(tool.name).toMatch(/^pangular_(scan-|ngrx-scan|analog-)/);
     }
     expect(list.every((name) => /^pangular_[\w.-]{1,119}$/.test(name))).toBe(true);
     expect(new Set(list).size).toBe(list.length);
@@ -196,10 +197,10 @@ describe('call-browser-tool', () => {
     const answer = await rpc('call-browser-tool', {
       pageId: 'p1',
       name: 'pangular_inspect-component',
-      args: { selector: 12345 },
+      args: { component: 12345 },
     });
     expect(answer.isError).toBe(true);
-    expect(answer.text).toMatch(/^`selector` must be a string, not the number \(12345\)/);
+    expect(answer.text).toMatch(/^`component` must be a string, not the number \(12345\)/);
     expect(answer.text).not.toContain('failed');
   });
 
@@ -292,16 +293,16 @@ describe('call-browser-tool', () => {
     });
     const failed = await callBrowserTool(
       failing,
-      { pageId: 'p1', name: 'pangular_get-routes' },
+      { pageId: 'p1', name: 'pangular_scan-routes' },
       { enabled: true, owns },
     );
     expect(failed.isError).toBe(true);
-    expect(failed.text).toMatch(/pangular_get-routes failed: boom/);
+    expect(failed.text).toMatch(/pangular_scan-routes failed: boom/);
     expect(failed.text).not.toContain(JWT);
     const json = fakeHost(async () => [{ path: '/', apiKey: 'sk-live-1234567890' }]);
     const answer = await callBrowserTool(
       json,
-      { pageId: 'p1', name: 'pangular_get-routes' },
+      { pageId: 'p1', name: 'pangular_scan-routes' },
       { enabled: true, owns },
     );
     expect(JSON.parse(answer.text)[0].path).toBe('/');
@@ -318,15 +319,11 @@ describe('browser tool helpers', () => {
 
   it('always answers for the calling page, replacing a page the agent named', () => {
     expect(scopedArgs(tool({ page: {} }), {}, 'p1')).toEqual({ page: 'p1' });
-    expect(scopedArgs(tool({ page: {}, pageId: {} }), { pageId: 'p2' }, 'p1')).toEqual({
-      page: 'p1',
-      pageId: 'p1',
-    });
     expect(scopedArgs(tool({ page: {} }), { page: 'p3', pageId: 'p4' }, 'p1')).toEqual({
       page: 'p1',
     });
-    expect(scopedArgs(tool({ pageId: {} }), { page: 'p3' }, 'p1')).toEqual({ pageId: 'p1' });
-    expect(scopedArgs(tool({ pageId: {} }), undefined, 'p1')).toEqual({ pageId: 'p1' });
+    // A `pageId` the agent sent never reaches the tool: `page` is the only page argument.
+    expect(scopedArgs(tool({ page: {} }), { pageId: 'p2' }, 'p1')).toEqual({ page: 'p1' });
     expect(scopedArgs(tool({}), { a: 1, page: 'p2' }, 'p1')).toEqual({ a: 1 });
     expect(scopedArgs(tool({}), 'junk', 'p1')).toEqual({});
   });
@@ -339,8 +336,8 @@ describe('browser tool helpers', () => {
     // plugin's own tools stay MCP only even when they take a page.
     expect(names).toEqual([
       'pangular_inspect-component',
-      'pangular_get-routes',
-      'pangular_get-components',
+      'pangular_scan-routes',
+      'pangular_scan-components',
     ]);
     expect(browserTools(host)[1].inputSchema).toEqual({ type: 'object', properties: {} });
   });
@@ -377,14 +374,14 @@ function fakeHost(invoke: (id: string, args: unknown) => Promise<unknown>) {
       safety: 'action' as const,
     },
     {
-      id: 'pangular:get-routes',
+      id: 'pangular:scan-routes',
       kind: 'rpc' as const,
-      rpcName: 'pangular:get-routes',
+      rpcName: 'pangular:scan-routes',
       description: 'Routes.',
       safety: 'read' as const,
     },
     {
-      id: 'pangular:get-components',
+      id: 'pangular:scan-components',
       kind: 'tool' as const,
       description: 'Components in source.',
       safety: 'read' as const,

@@ -124,17 +124,17 @@ describe('wait-for agent tool', () => {
     const { ctx } = await boot();
     const tool = ctx.agent.list().tools.find((t) => t.id === 'pangular:wait-for');
     expect(tool?.safety).toBe('read');
-    expect(tool?.tags).toEqual(['components', 'router', 'http', 'errors']);
+    expect(tool?.tags).toEqual(['components', 'router', 'http', 'errors', 'forms']);
   });
 
   it('component: answers at once when a match is rendered, and waits for one that appears', async () => {
     const { push, call } = await boot();
     await push('push-component-tree', tree('p1', [node('c2', 'Card', 'app-card')]));
-    expect(await call({ condition: 'component', selector: 'Card' })).toMatch(
+    expect(await call({ condition: 'component', component: 'Card' })).toMatch(
       /^Condition `component` `Card` holds after \d+ms\. `Card` matches `Card` \(`<app-card>`, instance `c2` on page `p1`\)\./,
     );
 
-    const waiting = call({ condition: 'component', selector: 'app-dialog', timeoutMs: 3000 });
+    const waiting = call({ condition: 'component', component: 'app-dialog', timeoutMs: 3000 });
     await later(50, () =>
       push('push-component-tree', tree('p1', [node('c3', 'Dialog', 'app-dialog')])),
     );
@@ -144,7 +144,7 @@ describe('wait-for agent tool', () => {
   it('component-gone: holds once no instance matches', async () => {
     const { push, call } = await boot();
     await push('push-component-tree', tree('p1', [node('c2', 'Spinner', 'app-spinner')]));
-    const waiting = call({ condition: 'component-gone', selector: 'Spinner', timeoutMs: 3000 });
+    const waiting = call({ condition: 'component-gone', component: 'Spinner', timeoutMs: 3000 });
     await later(50, () => push('push-component-tree', tree('p1')));
     expect(await waiting).toMatch(
       /^Condition `component-gone` `Spinner` holds after \d+ms\. No component matches `Spinner`\./,
@@ -216,7 +216,7 @@ describe('wait-for agent tool', () => {
     const { push, call } = await boot();
     await push('push-component-tree', tree('p1'));
     const started = Date.now();
-    expect(await call({ condition: 'component', selector: 'Missing', timeoutMs: 150 })).toBe(
+    expect(await call({ condition: 'component', component: 'Missing', timeoutMs: 150 })).toBe(
       'Timed out after 150ms waiting for `component` `Missing`. Last state: No component matches `Missing`.',
     );
     expect(Date.now() - started).toBeGreaterThanOrEqual(140);
@@ -232,14 +232,12 @@ describe('wait-for agent tool', () => {
     expect(await call({})).toMatch(/^Pass `condition`: one of `component`, `component-gone`/);
     expect(await call({ condition: 'stable' })).toMatch(/^`condition` must be one of `component`/);
     await push('push-component-tree', tree('p1'));
-    expect(await call({ condition: 'component' })).toMatch(/^Pass `selector`/);
-    expect(await call({ condition: 'component', selector: '   ' })).toMatch(/^Pass `selector`/);
-    expect(await call({ condition: 'component', selector: 'App', page: 'nope' })).toContain(
+    expect(await call({ condition: 'component' })).toMatch(/^Pass `component`/);
+    expect(await call({ condition: 'component', component: '   ' })).toMatch(/^Pass `component`/);
+    expect(await call({ condition: 'component', component: 'App', page: 'nope' })).toContain(
       'No page `nope` is reporting a component tree',
     );
-    expect(await call({ condition: 'component', selector: 'App', pageId: 'p1' })).toContain(
-      'holds',
-    );
+    expect(await call({ condition: 'component', component: 'App', page: 'p1' })).toContain('holds');
     expect(await call({ condition: 'navigation' })).toMatch(
       /^No page reports the router right now/,
     );
@@ -248,13 +246,15 @@ describe('wait-for agent tool', () => {
   it('offers only the conditions whose inspector is on, and is left out when none is', async () => {
     const some = await boot({ inspectors: { components: false, http: false } });
     expect(some.tools).toContain('pangular:wait-for');
-    expect(await some.call({ condition: 'component', selector: 'App' })).toMatch(
-      /^`condition` must be one of `navigation`, `error`, not a string \("component"\)\./,
+    expect(await some.call({ condition: 'component', component: 'App' })).toMatch(
+      /^`condition` must be one of `navigation`, `error`, `form`, not a string \("component"\)\./,
     );
-    expect(await some.call({})).toMatch(/^Pass `condition`: one of `navigation`, `error`\./);
+    expect(await some.call({})).toMatch(
+      /^Pass `condition`: one of `navigation`, `error`, `form`\./,
+    );
 
     const none = await boot({
-      inspectors: { components: false, router: false, http: false, errors: false },
+      inspectors: { components: false, router: false, http: false, errors: false, forms: false },
     });
     expect(none.tools).not.toContain('pangular:wait-for');
   });
@@ -339,7 +339,7 @@ describe('createWaitForTool', () => {
       ],
     })!;
     pages.set('p1', { ...tree('p1'), reportedAt: Date.now() } as ComponentPage);
-    const answer = tool.handler({ condition: 'component', selector: 'Card' });
+    const answer = tool.handler({ condition: 'component', component: 'Card' });
     await vi.advanceTimersByTimeAsync(0);
     expect(listeners.size).toBe(1);
     pages.set('p1', {

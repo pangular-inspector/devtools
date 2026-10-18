@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ACTION_TOOLS,
   ACTION_TOOL_FREE_MODES,
+  AGENT_ENTRIES,
   AGENT_INSPECTOR,
   AGENT_SAFETY,
   PANGULAR_INSPECTORS,
@@ -242,7 +243,9 @@ describe('agent tool and RPC registration', () => {
     const { rpc, tools, resources } = await boot();
     const unassigned = rpc.filter((name) => !RPC_INSPECTOR[name] && !SHARED_RPC.includes(name));
     expect(unassigned).toEqual([]);
-    for (const id of [...tools, ...resources].filter((id) => !SHARED_RPC.includes(id))) {
+    // Shared entries (no inspector, such as scan-build) stay with every inspector off.
+    const shared = (id: string) => SHARED_RPC.includes(id) || !AGENT_ENTRIES[id]?.inspectors;
+    for (const id of [...tools, ...resources].filter((id) => !shared(id))) {
       expect(agentAllowed({ id }, resolvePangularConfig({ agent: { tools: offAll() } }))).toBe(
         false,
       );
@@ -269,20 +272,21 @@ describe('agent tool and RPC registration', () => {
     const { tools, actionTools } = await boot();
     expect(actionTools.sort()).toEqual(
       [
-        'analog-call-api',
+        'analog-run-api',
         'audit',
-        'change-detection',
         'clear-recordings',
-        'dispatch-ngrx-action',
+        'ngrx-dispatch',
         'fill-form',
-        'form-action',
-        'hydration',
+        'run-form-action',
         'navigate',
-        'query-action',
+        'probe-route',
+        'record-change-detection',
+        'record-guards',
+        'tanstack-run-query',
         'record-pipes',
         'remove-http-rule',
         'remove-ssr-override',
-        'restore-ngrx-state',
+        'ngrx-restore',
         'set-component-property',
         'set-http-rule',
         'set-signal',
@@ -301,11 +305,14 @@ describe('agent tool and RPC registration', () => {
     ).toEqual(AGENT_SAFETY);
     expect(safety['highlight']).toBe('read');
     expect(safety['clear-recordings']).toBe('destructive');
-    expect(safety['analog-call-api']).toBe('destructive');
+    expect(safety['analog-run-api']).toBe('destructive');
     expect(safety['navigate']).toBe('action');
     expect(safety['record-pipes']).toBe('action');
-    expect(safety['change-detection']).toBe('action');
-    expect(safety['hydration']).toBe('action');
+    expect(safety['change-detection']).toBe('read');
+    expect(safety['record-change-detection']).toBe('action');
+    expect(safety['hydration']).toBe('read');
+    expect(safety['probe-route']).toBe('action');
+    expect(safety['record-guards']).toBe('action');
   });
 
   it('keeps only read tools in read-only mode', async () => {
@@ -314,61 +321,65 @@ describe('agent tool and RPC registration', () => {
     expect(Object.values(safety).every((tier) => tier === 'read')).toBe(true);
     for (const dropped of [
       'navigate',
+      'probe-route',
+      'record-guards',
+      'record-change-detection',
       'record-pipes',
       'clear-recordings',
-      'analog-call-api',
-      'form-action',
+      'analog-run-api',
+      'run-form-action',
     ]) {
       expect(tools).not.toContain(dropped);
     }
     expect(tools).toEqual(
-      expect.arrayContaining(['inspect-forms', 'list-routes', 'analog-lint', 'highlight']),
+      expect.arrayContaining([
+        'inspect-forms',
+        'list-routes',
+        'analog-lint',
+        'highlight',
+        'change-detection',
+        'hydration',
+      ]),
     );
     expect(resources).toEqual(expect.arrayContaining(['component-tree', 'router', 'forms']));
   });
 
-  it('keeps change-detection as a read tool without record in read-only mode', async () => {
+  it('splits the change detection read from the recording, which read-only mode drops', async () => {
     const full = await boot();
-    const fullSchema = full.describe('change-detection')?.inputSchema as {
+    const read = full.describe('change-detection')?.inputSchema as {
       properties: Record<string, unknown>;
     };
-    expect(Object.keys(fullSchema.properties)).toContain('record');
+    expect(Object.keys(read.properties).sort()).toEqual(['export', 'limit', 'page']);
+    const record = full.describe('record-change-detection')?.inputSchema as {
+      properties: Record<string, unknown>;
+    };
+    for (const key of ['record', 'flash', 'track', 'angularProfiling']) {
+      expect(Object.keys(record.properties)).toContain(key);
+    }
 
     const readOnly = await boot({ agent: { readOnly: true } });
-    const tool = readOnly.describe('change-detection');
-    expect(tool?.safety).toBe('read');
-    const schema = tool?.inputSchema as { properties: Record<string, unknown> };
-    expect(Object.keys(schema.properties)).not.toContain('record');
-    for (const view of ['flash', 'track', 'angularProfiling']) {
-      expect(Object.keys(fullSchema.properties)).toContain(view);
-      expect(Object.keys(schema.properties)).not.toContain(view);
-    }
+    expect(readOnly.describe('change-detection')?.safety).toBe('read');
+    expect(readOnly.describe('record-change-detection')).toBeUndefined();
     const answer = await toolAnswer(
       readOnly.ctx.agent.invoke('pangular:change-detection', { record: 'start' }),
     );
-    expect(answer.isError).toBe(true);
-    expect(answer.markdown).toContain('agent.readOnly');
-    const flash = await toolAnswer(
-      readOnly.ctx.agent.invoke('pangular:change-detection', { flash: true }),
-    );
-    expect(flash.isError).toBe(true);
-    expect(flash.markdown).toContain('agent.readOnly');
+    // `record` is not an argument of the read tool, so it only reads.
+    expect(answer.isError).toBe(false);
+    expect(answer.markdown).toMatch(/No change detection recording yet/);
   });
 
-  it('keeps navigate for its free modes when actions.router is off', async () => {
-    expect(ACTION_TOOLS.router).toContain('navigate');
-    expect(ACTION_TOOL_FREE_MODES['navigate']).toEqual(['instrument', 'resolve-lazy']);
+  it('keeps record-guards and drops navigate and probe-route when actions.router is off', async () => {
+    expect(ACTION_TOOLS.router).toEqual(expect.arrayContaining(['navigate', 'probe-route']));
+    expect(ACTION_TOOLS.router).not.toContain('record-guards');
+    expect(ACTION_TOOL_FREE_MODES['navigate']).toBeUndefined();
     const blocked = resolvePangularConfig({ actions: { router: false } });
-    expect(agentAllowed({ id: 'pangular:navigate' }, blocked)).toBe(true);
-    expect(
-      agentAllowed({ id: 'pangular:navigate' }, resolvePangularConfig({ actions: false })),
-    ).toBe(true);
-    expect(
-      agentAllowed(
-        { id: 'pangular:navigate' },
-        resolvePangularConfig({ agent: { readOnly: true } }),
-      ),
-    ).toBe(false);
+    expect(agentAllowed({ id: 'pangular:navigate' }, blocked)).toBe(false);
+    expect(agentAllowed({ id: 'pangular:probe-route' }, blocked)).toBe(false);
+    expect(agentAllowed({ id: 'pangular:record-guards' }, blocked)).toBe(true);
+    expect(agentAllowed({ id: 'pangular:list-routes' }, blocked)).toBe(true);
+    const readOnly = resolvePangularConfig({ agent: { readOnly: true } });
+    expect(agentAllowed({ id: 'pangular:record-guards' }, readOnly)).toBe(false);
+    expect(agentAllowed({ id: 'pangular:list-routes' }, readOnly)).toBe(true);
   });
 
   it('gives resources and unlisted tools the read tier', () => {
@@ -376,7 +387,8 @@ describe('agent tool and RPC registration', () => {
     expect(agentSafety('pangular:forms', readOnly)).toBe('read');
     expect(agentSafety('pangular:highlight', readOnly)).toBe('read');
     expect(agentSafety('pangular:change-detection', readOnly)).toBe('read');
-    expect(agentSafety('pangular:change-detection', resolvePangularConfig())).toBe('action');
+    expect(agentSafety('pangular:change-detection', resolvePangularConfig())).toBe('read');
+    expect(agentSafety('pangular:record-change-detection', resolvePangularConfig())).toBe('action');
     expect(agentSafety('pangular:clear-recordings', resolvePangularConfig())).toBe('destructive');
     expect(agentAllowed({ id: 'pangular:forms' }, readOnly)).toBe(true);
     expect(agentAllowed({ id: 'pangular:clear-recordings' }, readOnly)).toBe(false);
@@ -386,18 +398,19 @@ describe('agent tool and RPC registration', () => {
     const forms = await boot({ actions: { forms: false } });
     expect(forms.actionTools.sort()).toEqual(
       [
-        'analog-call-api',
+        'analog-run-api',
         'audit',
-        'change-detection',
         'clear-recordings',
-        'dispatch-ngrx-action',
-        'hydration',
+        'ngrx-dispatch',
         'navigate',
-        'query-action',
+        'probe-route',
+        'record-change-detection',
+        'record-guards',
+        'tanstack-run-query',
         'record-pipes',
         'remove-http-rule',
         'remove-ssr-override',
-        'restore-ngrx-state',
+        'ngrx-restore',
         'set-component-property',
         'set-http-rule',
         'set-signal',
@@ -406,21 +419,22 @@ describe('agent tool and RPC registration', () => {
         'watch-signal',
       ].sort(),
     );
-    expect(forms.tools).toEqual(expect.arrayContaining(['inspect-forms', 'form-history']));
+    expect(forms.tools).toEqual(expect.arrayContaining(['inspect-forms', 'list-form-changes']));
     const router = await boot({ actions: { router: false } });
-    expect(router.actionTools).toContain('navigate');
-    expect(router.actionTools).toEqual(expect.arrayContaining(['form-action', 'fill-form']));
+    expect(router.actionTools).not.toContain('navigate');
+    expect(router.actionTools).toContain('record-guards');
+    expect(router.actionTools).toEqual(expect.arrayContaining(['run-form-action', 'fill-form']));
     expect(router.tools).toContain('list-routes');
     const analog = await boot({ actions: { analog: false } });
-    expect(analog.actionTools).not.toContain('analog-call-api');
+    expect(analog.actionTools).not.toContain('analog-run-api');
     expect(analog.tools).toContain('analog-lint');
     const ngrx = await boot({ actions: { ngrx: false } });
-    expect(ngrx.actionTools).not.toContain('dispatch-ngrx-action');
-    expect(ngrx.actionTools).not.toContain('restore-ngrx-state');
+    expect(ngrx.actionTools).not.toContain('ngrx-dispatch');
+    expect(ngrx.actionTools).not.toContain('ngrx-restore');
     expect(ngrx.tools).toEqual(
-      expect.arrayContaining(['inspect-ngrx-entry', 'export-ngrx-session', 'generate-ngrx-test']),
+      expect.arrayContaining(['ngrx-inspect-entry', 'ngrx-export-session', 'ngrx-generate-test']),
     );
-    expect(ngrx.tools).toContain('get-ngrx-store');
+    expect(ngrx.tools).toContain('ngrx-scan');
     const http = await boot({ actions: { http: false } });
     expect(http.actionTools).not.toContain('set-http-rule');
     expect(http.actionTools).not.toContain('remove-http-rule');
@@ -435,8 +449,10 @@ describe('agent tool and RPC registration', () => {
     expect(components.actionTools).not.toContain('set-signal');
     expect(components.tools).toContain('inspect-component');
     const queries = await boot({ actions: { tanstackQuery: false } });
-    expect(queries.actionTools).not.toContain('query-action');
-    expect(queries.tools).toEqual(expect.arrayContaining(['list-queries', 'inspect-query']));
+    expect(queries.actionTools).not.toContain('tanstack-run-query');
+    expect(queries.tools).toEqual(
+      expect.arrayContaining(['tanstack-list-queries', 'tanstack-inspect-query']),
+    );
   });
 
   it('leaves out the RPC functions, tools and resources of a disabled inspector', async () => {
@@ -473,7 +489,7 @@ describe('agent tool and RPC registration', () => {
   it('hides one inspector from the agent while its panel keeps working', async () => {
     const { rpc, tools, resources } = await boot({ agent: { tools: { router: false } } });
     expect(tools.some((id) => AGENT_INSPECTOR[id] === 'router')).toBe(false);
-    expect(tools).not.toContain('get-routes');
+    expect(tools).not.toContain('scan-routes');
     expect(rpc).toContain('get-routes');
     expect(resources).not.toContain('router');
     expect(rpc).toContain('push-router');

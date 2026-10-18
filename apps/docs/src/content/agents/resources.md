@@ -88,14 +88,14 @@ The six resources above hold every connected page. When several tabs or apps are
 
 The HTTP endpoint lists one *MCP resource template per resource in `resources/templates/list`. Put a page id from [`list-pages`](./tools.md#list-pages) in the URI:
 
-| Template                                  | Same data as              |
-| ----------------------------------------- | ------------------------- |
-| `pangular://page/{pageId}/component-tree` | `pangular:component-tree` |
-| `pangular://page/{pageId}/signal-graph`   | `pangular:signal-graph`   |
-| `pangular://page/{pageId}/injector-tree`  | `pangular:injector-tree`  |
-| `pangular://page/{pageId}/ngrx-store`     | `pangular:ngrx-store`     |
-| `pangular://page/{pageId}/forms`          | `pangular:forms`          |
-| `pangular://page/{pageId}/router`         | `pangular:router`         |
+| Template                                   | Template name                     | Same data as              |
+| ------------------------------------------ | --------------------------------- | ------------------------- |
+| `pangular://pages/{pageId}/component-tree` | `pangular:component-tree-of-page` | `pangular:component-tree` |
+| `pangular://pages/{pageId}/signal-graph`   | `pangular:signal-graph-of-page`   | `pangular:signal-graph`   |
+| `pangular://pages/{pageId}/injector-tree`  | `pangular:injector-tree-of-page`  | `pangular:injector-tree`  |
+| `pangular://pages/{pageId}/ngrx-store`     | `pangular:ngrx-store-of-page`     | `pangular:ngrx-store`     |
+| `pangular://pages/{pageId}/forms`          | `pangular:forms-of-page`          | `pangular:forms`          |
+| `pangular://pages/{pageId}/router`         | `pangular:router-of-page`         | `pangular:router`         |
 
 Each one returns the JSON of its resource with only that page in it, with the same `_untrusted` field and the same summary when it is too large. The selection made in the panel (`selectedId` and the like) is left out, since it belongs to no page. If no page with that id reports the data, the answer is a markdown note that lists the pages that do.
 
@@ -103,7 +103,7 @@ A template follows its resource: it is left out when the inspector is off throug
 
 ### Per-page entries in the list
 
-Some clients don't read templates. For them, `resources/list` also names one resource per reporting page, such as `pangular://page/<pageId>/component-tree`.
+Some clients don't read templates. For them, `resources/list` also names one resource per reporting page, such as `pangular://pages/<pageId>/component-tree`, named `pangular:component-tree-of-page:<pageId>`.
 
 ### List changes
 

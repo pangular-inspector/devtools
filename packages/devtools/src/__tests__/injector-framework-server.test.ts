@@ -116,7 +116,7 @@ describe('framework injectors on the server', () => {
   it("finds a component's element injector by its component id", async () => {
     const { push, call } = await boot();
     await push('push-injector-tree', report('p1'));
-    const text = await call('inspect-providers', { selector: 'cab-1' });
+    const text = await call('inspect-providers', { injector: 'cab-1' });
     expect(text).toContain('matching `cab-1` (1)');
     expect(text).toContain('"componentId":"cab-1"');
   });

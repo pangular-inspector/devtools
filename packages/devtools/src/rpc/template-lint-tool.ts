@@ -1,4 +1,4 @@
-import { MARKDOWN_OUTPUT_SCHEMA, type MarkdownAnswer } from './agent-output.ts';
+import type { MarkdownAnswer } from './agent-output.ts';
 import {
   TEMPLATE_LINT_RULES,
   lintTemplates,
@@ -7,12 +7,11 @@ import {
   type TemplateLintArgs,
 } from './template-lint.ts';
 
-/** The `lint-templates` agent tool: reads source only, so the stdio server keeps it. */
+/** The `scan-templates` agent tool: reads source only, so the stdio server keeps it. */
 export function templateLintTool(cwd: string, options: { compiler?: TemplateCompiler } = {}) {
   return {
-    id: 'pangular:lint-templates',
+    id: 'pangular:scan-templates',
     title: 'Lint templates',
-    outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
       "Source checks of component templates with the project's Angular parser: parse errors, @for tracking by $index, img without alt, click without key handler, structural directives and ngClass/ngStyle. Filter by `rule`, `file` or `severity`.",
     inputSchema: {

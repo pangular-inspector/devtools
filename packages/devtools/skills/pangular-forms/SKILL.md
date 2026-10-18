@@ -14,24 +14,24 @@ The forms tools read Signal Forms, reactive forms and template-driven forms on t
 
 ## Answer the question
 
-| Question                                             | Tool                                                           |
-| ---------------------------------------------------- | -------------------------------------------------------------- |
-| Why is the form invalid?                             | `explain-form-invalid` (call this first)                       |
-| Why does this one field show, or not show, an error? | `explain-field` with `path` or a CSS `selector`                |
-| Why does submit do nothing?                          | `explain-submit`                                               |
-| What does the form send to the server?               | `form-payload` (`value` against `getRawValue()`)               |
-| Is the custom control bound right?                   | `explain-custom-control`                                       |
-| Setup errors (NG01xxx) and accessibility gaps?       | `lint-forms`                                                   |
-| What changed, and who changed it?                    | `form-history` (origins: user, code, devtools, binding, agent) |
+| Question                                             | Tool                                                                |
+| ---------------------------------------------------- | ------------------------------------------------------------------- |
+| Why is the form invalid?                             | `explain-invalid-forms` (call this first)                           |
+| Why does this one field show, or not show, an error? | `explain-field` with `path` or a CSS `selector`                     |
+| Why does submit do nothing?                          | `explain-submit`                                                    |
+| What does the form send to the server?               | `inspect-form-payload` (`value` against `getRawValue()`)            |
+| Is the custom control bound right?                   | `explain-custom-control`                                            |
+| Setup errors (NG01xxx) and accessibility gaps?       | `lint-forms`                                                        |
+| What changed, and who changed it?                    | `list-form-changes` (origins: user, code, devtools, binding, agent) |
 
 Large forms are cut to keep answers small. Each cut says what was left out; pass `path` to read one group at a time, or `onlyInvalid: true` to `inspect-forms`.
 
 ## Fix and verify
 
-1. Call `form-history` for the form and keep the marker it returns.
-2. Fix the code, or reproduce the user's steps with `fill-form` (types through the inputs like a user) or `form-action` (`set-value`, `touch-all`, `revalidate`, `submit`). `submit`, `reset`, `restore` and `fill-form` with `submit` need `confirm: true`; ask the user before you submit.
-3. `wait-for-form` with `until: "settled"` (or `valid`, `submitted`) waits for async validators.
-4. `form-diff` with `since` set to the marker lists every field whose value or status ended up different. That is your proof.
+1. Call `list-form-changes` for the form and keep the marker it returns.
+2. Fix the code, or reproduce the user's steps with `fill-form` (types through the inputs like a user) or `run-form-action` (`set-value`, `touch-all`, `revalidate`, `submit`). `submit`, `reset`, `restore` and `fill-form` with `submit` need `confirm: true`; ask the user before you submit.
+3. `wait-for` with `condition: "form"` and `until: "settled"` (or `valid`, `submitted`) waits for async validators.
+4. `explain-form-changes` with `after` set to the marker lists every field whose value or status ended up different. That is your proof.
 5. `export-form` with `format: "fixture"` turns the state into a test fixture with the expected status.
 
 ## Notes

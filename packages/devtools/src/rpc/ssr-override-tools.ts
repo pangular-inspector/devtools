@@ -14,7 +14,6 @@ import type { HttpPage } from '../types.ts';
 import { code, untrusted } from './forms-tools.ts';
 import { PAGE_ARGUMENT, byRecency, pageArgument, unknownPageText } from './pages.ts';
 import { capped } from './router-tools.ts';
-import { MARKDOWN_OUTPUT_SCHEMA } from './agent-output.ts';
 import { refusal } from './refusal.ts';
 import { defaultPage } from './default-page.ts';
 
@@ -353,7 +352,6 @@ export function ssrOverrideTools(deps: SsrOverrideToolDeps) {
     {
       id: 'pangular:inspect-transfer-state',
       title: 'Inspect TransferState',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'The TransferState payload the server sent with a page: each key with kind, size and, for cached responses, status and URL. `key` reads one value. Masked and cut at 20,000 characters.',
       inputSchema: {
@@ -380,7 +378,6 @@ export function ssrOverrideTools(deps: SsrOverrideToolDeps) {
     {
       id: 'pangular:list-ssr-overrides',
       title: 'List SSR overrides',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'The SSR overrides set from the panel or an agent: id, on or off, kind, page pattern and effect. Empty when none is set.',
       inputSchema: { type: 'object', properties: {} },

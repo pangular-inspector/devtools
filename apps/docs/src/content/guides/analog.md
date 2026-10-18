@@ -102,12 +102,12 @@ Start the dev server as usual. The terminal prints a one-time code. Enter it whe
 Open the **Analog** dock to see file routes, server calls, render modes, content and lint. See [the Analog inspector](../inspectors/analog.md) for each view.
 
 <ngmd-callout type="tip" title="Connect your agent">
-  Point your MCP client at <code>http://localhost:5173/__devframes/__mcp</code> with an <code>Origin</code> header and the bearer token. See <a href="../agents/mcp-server.md">MCP server</a>. The <code>analog-server-calls</code> and <code>analog-call-api</code> tools only work through the Vite plugin.
+  Point your MCP client at <code>http://localhost:5173/__devframes/__mcp</code> with an <code>Origin</code> header and the bearer token. See <a href="../agents/mcp-server.md">MCP server</a>. The <code>analog-list-server-calls</code> and <code>analog-run-api</code> tools only work through the Vite plugin.
 </ngmd-callout>
 
 ## Catch hydration errors from the first load
 
-The overlay can connect after the first render, so it can miss hydration errors (`NG0500` to `NG0506`) logged during the first load. `providePangularHttp()` starts listening for them when the app starts. The Analog dock lists them under **Hydration error** in **Lint**, and the `analog-current-page` tool returns them.
+The overlay can connect after the first render, so it can miss hydration errors (`NG0500` to `NG0506`) logged during the first load. `providePangularHttp()` starts listening for them when the app starts. The Analog dock lists them under **Hydration error** in **Lint**, and the `analog-inspect-page` tool returns them.
 
 Analog's own `load()` fetches and API calls show in the Analog dock without extra setup. `withPangular()` also records `HttpClient` calls in the **SSR & HTTP** tab.
 

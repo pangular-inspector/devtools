@@ -102,9 +102,9 @@ The stdio server reads the [devtools options](../getting-started/configuration.m
 
 ### What stdio can answer
 
-Over stdio, the source scan tools work: `get-routes`, `get-components`, `get-signals`, `get-providers`, `get-ngrx-store`, `get-pipes` and `build-meta`. So do the tools that read files only, like `lint-pipes`, `explain-pipe`, `explain-render-mode`, `analog-routes` and `analog-lint`.
+Over stdio, the source scan tools work: `scan-routes`, `scan-components`, `scan-signals`, `scan-providers`, `ngrx-scan`, `scan-pipes` and `scan-build`. So do the tools that read files only, like `scan-pipe-usage`, `explain-pipe`, `scan-render-mode`, `analog-scan-routes` and `analog-lint`.
 
-The stdio server leaves out the tools and resources that need the running app, such as `highlight`, `navigate`, `form-action`, `fill-form`, the forms and router tools, `analog-current-page`, `analog-server-calls` and `analog-call-api`. Use HTTP for those.
+The stdio server leaves out the tools and resources that need the running app, such as `highlight`, `navigate`, `run-form-action`, `fill-form`, the forms and router tools, `analog-inspect-page`, `analog-list-server-calls` and `analog-run-api`. Use HTTP for those.
 
 ## Connect over HTTP
 
@@ -225,7 +225,7 @@ The live tools read what the page reports. Without an open page, they have nothi
     Load the app with the <a href="../getting-started/overlay.md">overlay</a>. The page connects to the devtools and starts reporting.
   </ngmd-step>
   <ngmd-step title="Call a tool">
-    Ask your agent something the page knows, like "why is the checkout form invalid?". It calls <code>explain-form-invalid</code> on the connected page.
+    Ask your agent something the page knows, like "why is the checkout form invalid?". It calls <code>explain-invalid-forms</code> on the connected page.
   </ngmd-step>
 </ngmd-workflow>
 
@@ -245,13 +245,13 @@ The stdio server sends none. The HTTP endpoint needs devframe to pass the instru
 
 The HTTP endpoint also offers *MCP prompts: ready requests for the workflows in the [agent skills](./skills.md). Clients that support prompts usually show them as slash commands. Each prompt has one optional argument and returns a single user message with numbered steps that name the tools to call.
 
-| Prompt             | Argument      | What it asks the agent to do                                                                                      | Needs                      |
-| ------------------ | ------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| `inspect-page`     | `page`        | Call `list-pages`, then `snapshot`, and summarize the route, components, errors, HTTP calls and forms.            | Always offered             |
-| `debug-error`      | `error`       | Find the error with `list-errors`, explain it with `explain-error`, fix the cause and check it stops.             | `errors` on for agents     |
-| `fix-form`         | `form`        | Explain the form with `explain-form-invalid`, keep a `form-history` marker, fix it and prove it with `form-diff`. | `forms` on for agents      |
-| `performance-pass` | `interaction` | Record change detection, read `change-detection` and `diagnose-change-detection`, fix one thing and compare.      | `components` on for agents |
-| `verify-fix`       | `fix`         | Repeat the calls that showed the problem, compare the answers and check `list-errors` for new errors.             | Always offered             |
+| Prompt             | Argument      | What it asks the agent to do                                                                                                       | Needs                      |
+| ------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `inspect-page`     | `page`        | Call `list-pages`, then `snapshot`, and summarize the route, components, errors, HTTP calls and forms.                             | Always offered             |
+| `debug-error`      | `error`       | Find the error with `list-errors`, explain it with `explain-error`, fix the cause and check it stops.                              | `errors` on for agents     |
+| `fix-form`         | `form`        | Explain the form with `explain-invalid-forms`, keep a `list-form-changes` marker, fix it and prove it with `explain-form-changes`. | `forms` on for agents      |
+| `performance-pass` | `interaction` | Record change detection, read `change-detection` and `diagnose-change-detection`, fix one thing and compare.                       | `components` on for agents |
+| `verify-fix`       | `fix`         | Repeat the calls that showed the problem, compare the answers and check `list-errors` for new errors.                              | Always offered             |
 
 The prompts follow the same config as the tools. A prompt is left out when a tool it needs is off through `inspectors` or `agent.tools`, and its steps leave out the tools that are off. Under `agent.readOnly` or with `actions.forms` off, `fix-form` names no action tool. Under `agent.readOnly`, `performance-pass` asks you to start the recording from the panel.
 
@@ -261,60 +261,51 @@ The stdio server offers no prompts. Like the instructions, the prompts need a de
 
 ### Resource templates
 
-The HTTP endpoint also lists a resource template for each page-scoped resource, such as `pangular://page/{pageId}/component-tree`. When a page starts reporting or expires, it sends `notifications/resources/list_changed` to clients that listen through `subscriptions/listen` (the 2026-07-28 protocol). A client on an older protocol version, such as the MCP SDK 1.x defaults, gets no notification and lists the resources again to see new pages. See [Read one page](./resources.md#read-one-page) and [List changes](./resources.md#list-changes).
+The HTTP endpoint also lists a resource template for each page-scoped resource, such as `pangular://pages/{pageId}/component-tree`. When a page starts reporting or expires, it sends `notifications/resources/list_changed` to clients that listen through `subscriptions/listen` (the 2026-07-28 protocol). A client on an older protocol version, such as the MCP SDK 1.x defaults, gets no notification and lists the resources again to see new pages. See [Read one page](./resources.md#read-one-page) and [List changes](./resources.md#list-changes).
 
 ### Tool names
 
-The server registers tools with a colon, as `pangular:get-routes`. MCP clients see them with an underscore, as `pangular_get-routes`. Calls with either form work.
+The server registers tools with a colon, as `pangular:scan-routes`. MCP clients see them with an underscore, as `pangular_scan-routes`. Calls with either form work.
 
-### Titles and structured output
+### Titles and answers
 
 Each tool also has a short title, such as **List connected pages** for `pangular_list-pages`. The server sends it as the tool's `title` and `annotations.title`, and clients show it in their tool lists and approval prompts.
 
-A tool answers with a JSON object, sent as text. Most tools answer `{ "markdown": "..." }`. The tools below also declare an `outputSchema` and send the same object as `structuredContent`, so a client can read the answer without parsing the text. The text is the same either way.
-
-| Tools                                                                                                       | `structuredContent`            |
-| ----------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| Every tool whose name starts with `list-` or `inspect-`                                                     | `{ "markdown": "..." }`        |
-| `analog-routes`, `analog-api-routes`, `analog-server-functions`, `analog-server-calls` and `analog-content` | `{ "markdown": "..." }`        |
-| `wait-for` and `lint-templates`                                                                             | `{ "markdown": "..." }`        |
-| `build-meta`                                                                                                | The project and version fields |
-| `snapshot`                                                                                                  | `{ "markdown": "..." }`        |
-
-The other source scan tools answer with a JSON array, and `screenshot-component` with an image, so they send text and images only.
+Every tool answers with one plain text block, the answer as written: markdown for the live tools, and compact JSON for the source scans (`scan-*` and `ngrx-scan`). No tool declares an `outputSchema`, so no answer comes with `structuredContent`. `screenshot-component` adds an image block after its text. A refusal is one text block with `isError: true`.
 
 ### Read and action tools
 
-Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty tools act on the app, so the server does not mark them read-only:
+Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty-one tools act on the app, so the server does not mark them read-only:
 
-| Tool                     | Tier          | Reference                                                                     |
-| ------------------------ | ------------- | ----------------------------------------------------------------------------- |
-| `navigate`               | `action`      | [Act on the router](./tools.md#act-on-the-router)                             |
-| `dispatch-ngrx-action`   | `action`      | [Dispatch an action](./tools.md#dispatch-an-action)                           |
-| `restore-ngrx-state`     | `action`      | [Restore a state](./tools.md#restore-a-state)                                 |
-| `query-action`           | `action`      | [Invalidate or refetch a query](./tools.md#invalidate-or-refetch-a-query)     |
-| `form-action`            | `action`      | [Act on a form](./tools.md#act-on-a-form)                                     |
-| `fill-form`              | `action`      | [Act on a form](./tools.md#act-on-a-form)                                     |
-| `set-http-rule`          | `action`      | [Fault rules](./tools.md#fault-rules)                                         |
-| `remove-http-rule`       | `action`      | [Fault rules](./tools.md#fault-rules)                                         |
-| `set-ssr-override`       | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides) |
-| `remove-ssr-override`    | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides) |
-| `set-component-property` | `action`      | [Edit a component](./tools.md#edit-a-component)                               |
-| `set-signal`             | `action`      | [Edit a component](./tools.md#edit-a-component)                               |
-| `watch-signal`           | `action`      | [watch-signal](./tools.md#watch-signal)                                       |
-| `record-pipes`           | `action`      | [Record pipe calls](./tools.md#record-pipe-calls)                             |
-| `track-subscriptions`    | `action`      | [Track subscriptions](./tools.md#track-subscriptions)                         |
-| `change-detection`       | `action`      | [change-detection](./tools.md#change-detection)                               |
-| `hydration`              | `action`      | [hydration](./tools.md#hydration)                                             |
-| `audit`                  | `action`      | [audit](./tools.md#audit)                                                     |
-| `clear-recordings`       | `destructive` | [Clear recordings](./tools.md#clear-recordings)                               |
-| `analog-call-api`        | `destructive` | [Call a server route](./tools.md#call-a-server-route)                         |
+| Tool                      | Tier          | Reference                                                                     |
+| ------------------------- | ------------- | ----------------------------------------------------------------------------- |
+| `navigate`                | `action`      | [Act on the router](./tools.md#act-on-the-router)                             |
+| `probe-route`             | `action`      | [Act on the router](./tools.md#act-on-the-router)                             |
+| `record-guards`           | `action`      | [Act on the router](./tools.md#act-on-the-router)                             |
+| `ngrx-dispatch`           | `action`      | [Dispatch an action](./tools.md#dispatch-an-action)                           |
+| `ngrx-restore`            | `action`      | [Restore a state](./tools.md#restore-a-state)                                 |
+| `tanstack-run-query`      | `action`      | [Invalidate or refetch a query](./tools.md#invalidate-or-refetch-a-query)     |
+| `run-form-action`         | `action`      | [Act on a form](./tools.md#act-on-a-form)                                     |
+| `fill-form`               | `action`      | [Act on a form](./tools.md#act-on-a-form)                                     |
+| `set-http-rule`           | `action`      | [Fault rules](./tools.md#fault-rules)                                         |
+| `remove-http-rule`        | `action`      | [Fault rules](./tools.md#fault-rules)                                         |
+| `set-ssr-override`        | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides) |
+| `remove-ssr-override`     | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides) |
+| `set-component-property`  | `action`      | [Edit a component](./tools.md#edit-a-component)                               |
+| `set-signal`              | `action`      | [Edit a component](./tools.md#edit-a-component)                               |
+| `watch-signal`            | `action`      | [watch-signal](./tools.md#watch-signal)                                       |
+| `record-pipes`            | `action`      | [Record pipe calls](./tools.md#record-pipe-calls)                             |
+| `track-subscriptions`     | `action`      | [Track subscriptions](./tools.md#track-subscriptions)                         |
+| `record-change-detection` | `action`      | [record-change-detection](./tools.md#record-change-detection)                 |
+| `audit`                   | `action`      | [audit](./tools.md#audit)                                                     |
+| `clear-recordings`        | `destructive` | [Clear recordings](./tools.md#clear-recordings)                               |
+| `analog-run-api`          | `destructive` | [Call a server route](./tools.md#call-a-server-route)                         |
 
-Your client can ask you before it runs them. To drop them from the server, set `agent.readOnly`, which keeps only the `read` tools. `change-detection` stays without its `record` argument, `hydration` without its `overlay` argument and `audit` without its `axe` argument, as `read` tools. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
+Your client can ask you before it runs them. To drop them from the server, set `agent.readOnly`, which keeps only the `read` tools. `audit` stays without its `axe` argument, as a `read` tool. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ### Pages and tabs
 
-Each browser tab reports on its own and gets a page id, and so does an [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app. `list-pages` lists them with their platform. Without `page`, every tool that reads live data uses the same default page, the first row of `list-pages`, and names it in its answer. [The page argument](./tools.md#the-page-argument) gives the rule and the tools that pick a page another way. Pass `page` to pick another tab (`inspect-providers`, `highlight`, `inspect-component` and `defer-blocks` also accept `pageId`). An id that no tab reports gets an answer that lists the tabs that do, instead of data from another tab. The server drops pages that stop reporting after a short time.
+Each browser tab reports on its own and gets a page id, and so does an [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app. `list-pages` lists them with their platform. Without `page`, every tool that reads live data uses the same default page, the first row of `list-pages`, and names it in its answer. [The page argument](./tools.md#the-page-argument) gives the rule and the tools that pick a page another way. Pass `page` to pick another tab. An id that no tab reports gets an answer that lists the tabs that do, instead of data from another tab. The server drops pages that stop reporting after a short time.
 
 ## Where to next
 

@@ -354,10 +354,9 @@ describe('provider value server', () => {
         5,
       );
     }) as never);
-    const answer = (await ctx.agent.invoke('pangular:read-provider-value', {
-      token: 'CartService',
-      path: 'items[0]',
-    })) as { markdown: string };
+    const answer = await toolAnswer(
+      ctx.agent.invoke('pangular:read-provider-value', { token: 'CartService', path: 'items[0]' }),
+    );
     expect(answer.markdown, answer.markdown).toContain('`items[0]`');
     expect(broadcast).toHaveBeenCalled();
     expect(answer.markdown).toContain('`items[0]` of `CartService` from Root');

@@ -14,7 +14,7 @@ A skill is a folder with a `SKILL.md` file that an agent reads when a task match
 | Skill                  | What it covers                                                                                                                                  |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pangular-inspector`   | Checking the connection with `list-pages`, the inspect, fix and verify loop, which tool answers which question, safety tiers and empty answers. |
-| `pangular-forms`       | Why a form is invalid, won't submit or sends the wrong payload, and proving a fix with `form-history` and `form-diff`.                          |
+| `pangular-forms`       | Why a form is invalid, won't submit or sends the wrong payload, and proving a fix with `list-form-changes` and `explain-form-changes`.          |
 | `pangular-errors`      | Runtime errors and console calls: `list-errors`, `explain-error` and the NG0100, NG0201 and NG0500 explainers.                                  |
 | `pangular-performance` | Change detection recordings, `diagnose-change-detection`, wasted checks, OnPush hints and `find-leaks`.                                         |
 

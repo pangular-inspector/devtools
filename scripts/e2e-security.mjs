@@ -478,10 +478,10 @@ async function leakRun() {
     'login',
     'route',
   ]) {
-    reads.push(['inspect-component', { selector: 'app-secret-card', path, depth: 6, page }]);
-    reads.push(['inspect-component', { selector: 'app-reactive-secrets', path, depth: 6, page }]);
-    reads.push(['inspect-component', { selector: 'app-template-secrets', path, depth: 6, page }]);
-    reads.push(['inspect-component', { selector: 'app-signal-secrets', path, depth: 6, page }]);
+    reads.push(['inspect-component', { component: 'app-secret-card', path, depth: 6, page }]);
+    reads.push(['inspect-component', { component: 'app-reactive-secrets', path, depth: 6, page }]);
+    reads.push(['inspect-component', { component: 'app-template-secrets', path, depth: 6, page }]);
+    reads.push(['inspect-component', { component: 'app-signal-secrets', path, depth: 6, page }]);
   }
   for (const token of [
     'API_CONFIG',
@@ -498,18 +498,18 @@ async function leakRun() {
     'ActionsSubject',
   ]) {
     reads.push(['read-provider-value', { token, depth: 6, limit: 500, page }]);
-    reads.push(['explain-injection', { selector: 'app-secret-card', token, page }]);
+    reads.push(['explain-injection', { injector: 'app-secret-card', token, page }]);
   }
   for (const path of ['endpoint', 'apiKey', 'clientSecret', 'note']) {
     reads.push(['read-provider-value', { token: 'API_CONFIG', path, page }]);
   }
   for (const form of forms) {
     reads.push(['inspect-forms', { form, includeValues: true, page }]);
-    reads.push(['explain-form-invalid', { form, page }]);
+    reads.push(['explain-invalid-forms', { form, page }]);
     reads.push(['explain-submit', { form, page }]);
-    reads.push(['form-payload', { form, page }]);
-    reads.push(['form-history', { form, limit: 200, page }]);
-    reads.push(['form-diff', { form, page }]);
+    reads.push(['inspect-form-payload', { form, page }]);
+    reads.push(['list-form-changes', { form, limit: 200, page }]);
+    reads.push(['explain-form-changes', { form, page }]);
     reads.push(['lint-forms', { form, page }]);
     reads.push(['explain-custom-control', { form, page }]);
     for (const format of ['json', 'markdown', 'typescript', 'test', 'har', 'csv']) {
@@ -539,8 +539,8 @@ async function leakRun() {
       'blob',
     ]) {
       reads.push(['explain-field', { form, path, page }]);
-      reads.push(['form-payload', { form, path, page }]);
-      reads.push(['form-history', { form, path, page }]);
+      reads.push(['inspect-form-payload', { form, path, page }]);
+      reads.push(['list-form-changes', { form, path, page }]);
     }
   }
   for (const name of ['authHeader', 'json', 'slice', 'async'])
@@ -550,30 +550,30 @@ async function leakRun() {
   reads.push(['inspect-transfer-state', { search: 'token', page }]);
   reads.push(['list-http-calls', { preview: true, headers: true, limit: 200, page }]);
   reads.push(['list-http-calls', { failed: true, preview: true, headers: true, page }]);
-  reads.push(['http-waterfall', { headers: true, limit: 200, page }]);
+  reads.push(['list-http-calls', { view: 'waterfall', headers: true, limit: 50, page }]);
   for (const id of [1, 2, 3, 4, 5, 6, 7, 8])
     reads.push(['explain-ssr-request', { id: String(id) }]);
   reads.push(['explain-navigation', { limit: 50, perf: true, page }]);
   for (const id of [1, 2, 3, 4]) {
     reads.push(['explain-navigation', { id, page }]);
-    reads.push(['export-navigation', { id, page }]);
+    reads.push(['explain-navigation', { format: 'repro', id, page }]);
   }
-  reads.push(['explain-render-mode', { url: '/acct/reset/x', page }]);
+  reads.push(['scan-render-mode', { url: '/acct/reset/x', page }]);
   reads.push(['list-routes', { page, audit: true }]);
   reads.push(['router-config', { page }]);
-  for (const seq of [0, 1, 2, 3, 4, 5]) reads.push(['inspect-ngrx-entry', { seq, page }]);
-  reads.push(['export-ngrx-session', { page }]);
-  reads.push(['generate-ngrx-test', { page }]);
-  reads.push(['inspect-signal-store', { page }]);
-  reads.push(['signal-store-history', { page }]);
+  for (const seq of [0, 1, 2, 3, 4, 5]) reads.push(['ngrx-inspect-entry', { seq, page }]);
+  reads.push(['ngrx-export-session', { page }]);
+  reads.push(['ngrx-generate-test', { page }]);
+  reads.push(['ngrx-inspect-store', { page }]);
+  reads.push(['ngrx-history', { page }]);
   reads.push(['list-console', { limit: 200, page }]);
   for (const level of ['log', 'info', 'warn', 'error', 'debug'])
     reads.push(['list-console', { level, page }]);
   reads.push(['list-errors', { limit: 200, page }]);
   for (const id of ['e1', 'e2', 'e3', 'e4']) reads.push(['explain-error', { id, page }]);
-  reads.push(['analog-server-calls', { limit: 200 }]);
-  reads.push(['analog-current-page', { page }]);
-  reads.push(['analog-explain-url', { url: '/acct/reset/abc?token=zzz' }]);
+  reads.push(['analog-list-server-calls', { limit: 200 }]);
+  reads.push(['analog-inspect-page', { page }]);
+  reads.push(['analog-scan-url', { url: '/acct/reset/abc?token=zzz' }]);
   reads.push(['snapshot', { page, maxChars: 200000, limit: 500 }]);
   reads.push(['startup-timing', { page, limit: 200 }]);
   for (const path of [
@@ -589,14 +589,14 @@ async function leakRun() {
     'openai',
     'пароль',
   ]) {
-    reads.push(['inspect-component', { selector: 'app-secret-card', path, depth: 8, page }]);
+    reads.push(['inspect-component', { component: 'app-secret-card', path, depth: 8, page }]);
   }
-  reads.push(['list-queries', { page }]);
-  reads.push(['inspect-query', { page, id: 'q1' }]);
-  reads.push(['inspect-query', { page, id: 'q2' }]);
-  reads.push(['inspect-query', { page, id: 'q3' }]);
-  reads.push(['inspect-query', { page, id: 'm1' }]);
-  reads.push(['inspect-query', { page, id: 'm2' }]);
+  reads.push(['tanstack-list-queries', { page }]);
+  reads.push(['tanstack-inspect-query', { page, id: 'q1' }]);
+  reads.push(['tanstack-inspect-query', { page, id: 'q2' }]);
+  reads.push(['tanstack-inspect-query', { page, id: 'q3' }]);
+  reads.push(['tanstack-inspect-query', { page, id: 'm1' }]);
+  reads.push(['tanstack-inspect-query', { page, id: 'm2' }]);
   reads.push(['find-leaks', { page, limit: 200 }]);
   for (const r of await client
     .listResources()
@@ -648,7 +648,7 @@ async function leakRun() {
   const actionReads = [
     ['record-pipes', { action: 'start', page }],
     ['track-subscriptions', { action: 'start', page }],
-    ['change-detection', { record: 'start', page }],
+    ['record-change-detection', { record: 'start', page }],
     ['watch-signal', { watch: true, page }],
   ];
   for (const [name, args] of actionReads) await callTool(client, tool(name), args);
@@ -660,21 +660,22 @@ async function leakRun() {
     ['explain-pipe', { name: 'json', page }],
     ['explain-pipe', { name: 'async', page }],
     ['track-subscriptions', { action: 'stop', page }],
-    ['change-detection', { record: 'stop', page, export: true }],
+    ['record-change-detection', { record: 'stop', page }],
+    ['change-detection', { page, export: 'json' }],
     ['diagnose-change-detection', { page }],
-    ['inspect-signals', { selector: 'app-secret-card', history: true, page }],
+    ['inspect-signals', { component: 'app-secret-card', history: true, page }],
     ['audit', { page, axe: true, limit: 500 }],
-    ['hydration', { page, overlay: false }],
+    ['hydration', { page }],
     [
-      'analog-call-api',
+      'analog-run-api',
       { path: `/api/v1/secure?token=${C.anUrlToken.value}`, method: 'GET', confirm: true },
     ],
-    ['analog-server-calls', { limit: 200 }],
+    ['analog-list-server-calls', { limit: 200 }],
   ];
   for (const [name, args] of afterReads) await callTool(client, tool(name), args);
   // The Analog playground puts the URL token in its own arguments; keep that out of the grep.
   for (const [channel, text] of channels) {
-    if (channel.includes('analog-call-api')) {
+    if (channel.includes('analog-run-api')) {
       channels.set(channel, text.split(C.anUrlToken.value).join('[arg]'));
     }
   }
@@ -685,15 +686,15 @@ async function leakRun() {
   const reactive = forms[0];
   const writes = [
     [
-      'form-action',
+      'run-form-action',
       { action: 'set-value', form: reactive, path: 'password', value: probe, confirm: true },
     ],
     [
-      'form-action',
+      'run-form-action',
       { action: 'set-value', form: reactive, path: 'apiKey', value: probe, confirm: true },
     ],
     [
-      'form-action',
+      'run-form-action',
       {
         action: 'set-value',
         form: reactive,
@@ -703,7 +704,7 @@ async function leakRun() {
       },
     ],
     [
-      'form-action',
+      'run-form-action',
       {
         action: 'set-value',
         form: reactive,
@@ -712,9 +713,9 @@ async function leakRun() {
         force: true,
       },
     ],
-    ['form-action', { action: 'reset', form: reactive, confirm: true }],
+    ['run-form-action', { action: 'reset', form: reactive, confirm: true }],
     [
-      'form-action',
+      'run-form-action',
       { action: 'restore', form: reactive, snapshot: { password: probe }, confirm: true },
     ],
     [
@@ -726,17 +727,17 @@ async function leakRun() {
       },
     ],
     [
-      'form-action',
+      'run-form-action',
       { action: 'set-value', form: reactive, path: 'apiSecret', value: probe, confirm: true },
     ],
     ['fill-form', { form: forms[2], values: { password: probe, token: probe }, confirm: true }],
     ['fill-form', { form: forms[1], values: { token: probe }, confirm: true }],
-    ['set-signal', { component: 'app-secret-card', signal: 'authToken', value: probe, page }],
+    ['set-signal', { component: 'app-secret-card', property: 'authToken', value: probe, page }],
     [
       'set-signal',
       {
         component: 'app-secret-card',
-        signal: 'profile',
+        property: 'profile',
         value: { name: 'x', secret: probe, mfaCode: probe },
         page,
       },
@@ -790,7 +791,7 @@ async function leakRun() {
   // The documented escape hatch: a key unmasked on window can be written.
   const unmasked = await callTool(
     client,
-    tool('form-action'),
+    tool('run-form-action'),
     {
       action: 'set-value',
       form: reactive,
@@ -798,12 +799,12 @@ async function leakRun() {
       value: 'unmask-write-ok',
       confirm: true,
     },
-    'mcp write form-action unmasked',
+    'mcp write run-form-action unmasked',
   );
   await delay(800);
   const recovery = (await appValues(app)).rfRecovery;
   check(
-    'window unmask lets form-action write recoveryKey',
+    'window unmask lets run-form-action write recoveryKey',
     recovery === 'unmask-write-ok',
     `${recovery}; ${unmasked.text.slice(0, 200)}`,
   );
@@ -817,12 +818,12 @@ async function leakRun() {
   const webmcp = await app.evaluate(async (page) => {
     const out = {};
     const extra = {
-      'pangular_inspect-component': { selector: 'app-secret-card', depth: 6 },
-      'pangular_inspect-signals': { selector: 'app-secret-card', history: true },
+      'pangular_inspect-component': { component: 'app-secret-card', depth: 6 },
+      'pangular_inspect-signals': { component: 'app-secret-card', history: true },
       'pangular_inspect-forms': { form: `ReactiveSecrets.group@${page}`, includeValues: true },
       'pangular_read-provider-value': { token: 'API_CONFIG', depth: 6 },
       'pangular_list-http-calls': { preview: true, headers: true },
-      'pangular_form-history': { form: `ReactiveSecrets.group@${page}`, limit: 200 },
+      'pangular_list-form-changes': { form: `ReactiveSecrets.group@${page}`, limit: 200 },
     };
     for (const [name, t] of window.__webmcpTools) {
       for (const args of [{}, extra[name]].filter(Boolean)) {
@@ -1537,12 +1538,15 @@ async function gatingChecks() {
     ['agent.tools.forms false', { auth: false, agent: { tools: { forms: false } } }],
   ];
   const ACTION = [
-    'form-action',
+    'run-form-action',
     'fill-form',
     'navigate',
-    'dispatch-ngrx-action',
-    'restore-ngrx-state',
-    'query-action',
+    'probe-route',
+    'record-guards',
+    'record-change-detection',
+    'ngrx-dispatch',
+    'ngrx-restore',
+    'tanstack-run-query',
     'set-http-rule',
     'remove-http-rule',
     'set-ssr-override',
@@ -1552,7 +1556,7 @@ async function gatingChecks() {
     'watch-signal',
     'record-pipes',
     'track-subscriptions',
-    'analog-call-api',
+    'analog-run-api',
     'clear-recordings',
   ];
   for (const [label, options] of cases) {
@@ -1575,31 +1579,35 @@ async function gatingChecks() {
       g('no action tool is listed', left.length === 0, left.join(', '));
       const call = await callTool(
         client,
-        'pangular_form-action',
+        'pangular_run-form-action',
         { action: 'set-value', form, path: 'username', value: 'ro', confirm: true },
         `gating ${label}`,
       );
-      g('form-action call refused', !call.ok, call.text.slice(0, 120));
+      g('run-form-action call refused', !call.ok, call.text.slice(0, 120));
     }
     if (label === 'actions false') {
       const left = ACTION.filter(
         (n) =>
           names.has(n) &&
           ![
-            'navigate',
             'clear-recordings',
             'watch-signal',
             'record-pipes',
             'track-subscriptions',
+            'record-guards',
+            'record-change-detection',
           ].includes(n),
       );
       g('write tools are dropped', left.length === 0, left.join(', '));
     }
     if (label === 'actions.forms false') {
-      g('form-action and fill-form dropped', !names.has('form-action') && !names.has('fill-form'));
+      g(
+        'run-form-action and fill-form dropped',
+        !names.has('run-form-action') && !names.has('fill-form'),
+      );
       const call = await callTool(
         client,
-        'pangular_form-action',
+        'pangular_run-form-action',
         { action: 'set-value', form, path: 'username', value: 'blocked', confirm: true },
         `gating ${label}`,
       );
@@ -1637,7 +1645,7 @@ async function gatingChecks() {
     if (label === 'agent.tools.forms false') {
       g(
         'forms tools hidden from agents',
-        !names.has('inspect-forms') && !names.has('form-action'),
+        !names.has('inspect-forms') && !names.has('run-form-action'),
         '',
       );
       const read = await callTool(

@@ -137,12 +137,12 @@ Look for **resubscribing** rows in **Async subscriptions**, and for `async-on-ca
 
 ## Agent tools
 
-| Tool                    | Live   | What it does                                                                                                                                                                                         |
-| ----------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:get-pipes`    | no     | Custom pipes and the built-in pipes in use.                                                                                                                                                          |
-| `pangular:lint-pipes`   | no     | Runs the lint rules above.                                                                                                                                                                           |
-| `pangular:explain-pipe` | partly | One pipe by `name`: where it is declared or used, purity, live counts, time in `transform`, errors, last input and output, the stale warning, resubscribing `\| async` usages and the lint findings. |
-| `pangular:record-pipes` | yes    | Starts or stops call recording with `action`, like **Record calls**.                                                                                                                                 |
+| Tool                       | Live   | What it does                                                                                                                                                                                         |
+| -------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:scan-pipes`      | no     | Custom pipes and the built-in pipes in use.                                                                                                                                                          |
+| `pangular:scan-pipe-usage` | no     | Runs the lint rules above.                                                                                                                                                                           |
+| `pangular:explain-pipe`    | partly | One pipe by `name`: where it is declared or used, purity, live counts, time in `transform`, errors, last input and output, the stale warning, resubscribing `\| async` usages and the lint findings. |
+| `pangular:record-pipes`    | yes    | Starts or stops call recording with `action`, like **Record calls**.                                                                                                                                 |
 
 `explain-pipe` and `record-pipes` take `page` to pick a tab, and default to the most recent one, except that `record-pipes` with `action: "stop"` and no `page` stops recording on every tab. To give `explain-pipe` call data, call `record-pipes` with `action: "start"` or click **Record calls** in the panel, then use the app. See [Tools](../agents/tools.md#pipes).
 

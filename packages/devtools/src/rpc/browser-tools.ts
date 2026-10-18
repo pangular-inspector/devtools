@@ -105,33 +105,33 @@ setCallerPageReader(() => callerScope.getStore());
  * Page tools answer for the page that calls them, so a tool reaches the page
  * only when it is scoped to one page or reads the workspace source.
  *
- * - A tool with a `page` or `pageId` argument is listed, and the call always
+ * - A tool with a `page` argument is listed, and the call always
  *   gets the calling page's id (see {@link scopedArgs}).
  * - A tool without one is listed only when it is in {@link SOURCE_TOOLS}:
  *   these read the workspace (source scans, build metadata), never a page.
  *   Any other tool without a page scope, such as `list-pages`,
  *   `list-ssr-requests`, `explain-ssr-request`, `list-ssr-overrides`,
- *   `list-http-rules` and `analog-server-calls`, answers about every tab or
+ *   `list-http-rules` and `analog-list-server-calls`, answers about every tab or
  *   the whole server, so it stays MCP only. A new tool is left out until it
  *   is added here.
  * - {@link MCP_ONLY_TOOLS} are page scoped but stay off the page too.
  */
 const SOURCE_TOOLS: ReadonlySet<string> = new Set([
-  'pangular:get-routes',
-  'pangular:get-components',
-  'pangular:get-pipes',
-  'pangular:get-signals',
-  'pangular:get-providers',
-  'pangular:get-ngrx-store',
-  'pangular:build-meta',
-  'pangular:lint-pipes',
-  'pangular:analog-routes',
-  'pangular:analog-explain-url',
-  'pangular:analog-server-functions',
-  'pangular:analog-api-routes',
-  'pangular:analog-render-modes',
-  'pangular:analog-prerender-plan',
-  'pangular:analog-content',
+  'pangular:scan-routes',
+  'pangular:scan-components',
+  'pangular:scan-pipes',
+  'pangular:scan-signals',
+  'pangular:scan-providers',
+  'pangular:ngrx-scan',
+  'pangular:scan-build',
+  'pangular:scan-pipe-usage',
+  'pangular:analog-scan-routes',
+  'pangular:analog-scan-url',
+  'pangular:analog-scan-server-functions',
+  'pangular:analog-scan-api-routes',
+  'pangular:analog-explain-render-modes',
+  'pangular:analog-scan-prerender',
+  'pangular:analog-scan-content',
 ]);
 
 /**
@@ -145,8 +145,8 @@ const MCP_ONLY_TOOLS: ReadonlySet<string> = new Set([
   'pangular:screenshot-component',
   'pangular:highlight',
   'pangular:open-in-panel',
-  'pangular:export-ngrx-session',
-  'pangular:import-ngrx-session',
+  'pangular:ngrx-export-session',
+  'pangular:ngrx-import-session',
 ]);
 
 /**
@@ -177,7 +177,7 @@ function schemaOf(tool: ListedTool, host: BrowserToolHost): Record<string, unkno
 
 function pageScoped(schema: Record<string, unknown>): boolean {
   const properties = schema['properties'];
-  return isRecord(properties) && ('page' in properties || 'pageId' in properties);
+  return isRecord(properties) && 'page' in properties;
 }
 
 /**
@@ -222,9 +222,9 @@ function textOf(result: unknown): string {
 }
 
 /**
- * The arguments for a call from a page: a tool that takes `page` (or
- * `pageId`) always answers for the calling page. A page or page id the
- * caller passed is replaced, so a page tool never reads another tab.
+ * The arguments for a call from a page: a tool that takes `page` always
+ * answers for the calling page. A page the caller passed is replaced, so a
+ * page tool never reads another tab.
  */
 export function scopedArgs(
   tool: BrowserTool,
@@ -236,7 +236,6 @@ export function scopedArgs(
   delete out['pageId'];
   const properties = isRecord(tool.inputSchema['properties']) ? tool.inputSchema['properties'] : {};
   if ('page' in properties) out['page'] = pageId;
-  if ('pageId' in properties) out['pageId'] = pageId;
   return out;
 }
 

@@ -28,11 +28,6 @@ export const getSignals = defineRpcFunction({
   snapshot: true,
   args: [],
   returns: describable(v.array(SignalEntrySchema)),
-  agent: {
-    description:
-      'Source scan of signal(), computed(), linkedSignal(), effect(), toSignal(), resources, signal inputs, models and queries: name, kind, file and line.',
-    title: 'List Angular signals from source',
-  },
   setup: (ctx) => ({
     handler: async () => scanSignals(ctx.cwd),
   }),

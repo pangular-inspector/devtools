@@ -140,26 +140,25 @@ export function createComponentScreenshots(deps: Deps) {
     id: 'pangular:screenshot-component',
     title: 'Screenshot a component',
     description:
-      "A PNG (JPEG when large) of one component's host element as rendered now. `selector`: instance id, class, tag or CSS selector. Drawn from computed styles without changing the app; secret fields and masked elements are hidden. At most 2000 px.",
+      "A PNG (JPEG when large) of one component's host element as rendered now: `component` (instance id, class or tag) or `selector` (CSS). Drawn from computed styles without changing the app; secret fields and masked elements are hidden. At most 2000 px.",
     inputSchema: {
       type: 'object',
       properties: {
-        selector: {
+        component: {
           type: 'string',
           description:
-            'Instance id (e.g. c12), class name (e.g. ProductCard), host tag (e.g. app-root) or CSS selector.',
+            'Instance id (e.g. c12), class name (e.g. ProductCard) or host tag (e.g. app-root).',
         },
+        selector: { type: 'string', description: 'A CSS selector, such as .card > h2.' },
         page: {
           type: 'string',
           description:
             'Page id, when more than one tab reports (see pangular:list-pages). Without it, ids, class names and tags are searched on every page, newest first; a CSS selector uses the newest page.',
         },
-        pageId: { type: 'string', description: 'Same as `page`.' },
       },
-      required: ['selector'],
     },
     handler: async (args: Record<string, unknown>): Promise<ScreenshotAnswer> => {
-      const page = pageArgument(args, 'pageId');
+      const page = pageArgument(args);
       const all = byRecency(deps.pages());
       if (page && !all.some((entry) => entry.pageId === page)) {
         return { markdown: unknownPageText(page, all, 'a component tree') };
@@ -179,16 +178,27 @@ export function createComponentScreenshots(deps: Deps) {
             'No page reports a component tree, so there is nothing to capture. Open the app in a browser with the devtools connected.',
         };
       }
-      const selector = typeof args?.['selector'] === 'string' ? args['selector'].trim() : '';
-      if (!selector) {
+      const component =
+        typeof args?.['component'] === 'string' ? args['component'].trim() : undefined;
+      const css = typeof args?.['selector'] === 'string' ? args['selector'].trim() : undefined;
+      const selector = component ?? css ?? '';
+      if (!selector || (component !== undefined && css !== undefined)) {
         return {
           markdown: refusal(
-            'Pass `selector`: an instance id, class name, host tag or CSS selector.',
+            'Pass one of `component` (an instance id, class name or host tag) or `selector` (a CSS selector).',
           ),
         };
       }
-      const hits = findComponents(scope, selector);
+      const hits = component !== undefined ? findComponents(scope, component) : [];
       const [hit] = hits;
+      if (component !== undefined && !hit) {
+        const cut = truncationText(scope);
+        return {
+          markdown: refusal(
+            `No component instance matches \`${component}\`${page ? ` on page \`${page}\`` : ''}, so nothing was captured. Pass an instance id, class name or host tag from pangular:list-components, or a CSS selector as \`selector\`.${cut ? ` ${cut}` : ''}`,
+          ),
+        };
+      }
       const pageId = hit?.pageId ?? scope[0]!.pageId;
       const result = await request(pageId, hit ? { id: hit.node.id } : { selector });
       const what = hit

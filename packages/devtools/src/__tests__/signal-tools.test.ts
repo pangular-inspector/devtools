@@ -233,13 +233,13 @@ describe('inspect-signals tool', () => {
   it('passes `node` and `history` through and caps a large graph', async () => {
     const { push, call } = await boot();
     await push('push-signal-graph', { pageId: 'p1', ...bigGraph() });
-    const capped = await call('inspect-signals', { selector: 'app-root' });
+    const capped = await call('inspect-signals', { component: 'app-root' });
     // The notice counts toward the cap, so the graph gets what is left of it.
     expect(capped.startsWith(`${UNTRUSTED}\n\n`)).toBe(true);
     expect(capped.length).toBeLessThanOrEqual(SIGNAL_TOOL_MAX);
     expect(capped).toMatch(/Cut to fit 19,\d{3} characters/);
     const one = JSON.parse(
-      (await call('inspect-signals', { selector: 'app-root', node: 'n5', history: false })).slice(
+      (await call('inspect-signals', { component: 'app-root', node: 'n5', history: false })).slice(
         UNTRUSTED.length,
       ),
     ) as SignalGraph;
@@ -250,7 +250,7 @@ describe('inspect-signals tool', () => {
   it('caps the graph it falls back to when the selector does not match', async () => {
     const { push, call } = await boot();
     await push('push-signal-graph', { pageId: 'p1', ...bigGraph() });
-    const text = await call('inspect-signals', { selector: 'app-other' });
+    const text = await call('inspect-signals', { component: 'app-other' });
     expect(text.startsWith(`${UNTRUSTED}\n\nNo signal graph for \`app-other\``)).toBe(true);
     expect(text.length).toBeLessThanOrEqual(SIGNAL_TOOL_MAX);
     expect(text).toMatch(/Cut to fit/);
@@ -261,7 +261,7 @@ describe('inspect-signals tool with a long selector', () => {
   it('keeps the cut note when the selector it echoes is long', async () => {
     const { push, call } = await boot();
     await push('push-signal-graph', { pageId: 'p1', ...bigGraph() });
-    const text = await call('inspect-signals', { selector: 'x'.repeat(19_800) });
+    const text = await call('inspect-signals', { component: 'x'.repeat(19_800) });
     expect(text.length).toBeLessThanOrEqual(SIGNAL_TOOL_MAX);
     // The answer starts with the untrusted-data notice, then the heading.
     expect(text).toMatch(/No signal graph for `x{200}…`/);

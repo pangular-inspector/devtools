@@ -109,7 +109,7 @@ const page = (pageId: string, classic: boolean): NgrxPageReport => ({
   log: [],
 });
 
-describe('dispatch-ngrx-action tool', () => {
+describe('ngrx-dispatch tool', () => {
   it('sends the action to the page with a Store and returns the log entry', async () => {
     const { ctx, push, call } = await boot();
     await push('push-ngrx-state', page('p1', true));
@@ -131,7 +131,7 @@ describe('dispatch-ngrx-action tool', () => {
       setTimeout(() => void push('ngrx-action-result', { requestId, pageId, result }), 5);
     }) as never);
 
-    const text = await call('dispatch-ngrx-action', {
+    const text = await call('ngrx-dispatch', {
       type: '[Cart] Add Item',
       payload: { id: 7 },
     });
@@ -143,31 +143,27 @@ describe('dispatch-ngrx-action tool', () => {
     expect(text).toContain('untrusted data');
     expect(text).toContain('"id": 7');
 
-    await call('dispatch-ngrx-action', { seq: 4 });
+    await call('ngrx-dispatch', { seq: 4 });
     expect(sent[1].args[0].request).toEqual({ type: 'dispatch-again', seq: 4 });
   });
 
   it('checks the page, the Store and the action before it sends anything', async () => {
     const { ctx, push, call } = await boot();
     const broadcast = vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async () => {}) as never);
-    expect(await call('dispatch-ngrx-action', { type: '[A] B' })).toMatch(
+    expect(await call('ngrx-dispatch', { type: '[A] B' })).toMatch(
       /No connected page has an @ngrx\/store Store/,
     );
     await push('push-ngrx-state', page('p1', true));
     await push('push-ngrx-state', page('p2', false));
-    expect(await call('dispatch-ngrx-action', { page: 'p2', type: '[A] B' })).toMatch(
+    expect(await call('ngrx-dispatch', { page: 'p2', type: '[A] B' })).toMatch(
       /`p2` has no @ngrx\/store Store/,
     );
-    expect(await call('dispatch-ngrx-action', { page: 'p9', type: '[A] B' })).toMatch(
-      /No page `p9`/,
-    );
-    expect(await call('dispatch-ngrx-action', { type: '' })).toMatch(/non-empty string/);
-    expect(await call('dispatch-ngrx-action', { type: '[A] B', payload: { type: 'x' } })).toMatch(
+    expect(await call('ngrx-dispatch', { page: 'p9', type: '[A] B' })).toMatch(/No page `p9`/);
+    expect(await call('ngrx-dispatch', { type: '' })).toMatch(/non-empty string/);
+    expect(await call('ngrx-dispatch', { type: '[A] B', payload: { type: 'x' } })).toMatch(
       /"type" key/,
     );
-    expect(await call('dispatch-ngrx-action', { seq: 'x' })).toMatch(
-      /^`seq` must be a whole number/,
-    );
+    expect(await call('ngrx-dispatch', { seq: 'x' })).toMatch(/^`seq` must be a whole number/);
     expect(
       broadcast.mock.calls.filter(([o]) =>
         (o as unknown as Broadcast).method.endsWith('ngrx-action'),
@@ -181,7 +177,7 @@ describe('dispatch-ngrx-action tool', () => {
     await push('push-ngrx-state', page('p1', true));
     await push('push-ngrx-state', page('p2', true));
     await push('push-ngrx-state', page('p3', false));
-    const text = await call('dispatch-ngrx-action', { type: '[A] B' });
+    const text = await call('ngrx-dispatch', { type: '[A] B' });
     expect(text).toMatch(/^2 pages report an @ngrx\/store Store: /);
     expect(text).toContain('`p1`');
     expect(text).toContain('`p2`');
@@ -259,8 +255,8 @@ describe('dispatch-ngrx-action tool', () => {
   it('is left out when the ngrx write action is off, and the RPC refuses dispatches', async () => {
     const { ctx, push } = await boot({ actions: { ngrx: false } });
     const tools = ctx.agent.list().tools.map((tool) => tool.id);
-    expect(tools).not.toContain('pangular:dispatch-ngrx-action');
-    expect(tools).toContain('pangular:get-ngrx-store');
+    expect(tools).not.toContain('pangular:ngrx-dispatch');
+    expect(tools).toContain('pangular:ngrx-scan');
     expect(
       await push('request-ngrx-action', { request: { type: 'dispatch', action: '[A] B' } }),
     ).toEqual({ error: expect.stringContaining('dispatching actions') });
@@ -300,44 +296,57 @@ const signalPage = (pageId: string, reportedSeq: number): NgrxPageReport => ({
   })),
 });
 
-describe('inspect-signal-store and signal-store-history tools', () => {
+describe('ngrx-inspect-store and ngrx-history tools', () => {
   it('are registered with named arguments and hidden with the ngrx inspector off', async () => {
     const { ctx } = await boot();
     const tools = ctx.agent.list().tools;
-    for (const id of ['inspect-signal-store', 'signal-store-history']) {
+    for (const id of ['ngrx-inspect-store', 'ngrx-history']) {
       const tool = tools.find((t) => t.id === `pangular:${id}`);
       expect(tool?.inputSchema).toMatchObject({
-        properties: { page: { type: 'string' }, storeId: { type: 'string' } },
+        properties: { page: { type: 'string' }, store: { type: 'string' } },
       });
     }
-    const history = tools.find((t) => t.id === 'pangular:signal-store-history');
-    expect(history?.inputSchema).toMatchObject({ properties: { since: { type: 'number' } } });
+    const history = tools.find((t) => t.id === 'pangular:ngrx-history');
+    expect(history?.inputSchema).toMatchObject({ properties: { after: { type: 'number' } } });
 
     const off = await boot({ inspectors: { ngrx: false } });
     const offIds = off.ctx.agent.list().tools.map((t) => t.id);
-    expect(offIds).not.toContain('pangular:inspect-signal-store');
-    expect(offIds).not.toContain('pangular:signal-store-history');
+    expect(offIds).not.toContain('pangular:ngrx-inspect-store');
+    expect(offIds).not.toContain('pangular:ngrx-history');
   });
 
-  it('read the pushed page by page, store id and since', async () => {
+  it('read the pushed page by page, store id or name and after', async () => {
     const { push, call } = await boot();
-    expect(await call('inspect-signal-store', {})).toMatch(/No NgRx state has been reported/);
+    expect(await call('ngrx-inspect-store', {})).toMatch(/No NgRx state has been reported/);
     await push('push-ngrx-state', signalPage('p1', 3));
     await push('push-ngrx-state', signalPage('p2', 1));
 
-    const store = await call('inspect-signal-store', { page: 'p1', storeId: 'ngrx-1' });
+    const store = await call('ngrx-inspect-store', { page: 'p1', store: 'ngrx-1' });
     expect(store).toContain('untrusted data');
     expect(store).toContain('"query": "rome"');
     expect(store).toContain('`setQuery`: 1 call(s), avg 2ms, last 2ms');
+    // A store name works where an id does.
+    const named = await call('ngrx-inspect-store', { page: 'p1', store: 'SignalStore' });
+    expect(named).toContain('"query": "rome"');
+    expect(await call('ngrx-history', { page: 'p1', store: 'SignalStore', after: 2 })).toContain(
+      '#3 ',
+    );
+    // The old argument names are refused with the new ones.
+    expect(await call('ngrx-inspect-store', { storeId: 'ngrx-1' })).toMatch(
+      /There is no `storeId` argument; pass `store`/,
+    );
+    expect(await call('ngrx-history', { since: 1 })).toMatch(
+      /There is no `since` argument; pass `after`/,
+    );
 
-    const history = await call('signal-store-history', { page: 'p1', since: 1 });
+    const history = await call('ngrx-history', { page: 'p1', after: 1 });
     expect(history).toContain('untrusted data');
     expect(history).not.toContain('#1 ');
     expect(history).toContain('#2 ');
     expect(history).toContain('#3 ');
     expect(history).toContain('(2ms)');
     // Without `page`, the default page: p2 connected last.
-    expect(await call('signal-store-history', { since: 1 })).toMatch(/`p2`/);
-    expect(await call('signal-store-history', { page: 'p9' })).toMatch(/No page `p9`/);
+    expect(await call('ngrx-history', { after: 1 })).toMatch(/`p2`/);
+    expect(await call('ngrx-history', { page: 'p9' })).toMatch(/No page `p9`/);
   });
 });

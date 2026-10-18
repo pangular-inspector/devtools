@@ -44,11 +44,6 @@ export const getPipes = defineRpcFunction({
   snapshot: true,
   args: [],
   returns: describable(v.array(PipeSchema)),
-  agent: {
-    description:
-      'Source scan of pipes: custom @Pipe classes and the @angular/common pipes templates use, with name, class, purity, standalone and where each is declared or used.',
-    title: 'List Angular pipes',
-  },
   setup: (ctx) => ({
     handler: async () => scanPipes(ctx.cwd),
   }),

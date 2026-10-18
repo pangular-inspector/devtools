@@ -31,7 +31,7 @@ export function namingPageRead<R>(
     const noted = new Set<string>();
     const result = (await reads.run(noted, async () => handler(args))) as Awaited<R>;
     if (callerPage() !== undefined || refusalOf(result) !== undefined) return result;
-    const asked = pageArgument(args as Record<string, unknown> | undefined, 'pageId');
+    const asked = pageArgument(args as Record<string, unknown> | undefined);
     const pageId = asked ?? (noted.size === 1 ? [...noted][0] : undefined);
     if (!pageId) return result;
     return withPageLine(result, pageId, urlOf(pageId)) as Awaited<R>;

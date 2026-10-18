@@ -26,16 +26,20 @@ async function boot(config?: PangularConfig) {
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   // A refusal comes back as its text, the way an MCP client reads it.
+  // A text answer reaches the client as the markdown itself; an image answer keeps its blocks.
   const call = (args: Record<string, unknown>) =>
     (
-      ctx.agent.invoke('pangular:screenshot-component', args) as Promise<{
-        markdown: string;
-        mcpContent?: unknown[];
-      }>
-    ).catch((error: unknown) => {
-      if (error instanceof ToolRefusal) return { markdown: error.message, mcpContent: undefined };
-      throw error;
-    });
+      ctx.agent.invoke('pangular:screenshot-component', args) as Promise<
+        string | { markdown: string; mcpContent?: unknown[] }
+      >
+    )
+      .then((result) =>
+        typeof result === 'string' ? { markdown: result, mcpContent: undefined } : result,
+      )
+      .catch((error: unknown) => {
+        if (error instanceof ToolRefusal) return { markdown: error.message, mcpContent: undefined };
+        throw error;
+      });
   return { ctx, push, call };
 }
 
@@ -116,7 +120,7 @@ describe('screenshot-component', () => {
     const { ctx, push, call } = await boot();
     await push('push-component-tree', tree('p1'));
     const sent = answerCaptures(ctx, push, () => ok);
-    const answer = await call({ selector: 'TripCard' });
+    const answer = await call({ component: 'TripCard' });
     expect(sent).toEqual([{ requestId: expect.any(String), pageId: 'p1', id: 'p1-card' }]);
     expect(answer.markdown.startsWith(UNTRUSTED)).toBe(true);
     expect(answer.markdown).toContain(
@@ -134,7 +138,7 @@ describe('screenshot-component', () => {
     expect(JSON.stringify(answer)).not.toContain(PNG);
   });
 
-  it('sends a CSS selector to the newest page when no instance matches', async () => {
+  it('sends a CSS selector to the newest page', async () => {
     const { ctx, push, call } = await boot();
     await push('push-component-tree', tree('p1'));
     const sent = answerCaptures(ctx, push, () => ({
@@ -152,10 +156,19 @@ describe('screenshot-component', () => {
   it('answers without asking a page when none reports or the page is unknown', async () => {
     const { ctx, push, call } = await boot();
     const sent = answerCaptures(ctx, push, () => ok);
-    expect((await call({ selector: 'App' })).markdown).toMatch(/^No page reports a component tree/);
+    expect((await call({ component: 'App' })).markdown).toMatch(
+      /^No page reports a component tree/,
+    );
     await push('push-component-tree', tree('p1'));
-    expect((await call({ selector: 'App', page: 'p9' })).markdown).toMatch(/No page `p9`/);
-    expect((await call({ selector: ' ' })).markdown).toMatch(/^Pass `selector`/);
+    expect((await call({ component: 'App', page: 'p9' })).markdown).toMatch(/No page `p9`/);
+    expect((await call({ component: ' ' })).markdown).toMatch(/^Pass one of `component`/);
+    expect((await call({ component: 'App', selector: '.x' })).markdown).toMatch(
+      /^Pass one of `component`/,
+    );
+    // A component name is never sent on as a CSS selector.
+    expect((await call({ component: 'Missing' })).markdown).toMatch(
+      /^No component instance matches `Missing`/,
+    );
     expect(sent).toEqual([]);
   });
 

@@ -110,12 +110,12 @@ describe('Analog MCP tools', () => {
   it('are left out of a project that is not an Analog app, and come with a page that reports Analog', async () => {
     const { ctx, push } = await boot(makeProject({ 'package.json': '{}' }));
     const listed = () => ctx.agent.list().tools.map((tool) => tool.id);
-    expect(listed()).not.toContain('pangular:analog-routes');
+    expect(listed()).not.toContain('pangular:analog-scan-routes');
     // A page that reports Analog data brings the tools in (devframe sends tools/list_changed).
     await push('push-analog', report);
     // The server looks for newly reporting libraries every 2 seconds.
     await new Promise((resolve) => setTimeout(resolve, 2200));
-    expect(listed()).toContain('pangular:analog-routes');
+    expect(listed()).toContain('pangular:analog-scan-routes');
   });
 
   it('say when the workspace is not an Analog app', async () => {
@@ -123,43 +123,43 @@ describe('Analog MCP tools', () => {
       makeProject({ 'package.json': '{}' }),
       createPangular({ inspectors: { analog: true } }),
     );
-    expect(await call('analog-current-page')).toContain('not an Analog app');
+    expect(await call('analog-inspect-page')).toContain('not an Analog app');
     for (const tool of [
-      'analog-routes',
-      'analog-api-routes',
-      'analog-server-functions',
-      'analog-render-modes',
-      'analog-prerender-plan',
-      'analog-content',
+      'analog-scan-routes',
+      'analog-scan-api-routes',
+      'analog-scan-server-functions',
+      'analog-explain-render-modes',
+      'analog-scan-prerender',
+      'analog-scan-content',
       'analog-lint',
     ]) {
       expect(await call(tool), tool).toContain('not an Analog app');
     }
-    expect(await call('analog-explain-url', { url: '/' })).toContain('not an Analog app');
+    expect(await call('analog-scan-url', { url: '/' })).toContain('not an Analog app');
   });
 
-  it('analog-routes and analog-explain-url describe the file routes', async () => {
+  it('analog-scan-routes and analog-scan-url describe the file routes', async () => {
     const { call, push } = await boot(makeProject(BASE_FILES));
-    const routes = await call('analog-routes');
+    const routes = await call('analog-scan-routes');
     expect(routes).toContain(
       '`/products/:id` `/src/app/pages/products/[id].page.ts`: page, .server.ts (load)',
     );
     expect(routes).toContain('routeMeta: title, meta, canActivate');
-    expect(await call('analog-routes', { filter: 'docs' })).not.toContain('products');
+    expect(await call('analog-scan-routes', { filter: 'docs' })).not.toContain('products');
     await push('push-analog', report);
-    const explained = await call('analog-explain-url', { url: '/products/1' });
+    const explained = await call('analog-scan-url', { url: '/products/1' });
     expect(explained).toContain('`/src/app/pages/products.page.ts`');
     expect(explained).toContain('Params: {"id":"1"}');
     expect(explained).toContain('`/api/_analog/pages/products/1`');
     expect(explained).toContain('Live page:');
-    expect(await call('analog-explain-url', { url: '/nope' })).toContain('matches no file route');
+    expect(await call('analog-scan-url', { url: '/nope' })).toContain('matches no file route');
   });
 
-  it('analog-current-page reports files, load data, hydration and restart hints', async () => {
+  it('analog-inspect-page reports files, load data, hydration and restart hints', async () => {
     const { call, push } = await boot(makeProject(BASE_FILES));
-    expect(await call('analog-current-page')).toContain('No Analog page has reported yet');
+    expect(await call('analog-inspect-page')).toContain('No Analog page has reported yet');
     await push('push-analog', report);
-    const text = await call('analog-current-page');
+    const text = await call('analog-inspect-page');
     expect(text).toContain(
       '`/src/app/pages/products/[id].page.ts` + `/src/app/pages/products/[id].server.ts`',
     );
@@ -240,7 +240,7 @@ describe('Analog MCP tools', () => {
     expect(text).toContain('analog');
   });
 
-  it('analog-current-page masks tokens in the url, load preview and hydration errors', async () => {
+  it('analog-inspect-page masks tokens in the url, load preview and hydration errors', async () => {
     const { call, push } = await boot(makeProject(BASE_FILES));
     await push('push-analog', {
       ...report,
@@ -248,25 +248,25 @@ describe('Analog MCP tools', () => {
       load: { preview: '{"header":"Bearer xyz.789"}', bytes: 10, keys: ['header'] },
       hydrationErrors: ['NG0500 at /cb?token=qrs456 Bearer lmn.012'],
     });
-    const text = await call('analog-current-page');
+    const text = await call('analog-inspect-page');
     expect(text).not.toMatch(/abc999|eyJhbGci|xyz\.789|qrs456|lmn\.012/);
     expect(text).toContain('/auth/callback');
   });
 
-  it('analog-current-page masks secret query values in load keys', async () => {
+  it('analog-inspect-page masks secret query values in load keys', async () => {
     const { call, push } = await boot(makeProject(BASE_FILES));
     await push('push-analog', {
       ...report,
       load: { preview: '{}', bytes: 2, keys: ['/callback?token=abc123', 'id'] },
     });
-    const text = await call('analog-current-page');
+    const text = await call('analog-inspect-page');
     expect(text).not.toContain('abc123');
     expect(text).toContain('id');
   });
 
-  it('analog-server-calls lists calls and flags loads fetched twice', async () => {
+  it('analog-list-server-calls lists calls and flags loads fetched twice', async () => {
     const { call } = await boot(makeProject(BASE_FILES));
-    expect(await call('analog-server-calls')).toContain('No server calls recorded yet');
+    expect(await call('analog-list-server-calls')).toContain('No server calls recorded yet');
     const base = { method: 'GET', status: 200, ms: 3, bytes: 20 };
     recordCall({
       ...base,
@@ -303,17 +303,17 @@ describe('Analog MCP tools', () => {
       from: 'browser',
       status: 404,
     });
-    const text = await call('analog-server-calls');
+    const text = await call('analog-list-server-calls');
     expect(text).toContain('load GET `/api/_analog/pages/products/1` 200 in 3ms (ssr, 20 B)');
     expect(text).toContain('render ssr');
     expect(text).toContain('Fetched twice');
-    expect(await call('analog-server-calls', { kind: 'api' })).not.toContain('_analog');
+    expect(await call('analog-list-server-calls', { kind: 'api' })).not.toContain('_analog');
     const lint = await call('analog-lint');
     expect(lint).toContain('load-fetched-twice');
     expect(lint).toContain('api-not-found');
   });
 
-  it('analog-server-calls lists form actions with their outcome and filters them', async () => {
+  it('analog-list-server-calls lists form actions with their outcome and filters them', async () => {
     const { call } = await boot(makeProject(BASE_FILES));
     const base = {
       method: 'POST',
@@ -333,7 +333,7 @@ describe('Analog MCP tools', () => {
     });
     recordCall({ ...base, at: 3, status: 302, outcome: 'redirect', location: '/dashboard' });
     recordCall({ ...base, at: 4, kind: 'load', method: 'GET', status: 200 });
-    const actions = await call('analog-server-calls', { kind: 'action' });
+    const actions = await call('analog-list-server-calls', { kind: 'action' });
     expect(actions).toContain(
       'action POST `/api/_analog/pages/login` 200 in 4ms (browser, action succeeded)',
     );
@@ -341,28 +341,28 @@ describe('Analog MCP tools', () => {
     expect(actions).toContain('{"email":"Email is required"}');
     expect(actions).toContain('302 in 4ms (browser, action redirected, to `/dashboard`)');
     expect(actions).not.toContain('load GET');
-    expect(await call('analog-server-calls', { kind: 'load' })).not.toContain('action POST');
+    expect(await call('analog-list-server-calls', { kind: 'load' })).not.toContain('action POST');
   });
 
-  it('analog-api-routes and analog-call-api reach the dev server with a confirm gate', async () => {
+  it('analog-scan-api-routes and analog-run-api reach the dev server with a confirm gate', async () => {
     const { ctx, call } = await boot(makeProject(BASE_FILES));
-    const api = await call('analog-api-routes');
+    const api = await call('analog-scan-api-routes');
     expect(api).toContain(
       'DELETE `/api/v1/products/:id` `/src/server/routes/api/v1/products/[id].delete.ts`',
     );
     expect(api).toContain('Middleware');
-    expect(await call('analog-call-api', { path: '/api/v1/hello' })).toContain(
+    expect(await call('analog-run-api', { path: '/api/v1/hello' })).toContain(
       'dev server address is unknown',
     );
     setDevOrigin(`${origin}/`);
-    const get = await call('analog-call-api', { path: '/api/v1/hello' });
+    const get = await call('analog-run-api', { path: '/api/v1/hello' });
     // The response body is the route's own output, so it sits behind the notice.
     expect(get.startsWith(`${UNTRUSTED}\n\nGET /api/v1/hello: 200`)).toBe(true);
     expect(get).toContain('"method":"GET"');
     expect(
-      await call('analog-call-api', { path: '/api/v1/products', method: 'POST', body: { a: 1 } }),
+      await call('analog-run-api', { path: '/api/v1/products', method: 'POST', body: { a: 1 } }),
     ).toContain('confirm: true');
-    const post = await call('analog-call-api', {
+    const post = await call('analog-run-api', {
       path: '/api/v1/products',
       method: 'POST',
       body: { a: 1 },
@@ -376,33 +376,33 @@ describe('Analog MCP tools', () => {
       devtools: '1',
     });
     const evil = await toolAnswer(
-      ctx.agent.invoke('pangular:analog-call-api', { path: '//evil.test/x' }),
+      ctx.agent.invoke('pangular:analog-run-api', { path: '//evil.test/x' }),
     );
     expect(evil.isError).toBe(true);
     expect(evil.markdown).toMatch(/^Pass a path that starts with \//);
-    expect(await call('analog-call-api', { path: '/x', method: 'TRACE' })).toMatch(
+    expect(await call('analog-run-api', { path: '/x', method: 'TRACE' })).toMatch(
       /^`method` must be one of `GET`, `POST`/,
     );
   });
 
-  it('analog-call-api masks secrets in the response body', async () => {
+  it('analog-run-api masks secrets in the response body', async () => {
     const { call } = await boot(makeProject(BASE_FILES));
     setDevOrigin(`${origin}/`);
-    const text = await call('analog-call-api', { path: '/api/v1/session' });
+    const text = await call('analog-run-api', { path: '/api/v1/session' });
     expect(text).toContain('GET /api/v1/session: 200');
     expect(text).toContain('"user":"ada"');
     expect(text).not.toMatch(/eyJhbGciOiJI|sk-live-123|abc\.def/);
   });
 
-  it('analog-call-api masks secret key value pairs in a plain-text body', async () => {
+  it('analog-run-api masks secret key value pairs in a plain-text body', async () => {
     const { call } = await boot(makeProject(BASE_FILES));
     setDevOrigin(`${origin}/`);
-    const text = await call('analog-call-api', { path: '/api/v1/plain' });
+    const text = await call('analog-run-api', { path: '/api/v1/plain' });
     expect(text).toContain('user=ada');
     expect(text).not.toMatch(/sk-live-123|hunter2/);
   });
 
-  it('analog-render-modes and analog-prerender-plan read config, build output and requests', async () => {
+  it('analog-explain-render-modes and analog-scan-prerender read config, build output and requests', async () => {
     const { call } = await boot(makeProject(BASE_FILES));
     recordCall({
       at: 1,
@@ -415,13 +415,13 @@ describe('Analog MCP tools', () => {
       from: 'browser',
       render: 'client',
     });
-    const modes = await call('analog-render-modes');
+    const modes = await call('analog-explain-render-modes');
     expect(modes).toContain(
       "`/dashboard`: client only (routeRules['/dashboard'] ssr: false); last request: client only",
     );
     expect(modes).toContain('`/pricing`: prerendered (SSG)');
     expect(modes).toContain('`/login`: server rendered on each request (SSR)');
-    const plan = await call('analog-prerender-plan');
+    const plan = await call('analog-scan-prerender');
     expect(plan).toContain('prerender.routes: `/`, `/pricing`, `/missing`');
     expect(plan).toContain('Dynamic pages need explicit entries');
     expect(plan).toContain('`/products/:id`');
@@ -516,12 +516,12 @@ export default {
     expect(plan.staticMissing).not.toContain('/login');
   });
 
-  it('analog-content and analog-lint cover content and static mistakes', async () => {
+  it('analog-scan-content and analog-lint cover content and static mistakes', async () => {
     const { call } = await boot(makeProject(BASE_FILES, BROKEN_FILES));
-    const content = await call('analog-content');
+    const content = await call('analog-scan-content');
     expect(content).toContain('`/src/content/hello.md` slug `hello`, served at `/hello`');
     expect(content).toContain('ERROR: Frontmatter block is not closed');
-    expect(await call('analog-content', { filter: 'Copy' })).toContain('hello-copy.md');
+    expect(await call('analog-scan-content', { filter: 'Copy' })).toContain('hello-copy.md');
     const lint = await call('analog-lint');
     for (const rule of [
       'duplicate-url',
@@ -534,7 +534,7 @@ export default {
     }
   });
 
-  it('get-routes and build-meta understand Analog apps', async () => {
+  it('scan-routes and scan-build understand Analog apps', async () => {
     const { ctx } = await boot(makeProject(BASE_FILES));
     const routes = (await local(ctx, 'pangular:get-routes')) as unknown as {
       path: string;
@@ -569,7 +569,7 @@ export default {
     await push('push-analog', { ...report, chain: [{ path: '/a', file: 7 }] });
     await push('push-analog', { ...report, load: { preview: '{}', bytes: 2 } });
     await push('push-analog', { ...report, serverContext: 1 });
-    expect(await call('analog-current-page')).toContain('No Analog page has reported yet');
+    expect(await call('analog-inspect-page')).toContain('No Analog page has reported yet');
   });
 
   it('checks page and server files against the project', async () => {

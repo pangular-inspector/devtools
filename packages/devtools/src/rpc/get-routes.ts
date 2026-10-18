@@ -36,11 +36,6 @@ export const getRoutes = defineRpcFunction({
   snapshot: true,
   args: [],
   returns: describable(v.array(RouteSchema)),
-  agent: {
-    description:
-      "Source scan of route config files: each route's full path, kind (page, group, redirect, wildcard), guards, resolvers and file:line. Use before changing navigation.",
-    title: 'List Angular routes',
-  },
   setup: (ctx) => ({
     handler: async () => extractRoutes(ctx.cwd),
   }),

@@ -15,8 +15,18 @@ async function boot() {
   await pangular.setup(ctx as never);
   const push = (name: string, payload: unknown) =>
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
-  const call = async (tool: string, selector: string, extra: Record<string, unknown> = {}) =>
-    answerText(ctx.agent.invoke(`pangular:${tool}`, { selector, ...extra }));
+  // What a call names: an injector for the DI tools, a CSS selector when it
+  // starts with `.`, and a component otherwise.
+  const call = async (tool: string, subject: string, extra: Record<string, unknown> = {}) => {
+    const key = ['inspect-providers', 'explain-injection'].includes(tool)
+      ? 'injector'
+      : subject.startsWith('.')
+        ? 'selector'
+        : 'component';
+    return answerText(
+      ctx.agent.invoke(`pangular:${tool}`, { ...(subject ? { [key]: subject } : {}), ...extra }),
+    );
+  };
   const injectorState = async () =>
     (
       await (
@@ -87,7 +97,7 @@ describe('agent tools', () => {
     const { push, call } = await boot();
     expect(await call('change-detection', '')).toMatch(/No change detection recording yet/);
     // No page is connected, so nothing starts.
-    expect(await call('change-detection', '', { record: 'start' })).toMatch(
+    expect(await call('record-change-detection', '', { record: 'start' })).toMatch(
       /^No page reports change detection, so no recording was started/,
     );
     await push('push-change-detection', {
@@ -103,7 +113,7 @@ describe('agent tools', () => {
     expect(await call('change-detection', '')).toContain('`Cart`: 1 check(s)');
     expect(await call('change-detection', '')).toContain('Recording is on.');
     // Right after a stop, before the page pushed again, the summary already says it is off.
-    const stopping = call('change-detection', '', { record: 'stop' });
+    const stopping = call('record-change-detection', '', { record: 'stop' });
     const after = await call('change-detection', '');
     expect(after).toContain('Recording is off.');
     expect(after).toContain('`Cart`: 1 check(s)');
@@ -137,12 +147,12 @@ describe('agent tools', () => {
       /^No page `gone` is reporting change detection\. Pages that report change detection: `live`\./,
     );
     // Recording on a closed tab is not reported as started.
-    const recording = await call('change-detection', '', { page: 'gone', record: 'start' });
+    const recording = await call('record-change-detection', '', { page: 'gone', record: 'start' });
     expect(recording).toMatch(/^No page `gone` is reporting change detection/);
     expect(recording).not.toMatch(/Recording started/);
     // A connected tab that has not recorded yet can still start a recording.
     answerCdRecords(ctx, ['live']);
-    expect(await call('change-detection', '', { page: 'live', record: 'start' })).toMatch(
+    expect(await call('record-change-detection', '', { page: 'live', record: 'start' })).toMatch(
       /^Recording started on page `live`/,
     );
     // The page confirmed with a recording that has no cycles yet.
@@ -178,7 +188,7 @@ describe('agent tools', () => {
 
     // tab-1 stays loaded but its connection drops: no record request reaches it.
     host._emitSessionDisconnected({ id: 1 });
-    const start = await call('change-detection', '', { page: 'tab-1', record: 'start' });
+    const start = await call('record-change-detection', '', { page: 'tab-1', record: 'start' });
     expect(start).toMatch(/^No page `tab-1` is reporting change detection/);
     expect(start).toContain('`tab-2`');
     expect(await call('change-detection', '', { page: 'tab-1' })).toMatch(/^No page `tab-1`/);
@@ -187,7 +197,7 @@ describe('agent tools', () => {
     host.getCurrentRpcSession = () => ({ meta: { id: 3 } });
     await push('ping-injector-tree', 'tab-1');
     answerCdRecords(ctx, ['tab-1']);
-    expect(await call('change-detection', '', { page: 'tab-1', record: 'start' })).toMatch(
+    expect(await call('record-change-detection', '', { page: 'tab-1', record: 'start' })).toMatch(
       /^Recording started on page `tab-1`/,
     );
   });
@@ -326,8 +336,10 @@ describe('agent tools', () => {
     expect(await call('highlight', 'Card')).toMatch(/instance `c2` on page `p1`/);
     expect(await call('highlight', 'c3')).toMatch(/instance `c3`/);
     expect(await call('highlight', '.promo')).toMatch(
-      /Sent it as a CSS selector to every page \(`p1`/,
+      /Sent the CSS selector `.promo` to every page \(`p1`/,
     );
+    // A component that matches no instance is not sent on as a CSS selector.
+    expect(await call('highlight', 'Nope')).toMatch(/No component instance matches `Nope`/);
     await push('forget-component-page', 'p1');
     expect(await call('highlight', 'Card')).toMatch(/no component tree has been reported/i);
   });
@@ -658,7 +670,7 @@ describe('agent tools', () => {
     expect(elementInjectors(await call('inspect-providers', ''))).toMatchObject([
       { injector: { name: 'B' } },
     ]);
-    const first = await call('inspect-providers', '', { pageId: 'p1' });
+    const first = await call('inspect-providers', '', { page: 'p1' });
     expect(first).toMatch(/`p1`/);
     expect(elementInjectors(first)).toMatchObject([{ injector: { name: 'A' } }]);
 
@@ -856,7 +868,7 @@ describe('agent tools', () => {
     await push('push-injector-tree', { pageId: 'p1', roots, environment: [] });
     const answer = await call('inspect-providers', '');
     expect(answer.length).toBeLessThanOrEqual(20_000);
-    expect(answer).toMatch(/shown as an outline.*pass `selector` or `token`/);
+    expect(answer).toMatch(/shown as an outline.*pass `injector` or `token`/);
     const kept = elementInjectors(answer).length;
     expect(answer).toContain(`${400 - kept} of 400 element injectors are left out`);
   });
@@ -945,13 +957,16 @@ describe('agent tools', () => {
     );
     // An unknown page is a refusal, so MCP sends it with isError.
     await expect(
-      ctx.agent.invoke('pangular:inspect-signals', { selector: 'Card', page: 'gone' }),
+      ctx.agent.invoke('pangular:inspect-signals', { component: 'Card', page: 'gone' }),
     ).rejects.toBeInstanceOf(ToolRefusal);
 
     await push('push-injector-tree', { pageId: 'p1', roots: [injectorRoot('A')], environment: [] });
     expect(await call('inspect-providers', 'app-root', { page: 'p1' })).toMatch(/`p1`/);
-    expect(await call('inspect-providers', 'app-root', { pageId: 'p1' })).toMatch(/`p1`/);
-    for (const args of [{ page: 'gone' }, { pageId: 'gone' }]) {
+    // The old `pageId` argument is gone, and saying so beats reading another page.
+    expect(await call('inspect-providers', 'app-root', { pageId: 'p1' })).toMatch(
+      /There is no `pageId` argument; pass `page`/,
+    );
+    for (const args of [{ page: 'gone' }]) {
       const text = await call('inspect-providers', 'app-root', args);
       expect(text).toMatch(/^No page `gone` is reporting an injector tree\./);
       expect(text).toContain('`p1`');

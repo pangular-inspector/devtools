@@ -7,15 +7,15 @@ import { countInjectors, largestFitting, outlineInjectors } from './injector-out
 
 export const MAX_TOOL_CHARS = 20_000;
 
-/** Longest `selector` or `token` taken; answers echo them, so they must stay short. */
+/** Longest `injector` or `token` taken; answers echo them, so they must stay short. */
 export const MAX_ARG_CHARS = 500;
 
 export const NO_INJECTORS = `No injector data available. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio MCP server has no page, so there it always answers this.`;
 
-const NARROW = 'pass `selector` or `token` to narrow it down';
+const NARROW = 'pass `injector` or `token` to narrow it down';
 
 export interface InspectProvidersArgs {
-  selector?: string;
+  injector?: string;
   token?: string;
 }
 
@@ -56,7 +56,7 @@ function wholeTreeText(
   const outlineNote = (environmentNote: string) =>
     `\n\nThe whole tree is longer than ${MAX_TOOL_CHARS} characters, so element injectors are shown as an outline: \`providers\` and \`dependencies\` are counts. To see providers and lookup paths, ${NARROW}.${environmentNote}`;
   const environmentOutlined =
-    ' Environment injectors are outlined too; pass an environment injector name as `selector` to see its providers.';
+    ' Environment injectors are outlined too; pass an environment injector name as `injector` to see its providers.';
   let environmentJson = environmentFull;
   let outlined = outlineNote('');
   if (environmentFull.length > MAX_TOOL_CHARS / 2) {
@@ -92,7 +92,7 @@ function wholeTreeText(
 }
 
 /** The answer when the text around the lists alone is longer than {@link MAX_TOOL_CHARS}. */
-const TOO_LONG = `The answer does not fit in ${MAX_TOOL_CHARS} characters even without any injectors in it. Pass a shorter \`selector\` or \`token\`.`;
+const TOO_LONG = `The answer does not fit in ${MAX_TOOL_CHARS} characters even without any injectors in it. Pass a shorter \`injector\` or \`token\`.`;
 
 /**
  * Keeps the first items of every list, the same share of each, so `render`
@@ -234,10 +234,10 @@ export function inspectProvidersText(
     ? `\n\nThe page reported only part of its injector tree (it keeps at most ${MAX_INJECTOR_NODES} element injectors and ${MAX_REPORTED_INJECTORS} in all, and leaves out injectors nested more than ${MAX_INJECTOR_DEPTH} levels deep), so some injectors are missing from this answer and a lookup path or a provider can point to one that is not listed.`
     : '';
 
-  const selector = args.selector?.trim();
+  const selector = args.injector?.trim();
   const token = args.token?.trim();
   if ((selector?.length ?? 0) > MAX_ARG_CHARS || (token?.length ?? 0) > MAX_ARG_CHARS) {
-    return `\`selector\` and \`token\` take at most ${MAX_ARG_CHARS} characters each. Pass a tag name, a class name, an injector name or id, or a token name.`;
+    return `\`injector\` and \`token\` take at most ${MAX_ARG_CHARS} characters each. Pass a tag name, a class name, an injector name or id, or a token name.`;
   }
 
   if (!selector && !token) {

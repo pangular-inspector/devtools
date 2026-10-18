@@ -202,8 +202,8 @@ describe('Pangular Inspector hub', () => {
     expect((await get('/__devframes/')).status).toBe(200);
     const meta = await (await get('/__devframes/pangular/__connection.json')).json();
     expect(meta.configs.ui.branding.primaryColor).toBe('#f5a524');
-    const forms = (await ctx.agent.invoke('pangular:inspect-forms', {})) as { markdown: string };
-    expect(forms.markdown).toContain('No forms');
+    const forms = (await ctx.agent.invoke('pangular:inspect-forms', {})) as string;
+    expect(forms).toContain('No forms');
   });
 
   it('lists the posted messages for the hub UI and serves the Messages panel from the hub', async () => {
@@ -359,7 +359,7 @@ describe('Pangular Inspector hub MCP route', () => {
     expect((await mcp('wrong')).status).toBe(401);
     const allowed = await mcp('env-secret');
     expect(allowed.status).toBe(200);
-    expect(await allowed.text()).toContain('pangular_get-routes');
+    expect(await allowed.text()).toContain('pangular_scan-routes');
   });
 
   it('writes a generated token to a file only the user can read, and prints the path only', async () => {

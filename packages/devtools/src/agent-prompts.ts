@@ -86,7 +86,7 @@ const WORKFLOWS: readonly WorkflowPrompt[] = [
         : []),
       ...(has('explain-injection')
         ? [
-            `For NG0201 or NullInjectorError, call ${tool('explain-injection')} with the \`selector\` and the \`token\`.`,
+            `For NG0201 or NullInjectorError, call ${tool('explain-injection')} with the \`injector\` (the component) and the \`token\`.`,
           ]
         : []),
       'Fix the cause in the code, not the symptom. Then reproduce the steps and call list-errors again: the group should stop growing.',
@@ -101,25 +101,32 @@ const WORKFLOWS: readonly WorkflowPrompt[] = [
       name: 'form',
       description: 'A form id like Checkout.form@ab12, or part of its label.',
     },
-    requires: ['inspect-forms', 'explain-form-invalid', 'form-history', 'form-diff'],
+    requires: [
+      'inspect-forms',
+      'explain-invalid-forms',
+      'list-form-changes',
+      'explain-form-changes',
+    ],
     steps: (has, form) => [
       form
         ? `Call ${tool('inspect-forms')} and find the form ${form}.`
         : `Call ${tool('inspect-forms')} and pick the form with errors; ask me when several have them.`,
-      `Call ${tool('explain-form-invalid')} with its \`form\` id.`,
+      `Call ${tool('explain-invalid-forms')} with its \`form\` id.`,
       ...(has('explain-field') && has('explain-submit')
         ? [
             `Narrow down with ${tool('explain-field')} for one field (\`path\`) or ${tool('explain-submit')} when submit does nothing.`,
           ]
         : []),
-      `Call ${tool('form-history')} for the form and keep the marker it returns.`,
+      `Call ${tool('list-form-changes')} for the form and keep the marker it returns.`,
       has('fill-form')
         ? `Fix the code. To reproduce my steps, use ${tool('fill-form')}; ${ASK_FIRST}`
         : 'Fix the code, then ask me to repeat the steps in the browser.',
-      ...(has('wait-for-form')
-        ? [`Call ${tool('wait-for-form')} with \`until: "settled"\` for async validators.`]
+      ...(has('wait-for')
+        ? [
+            `Call ${tool('wait-for')} with \`condition: "form"\` and \`until: "settled"\` for async validators.`,
+          ]
         : []),
-      `Call ${tool('form-diff')} with \`since\` set to the marker, and report the fields that changed as the proof.`,
+      `Call ${tool('explain-form-changes')} with \`after\` set to the marker, and report the fields that changed as the proof.`,
     ],
   },
   {
@@ -133,13 +140,13 @@ const WORKFLOWS: readonly WorkflowPrompt[] = [
     },
     requires: ['change-detection', 'diagnose-change-detection'],
     steps: (has, interaction, config) => [
-      config.agent.readOnly
-        ? 'This server is read-only: ask me to start a change detection recording from the panel.'
-        : `Call ${tool('change-detection')} with \`record: "clear"\`, then \`record: "start"\`.`,
+      config.agent.readOnly || !has('record-change-detection')
+        ? `This server ${config.agent.readOnly ? 'is read-only' : 'cannot start a recording'}: ask me to start a change detection recording from the panel.`
+        : `Call ${tool('record-change-detection')} with \`record: "clear"\`, then \`record: "start"\`.`,
       interaction
         ? `Ask me to do this interaction: ${interaction}.`
         : 'Ask me to do the slow interaction.',
-      `Call ${tool('change-detection')} without \`record\` to read the slowest and most checked components.`,
+      `Call ${tool('change-detection')} to read the slowest and most checked components.`,
       `Call ${tool('diagnose-change-detection')} for what started the cycles, wasted checks, inputs that break OnPush and the hints.`,
       ...(has('find-leaks')
         ? [`If memory grows across navigations, call ${tool('find-leaks')}.`]

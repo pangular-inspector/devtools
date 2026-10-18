@@ -36,7 +36,7 @@ describe('duplicate-path lint', () => {
   });
 });
 
-describe('explain-render-mode', () => {
+describe('scan-render-mode', () => {
   const entries = [{ path: 'admin/dashboard', renderMode: 'Server', file: 'x' }];
 
   it('does not claim a build failure for entries under an unloaded lazy route', () => {

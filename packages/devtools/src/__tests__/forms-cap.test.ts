@@ -167,7 +167,7 @@ describe('inspect-forms size cap', () => {
     const [tree] = json(text);
     expect(tree.root.children[0].value).toHaveLength(301);
     expect(text).toContain(
-      "_1 value(s) longer than 300 characters are cut and end in …. A group's value is also split across its fields; use form-payload with `path` to read a longer value._",
+      "_1 value(s) longer than 300 characters are cut and end in …. A group's value is also split across its fields; use inspect-form-payload with `path` to read a longer value._",
     );
   });
 
@@ -176,7 +176,7 @@ describe('inspect-forms size cap', () => {
   });
 });
 
-describe('explain-form-invalid size cap', () => {
+describe('explain-invalid-forms size cap', () => {
   const state = stateOf(bigForm(40, true));
 
   it('lists at most 100 problems per form and names a path to narrow', () => {
@@ -203,7 +203,7 @@ describe('explain-form-invalid size cap', () => {
   });
 });
 
-describe('form-payload and export-form size cap', () => {
+describe('inspect-form-payload and export-form size cap', () => {
   it('cuts a long form value and narrows by path', () => {
     const form = bigForm(1);
     form.root.children![0].value = 'v'.repeat(20_000);
@@ -228,7 +228,7 @@ describe('form-payload and export-form size cap', () => {
     const shown = Number(/_Snapshot cut: showing (\d+) of 483 fields/.exec(text)![1]);
     expect(countKept(snapshot.root)).toBe(shown);
     expect(snapshot.root.children[1].children.at(-1).notShown).toBe(5);
-    expect(text).toContain('read the rest with inspect-forms or form-payload and a `path`');
+    expect(text).toContain('read the rest with inspect-forms or inspect-form-payload and a `path`');
   });
 });
 
@@ -308,7 +308,7 @@ describe('answers that must stay parseable', () => {
     expect(text.length).toBeLessThan(FORM_TOOL_MAX_CHARS + 1_000);
   });
 
-  it('form-payload handles a path to a field without a value', () => {
+  it('inspect-form-payload handles a path to a field without a value', () => {
     const form = bigForm(1);
     form.root.children![0].value = undefined;
     const text = formPayloadText(stateOf(form), { form: 'Orders', path: 'name' });
@@ -321,6 +321,6 @@ describe('answers that must stay parseable', () => {
     const code = /```ts\n([\s\S]*)\n```/.exec(text)![1];
     expect(code.length).toBeLessThanOrEqual(FORM_TOOL_MAX_CHARS);
     expect(code).toContain('items.0.a required, ');
-    expect(code).toContain('and 1980 more not shown (call explain-form-invalid for all)');
+    expect(code).toContain('and 1980 more not shown (call explain-invalid-forms for all)');
   });
 });

@@ -11,7 +11,6 @@ import {
 import { PAGE_ARGUMENT, pageArgument } from './pages.ts';
 import { trackPageSessions } from './page-sessions.ts';
 import type { PageTtl } from './page-ttl.ts';
-import { MARKDOWN_OUTPUT_SCHEMA } from './agent-output.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -96,7 +95,6 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
   host.agent.registerTool({
     id: 'pangular:list-errors',
     title: 'List errors',
-    outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
       'Errors the page hit, grouped by message, newest first: id, count, last seen, Angular code with reference link, owning component and source (ErrorHandler, window or promise). Masked; 100 groups per page. Empty when there were none.',
     inputSchema: {
@@ -144,7 +142,6 @@ export async function registerErrors(host: ErrorsHost): Promise<ErrorsRegistrati
   host.agent.registerTool({
     id: 'pangular:list-console',
     title: 'List console messages',
-    outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
       'Console calls on the page, newest first: level, text and Angular code. Filter by `level`, `search` and `since` (e.g. 5m). Repeats collapse; the page keeps its last 200 calls. Masked. Empty when no page is connected.',
     inputSchema: {

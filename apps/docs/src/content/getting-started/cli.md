@@ -206,7 +206,7 @@ npx @pangular-inspector/devtools mcp --print-config --port 4000 --base /__devfra
 
 ### Source scan only
 
-The stdio server has no page connected, so it registers only the tools that read your source files. The tools that need a page, such as `highlight`, `navigate`, `form-action` and the forms and router tools, are left out. For live data, point your agent at the HTTP endpoint of a running app instead. On a hub it lives at `/__devframes/__mcp`.
+The stdio server has no page connected, so it registers only the tools that read your source files. The tools that need a page, such as `highlight`, `navigate`, `run-form-action` and the forms and router tools, are left out. For live data, point your agent at the HTTP endpoint of a running app instead. On a hub it lives at `/__devframes/__mcp`.
 
 ## Agent skills
 
@@ -228,11 +228,11 @@ pangular skills install --agent agents --dry-run
 npx pangular lint --format sarif --output reports/pangular.sarif --fail-on error
 ```
 
-| Lint        | Agent tool                                            | What it checks                                                                                        |
-| ----------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `templates` | [`lint-templates`](../agents/tools.md#lint-templates) | Component templates, parsed with your project's own `@angular/compiler`. Skipped when it is missing.  |
-| `pipes`     | [`lint-pipes`](../agents/tools.md#lint-pipes)         | Pipe use in templates and pipe declarations.                                                          |
-| `analog`    | [`analog-lint`](../agents/tools.md#lint)              | The static Analog checks: routes, API routes, server files, content and prerender. Skipped elsewhere. |
+| Lint        | Agent tool                                              | What it checks                                                                                        |
+| ----------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `templates` | [`scan-templates`](../agents/tools.md#scan-templates)   | Component templates, parsed with your project's own `@angular/compiler`. Skipped when it is missing.  |
+| `pipes`     | [`scan-pipe-usage`](../agents/tools.md#scan-pipe-usage) | Pipe use in templates and pipe declarations.                                                          |
+| `analog`    | [`analog-lint`](../agents/tools.md#lint)                | The static Analog checks: routes, API routes, server files, content and prerender. Skipped elsewhere. |
 
 `lint-forms`, `lint-routes` and the live checks of `analog-lint` read the running page, so `lint` leaves them out. When a lint is skipped, the command says why on stderr and the JSON lists it with `ran: false`.
 

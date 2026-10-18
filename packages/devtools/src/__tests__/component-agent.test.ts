@@ -58,7 +58,7 @@ describe('component agent tools', () => {
       sent.push(options);
     }) as never);
 
-    const text = await call('highlight', { selector: 'Card' });
+    const text = await call('highlight', { component: 'Card' });
     expect(text).toMatch(/instance `c2` on page `p1`\) and selected it/);
     expect(text).toContain('2 instances match `Card`: `c2`, `c3`');
     expect(sent.find((b) => b.method.endsWith('inspect-component-in-page'))?.args[0]).toEqual({
@@ -67,11 +67,13 @@ describe('component agent tools', () => {
     });
     expect(await selectedId()).toBe('c2');
 
-    expect(await call('highlight', { selector: 'c3' })).not.toMatch(/instances match/);
+    expect(await call('highlight', { component: 'c3' })).not.toMatch(/instances match/);
     expect(await selectedId()).toBe('c3');
 
     sent.length = 0;
-    expect(await call('highlight', { selector: '.promo' })).toMatch(/selection did not change/);
+    expect(await call('highlight', { selector: '.promo' })).toMatch(
+      /Sent the CSS selector `.promo`/,
+    );
     expect(sent.some((b) => b.method.endsWith('inspect-component-in-page'))).toBe(false);
     expect(await selectedId()).toBe('c3');
   });
@@ -88,12 +90,12 @@ describe('component agent tools', () => {
       );
     }) as never);
 
-    const text = await call('inspect-component', { selector: 'c3' });
+    const text = await call('inspect-component', { component: 'c3' });
     const json = JSON.parse(text.slice(text.indexOf('{')));
     expect(json).toMatchObject({ id: 'c3', properties: [{ name: 'loading', kind: 'signal' }] });
     expect(text).not.toMatch(/instances match/);
 
-    const again = await call('inspect-component', { selector: 'app-card' });
+    const again = await call('inspect-component', { component: 'app-card' });
     expect(again).toContain('instance `c2`');
     expect(again).toContain('2 instances match `app-card`');
   });
@@ -118,7 +120,7 @@ describe('component agent tools', () => {
       );
     }) as never);
 
-    const text = await call('inspect-component', { selector: 'c2' });
+    const text = await call('inspect-component', { component: 'c2' });
     expect(text.length).toBeLessThanOrEqual(20_000);
     expect(text).toContain('instance `c2` on page `p1`');
     expect(text).toContain('60 values are longer than 1,000 characters');
@@ -127,17 +129,17 @@ describe('component agent tools', () => {
 
   it('inspect-component says when nothing matches or the page does not answer', async () => {
     const { ctx, push, call } = await boot();
-    expect(await call('inspect-component', { selector: 'Card' })).toMatch(
+    expect(await call('inspect-component', { component: 'Card' })).toMatch(
       /no component tree has been reported/i,
     );
     await push('push-component-tree', { pageId: 'p1', roots, count: 3, detail: null });
     vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async () => {}) as never);
-    expect(await call('inspect-component', { selector: 'Missing' })).toMatch(
+    expect(await call('inspect-component', { component: 'Missing' })).toMatch(
       /no component instance matches `Missing`/i,
     );
     vi.useFakeTimers();
     try {
-      const pending = call('inspect-component', { selector: 'c2' });
+      const pending = call('inspect-component', { component: 'c2' });
       await vi.advanceTimersByTimeAsync(3100);
       expect(await pending).toMatch(/did not report its detail/);
     } finally {
@@ -167,9 +169,9 @@ describe('component agent tools', () => {
     expect(state.pages['p1']).not.toHaveProperty('truncatedBy.depth');
     const note =
       'stops at the first 2000 component instances, so instances past it are not listed or searchable';
-    expect(await call('inspect-component', { selector: 'Missing' })).toContain(note);
-    expect(await call('highlight', { selector: '.missing' })).toContain(note);
-    expect(await call('inspect-component', { selector: 'c2', page: 'p1' })).not.toContain(note);
+    expect(await call('inspect-component', { component: 'Missing' })).toContain(note);
+    expect(await call('highlight', { component: 'Missing' })).toContain(note);
+    expect(await call('inspect-component', { component: 'c2', page: 'p1' })).not.toContain(note);
   });
 
   it('inspect-component and highlight narrow the search to one page', async () => {
@@ -182,13 +184,13 @@ describe('component agent tools', () => {
       detail: null,
     });
     vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async () => {}) as never);
-    const everywhere = await call('highlight', { selector: 'Card' });
+    const everywhere = await call('highlight', { component: 'Card' });
     expect(everywhere).toContain('3 instances match `Card`');
     expect(everywhere).toContain('`d9` (page `p2`)');
-    expect(await call('highlight', { selector: 'Card', pageId: 'p2' })).toContain(
+    expect(await call('highlight', { component: 'Card', page: 'p2' })).toContain(
       'instance `d9` on page `p2`',
     );
-    expect(await call('inspect-component', { selector: 'Card', page: 'gone' })).toMatch(
+    expect(await call('inspect-component', { component: 'Card', page: 'gone' })).toMatch(
       /^No page `gone` is reporting a component tree\..*`p1`/,
     );
   });

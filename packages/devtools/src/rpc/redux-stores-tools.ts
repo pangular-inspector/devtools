@@ -123,7 +123,7 @@ export interface InspectReduxStoresArgs {
 }
 
 /**
- * The `inspect-redux-stores` answer: the stores of one page, or one store with
+ * The `redux-inspect-stores` answer: the stores of one page, or one store with
  * its state and its latest actions, newest first, with their diffs.
  */
 export function inspectReduxStoresText(

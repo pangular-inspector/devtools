@@ -110,7 +110,7 @@ describe('pangularMcpPrompts', () => {
     for (const config of [{ agent: { readOnly: true } }, { actions: { forms: false } }]) {
       const text = await promptText(config, 'fix-form', {});
       expect(text).not.toContain('fill-form');
-      expect(text).toContain('pangular_form-diff');
+      expect(text).toContain('pangular_explain-form-changes');
     }
     const readOnly = await promptText({ agent: { readOnly: true } }, 'performance-pass', {});
     expect(readOnly).toContain('read-only');

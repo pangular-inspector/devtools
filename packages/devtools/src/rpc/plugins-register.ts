@@ -34,7 +34,6 @@ import { code, untrusted } from './forms-tools.ts';
 import { PAGE_ARGUMENT, byRecency, pageArgument, unknownPageText } from './pages.ts';
 import { trackPageSessions } from './page-sessions.ts';
 import type { PageTtl } from './page-ttl.ts';
-import { MARKDOWN_OUTPUT_SCHEMA } from './agent-output.ts';
 
 type AnyRecord = Record<string, any>;
 
@@ -564,7 +563,6 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
   host.agent.registerTool({
     id: 'pangular:list-plugins',
     title: 'List plugins',
-    outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
       'Page plugins each connected page runs (id, version, status) and server plugins with their agent tools. Plugins whose tools the config turns off are left out. Empty when there are none.',
     inputSchema: { type: 'object', properties: {} },
@@ -574,7 +572,6 @@ export async function registerPlugins(host: PluginsHost): Promise<PluginsRegistr
   host.agent.registerTool({
     id: 'pangular:inspect-plugin',
     title: 'Inspect a plugin',
-    outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description:
       "One page plugin's view of the page (`plugin` from list-plugins): its tables, lists, stats and trees as markdown, with its status, actions and tools. Values are masked.",
     inputSchema: {

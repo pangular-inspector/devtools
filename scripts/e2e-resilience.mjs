@@ -507,11 +507,11 @@ async function checkMultitab() {
       `${formId} own=${detail.includes(own)} other=${detail.includes(other)}`,
     );
   }
-  const storeA = await mcp.tool('inspect-signal-store', { page: A.id });
-  const storeB = await mcp.tool('inspect-signal-store', { page: B.id });
-  const storeE = await mcp.tool('inspect-signal-store', { page: E.id });
+  const storeA = await mcp.tool('ngrx-inspect-store', { page: A.id });
+  const storeB = await mcp.tool('ngrx-inspect-store', { page: B.id });
+  const storeE = await mcp.tool('ngrx-inspect-store', { page: E.id });
   assert(
-    'inspect-signal-store is scoped per page',
+    'ngrx-inspect-store is scoped per page',
     storeA.includes('StoreExample (component)') &&
       !storeB.includes('StoreExample') &&
       !storeE.includes('StoreExample') &&
@@ -797,7 +797,7 @@ async function checkLifecycle(server) {
     rows.filter((r) => r.id === L.id).length === 1 && rows.length >= 1,
     rows.map((r) => r.id).join(','),
   );
-  const store = await mcp.tool('inspect-signal-store', { page: L.id });
+  const store = await mcp.tool('ngrx-inspect-store', { page: L.id });
   record('store after reload', store.slice(0, 200).replace(/\n/g, ' '));
 
   // A hard navigation in the same tab keeps the id too.
@@ -982,12 +982,14 @@ async function checkStress() {
     deferNote.some((l) => /500\+|more|trunc|limit|first 500|of 520/i.test(l)),
   );
 
-  const storeList = await mcp.tool('inspect-signal-store', { page: id });
+  const storeList = await mcp.tool('ngrx-inspect-store', { page: id });
   const storeId = /`(ngrx-\d+)`/.exec(storeList)?.[1];
-  const storeDetail = storeId ? await mcp.tool('inspect-signal-store', { page: id, storeId }) : '';
-  record('inspect-signal-store detail chars', storeDetail.length);
+  const storeDetail = storeId
+    ? await mcp.tool('ngrx-inspect-store', { page: id, store: storeId })
+    : '';
+  record('ngrx-inspect-store detail chars', storeDetail.length);
   record(
-    'inspect-signal-store notes',
+    'ngrx-inspect-store notes',
     storeDetail
       .split('\n')
       .filter((l) => /trunc|more|limit|cut|10000|10,000/i.test(l))
@@ -1023,11 +1025,11 @@ async function checkStress() {
   );
   await S.page.evaluate(() => window.__stress.invalidate(250));
   await sleep(2500);
-  const invalid = await mcp.tool('explain-form-invalid', { page: id, form: formId });
-  record('explain-form-invalid with field250 failing', invalid.replace(/\s+/g, ' ').slice(0, 300));
+  const invalid = await mcp.tool('explain-invalid-forms', { page: id, form: formId });
+  record('explain-invalid-forms with field250 failing', invalid.replace(/\s+/g, ' ').slice(0, 300));
   knownFailure(
     423,
-    'explain-form-invalid names a failing field past the 100th control',
+    'explain-invalid-forms names a failing field past the 100th control',
     invalid.includes('field250'),
   );
 
@@ -1041,7 +1043,7 @@ async function checkStress() {
       await window.__stress.settle();
     }
   });
-  await mcp.tool('change-detection', { page: id, record: 'start' });
+  await mcp.tool('record-change-detection', { page: id, record: 'start' });
   await S.page.evaluate(async () => {
     for (let i = 0; i < 300; i++) {
       window.__stress.tick(1);
@@ -1049,12 +1051,12 @@ async function checkStress() {
     }
   });
   await sleep(3000);
-  const history = await mcp.tool('form-history', { page: id, form: formId, limit: 500 });
+  const history = await mcp.tool('list-form-changes', { page: id, form: formId, limit: 500 });
   const historyNote = history
     .split('\n')
     .filter((l) => /dropped|older|latest|limit|showing/i.test(l));
-  record('form-history notes', historyNote.slice(0, 3));
-  assert('form-history says older events were dropped', historyNote.length > 0);
+  record('list-form-changes notes', historyNote.slice(0, 3));
+  assert('list-form-changes says older events were dropped', historyNote.length > 0);
   const formsState = await mcp.state('forms');
   record(
     'forms state: events kept / dropped',
@@ -1062,9 +1064,9 @@ async function checkStress() {
   );
   assert('forms timeline keeps at most 200 events', (formsState.events?.length ?? 0) <= 200);
 
-  const log = await mcp.tool('signal-store-history', { page: id });
+  const log = await mcp.tool('ngrx-history', { page: id });
   const logRows = log.split('\n').filter((l) => /^\|\s*\d+/.test(l) || /^- /.test(l)).length;
-  record('signal-store-history chars / rows', `${log.length} / ${logRows}`);
+  record('ngrx-history chars / rows', `${log.length} / ${logRows}`);
   const ngrx2 = await mcp.state('ngrx-store');
   const p2 = (ngrx2.pages ?? []).find((p) => p.pageId === id) ?? {};
   const changeLog = p2.log ?? p2.changeLog ?? p2.entries ?? [];
@@ -1078,7 +1080,7 @@ async function checkStress() {
   );
 
   const ticks = await mcp.tool('inspect-signals', {
-    selector: 'StressRoot',
+    component: 'StressRoot',
     page: id,
     node: 'ticks',
   });
@@ -1113,7 +1115,7 @@ async function checkStress() {
     cycles === undefined || cycles <= 200,
     cycles,
   );
-  await mcp.tool('change-detection', { page: id, record: 'stop' });
+  await mcp.tool('record-change-detection', { page: id, record: 'stop' });
 
   const snap = await mcp.tool('snapshot', { page: id });
   record('snapshot chars', snap.length);

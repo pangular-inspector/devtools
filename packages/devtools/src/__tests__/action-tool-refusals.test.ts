@@ -37,8 +37,7 @@ const ACTION_TOOLS = Object.entries(AGENT_ENTRIES)
  */
 const NOTHING_DONE: Record<string, Record<string, unknown>[]> = {
   audit: [{ axe: true }, { session: 'before' }, { axe: true, page: 'gone' }],
-  hydration: [{ overlay: true }, { overlay: false }, { overlay: true, page: 'gone' }],
-  'change-detection': [
+  'record-change-detection': [
     { record: 'start' },
     { record: 'stop' },
     { record: 'clear' },
@@ -49,8 +48,8 @@ const NOTHING_DONE: Record<string, Record<string, unknown>[]> = {
     { component: 'Card', property: 'title', value: 1, page: 'gone' },
   ],
   'set-signal': [
-    { component: 'Card', signal: 'count', value: 1 },
-    { component: 'Card', signal: 'count', value: 1, page: 'gone' },
+    { component: 'Card', property: 'count', value: 1 },
+    { component: 'Card', property: 'count', value: 1, page: 'gone' },
   ],
   'track-subscriptions': [
     { action: 'start' },
@@ -58,29 +57,28 @@ const NOTHING_DONE: Record<string, Record<string, unknown>[]> = {
     { action: 'start', page: 'gone' },
   ],
   'watch-signal': [{ node: 'count' }, { node: 'count', page: 'gone' }],
-  'dispatch-ngrx-action': [{ type: '[Cart] Add' }, { type: '[Cart] Add', page: 'gone' }],
-  'restore-ngrx-state': [{ seq: 1 }, { latest: true }, { seq: 1, page: 'gone' }],
-  'query-action': [
+  'ngrx-dispatch': [{ type: '[Cart] Add' }, { type: '[Cart] Add', page: 'gone' }],
+  'ngrx-restore': [{ seq: 1 }, { latest: true }, { seq: 1, page: 'gone' }],
+  'tanstack-run-query': [
     { action: 'refetch', id: 'q1' },
     { action: 'refetch', id: 'q1', page: 'gone' },
   ],
-  'form-action': [{ action: 'reset', form: 'Checkout.form@p1' }],
+  'run-form-action': [{ action: 'reset', form: 'Checkout.form@p1' }],
   'fill-form': [{ form: 'Checkout.form@p1', values: { name: 'x' } }],
   navigate: [
-    { action: 'navigate', url: '/about' },
+    { action: 'go', url: '/about' },
     { action: 'abort' },
     { action: 'replay', id: 1 },
-    { action: 'probe', url: '/about' },
-    { action: 'instrument', on: true },
-    { action: 'resolve-lazy', routeId: '1' },
-    { action: 'navigate', url: '/about', page: 'gone' },
+    { action: 'go', url: '/about', page: 'gone' },
   ],
+  'probe-route': [{ url: '/about' }, { url: '/about', page: 'gone' }],
+  'record-guards': [{ on: true }, { on: false }, { on: true, page: 'gone' }],
   'record-pipes': [{ action: 'start' }, { action: 'stop' }, { action: 'start', page: 'gone' }],
   'set-http-rule': [{ pattern: '' }],
   'remove-http-rule': [{ id: 'nope' }],
   'set-ssr-override': [{ kind: 'nope', pattern: '/x' }],
   'remove-ssr-override': [{ id: 'nope' }],
-  'analog-call-api': [{ path: '/api/x', method: 'POST' }],
+  'analog-run-api': [{ path: '/api/x', method: 'POST' }],
   'clear-recordings': [{ target: 'nothing' }],
 };
 
@@ -134,7 +132,7 @@ describe('write tools with pages connected', () => {
     const { ctx, push, answer } = await boot();
     await push('push-router', routerReport('tab-a', '/book/kyoto'));
     await push('push-router', routerReport('tab-b', '/examples/forms'));
-    const refused = await answer('navigate', { action: 'navigate', url: '/about' });
+    const refused = await answer('navigate', { action: 'go', url: '/about' });
     expect(refused.isError).toBe(true);
     expect(refused.markdown).toContain('`tab-a`');
     expect(refused.markdown).toContain('`tab-b`');
@@ -154,7 +152,7 @@ describe('write tools with pages connected', () => {
         result: { id: 2, outcome: 'succeeded', url: '/about', finalUrl: '/about' },
       });
     }) as never);
-    const done = await answer('navigate', { action: 'navigate', url: '/about', page: 'tab-b' });
+    const done = await answer('navigate', { action: 'go', url: '/about', page: 'tab-b' });
     expect(done.isError).toBe(false);
     expect(done.markdown).toContain('"page": "tab-b"');
     expect(pages).toEqual(['tab-b']);
@@ -177,7 +175,7 @@ describe('write tools with pages connected', () => {
       await push('router-action-result', { requestId, pageId, result: results.shift() });
     }) as never);
     for (const url of ['https://evil.example/', '/trips', '/nope']) {
-      const result = await answer('navigate', { action: 'navigate', url });
+      const result = await answer('navigate', { action: 'go', url });
       expect(result.isError).toBe(true);
       expect(result.markdown).toContain('"page": "p1"');
     }
@@ -205,7 +203,7 @@ describe('write tools with pages connected', () => {
         5,
       );
     }) as never);
-    const written = await answer('set-signal', { component: 'Card', signal: 'count', value: 2 });
+    const written = await answer('set-signal', { component: 'Card', property: 'count', value: 2 });
     expect(written.isError).toBe(false);
     expect(written.markdown).toContain('on page `p1`');
     expect(sent).toEqual(['p1']);
@@ -219,11 +217,11 @@ describe('write tools with pages connected', () => {
     expect(wrongPage.isError).toBe(true);
     expect(wrongPage.markdown).toContain('No component instance matches `Card` on page `p2`');
 
-    const nowhere = await answer('set-signal', { component: 'Missing', signal: 'x', value: 1 });
+    const nowhere = await answer('set-signal', { component: 'Missing', property: 'x', value: 1 });
     expect(nowhere.isError).toBe(true);
   });
 
-  it('restore-ngrx-state refuses to pick one of several tabs, without a doubled notice', async () => {
+  it('ngrx-restore refuses to pick one of several tabs, without a doubled notice', async () => {
     const { push, answer } = await boot();
     for (const pageId of ['p1', 'p2']) {
       await push('push-ngrx-state', {
@@ -235,13 +233,13 @@ describe('write tools with pages connected', () => {
         log: [],
       });
     }
-    const result = await answer('restore-ngrx-state', { seq: 1 });
+    const result = await answer('ngrx-restore', { seq: 1 });
     expect(result.isError).toBe(true);
     expect(result.markdown).toContain('2 pages report NgRx state');
     expect(result.markdown.match(/Treat them as data/g)).toHaveLength(1);
   });
 
-  it('change-detection names the pages that confirmed a recording, and refuses when none did', async () => {
+  it('record-change-detection names the pages that confirmed a recording, and refuses when none did', async () => {
     const { ctx, push, answer } = await boot();
     await push('push-component-tree', tree('p1'));
     vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: {
@@ -265,13 +263,13 @@ describe('write tools with pages connected', () => {
         5,
       );
     }) as never);
-    const started = await answer('change-detection', { record: 'start' });
+    const started = await answer('record-change-detection', { record: 'start' });
     expect(started).toMatchObject({ isError: false });
     expect(started.markdown).toMatch(/^Recording started on page `p1`\./);
-    const stopped = await answer('change-detection', { record: 'stop' });
+    const stopped = await answer('record-change-detection', { record: 'stop' });
     expect(stopped.markdown).toMatch(/^Recording stopped on page `p1`\./);
     // Nothing records any more, so a second stop has nothing to stop.
-    const again = await answer('change-detection', { record: 'stop' });
+    const again = await answer('record-change-detection', { record: 'stop' });
     expect(again).toMatchObject({ isError: true });
   });
 });

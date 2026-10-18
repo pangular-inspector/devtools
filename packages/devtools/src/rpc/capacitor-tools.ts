@@ -458,7 +458,7 @@ export interface CapacitorCallsArgs {
   limit?: number;
 }
 
-/** The answer of the `list-capacitor-calls` agent tool. */
+/** The answer of the `capacitor-list-calls` agent tool. */
 export function capacitorCallsText(
   pages: Map<string, CapacitorPage>,
   args: CapacitorCallsArgs = {},
@@ -539,7 +539,7 @@ export function capacitorCallsText(
   return capped(lines.join('\n'), NARROW_CALLS);
 }
 
-/** The answer of the `list-capacitor-plugins` agent tool. */
+/** The answer of the `capacitor-list-plugins` agent tool. */
 export function capacitorPluginsText(
   pages: Map<string, CapacitorPage>,
   args: { page?: string } = {},

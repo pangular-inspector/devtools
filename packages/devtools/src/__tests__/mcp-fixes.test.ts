@@ -154,21 +154,21 @@ describe('library tools only for apps that use them (M5)', () => {
       reporting: { capacitor: () => reporting },
       register: (tool) => registered.push(tool.id),
     });
-    expect(gate.hold({ id: 'pangular:list-capacitor-calls' })).toBe(true);
+    expect(gate.hold({ id: 'pangular:capacitor-list-calls' })).toBe(true);
     expect(gate.hold({ id: 'pangular:list-errors' })).toBe(false);
     gate.check();
     expect(registered).toEqual([]);
     reporting = true;
     gate.check();
-    expect(registered).toEqual(['pangular:list-capacitor-calls']);
+    expect(registered).toEqual(['pangular:capacitor-list-calls']);
     gate.stop();
   });
 
   it('keeps the tools the config turns on', async () => {
     const { ctx } = await boot({ inspectors: { capacitor: true } });
     const ids = ctx.agent.list().tools.map((tool) => tool.id);
-    expect(ids).toContain('pangular:list-capacitor-calls');
-    expect(ids).not.toContain('pangular:list-queries');
+    expect(ids).toContain('pangular:capacitor-list-calls');
+    expect(ids).not.toContain('pangular:tanstack-list-queries');
   });
 });
 
@@ -228,7 +228,7 @@ describe('injectors (M3)', () => {
   });
 
   it('shows a Root injector too large for the answer, cut inside with counts', () => {
-    const text = inspectProvidersText(page(), { selector: 'Root' });
+    const text = inspectProvidersText(page(), { injector: 'Root' });
     expect(text.length).toBeLessThanOrEqual(20_000);
     expect(text).not.toContain('Showing 0 of 1');
     expect(text).toContain('"providersTotal":400');
@@ -307,11 +307,11 @@ describe('signal store names in the DI tools (M2)', () => {
 describe('a wrong project folder (M9)', () => {
   it('makes every source scan refuse and name the folder', async () => {
     const { ctx, answer } = await boot({}, { pageTools: false, notAProject: '/tmp' });
-    const scan = await answer('lint-pipes');
+    const scan = await answer('scan-pipe-usage');
     expect(scan.isError).toBe(true);
     expect(scan.markdown).toContain('`/tmp`');
     expect(scan.markdown).toContain('--root');
-    await expect(ctx.agent.invoke('pangular:get-routes', {})).rejects.toThrow(/--root/);
+    await expect(ctx.agent.invoke('pangular:scan-routes', {})).rejects.toThrow(/--root/);
   });
 });
 

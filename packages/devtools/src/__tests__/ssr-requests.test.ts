@@ -400,7 +400,9 @@ describe('devframe SSR requests', () => {
       ).value() as HttpState;
     const tool = (id: string, args: Record<string, unknown> = {}) =>
       ctx.agent.list().tools.some((t) => t.id === `pangular:${id}`)
-        ? (ctx.agent.invoke(`pangular:${id}`, args) as Promise<{ markdown: string }>)
+        ? (ctx.agent.invoke(`pangular:${id}`, args) as Promise<string>).then((markdown) => ({
+            markdown,
+          }))
         : undefined;
     const push = (payload: unknown) =>
       ctx.rpc.invokeLocal('pangular:push-http' as never, ...([payload] as never));

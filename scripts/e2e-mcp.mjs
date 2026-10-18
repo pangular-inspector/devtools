@@ -357,14 +357,8 @@ async function listAll(client, method, key) {
 
 const short = (name) => name.replace(/^pangular_/, '');
 
+/** A tool answers with one plain text block: the markdown itself, or compact JSON for a scan. */
 function markdownOf(text) {
-  try {
-    const value = JSON.parse(text);
-    if (value && typeof value === 'object' && typeof value.markdown === 'string')
-      return value.markdown;
-  } catch {
-    // Not JSON.
-  }
   return text;
 }
 
@@ -380,9 +374,9 @@ const CAPS = {
   snapshot: 20_000,
   'inspect-forms': 20_000,
   'export-form': 20_000,
-  'list-capacitor-calls': 20_000,
-  'list-capacitor-plugins': 20_000,
-  'export-ngrx-session': 60_000,
+  'capacitor-list-calls': 20_000,
+  'capacitor-list-plugins': 20_000,
+  'ngrx-export-session': 60_000,
   'change-detection': 100_000,
 };
 /** Above this, any answer gets a warning: it costs an agent a lot of context. */
@@ -509,8 +503,11 @@ function checkAnswer(record, tool, expect) {
     recordFailure(record, `answer is ${record.length} chars, over its documented ${cap}`);
   else if (record.length > SOFT_CAP) recordWarning(record, `answer is ${record.length} chars`);
 
-  if (tool?.outputSchema && !record.isError && !record.structured) {
-    recordFailure(record, 'tool declares outputSchema but sent no structuredContent');
+  // Every answer is plain text: no output schema, no structured copy, no `{markdown}` wrapper.
+  if (tool?.outputSchema) recordFailure(record, 'tool declares an outputSchema');
+  if (record.structured) recordFailure(record, 'answer sent structuredContent');
+  if (!record.isError && /^\{\s*"markdown"\s*:/.test(record.markdown)) {
+    recordFailure(record, 'answer is wrapped in {"markdown": ...}');
   }
 }
 
@@ -606,39 +603,39 @@ class App {
 // Valid arguments for each read tool, and the route the page should be on.
 
 /** Tools of a library the demo does not use, which the server lists only for an app that uses it. */
-const LIBRARY_TOOL = /^(analog-|list-capacitor-|list-queries$|inspect-query$|query-action$)/;
+const LIBRARY_TOOL = /^(analog-|capacitor-|tanstack-)/;
 
 const READ_PLAN = [
   // [tool, route, args(ctx)]
   ['list-pages', null, () => ({})],
-  ['build-meta', null, () => ({})],
-  ['get-routes', null, () => ({})],
-  ['get-components', null, () => ({})],
-  ['get-pipes', null, () => ({})],
-  ['get-signals', null, () => ({})],
-  ['get-providers', null, () => ({})],
-  ['get-ngrx-store', null, () => ({})],
+  ['scan-build', null, () => ({})],
+  ['scan-routes', null, () => ({})],
+  ['scan-components', null, () => ({})],
+  ['scan-pipes', null, () => ({})],
+  ['scan-signals', null, () => ({})],
+  ['scan-providers', null, () => ({})],
+  ['ngrx-scan', null, () => ({})],
   ['devframes_plugin_messages_list', null, () => ({})],
   ['devframe_state_read', null, () => ({})],
   ['devframe_state_read', null, () => ({ key: 'pangular:http' })],
-  ['lint-templates', null, () => ({ limit: 20 })],
-  ['lint-pipes', null, () => ({})],
-  ['explain-render-mode', null, () => ({ url: '/about' })],
-  ['analog-routes', null, () => ({})],
-  ['analog-explain-url', null, () => ({ url: '/' })],
-  ['analog-current-page', null, () => ({})],
-  ['analog-server-calls', null, () => ({})],
-  ['analog-server-functions', null, () => ({})],
-  ['analog-api-routes', null, () => ({})],
-  ['analog-render-modes', null, () => ({})],
-  ['analog-prerender-plan', null, () => ({})],
-  ['analog-content', null, () => ({})],
+  ['scan-templates', null, () => ({ limit: 20 })],
+  ['scan-pipe-usage', null, () => ({})],
+  ['scan-render-mode', null, () => ({ url: '/about' })],
+  ['analog-scan-routes', null, () => ({})],
+  ['analog-scan-url', null, () => ({ url: '/' })],
+  ['analog-inspect-page', null, () => ({})],
+  ['analog-list-server-calls', null, () => ({})],
+  ['analog-scan-server-functions', null, () => ({})],
+  ['analog-scan-api-routes', null, () => ({})],
+  ['analog-explain-render-modes', null, () => ({})],
+  ['analog-scan-prerender', null, () => ({})],
+  ['analog-scan-content', null, () => ({})],
   ['analog-lint', null, () => ({})],
-  ['list-capacitor-calls', null, () => ({})],
-  ['list-capacitor-plugins', null, () => ({})],
-  ['list-queries', null, () => ({})],
-  ['inspect-query', null, () => ({ key: 'products' })],
-  ['inspect-redux-stores', null, () => ({})],
+  ['capacitor-list-calls', null, () => ({})],
+  ['capacitor-list-plugins', null, () => ({})],
+  ['tanstack-list-queries', null, () => ({})],
+  ['tanstack-inspect-query', null, () => ({ key: 'products' })],
+  ['redux-inspect-stores', null, () => ({})],
   ['list-errors', null, () => ({})],
   ['explain-error', null, (ctx) => ({ id: ctx.errorId ?? 'e1' })],
   ['explain-error', null, () => ({ code: 'NG0100' })],
@@ -654,24 +651,25 @@ const READ_PLAN = [
   [
     'inspect-component',
     '/destinations',
-    (ctx) => ({ selector: ctx.component('DestinationCard').id }),
+    (ctx) => ({ component: ctx.component('DestinationCard').id }),
   ],
   [
     'inspect-component',
     '/destinations',
-    (ctx) => ({ selector: ctx.component('DestinationCard').id, path: 'destination', depth: 2 }),
+    (ctx) => ({ component: ctx.component('DestinationCard').id, path: 'destination', depth: 2 }),
   ],
-  ['highlight', '/destinations', (ctx) => ({ selector: ctx.component('DestinationCard', 1).id })],
-  ['screenshot-component', '/destinations', () => ({ selector: 'app-theme-toggle' })],
+  ['highlight', '/destinations', (ctx) => ({ component: ctx.component('DestinationCard', 1).id })],
+  ['highlight', '/destinations', () => ({ selector: 'app-theme-toggle' })],
+  ['screenshot-component', '/destinations', () => ({ component: 'app-theme-toggle' })],
   [
     'wait-for',
     '/destinations',
-    () => ({ condition: 'component', selector: 'DestinationCard', timeoutMs: 3000 }),
+    () => ({ condition: 'component', component: 'DestinationCard', timeoutMs: 3000 }),
   ],
   [
     'wait-for',
     '/destinations',
-    () => ({ condition: 'component-gone', selector: 'Booking', timeoutMs: 2000 }),
+    () => ({ condition: 'component-gone', component: 'Booking', timeoutMs: 2000 }),
   ],
   ['wait-for', '/destinations', () => ({ condition: 'navigation', timeoutMs: 2000 })],
   [
@@ -685,24 +683,25 @@ const READ_PLAN = [
     '/destinations',
     () => ({ sections: ['page', 'route', 'stores'], limit: 3, maxChars: 2000 }),
   ],
-  ['inspect-signal-store', '/destinations', () => ({})],
-  ['inspect-signal-store', '/destinations', (ctx) => ({ storeId: ctx.storeId('TravelStore') })],
+  ['ngrx-inspect-store', '/destinations', () => ({})],
+  ['ngrx-inspect-store', '/destinations', (ctx) => ({ store: ctx.storeId('TravelStore') })],
+  ['ngrx-inspect-store', '/destinations', () => ({ store: 'TravelStore' })],
   [
-    'signal-store-history',
+    'ngrx-history',
     '/destinations',
-    (ctx) => ({ page: ctx.pageId, storeId: ctx.storeId('TravelStore') }),
+    (ctx) => ({ page: ctx.pageId, store: ctx.storeId('TravelStore') }),
   ],
-  ['inspect-ngrx-entry', '/destinations', (ctx) => ({ seq: ctx.lastSeq() })],
-  ['export-ngrx-session', '/destinations', (ctx) => ({ storeId: ctx.storeId('TravelStore') })],
-  ['import-ngrx-session', '/destinations', (ctx) => ({ session: ctx.exportedSession ?? '{}' })],
-  ['generate-ngrx-test', '/destinations', (ctx) => ({ storeId: ctx.storeId('TravelStore') })],
+  ['ngrx-inspect-entry', '/destinations', (ctx) => ({ seq: ctx.lastSeq() })],
+  ['ngrx-export-session', '/destinations', (ctx) => ({ store: ctx.storeId('TravelStore') })],
+  ['ngrx-import-session', '/destinations', (ctx) => ({ session: ctx.exportedSession ?? '{}' })],
+  ['ngrx-generate-test', '/destinations', (ctx) => ({ store: ctx.storeId('TravelStore') })],
   [
-    'generate-ngrx-test',
+    'ngrx-generate-test',
     '/destinations',
-    (ctx) => (ctx.sessionId ? { session: ctx.sessionId } : { storeId: 'ngrx-1' }),
+    (ctx) => (ctx.sessionId ? { session: ctx.sessionId } : { store: 'ngrx-1' }),
   ],
   [
-    'inspect-ngrx-entry',
+    'ngrx-inspect-entry',
     '/destinations',
     (ctx) => (ctx.sessionId ? { seq: 1, session: ctx.sessionId } : { seq: 1 }),
   ],
@@ -717,22 +716,22 @@ const READ_PLAN = [
   ['diagnose-change-detection', '/examples/components', () => ({})],
   ['find-leaks', '/examples/components', () => ({ limit: 5 })],
 
-  ['inspect-signals', '/examples/signals', () => ({ selector: 'app-signals-example' })],
+  ['inspect-signals', '/examples/signals', () => ({ component: 'app-signals-example' })],
   [
     'inspect-signals',
     '/examples/signals',
-    () => ({ selector: 'app-signals-example', node: 'count', history: false }),
+    () => ({ component: 'app-signals-example', node: 'count', history: false }),
   ],
-  ['inspect-signals', '/examples/signals', () => ({ selector: 'root' })],
+  ['inspect-signals', '/examples/signals', () => ({ component: 'root' })],
 
   ['inspect-providers', '/examples/di', () => ({})],
-  ['inspect-providers', '/examples/di', () => ({ selector: 'Root' })],
+  ['inspect-providers', '/examples/di', () => ({ injector: 'Root' })],
   ['inspect-providers', '/examples/di', () => ({ token: 'HttpClient' })],
-  ['explain-injection', '/examples/di', () => ({ selector: 'app-root', token: 'Router' })],
+  ['explain-injection', '/examples/di', () => ({ injector: 'app-root', token: 'Router' })],
   [
     'explain-injection',
     '/examples/di',
-    () => ({ selector: 'app-root', token: 'NoSuchToken', optional: true }),
+    () => ({ injector: 'app-root', token: 'NoSuchToken', optional: true }),
   ],
 
   ['explain-pipe', '/examples/pipes', () => ({ name: 'appTimeAgo' })],
@@ -747,13 +746,13 @@ const READ_PLAN = [
   ['explain-ssr-request', '/examples/http', () => ({ url: '/' })],
   ['list-http-calls', '/examples/http', () => ({ limit: 10, preview: true, headers: true })],
   ['list-http-calls', '/examples/http', () => ({ failed: true })],
-  ['http-waterfall', '/examples/http', () => ({ headers: true })],
+  ['list-http-calls', '/examples/http', () => ({ view: 'waterfall', headers: true })],
   ['list-http-rules', '/examples/http', () => ({})],
   ['inspect-transfer-state', '/examples/http', () => ({})],
   ['list-ssr-overrides', '/examples/http', () => ({})],
 
   ['inspect-route', '/examples/routes/details', () => ({})],
-  ['inspect-route', '/examples/routes/details', () => ({ selector: 'RoutePanel' })],
+  ['inspect-route', '/examples/routes/details', () => ({ component: 'RoutePanel' })],
   ['explain-navigation', '/examples/routes/details', () => ({ limit: 5 })],
   ['explain-navigation', '/examples/routes/details', () => ({ perf: true })],
   ['explain-navigation', '/examples/routes/details', () => ({ url: '/trips' })],
@@ -766,7 +765,7 @@ const READ_PLAN = [
   ['list-routes', '/examples/routes/details', () => ({ filter: 'book' })],
   ['lint-routes', '/examples/routes/details', () => ({})],
   ['router-config', '/examples/routes/details', () => ({})],
-  ['export-navigation', '/examples/routes/details', () => ({})],
+  ['explain-navigation', '/examples/routes/details', () => ({ format: 'repro' })],
 
   ['inspect-forms', '/examples/forms', () => ({})],
   ['inspect-forms', '/examples/forms', (ctx) => ({ form: ctx.formIds[0] })],
@@ -775,7 +774,7 @@ const READ_PLAN = [
     '/examples/forms',
     (ctx) => ({ form: ctx.formIds[1], onlyInvalid: true, includeValues: false }),
   ],
-  ['explain-form-invalid', '/examples/forms', () => ({})],
+  ['explain-invalid-forms', '/examples/forms', () => ({})],
   ['lint-forms', '/examples/forms', () => ({})],
   ['explain-custom-control', '/examples/forms', (ctx) => ({ form: ctx.formIds[0] })],
   ['explain-submit', '/examples/forms', (ctx) => ({ form: ctx.formIds[2] })],
@@ -783,35 +782,37 @@ const READ_PLAN = [
 
   ['inspect-forms', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm })],
   ['inspect-forms', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm, path: 'email' })],
-  ['explain-form-invalid', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm })],
+  ['explain-invalid-forms', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm })],
   ['explain-field', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm, path: 'travelers' })],
   ['explain-field', '/book/kyoto', () => ({ selector: '#email' })],
   ['explain-submit', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm })],
-  ['form-payload', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm })],
-  ['form-history', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm, limit: 20 })],
+  ['inspect-form-payload', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm })],
+  ['list-form-changes', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm, limit: 20 })],
   [
-    'form-history',
+    'list-form-changes',
     '/book/kyoto',
     (ctx) => ({ form: ctx.bookingForm, type: 'submit', origin: 'user' }),
   ],
-  ['form-diff', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm, since: 0 })],
+  ['explain-form-changes', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm, after: 0 })],
   ['lint-forms', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm })],
   ['explain-custom-control', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm, path: 'terms' })],
   ['export-form', '/book/kyoto', (ctx) => ({ form: ctx.bookingForm, format: 'fixture' })],
   [
-    'wait-for-form',
+    'wait-for',
     '/book/kyoto',
-    (ctx) => ({ form: ctx.bookingForm, until: 'settled', timeoutMs: 2000 }),
+    (ctx) => ({ condition: 'form', form: ctx.bookingForm, until: 'settled', timeoutMs: 2000 }),
   ],
 ];
 
 /** Tools that act; each is covered by a scenario in `runActions`. */
 const ACTION_SCENARIO_TOOLS = new Set([
   'navigate',
-  'dispatch-ngrx-action',
-  'restore-ngrx-state',
-  'query-action',
-  'form-action',
+  'probe-route',
+  'record-guards',
+  'ngrx-dispatch',
+  'ngrx-restore',
+  'tanstack-run-query',
+  'run-form-action',
   'fill-form',
   'set-http-rule',
   'remove-http-rule',
@@ -822,11 +823,10 @@ const ACTION_SCENARIO_TOOLS = new Set([
   'watch-signal',
   'record-pipes',
   'track-subscriptions',
-  'change-detection',
-  'hydration',
+  'record-change-detection',
   'audit',
   'clear-recordings',
-  'analog-call-api',
+  'analog-run-api',
   'plugin_travel_clear-saved',
   'highlight',
 ]);
@@ -1019,8 +1019,8 @@ async function makeContext(client, state) {
         ctx.components = parseComponents(await read('list-components', {}));
       }
       if (route === '/destinations') {
-        ctx.stores = parseStoreIds(await read('inspect-signal-store', {}));
-        ctx.seqs = parseSeqs(await read('signal-store-history', { page: ctx.pageId }));
+        ctx.stores = parseStoreIds(await read('ngrx-inspect-store', {}));
+        ctx.seqs = parseSeqs(await read('ngrx-history', { page: ctx.pageId }));
       }
       if (route === '/examples/forms') ctx.formIds = parseFormIds(await read('inspect-forms', {}));
       if (route === '/book/kyoto')
@@ -1057,12 +1057,12 @@ async function runReadPlan(client, app, state, ctx) {
     const record = await callTool(client, 'http', tool.name, args, 'valid');
     checkAnswer(record, tool, 'ok');
     // Hand-offs between calls.
-    if (name === 'export-ngrx-session' && !record.isError) {
+    if (name === 'ngrx-export-session' && !record.isError) {
       const block = record.markdown.match(/```json\n([\s\S]*?)\n```/)?.[1];
       ctx.exportedSession = block;
       if (!block) recordFailure(record, 'export has no json block to import');
     }
-    if (name === 'import-ngrx-session' && !record.isError) {
+    if (name === 'ngrx-import-session' && !record.isError) {
       ctx.sessionId = record.markdown.match(/`(s[\w-]+|[0-9a-f-]{6,})`/)?.[1];
       if (!ctx.sessionId) recordWarning(record, 'could not find the session id in the answer');
     }
@@ -1121,15 +1121,15 @@ async function checkResourcesAndPrompts(client, state, transport) {
       `missing ${uri}`,
     );
     check(
-      templates.some((item) => item.uriTemplate === `pangular://page/{pageId}/${name}`),
+      templates.some((item) => item.uriTemplate === `pangular://pages/{pageId}/${name}`),
       `${transport} resources/templates/list`,
       `missing template for ${name}`,
     );
     if (state.pageId) {
       check(
-        resources.some((item) => item.uri === `pangular://page/${state.pageId}/${name}`),
+        resources.some((item) => item.uri === `pangular://pages/${state.pageId}/${name}`),
         `${transport} resources/list`,
-        `missing the per-page entry pangular://page/${state.pageId}/${name}`,
+        `missing the per-page entry pangular://pages/${state.pageId}/${name}`,
       );
     }
   }
@@ -1373,7 +1373,7 @@ async function checkListChanged(context, state, origin, sdk, timeoutMs) {
   const legacyLeaveCount = state.listChanged.length;
   await second.close();
   const closedAt = Date.now();
-  const uri = `pangular://page/${state.secondPageId}/component-tree`;
+  const uri = `pangular://pages/${state.secondPageId}/component-tree`;
   const gone = await waitUntil(
     async () => {
       const resources = await listAll(state.client, 'listResources', 'resources');
@@ -1430,7 +1430,7 @@ async function runActions(state) {
 
   // navigate
   await app.go('/destinations');
-  let r = await act('navigate', { action: 'navigate', url: '/about', waitFor: 'stable' });
+  let r = await act('navigate', { action: 'go', url: '/about', waitFor: 'stable' });
   await sleep(500);
   write(
     'navigate',
@@ -1443,7 +1443,7 @@ async function runActions(state) {
     'inspect-route reads /about afterwards',
     /\/about/.test(await read('inspect-route', {})),
   );
-  r = await act('navigate', { action: 'navigate', url: '/trips' });
+  r = await act('navigate', { action: 'go', url: '/trips' });
   await sleep(500);
   write(
     'navigate',
@@ -1452,7 +1452,7 @@ async function runActions(state) {
     `page is on ${app.path()}, answer ${r.markdown.slice(0, 300)}`,
   );
   r = await act('navigate', {
-    action: 'navigate',
+    action: 'go',
     pattern: '/destinations/:id',
     params: { id: 'lisbon' },
   });
@@ -1463,21 +1463,23 @@ async function runActions(state) {
     app.path() === '/destinations/lisbon',
     app.path(),
   );
-  r = await act('navigate', { action: 'probe', url: '/trips' });
+  r = await act('probe-route', { url: '/trips' });
   write(
-    'navigate',
+    'probe-route',
     'probe does not move the page',
     app.path() === '/destinations/lisbon',
     app.path(),
   );
   // signedInGuard is canActivate, which a probe does not run (it runs canMatch only).
   write(
-    'navigate',
+    'probe-route',
     'probe matches the trips route',
     /"matched":\s*true/.test(r.markdown) && /trips/.test(r.markdown),
     r.markdown.slice(0, 400),
   );
-  await act('navigate', { action: 'instrument', on: true });
+  await act('record-guards', { on: true });
+  // The old actions are gone: `probe` is not a `navigate` action any more.
+  await act('navigate', { action: 'probe', url: '/trips' }, 'refusal');
   const navs = await read('explain-navigation', { limit: 3 });
   const navId = Number(navs.match(/^- #(\d+)/m)?.[1] ?? 1);
   // Replaying the navigation to the current URL is skipped by the router: a no-op, so isError.
@@ -1493,13 +1495,13 @@ async function runActions(state) {
   const routesMd = await read('list-routes', {});
   const lazyId = routesMd.match(/`(r?\d+|[\w-]*examples[\w-]*)`[^\n]*(?:lazy|not loaded)/i)?.[1];
   r = await act(
-    'navigate',
-    { action: 'resolve-lazy', routeId: lazyId ?? 'examples' },
+    'list-routes',
+    { resolveLazy: lazyId ?? 'examples' },
     // A name that is not a route id is refused by the page.
     lazyId && /^r?\d+(\.\d+)*$/.test(lazyId) ? 'ok' : 'any',
   );
   state.resolveLazyRouteId = lazyId;
-  await act('navigate', { action: 'navigate', url: 'https://example.com/' }, 'refusal');
+  await act('navigate', { action: 'go', url: 'https://example.com/' }, 'refusal');
   write(
     'navigate',
     'an off-origin URL is refused',
@@ -1511,7 +1513,7 @@ async function runActions(state) {
   await app.go('/destinations');
   ctx.components = parseComponents(await read('list-components', {}));
   const card = ctx.component('DestinationCard', 2);
-  r = await act('highlight', { selector: card.id });
+  r = await act('highlight', { component: card.id });
   const tree = await state.client.readResource({
     uri: 'devframe://resource/pangular%3Acomponent-tree',
   });
@@ -1535,42 +1537,42 @@ async function runActions(state) {
   );
   write('highlight', 'an overlay element is drawn in the page', overlayShown);
 
-  // restore-ngrx-state: save Lisbon, then restore the entry before it.
-  ctx.seqs = parseSeqs(await read('signal-store-history', { page: ctx.pageId }));
+  // ngrx-restore: save Lisbon, then restore the entry before it.
+  ctx.seqs = parseSeqs(await read('ngrx-history', { page: ctx.pageId }));
   const beforeSave = ctx.seqs.filter((entry) => entry.method === 'toggleSaved').at(-1);
   await page.getByRole('button', { name: 'Save Lisbon' }).first().click({ timeout: 5000 });
   await sleep(800);
   const savedBefore = await page.getByRole('button', { name: 'Remove Lisbon' }).count();
-  write('restore-ngrx-state', 'precondition: Lisbon is saved through the UI', savedBefore > 0);
+  write('ngrx-restore', 'precondition: Lisbon is saved through the UI', savedBefore > 0);
   if (beforeSave) {
-    r = await act('restore-ngrx-state', { seq: beforeSave.seq, page: ctx.pageId });
+    r = await act('ngrx-restore', { seq: beforeSave.seq, page: ctx.pageId });
     await sleep(800);
     const lisbonSaved = await page.getByRole('button', { name: 'Remove Lisbon' }).count();
     write(
-      'restore-ngrx-state',
+      'ngrx-restore',
       `restoring #${beforeSave.seq} unsaves Lisbon in the DOM`,
       lisbonSaved === 0,
       r.markdown.slice(0, 300),
     );
-    const state1 = await read('inspect-signal-store', { storeId: ctx.storeId('TravelStore') });
+    const state1 = await read('ngrx-inspect-store', { store: ctx.storeId('TravelStore') });
     write(
-      'restore-ngrx-state',
-      'inspect-signal-store no longer lists lisbon in saved',
+      'ngrx-restore',
+      'ngrx-inspect-store no longer lists lisbon in saved',
       !/"saved":\s*\[[^\]]*lisbon/.test(state1.replace(/\s+/g, '')),
       state1.match(/saved[^\]]*\]/)?.[0],
     );
-    const history = await read('signal-store-history', { page: ctx.pageId });
+    const history = await read('ngrx-history', { page: ctx.pageId });
     write(
-      'restore-ngrx-state',
+      'ngrx-restore',
       'the log gets a Restore entry',
       /restore/i.test(history.split('\n').slice(-5).join('\n')),
     );
   } else {
-    write('restore-ngrx-state', 'found a toggleSaved entry to restore', false);
+    write('ngrx-restore', 'found a toggleSaved entry to restore', false);
   }
-  await act('restore-ngrx-state', { latest: true, page: ctx.pageId }, 'any');
-  await act('restore-ngrx-state', { seq: 999_999, page: ctx.pageId }, 'refusal');
-  await act('dispatch-ngrx-action', { type: '[E2E] Ping', payload: { id: 1 } }, 'refusal');
+  await act('ngrx-restore', { latest: true, page: ctx.pageId }, 'any');
+  await act('ngrx-restore', { seq: 999_999, page: ctx.pageId }, 'refusal');
+  await act('ngrx-dispatch', { type: '[E2E] Ping', payload: { id: 1 } }, 'refusal');
 
   // plugin action
   const savedCount = await page.getByRole('button', { name: /^Remove / }).count();
@@ -1612,7 +1614,7 @@ async function runActions(state) {
   );
 
   await app.go('/examples/signals');
-  r = await act('set-signal', { component: 'SignalsExample', signal: 'count', value: 42 });
+  r = await act('set-signal', { component: 'SignalsExample', property: 'count', value: 42 });
   await sleep(600);
   const count = await app.text('dl.readouts dd');
   const doubled = await app.text('dl.readouts dd:nth-of-type(2)');
@@ -1622,7 +1624,11 @@ async function runActions(state) {
     count === '42' && doubled === '84',
     `count ${count}, doubled ${doubled}`,
   );
-  await act('set-signal', { component: 'SignalsExample', signal: 'doubled', value: 1 }, 'refusal');
+  await act(
+    'set-signal',
+    { component: 'SignalsExample', property: 'doubled', value: 1 },
+    'refusal',
+  );
   const doubledAfter = await app.text('dl.readouts dd:nth-of-type(2)');
   write(
     'set-signal',
@@ -1632,14 +1638,14 @@ async function runActions(state) {
   );
 
   // watch-signal
-  const graph = jsonBlock(await read('inspect-signals', { selector: 'app-signals-example' }));
+  const graph = jsonBlock(await read('inspect-signals', { component: 'app-signals-example' }));
   const countNode = graph?.nodes?.find((node) => node.label === 'count');
   r = await act('watch-signal', { node: countNode?.id ?? 'count', stacks: true });
   await page.getByRole('button', { name: 'Add one' }).click();
   await sleep(800);
   const watched = jsonBlock(
     await read('inspect-signals', {
-      selector: 'app-signals-example',
+      component: 'app-signals-example',
       node: countNode?.id ?? 'count',
     }),
   );
@@ -1657,8 +1663,8 @@ async function runActions(state) {
   await act('watch-signal', { node: countNode?.id ?? 'count', watch: false, stacks: false });
   await act('watch-signal', {}, 'refusal');
 
-  // change-detection
-  r = await act('change-detection', { record: 'start' });
+  // record-change-detection, then change-detection reads
+  r = await act('record-change-detection', { record: 'start' });
   for (let i = 0; i < 3; i++) {
     await page.getByRole('button', { name: 'Add one' }).click();
     await sleep(200);
@@ -1680,12 +1686,12 @@ async function runActions(state) {
     r.markdown.slice(0, 200),
   );
   await act('change-detection', { export: 'trace' });
-  await act('change-detection', { record: 'start', export: 'json' }, 'refusal');
-  await act('change-detection', { flash: true, track: true });
-  await act('change-detection', { flash: false, track: false });
-  await act('change-detection', { angularProfiling: false }, 'refusal');
-  await act('change-detection', { record: 'stop' });
-  r = await act('change-detection', { record: 'clear' });
+  await act('record-change-detection', {}, 'refusal');
+  await act('record-change-detection', { flash: true, track: true });
+  await act('record-change-detection', { flash: false, track: false });
+  await act('record-change-detection', { angularProfiling: false }, 'refusal');
+  await act('record-change-detection', { record: 'stop' });
+  r = await act('record-change-detection', { record: 'clear' });
 
   // track-subscriptions and find-leaks
   r = await act('track-subscriptions', { action: 'start' });
@@ -1718,9 +1724,9 @@ async function runActions(state) {
   );
   await act('record-pipes', { action: 'stop' });
 
-  // hydration overlay
+  // hydration overlay, drawn by highlight
   await app.go('/examples/defer');
-  r = await act('hydration', { overlay: true });
+  r = await act('highlight', { hydration: true });
   await sleep(800);
   const treeAfter = JSON.parse(
     (await state.client.readResource({ uri: 'devframe://resource/pangular%3Acomponent-tree' }))
@@ -1728,12 +1734,12 @@ async function runActions(state) {
   );
   const overlayOn = JSON.stringify(treeAfter).match(/"overlay":(true|false)/)?.[1];
   write(
-    'hydration',
-    'overlay: true turns the hydration overlay on',
+    'highlight',
+    'hydration: true turns the hydration overlay on',
     overlayOn === 'true' || !/not rendered on the server/i.test(r.markdown) === false,
     `component-tree overlay=${overlayOn}; ${r.markdown.slice(0, 200)}`,
   );
-  await act('hydration', { overlay: false });
+  await act('highlight', { hydration: false });
 
   // audit with axe
   r = await act('audit', { axe: true, session: 'before' }, 'any');
@@ -1860,11 +1866,11 @@ async function runActions(state) {
   await act('clear-recordings', { target: 'all' }, 'any');
 
   // TanStack and Analog: not in this app, so a readable refusal.
-  await act('query-action', { action: 'invalidate', key: 'products' }, 'refusal');
-  await act('analog-call-api', { path: '/api/products' }, 'refusal');
-  await act('analog-call-api', { path: '/api/products', method: 'DELETE' }, 'refusal');
+  await act('tanstack-run-query', { action: 'invalidate', key: 'products' }, 'refusal');
+  await act('analog-run-api', { path: '/api/products' }, 'refusal');
+  await act('analog-run-api', { path: '/api/products', method: 'DELETE' }, 'refusal');
 
-  // Forms: fill-form and form-action on the booking form.
+  // Forms: fill-form and run-form-action on the booking form.
   await app.go('/destinations');
   await app.go('/book/lisbon');
   // The page reports a form that appears after a route change on its next
@@ -1880,7 +1886,7 @@ async function runActions(state) {
     return;
   }
   const marker = Number(
-    (await read('form-history', { form, limit: 1 })).match(/marker[^\d]*(\d+)/i)?.[1] ?? 0,
+    (await read('list-form-changes', { form, limit: 1 })).match(/marker[^\d]*(\d+)/i)?.[1] ?? 0,
   );
   r = await act('fill-form', { form, values: { travelers: 0, email: 'not-an-email', name: 'B' } });
   await sleep(500);
@@ -1890,10 +1896,10 @@ async function runActions(state) {
     (await app.value('#travelers')) === '0' && (await app.value('#email')) === 'not-an-email',
     `travelers ${await app.value('#travelers')}, email ${await app.value('#email')}`,
   );
-  const invalid = await read('explain-form-invalid', { form });
+  const invalid = await read('explain-invalid-forms', { form });
   write(
     'fill-form',
-    'explain-form-invalid names the invalid fields',
+    'explain-invalid-forms names the invalid fields',
     /travelers/.test(invalid) && /email/.test(invalid),
     invalid.slice(0, 400),
   );
@@ -1930,31 +1936,31 @@ async function runActions(state) {
       dom.terms === true,
     JSON.stringify(dom),
   );
-  const nowValid = await read('explain-form-invalid', { form });
+  const nowValid = await read('explain-invalid-forms', { form });
   write(
     'fill-form',
-    'explain-form-invalid finds nothing wrong',
+    'explain-invalid-forms finds nothing wrong',
     !/travelers|startDate|email/.test(nowValid) ||
       /valid/i.test(nowValid.split('\n').slice(0, 4).join(' ')),
     nowValid.slice(0, 300),
   );
-  const diff = await read('form-diff', { form, since: marker });
+  const diff = await read('explain-form-changes', { form, after: marker });
   write(
     'fill-form',
-    `form-diff since ${marker} lists the changed fields`,
+    `explain-form-changes after ${marker} lists the changed fields`,
     ['startDate', 'name', 'email', 'terms'].every((field) => diff.includes(field)),
     diff.slice(0, 500),
   );
   // MCP writes are tagged `devtools`; `agent` is a WebMCP tool call on the page.
-  const history = await read('form-history', { form, origin: 'devtools', limit: 50 });
+  const history = await read('list-form-changes', { form, origin: 'devtools', limit: 50 });
   write(
     'fill-form',
-    'form-history tags the writes with origin devtools',
+    'list-form-changes tags the writes with origin devtools',
     /email/.test(history),
     history.slice(0, 300),
   );
 
-  r = await act('form-action', {
+  r = await act('run-form-action', {
     action: 'set-value',
     form,
     path: 'requests',
@@ -1963,12 +1969,12 @@ async function runActions(state) {
   });
   await sleep(300);
   write(
-    'form-action',
+    'run-form-action',
     'set-value (user) reaches the textarea',
     (await app.value('#requests')) === 'Aisle seat',
     await app.value('#requests'),
   );
-  r = await act('form-action', {
+  r = await act('run-form-action', {
     action: 'set-value',
     form,
     path: 'travelers',
@@ -1977,31 +1983,31 @@ async function runActions(state) {
   });
   await sleep(300);
   write(
-    'form-action',
+    'run-form-action',
     'set-value (code) reaches the input',
     (await app.value('#travelers')) === '3',
     await app.value('#travelers'),
   );
-  r = await act('form-action', { action: 'focus', form, path: 'email' });
+  r = await act('run-form-action', { action: 'focus', form, path: 'email' });
   await sleep(300);
   write(
-    'form-action',
+    'run-form-action',
     'focus moves focus to the field',
     (await page.evaluate(() => document.activeElement?.id)) === 'email',
     await page.evaluate(() => document.activeElement?.id),
   );
-  r = await act('form-action', { action: 'mark-touched', form, path: 'name' });
-  r = await act('form-action', { action: 'touch-all', form });
-  r = await act('form-action', { action: 'revalidate', form });
-  r = await act('form-action', { action: 'snapshot', form });
+  r = await act('run-form-action', { action: 'mark-touched', form, path: 'name' });
+  r = await act('run-form-action', { action: 'touch-all', form });
+  r = await act('run-form-action', { action: 'revalidate', form });
+  r = await act('run-form-action', { action: 'snapshot', form });
   const snapshotId = r.markdown.match(/`([\w:-]+)`/)?.[1];
-  r = await act('form-action', { action: 'store-as-global', form });
+  r = await act('run-form-action', { action: 'store-as-global', form });
   const globalSet = await page.evaluate(() => typeof window.$form !== 'undefined');
-  write('form-action', 'store-as-global sets $form in the page', globalSet);
-  r = await act('form-action', { action: 'submit', form }, 'refusal');
+  write('run-form-action', 'store-as-global sets $form in the page', globalSet);
+  r = await act('run-form-action', { action: 'submit', form }, 'refusal');
   await sleep(300);
   write(
-    'form-action',
+    'run-form-action',
     'submit without confirm does not submit',
     !(await page.getByText("You're going to").count()),
   );
@@ -2012,34 +2018,34 @@ async function runActions(state) {
     (await app.value('#name')) === valid.name,
     await app.value('#name'),
   );
-  r = await act('form-action', { action: 'submit', form, confirm: true });
+  r = await act('run-form-action', { action: 'submit', form, confirm: true });
   const booked = await waitUntil(
     async () => (await page.getByText("You're going to").count()) > 0,
     5000,
   );
   write(
-    'form-action',
+    'run-form-action',
     'submit with confirm books the trip (confirmation shown)',
     booked,
     r.markdown.slice(0, 300),
   );
-  const stores = await read('inspect-signal-store', { storeId: ctx.storeId('TravelStore') });
+  const stores = await read('ngrx-inspect-store', { store: ctx.storeId('TravelStore') });
   write(
-    'form-action',
+    'run-form-action',
     'TravelStore holds the booking',
     /Ada Lovelace|BK-?\d+|booking[^\n]*\(1\)/i.test(stores),
     stores.slice(0, 300),
   );
-  const submitHistory = await read('form-history', { form, type: 'submit' });
+  const submitHistory = await read('list-form-changes', { form, type: 'submit' });
   write(
-    'form-action',
-    'form-history records the submit as ran',
+    'run-form-action',
+    'list-form-changes records the submit as ran',
     /ran/.test(submitHistory),
     submitHistory.slice(0, 300),
   );
-  await act('form-action', { action: 'restore', form, snapshot: snapshotId ?? 'none' }, 'any');
+  await act('run-form-action', { action: 'restore', form, snapshot: snapshotId ?? 'none' }, 'any');
   await act(
-    'form-action',
+    'run-form-action',
     { action: 'set-value', form: 'NoSuch.form@zz', path: 'x', value: 1 },
     'refusal',
   );
@@ -2116,17 +2122,20 @@ function validFor(name, state) {
 }
 
 const ACTION_VALID = {
-  navigate: () => ({ action: 'probe', url: '/about' }),
+  navigate: () => ({ action: 'abort' }),
+  'probe-route': () => ({ url: '/about' }),
+  'record-guards': () => ({ on: false }),
+  'record-change-detection': () => ({ record: 'stop' }),
   'track-subscriptions': () => ({ action: 'stop' }),
   'record-pipes': () => ({ action: 'stop' }),
   'clear-recordings': () => ({ target: 'router' }),
   'set-component-property': () => ({ component: 'NoSuch', property: 'x', value: 1 }),
-  'set-signal': () => ({ component: 'NoSuch', signal: 'x', value: 1 }),
+  'set-signal': () => ({ component: 'NoSuch', property: 'x', value: 1 }),
   'watch-signal': () => ({ stacks: false }),
-  'restore-ngrx-state': () => ({ seq: 999_999 }),
-  'dispatch-ngrx-action': () => ({ type: '[E2E] Ping' }),
-  'query-action': () => ({ action: 'refetch', key: 'nothing' }),
-  'form-action': (ctx) => ({ action: 'revalidate', form: ctx.formIds?.[0] ?? 'x' }),
+  'ngrx-restore': () => ({ seq: 999_999 }),
+  'ngrx-dispatch': () => ({ type: '[E2E] Ping' }),
+  'tanstack-run-query': () => ({ action: 'refetch', key: 'nothing' }),
+  'run-form-action': (ctx) => ({ action: 'revalidate', form: ctx.formIds?.[0] ?? 'x' }),
   'fill-form': (ctx) => ({ form: ctx.formIds?.[0] ?? 'x', values: {} }),
   'set-http-rule': () => ({ pattern: '/never-matches-e2e', delayMs: 1, enabled: false }),
   'remove-http-rule': () => ({ id: 'no-such-rule' }),
@@ -2136,7 +2145,7 @@ const ACTION_VALID = {
     enabled: false,
   }),
   'remove-ssr-override': () => ({ id: 'no-such-override' }),
-  'analog-call-api': () => ({ path: '/api/none' }),
+  'analog-run-api': () => ({ path: '/api/none' }),
   'plugin_travel_clear-saved': () => ({}),
   'change-detection': () => ({}),
   hydration: () => ({}),
@@ -2179,12 +2188,7 @@ async function runNegative(client, transport, tools, state) {
       checkAnswer(record, tool, 'error');
       if (!record.protocolError && !record.isError)
         recordWarning(record, `wrong-typed ${key} was accepted without isError`);
-      if (
-        (key === 'page' || key === 'pageId') &&
-        transport === 'http' &&
-        !record.isError &&
-        !record.protocolError
-      ) {
+      if (key === 'page' && transport === 'http' && !record.isError && !record.protocolError) {
         const fellBack =
           (state.pageId && record.markdown.includes(state.pageId)) ||
           /every page|on \d+ page\(s\)|^Cleared/m.test(record.markdown);
@@ -2221,7 +2225,7 @@ async function runNegative(client, transport, tools, state) {
       checkAnswer(record, tool, 'any');
     }
 
-    const pageKey = 'page' in properties ? 'page' : 'pageId' in properties ? 'pageId' : undefined;
+    const pageKey = 'page' in properties ? 'page' : undefined;
     if (pageKey && transport === 'http') {
       const record = await callTool(
         client,
@@ -2265,7 +2269,76 @@ async function runNegative(client, transport, tools, state) {
   } else {
     checkAnswer(record, undefined, 'error');
   }
+
+  // 1.0 is a clean break: the names before it are gone, not aliased.
+  const listed = new Set(tools.map((tool) => short(tool.name)));
+  for (const old of RETIRED_TOOLS) {
+    if (listed.has(old)) failure(`${transport} tools/list`, `retired tool ${old} is still listed`);
+  }
+  const retired = await callTool(client, transport, 'pangular_get-routes', {}, 'unknown-tool');
+  if (!retired.protocolError && !retired.isError)
+    recordFailure(retired, 'the retired tool get-routes still answers');
+  if (transport === 'http' && listed.has('inspect-providers')) {
+    const oldArg = await callTool(
+      client,
+      transport,
+      'pangular_inspect-providers',
+      { pageId: state.pageId ?? 'p1' },
+      'retired-argument',
+    );
+    if (
+      !oldArg.protocolError &&
+      !/There is no `pageId` argument; pass `page`/.test(oldArg.markdown)
+    )
+      recordFailure(oldArg, 'the retired argument pageId is not refused with its new name');
+  }
 }
+
+/** Tool names 1.0 retired (see apps/docs/src/content/agents/tools.md, Names before 1.0). */
+const RETIRED_TOOLS = [
+  'get-routes',
+  'get-components',
+  'get-pipes',
+  'get-signals',
+  'get-providers',
+  'get-ngrx-store',
+  'lint-templates',
+  'lint-pipes',
+  'explain-render-mode',
+  'build-meta',
+  'inspect-signal-store',
+  'signal-store-history',
+  'dispatch-ngrx-action',
+  'restore-ngrx-state',
+  'inspect-ngrx-entry',
+  'export-ngrx-session',
+  'import-ngrx-session',
+  'generate-ngrx-test',
+  'inspect-redux-stores',
+  'list-queries',
+  'inspect-query',
+  'query-action',
+  'list-capacitor-calls',
+  'list-capacitor-plugins',
+  'analog-routes',
+  'analog-explain-url',
+  'analog-server-functions',
+  'analog-api-routes',
+  'analog-prerender-plan',
+  'analog-content',
+  'analog-current-page',
+  'analog-server-calls',
+  'analog-call-api',
+  'analog-render-modes',
+  'form-payload',
+  'form-history',
+  'form-diff',
+  'form-action',
+  'wait-for-form',
+  'explain-form-invalid',
+  'export-navigation',
+  'http-waterfall',
+];
 
 // ---------------------------------------------------------------------------
 // stdio
@@ -2299,7 +2372,7 @@ async function runStdio(sdk, state, config) {
       delete args.page;
       const record = await callTool(client, 'stdio', tool.name, args, 'valid');
       // No page reaches stdio, so reading a live NgRx entry reads nothing: a refusal.
-      checkAnswer(record, tool, name === 'inspect-ngrx-entry' ? 'error' : 'ok');
+      checkAnswer(record, tool, name === 'ngrx-inspect-entry' ? 'error' : 'ok');
     }
     await runNegative(client, 'stdio', tools, state);
     const resources = await listAll(client, 'listResources', 'resources').catch((error) => {
@@ -2340,13 +2413,13 @@ async function runStdio(sdk, state, config) {
       '--config pipes off, ngrx agent tools off',
       ['--config', configFile],
       [
-        'get-pipes',
-        'lint-pipes',
+        'scan-pipes',
+        'scan-pipe-usage',
         'explain-pipe',
-        'get-ngrx-store',
-        'inspect-ngrx-entry',
-        'import-ngrx-session',
-        'generate-ngrx-test',
+        'ngrx-scan',
+        'ngrx-inspect-entry',
+        'ngrx-import-session',
+        'ngrx-generate-test',
       ],
     ],
   ]) {
@@ -2483,16 +2556,19 @@ async function runVariants(opts, sdk, browser, config, state) {
           scope,
           `change-detection keeps acting arguments: ${props('change-detection')}`,
         );
-        check(!props('hydration').includes('overlay'), scope, 'hydration keeps overlay');
+        check(!props('hydration').includes('overlay'), scope, 'hydration has an overlay argument');
         check(!props('audit').includes('axe'), scope, 'audit keeps axe');
         for (const name of [
-          'form-action',
+          'run-form-action',
           'fill-form',
           'navigate',
+          'probe-route',
+          'record-guards',
+          'record-change-detection',
           'set-signal',
           'set-component-property',
-          'restore-ngrx-state',
-          'dispatch-ngrx-action',
+          'ngrx-restore',
+          'ngrx-dispatch',
           'set-http-rule',
           'remove-http-rule',
           'set-ssr-override',
@@ -2501,8 +2577,8 @@ async function runVariants(opts, sdk, browser, config, state) {
           'record-pipes',
           'track-subscriptions',
           'clear-recordings',
-          'query-action',
-          'analog-call-api',
+          'tanstack-run-query',
+          'analog-run-api',
           'plugin_travel_clear-saved',
         ]) {
           check(!names.has(name), scope, `${name} is still listed`);
@@ -2535,16 +2611,9 @@ async function runVariants(opts, sdk, browser, config, state) {
         if (auditAfter !== auditBefore && /axe/i.test(auditAfter))
           recordFailure(axeRecord, 'axe ran under agent.readOnly');
         else if (!/read-only|readOnly/i.test(axeRecord.markdown))
-          recordWarning(
-            axeRecord,
-            '`axe: true` is ignored silently under agent.readOnly (change-detection and hydration refuse with a note)',
-          );
+          recordWarning(axeRecord, '`axe: true` is ignored silently under agent.readOnly');
         // The arguments that act are refused even when sent anyway.
-        for (const [name, args] of [
-          ['change-detection', { record: 'start' }],
-          ['hydration', { overlay: true }],
-          ['audit', { session: 'clear' }],
-        ]) {
+        for (const [name, args] of [['audit', { session: 'clear' }]]) {
           const record = await callTool(
             client,
             `variant:${variant.label}`,
@@ -2568,7 +2637,7 @@ async function runVariants(opts, sdk, browser, config, state) {
         const record = await callTool(
           client,
           `variant:${variant.label}`,
-          'pangular_form-action',
+          'pangular_run-form-action',
           { action: 'submit', form: 'x', confirm: true },
           'hidden-tool',
         );
@@ -2619,7 +2688,7 @@ async function runVariants(opts, sdk, browser, config, state) {
           const perPage = await readResource(
             client,
             `variant:${variant.label}`,
-            `pangular://page/${pageId}/${name}`,
+            `pangular://pages/${pageId}/${name}`,
             'expect-missing',
           );
           if (perPage.ok && perPage.json) result.leaks.push(`page resource ${name}`);
@@ -2701,41 +2770,43 @@ async function runVariants(opts, sdk, browser, config, state) {
         }
       }
       if (variant.config.actions?.router === false) {
-        check(names.has('navigate'), scope, 'navigate should stay for instrument and resolve-lazy');
+        check(!names.has('navigate'), scope, 'navigate is still listed with actions.router off');
+        check(
+          !names.has('probe-route'),
+          scope,
+          'probe-route is still listed with actions.router off',
+        );
+        check(
+          names.has('record-guards'),
+          scope,
+          'record-guards should stay with actions.router off',
+        );
         const before = new URL(page.url()).pathname;
         const record = await callTool(
           client,
           `variant:${variant.label}`,
           'pangular_navigate',
-          { action: 'navigate', url: '/about' },
-          'blocked-action',
+          { action: 'go', url: '/about' },
+          'hidden-tool',
         );
-        checkAnswer(
-          record,
-          tools.find((tool) => short(tool.name) === 'navigate'),
-          'refusal',
-        );
+        if (!record.protocolError && !record.isError)
+          recordFailure(record, 'navigate ran with actions.router off');
         await sleep(800);
         check(
           new URL(page.url()).pathname === before,
           scope,
           `navigate moved the page to ${new URL(page.url()).pathname}`,
         );
-        check(
-          /actions\.router/.test(record.markdown),
-          scope,
-          'the refusal does not name actions.router',
-        );
         const instrument = await callTool(
           client,
           `variant:${variant.label}`,
-          'pangular_navigate',
-          { action: 'instrument', on: true },
-          'free-mode',
+          'pangular_record-guards',
+          { on: true },
+          'kept-tool',
         );
         checkAnswer(
           instrument,
-          tools.find((tool) => short(tool.name) === 'navigate'),
+          tools.find((tool) => short(tool.name) === 'record-guards'),
           'ok',
         );
       }
@@ -2758,7 +2829,10 @@ async function runVariants(opts, sdk, browser, config, state) {
 
 function runDocs(state) {
   const docsDir = join(ROOT, 'apps/docs/src/content');
-  const toolsMd = readFileSync(join(docsDir, 'agents/tools.md'), 'utf8');
+  // The table of names before 1.0 lists names that are gone on purpose.
+  const toolsMd = readFileSync(join(docsDir, 'agents/tools.md'), 'utf8').split(
+    /^## Names before 1\.0$/m,
+  )[0];
   const serverMd = readFileSync(join(docsDir, 'agents/mcp-server.md'), 'utf8');
   const configMd = readFileSync(join(docsDir, 'getting-started/configuration.md'), 'utf8');
   const live = [...state.tools.keys()].filter(
@@ -2793,6 +2867,14 @@ function runDocs(state) {
     'id',
     'condition',
     'selector',
+    'after',
+    'go',
+    'view',
+    'waterfall',
+    'list',
+    'explain',
+    'repro',
+    'resolvelazy',
     'url',
     'code',
     'timeoutMs',
@@ -2801,7 +2883,6 @@ function runDocs(state) {
     'http-call',
     'error',
     'component-gone',
-    'pageId',
     'rule',
     'file',
     'severity',
@@ -2811,7 +2892,6 @@ function runDocs(state) {
     'click-without-key',
     'legacy-control-flow',
     'ngclass-ngstyle',
-    'overlay',
     'record',
     'export',
     'flash',
@@ -2841,7 +2921,6 @@ function runDocs(state) {
     'skipself',
     'host',
     'optional',
-    'storeid',
     'since',
     'seq',
     'session',
@@ -2858,9 +2937,6 @@ function runDocs(state) {
     'navigate',
     'abort',
     'replay',
-    'probe',
-    'instrument',
-    'resolve-lazy',
     'stable',
     'name',
     'kind',
@@ -2898,7 +2974,6 @@ function runDocs(state) {
     'headers',
     'preview',
     'perf',
-    'routeid',
     'on',
     'waitfor',
     'params',
@@ -2926,7 +3001,7 @@ function runDocs(state) {
     );
     const notInSchema = docArgs.filter((arg) => !(arg in schema) && !enumValues.has(arg));
     const missingInDocs = Object.keys(schema).filter(
-      (arg) => !docArgs.includes(arg) && arg !== 'page' && arg !== 'pageId',
+      (arg) => !docArgs.includes(arg) && arg !== 'page',
     );
     if (notInSchema.length || missingInDocs.length)
       argDrift.push({ tool: name, where, missingInDocs, notInSchema });
@@ -3005,9 +3080,7 @@ function runDocs(state) {
   docs.configReadOnlyList = readOnlyListed;
   docs.configReadOnlyListMissing = actionLive.filter(
     (name) =>
-      !['change-detection', 'hydration', 'audit'].includes(name) &&
-      !name.startsWith('plugin_') &&
-      !readOnlyListed.includes(name),
+      !['audit'].includes(name) && !name.startsWith('plugin_') && !readOnlyListed.includes(name),
   );
   docs.builtInsCountedAs = builtIns;
   for (const name of docs.undocumentedTools)

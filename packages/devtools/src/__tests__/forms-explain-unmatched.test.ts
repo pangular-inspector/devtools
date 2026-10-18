@@ -25,12 +25,12 @@ const events: FormEvent[] = [
   { formId: 'a@p1', path: 'x', type: 'value', detail: '"1"', prev: '""', timestamp: 1, seq: 1 },
 ];
 
-describe('form-diff and form-history with a form that matches nothing', () => {
+describe('explain-form-changes and list-form-changes with a form that matches nothing', () => {
   const state = { forms: [form], events, reportedAt: 0 };
 
   it('says no form matches instead of reporting no change', () => {
     for (const text of [
-      formDiffText(state, { form: 'zzz', since: 0 }),
+      formDiffText(state, { form: 'zzz', after: 0 }),
       formHistoryText(state, { form: 'zzz' }),
     ]) {
       expect(text).toContain('No form matches `zzz`');
@@ -41,6 +41,6 @@ describe('form-diff and form-history with a form that matches nothing', () => {
   });
 
   it('still reports no change for a form that exists', () => {
-    expect(formDiffText(state, { form: 'a@p1', since: 1 })).toContain('Nothing changed');
+    expect(formDiffText(state, { form: 'a@p1', after: 1 })).toContain('Nothing changed');
   });
 });

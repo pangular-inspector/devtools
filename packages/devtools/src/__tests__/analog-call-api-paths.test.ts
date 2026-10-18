@@ -70,7 +70,7 @@ describe('apiPathRefusal', () => {
   });
 });
 
-describe('analog-call-api paths', () => {
+describe('analog-run-api paths', () => {
   let server: Server;
   const received: string[] = [];
 
@@ -107,7 +107,7 @@ describe('analog-call-api paths', () => {
   it('never sends a Vite file request from the agent tool or the panel RPC', async () => {
     const ctx = await boot();
     const tool = await toolAnswer(
-      ctx.agent.invoke('pangular:analog-call-api', { path: '/@fs/etc/passwd' }),
+      ctx.agent.invoke('pangular:analog-run-api', { path: '/@fs/etc/passwd' }),
     );
     expect(tool.isError).toBe(true);
     const rpc = (await ctx.rpc.invokeLocal(
@@ -118,10 +118,10 @@ describe('analog-call-api paths', () => {
     expect(rpc.error).toContain('?raw');
     expect(received).toEqual([]);
 
-    const ok = (await ctx.agent.invoke('pangular:analog-call-api', {
+    const ok = (await ctx.agent.invoke('pangular:analog-run-api', {
       path: '/api/v1/hello',
-    })) as { markdown: string };
-    expect(ok.markdown).toContain('GET /api/v1/hello: 200');
+    })) as string;
+    expect(ok).toContain('GET /api/v1/hello: 200');
     expect(received).toEqual(['/api/v1/hello']);
   });
 });

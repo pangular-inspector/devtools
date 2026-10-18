@@ -578,7 +578,7 @@ function findOutlet(outlets: OutletInfo[] | undefined, needle: string): OutletIn
 
 export function inspectRouteText(
   state: RouterState,
-  args: { page?: string; selector?: string },
+  args: { page?: string; component?: string },
   now = Date.now(),
 ): string {
   const page = pickPage(state, args.page);
@@ -587,16 +587,16 @@ export function inspectRouteText(
     return `${UNTRUSTED}\n\nPage ${code(page.pageId)} reports no Router. The app may not use the Angular router, or it is not a development build.${otherPages(state, page)}${freshness(page, now)}`;
   }
   const { snapshot } = page;
-  if (args.selector) {
-    const outlet = findOutlet(page.outlets, args.selector);
+  if (args.component) {
+    const outlet = findOutlet(page.outlets, args.component);
     const links = (page.links ?? []).filter(
       (link) =>
-        link.text.toLowerCase().includes(args.selector!.toLowerCase()) ||
-        link.href === args.selector,
+        link.text.toLowerCase().includes(args.component!.toLowerCase()) ||
+        link.href === args.component,
     );
     const lines: string[] = [];
     if (outlet) {
-      lines.push(`${code(args.selector)} is routed:`);
+      lines.push(`${code(args.component)} is routed:`);
       outletLines([outlet], 0, lines);
     }
     for (const link of links.slice(0, 5)) {
@@ -607,7 +607,7 @@ export function inspectRouteText(
     const skipped = skippedLinksNote(page, 'searched');
     const unsearched = skipped ? `\n\n_${skipped}_` : '';
     return capped(
-      `${UNTRUSTED}\n\n${lines.length ? lines.join('\n') : `No routed component or link matches ${code(args.selector)}.`}${unsearched}${freshness(page, now)}`,
+      `${UNTRUSTED}\n\n${lines.length ? lines.join('\n') : `No routed component or link matches ${code(args.component)}.`}${unsearched}${freshness(page, now)}`,
     );
   }
   const lines = [`**URL** ${code(snapshot.url)}`];

@@ -94,7 +94,7 @@ The Forms and SSR & HTTP cards read the live page only, and update while it runs
 
 | Tool                  | What it returns                                                                                        |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
-| `pangular:build-meta` | Angular and TypeScript versions, the project name, SSR status and, in Analog apps, the Analog version. |
+| `pangular:scan-build` | Angular and TypeScript versions, the project name, SSR status and, in Analog apps, the Analog version. |
 
 [Static reports](../getting-started/cli.md) include the same data. See [Tools](../agents/tools.md) for every tool.
 

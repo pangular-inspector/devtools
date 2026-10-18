@@ -119,7 +119,22 @@ function storeDetail(page: NgrxPageRecord, store: NgrxSignalStoreInfo): string {
 }
 
 /**
- * Live @ngrx/signals state for a connected page, as markdown. With `storeId`, the full
+ * The store id a `store` argument names on the matching page(s): an id as
+ * it is, else the id of the first store whose name or class name it is.
+ */
+export function storeIdNamed(
+  pages: NgrxPages,
+  pageId: string | undefined,
+  store: string | undefined,
+): string | undefined {
+  if (!store) return undefined;
+  const stores = pagesOf(pages, pageId).flatMap((page) => page.stores);
+  if (stores.some((s) => s.id === store)) return store;
+  return stores.find((s) => s.name === store || s.className === store)?.id ?? store;
+}
+
+/**
+ * Live @ngrx/signals state for a connected page, as markdown. With a store id, the full
  * detail of one store (state, computed, `withEntities()` summary, methods, scope,
  * references); without it, every store discovered so far, across the matching page(s).
  * `pages` is the same `NgrxPages` map `devframe.ts` merges pushed reports into.
@@ -153,7 +168,7 @@ export function inspectSignalStoreText(
     }
   }
   if (!lines.length) return NO_DATA;
-  return `Stores reported by ${matching.length === 1 ? 'the page' : `${matching.length} pages`}:\n\n${lines.join('\n')}\n\nCall again with \`storeId\` for the full state of one.`;
+  return `Stores reported by ${matching.length === 1 ? 'the page' : `${matching.length} pages`}:\n\n${lines.join('\n')}\n\nCall again with \`store\` (an id or name) for the full state of one.`;
 }
 
 function entryLine(entry: NgrxLogEntry, showPage?: string): string {
@@ -179,9 +194,9 @@ function entryLine(entry: NgrxLogEntry, showPage?: string): string {
 
 /**
  * Change/action/event log entries for a page, oldest first (chronological, unlike the
- * panel which shows newest first), as markdown. With `storeId`, only that store's
+ * panel which shows newest first), as markdown. With a store id, only that store's
  * entries; a dispatched event with no store effect only shows up in the unfiltered log.
- * `since` (a `seq` from a previous call) returns only entries after it.
+ * `after` (a `seq` from a previous call) returns only entries after it.
  */
 export function signalStoreHistoryText(
   pages: NgrxPages,
@@ -192,7 +207,7 @@ export function signalStoreHistoryText(
   const matching = pagesOf(pages, pageId);
   if (!matching.length) return noMatchText(pages, pageId);
   if (typeof since === 'number' && matching.length > 1) {
-    return `Pass \`page\` to identify a single page when using \`since\`; sequence numbers are per-page and cannot be compared across pages.`;
+    return `Pass \`page\` to identify a single page when using \`after\`; sequence numbers are per-page and cannot be compared across pages.`;
   }
   const multiplePages = matching.length > 1;
   type Row = { page: NgrxPageRecord; entry: NgrxLogEntry };
@@ -235,16 +250,16 @@ export function signalStoreHistoryText(
   }
   const droppedNote =
     dropped > 0
-      ? `\n\n(${dropped} older ${dropped === 1 ? 'entry was' : 'entries were'} omitted; pass \`storeId\` or \`since\` to narrow the results)`
+      ? `\n\n(${dropped} older ${dropped === 1 ? 'entry was' : 'entries were'} omitted; pass \`store\` or \`after\` to narrow the results)`
       : '';
   return `${header}\n\n${keptLines.join('\n')}${droppedNote}`;
 }
 
 export const INSPECT_SIGNAL_STORE_DESCRIPTION =
-  'Live NgRx state: @ngrx/signals stores (state, computed, entities, methods with call counts) and classic @ngrx/store state. `storeId` picks one store.';
+  'Live NgRx state: @ngrx/signals stores (state, computed, entities, methods with call counts) and classic @ngrx/store state. `store` (an id or name) picks one store.';
 
 export const SIGNAL_STORE_HISTORY_DESCRIPTION =
-  'NgRx change log, oldest first: signal store state diffs, classic actions and events, with timing and causing event. Filter by `storeId`; poll with `since` (a `seq`).';
+  'NgRx change log, oldest first: signal store state diffs, classic actions and events, with timing and causing event. Filter by `store` (an id or name); poll with `after` (a `seq`).';
 
 /**
  * Prefixes an untrusted-data preamble to the live-tool text and caps the body

@@ -340,11 +340,11 @@ describe('templateLintText', () => {
   });
 });
 
-describe('lint-templates tool', () => {
+describe('scan-templates tool', () => {
   it('answers markdown for the arguments it gets', async () => {
     const dir = project({ 'src/view.ts': component('<img src="a.png">') });
     const tool = templateLintTool(dir, { compiler });
-    expect(tool.id).toBe('pangular:lint-templates');
+    expect(tool.id).toBe('pangular:scan-templates');
     expect(tool.description.length).toBeLessThanOrEqual(600);
     const answer = await tool.handler({ rule: 'img-missing-alt' });
     expect(answer.markdown).toContain('img-missing-alt at `src');

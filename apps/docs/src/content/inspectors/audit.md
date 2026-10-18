@@ -47,7 +47,7 @@ The audit runs no check of its own. It reads what each inspector already collect
 | Router           | The findings of [Router Lint](./router.md), redirect loops included.                                                                                                                                                    | `lint-routes`               |
 | Forms            | The findings of Forms Lint, and NG01xxx setup errors.                                                                                                                                                                   | `lint-forms`                |
 | HTTP             | Failed `HttpClient` calls by endpoint, calls a fault rule failed, and calls the browser fetched again because the transfer cache did not keep them.                                                                     | `list-http-calls`           |
-| Pipes            | The findings of the pipe lint, from the source scan.                                                                                                                                                                    | `lint-pipes`                |
+| Pipes            | The findings of the pipe lint, from the source scan.                                                                                                                                                                    | `scan-pipe-usage`           |
 
 ### Key numbers
 

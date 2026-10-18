@@ -332,7 +332,7 @@ describe('router tool text', () => {
       '  - outlet `side`: `Filters` for `/side`\n    - routerOutletData (ROUTER_OUTLET_DATA): `"x"`',
     );
     expect(text.match(/routerOutletData/g)).toHaveLength(2);
-    expect(inspectRouteText(state({ outlets }), { selector: 'Filters' }, 1_000)).toContain(
+    expect(inspectRouteText(state({ outlets }), { component: 'Filters' }, 1_000)).toContain(
       'routerOutletData (ROUTER_OUTLET_DATA): `"x"`',
     );
     expect(isRouterReport({ pageId: 'a', snapshot: null, navigations: [], outlets })).toBe(true);

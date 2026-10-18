@@ -17,7 +17,7 @@ import { clip } from './text.ts';
 import type { HydrationStats } from './types.ts';
 
 /** The kinds of item the feed posts, as the message `category`. */
-/** Whether a `change-detection` call changes the page rather than only reading it. */
+/** Whether a `record-change-detection` call changes the page rather than only refusing. */
 function cdWrites(args: unknown): boolean {
   const call = (args ?? {}) as Record<string, unknown>;
   return (
@@ -293,16 +293,9 @@ export function createHubFeed(
   const agentWrite = (id: string, safety: AgentSafety, args: unknown, result: unknown) => {
     const name = id.replace(/^pangular:/, '');
     if (safety === 'read' || !agentAllowed({ id }, config)) return;
-    // change-detection only writes when it starts, stops or clears a recording,
-    // or turns a live view on or off.
-    if (name === 'change-detection' && !cdWrites(args)) return;
-    // hydration only acts when it turns the overlay on or off.
-    if (
-      name === 'hydration' &&
-      typeof (args as { overlay?: unknown } | null)?.overlay !== 'boolean'
-    ) {
-      return;
-    }
+    // record-change-detection writes only when it starts, stops or clears a
+    // recording, or turns a live view on or off.
+    if (name === 'record-change-detection' && !cdWrites(args)) return;
     // audit only runs something in the page when it runs axe.
     if (name === 'audit' && (args as { axe?: unknown } | null)?.axe !== true) return;
     if (changedNothing(result)) return;

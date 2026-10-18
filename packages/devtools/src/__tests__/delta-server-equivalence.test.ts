@@ -148,8 +148,8 @@ describe('delta pushes on the server', () => {
     ]) {
       await injectors(full, delta, { pageId: 'p1', roots, environment: [], zone: 'zoneless' });
       expect(await delta.state('injector-tree')).toEqual(await full.state('injector-tree'));
-      expect(await delta.call('inspect-providers', { selector: 'app-root' })).toBe(
-        await full.call('inspect-providers', { selector: 'app-root' }),
+      expect(await delta.call('inspect-providers', { injector: 'app-root' })).toBe(
+        await full.call('inspect-providers', { injector: 'app-root' }),
       );
     }
 
@@ -195,7 +195,7 @@ describe('delta pushes on the server', () => {
         instrumented: false,
       });
       expect(await delta.state('forms')).toEqual(await full.state('forms'));
-      for (const tool of ['inspect-forms', 'form-history']) {
+      for (const tool of ['inspect-forms', 'list-form-changes']) {
         expect(await delta.call(tool, { form: 'form-1@p1' })).toBe(
           await full.call(tool, { form: 'form-1@p1' }),
         );

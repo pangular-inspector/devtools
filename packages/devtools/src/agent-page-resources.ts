@@ -74,7 +74,7 @@ const INFO: Record<PageResourceName, PageResourceInfo> = {
 
 /** The URI of `name` for one page. */
 export function pageResourceUri(name: PageResourceName, pageId: string): string {
-  return `pangular://page/${encodeURIComponent(pageId)}/${name}`;
+  return `pangular://pages/${encodeURIComponent(pageId)}/${name}`;
 }
 
 /** A shared state the source reads and watches; `value()` is the live state. */
@@ -173,7 +173,7 @@ export function pageResourceText(name: PageResourceName, state: unknown, pageId:
     case 'ngrx-store':
       return liveResourceText(
         { pages: (value as unknown as NgrxState).pages.filter((page) => page.pageId === pageId) },
-        'pangular:inspect-signal-store and pangular:signal-store-history',
+        'pangular:ngrx-inspect-store and pangular:ngrx-history',
       );
     case 'forms':
       return formsResourceText(formsOf(state as FormsState, pageId));
@@ -262,7 +262,7 @@ export function offeredPageResources(config: ResolvedPangularConfig): PageResour
 
 /**
  * The per-page resource templates the MCP server offers under `config`:
- * `pangular://page/{pageId}/<name>` for each page-scoped resource that is on
+ * `pangular://pages/{pageId}/<name>` for each page-scoped resource that is on
  * for agents (`inspectors`, `agent.tools`). `resources/list` also names one
  * concrete resource per reporting page, for clients without template support.
  */
@@ -270,15 +270,15 @@ export function pangularMcpResourceTemplates(
   config: ResolvedPangularConfig,
 ): PangularMcpResourceTemplate[] {
   return offeredPageResources(config).map((name) => ({
-    uriTemplate: `pangular://page/{pageId}/${name}`,
-    name: `pangular:page:${name}`,
+    uriTemplate: `pangular://pages/{pageId}/${name}`,
+    name: `pangular:${name}-of-page`,
     title: INFO[name].title,
     description: INFO[name].description,
     mimeType: 'application/json',
     list: (ctx) =>
       (sourceOf(ctx)?.pageIds(name) ?? []).map((pageId) => ({
         uri: pageResourceUri(name, pageId),
-        name: `pangular:page:${name}:${pageId}`,
+        name: `pangular:${name}-of-page:${pageId}`,
         title: `${INFO[name].title} (${pageId})`,
         description: `${INFO[name].title}, for page ${pageId}.`,
         mimeType: 'application/json',

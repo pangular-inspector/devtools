@@ -266,7 +266,7 @@ export function inspectFormsText(
       const errors = countNodes(f.root, (n) => n.errors.length);
       return `- ${f.id} ${code(f.label)} (${f.kind}): ${f.root.status}, ${fields} fields, ${errors} errors${webMcpLine(f)}`;
     });
-    return `${UNTRUSTED}\n\n${forms.length} form(s) on the page. Pass \`form\` for a field tree, or use explain-form-invalid for validation problems.\n\n${lines.join('\n')}${webMcpNotes(state, args.page)}${stale}`;
+    return `${UNTRUSTED}\n\n${forms.length} form(s) on the page. Pass \`form\` for a field tree, or use explain-invalid-forms for validation problems.\n\n${lines.join('\n')}${webMcpNotes(state, args.page)}${stale}`;
   }
   const missing: string[] = [];
   const pruned = forms.map((f) => {
@@ -357,7 +357,7 @@ function renderTrees(
   });
   if (clipped) {
     notes.push(
-      `_${clipped} value(s) longer than ${MAX_FIELD_VALUE_CHARS} characters are cut and end in …. A group's value is also split across its fields; use form-payload with \`path\` to read a longer value._`,
+      `_${clipped} value(s) longer than ${MAX_FIELD_VALUE_CHARS} characters are cut and end in …. A group's value is also split across its fields; use inspect-form-payload with \`path\` to read a longer value._`,
     );
   }
   if (trimmed) {

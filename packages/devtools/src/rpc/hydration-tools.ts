@@ -9,8 +9,6 @@ export const HYDRATION_ROWS = 30;
 export const HYDRATION_DESCRIPTION =
   'Live SSR hydration per page: hydrated, skipped, mismatched (with a diff of expected server HTML and client DOM) and client-created hosts, plus dehydrated @defer blocks (up to 30 each). Cut at 20,000 characters.';
 
-export const HYDRATION_OVERLAY_DESCRIPTION = ' `overlay: true|false` toggles outlines on the page.';
-
 const NO_TREE =
   'No component tree has been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio MCP server has no page, so there it always answers this.';
 

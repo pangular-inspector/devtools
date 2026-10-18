@@ -53,7 +53,7 @@ function pagesWith(stores: NgrxSignalStoreInfo[], log: NgrxLogEntry[] = []): Ngr
   return pages;
 }
 
-describe('inspect-signal-store', () => {
+describe('ngrx-inspect-store', () => {
   it('says live data needs a connected page when nothing has been reported', () => {
     expect(inspectSignalStoreText(new Map())).toMatch(/no ngrx state has been reported/i);
   });
@@ -134,7 +134,7 @@ describe('inspect-signal-store', () => {
   });
 });
 
-describe('signal-store-history', () => {
+describe('ngrx-history', () => {
   it('says nothing has changed yet when the page has no log', () => {
     const pages = pagesWith([store()]);
     expect(signalStoreHistoryText(pages)).toMatch(/no ngrx changes/i);
@@ -358,8 +358,8 @@ describe('an unknown page', () => {
   }
 
   const tools = [
-    ['inspect-signal-store', (pages: NgrxPages) => inspectSignalStoreText(pages, 'p3')],
-    ['signal-store-history', (pages: NgrxPages) => signalStoreHistoryText(pages, 'p3')],
+    ['ngrx-inspect-store', (pages: NgrxPages) => inspectSignalStoreText(pages, 'p3')],
+    ['ngrx-history', (pages: NgrxPages) => signalStoreHistoryText(pages, 'p3')],
   ] as const;
 
   for (const [name, answer] of tools) {

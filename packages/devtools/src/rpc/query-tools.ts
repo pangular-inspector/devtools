@@ -146,7 +146,7 @@ export interface ListQueriesArgs {
   limit?: unknown;
 }
 
-/** The `list-queries` answer: queries and mutations of one page, as tables. */
+/** The `tanstack-list-queries` answer: queries and mutations of one page, as tables. */
 export function listQueriesText(state: QueryState, args: ListQueriesArgs = {}): string {
   const page = queryPageOf(state, args.page);
   if (typeof page === 'string') return page;
@@ -200,7 +200,7 @@ export function listQueriesText(state: QueryState, args: ListQueriesArgs = {}): 
   } else {
     lines.push('', 'No mutation matches.');
   }
-  lines.push('', 'Pass an id to pangular:inspect-query for the data.');
+  lines.push('', 'Pass an id to pangular:tanstack-inspect-query for the data.');
   return untrusted(cap(lines.join('\n')));
 }
 
@@ -214,7 +214,7 @@ export function findQueryItem(
       page.queries.find((q) => q.id === args.id) ?? page.mutations.find((m) => m.id === args.id);
     return (
       found ??
-      `No query or mutation ${code(args.id)} on ${code(page.pageId)}. List them with pangular:list-queries.`
+      `No query or mutation ${code(args.id)} on ${code(page.pageId)}. List them with pangular:tanstack-list-queries.`
     );
   }
   if (typeof args.key === 'string' && args.key) {
@@ -229,14 +229,14 @@ export function findQueryItem(
         .join(', ')}. Pass one id as \`id\`.`,
     );
   }
-  return 'Pass `id` (from pangular:list-queries) or `key`.';
+  return 'Pass `id` (from pangular:tanstack-list-queries) or `key`.';
 }
 
 function json(value: unknown): string {
   return '```json\n' + JSON.stringify(value, null, 2) + '\n```';
 }
 
-/** The `inspect-query` answer: the summary the page pushed and the data it sent on request. */
+/** The `tanstack-inspect-query` answer: the summary the page pushed and the data it sent on request. */
 export function inspectQueryText(
   page: QueryPage,
   item: QueryInfo | MutationInfo,

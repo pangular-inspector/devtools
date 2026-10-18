@@ -238,8 +238,8 @@ describe('open-in-panel', () => {
     const answer = (await ctx.agent.invoke('pangular:open-in-panel', {
       tab: 'injectors',
       id: 'c4',
-    })) as { markdown: string };
-    expect(answer.markdown).toContain('`#tab=injectors&id=c4`');
+    })) as string;
+    expect(answer).toContain('`#tab=injectors&id=c4`');
     expect(broadcast).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'pangular:open-in-panel',

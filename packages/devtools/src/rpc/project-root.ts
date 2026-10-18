@@ -13,7 +13,7 @@ export function notAProjectText(root: string): string {
 }
 
 /** NgRx session tools read an imported session, not the source, so they keep working. */
-const SESSION_TOOLS = new Set(['inspect-ngrx-entry', 'import-ngrx-session', 'generate-ngrx-test']);
+const SESSION_TOOLS = new Set(['ngrx-inspect-entry', 'ngrx-import-session', 'ngrx-generate-test']);
 
 /** Whether an agent tool answers from the project's source (not from a page or a session). */
 export function readsSource(id: string): boolean {

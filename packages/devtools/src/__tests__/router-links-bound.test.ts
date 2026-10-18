@@ -157,7 +157,7 @@ describe('link truncation count', () => {
     const state = { pages: [page] } as never;
     expect(lintRoutesText(state, {})).toContain('At least 30 link(s) past the first 100');
     expect(lintRoutesText(state, {})).toContain('12 elements that could hold a link');
-    expect(inspectRouteText(state, { selector: 'Nope' })).toContain(
+    expect(inspectRouteText(state, { component: 'Nope' })).toContain(
       'At least 30 link(s) past the first 100 on the page were not searched',
     );
     const none = { pages: [{ ...page, linksTruncated: undefined }] } as never;
@@ -177,7 +177,7 @@ describe('link truncation count', () => {
     };
     const state = { pages: [page] } as never;
     expect(lintRoutesText(state, {})).toContain('30 link(s) past the first 100');
-    expect(inspectRouteText(state, { selector: 'Nope' })).toContain(
+    expect(inspectRouteText(state, { component: 'Nope' })).toContain(
       '30 link(s) past the first 100 on the page were not searched',
     );
   });

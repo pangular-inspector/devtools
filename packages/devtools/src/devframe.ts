@@ -2,9 +2,7 @@ import type { DevframeSetupInfo, RemoteAssets } from 'devframe';
 import { defineDevframe } from 'devframe';
 import { createSharedState } from 'devframe/utils/shared-state';
 import { PANGULAR_LOGO_DATA_URI } from './brand.ts';
-import { getRoutes } from './rpc/get-routes.ts';
-import { getComponents } from './rpc/get-components.ts';
-import { getPipes } from './rpc/get-pipes.ts';
+import { SCAN_RPC_DEFINITIONS, SCAN_TOOLS, scanTool } from './rpc/scan-tools.ts';
 import {
   capacitorCallsText,
   capacitorPluginsText,
@@ -19,7 +17,6 @@ import {
 import { forBlocksText } from './rpc/for-blocks-tools.ts';
 import {
   HYDRATION_DESCRIPTION,
-  HYDRATION_OVERLAY_DESCRIPTION,
   hydrationOverlayText,
   hydrationText,
 } from './rpc/hydration-tools.ts';
@@ -48,10 +45,8 @@ import {
 } from './rpc/pipes-agent.ts';
 import { createPageOwners, type OwnerBroadcast } from './rpc/page-owners.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
-import { getBuildMeta } from './rpc/build-meta.ts';
 import { createOpenInEditor, defaultLauncher } from './rpc/open-in-editor.ts';
 import { isAnalogProject, servedAnalogRoot } from './rpc/analog-scan.ts';
-import { getSignals } from './rpc/get-signals.ts';
 import {
   SIGNAL_TOOL_MAX,
   signalGraphText,
@@ -66,8 +61,7 @@ import {
   type WatchSignalArgs,
 } from './rpc/signal-watch-tools.ts';
 import { injectorMatches, isEnvironmentRequest, signalOwner } from './signal-graph.ts';
-import { getProviders } from './rpc/get-providers.ts';
-import { getNgrxStore, scanNgrxStore } from './rpc/get-ngrx-store.ts';
+import { scanNgrxStore } from './rpc/get-ngrx-store.ts';
 import { createNgrxHistory } from './rpc/ngrx-session-tools.ts';
 import { createProviderValues } from './rpc/provider-values.ts';
 import {
@@ -84,6 +78,7 @@ import {
   SIGNAL_STORE_HISTORY_DESCRIPTION,
   inspectSignalStoreText,
   signalStoreHistoryText,
+  storeIdNamed,
   withUntrustedPreamble,
 } from './rpc/ngrx-live-tools.ts';
 import {
@@ -204,7 +199,7 @@ import { ssrOverrideTools } from './rpc/ssr-override-tools.ts';
 import { createComponentScreenshots } from './rpc/component-screenshots.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import { listHttpCallsText } from './rpc/http-tools.ts';
-import { httpWaterfallText, type HttpWaterfallArgs } from './rpc/http-waterfall.ts';
+import { httpWaterfallText } from './rpc/http-waterfall.ts';
 import {
   httpRulesText,
   removeHttpRule,
@@ -318,8 +313,8 @@ import {
   FORMS_SHAPE,
   INJECTOR_TREE_SHAPE,
 } from './push-delta.ts';
-import { MARKDOWN_OUTPUT_SCHEMA } from './rpc/agent-output.ts';
 import { createWaitForTool } from './rpc/wait-for.ts';
+import { answeringText, type MarkdownAnswer } from './rpc/agent-output.ts';
 import { guardHandler } from './rpc/tool-input.ts';
 import {
   createPageOrder,
@@ -336,8 +331,7 @@ import { STATE_READ_BY, stateReadTool } from './rpc/state-read-tool.ts';
 import { createLibraryGate, usedLibraries } from './rpc/library-tools.ts';
 import { createPushAcks } from './rpc/push-acks.ts';
 import { cdRecordAnswer } from './rpc/cd-record-tool.ts';
-import { refusal, refusedAnswer, ToolRefusal } from './rpc/refusal.ts';
-import { ROUTER_ACTIONS, unknownRouterActionText } from './router-actions.ts';
+import { refusal, refusalOf, refusedAnswer, ToolRefusal } from './rpc/refusal.ts';
 
 type CapacitorToolArgs = {
   page?: string;
@@ -443,31 +437,33 @@ const pangular = defineDevframe({
       ctx.agent.registerTool(
         feed.wrapTool({
           ...tool,
+          // Every answer is one plain text block (rpc/agent-output.ts).
+          outputSchema: undefined,
           safety: agentSafety(tool.id, config),
           tags: agentTags(tool.id),
           // Arguments are checked against `inputSchema` before the lease
           // wakes any page, and refusals go out with `isError`.
-          handler: guardHandler(
-            tool.inputSchema,
-            // A live tool's answer names the page it read.
-            isPageAgentEntry(tool.id)
-              ? namingPageRead(
-                  leased(() => interest, tool.handler),
-                  pageUrl,
-                )
-              : leased(() => interest, tool.handler),
+          handler: answeringText(
+            guardHandler(
+              tool.inputSchema,
+              // A live tool's answer names the page it read.
+              isPageAgentEntry(tool.id)
+                ? namingPageRead(
+                    leased(() => interest, tool.handler),
+                    pageUrl,
+                  )
+                : leased(() => interest, tool.handler),
+            ),
           ),
         }),
       );
     }
 
-    register(getRoutes);
-    register(getComponents);
-    register(getPipes);
-    register(getSignals);
-    register(getProviders);
-    register(getNgrxStore);
-    register(getBuildMeta);
+    // The panel reads the scans as RPC functions; agents read them as the `scan-*` tools.
+    for (const definition of SCAN_RPC_DEFINITIONS) {
+      register({ ...(definition as Parameters<typeof register>[0]), agent: undefined });
+    }
+    for (const spec of SCAN_TOOLS) agent.registerTool(scanTool(spec, ctx));
     register({
       name: 'open-in-editor',
       type: 'action',
@@ -741,9 +737,9 @@ const pangular = defineDevframe({
       initialValue: { pages: [] } as NgrxState,
     });
     const ngrxPages: NgrxPages = new Map();
-    /** The page an NgRx read tool reads: `page`; else, unless `storeId` names a store, the default page. */
-    const ngrxReadPage = (args: { page?: string; storeId?: string } | undefined) =>
-      args?.page || (args?.storeId ? undefined : defaultPage(ngrxPages.values())?.pageId);
+    /** The page an NgRx read tool reads: `page`; else, unless `store` names a store, the default page. */
+    const ngrxReadPage = (args: { page?: string; store?: string } | undefined) =>
+      args?.page || (args?.store ? undefined : defaultPage(ngrxPages.values())?.pageId);
     let ngrxDeclarations: { at: number; list: NgrxDeclaration[] } = { at: 0, list: [] };
     const ngrxNames = () => {
       if (Date.now() - ngrxDeclarations.at > 10_000) {
@@ -883,7 +879,7 @@ const pangular = defineDevframe({
       name: 'pipe-lint',
       type: 'query',
       jsonSerializable: true,
-      // A source scan like get-pipes, so a static report bakes it in too.
+      // A source scan like scan-pipes, so a static report bakes it in too.
       snapshot: true,
       handler: () => lintPipes(ctx.cwd),
     });
@@ -977,11 +973,14 @@ const pangular = defineDevframe({
             ctx.agent.registerTool(
               feed.wrapTool({
                 ...(tool as Parameters<typeof ctx.agent.registerTool>[0]),
+                outputSchema: undefined,
                 safety,
                 tags: agentTags(String(tool['id'])),
-                handler: guardHandler(
-                  tool['inputSchema'],
-                  leased(() => interest, tool['handler']),
+                handler: answeringText(
+                  guardHandler(
+                    tool['inputSchema'],
+                    leased(() => interest, tool['handler']),
+                  ),
                 ),
               }),
             ),
@@ -1512,7 +1511,6 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:list-ssr-requests',
       title: 'List SSR requests',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'Recent document requests the SSR server answered: id, URL, status, render mode, render time, server HttpClient calls and whether a page loaded the response. Needs ssrMiddleware or withPangularSsr(); empty otherwise.',
       inputSchema: {
@@ -1553,9 +1551,8 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:list-http-calls',
       title: 'List HTTP calls',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'HttpClient calls recorded by withPangular(), newest first: side (SSR or client), method, URL, status, duration, rule and cache flags, and the response preview (failed calls included). `headers` adds headers. Masked. Empty without the interceptor.',
+        'HttpClient calls recorded by withPangular(), newest first: side, method, URL, status, duration, rule and cache flags, and the response preview. `view: "waterfall"` draws a page\'s client calls per navigation instead. `headers` adds headers. Masked. Empty without the interceptor.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1566,7 +1563,11 @@ const pangular = defineDevframe({
             description:
               'Only failed calls: status 400 or more, no response, an error, or cancelled.',
           },
-          limit: { type: 'integer', description: 'How many calls to list (1-200, default 30).' },
+          limit: {
+            type: 'integer',
+            description:
+              'How many calls to list (1-200, default 30); with `view: "waterfall"`, how many navigations to draw (1-50, default 5).',
+          },
           preview: {
             type: 'boolean',
             description: 'Add the masked response preview of each listed call.',
@@ -1574,6 +1575,12 @@ const pangular = defineDevframe({
           headers: {
             type: 'boolean',
             description: 'Add the masked request and response headers of each listed call.',
+          },
+          view: {
+            type: 'string',
+            enum: ['list', 'waterfall'],
+            description:
+              '`list` (default), or `waterfall`: start offset, duration and status of each client call, grouped by navigation. `url`, `failed` and `preview` apply to the list only.',
           },
         },
       },
@@ -1584,7 +1591,27 @@ const pangular = defineDevframe({
         limit?: number;
         preview?: boolean;
         headers?: boolean;
+        view?: 'list' | 'waterfall';
       }) => {
+        if (args.view === 'waterfall') {
+          const listOnly = (['url', 'failed', 'preview'] as const).filter(
+            (key) => args[key] !== undefined,
+          );
+          if (listOnly.length) {
+            return {
+              markdown: refusal(
+                `${listOnly.map((key) => `\`${key}\``).join(', ')} apply to the list, not to \`view: "waterfall"\`.`,
+              ),
+            };
+          }
+          return {
+            markdown: httpWaterfallText(httpSnapshot(), {
+              page: pageArgument(args),
+              limit: args.limit,
+              headers: args.headers,
+            }),
+          };
+        }
         const snapshot = httpSnapshot();
         // Without `page`, the default page and the server render that served it, like every live tool.
         const page = pageArgument(args) ?? defaultPage(snapshot.pages ?? [])?.pageId;
@@ -1593,33 +1620,8 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
-      id: 'pangular:http-waterfall',
-      title: 'Show an HTTP waterfall',
-      description:
-        "One page's client HttpClient calls as a text waterfall, grouped by navigation: start offset, duration and status. `headers` adds request and response headers (masked).",
-      inputSchema: {
-        type: 'object',
-        properties: {
-          page: PAGE_ARGUMENT,
-          limit: {
-            type: 'integer',
-            description: 'How many navigations to show, newest first (1-50, default 5).',
-          },
-          headers: {
-            type: 'boolean',
-            description: 'Add the masked request and response headers of each call.',
-          },
-        },
-      },
-      handler: async (args: HttpWaterfallArgs & Record<string, unknown>) => ({
-        markdown: httpWaterfallText(httpSnapshot(), { ...args, page: pageArgument(args) }),
-      }),
-    });
-
-    agent.registerTool({
-      id: 'pangular:list-capacitor-calls',
+      id: 'pangular:capacitor-list-calls',
       title: 'List Capacitor plugin calls',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'Capacitor plugin calls, newest first: plugin, method, native or web target, arguments, result or error and duration, plus listeners. Filter by `plugin`, `failed` or `slowMs`. Masked.',
       inputSchema: {
@@ -1641,9 +1643,8 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
-      id: 'pangular:list-capacitor-plugins',
+      id: 'pangular:capacitor-list-plugins',
       title: 'List Capacitor plugins',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'The Capacitor environment (platform, server URL, CapacitorHttp, user agent) and each plugin: available, imported, installed natively, methods. Flags imported plugins that are missing natively.',
       inputSchema: { type: 'object', properties: { page: PAGE_ARGUMENT } },
@@ -1685,7 +1686,6 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:list-http-rules',
       title: 'List HTTP mock rules',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'The HTTP fault and mock rules, in match order: id, on or off, method, URL pattern, browser or SSR scope and effect. Empty when no rule is set.',
       inputSchema: { type: 'object', properties: {} },
@@ -2799,7 +2799,7 @@ const pangular = defineDevframe({
       read: () => ({
         text: liveResourceText(
           ngrxStoreState.value(),
-          'pangular:inspect-signal-store and pangular:signal-store-history',
+          'pangular:ngrx-inspect-store and pangular:ngrx-history',
         ),
       }),
     });
@@ -2844,51 +2844,59 @@ const pangular = defineDevframe({
     } as const;
 
     agent.registerTool({
-      id: 'pangular:inspect-signal-store',
+      id: 'pangular:ngrx-inspect-store',
       title: 'Inspect a signal store',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description: INSPECT_SIGNAL_STORE_DESCRIPTION,
       inputSchema: {
         type: 'object',
         properties: {
           page: ngrxPageProperty,
-          storeId: {
+          store: {
             type: 'string',
             description:
-              'Store id (e.g. `ngrx-1`, as shown on the NgRx Store page or returned by a previous call). Omit for a summary of every store across the matching page(s).',
+              'Store id or name (e.g. `ngrx-1` or `CartStore`, as shown on the NgRx Store page or returned by a previous call). Omit for a summary of every store across the matching page(s).',
           },
         },
       },
-      handler: async (args: { page?: string; storeId?: string }) => ({
+      handler: async (args: { page?: string; store?: string }) => ({
         markdown: withUntrustedPreamble(
-          inspectSignalStoreText(ngrxPages, ngrxReadPage(args), args?.storeId),
+          inspectSignalStoreText(
+            ngrxPages,
+            ngrxReadPage(args),
+            storeIdNamed(ngrxPages, ngrxReadPage(args), args?.store),
+          ),
         ),
       }),
     });
 
     agent.registerTool({
-      id: 'pangular:signal-store-history',
+      id: 'pangular:ngrx-history',
       title: 'Show signal store history',
       description: SIGNAL_STORE_HISTORY_DESCRIPTION,
       inputSchema: {
         type: 'object',
         properties: {
           page: ngrxPageProperty,
-          storeId: {
+          store: {
             type: 'string',
             description:
-              'Store id to filter the log to. Omit to include every store, plus `@ngrx/signals/events` events with no store effect.',
+              'Store id or name to filter the log to. Omit to include every store, plus `@ngrx/signals/events` events with no store effect.',
           },
-          since: {
+          after: {
             type: 'number',
             description:
               'Only return entries whose `seq` is strictly greater than this. Pass the last `seq` from a previous call to poll.',
           },
         },
       },
-      handler: async (args: { page?: string; storeId?: string; since?: number }) => ({
+      handler: async (args: { page?: string; store?: string; after?: number }) => ({
         markdown: withUntrustedPreamble(
-          signalStoreHistoryText(ngrxPages, ngrxReadPage(args), args?.storeId, args?.since),
+          signalStoreHistoryText(
+            ngrxPages,
+            ngrxReadPage(args),
+            storeIdNamed(ngrxPages, ngrxReadPage(args), args?.store),
+            args?.after,
+          ),
         ),
       }),
     });
@@ -2918,7 +2926,11 @@ const pangular = defineDevframe({
         : null;
 
     const forAgents = (key: PangularInspector) => on[key] && config.agent.tools[key];
+    // Set with the forms tools below.
+    let waitForForm:
+      ((args: Record<string, unknown>, timeoutMs: number) => Promise<MarkdownAnswer>) | undefined;
     const waitFor = createWaitForTool({
+      forms: forAgents('forms') ? (args, timeoutMs) => waitForForm!(args, timeoutMs) : undefined,
       components: forAgents('components') ? () => componentPages.values() : undefined,
       router: forAgents('router') ? () => routerPages.values() : undefined,
       http: forAgents('http') ? () => httpPages.values() : undefined,
@@ -2934,44 +2946,98 @@ const pangular = defineDevframe({
       id: 'pangular:highlight',
       title: 'Highlight a component',
       description:
-        'Outline a component in the page and select it, so component-tree and inspect-signals follow it. `selector`: instance id, class, tag or CSS selector; several matches pick the first and list the rest.',
+        'Outline a component in the page and select it, so component-tree and inspect-signals follow it: `component` (instance id, class or tag; the first of several matches) or `selector` (CSS). `hydration: true` outlines the hydration regions instead, `false` removes them.',
       inputSchema: {
         type: 'object',
         properties: {
-          selector: {
+          component: {
             type: 'string',
             description:
-              'Instance id (e.g. c12), class name (e.g. ProductCard), host tag (e.g. app-root) or CSS selector.',
+              'Instance id (e.g. c12), class name (e.g. ProductCard) or host tag (e.g. app-root).',
+          },
+          selector: { type: 'string', description: 'A CSS selector, such as .card > h2.' },
+          hydration: {
+            type: 'boolean',
+            description:
+              'Outline the hydration regions on the page (true), or remove the outline (false).',
           },
           page: componentPageProperty,
-          pageId: { type: 'string', description: 'Same as `page`.' },
         },
-        required: ['selector'],
       },
-      handler: async (args: { selector: string; page?: string; pageId?: string }) => {
-        const page = pageArgument(args, 'pageId');
+      handler: async (args: {
+        component?: string;
+        selector?: string;
+        hydration?: boolean;
+        page?: string;
+      }) => {
+        const page = pageArgument(args);
         const all = byRecency(componentPages.values());
         if (page && !componentPages.has(page)) {
           return { markdown: unknownPageText(page, all, 'a component tree') };
         }
         const pages = page ? all.filter((entry) => entry.pageId === page) : all;
+        const given = (['component', 'selector', 'hydration'] as const).filter(
+          (key) => args[key] !== undefined,
+        );
+        if (given.length !== 1) {
+          return {
+            markdown: refusal(
+              'Pass one of `component` (an instance id, class name or host tag), `selector` (a CSS selector) or `hydration` (true or false).',
+            ),
+          };
+        }
+        if (args.hydration !== undefined) {
+          const done = hydrationOverlayText(args.hydration, pages);
+          const sent = args.hydration ? pages.some((entry) => entry.hydration) : pages.length > 0;
+          // Nothing to send the request to is a refusal, not a request sent.
+          if (!sent) return { markdown: refusal(`${done}\n\n${hydrationText(pages)}`) };
+          requestHydrationOverlay({ pageId: page, on: args.hydration });
+          return { markdown: `${done}\n\n${hydrationText(pages)}` };
+        }
         if (!pages.some((entry) => entry.roots.length)) {
           return refusedAnswer(noComponentTree(', so nothing was highlighted'));
         }
-        if (typeof args.selector !== 'string' || !args.selector.trim()) {
-          return { markdown: refusal('Pass `selector`: an instance id, class name or host tag.') };
+        const wanted = args.component ?? args.selector;
+        if (typeof wanted !== 'string' || !wanted.trim()) {
+          return {
+            markdown: refusal(
+              args.component !== undefined
+                ? 'Pass `component`: an instance id, class name or host tag.'
+                : 'Pass `selector`: a CSS selector.',
+            ),
+          };
         }
-        const hits = componentHits(args.selector, page);
+        if (args.selector !== undefined) {
+          const target = page ? { pageId: page, selector: wanted } : wanted;
+          const shown = typeof target === 'string' ? { selector: target } : target;
+          void my.rpc.broadcast({
+            method: 'highlight-in-page',
+            args: [{ ...shown, reveal: true, durationMs: AGENT_HIGHLIGHT_MS }],
+            optional: true,
+          });
+          void my.rpc.broadcast({
+            method: 'select-signal-component',
+            args: [target],
+            optional: true,
+          });
+          return {
+            markdown: `Sent the CSS selector \`${wanted}\` to ${page ? `page \`${page}\`` : `every page (${pages.map((entry) => `\`${entry.pageId}\``).join(', ')})`}; the page outlines it only if an element matches, which the page does not confirm.`,
+          };
+        }
+        const hits = componentHits(wanted, page);
         const [hit] = hits;
-        const target = hit
-          ? { pageId: hit.pageId, id: hit.node.id }
-          : page
-            ? { pageId: page, selector: args.selector }
-            : args.selector;
-        const shown = typeof target === 'string' ? { selector: target } : target;
+        if (!hit) {
+          const cut = truncationText(pages);
+          return {
+            markdown: refusal(
+              `No component instance matches \`${wanted}\`${page ? ` on page \`${page}\`` : ''}, so nothing was highlighted. Pass an instance id, class name or host tag from pangular:list-components, or a CSS selector as \`selector\`.${cut ? ` ${cut}` : ''}`,
+            ),
+          };
+        }
+        const target = { pageId: hit.pageId, id: hit.node.id };
         void my.rpc.broadcast({
           method: 'highlight-in-page',
-          args: [{ ...shown, reveal: true, durationMs: AGENT_HIGHLIGHT_MS }],
+          args: [{ ...target, reveal: true, durationMs: AGENT_HIGHLIGHT_MS }],
           optional: true,
         });
         void my.rpc.broadcast({
@@ -2979,19 +3045,16 @@ const pangular = defineDevframe({
           args: [target],
           optional: true,
         });
-        if (hit) selectComponentOnPage(hit.pageId, hit.node.id);
-        const others = otherMatchesText(hits, args.selector);
-        const cut = hit ? '' : truncationText(pages);
+        selectComponentOnPage(hit.pageId, hit.node.id);
+        const others = otherMatchesText(hits, wanted);
         const otherPages = [
-          ...new Set(hits.map((entry) => entry.pageId).filter((id) => id !== hit?.pageId)),
+          ...new Set(hits.map((entry) => entry.pageId).filter((id) => id !== hit.pageId)),
         ];
         const also = otherPages.length
           ? ` It also matches on ${otherPages.map((id) => `\`${id}\``).join(', ')}. Pass \`page\` to pick another tab.`
           : '';
         return {
-          markdown: hit
-            ? `Sent a highlight request for \`${hit.node.name}\` (\`<${hit.node.tag}>\`, instance \`${hit.node.id}\` on page \`${hit.pageId}\`) and selected it.${also}${others ? `\n\n${others}` : ''}`
-            : `No component instance matches \`${args.selector}\`, so the selection did not change. Sent it as a CSS selector to ${page ? `page \`${page}\`` : `every page (${pages.map((entry) => `\`${entry.pageId}\``).join(', ')})`}; the page outlines it only if an element matches, which the page does not confirm.${cut ? ` ${cut}` : ''}`,
+          markdown: `Sent a highlight request for \`${hit.node.name}\` (\`<${hit.node.tag}>\`, instance \`${hit.node.id}\` on page \`${hit.pageId}\`) and selected it.${also}${others ? `\n\n${others}` : ''}`,
         };
       },
     });
@@ -2999,13 +3062,12 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-component',
       title: 'Inspect a component',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'Live details of a component instance (`selector`: id, class or tag): inputs, outputs, properties, listeners, host directives, DI dependencies, change detection and source. Fields say `edit` or `locked`. `path` reads a nested value. Masked; cut at 20,000 characters.',
+        'Live details of a component instance (`component`: id, class or tag): inputs, outputs, properties, listeners, host directives, DI dependencies, change detection and source. Fields say `edit` or `locked`. `path` reads a nested value. Masked; cut at 20,000 characters.',
       inputSchema: {
         type: 'object',
         properties: {
-          selector: {
+          component: {
             type: 'string',
             description: 'Instance id (e.g. c12), class name (e.g. ProductCard) or host tag.',
           },
@@ -3023,19 +3085,17 @@ const pangular = defineDevframe({
             description: 'With `path`: most entries per object or list, 1 to 1000. Defaults to 30.',
           },
           page: componentPageProperty,
-          pageId: { type: 'string', description: 'Same as `page`.' },
         },
-        required: ['selector'],
+        required: ['component'],
       },
       handler: async (args: {
-        selector: string;
+        component: string;
         path?: unknown;
         depth?: unknown;
         limit?: unknown;
         page?: string;
-        pageId?: string;
       }) => {
-        const page = pageArgument(args, 'pageId');
+        const page = pageArgument(args);
         const valuePath = args.path === undefined || args.path === '' ? null : parsePath(args.path);
         if (args.path !== undefined && args.path !== '' && !valuePath) {
           return {
@@ -3048,15 +3108,15 @@ const pangular = defineDevframe({
         if (![...componentPages.values()].some((entry) => entry.roots.length)) {
           return { markdown: noComponentTree('') };
         }
-        if (typeof args.selector !== 'string' || !args.selector.trim()) {
-          return { markdown: 'Pass `selector`: an instance id, class name or host tag.' };
+        if (typeof args.component !== 'string' || !args.component.trim()) {
+          return { markdown: 'Pass `component`: an instance id, class name or host tag.' };
         }
-        const hits = componentHits(args.selector, page);
+        const hits = componentHits(args.component, page);
         const [hit] = hits;
         if (!hit) {
           return {
             markdown: [
-              `No component instance matches \`${args.selector}\`. Pass an instance id, class name or host tag from the pangular:component-tree resource.`,
+              `No component instance matches \`${args.component}\`. Pass an instance id, class name or host tag from the pangular:component-tree resource.`,
               truncationText(
                 [...componentPages.values()].filter((entry) => !page || entry.pageId === page),
               ),
@@ -3068,7 +3128,7 @@ const pangular = defineDevframe({
         if (hit.node.kind === 'directive') {
           return { markdown: untrusted(directiveHostText(hit.node, hit.pageId)) };
         }
-        const others = otherMatchesText(hits, args.selector);
+        const others = otherMatchesText(hits, args.component);
         if (valuePath) {
           const whole = (value: unknown) =>
             typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : undefined;
@@ -3103,7 +3163,6 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:list-components',
       title: 'List live components',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description: LIST_COMPONENTS_DESCRIPTION,
       inputSchema: {
         type: 'object',
@@ -3157,11 +3216,10 @@ const pangular = defineDevframe({
             description:
               'Page id, when more than one tab reports (see pangular:list-pages). Lists every page without it.',
           },
-          pageId: { type: 'string', description: 'Same as `page`.' },
         },
       },
-      handler: async (args: { page?: string; pageId?: string }) => {
-        const page = pageArgument(args, 'pageId');
+      handler: async (args: { page?: string }) => {
+        const page = pageArgument(args);
         return (
           unknownComponentPage(page) ?? {
             markdown: deferBlocksText(
@@ -3189,11 +3247,10 @@ const pangular = defineDevframe({
             description:
               'Page id, when more than one tab reports (see pangular:list-pages). Lists every page without it.',
           },
-          pageId: { type: 'string', description: 'Same as `page`.' },
         },
       },
-      handler: async (args: { page?: string; pageId?: string }) => {
-        const page = pageArgument(args, 'pageId');
+      handler: async (args: { page?: string }) => {
+        const page = pageArgument(args);
         return (
           unknownComponentPage(page) ?? {
             markdown: forBlocksText(
@@ -3205,16 +3262,10 @@ const pangular = defineDevframe({
       },
     });
 
-    // Read-only mode keeps this tool as a read tool, without `overlay`.
-    const hydrationOverlayAllowed = !config.agent.readOnly;
     agent.registerTool({
       id: 'pangular:hydration',
       title: 'Check hydration',
-      description: `${HYDRATION_DESCRIPTION}${
-        hydrationOverlayAllowed
-          ? HYDRATION_OVERLAY_DESCRIPTION
-          : ' The agent is read-only, so this tool cannot turn the hydration overlay on or off.'
-      }`,
+      description: `${HYDRATION_DESCRIPTION} pangular:highlight with \`hydration: true\` outlines the regions on the page.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -3223,78 +3274,37 @@ const pangular = defineDevframe({
             description:
               'Page id, when more than one tab reports (see pangular:list-pages). Lists every page without it.',
           },
-          pageId: { type: 'string', description: 'Same as `page`.' },
-          ...(hydrationOverlayAllowed
-            ? {
-                overlay: {
-                  type: 'boolean',
-                  description:
-                    'Outline hydrated, skipped, mismatched and dehydrated regions on the page (true), or remove the outline (false).',
-                },
-              }
-            : {}),
         },
       },
-      handler: async (args: { page?: string; pageId?: string; overlay?: boolean }) => {
-        const page = pageArgument(args, 'pageId');
+      handler: async (args: { page?: string }) => {
+        const page = pageArgument(args);
         const unknown = unknownComponentPage(page);
         if (unknown) return unknown;
         const pages = byRecency(componentPages.values()).filter(
           (entry) => !page || entry.pageId === page,
         );
-        if (args?.overlay === undefined) return { markdown: hydrationText(pages) };
-        if (!hydrationOverlayAllowed) {
-          return {
-            markdown: refusal(
-              'The agent is read-only in the devtools config (agent.readOnly), so it cannot turn the hydration overlay on or off. Use the Hydration section on the Components page of the panel, or call this tool without `overlay`.',
-            ),
-          };
-        }
-        if (typeof args.overlay !== 'boolean') {
-          return { markdown: refusal('`overlay` must be true or false.') };
-        }
-        const done = hydrationOverlayText(args.overlay, pages);
-        const sent = args.overlay ? pages.some((entry) => entry.hydration) : pages.length > 0;
-        // Nothing to send the request to is a refusal, not a request sent.
-        if (!sent) return { markdown: refusal(`${done}\n\n${hydrationText(pages)}`) };
-        requestHydrationOverlay({ pageId: page, on: args.overlay });
-        return { markdown: `${done}\n\n${hydrationText(pages)}` };
+        return { markdown: hydrationText(pages) };
       },
     });
 
-    // Read-only mode keeps this tool as a read tool, without `record`.
-    const cdRecordAllowed = !config.agent.readOnly;
-    const cdActionDesc = cdRecordAllowed
-      ? '`record`: start, stop or clear. `flash`, `track` and `angularProfiling` turn on extra views.'
-      : 'Read-only: the panel starts recordings.';
+    const cdUnknown = (page: string | undefined) =>
+      page &&
+      cdUnknownPageText(
+        page,
+        cdState.value() as CdState,
+        [...componentPages.values(), ...injectorPages.values()].filter(
+          (entry) => !goneCdPages.has(entry.pageId),
+        ),
+      );
+
     agent.registerTool({
       id: 'pangular:change-detection',
-      title: 'Record change detection',
-      description: `Change detection cycles from Angular's profiler (Angular 20+ dev builds): slowest components, checks, durations and the zone mode. ${cdActionDesc} \`export\`: json or trace.`,
+      title: 'Read change detection',
+      description:
+        "Change detection cycles from Angular's profiler (Angular 20+ dev builds): slowest components, checks, durations and the zone mode. pangular:record-change-detection starts a recording. `export`: json or trace.",
       inputSchema: {
         type: 'object',
         properties: {
-          ...(cdRecordAllowed
-            ? {
-                record: { type: 'string', enum: ['start', 'stop', 'clear'] },
-                flash: {
-                  type: 'boolean',
-                  description:
-                    'Turn the flash overlay on or off: a box over each component as it is checked.',
-                },
-                track: {
-                  type: 'boolean',
-                  description:
-                    'Turn the "Pangular" track in the Chrome Performance panel on or off.',
-                },
-                angularProfiling: {
-                  type: 'boolean',
-                  enum: [true],
-                  description:
-                    "Call `ng.enableProfiling()` for Angular's own Performance panel track. It cannot be turned off until the page reloads.",
-                },
-              }
-            : {}),
           page: { type: 'string', description: 'Page id; defaults to the page that is recording.' },
           limit: { type: 'number', description: 'Rows per list (default 10, max 50).' },
           export: {
@@ -3305,38 +3315,12 @@ const pangular = defineDevframe({
           },
         },
       },
-      handler: async (args: {
-        record?: string;
-        page?: string;
-        limit?: number;
-        export?: string;
-        flash?: boolean;
-        track?: boolean;
-        angularProfiling?: boolean;
-      }) => {
-        const unknown =
-          args?.page &&
-          cdUnknownPageText(
-            args.page,
-            cdState.value() as CdState,
-            [...componentPages.values(), ...injectorPages.values()].filter(
-              (page) => !goneCdPages.has(page.pageId),
-            ),
-          );
+      handler: async (args: { page?: string; limit?: number; export?: string }) => {
+        const unknown = cdUnknown(args?.page);
         if (unknown) return { markdown: unknown };
         if (args?.export !== undefined) {
           if (args.export !== 'json' && args.export !== 'trace') {
             return { markdown: refusal('`export` must be `json` or `trace`.') };
-          }
-          if (args.record !== undefined) {
-            return { markdown: refusal('Pass either `record` or `export`, not both.') };
-          }
-          if (cdViewsAsked(args)) {
-            return {
-              markdown: refusal(
-                'Pass either `export` or `flash`, `track` and `angularProfiling`, not both.',
-              ),
-            };
           }
           return {
             markdown: cdExportText(
@@ -3347,12 +3331,68 @@ const pangular = defineDevframe({
             ),
           };
         }
-        if ((args?.record !== undefined || cdViewsAsked(args)) && !cdRecordAllowed) {
+        const cd = cdState.value() as CdState;
+        const text = changeDetectionText(cd, args ?? {}, angularPages.get);
+        // The zone mode comes from the same page as the recording, not the latest tab.
+        const zonePage = args?.page ?? pickCdPage(cd)?.pageId;
+        const injectors = zonePage ? injectorPages.get(zonePage) : latestInjectorPage();
+        const mode = injectors ? zoneModeText(injectors.zone, injectors.pageId) : '';
+        const options = cdOptionsText(pickCdPage(cd, args?.page)?.options);
+        const parts = [mode, text, options].filter(Boolean);
+        return { markdown: parts.join('\n\n') };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:record-change-detection',
+      title: 'Record change detection',
+      description:
+        'Start, stop or clear a change detection recording (`record`), and turn the live views on or off: `flash` boxes each checked component, `track` adds a Chrome Performance panel track, `angularProfiling` calls ng.enableProfiling(). Read the result with pangular:change-detection.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          record: { type: 'string', enum: ['start', 'stop', 'clear'] },
+          flash: {
+            type: 'boolean',
+            description:
+              'Turn the flash overlay on or off: a box over each component as it is checked.',
+          },
+          track: {
+            type: 'boolean',
+            description: 'Turn the "Pangular" track in the Chrome Performance panel on or off.',
+          },
+          angularProfiling: {
+            type: 'boolean',
+            enum: [true],
+            description:
+              "Call `ng.enableProfiling()` for Angular's own Performance panel track. It cannot be turned off until the page reloads.",
+          },
+          page: { type: 'string', description: 'Page id; defaults to the page that is recording.' },
+        },
+      },
+      handler: async (args: {
+        record?: string;
+        page?: string;
+        flash?: boolean;
+        track?: boolean;
+        angularProfiling?: boolean;
+      }) => {
+        const unknown = cdUnknown(args?.page);
+        if (unknown) return { markdown: unknown };
+        if (args?.record === undefined && !cdViewsAsked(args)) {
           return {
             markdown: refusal(
-              'The agent is read-only in the devtools config (agent.readOnly), so it cannot start, stop or clear a change detection recording, or turn on the flash overlay, the Performance panel track or Angular profiling. Use the panel, then call this tool without those arguments.',
+              'Pass `record` (start, stop or clear), or `flash`, `track` or `angularProfiling`.',
             ),
           };
+        }
+        if (
+          args.record !== undefined &&
+          args.record !== 'start' &&
+          args.record !== 'stop' &&
+          args.record !== 'clear'
+        ) {
+          return { markdown: refusal('`record` must be `start`, `stop` or `clear`.') };
         }
         // The live views draw on a DOM or into the browser's Performance panel.
         const liveViews = 'the flash overlay, the Performance panel track and Angular profiling';
@@ -3380,42 +3420,31 @@ const pangular = defineDevframe({
           });
           if (args.record === undefined) return { markdown: views };
         }
-        if (args?.record === 'start' || args?.record === 'stop' || args?.record === 'clear') {
-          const record = args.record;
-          const cdNow = cdState.value() as CdState;
-          const answer = await cdRecordAnswer({
-            record,
-            page: args.page,
-            connected: rankPages(
-              [...componentPages.values(), ...injectorPages.values(), ...Object.values(cdNow.pages)]
-                .filter((page) => !goneCdPages.has(page.pageId))
-                .filter((page, i, all) => all.findIndex((p) => p.pageId === page.pageId) === i),
-            ).map((page) => page.pageId),
-            recording: Object.values(cdNow.pages)
-              .filter((page) => page.recording && !goneCdPages.has(page.pageId))
-              .map((page) => page.pageId),
-            send: () =>
-              requestCdRecord({
-                pageId: args.page,
-                on: record === 'clear' ? undefined : record === 'start',
-                clear: record === 'clear',
-              }),
-            acks: cdAcks,
-          });
-          if ('refused' in answer) return answer;
-          const next = answer.markdown;
-          if (noViews) return { markdown: `${noViews}\n\n${next}` };
-          return { markdown: views ? `${next}\n\n${views}` : next };
-        }
-        const cd = cdState.value() as CdState;
-        const text = changeDetectionText(cd, args ?? {}, angularPages.get);
-        // The zone mode comes from the same page as the recording, not the latest tab.
-        const zonePage = args?.page ?? pickCdPage(cd)?.pageId;
-        const injectors = zonePage ? injectorPages.get(zonePage) : latestInjectorPage();
-        const mode = injectors ? zoneModeText(injectors.zone, injectors.pageId) : '';
-        const options = cdOptionsText(pickCdPage(cd, args?.page)?.options);
-        const parts = [mode, text, options].filter(Boolean);
-        return { markdown: parts.join('\n\n') };
+        const record = args.record as 'start' | 'stop' | 'clear';
+        const cdNow = cdState.value() as CdState;
+        const answer = await cdRecordAnswer({
+          record,
+          page: args.page,
+          connected: rankPages(
+            [...componentPages.values(), ...injectorPages.values(), ...Object.values(cdNow.pages)]
+              .filter((page) => !goneCdPages.has(page.pageId))
+              .filter((page, i, all) => all.findIndex((p) => p.pageId === page.pageId) === i),
+          ).map((page) => page.pageId),
+          recording: Object.values(cdNow.pages)
+            .filter((page) => page.recording && !goneCdPages.has(page.pageId))
+            .map((page) => page.pageId),
+          send: () =>
+            requestCdRecord({
+              pageId: args.page,
+              on: record === 'clear' ? undefined : record === 'start',
+              clear: record === 'clear',
+            }),
+          acks: cdAcks,
+        });
+        if ('refused' in answer) return answer;
+        const next = answer.markdown;
+        if (noViews) return { markdown: `${noViews}\n\n${next}` };
+        return { markdown: views ? `${next}\n\n${views}` : next };
       },
     });
 
@@ -3454,13 +3483,12 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-signals',
       title: 'Inspect signals',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'The signal graph the page last reported: nodes, edges (`consumer` reads `producer`, by node id), resources and value history. `selector` names a component, `root` for root effects, or a route; `node` narrows to one node. Only signals something read appear.',
+        'The signal graph the page last reported: nodes, edges (`consumer` reads `producer`, by node id), resources and value history. `component` names a component, `root` for root effects, or a route; `node` narrows to one node. Only signals something read appear.',
       inputSchema: {
         type: 'object',
         properties: {
-          selector: {
+          component: {
             type: 'string',
             description:
               'Host tag, class name or instance id of the component (e.g. app-root), `root`, or a route path (e.g. /admin).',
@@ -3481,13 +3509,13 @@ const pangular = defineDevframe({
           },
           page: PAGE_ARGUMENT,
         },
-        required: ['selector'],
+        required: ['component'],
       },
-      handler: async (args: { selector: string; page?: string } & InspectSignalsArgs) => {
-        if (typeof args?.selector !== 'string' || !args.selector.trim()) {
+      handler: async (args: { component: string; page?: string } & InspectSignalsArgs) => {
+        if (typeof args?.component !== 'string' || !args.component.trim()) {
           return {
             markdown: refusal(
-              'Pass `selector`: a host tag, class name or instance id (such as app-root), `root` for root service effects, or a route path such as /admin.',
+              'Pass `component`: a host tag, class name or instance id (such as app-root), `root` for root service effects, or a route path such as /admin.',
             ),
           };
         }
@@ -3499,8 +3527,8 @@ const pangular = defineDevframe({
           return { markdown: unknownPageText(page, all, 'a signal graph') };
         }
         const matches = (g: PageGraph) =>
-          [g.componentSelector, g.component?.name, g.component?.id].includes(args.selector) ||
-          (!!g.injector && injectorMatches(g.injector, args.selector));
+          [g.componentSelector, g.component?.name, g.component?.id].includes(args.component) ||
+          (!!g.injector && injectorMatches(g.injector, args.component));
         const latestMatch = () =>
           byRecency(
             [...signalPages]
@@ -3508,7 +3536,7 @@ const pangular = defineDevframe({
               .filter((entry) => !page || entry.pageId === page),
           ).find((entry) => matches(entry.graph))?.graph;
         let matched = latestMatch();
-        if (!matched && signalPages.size && isEnvironmentRequest(args.selector)) {
+        if (!matched && signalPages.size && isEnvironmentRequest(args.component)) {
           // Ask for this injector's graph once. The page answers without
           // changing its selected target, so the Signals page keeps its view.
           const peeked = await signalPeeks.request(
@@ -3518,7 +3546,7 @@ const pangular = defineDevframe({
                 args: [request],
                 optional: true,
               }),
-            args.selector,
+            args.component,
             page,
             page ? [page] : [...signalPages.keys()],
             ENV_WAIT_MS,
@@ -3533,7 +3561,7 @@ const pangular = defineDevframe({
         const signalSupport = unsupportedToolText(
           angularPages.pick(page),
           'signalGraph',
-          'The get-signals source scan still lists the signals in the source.',
+          'The scan-signals source scan still lists the signals in the source.',
         );
         if (!graph && signalSupport) return { markdown: signalSupport };
         if (!graph) {
@@ -3545,7 +3573,7 @@ const pangular = defineDevframe({
           // Angular 19.1 to 20.0 have `ɵgetSignalGraph`, but without node ids.
           const version = angularPages.get(page ?? graph.pageId)?.version;
           return {
-            markdown: `**Unsupported on this Angular version.** The page's signal graph has no node ids, so there is no live graph. ${angularUnavailableText('signalGraph', version)} The get-signals source scan still works.`,
+            markdown: `**Unsupported on this Angular version.** The page's signal graph has no node ids, so there is no live graph. ${angularUnavailableText('signalGraph', version)} The scan-signals source scan still works.`,
           };
         }
         const view = { node: args.node, history: args.history, framework: args.framework };
@@ -3554,10 +3582,10 @@ const pangular = defineDevframe({
         if (!matches(graph)) {
           const known = (graph.environments ?? []).map((e) => `\`${e.name}\``).join(', ');
           const covers = graph.componentSelector ?? graph.injector?.name ?? 'another target';
-          const hint = isEnvironmentRequest(args.selector)
+          const hint = isEnvironmentRequest(args.component)
             ? ` No environment injector on the page matches it${known ? `; the page knows ${known}` : ''}.`
             : '';
-          const head = `No signal graph for \`${clip(args.selector, 200)}\`.${hint} The live graph covers \`${covers}\`:\n\n`;
+          const head = `No signal graph for \`${clip(args.component, 200)}\`.${hint} The live graph covers \`${covers}\`:\n\n`;
           return {
             markdown: untrusted(
               (head + signalGraphText(graph, view, Math.max(0, budget - head.length))).slice(
@@ -3574,13 +3602,12 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-providers',
       title: 'Inspect injectors and providers',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        'DI injectors on the page: without arguments the injector tree with providers; `selector` narrows to one injector (component, Root, Platform, Route: x); `token` finds where a token is provided and injected.',
+        'DI injectors on the page: without arguments the injector tree with providers; `injector` narrows to one injector (component, Root, Platform, Route: x); `token` finds where a token is provided and injected.',
       inputSchema: {
         type: 'object',
         properties: {
-          selector: {
+          injector: {
             type: 'string',
             description:
               'Optional. A tag name (app-card), a component or directive class name (CardComponent), an environment injector name (Root, Platform, Route: admin; case-insensitive), an injector id, or a component id from the component tree (c12). Returns only the matching injectors. At most 500 characters.',
@@ -3588,19 +3615,13 @@ const pangular = defineDevframe({
           token: {
             type: 'string',
             description:
-              'Optional. A token name, such as a service class or InjectionToken description (HttpClient, API_URL). Returns where it is provided and injected. With `selector`, only injections by the matching injectors are listed. At most 500 characters.',
+              'Optional. A token name, such as a service class or InjectionToken description (HttpClient, API_URL). Returns where it is provided and injected. With `injector`, only injections by the matching injectors are listed. At most 500 characters.',
           },
           page: PAGE_ARGUMENT,
-          pageId: { type: 'string', description: 'Same as `page`.' },
         },
       },
-      handler: async (args: {
-        selector?: string;
-        token?: string;
-        page?: string;
-        pageId?: string;
-      }) => {
-        const requested = pageArgument(args, 'pageId');
+      handler: async (args: { injector?: string; token?: string; page?: string }) => {
+        const requested = pageArgument(args);
         if (requested && !injectorPages.has(requested)) {
           return {
             markdown: unknownPageText(requested, [...injectorPages.values()], 'an injector tree'),
@@ -3646,21 +3667,20 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-route',
       title: 'Inspect the active route',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        "The current route: URL, query params, fragment, title, in-flight navigation, the active route tree and outlets. `selector` (component or link text) checks one component's route or whether a link is active.",
+        "The current route: URL, query params, fragment, title, in-flight navigation, the active route tree and outlets. `component` (a component or link text) checks one component's route or whether a link is active.",
       inputSchema: {
         type: 'object',
         properties: {
           page: pageProperty,
-          selector: {
+          component: {
             type: 'string',
             description:
               'Component class name, element tag or link text to explain instead of the whole route.',
           },
         },
       },
-      handler: async (args: { page?: string; selector?: string }) => {
+      handler: async (args: { page?: string; component?: string }) => {
         const state = routerState.value() as RouterState;
         if (!state.pages.length) return { markdown: noRouter };
         return { markdown: inspectRouteText(state, args) };
@@ -3671,7 +3691,7 @@ const pangular = defineDevframe({
       id: 'pangular:explain-navigation',
       title: 'Explain a navigation',
       description:
-        'Recent navigations, newest first: trigger, redirect chain and loops, phase timing, guards, resolvers, lazy loads, HTTP calls and why one was cancelled or failed. Filter by `url` or `id`; `perf: true` summarizes the slowest.',
+        'Recent navigations, newest first: trigger, redirects and loops, phase timing, guards, resolvers, lazy loads, HTTP calls and why one failed. Filter by `url` or `id`; `perf: true` summarizes the slowest; `format: "repro"` gives a repro of one (default: the latest that failed).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3691,6 +3711,12 @@ const pangular = defineDevframe({
             type: 'boolean',
             description: 'Summarize the slowest navigations and preloads instead.',
           },
+          format: {
+            type: 'string',
+            enum: ['explain', 'repro'],
+            description:
+              '`explain` (default), or `repro`: a markdown repro of one navigation with the version, router options, trigger, redirect chain, loops and the relevant route config. Values stay redacted.',
+          },
         },
       },
       handler: async (args: {
@@ -3699,9 +3725,14 @@ const pangular = defineDevframe({
         limit?: number;
         perf?: boolean;
         id?: number;
+        format?: 'explain' | 'repro';
       }) => {
         const state = routerState.value() as RouterState;
         if (!state.pages.length) return { markdown: noRouter };
+        if (args.format === 'repro') {
+          if (args.perf) return { markdown: refusal('Pass either `perf` or `format: "repro"`.') };
+          return { markdown: exportNavigationText(state, { page: args.page, id: args.id }) };
+        }
         return { markdown: explainNavigationText(state, args, Date.now(), limits.navigations) };
       },
     });
@@ -3709,9 +3740,8 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:list-routes',
       title: 'List live routes',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
-        "The router's live config: every route with full path, component or redirect, lazy state, guards, resolvers, title and source file, active routes marked. `match` predicts the route for a URL; `audit` lists guards per page.",
+        "The router's live config: every route with full path, component or redirect, lazy state, guards, resolvers, title and source file, active routes marked. `match` predicts the route for a URL; `audit` lists guards per page; `resolveLazy` loads one lazy route's children first.",
       inputSchema: {
         type: 'object',
         properties: {
@@ -3725,6 +3755,11 @@ const pangular = defineDevframe({
             type: 'string',
             description: 'Only routes whose path or component contains this text.',
           },
+          resolveLazy: {
+            type: 'string',
+            description:
+              'Route id of a lazy route (from this list) to load first, so its children are listed too.',
+          },
         },
       },
       handler: async (args: {
@@ -3732,16 +3767,30 @@ const pangular = defineDevframe({
         match?: string;
         audit?: boolean;
         filter?: string;
+        resolveLazy?: string;
       }) => {
-        const state = routerState.value() as RouterState;
+        let state = routerState.value() as RouterState;
         if (!state.pages.length) return { markdown: noRouter };
+        let resolved = '';
+        if (args.resolveLazy !== undefined) {
+          const target = routerTarget(args.page);
+          if (!('pageId' in target)) return target;
+          const result = await requestRouterAction(target.pageId, {
+            action: 'resolve-lazy',
+            id: args.resolveLazy,
+          });
+          const answer = routerActionAnswer('resolve-lazy', target.pageId, result, []);
+          if (refusalOf(answer) !== undefined) return { markdown: answer };
+          resolved = `${answer}\n\n`;
+          state = routerState.value() as RouterState;
+        }
         let sources: ReturnType<typeof extractRoutes> = [];
         try {
           sources = extractRoutes(ctx.cwd);
         } catch {
           sources = [];
         }
-        return { markdown: listRoutesText(state, args, sources) };
+        return { markdown: `${resolved}${listRoutesText(state, args, sources)}` };
       },
     });
 
@@ -3772,23 +3821,7 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
-      id: 'pangular:export-navigation',
-      title: 'Export a navigation',
-      description:
-        'A markdown repro of one navigation (default: the latest that did not succeed): version, router options, trigger, redirect chain, loops and the relevant route config. Values stay redacted.',
-      inputSchema: {
-        type: 'object',
-        properties: { page: pageProperty, id: { type: 'integer', description: 'Navigation id.' } },
-      },
-      handler: async (args: { page?: string; id?: number }) => {
-        const state = routerState.value() as RouterState;
-        if (!state.pages.length) return { markdown: noRouter };
-        return { markdown: exportNavigationText(state, args) };
-      },
-    });
-
-    agent.registerTool({
-      id: 'pangular:explain-render-mode',
+      id: 'pangular:scan-render-mode',
       title: "Explain a URL's render mode",
       description:
         "Which ServerRoute (from the workspace's *.routes.server.ts) and render mode (Server, Client, Prerender) a URL gets, plus server entries that match no client route and the render mode of every client route.",
@@ -3811,21 +3844,57 @@ const pangular = defineDevframe({
       },
     });
 
+    // The page each router write runs in: the one asked for, or the only one with a router.
+    const routerTarget = (
+      page: string | undefined,
+    ): { pageId: string } | MarkdownAnswer | ReturnType<typeof refusedAnswer> => {
+      const state = routerState.value() as RouterState;
+      const routed = state.pages.filter((p) => p.snapshot);
+      // Every action runs in one page; one the caller did not choose only when it is the only one.
+      if (!page && routed.length > 1) {
+        return { markdown: choosePageText(withPageUrls(routed), 'a router') };
+      }
+      const target = page ? state.pages.find((p) => p.pageId === page) : defaultPage(routed);
+      if (page && !target) return { markdown: noPage(page, state) };
+      if (!target?.snapshot) {
+        return refusedAnswer(
+          page
+            ? `Page \`${page}\` reports no Router, so there is nothing to navigate. The app may not use the Angular router, or it is not a development build.`
+            : noRouter,
+        );
+      }
+      return { pageId: target.pageId };
+    };
+    /** Sends one page router action and answers with its result. */
+    const runRouterAction = async (
+      page: string | undefined,
+      request: { action: string } & Record<string, unknown>,
+    ) => {
+      const target = routerTarget(page);
+      if (!('pageId' in target)) return target;
+      const result = await requestRouterAction(target.pageId, request);
+      const navigations = routerPages.get(target.pageId)?.navigations;
+      return {
+        markdown: routerActionAnswer(request.action, target.pageId, result, navigations),
+      };
+    };
+
+    const NAVIGATE_ACTIONS = ['go', 'abort', 'replay'] as const;
     agent.registerTool({
       id: 'pangular:navigate',
       title: 'Navigate the app',
       description:
-        'Router actions in the running app (dev only): `navigate` (`url` or `pattern` + `params`), `abort`, `replay` (`id`), `probe` (match without navigating; runs canMatch), `instrument` and `resolve-lazy`. Needs `page` when several tabs report a router; the result names the page.',
+        'Router writes in the running app (dev only): `go` (`url`, or `pattern` + `params`), `abort` the navigation in flight, `replay` a recorded one (`id`). Needs `page` when several tabs report a router; the result names the page.',
       inputSchema: {
         type: 'object',
         properties: {
           page: pageProperty,
-          action: {
+          action: { type: 'string', enum: [...NAVIGATE_ACTIONS] },
+          url: { type: 'string', description: 'For go: a same-origin path such as /users/42.' },
+          pattern: {
             type: 'string',
-            enum: ['navigate', 'abort', 'replay', 'probe', 'instrument', 'resolve-lazy'],
+            description: 'For go: a route path such as /users/:id, filled from `params`.',
           },
-          url: { type: 'string' },
-          pattern: { type: 'string' },
           params: { type: 'object', additionalProperties: { type: 'string' } },
           replaceUrl: { type: 'boolean' },
           skipLocationChange: { type: 'boolean' },
@@ -3833,11 +3902,9 @@ const pangular = defineDevframe({
             type: 'string',
             enum: ['navigation', 'stable'],
             description:
-              'For navigate. "navigation" (default) returns when the navigation ends. "stable" also waits until the app has no pending tasks (HTTP requests, httpResource loads, timers), like ApplicationRef.whenStable(); the result says `stable: true`, or `stable: false` when 10s ran out first.',
+              'For go. "navigation" (default) returns when the navigation ends. "stable" also waits until the app has no pending tasks (HTTP requests, httpResource loads, timers), like ApplicationRef.whenStable(); the result says `stable: true`, or `stable: false` when 10s ran out first.',
           },
           id: { type: 'integer', description: 'Navigation id for replay.' },
-          on: { type: 'boolean', description: 'For instrument.' },
-          routeId: { type: 'string', description: 'Route id for resolve-lazy.' },
         },
         required: ['action'],
       },
@@ -3851,36 +3918,20 @@ const pangular = defineDevframe({
         skipLocationChange?: boolean;
         waitFor?: 'navigation' | 'stable';
         id?: number;
-        on?: boolean;
-        routeId?: string;
       }) => {
-        if (!(ROUTER_ACTIONS as readonly unknown[]).includes(args?.action))
-          return { markdown: refusal(unknownRouterActionText(args?.action)) };
-        if (!config.actions.router && ROUTER_WRITE_ACTIONS.includes(args.action))
-          return { markdown: refusal(actionBlockedMessage('router')) };
-        const state = routerState.value() as RouterState;
-        const routed = state.pages.filter((p) => p.snapshot);
-        // Every action runs in one page; one the caller did not choose only when it is the only one.
-        if (!args.page && routed.length > 1) {
-          return { markdown: choosePageText(withPageUrls(routed), 'a router') };
-        }
-        const target = args.page
-          ? state.pages.find((p) => p.pageId === args.page)
-          : defaultPage(routed);
-        if (args.page && !target) return { markdown: noPage(args.page, state) };
-        if (!target?.snapshot) {
+        if (!(NAVIGATE_ACTIONS as readonly unknown[]).includes(args?.action)) {
+          const known = NAVIGATE_ACTIONS.map((name) => `\`${name}\``).join(', ');
           return {
-            ...refusedAnswer(
-              args.page
-                ? `Page \`${args.page}\` reports no Router, so there is nothing to navigate. The app may not use the Angular router, or it is not a development build.`
-                : noRouter,
+            markdown: refusal(
+              typeof args?.action === 'string' && args.action
+                ? `Unknown action \`${args.action.slice(0, 40)}\`. Pass \`action\`: one of ${known}.`
+                : `Pass \`action\`: one of ${known}.`,
             ),
           };
         }
-        if (args.action === 'resolve-lazy' && typeof args.routeId !== 'string')
-          return { markdown: refusal('Pass `routeId`, the id of the lazy route to resolve.') };
+        if (!config.actions.router) return { markdown: refusal(actionBlockedMessage('router')) };
         const request =
-          args.action === 'navigate'
+          args.action === 'go'
             ? {
                 action: 'navigate',
                 url: args.url,
@@ -3894,21 +3945,48 @@ const pangular = defineDevframe({
               }
             : args.action === 'replay'
               ? { action: 'replay', id: args.id }
-              : args.action === 'probe'
-                ? { action: 'probe', url: args.url }
-                : args.action === 'instrument'
-                  ? { action: 'instrument', on: args.on !== false }
-                  : args.action === 'resolve-lazy'
-                    ? { action: 'resolve-lazy', id: args.routeId }
-                    : { action: args.action };
-        const result = await requestRouterAction(target.pageId, request);
-        const navigations = routerPages.get(target.pageId)?.navigations;
-        return { markdown: routerActionAnswer(args.action, target.pageId, result, navigations) };
+              : { action: 'abort' };
+        return runRouterAction(args.page, request);
       },
     });
 
     agent.registerTool({
-      id: 'pangular:dispatch-ngrx-action',
+      id: 'pangular:probe-route',
+      title: 'Probe a route',
+      description:
+        "Which route a URL would match in the running app, without navigating: runs the routes' canMatch guards (dev only) and answers the matched route, the guards' results and why it stopped. Needs actions.router.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: pageProperty,
+          url: { type: 'string', description: 'A same-origin path such as /admin/users.' },
+        },
+        required: ['url'],
+      },
+      handler: async (args: { page?: string; url?: string }) => {
+        if (!config.actions.router) return { markdown: refusal(actionBlockedMessage('router')) };
+        return runRouterAction(args.page, { action: 'probe', url: args.url });
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:record-guards',
+      title: 'Record guard timing',
+      description:
+        "Turn guard and resolver recording on (`on: true`, the default) or off in the page, so pangular:explain-navigation shows each guard's and resolver's result and time. Wraps the router's guards until the page reloads.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: pageProperty,
+          on: { type: 'boolean', description: 'true starts recording (default), false stops it.' },
+        },
+      },
+      handler: async (args: { page?: string; on?: boolean }) =>
+        runRouterAction(args.page, { action: 'instrument', on: args.on !== false }),
+    });
+
+    agent.registerTool({
+      id: 'pangular:ngrx-dispatch',
       title: 'Dispatch an NgRx action',
       description:
         'Dispatch an action (`type`, `payload`) or redispatch a logged one (`seq`) to the @ngrx/store Store (dev only); returns the log entry with origin and diff. Needs `page` when several tabs have a Store, and actions.ngrx.',
@@ -4006,7 +4084,6 @@ const pangular = defineDevframe({
     agent.registerTool({
       id: 'pangular:inspect-forms',
       title: 'Inspect forms',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'Forms on the page (Signal Forms, reactive, template-driven). Without `form`: each form with status and error counts. With `form`: the field tree; narrow with `path`, `onlyInvalid`, `includeValues`. Masked; cut at 20,000 characters.',
       inputSchema: {
@@ -4043,7 +4120,7 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
-      id: 'pangular:explain-form-invalid',
+      id: 'pangular:explain-invalid-forms',
       title: 'Explain invalid forms',
       description:
         'Why forms are invalid: each failing field with value, validator, message and touched state, plus pending async validators and disabled reasons. Without `form`, every invalid form.',
@@ -4141,7 +4218,7 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
-      id: 'pangular:form-payload',
+      id: 'pangular:inspect-form-payload',
       title: 'Show a form payload',
       description:
         'What a form would send: form.value against getRawValue() and the fields each drops or keeps, plus what the user changed. `path` narrows to one group.',
@@ -4153,10 +4230,10 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
-      id: 'pangular:form-history',
+      id: 'pangular:list-form-changes',
       title: 'Show form history',
       description:
-        'Timeline of form changes (value, status, submit, fields added or removed) tagged with origin (user, code, devtools, binding, agent). Filter by form, path, type, origin or `since`; returns the current marker.',
+        'Timeline of form changes (value, status, submit, fields added or removed) tagged with origin (user, code, devtools, binding, agent). Filter by form, path, type, origin or `after` (a marker); returns the current marker.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4178,7 +4255,7 @@ const pangular = defineDevframe({
             ],
           },
           origin: { type: 'string', enum: ['user', 'code', 'devtools', 'binding', 'agent'] },
-          since: { type: 'number', description: 'Only events after this marker.' },
+          after: { type: 'number', description: 'Only events after this marker.' },
           limit: { type: 'number', description: 'Max events (default 50, max 200).' },
           page: formPageProperty,
         },
@@ -4187,15 +4264,15 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
-      id: 'pangular:form-diff',
+      id: 'pangular:explain-form-changes',
       title: 'Diff form values',
       description:
-        'Net change of a form since a marker: each field whose value or status ended different, with from → to and how many changes happened in between. Get a marker from form-history, inspect-forms or a form-action result, act, then call this.',
+        'Net change of a form since a marker: each field whose value or status ended different, with from → to and how many changes happened in between. Get a marker from list-form-changes, inspect-forms or a run-form-action result, act, then call this.',
       inputSchema: {
         type: 'object',
         properties: {
           form: formProperty,
-          since: {
+          after: {
             type: 'number',
             description: 'Marker to diff from (default: everything buffered).',
           },
@@ -4221,7 +4298,7 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
-      id: 'pangular:lint-pipes',
+      id: 'pangular:scan-pipe-usage',
       title: 'Lint pipes',
       description:
         'Source checks of pipes: impure pipes inside @for, `| json` left in templates, pure pipes that read signals, and method calls piped to `| async`.',
@@ -4312,48 +4389,32 @@ const pangular = defineDevframe({
       handler: withForms(exportFormText),
     });
 
-    agent.registerTool({
-      id: 'pangular:wait-for-form',
-      title: 'Wait for a form',
-      description:
-        'Wait until a form is settled (no pending async validation, debounce or submit in flight), valid, not pending, or submitted after a marker. Resolves as soon as the condition holds, or reports the state on timeout.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          form: formProperty,
-          until: { type: 'string', enum: ['settled', 'valid', 'not-pending', 'submitted'] },
-          since: { type: 'number', description: 'Marker for `submitted`.' },
-          timeoutMs: { type: 'number', description: 'Default 5000, max 30000.' },
-          page: formPageProperty,
-        },
-      },
-      handler: async (args: {
+    // `wait-for` with `condition: "form"`: polls the forms state until the condition holds.
+    waitForForm = async (raw, timeout) => {
+      const args = raw as {
         form?: string;
         until?: WaitUntil;
-        since?: number;
-        timeoutMs?: number;
+        after?: number;
         page?: string;
-      }) => {
-        const elsewhere = unknownFormPage(args);
-        if (elsewhere) return elsewhere;
-        const timeout = Math.min(Math.max(Number(args?.timeoutMs) || 5000, 100), 30_000);
-        const start = Date.now();
-        while (true) {
-          const state = formsState.value() as FormsState;
-          if (waitSatisfied(state, args ?? {})) {
-            return {
-              markdown: `Condition \`${args?.until ?? 'settled'}\` holds after ${Date.now() - start}ms. Marker: ${latestMarker(state)}.\n\n${explainFormsText(state, { form: args?.form, page: args?.page })}`,
-            };
-          }
-          if (Date.now() - start >= timeout) {
-            return {
-              markdown: `Timed out after ${timeout}ms waiting for \`${args?.until ?? 'settled'}\`.\n\n${explainFormsText(state, { form: args?.form, page: args?.page })}`,
-            };
-          }
-          await new Promise((resolve) => setTimeout(resolve, 100));
+      };
+      const elsewhere = unknownFormPage(args);
+      if (elsewhere) return elsewhere as MarkdownAnswer;
+      const start = Date.now();
+      while (true) {
+        const state = formsState.value() as FormsState;
+        if (waitSatisfied(state, args)) {
+          return {
+            markdown: `Condition \`${args.until ?? 'settled'}\` holds after ${Date.now() - start}ms. Marker: ${latestMarker(state)}.\n\n${explainFormsText(state, { form: args.form, page: args.page })}`,
+          };
         }
-      },
-    });
+        if (Date.now() - start >= timeout) {
+          return {
+            markdown: `Timed out after ${timeout}ms waiting for \`${args.until ?? 'settled'}\`.\n\n${explainFormsText(state, { form: args.form, page: args.page })}`,
+          };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    };
 
     /**
      * The forms state once the page pushed the events of a write, so the
@@ -4389,7 +4450,7 @@ const pangular = defineDevframe({
       if (typeof result['snapshot'] === 'string')
         lines.push(`Snapshot id: ${result['snapshot']} (use with restore).`);
       lines.push(
-        `Marker: ${latestMarker(state)}. Call form-diff with since set to the marker you had before this action to see what changed.`,
+        `Marker: ${latestMarker(state)}. Call explain-form-changes with \`after\` set to the marker you had before this action to see what changed.`,
       );
       // The page writes the message, errors and skipped reasons.
       const text = untrusted(lines.join('\n'));
@@ -4397,7 +4458,7 @@ const pangular = defineDevframe({
     };
 
     agent.registerTool({
-      id: 'pangular:form-action',
+      id: 'pangular:run-form-action',
       title: 'Run a form action',
       description:
         'Act on a live form (dev only): set-value, mark-touched/untouched/dirty/pristine, touch-all, revalidate, reset, enable, disable, submit, focus, focus-first-invalid, store-as-global, snapshot, restore, instrument. reset, submit and restore need `confirm: true`.',
@@ -4540,13 +4601,12 @@ const pangular = defineDevframe({
     });
     ctx.agent.registerTool({
       ...stateRead,
-      handler: guardHandler(stateRead.inputSchema, stateRead.handler),
+      handler: answeringText(guardHandler(stateRead.inputSchema, stateRead.handler)),
     });
 
     agent.registerTool({
       id: 'pangular:list-pages',
       title: 'List connected pages',
-      outputSchema: MARKDOWN_OUTPUT_SCHEMA,
       description:
         'List connected browser tabs, Angular Native apps, and Capacitor apps reporting live data, newest first: page id, URL, title, platform, Angular version, recency, background status, and reporting inspectors. Pass a page id as `page` to the live tools to target a specific tab.',
       inputSchema: { type: 'object', properties: {} },

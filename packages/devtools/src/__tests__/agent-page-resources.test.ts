@@ -91,19 +91,19 @@ function templateNames(config: PangularConfig = {}) {
 describe('pangularMcpResourceTemplates', () => {
   it('offers one page template per page-scoped resource', () => {
     expect(templateNames()).toEqual(
-      PAGE_RESOURCE_NAMES.map((name) => `pangular://page/{pageId}/${name}`),
+      PAGE_RESOURCE_NAMES.map((name) => `pangular://pages/{pageId}/${name}`),
     );
   });
 
   it('follows its resource when an inspector or its agent tools are off', () => {
     expect(templateNames({ inspectors: { forms: false } })).not.toContain(
-      'pangular://page/{pageId}/forms',
+      'pangular://pages/{pageId}/forms',
     );
     expect(templateNames({ agent: { tools: { router: false } } })).not.toContain(
-      'pangular://page/{pageId}/router',
+      'pangular://pages/{pageId}/router',
     );
     expect(templateNames({ agent: { tools: { router: false } } })).toContain(
-      'pangular://page/{pageId}/forms',
+      'pangular://pages/{pageId}/forms',
     );
     // agent.readOnly keeps every read resource.
     expect(templateNames({ agent: { readOnly: true } })).toHaveLength(PAGE_RESOURCE_NAMES.length);
@@ -263,7 +263,7 @@ describe('MCP resource templates over the hub endpoint', () => {
     const list = await call<Templates>('resources/templates/list');
     expect(list.result?.resourceTemplates.map((t) => t.uriTemplate)).toEqual(templateNames());
     expect(list.result?.resourceTemplates[0]).toMatchObject({
-      name: 'pangular:page:component-tree',
+      name: 'pangular:component-tree-of-page',
       title: 'Angular Component Tree of one page',
       mimeType: 'application/json',
     });
@@ -275,15 +275,15 @@ describe('MCP resource templates over the hub endpoint', () => {
     await push('push-component-tree', { pageId: 'p2', roots: tree('Second'), count: 1 });
 
     const read = (uri: string) => call<Contents>('resources/read', { uri });
-    const one = (await read('pangular://page/p1/component-tree')).result!.contents[0]!;
-    const two = (await read('pangular://page/p2/component-tree')).result!.contents[0]!;
-    expect(one).toMatchObject({ uri: 'pangular://page/p1/component-tree' });
+    const one = (await read('pangular://pages/p1/component-tree')).result!.contents[0]!;
+    const two = (await read('pangular://pages/p2/component-tree')).result!.contents[0]!;
+    expect(one).toMatchObject({ uri: 'pangular://pages/p1/component-tree' });
     expect(one.mimeType).toBe('application/json');
     expect(JSON.parse(one.text)).toMatchObject({ nodes: [{ name: 'First' }] });
     expect(Object.keys(JSON.parse(one.text).pages)).toEqual(['p1']);
     expect(JSON.parse(two.text)).toMatchObject({ nodes: [{ name: 'Second' }] });
 
-    const unknown = (await read('pangular://page/zz/component-tree')).result!.contents[0]!;
+    const unknown = (await read('pangular://pages/zz/component-tree')).result!.contents[0]!;
     expect(unknown.mimeType).toBe('text/markdown');
     expect(unknown.text).toContain('No page `zz` is reporting a component tree');
     expect(unknown.text).toContain('`p1`, `p2`');
@@ -293,15 +293,15 @@ describe('MCP resource templates over the hub endpoint', () => {
     expect(Object.keys(JSON.parse(all.text).pages).sort()).toEqual(['p1', 'p2']);
 
     // A URI the template does not match stays unknown.
-    expect((await read('pangular://page/p1/x/component-tree')).error).toBeDefined();
+    expect((await read('pangular://pages/p1/x/component-tree')).error).toBeDefined();
   });
 
   it('names one concrete resource per reporting page in resources/list', async () => {
     const { push, call } = await bootHub();
     await push('push-component-tree', { pageId: 'p1', roots: tree('First'), count: 1 });
     const uris = (await call<Resources>('resources/list')).result!.resources.map((r) => r.uri);
-    expect(uris).toContain('pangular://page/p1/component-tree');
-    expect(uris).not.toContain('pangular://page/p1/router');
+    expect(uris).toContain('pangular://pages/p1/component-tree');
+    expect(uris).not.toContain('pangular://pages/p1/router');
     expect(uris).toContain('devframe://resource/pangular%3Acomponent-tree');
   });
 
@@ -309,9 +309,9 @@ describe('MCP resource templates over the hub endpoint', () => {
     const { call } = await bootHub({ inspectors: { components: false } });
     const list = await call<Templates>('resources/templates/list');
     const uris = list.result!.resourceTemplates.map((t) => t.uriTemplate);
-    expect(uris).not.toContain('pangular://page/{pageId}/component-tree');
-    expect(uris).toContain('pangular://page/{pageId}/router');
-    const read = await call('resources/read', { uri: 'pangular://page/p1/component-tree' });
+    expect(uris).not.toContain('pangular://pages/{pageId}/component-tree');
+    expect(uris).toContain('pangular://pages/{pageId}/router');
+    const read = await call('resources/read', { uri: 'pangular://pages/p1/component-tree' });
     expect(read.error?.message).toContain('unknown resource URI');
   });
 
@@ -322,7 +322,7 @@ describe('MCP resource templates over the hub endpoint', () => {
     const uris = (await call<Resources>('resources/list')).result!.resources.map((r) => r.uri);
     expect(uris.some((uri) => uri.startsWith('pangular://'))).toBe(false);
     expect(uris).toContain('devframe://resource/pangular%3Acomponent-tree');
-    const read = await call('resources/read', { uri: 'pangular://page/p1/component-tree' });
+    const read = await call('resources/read', { uri: 'pangular://pages/p1/component-tree' });
     expect(read.error).toBeDefined();
   });
 
@@ -431,9 +431,9 @@ describe('MCP resource templates over the pangular dev route', () => {
     const call = mcpClient(`${server.origin}/__mcp`, (request) => fetch(request));
     const list = await call<Templates>('resources/templates/list');
     const uris = list.result!.resourceTemplates.map((t) => t.uriTemplate);
-    expect(uris).toContain('pangular://page/{pageId}/router');
-    expect(uris).not.toContain('pangular://page/{pageId}/forms');
-    const read = await call<Contents>('resources/read', { uri: 'pangular://page/p1/router' });
+    expect(uris).toContain('pangular://pages/{pageId}/router');
+    expect(uris).not.toContain('pangular://pages/{pageId}/forms');
+    const read = await call<Contents>('resources/read', { uri: 'pangular://pages/p1/router' });
     expect(read.result!.contents[0]!.text).toContain('No page reports router state right now.');
   });
 });

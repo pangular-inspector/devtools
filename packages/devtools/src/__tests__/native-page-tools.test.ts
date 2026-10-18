@@ -59,7 +59,7 @@ describe('tools that need a DOM on a native page', () => {
   it('answers a screenshot of a native page without asking the page', async () => {
     const { push, tool, sent } = await boot();
     await push('push-component-tree', tree('an1', 'angular-native'));
-    const answer = await tool('screenshot-component', { selector: 'App', page: 'an1' });
+    const answer = await tool('screenshot-component', { component: 'App', page: 'an1' });
     expect(answer).toContain('is an Angular Native app');
     expect(answer).toContain('no DOM');
     expect(sent.some((s) => s.method.endsWith('component-screenshot'))).toBe(false);
@@ -69,7 +69,7 @@ describe('tools that need a DOM on a native page', () => {
     const { push, tool, sent } = await boot();
     await push('push-component-tree', tree('web1'));
     await push('push-component-tree', tree('an1', 'angular-native'));
-    void tool('screenshot-component', { selector: 'App' });
+    void tool('screenshot-component', { component: 'App' });
     await vi.waitFor(() =>
       expect(sent.find((s) => s.method.endsWith('component-screenshot'))?.args[0]).toMatchObject({
         pageId: 'web1',
@@ -80,7 +80,7 @@ describe('tools that need a DOM on a native page', () => {
   it('says why when only a native app reports', async () => {
     const { push, tool } = await boot();
     await push('push-component-tree', tree('ns1', 'nativescript'));
-    expect(await tool('screenshot-component', { selector: 'App' })).toContain(
+    expect(await tool('screenshot-component', { component: 'App' })).toContain(
       'is a NativeScript app',
     );
   });
@@ -112,12 +112,12 @@ describe('tools that need a DOM on a native page', () => {
   it('turns no live change detection view on for a native page, and records there', async () => {
     const { push, tool, sent } = await boot();
     await push('push-component-tree', tree('an1', 'angular-native'));
-    const answer = await tool('change-detection', { page: 'an1', flash: true });
+    const answer = await tool('record-change-detection', { page: 'an1', flash: true });
     expect(answer).toContain('the flash overlay');
     expect(answer).toContain('Recording with `record` works there.');
     expect(sent.some((s) => s.method.endsWith('change-detection-options'))).toBe(false);
 
-    await tool('change-detection', { page: 'an1', record: 'start' });
+    await tool('record-change-detection', { page: 'an1', record: 'start' });
     expect(sent.find((s) => s.method.endsWith('change-detection-record'))?.args[0]).toMatchObject({
       pageId: 'an1',
       on: true,
@@ -127,7 +127,11 @@ describe('tools that need a DOM on a native page', () => {
   it('still records when live views are asked for a native page in the same call', async () => {
     const { push, tool, sent } = await boot();
     await push('push-component-tree', tree('an1', 'angular-native'));
-    const answer = await tool('change-detection', { page: 'an1', record: 'start', flash: true });
+    const answer = await tool('record-change-detection', {
+      page: 'an1',
+      record: 'start',
+      flash: true,
+    });
     expect(answer.startsWith('Page `an1` is an Angular Native app')).toBe(true);
     expect(answer).toContain('Recording started');
     expect(sent.some((s) => s.method.endsWith('change-detection-options'))).toBe(false);
@@ -139,12 +143,12 @@ describe('tools that need a DOM on a native page', () => {
   it('says no page can show live views when every reporting page is native and page is omitted', async () => {
     const { push, tool, sent } = await boot();
     await push('push-component-tree', tree('an1', 'angular-native'));
-    const answer = await tool('change-detection', { flash: true });
+    const answer = await tool('record-change-detection', { flash: true });
     expect(answer).toContain('Every page that reports is an Angular Native or NativeScript app');
     expect(sent.some((s) => s.method.endsWith('change-detection-options'))).toBe(false);
 
     await push('push-component-tree', tree('web1'));
-    await tool('change-detection', { flash: true });
+    await tool('record-change-detection', { flash: true });
     expect(sent.some((s) => s.method.endsWith('change-detection-options'))).toBe(true);
   });
 });

@@ -201,7 +201,7 @@ export function ngrxStateOf(pages: NgrxPages): NgrxState {
 }
 
 /**
- * The answer of the dispatch-ngrx-action tool, as markdown. The page writes the
+ * The answer of the ngrx-dispatch tool, as markdown. The page writes the
  * error, the message and the entry, so all of it sits behind the notice.
  */
 export function dispatchResultText(result: NgrxRequestResult): string {

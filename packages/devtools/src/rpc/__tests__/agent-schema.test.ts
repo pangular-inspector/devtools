@@ -77,11 +77,11 @@ describe('describable', () => {
   });
 
   it.each([
-    ['get-routes', getRoutes],
-    ['get-components', getComponents],
-    ['get-signals', getSignals],
-    ['get-providers', getProviders],
-    ['get-ngrx-store', getNgrxStore],
+    ['scan-routes', getRoutes],
+    ['scan-components', getComponents],
+    ['scan-signals', getSignals],
+    ['scan-providers', getProviders],
+    ['ngrx-scan', getNgrxStore],
   ])('%s describes its own return value', (_name, definition) => {
     const converter = converterOf((definition as { returns: unknown }).returns);
     expect(converter).toBeDefined();

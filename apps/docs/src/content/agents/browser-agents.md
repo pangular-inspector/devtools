@@ -29,19 +29,19 @@ Each call goes from the page to the devtools server, which runs the same handler
 
 Only tools in the `read` [safety tier](./tools.md#action-tools). Action and destructive tools, such as `navigate`, `fill-form` or `clear-recordings`, never reach the page.
 
-Of the `read` tools, the page registers two kinds. The first answer for one page and take `page` or `pageId`. The second read your source, such as `get-routes`, `get-components` and `build-meta`. The following tools stay with the [MCP server](./mcp-server.md) only:
+Of the `read` tools, the page registers two kinds. The first answer for one page and take `page`. The second read your source, such as `scan-routes`, `scan-components` and `scan-build`. The following tools stay with the [MCP server](./mcp-server.md) only:
 
-| Tool                                                                                                       | Why it stays off the page                                                               |
-| ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `list-pages`                                                                                               | It lists every tab that reports.                                                        |
-| `list-ssr-requests`, `explain-ssr-request`, `list-ssr-overrides`, `list-http-rules`, `analog-server-calls` | They answer about the whole server, for every tab.                                      |
-| `screenshot-component`                                                                                     | A page tool answers with text, not an image, and the capture draws the whole component. |
-| `highlight`                                                                                                | It draws on the page and changes the selection in open panels.                          |
-| `open-in-panel`                                                                                            | It switches the panels that are open.                                                   |
-| `export-ngrx-session`, `import-ngrx-session`                                                               | They move whole recorded NgRx sessions out of and into the server.                      |
-| A [server plugin's own tools](./tools.md#plugins)                                                          | Their handlers can read every page the plugin sees.                                     |
+| Tool                                                                                                            | Why it stays off the page                                                               |
+| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `list-pages`                                                                                                    | It lists every tab that reports.                                                        |
+| `list-ssr-requests`, `explain-ssr-request`, `list-ssr-overrides`, `list-http-rules`, `analog-list-server-calls` | They answer about the whole server, for every tab.                                      |
+| `screenshot-component`                                                                                          | A page tool answers with text, not an image, and the capture draws the whole component. |
+| `highlight`                                                                                                     | It draws on the page and changes the selection in open panels.                          |
+| `open-in-panel`                                                                                                 | It switches the panels that are open.                                                   |
+| `ngrx-export-session`, `ngrx-import-session`                                                                    | They move whole recorded NgRx sessions out of and into the server.                      |
+| A [server plugin's own tools](./tools.md#plugins)                                                               | Their handlers can read every page the plugin sees.                                     |
 
-On the page, `inspect-ngrx-entry` and `generate-ngrx-test` read the live page only: they refuse `session`, because imported sessions are kept for the whole server.
+On the page, `ngrx-inspect-entry` and `ngrx-generate-test` read the live page only: they refuse `session`, because imported sessions are kept for the whole server.
 
 The config decides the rest, as for MCP clients:
 
@@ -56,7 +56,7 @@ See [Configuration](../getting-started/configuration.md#inspectors-and-agent-too
 
 ## How the tools answer
 
-- A tool that takes `page` or `pageId` always answers for the page that registered it. A `page` or `pageId` the agent passes is replaced with that page's id, so a page never reads another tab. When the page has not reported that data, the answer says so without naming other tabs.
+- A tool that takes `page` always answers for the page that registered it. A `page` the agent passes is replaced with that page's id, so a page never reads another tab. When the page has not reported that data, the answer says so without naming other tabs.
 - The answer is the markdown or JSON an MCP client gets. Secret names, JWTs and bearer tokens are masked, as in every answer. See [Redaction](../security.md).
 - Answers over 100,000 characters are cut, with a note to narrow the call.
 - A WebMCP call resolves to `{content: [{type: 'text', text}]}`. A refused or failed call rejects with the reason.

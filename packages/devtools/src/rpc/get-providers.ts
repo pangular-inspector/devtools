@@ -30,11 +30,6 @@ export const getProviders = defineRpcFunction({
   snapshot: true,
   args: [],
   returns: describable(v.array(ProviderEntrySchema)),
-  agent: {
-    description:
-      'Scan source files for DI providers: @Injectable services, inject() calls, constructor parameters of decorated classes, and providers arrays. Returns token, file, and where it is provided. Call this to understand the DI architecture.',
-    title: 'List Angular DI providers from source',
-  },
   setup: (ctx) => ({
     handler: async () => scanProviders(ctx.cwd),
   }),

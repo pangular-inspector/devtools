@@ -27,8 +27,8 @@ async function boot(definition = createPangular({ inspectors: { capacitor: true 
     ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
   const invoke = async (id: string, args: Record<string, unknown> = {}) =>
     await answerText(ctx.agent.invoke(`pangular:${id}`, args));
-  const tool = (args: Record<string, unknown> = {}) => invoke('list-capacitor-calls', args);
-  const plugins = (args: Record<string, unknown> = {}) => invoke('list-capacitor-plugins', args);
+  const tool = (args: Record<string, unknown> = {}) => invoke('capacitor-list-calls', args);
+  const plugins = (args: Record<string, unknown> = {}) => invoke('capacitor-list-plugins', args);
   const state = async () =>
     (
       await (
@@ -94,7 +94,7 @@ const report = (extra: Partial<CapacitorReport> = {}): CapacitorReport => ({
   ...extra,
 });
 
-describe('list-capacitor-calls', () => {
+describe('capacitor-list-calls', () => {
   it('says how to connect an app when none reports', async () => {
     const { tool } = await boot();
     expect(await tool()).toMatch(/No Capacitor app reports to this server/);
@@ -328,14 +328,14 @@ describe('list-capacitor-calls', () => {
   it('is gone with the inspector turned off', async () => {
     const { ctx } = await boot(createPangular({ inspectors: { capacitor: false } }));
     const tools = ctx.agent.list().tools.map((entry: { id: string }) => entry.id);
-    expect(tools).not.toContain('pangular:list-capacitor-calls');
+    expect(tools).not.toContain('pangular:capacitor-list-calls');
     await expect(
       ctx.rpc.invokeLocal('pangular:push-capacitor' as never, ...([report()] as never)),
     ).rejects.toThrow();
   });
 });
 
-describe('list-capacitor-plugins', () => {
+describe('capacitor-list-plugins', () => {
   it('lists the environment and each plugin with hints', async () => {
     const { push, plugins } = await boot();
     await push('push-capacitor', report());
@@ -391,7 +391,7 @@ describe('list-capacitor-plugins', () => {
   it('is gone with the inspector turned off', async () => {
     const { ctx } = await boot(createPangular({ inspectors: { capacitor: false } }));
     const tools = ctx.agent.list().tools.map((entry: { id: string }) => entry.id);
-    expect(tools).not.toContain('pangular:list-capacitor-plugins');
+    expect(tools).not.toContain('pangular:capacitor-list-plugins');
   });
 });
 

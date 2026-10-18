@@ -133,21 +133,25 @@ describe('the TanStack Query report on the server', () => {
 
   it('lists queries and mutations, filtered by status and key', async () => {
     const { call, invoke } = await boot();
-    expect(await invoke('list-queries')).toMatch(/No page reports a TanStack Query/);
+    expect(await invoke('tanstack-list-queries')).toMatch(/No page reports a TanStack Query/);
     await call('push-tanstack-query', report());
-    const text = await invoke('list-queries');
+    const text = await invoke('tanstack-list-queries');
     expect(text).toMatch(/come from the running page/);
     expect(text).toMatch(/`c1` in root \(1 queries, 1 mutations\)/);
     expect(text).toMatch(
       /\| `q1` \| `\["trips"\]` \| success \| idle \| stale \| 12 s ago \| 2 \|/,
     );
     expect(text).toMatch(/\| `m1` \| `\["book"\]` \| error \| 1 s ago \| Error: 500 \|/);
-    expect(await invoke('list-queries', { status: 'error' })).toMatch(/Queries \(0 of 0\)/);
-    expect(await invoke('list-queries', { search: 'TRIPS' })).toMatch(/Mutations \(0 of 0\)/);
-    expect(await invoke('list-queries', { page: 'nope' })).toMatch(/No page `nope`/);
+    expect(await invoke('tanstack-list-queries', { status: 'error' })).toMatch(
+      /Queries \(0 of 0\)/,
+    );
+    expect(await invoke('tanstack-list-queries', { search: 'TRIPS' })).toMatch(
+      /Mutations \(0 of 0\)/,
+    );
+    expect(await invoke('tanstack-list-queries', { page: 'nope' })).toMatch(/No page `nope`/);
   });
 
-  it('reads the data from the page for inspect-query', async () => {
+  it('reads the data from the page for tanstack-inspect-query', async () => {
     const { call, invoke, answerAs } = await boot();
     await call('push-tanstack-query', report());
     const broadcast = answerAs((request) => ({
@@ -159,7 +163,7 @@ describe('the TanStack Query report on the server', () => {
         data: [{ id: 7, apiKey: '[redacted]' }],
       },
     }));
-    const text = await invoke('inspect-query', { key: 'trips' });
+    const text = await invoke('tanstack-inspect-query', { key: 'trips' });
     expect(broadcast).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'pangular:tanstack-query-request',
@@ -169,23 +173,27 @@ describe('the TanStack Query report on the server', () => {
     expect(text).toMatch(/# Query `q1` `\["trips"\]`/);
     expect(text).toMatch(/freshness: stale \(staleTime 0 ms\)/);
     expect(text).toMatch(/"apiKey": "\[redacted\]"/);
-    expect(await invoke('inspect-query', { id: 'q9' })).toMatch(/No query or mutation `q9`/);
-    expect(await invoke('inspect-query')).toMatch(/Pass `id`/);
+    expect(await invoke('tanstack-inspect-query', { id: 'q9' })).toMatch(
+      /No query or mutation `q9`/,
+    );
+    expect(await invoke('tanstack-inspect-query')).toMatch(/Pass `id`/);
   });
 
   it('invalidates through the page, and refuses when the action is blocked', async () => {
     const { call, invoke, answerAs } = await boot();
     await call('push-tanstack-query', report());
     answerAs((request) => ({ ok: true, message: `Invalidated ${request.id}.` }));
-    expect(await invoke('query-action', { action: 'invalidate', id: 'q1' })).toMatch(
+    expect(await invoke('tanstack-run-query', { action: 'invalidate', id: 'q1' })).toMatch(
       /Invalidated q1\./,
     );
-    expect(await invoke('query-action', { action: 'refetch', id: 'm1' })).toMatch(/is a mutation/);
-    expect(await invoke('query-action', { action: 'drop', id: 'q1' })).toMatch(
+    expect(await invoke('tanstack-run-query', { action: 'refetch', id: 'm1' })).toMatch(
+      /is a mutation/,
+    );
+    expect(await invoke('tanstack-run-query', { action: 'drop', id: 'q1' })).toMatch(
       /^`action` must be one of `invalidate`, `refetch`/,
     );
     await call('push-tanstack-query', report({ pageId: 'tab2' }));
-    expect(await invoke('query-action', { action: 'refetch', id: 'q1' })).toMatch(
+    expect(await invoke('tanstack-run-query', { action: 'refetch', id: 'q1' })).toMatch(
       /2 pages report TanStack Query/,
     );
 
@@ -200,14 +208,14 @@ describe('the TanStack Query report on the server', () => {
       }),
     ).toEqual({ error: expect.stringMatching(/actions\.tanstackQuery/) });
     const tools = blocked.ctx.agent.list().tools.map((tool: { id: string }) => tool.id);
-    expect(tools).not.toContain('pangular:query-action');
-    expect(tools).toContain('pangular:inspect-query');
+    expect(tools).not.toContain('pangular:tanstack-run-query');
+    expect(tools).toContain('pangular:tanstack-inspect-query');
   });
 
   it('goes away with its inspector', async () => {
     const { ctx } = await boot(createPangular({ inspectors: { tanstackQuery: false } }));
     const tools = ctx.agent.list().tools.map((tool: { id: string }) => tool.id);
-    expect(tools).not.toContain('pangular:list-queries');
+    expect(tools).not.toContain('pangular:tanstack-list-queries');
     await expect(
       ctx.rpc.invokeLocal('pangular:push-tanstack-query' as never, ...([report()] as never)),
     ).rejects.toThrow();

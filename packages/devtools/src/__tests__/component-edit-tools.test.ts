@@ -86,7 +86,7 @@ describe('set-component-property and set-signal', () => {
       path: request.path,
       value: request.value,
     }));
-    const text = await call('set-signal', { component: 'p1-a', signal: 'count', value: 3 });
+    const text = await call('set-signal', { component: 'p1-a', property: 'count', value: 3 });
     expect(text.startsWith(UNTRUSTED)).toBe(true);
     expect(text).toContain('Set `count` on `Card` (instance `p1-a` on page `p1`) with `.set()`');
     expect(text).toContain('```json\n3\n```');
@@ -113,7 +113,7 @@ describe('set-component-property and set-signal', () => {
       path: request.path,
       value: request.value,
     }));
-    const text = await call('set-signal', { component: 'p1-a', signal: 'user', value: null });
+    const text = await call('set-signal', { component: 'p1-a', property: 'user', value: null });
     expect(text).not.toContain('Pass `value`');
     expect(text).toContain('```json\nnull\n```');
     expect(sent[0].request).toMatchObject({ kind: 'signal', path: 'user', value: null });
@@ -130,7 +130,7 @@ describe('set-component-property and set-signal', () => {
     const { ctx, push, call } = await boot();
     await push('push-component-tree', tree('p1'));
     answerEdits(ctx, push, () => ({ error: '`title` is a signal input.' }));
-    const text = await call('set-signal', { component: 'p1-a', signal: 'title', value: 'x' });
+    const text = await call('set-signal', { component: 'p1-a', property: 'title', value: 'x' });
     expect(text.startsWith(UNTRUSTED)).toBe(true);
     expect(text).toContain(
       'Nothing was written to instance `p1-a` on page `p1`. `title` is a signal input.',
@@ -156,11 +156,11 @@ describe('set-component-property and set-signal', () => {
     await push('push-component-tree', tree('p2'));
     const sent = answerEdits(ctx, push, () => ({ ok: true }));
     // `Card` renders on both pages, so the caller picks one.
-    expect(await call('set-signal', { component: 'Card', signal: 'count', value: 1 })).toMatch(
+    expect(await call('set-signal', { component: 'Card', property: 'count', value: 1 })).toMatch(
       /2 pages report a component that matches `Card`/,
     );
     expect(
-      await call('set-signal', { component: 'p1-a', signal: 'count', value: 1, page: 'p9' }),
+      await call('set-signal', { component: 'p1-a', property: 'count', value: 1, page: 'p9' }),
     ).toMatch(/No page `p9`/);
     expect(sent).toHaveLength(0);
     // The panel RPC follows the same rule.

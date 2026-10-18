@@ -570,25 +570,25 @@ describe('ngrx history agent tools', () => {
     await push('push-ngrx-state', report('p1'));
     const sent = answerWith(ctx, push, (request) => collector.run(request));
 
-    const entry = await call('inspect-ngrx-entry', { seq: 2 });
+    const entry = await call('ngrx-inspect-entry', { seq: 2 });
     expect(sent[0]).toEqual({ type: 'entry', seq: 2 });
     expect(entry).toContain('## Entry #2 on `store`');
     expect(entry).toContain('"oslo"');
 
-    const exported = await call('export-ngrx-session', { from: 2 });
+    const exported = await call('ngrx-export-session', { from: 2 });
     expect(exported).toContain('Exported 2 entries of `store`');
     const json = /```json\n([\s\S]*?)\n```/.exec(exported)![1];
     expect(JSON.parse(json).page).toEqual({ url: '/cart', title: 'Cart' });
 
-    const imported = await call('import-ngrx-session', { session: json });
+    const imported = await call('ngrx-import-session', { session: json });
     const id = /Imported session `([^`]+)`/.exec(imported)![1];
     expect(imported).toContain('#2 to #3');
-    const fromImport = await call('inspect-ngrx-entry', { seq: 3, session: id });
+    const fromImport = await call('ngrx-inspect-entry', { seq: 3, session: id });
     expect(fromImport).toContain('"lima"');
 
-    const live = await call('generate-ngrx-test', { from: 1, to: 3 });
+    const live = await call('ngrx-generate-test', { from: 1, to: 3 });
     expect(live).toContain("import { cartReducer } from './cart.reducer';");
-    const offline = await call('generate-ngrx-test', { session: id });
+    const offline = await call('ngrx-generate-test', { session: id });
     expect(offline).toContain('(entries #2 to #3)');
   });
 
@@ -599,12 +599,12 @@ describe('ngrx history agent tools', () => {
       ok: true,
       message: 'Jumped to the state after action #2.',
     }));
-    expect(await call('restore-ngrx-state', { seq: 2 })).toContain(
+    expect(await call('ngrx-restore', { seq: 2 })).toContain(
       'Jumped to the state after action #2.',
     );
-    expect(await call('restore-ngrx-state', { latest: true })).toContain('Jumped');
+    expect(await call('ngrx-restore', { latest: true })).toContain('Jumped');
     expect(sent).toEqual([{ type: 'restore', seq: 2 }, { type: 'latest' }]);
-    expect(await call('restore-ngrx-state', {})).toMatch(/Pass `seq`/);
+    expect(await call('ngrx-restore', {})).toMatch(/Pass `seq`/);
   });
 
   it('keeps reading history with the ngrx write action off, and refuses restores', async () => {
@@ -627,6 +627,6 @@ describe('ngrx history agent tools', () => {
     expect(
       await push('request-ngrx-action', { pageId: 'p1', request: { type: 'restore', seq: 1 } }),
     ).toMatchObject({ error: expect.stringMatching(/actions\.ngrx/) });
-    expect(ctx.agent.list().tools.map((t) => t.id)).not.toContain('pangular:restore-ngrx-state');
+    expect(ctx.agent.list().tools.map((t) => t.id)).not.toContain('pangular:ngrx-restore');
   });
 });

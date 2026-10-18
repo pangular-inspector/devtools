@@ -210,12 +210,12 @@ export const ping = serverFn(() => 1);
       ms: 4,
       from: 'browser',
     });
-    const fns = await call('analog-server-functions');
+    const fns = await call('analog-scan-server-functions');
     expect(fns).toContain(
       `- GET getUsers \`/src/app/users/users.server.ts\` id \`${id}\`; seen 1 HTTP call(s), 1 during server rendering; called again in the browser right after hydration`,
     );
     expect(fns).toContain('- DELETE removeUser');
-    const calls = await call('analog-server-calls', { route: 'getUsers' });
+    const calls = await call('analog-list-server-calls', { route: 'getUsers' });
     expect(calls).toContain(
       'fn getUsers (`/src/app/users/users.server.ts`) ran in-process during server rendering',
     );

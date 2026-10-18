@@ -70,7 +70,7 @@ Click a field to open its details below the table. Click the field again, or **C
 
 ### Timeline view
 
-Recent changes, newest first, each tagged with its origin: user, code, agent (a WebMCP tool call) or devtools. The timeline tracks array items by identity, so moves show as moves. Async validation times show as **pending** tags. The page keeps the last 200 events, set with [`limits.formTimeline`](../getting-started/configuration.md#limits). Once older events are dropped, the timeline and `form-history` say how many.
+Recent changes, newest first, each tagged with its origin: user, code, agent (a WebMCP tool call) or devtools. The timeline tracks array items by identity, so moves show as moves. Async validation times show as **pending** tags. The page keeps the last 200 events, set with [`limits.formTimeline`](../getting-started/configuration.md#limits). Once older events are dropped, the timeline and `list-form-changes` say how many.
 
 Narrow the list with three filters. An event shows only when it passes all of them.
 
@@ -198,26 +198,26 @@ You can also open a form from its component in the [Components tab](./components
 
 | Tool                              | What it does                                                                                                                          |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:explain-form-invalid`   | Start here. Every invalid or pending form, with each failing field's value, validator, message and touched state. Narrow with `path`. |
+| `pangular:explain-invalid-forms`  | Start here. Every invalid or pending form, with each failing field's value, validator, message and touched state. Narrow with `path`. |
 | `pangular:inspect-forms`          | The forms with status and error counts, and WebMCP tool state. With `form`, the field tree. Narrow with `path` or `onlyInvalid`.      |
 | `pangular:explain-field`          | One field: error sources, skip reasons, pending values, binding, visible errors, and source lines.                                    |
 | `pangular:explain-submit`         | What submit does, and why it might do nothing.                                                                                        |
-| `pangular:form-payload`           | What the form sends: value against raw value, and unvalidated fields. Narrow with `path`.                                             |
-| `pangular:form-history`           | The change timeline with origins. Returns a marker.                                                                                   |
-| `pangular:form-diff`              | The net change since a marker.                                                                                                        |
+| `pangular:inspect-form-payload`   | What the form sends: value against raw value, and unvalidated fields. Narrow with `path`.                                             |
+| `pangular:list-form-changes`      | The change timeline with origins. Returns a marker.                                                                                   |
+| `pangular:explain-form-changes`   | The net change since a marker.                                                                                                        |
 | `pangular:lint-forms`             | Form bugs and accessibility checks.                                                                                                   |
 | `pangular:explain-custom-control` | How a field binds to its element, and what is wrong with the binding.                                                                 |
 | `pangular:export-form`            | A JSON snapshot or a test fixture.                                                                                                    |
-| `pangular:wait-for-form`          | Waits until the form is settled, valid, not pending or submitted.                                                                     |
+| `pangular:wait-for`               | With `condition: "form"`, waits until the form is settled, valid, not pending or submitted.                                           |
 
 ### Write tools
 
-| Tool                   | What it does                                                                       |
-| ---------------------- | ---------------------------------------------------------------------------------- |
-| `pangular:form-action` | Set, touch, revalidate, reset, submit, focus, snapshot, restore and more.          |
-| `pangular:fill-form`   | Fills several fields through the inputs, like a user would. Can submit afterwards. |
+| Tool                       | What it does                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| `pangular:run-form-action` | Set, touch, revalidate, reset, submit, focus, snapshot, restore and more.          |
+| `pangular:fill-form`       | Fills several fields through the inputs, like a user would. Can submit afterwards. |
 
-Agents can loop: inspect, act, `wait-for-form`, then `form-diff` from the marker they had. The `pangular:forms` resource holds every form and recent changes. See [Tools](../agents/tools.md).
+Agents can loop: inspect, act, `wait-for` with `condition: "form"`, then `explain-form-changes` from the marker they had. The `pangular:forms` resource holds every form and recent changes. See [Tools](../agents/tools.md).
 
 ## Limits and gotchas
 

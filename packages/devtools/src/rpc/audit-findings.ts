@@ -615,7 +615,7 @@ function pipes(lint: (() => PipeLintFinding[]) | undefined): Collected {
     return { findings: [], source: { area, state: 'empty', note: 'The source scan failed.' } };
   }
   const findings = found.map((finding) =>
-    make(area, finding.rule, finding.severity, finding.message, 'pangular:lint-pipes', {
+    make(area, finding.rule, finding.severity, finding.message, 'pangular:scan-pipe-usage', {
       subject: `${finding.pipe} in ${finding.file}:${finding.line}`,
     }),
   );

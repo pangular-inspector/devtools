@@ -256,19 +256,19 @@ The stand-in is part of the NgRx inspector. With [`inspectors.ngrx`](../getting-
 
 | Tool or resource                | Kind     | What it does                                                                                                                      |
 | ------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:get-ngrx-store`       | tool     | NgRx declarations from source, with the members of each `signalStore` and the type strings of each action.                        |
-| `pangular:dispatch-ngrx-action` | tool     | Dispatches an action to the classic Store, or an action from the log again, and returns the new log entry.                        |
+| `pangular:ngrx-scan`            | tool     | NgRx declarations from source, with the members of each `signalStore` and the type strings of each action.                        |
+| `pangular:ngrx-dispatch`        | tool     | Dispatches an action to the classic Store, or an action from the log again, and returns the new log entry.                        |
 | `pangular:ngrx-store`           | resource | The live stores per page, with state, computeds, methods, references and the change log. Classic Store actions carry an `origin`. |
-| `pangular:inspect-signal-store` | tool     | The live state of one store, or a summary of every store discovered so far.                                                       |
-| `pangular:signal-store-history` | tool     | The live change log, oldest first: state diffs, classic `@ngrx/store` actions and `@ngrx/signals/events` events.                  |
-| `pangular:inspect-ngrx-entry`   | tool     | The State, Diff and Action of one past entry, from the page or an imported session.                                               |
-| `pangular:export-ngrx-session`  | tool     | A range of one store's log as session JSON.                                                                                       |
-| `pangular:import-ngrx-session`  | tool     | Reads an exported session back, for the two tools above and below.                                                                |
-| `pangular:generate-ngrx-test`   | tool     | A Vitest spec from a range of entries, live or imported.                                                                          |
-| `pangular:restore-ngrx-state`   | tool     | Restores the state after an entry, or sends Store DevTools back to the latest state. An action tool.                              |
-| `pangular:inspect-redux-stores` | tool     | The NGXS, Elf, MiniRx and other Redux DevTools stores of a page, or one of them with its state and latest actions.                |
+| `pangular:ngrx-inspect-store`   | tool     | The live state of one store, or a summary of every store discovered so far.                                                       |
+| `pangular:ngrx-history`         | tool     | The live change log, oldest first: state diffs, classic `@ngrx/store` actions and `@ngrx/signals/events` events.                  |
+| `pangular:ngrx-inspect-entry`   | tool     | The State, Diff and Action of one past entry, from the page or an imported session.                                               |
+| `pangular:ngrx-export-session`  | tool     | A range of one store's log as session JSON.                                                                                       |
+| `pangular:ngrx-import-session`  | tool     | Reads an exported session back, for the two tools above and below.                                                                |
+| `pangular:ngrx-generate-test`   | tool     | A Vitest spec from a range of entries, live or imported.                                                                          |
+| `pangular:ngrx-restore`         | tool     | Restores the state after an entry, or sends Store DevTools back to the latest state. An action tool.                              |
+| `pangular:redux-inspect-stores` | tool     | The NGXS, Elf, MiniRx and other Redux DevTools stores of a page, or one of them with its state and latest actions.                |
 
-See [NgRx tools](../agents/tools.md#inspect-ngrx-entry), [Restore a state](../agents/tools.md#restore-a-state) and [Resources](../agents/resources.md).
+See [NgRx tools](../agents/tools.md#ngrx-inspect-entry), [Restore a state](../agents/tools.md#restore-a-state) and [Resources](../agents/resources.md).
 
 ## Limits and gotchas
 
@@ -302,7 +302,7 @@ The copy buttons use the browser clipboard. If the panel cannot write to it, for
 
 ### Write actions
 
-Restore, **Back to latest**, **Dispatch** and **Dispatch again** need [`actions.ngrx`](../getting-started/configuration.md#actions). With it off, the panel disables them, the server refuses them, and the `dispatch-ngrx-action` and `restore-ngrx-state` tools are dropped. The **State** tab, **Session** and their tools only read, so they keep working.
+Restore, **Back to latest**, **Dispatch** and **Dispatch again** need [`actions.ngrx`](../getting-started/configuration.md#actions). With it off, the panel disables them, the server refuses them, and the `ngrx-dispatch` and `ngrx-restore` tools are dropped. The **State** tab, **Session** and their tools only read, so they keep working.
 
 ### Log size
 

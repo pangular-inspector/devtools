@@ -6,7 +6,7 @@ import { defaultPage } from './default-page.ts';
 
 import type { ComponentPage, HttpPage } from '../types.ts';
 import { urlGlobMatch } from '../url-glob.ts';
-import { MARKDOWN_OUTPUT_SCHEMA, type MarkdownAnswer } from './agent-output.ts';
+import type { MarkdownAnswer } from './agent-output.ts';
 import { findComponents } from './component-tools.ts';
 import type { ErrorGroup, ErrorsState } from './errors-tools.ts';
 import { code, untrusted } from './forms-tools.ts';
@@ -19,6 +19,7 @@ export const WAIT_CONDITIONS = [
   'navigation',
   'http-call',
   'error',
+  'form',
 ] as const;
 export type WaitCondition = (typeof WAIT_CONDITIONS)[number];
 
@@ -39,6 +40,11 @@ export interface WaitForSources {
   http?: () => Iterable<HttpPage>;
   /** What every page reported to the Errors inspector; left out when it is off. */
   errors?: () => ErrorsState;
+  /**
+   * Waits for a form condition (`form`, `until`, `after`) on the Forms
+   * inspector's state; left out when it is off.
+   */
+  forms?: (args: Args, timeoutMs: number) => Promise<MarkdownAnswer>;
   /** Change events of the stores above: each takes a listener and returns its unsubscribe. */
   subscribe?: readonly ((listener: () => void) => () => void)[];
   /** Renews the activity lease while the tool waits. */
@@ -65,6 +71,7 @@ const SOURCE_OF: Record<WaitCondition, keyof WaitForSources> = {
   navigation: 'router',
   'http-call': 'http',
   error: 'errors',
+  form: 'forms',
 };
 
 const INSPECTOR_OF: Record<WaitCondition, string> = {
@@ -73,6 +80,7 @@ const INSPECTOR_OF: Record<WaitCondition, string> = {
   navigation: 'Router',
   'http-call': 'HTTP',
   error: 'Errors',
+  form: 'Forms',
 };
 
 const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value : undefined);
@@ -175,9 +183,9 @@ function componentProbe(
   page: string | undefined,
   gone: boolean,
 ): Probe | string {
-  const selector = text(args['selector']);
+  const selector = text(args['component']);
   if (!selector) {
-    return 'Pass `selector`: an instance id (e.g. c12), class name (e.g. ProductCard) or host tag (e.g. app-product-card).';
+    return 'Pass `component`: an instance id (e.g. c12), class name (e.g. ProductCard) or host tag (e.g. app-product-card).';
   }
   const read = () => pick(sources.components!(), page, 'a component tree');
   const first = read();
@@ -304,7 +312,7 @@ function errorProbe(sources: WaitForSources, args: Args, page: string | undefine
 }
 
 function conditionLabel(condition: WaitCondition, args: Args): string {
-  const selector = text(args['selector']);
+  const selector = text(args['component']);
   const url = text(args['url']);
   const errorCode = text(args['code']);
   switch (condition) {
@@ -318,12 +326,14 @@ function conditionLabel(condition: WaitCondition, args: Args): string {
       return url ? `\`http-call\` ${code(url)}` : '`http-call`';
     case 'error':
       return errorCode ? `\`error\` ${code(errorCode)}` : '`error`';
+    case 'form':
+      return '`form`';
   }
 }
 
 /** What the tool tells an agent, under 600 characters. */
 export const WAIT_FOR_DESCRIPTION =
-  'Wait until a condition holds instead of polling: `component` or `component-gone` (`selector`), `navigation` (`url`), `http-call` (`url`) or `error` (`code`). Returns once it holds or after `timeoutMs` (default 5000, max 30000). Only reads.';
+  'Wait until a condition holds instead of polling: `component` or `component-gone` (`component`), `navigation` (`url`), `http-call` (`url`), `error` (`code`) or `form` (`form`, `until`, `after`). Returns once it holds or after `timeoutMs` (default 5000, max 30000). Only reads.';
 
 /**
  * The `pangular:wait-for` tool, offering only the conditions whose inspector
@@ -350,7 +360,8 @@ export function createWaitForTool(sources: WaitForSources) {
         markdown: `\`${condition}\` needs the ${INSPECTOR_OF[condition]} inspector, which is turned off for agents in this server's config.`,
       };
     }
-    const page = pageArgument(args, 'pageId');
+    if (condition === 'form') return sources.forms!(args, waitTimeout(args['timeoutMs']));
+    const page = pageArgument(args);
     const probe =
       condition === 'component' || condition === 'component-gone'
         ? componentProbe(sources, args, page, condition === 'component-gone')
@@ -380,13 +391,12 @@ export function createWaitForTool(sources: WaitForSources) {
   return {
     id: 'pangular:wait-for',
     title: 'Wait for a condition',
-    outputSchema: MARKDOWN_OUTPUT_SCHEMA,
     description: WAIT_FOR_DESCRIPTION,
     inputSchema: {
       type: 'object',
       properties: {
         condition: { type: 'string', enum: [...conditions], description: 'What to wait for.' },
-        selector: {
+        component: {
           type: 'string',
           description:
             'For `component` and `component-gone`: instance id (e.g. c12), class name (e.g. ProductCard) or host tag.',
@@ -400,6 +410,26 @@ export function createWaitForTool(sources: WaitForSources) {
           type: 'string',
           description: 'For `error`: only an error with this Angular code, such as NG0100.',
         },
+        ...(conditions.includes('form')
+          ? {
+              form: {
+                type: 'string',
+                description:
+                  'For `form`: form id or label from pangular:inspect-forms; every form without it.',
+              },
+              until: {
+                type: 'string',
+                enum: ['settled', 'valid', 'not-pending', 'submitted'],
+                description:
+                  'For `form`: `settled` (default: no pending async validation, debounce or submit in flight), `valid`, `not-pending`, or `submitted` after `after`.',
+              },
+              after: {
+                type: 'number',
+                description:
+                  'For `form` with `until: "submitted"`: a marker from a forms tool answer.',
+              },
+            }
+          : {}),
         timeoutMs: {
           type: 'number',
           description: `How long to wait, in ms (default ${WAIT_DEFAULT_MS}, at most ${WAIT_MAX_MS}).`,
@@ -409,7 +439,6 @@ export function createWaitForTool(sources: WaitForSources) {
           description:
             'Page id, when more than one tab reports (see pangular:list-pages). Without it, every page counts; `navigation` uses the default page.',
         },
-        pageId: { type: 'string', description: 'Same as `page`.' },
       },
       required: ['condition'],
     },

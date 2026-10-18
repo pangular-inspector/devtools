@@ -143,7 +143,7 @@ describe('inspect-component with path', () => {
       value: { city: 'Rome', tags: { $collapsed: 'Array', size: 2 } },
     }));
     const text = await call('inspect-component', {
-      selector: 'p1-a',
+      component: 'p1-a',
       path: 'user.address',
       depth: 2,
       limit: 10,
@@ -158,7 +158,7 @@ describe('inspect-component with path', () => {
       depth: 2,
       limit: 10,
     });
-    const indexed = await call('inspect-component', { selector: 'Card', path: 'items[2].tags' });
+    const indexed = await call('inspect-component', { component: 'Card', path: 'items[2].tags' });
     expect(indexed).toContain('`items[2].tags`');
     expect(sent[1].request).toMatchObject({ path: ['items', '2', 'tags'], depth: 1, limit: 30 });
   });
@@ -167,11 +167,11 @@ describe('inspect-component with path', () => {
     const { ctx, push, call } = await boot();
     await push('push-component-tree', tree('p1'));
     answerValues(ctx, push, () => ({ error: '`user.password` is redacted, so it is not read.' }));
-    const text = await call('inspect-component', { selector: 'p1-a', path: 'user.password' });
+    const text = await call('inspect-component', { component: 'p1-a', path: 'user.password' });
     expect(text.startsWith(UNTRUSTED)).toBe(true);
     expect(text).toContain('Could not read `user.password` of instance `p1-a` on page `p1`.');
     expect(text).toContain('is redacted');
-    expect(await call('inspect-component', { selector: 'p1-a', path: 'a..b' })).toMatch(
+    expect(await call('inspect-component', { component: 'p1-a', path: 'a..b' })).toMatch(
       /Pass `path`/,
     );
   });

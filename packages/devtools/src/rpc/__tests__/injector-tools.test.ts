@@ -106,7 +106,7 @@ describe('inspectProvidersText', () => {
     expect(kept).toBeGreaterThan(0);
     expect(kept).toBeLessThan(total);
     expect(text).toContain(`${total - kept} of ${total} element injectors are left out`);
-    expect(text).toMatch(/pass `selector` or `token`/);
+    expect(text).toMatch(/pass `injector` or `token`/);
     expect(outline[0]!.id).toBe('r');
     expect(outline[0]!.children).toHaveLength(6);
     expect(section(text, 'Environment injectors:')).toEqual(environment());
@@ -162,15 +162,15 @@ describe('inspectProvidersText', () => {
     expect(() => section(text, 'Element injectors:', 'Environment injectors:')).not.toThrow();
   });
 
-  it('asks for a shorter selector or token instead of echoing a very long one', () => {
+  it('asks for a shorter injector or token instead of echoing a very long one', () => {
     const long = 'x'.repeat(MAX_TOOL_CHARS);
-    for (const args of [{ selector: long }, { token: long }, { selector: 'app-a', token: long }]) {
+    for (const args of [{ injector: long }, { token: long }, { injector: 'app-a', token: long }]) {
       const text = inspectProvidersText(page([element('a')]), args);
       expect(text.length).toBeLessThan(500);
       expect(text).toContain(`at most ${MAX_ARG_CHARS} characters`);
     }
     const text = inspectProvidersText(page([element('a')]), {
-      selector: 'app-a',
+      injector: 'app-a',
       token: 'y'.repeat(MAX_ARG_CHARS),
     });
     expect(text.length).toBeLessThanOrEqual(MAX_TOOL_CHARS);
@@ -184,7 +184,7 @@ describe('inspectProvidersText', () => {
         5,
       ),
     );
-    const text = inspectProvidersText(page(roots), { selector: 'app-item', token: 'Store' });
+    const text = inspectProvidersText(page(roots), { injector: 'app-item', token: 'Store' });
     expect(text.length).toBeLessThanOrEqual(MAX_TOOL_CHARS);
     expect(text).toMatch(/Showing \d+ of 200/);
     const json = text.split('\n\n').filter((part) => /^[[{]/.test(part));

@@ -50,11 +50,6 @@ export const getNgrxStore = defineRpcFunction({
   snapshot: true,
   args: [],
   returns: describable(v.array(NgrxStoreEntrySchema)),
-  agent: {
-    description:
-      'Source scan of @ngrx/store (actions, reducers, effects, selectors, features) and @ngrx/signals (signalStore, signalState, signalMethod): name, kind, file, line and members.',
-    title: 'List NgRx store entries from source',
-  },
   setup: (ctx) => ({
     handler: async () => scanNgrxStore(ctx.cwd),
   }),

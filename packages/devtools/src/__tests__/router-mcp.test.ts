@@ -193,11 +193,13 @@ describe('router MCP tools', () => {
       'list-routes',
       'lint-routes',
       'router-config',
-      'export-navigation',
     ]) {
       expect(await call(tool)).toMatch(/no router state/i);
     }
+    expect(await call('explain-navigation', { format: 'repro' })).toMatch(/no router state/i);
     expect(await call('navigate', { action: 'abort' })).toMatch(/no router state/i);
+    expect(await call('probe-route', { url: '/' })).toMatch(/no router state/i);
+    expect(await call('record-guards')).toMatch(/no router state/i);
   });
 
   it('inspect-route shows drift, provenance, title and outlets, and explains a component', async () => {
@@ -210,9 +212,9 @@ describe('router MCP tools', () => {
     expect(text).toContain('title: `Users` (inherited)');
     expect(text).toContain('outlet `primary`: `UserPage` for `/users/:id`');
     expect(text).toContain('`user` from data');
-    const component = await call('inspect-route', { selector: 'UserPage' });
+    const component = await call('inspect-route', { component: 'UserPage' });
     expect(component).toContain('`UserPage` is routed');
-    const link = await call('inspect-route', { selector: 'Users' });
+    const link = await call('inspect-route', { component: 'Users' });
     expect(link).toContain('router says active, RouterLinkActive says inactive (exact)');
   });
 
@@ -299,7 +301,7 @@ describe('router MCP tools', () => {
     );
   });
 
-  it('explains a redirect loop in explain-navigation, export-navigation and lint-routes', async () => {
+  it('explains a redirect loop in explain-navigation, its repro format and lint-routes', async () => {
     const { push, call } = await boot();
     const hop = (id: number, url: string, to: string, guard: string, from?: number) => ({
       id,
@@ -333,7 +335,7 @@ describe('router MCP tools', () => {
       '`/account` → `/login`: guard redirect `authGuard (canActivate on /account)` in #10',
     );
     expect(explain).toContain('guards involved: `authGuard`, `guestGuard`');
-    const exported = await call('export-navigation', { id: 12 });
+    const exported = await call('explain-navigation', { format: 'repro', id: 12 });
     expect(exported).toContain('### Redirect loop');
     expect(exported).toContain(
       '`/login` → `/account`: guard redirect `guestGuard (canActivate on /login)` in #11',
@@ -367,14 +369,14 @@ describe('router MCP tools', () => {
     expect(await call('lint-routes')).not.toMatch(/No checks ran/);
   });
 
-  it('export-navigation builds a repro for the latest failure', async () => {
+  it('explain-navigation format repro builds a repro for the latest failure', async () => {
     const { push, call } = await boot();
     await push('push-router', report());
-    const text = await call('export-navigation');
+    const text = await call('explain-navigation', { format: 'repro' });
     expect(text).toContain('## Router repro: #5 /nope (failed)');
     expect(text).toContain('Angular: 22.1.7');
     expect(text).toContain('### Relevant routes');
-    const chain = await call('export-navigation', { id: 4 });
+    const chain = await call('explain-navigation', { format: 'repro', id: 4 });
     expect(chain).toContain('#3 `/admin`');
     expect(chain).toContain('#4 `/login`');
     const later = {
@@ -387,15 +389,15 @@ describe('router MCP tools', () => {
     };
     const fresh = await boot();
     await fresh.push('push-router', report({ navigations: [...navigations, later] }));
-    const full = await fresh.call('export-navigation', { id: 3 });
+    const full = await fresh.call('explain-navigation', { format: 'repro', id: 3 });
     expect(full).toContain('#4 `/login`');
     expect(full).toContain('#6 `/welcome`');
   });
 
-  it('explain-render-mode reads the workspace server routes', async () => {
+  it('scan-render-mode reads the workspace server routes', async () => {
     const { push, call } = await boot();
     await push('push-router', report({ snapshot: { ...report().snapshot, url: '/book/lisbon' } }));
-    const text = await call('explain-render-mode', { url: '/book/lisbon' });
+    const text = await call('scan-render-mode', { url: '/book/lisbon' });
     expect(text).toContain('renders with `Client`');
     expect(text).toContain('app.routes.server.ts');
   });
@@ -416,7 +418,7 @@ describe('router MCP tools', () => {
       });
       return undefined as never;
     }) as never);
-    const text = await call('navigate', { action: 'navigate', url: '/users/9' });
+    const text = await call('navigate', { action: 'go', url: '/users/9' });
     expect(text).toContain('"outcome": "succeeded"');
     expect(broadcast).toHaveBeenCalledOnce();
   });
@@ -434,7 +436,7 @@ describe('router MCP tools', () => {
       });
       return undefined as never;
     }) as never);
-    const text = await call('navigate', { action: 'probe', url: '/' });
+    const text = await call('probe-route', { url: '/' });
     expect(text).toMatch(
       /```\n\n_Cut at 15,000 of 20,\d{3} characters, so the JSON above is incomplete and does not parse\._$/,
     );
@@ -454,29 +456,35 @@ describe('router MCP tools', () => {
     }) as never);
     await push('request-router-action', { request: { action: 'probe', url: '/' } });
     await push('request-router-action', { pageId: '', request: { action: 'probe', url: '/' } });
-    await call('navigate', { action: 'probe', url: '/users/7', page: '' });
+    await call('probe-route', { url: '/users/7', page: '' });
     expect(seen).toEqual([report().pageId, report().pageId, report().pageId]);
   });
 
-  it('navigate refuses pages without a router and resolve-lazy without a routeId', async () => {
+  it('refuses pages without a router, the old actions and a probe without a url', async () => {
     const { ctx, push, call } = await boot();
     await push('push-router', report());
     await push('push-router', { ...report(), pageId: 'bare', snapshot: null });
     const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
-    expect(await call('navigate', { action: 'probe', url: '/', page: 'bare' })).toMatch(
+    expect(await call('probe-route', { url: '/', page: 'bare' })).toMatch(
       /Page `bare` reports no Router/,
     );
-    const unknown = await call('navigate', { action: 'probe', url: '/', page: 'gone' });
+    const unknown = await call('navigate', { action: 'abort', page: 'gone' });
     expect(unknown).toMatch(/^_Labels.*_\n\nNo page `gone` is reporting router state\. Pages/);
     expect(unknown).toContain('`bare`');
     expect(unknown).not.toMatch(/stdio/);
-    expect(await call('navigate', { action: 'resolve-lazy' })).toContain('Pass `routeId`');
+    expect(await call('navigate', { action: 'probe', url: '/' })).toMatch(
+      /Pass `action`: one of `go`, `abort`, `replay`|`action` must be one of/,
+    );
+    expect(await call('probe-route', {})).toContain('Pass `url`');
     expect(broadcast).not.toHaveBeenCalled();
   });
 
-  it('blocks navigate, abort, replay and probe with actions.router off but keeps instrument and resolve-lazy', async () => {
+  it('drops navigate and probe-route with actions.router off, and keeps record-guards and resolveLazy', async () => {
     const { ctx, push, call } = await boot({ actions: { router: false } });
-    expect(ctx.agent.list().tools.map((tool) => tool.id)).toContain('pangular:navigate');
+    const ids = ctx.agent.list().tools.map((tool) => tool.id);
+    expect(ids).not.toContain('pangular:navigate');
+    expect(ids).not.toContain('pangular:probe-route');
+    expect(ids).toContain('pangular:record-guards');
     await push('push-router', report());
     const sent: unknown[] = [];
     vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: never) => {
@@ -486,15 +494,8 @@ describe('router MCP tools', () => {
       sent.push(request);
       await push('router-action-result', { requestId, pageId, result: { ok: true } });
     }) as never);
-    for (const action of ['navigate', 'abort', 'replay', 'probe']) {
-      expect(await call('navigate', { action, url: '/users/9', id: 3 })).toBe(
-        'Navigating and clearing navigations is turned off in the devtools config (actions.router).',
-      );
-    }
-    expect(await call('navigate', { action: 'instrument', on: true })).toContain('"ok": true');
-    expect(await call('navigate', { action: 'resolve-lazy', routeId: '2' })).toContain(
-      '"ok": true',
-    );
+    expect(await call('record-guards', { on: true })).toContain('"ok": true');
+    expect(await call('list-routes', { resolveLazy: '2' })).toContain('"ok": true');
     expect(sent).toEqual([
       { action: 'instrument', on: true },
       { action: 'resolve-lazy', id: '2' },

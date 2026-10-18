@@ -26,8 +26,17 @@ async function boot() {
       );
     }
   }) as never);
+  // Recording and the live views are record-change-detection; reading is change-detection.
+  const writes = ['record', 'flash', 'track', 'angularProfiling'];
   const call = async (args: Record<string, unknown>) =>
-    await answerText(ctx.agent.invoke('pangular:change-detection', args));
+    await answerText(
+      ctx.agent.invoke(
+        Object.keys(args).some((key) => writes.includes(key))
+          ? 'pangular:record-change-detection'
+          : 'pangular:change-detection',
+        args,
+      ),
+    );
   const options = () => sent.filter((s) => s.method === 'pangular:change-detection-options');
   return { push, call, sent, options };
 }
@@ -89,7 +98,7 @@ describe('change detection views', () => {
     expect(options()).toHaveLength(sent);
   });
 
-  it('combines views with record, but not with export', async () => {
+  it('combines views with record', async () => {
     const { call, sent, push } = await boot();
     await push('push-change-detection', report('p1'));
     sent.length = 0;
@@ -99,7 +108,6 @@ describe('change detection views', () => {
     expect(
       sent.map((s) => s.method).filter((method) => method.includes('change-detection')),
     ).toEqual(['pangular:change-detection-options', 'pangular:change-detection-record']);
-    expect(await call({ export: 'json', flash: true })).toMatch(/not both/);
   });
 
   it('keeps the views a page reports and lists them in the answer', async () => {

@@ -38,11 +38,6 @@ export const getComponents = defineRpcFunction({
   snapshot: true,
   args: [],
   returns: describable(v.array(ComponentSchema)),
-  agent: {
-    description:
-      'Source scan of @Component and @Directive classes: class, selector (empty for routed components), `kind`, inputs, outputs, file and line.',
-    title: 'List Angular components',
-  },
   setup: (ctx) => ({
     // Resolved once per scan: Angular 22 made `OnPush` the implicit default,
     // so telling a component's effective strategy apart from an explicit one

@@ -143,34 +143,42 @@ describe('hydration tool', () => {
     expect(kept).not.toHaveProperty('extra');
   });
 
-  it('turns the overlay on for a page that reports hydration, and off', async () => {
+  it('highlight turns the hydration overlay on for a page that reports hydration, and off', async () => {
     const { push, call, sent } = await boot();
     await push('push-component-tree', report);
-    const on = await call('hydration', { overlay: true });
+    const on = await call('highlight', { hydration: true });
     expect(on).toMatch(/^Sent the request to outline hydration on page `p1`/);
     expect(sent.at(-1)).toMatchObject({
       method: 'pangular:hydration-overlay',
       args: [{ on: true }],
     });
-    await call('hydration', { overlay: false, page: 'p1' });
+    await call('highlight', { hydration: false, page: 'p1' });
     expect(sent.at(-1)?.args[0]).toEqual({ pageId: 'p1', on: false });
   });
 
   it('sends no overlay request when no page reports hydration', async () => {
     const { push, call, sent } = await boot();
     await push('push-component-tree', { ...report, hydration: undefined });
-    expect(await call('hydration', { overlay: true })).toMatch(/^No page reports hydration/);
+    expect(await call('highlight', { hydration: true })).toMatch(/^No page reports hydration/);
     expect(sent.some((entry) => entry.method.endsWith('hydration-overlay'))).toBe(false);
   });
 
-  it('refuses the overlay in read-only mode and still answers', async () => {
+  it('keeps hydration a read with no overlay argument, and the outline a highlight', async () => {
     const { push, call, sent, ctx } = await boot({ agent: { readOnly: true } });
     await push('push-component-tree', report);
     const tool = ctx.agent.list().tools.find((t) => t.id === 'pangular:hydration')!;
     expect(tool.safety).toBe('read');
-    expect(await call('hydration', { overlay: true })).toMatch(/^The agent is read-only/);
+    expect(Object.keys((tool.inputSchema as { properties: object }).properties)).toEqual(['page']);
+    // `overlay` is not an argument of the read, so it only reads.
+    expect(await call('hydration', { overlay: true })).toContain('hydrated from server HTML');
     expect(sent.some((entry) => entry.method.endsWith('hydration-overlay'))).toBe(false);
-    expect(await call('hydration', {})).toContain('hydrated from server HTML');
+    // The outline is a page drawing like any highlight, so read-only mode keeps it.
+    expect(await call('highlight', { hydration: true })).toMatch(
+      /^Sent the request to outline hydration/,
+    );
+    expect(await call('highlight', { hydration: true, component: 'App' })).toMatch(
+      /^Pass one of `component`/,
+    );
   });
 
   it('forwards the panel request to the page it names', async () => {
@@ -208,11 +216,11 @@ describe('directive hosts and search syntax for agents', () => {
   it('inspect-component answers for a directive host without waiting for a detail', async () => {
     const { push, call, sent } = await boot();
     await push('push-component-tree', report);
-    const text = await call('inspect-component', { selector: 'c2' });
+    const text = await call('inspect-component', { component: 'c2' });
     expect(text).toContain('is a `<a>` that hosts `RouterLink`, `RouterLinkActive`');
     expect(sent.some((entry) => entry.method.endsWith('inspect-component-in-page'))).toBe(false);
     // A class name names a component, not a directive host.
-    expect(await call('inspect-component', { selector: 'RouterLink' })).toMatch(
+    expect(await call('inspect-component', { component: 'RouterLink' })).toMatch(
       /No component instance matches/,
     );
   });

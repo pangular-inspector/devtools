@@ -7,7 +7,7 @@ export const FORM_TOOL_MAX_CHARS = 20_000;
 export const MAX_FORM_FIELDS = 200;
 /** Characters of one value (as JSON) in a field tree. */
 export const MAX_FIELD_VALUE_CHARS = 300;
-/** Characters of a whole form value (form-payload, export-form). */
+/** Characters of a whole form value (inspect-form-payload, export-form). */
 export const MAX_FORM_VALUE_CHARS = 8_000;
 /** Lines in a list answer (errors, findings, changes). */
 export const MAX_FORM_LINES = 100;

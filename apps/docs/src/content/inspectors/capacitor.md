@@ -174,8 +174,8 @@ The overlay leaves its own requests to the devtools server out of the log.
 
 | Tool                     | What it answers                                                                                                               |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `list-capacitor-calls`   | Recent plugin calls, with filters for a plugin, failed calls and slow calls, then the active listeners with their last event. |
-| `list-capacitor-plugins` | The environment and every plugin, with notes like the **Plugins** table.                                                      |
+| `capacitor-list-calls`   | Recent plugin calls, with filters for a plugin, failed calls and slow calls, then the active listeners with their last event. |
+| `capacitor-list-plugins` | The environment and every plugin, with notes like the **Plugins** table.                                                      |
 
 See [Tools](../agents/tools.md#capacitor) for their arguments.
 

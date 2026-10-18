@@ -125,14 +125,13 @@ export function createComponentEdits(deps: Deps) {
     });
 
   const tool = (kind: ComponentEditKind): ComponentEditTool => {
-    const field = kind === 'signal' ? 'signal' : 'property';
     return {
       id: kind === 'signal' ? 'pangular:set-signal' : 'pangular:set-component-property',
       title: kind === 'signal' ? 'Set a signal' : 'Set a component property',
       description:
         kind === 'signal'
-          ? 'Set a writable signal (signal, linkedSignal, model) on a live component instance with `.set()` (dev only), or a nested `path` in its value. `component` must match one instance. Needs actions.components.'
-          : 'Set a property or input (or a nested `path`) on a live component instance and run change detection (dev only). Not for signals (use set-signal). `component` must match one instance. Needs actions.components.',
+          ? 'Set a writable signal (signal, linkedSignal, model) on a live component instance with `.set()` (dev only): `property` names the signal, or a path inside its value. `component` must match one instance. Needs actions.components.'
+          : 'Set a property or input (`property`, or a path such as user.name) on a live component instance and run change detection (dev only). Not for signals (use set-signal). `component` must match one instance. Needs actions.components.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -140,7 +139,8 @@ export function createComponentEdits(deps: Deps) {
             type: 'string',
             description: 'Instance id (e.g. c12), class name (e.g. ProductCard) or host tag.',
           },
-          [field]:
+          // Both tools name a field on the component: a signal, or a property or input.
+          property:
             kind === 'signal'
               ? { type: 'string', description: 'Signal property, or a path inside its value.' }
               : {
@@ -154,7 +154,7 @@ export function createComponentEdits(deps: Deps) {
               'Page id, when more than one tab reports (see pangular:list-pages). Required then.',
           },
         },
-        required: ['component', field, 'value'],
+        required: ['component', 'property', 'value'],
       },
       handler: async (args) => {
         const page = pageArgument(args);
@@ -205,7 +205,7 @@ export function createComponentEdits(deps: Deps) {
         const [hit] = hits;
         const result = await request(hit.pageId, {
           id: hit.node.id,
-          path: args[field],
+          path: args['property'],
           value: args['value'],
           kind,
         });

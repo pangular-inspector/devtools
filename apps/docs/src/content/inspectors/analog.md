@@ -115,7 +115,7 @@ Checks grouped by rule, each with a fix. The count on the tab adds up errors and
 ### Supported layouts
 
 - **Single app**: `package.json`, `vite.config.ts` and `src/app/pages` in one folder. The build output is read from `dist/analog/public`.
-- **Nx workspace**: the app lives in `apps/<name>` and `package.json` sits at the workspace root. The scan uses the Vite root, or the first folder under `apps/` whose `vite.config` calls `analog()` when the tools run from the workspace root. The **Routes** tab, `get-routes` and the **SSR** and **Analog** fields on the **Dashboard** read the same app, so they match this tab. `package.json` is looked up from the app folder upward, and the build output is read from `dist/apps/<name>/analog/public`.
+- **Nx workspace**: the app lives in `apps/<name>` and `package.json` sits at the workspace root. The scan uses the Vite root, or the first folder under `apps/` whose `vite.config` calls `analog()` when the tools run from the workspace root. The **Routes** tab, `scan-routes` and the **SSR** and **Analog** fields on the **Dashboard** read the same app, so they match this tab. `package.json` is looked up from the app folder upward, and the build output is read from `dist/apps/<name>/analog/public`.
 
 ### Render mode rules
 
@@ -133,7 +133,7 @@ The tab reads every `routeRules` entry in `vite.config`. A rule like `/blog/**` 
 
 The scan reads the `analog()` options as written in `vite.config`. It does not run the file. It reads `ssr`, `static`, `apiPrefix`, `prerender.routes` and `routeRules` only when they are literals.
 
-If an option comes from a variable, a spread (`...`), a template string or a computed key, the scan can't know its value. In that case the **Render** view shows a note with the reasons. The lint reports `config-partial`, and `analog-render-modes` and `analog-prerender-plan` add a **Config read in part** line. The modes and the plan may be missing what the scan could not read.
+If an option comes from a variable, a spread (`...`), a template string or a computed key, the scan can't know its value. In that case the **Render** view shows a note with the reasons. The lint reports `config-partial`, and `analog-explain-render-modes` and `analog-scan-prerender` add a **Config read in part** line. The modes and the plan may be missing what the scan could not read.
 
 ### Other tabs in Analog apps
 
@@ -183,25 +183,25 @@ If an option comes from a variable, a spread (`...`), a template string or a com
 
 ## Agent tools
 
-| Tool                               | Inputs                                         | What it does                                                            |
-| ---------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------- |
-| `pangular:analog-routes`           | `filter`                                       | File routes in match order, with page, layout and server files.         |
-| `pangular:analog-explain-url`      | `url` (required)                               | Which files render a URL, or the closest candidates.                    |
-| `pangular:analog-current-page`     | `page`                                         | The open page: its files, `load()` data, rendering and hydration state. |
-| `pangular:analog-server-calls`     | `kind`, `route`, `limit`                       | Recent server calls, with server function names and action outcomes.    |
-| `pangular:analog-api-routes`       |                                                | Server routes with method, URL and file, plus middleware.               |
-| `pangular:analog-server-functions` |                                                | Server functions with name, method, file, id and call counts.           |
-| `pangular:analog-call-api`         | `path` (required), `method`, `body`, `confirm` | Sends a real request to the dev server.                                 |
-| `pangular:analog-render-modes`     |                                                | The render mode of each page, and what the last request did.            |
-| `pangular:analog-prerender-plan`   |                                                | The prerender plan.                                                     |
-| `pangular:analog-content`          | `filter`                                       | Markdown files with slug, frontmatter, route and parse errors.          |
-| `pangular:analog-lint`             | `page`                                         | The Analog checks.                                                      |
+| Tool                                    | Inputs                                         | What it does                                                            |
+| --------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------- |
+| `pangular:analog-scan-routes`           | `filter`                                       | File routes in match order, with page, layout and server files.         |
+| `pangular:analog-scan-url`              | `url` (required)                               | Which files render a URL, or the closest candidates.                    |
+| `pangular:analog-inspect-page`          | `page`                                         | The open page: its files, `load()` data, rendering and hydration state. |
+| `pangular:analog-list-server-calls`     | `kind`, `route`, `limit`                       | Recent server calls, with server function names and action outcomes.    |
+| `pangular:analog-scan-api-routes`       |                                                | Server routes with method, URL and file, plus middleware.               |
+| `pangular:analog-scan-server-functions` |                                                | Server functions with name, method, file, id and call counts.           |
+| `pangular:analog-run-api`               | `path` (required), `method`, `body`, `confirm` | Sends a real request to the dev server.                                 |
+| `pangular:analog-explain-render-modes`  |                                                | The render mode of each page, and what the last request did.            |
+| `pangular:analog-scan-prerender`        |                                                | The prerender plan.                                                     |
+| `pangular:analog-scan-content`          | `filter`                                       | Markdown files with slug, frontmatter, route and parse errors.          |
+| `pangular:analog-lint`                  | `page`                                         | The Analog checks.                                                      |
 
-`analog-current-page` is the only place that shows the `load()` data a page received. See [Tools](../agents/tools.md).
+`analog-inspect-page` is the only place that shows the `load()` data a page received. See [Tools](../agents/tools.md).
 
 ## Limits and gotchas
 
-### `analog-call-api` changes real data
+### `analog-run-api` changes real data
 
 It sends a real request to your dev server. Methods other than GET, HEAD and OPTIONS need `confirm: true`. It works only through the Vite plugin. It only reaches API routes, `/_analog` URLs and pages, and refuses Vite file requests such as `/@fs/` or `?raw`. See [Call a server route](../agents/tools.md#call-a-server-route).
 

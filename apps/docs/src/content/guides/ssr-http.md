@@ -142,7 +142,7 @@ export const serverRoutes: ServerRoute[] = [
 ```
 
 <ngmd-callout type="tip" title="Check a route's render mode">
-  The <code>explain-render-mode</code> agent tool tells you which <code>ServerRoute</code> and render mode a URL gets. See <a href="../agents/tools.md">Tools</a>.
+  The <code>scan-render-mode</code> agent tool tells you which <code>ServerRoute</code> and render mode a URL gets. See <a href="../agents/tools.md">Tools</a>.
 </ngmd-callout>
 
 ## Step 5: Inject a fault

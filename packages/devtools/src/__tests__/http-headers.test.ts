@@ -272,7 +272,7 @@ describe('waterfallGroups', () => {
   });
 });
 
-describe('http-waterfall text', () => {
+describe('waterfall text', () => {
   const state = {
     pages: [
       page([
@@ -331,7 +331,7 @@ describe('list-http-calls headers', () => {
   });
 });
 
-describe('http-waterfall tool', () => {
+describe('list-http-calls waterfall view', () => {
   afterEach(() => httpRegistry().dispose?.());
 
   async function boot(config?: Parameters<typeof createPangular>[0]) {
@@ -362,9 +362,10 @@ describe('http-waterfall tool', () => {
         },
       ] as never),
     );
-    const { markdown } = (await ctx.agent.invoke('pangular:http-waterfall', {
+    const markdown = (await ctx.agent.invoke('pangular:list-http-calls', {
+      view: 'waterfall',
       headers: true,
-    })) as { markdown: string };
+    })) as string;
     expect(markdown).toContain('GET `/api/trips`');
     expect(markdown).toContain('- `authorization`: `[redacted]`');
     expect(markdown).not.toContain('abcdef123456');
@@ -372,6 +373,6 @@ describe('http-waterfall tool', () => {
 
   it('is hidden with the http inspector', async () => {
     const ctx = await boot({ inspectors: { http: false } });
-    expect(ctx.agent.list().tools.some((t) => t.id === 'pangular:http-waterfall')).toBe(false);
+    expect(ctx.agent.list().tools.some((t) => t.id === 'pangular:list-http-calls')).toBe(false);
   });
 });

@@ -18,9 +18,9 @@ The page captures errors from Angular's `ErrorHandler`, uncaught errors, unhandl
 | Error                                | What the explainer gives                                                        | Next tool                                           |
 | ------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------------------- |
 | NG0100 ExpressionChangedAfterChecked | The binding, previous and current value, the fields and signals that changed it | `inspect-component` on the owner, `inspect-signals` |
-| NG0201, `NullInjectorError`          | The token and Angular's dependency path                                         | `explain-injection` with `selector` and `token`     |
+| NG0201, `NullInjectorError`          | The token and Angular's dependency path                                         | `explain-injection` with `injector` and `token`     |
 | NG0500 to NG0503 hydration           | A diff of the server HTML Angular expected and the client DOM it found          | `hydration`, `explain-ssr-request`                  |
-| Navigation errors                    | (from `explain-navigation`) the guard, resolver or lazy load that failed        | `export-navigation`                                 |
+| Navigation errors                    | (from `explain-navigation`) the guard, resolver or lazy load that failed        | `explain-navigation` with `format: "repro"`         |
 
 Pass the owner's instance id (like `c12`) to `inspect-component` to read its inputs and state at the time.
 

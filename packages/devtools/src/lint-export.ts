@@ -16,8 +16,8 @@ import pkg from '../package.json' with { type: 'json' };
 
 /** The source lints, by the name `--only` takes, with the agent tool each matches. */
 export const SOURCE_LINTS = {
-  templates: 'lint-templates',
-  pipes: 'lint-pipes',
+  templates: 'scan-templates',
+  pipes: 'scan-pipe-usage',
   analog: 'analog-lint',
 } as const;
 

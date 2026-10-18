@@ -101,7 +101,7 @@ describe('agent tools on an older Angular', () => {
   it('answer inspect-signals and watch-signal with an unsupported result naming the version', async () => {
     const { push, call } = await boot();
     await push('report-page-angular', angular15());
-    const text = await call('inspect-signals', { selector: 'app-root' });
+    const text = await call('inspect-signals', { component: 'app-root' });
     expect(text).toMatch(/^\*\*Unsupported on this Angular version\.\*\*/);
     expect(text).toContain('The live signal graph needs Angular 20.1 or later');
     expect(text).toContain('this page runs Angular 15.2');
@@ -116,7 +116,7 @@ describe('agent tools on an older Angular', () => {
       capabilities: { ...NONE, signalGraph: true },
     });
     await push('push-signal-graph', { pageId: 'p1', nodes: [], edges: [], unsupported: true });
-    const text = await call('inspect-signals', { selector: 'app-root' });
+    const text = await call('inspect-signals', { component: 'app-root' });
     expect(text).toContain('Unsupported on this Angular version');
     expect(text).toContain('this page runs Angular 19.2');
   });
@@ -193,7 +193,7 @@ describe('agent tools on an older Angular', () => {
 
   it('answer as before when the page never said what it has', async () => {
     const { call } = await boot();
-    expect(await call('inspect-signals', { selector: 'app-root' })).toMatch(
+    expect(await call('inspect-signals', { component: 'app-root' })).toMatch(
       /No signal graph available/,
     );
   });

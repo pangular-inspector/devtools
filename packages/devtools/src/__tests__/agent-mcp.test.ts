@@ -78,8 +78,8 @@ async function stateKeys(call: ReturnType<typeof mcpClient>): Promise<string[]> 
     arguments: {},
   });
   // Pangular's own devframe_state_read answers a markdown table, a key per row.
-  const text = JSON.parse(listed.result!.content[0]!.text) as { markdown: string };
-  return [...text.markdown.matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1]!);
+  const text = listed.result!.content[0]!.text;
+  return [...text.matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1]!);
 }
 
 describe('sharedStateExposed', () => {

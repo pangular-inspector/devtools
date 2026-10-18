@@ -47,8 +47,8 @@ describe('runSourceLints', () => {
   it('collects template and pipe findings with project-relative files and lines', async () => {
     const result = await runSourceLints(project(), { compiler });
     expect(result.lints).toEqual([
-      { lint: 'templates', tool: 'lint-templates', ran: true, findings: 1 },
-      { lint: 'pipes', tool: 'lint-pipes', ran: true, findings: 1 },
+      { lint: 'templates', tool: 'scan-templates', ran: true, findings: 1 },
+      { lint: 'pipes', tool: 'scan-pipe-usage', ran: true, findings: 1 },
       {
         lint: 'analog',
         tool: 'analog-lint',

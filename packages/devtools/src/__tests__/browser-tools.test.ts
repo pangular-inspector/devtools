@@ -25,7 +25,7 @@ const LISTED = [
     inputSchema: { type: 'object', properties: { selector: { type: 'string' } } },
   },
   {
-    name: 'pangular_get-routes',
+    name: 'pangular_scan-routes',
     title: 'Routes',
     description: 'Routes from the source.',
     inputSchema: { type: 'object', properties: {} },
@@ -86,7 +86,7 @@ describe('browser tools on the page', () => {
     const { tools } = fakeContext();
     attach();
     await tick();
-    expect([...tools.keys()]).toEqual(['pangular_inspect-component', 'pangular_get-routes']);
+    expect([...tools.keys()]).toEqual(['pangular_inspect-component', 'pangular_scan-routes']);
     const tool = tools.get('pangular_inspect-component')!;
     expect(tool.annotations).toEqual({
       readOnlyHint: true,
@@ -94,7 +94,7 @@ describe('browser tools on the page', () => {
       debugging: true,
     });
     expect(tool.inputSchema).toEqual(LISTED[0].inputSchema);
-    expect(tools.get('pangular_get-routes')!.title).toBe('Routes');
+    expect(tools.get('pangular_scan-routes')!.title).toBe('Routes');
   });
 
   it('falls back to navigator.modelContext from earlier drafts', async () => {
@@ -123,10 +123,10 @@ describe('browser tools on the page', () => {
   it('rejects the call when the server refuses it', async () => {
     const { tools } = fakeContext();
     attach(
-      fakeRpc({ 'pangular_get-routes': { text: 'Browser tools are turned off.', isError: true } }),
+      fakeRpc({ 'pangular_scan-routes': { text: 'Browser tools are turned off.', isError: true } }),
     );
     await tick();
-    await expect(tools.get('pangular_get-routes')!.execute({})).rejects.toThrow(/turned off/);
+    await expect(tools.get('pangular_scan-routes')!.execute({})).rejects.toThrow(/turned off/);
   });
 
   it('answers devtoolstooldiscovery with one tool group', async () => {
@@ -138,10 +138,10 @@ describe('browser tools on the page', () => {
     expect(groups[0].name).toBe(TOOL_GROUP.name);
     expect(groups[0].tools.map((tool: any) => tool.name)).toEqual([
       'pangular_inspect-component',
-      'pangular_get-routes',
+      'pangular_scan-routes',
     ]);
     expect(typeof groups[0].tools[0].inputSchema).toBe('object');
-    await expect(groups[0].tools[1].execute({})).resolves.toBe('ran pangular_get-routes for p1');
+    await expect(groups[0].tools[1].execute({})).resolves.toBe('ran pangular_scan-routes for p1');
   });
 
   it('leaves out of the group the tools a native WebMCP already shows', async () => {
@@ -158,7 +158,7 @@ describe('browser tools on the page', () => {
   it('keeps a tool in the group when WebMCP refused it', async () => {
     class ModelContext {
       registerTool = vi.fn(async (tool: Registered) => {
-        if (tool.name === 'pangular_get-routes') throw new TypeError('bad schema');
+        if (tool.name === 'pangular_scan-routes') throw new TypeError('bad schema');
       });
     }
     (globalThis as any).ModelContext = ModelContext;
@@ -166,7 +166,7 @@ describe('browser tools on the page', () => {
     attach();
     await tick();
     await tick();
-    expect(discover()[0].tools.map((tool: any) => tool.name)).toEqual(['pangular_get-routes']);
+    expect(discover()[0].tools.map((tool: any) => tool.name)).toEqual(['pangular_scan-routes']);
   });
 
   it('does nothing without WebMCP or tools, and survives a context that throws', async () => {
@@ -242,7 +242,7 @@ describe('browser tools on the page', () => {
     listed = LISTED;
     handlers.get(CHANGED_EVENT)!({ enabled: true, config: false });
     await tick();
-    expect([...tools.keys()]).toEqual(['pangular_inspect-component', 'pangular_get-routes']);
+    expect([...tools.keys()]).toEqual(['pangular_inspect-component', 'pangular_scan-routes']);
     expect(discover()).toHaveLength(1);
 
     listed = [];

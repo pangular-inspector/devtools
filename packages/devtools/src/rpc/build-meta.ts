@@ -27,11 +27,6 @@ export const getBuildMeta = defineRpcFunction({
   snapshot: true,
   args: [],
   returns: describable(BuildMetaSchema),
-  agent: {
-    description:
-      'Angular project metadata: framework version, TypeScript version, SSR status. Baked into static builds. Call this before suggesting dependency or config changes.',
-    title: 'Angular build metadata',
-  },
   setup: (ctx) => ({
     handler: async () => {
       const pkg = readJson(join(ctx.cwd, 'package.json'));

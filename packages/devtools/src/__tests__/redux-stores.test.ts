@@ -182,22 +182,22 @@ describe('the other stores on the server', () => {
     expect(staleReduxStoresPages(state, Date.now() + 20_000, () => 15_000)).toEqual(['tab1']);
   });
 
-  it('keeps one entry per page, forgets a page, and answers inspect-redux-stores', async () => {
+  it('keeps one entry per page, forgets a page, and answers redux-inspect-stores', async () => {
     const { call, invoke, state } = await boot();
-    expect(await invoke('inspect-redux-stores')).toMatch(/No page reports a store/);
+    expect(await invoke('redux-inspect-stores')).toMatch(/No page reports a store/);
     expect(await call('push-redux-stores', report())).toEqual({ seq: 2 });
     await call('push-redux-stores', report({ pageId: 'tab2', url: '/about' }));
     expect(Object.keys((await state()).pages).sort()).toEqual(['tab1', 'tab2']);
     await call('forget-redux-stores-page', 'tab2');
     expect(Object.keys((await state()).pages)).toEqual(['tab1']);
 
-    const text = await invoke('inspect-redux-stores');
+    const text = await invoke('redux-inspect-stores');
     expect(text).toMatch(/come from the running page/);
     expect(text).toMatch(/## NGXS \(`r1`, NGXS\)/);
     expect(text).toMatch(/#2 `\[Trips\] Book`/);
     expect(text).toMatch(/add `trips.booked\[0\]` → 7/);
-    expect(await invoke('inspect-redux-stores', { store: 'nope' })).toMatch(/No store `nope`/);
-    expect(await invoke('inspect-redux-stores', { page: 'nope' })).toMatch(/No page `nope`/);
+    expect(await invoke('redux-inspect-stores', { store: 'nope' })).toMatch(/No store `nope`/);
+    expect(await invoke('redux-inspect-stores', { page: 'nope' })).toMatch(/No page `nope`/);
     expect(await invoke('list-pages')).toMatch(/ngrx/);
   });
 
@@ -216,7 +216,7 @@ describe('the other stores on the server', () => {
   it('goes away with the NgRx inspector', async () => {
     const { ctx } = await boot(createPangular({ inspectors: { ngrx: false } }));
     const tools = ctx.agent.list().tools.map((tool: { id: string }) => tool.id);
-    expect(tools).not.toContain('pangular:inspect-redux-stores');
+    expect(tools).not.toContain('pangular:redux-inspect-stores');
     await expect(
       ctx.rpc.invokeLocal('pangular:push-redux-stores' as never, ...([report()] as never)),
     ).rejects.toThrow();

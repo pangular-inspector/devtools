@@ -338,13 +338,16 @@ describe('snapshot agent tool', () => {
     expect(text).toContain('Unauthorized');
   });
 
-  it('picks the page from `page` or `pageId`, and answers for an unknown one', async () => {
+  it('picks the page from `page`, refuses the old `pageId`, and answers for an unknown one', async () => {
     const { push, snapshot } = await boot();
     expect(await snapshot()).toMatch(/^No page is reporting/);
     await push('push-router', routerReport('tab1', '/one'));
     await push('push-router', routerReport('tab2', '/two'));
     expect(await snapshot({ page: 'tab1', sections: ['route'] })).toContain('**URL** `/one`');
-    expect(await snapshot({ pageId: 'tab2', sections: ['route'] })).toContain('**URL** `/two`');
+    expect(await snapshot({ page: 'tab2', sections: ['route'] })).toContain('**URL** `/two`');
+    expect(await snapshot({ pageId: 'tab2' })).toMatch(
+      /There is no `pageId` argument; pass `page`/,
+    );
     const unknown = await snapshot({ page: 'nope' });
     expect(unknown).toMatch(/No page `nope` is reporting live data/);
     expect(unknown).toContain('`tab1`');

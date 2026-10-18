@@ -66,7 +66,7 @@ describe('untrusted-data notice on agent tools that return page text', () => {
       if (!options.method.endsWith('inspect-component-in-page')) return;
       setTimeout(() => void push('push-component-tree', { pageId: 'p1', roots, detail }), 10);
     }) as never);
-    expectNoticeFirst(await call('inspect-component', { selector: 'c2' }));
+    expectNoticeFirst(await call('inspect-component', { component: 'c2' }));
   });
 
   it('inspect-component keeps the notice first and inside the cap for a large detail', async () => {
@@ -92,7 +92,7 @@ describe('untrusted-data notice on agent tools that return page text', () => {
       if (!options.method.endsWith('inspect-component-in-page')) return;
       setTimeout(() => void push('push-component-tree', { pageId: 'p1', roots, detail: big }), 10);
     }) as never);
-    const capped = await call('inspect-component', { selector: 'c2' });
+    const capped = await call('inspect-component', { component: 'c2' });
     expectNoticeFirst(capped);
     expect(capped.length).toBeLessThanOrEqual(MAX_TOOL_CHARS);
     expect(capped).toContain('show only the start of their JSON');
@@ -107,12 +107,12 @@ describe('untrusted-data notice on agent tools that return page text', () => {
       componentSelector: 'app-root',
       component: { id: 'c1', name: 'App', tag: 'app-root', path: 'app-root' },
     });
-    const matched = await call('inspect-signals', { selector: 'app-root' });
+    const matched = await call('inspect-signals', { component: 'app-root' });
     expectNoticeFirst(matched);
     expect(JSON.parse(matched.slice(UNTRUSTED.length))).toMatchObject({
       nodes: [{ value: INJECTED }],
     });
-    expectNoticeFirst(await call('inspect-signals', { selector: 'app-other' }));
+    expectNoticeFirst(await call('inspect-signals', { component: 'app-other' }));
   });
 
   it('inspect-providers puts the notice before token names and route injectors', async () => {
@@ -129,9 +129,9 @@ describe('untrusted-data notice on agent tools that return page text', () => {
       environment: [],
     });
     expectNoticeFirst(await call('inspect-providers'));
-    expectNoticeFirst(await call('inspect-providers', { selector: 'app-root' }));
+    expectNoticeFirst(await call('inspect-providers', { injector: 'app-root' }));
     expectNoticeFirst(await call('inspect-providers', { token: INJECTED }));
-    expect(await call('inspect-providers', { selector: 'nothing' })).toMatch(
+    expect(await call('inspect-providers', { injector: 'nothing' })).toMatch(
       new RegExp(`^${UNTRUSTED.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n\\nNo element`),
     );
   });
@@ -210,7 +210,7 @@ describe('untrusted-data notice on agent tools that return page text', () => {
     expectNoticeFirst(text);
   });
 
-  it('form-action and fill-form put the notice before what the page answered', async () => {
+  it('run-form-action and fill-form put the notice before what the page answered', async () => {
     const { ctx, push, call } = await boot();
     const form: CollectedForm = {
       id: 'F.form@p1',
@@ -245,11 +245,11 @@ describe('untrusted-data notice on agent tools that return page text', () => {
         5,
       );
     }) as never);
-    expectNoticeFirst(await call('form-action', { action: 'focus', form: 'F.form@p1' }));
+    expectNoticeFirst(await call('run-form-action', { action: 'focus', form: 'F.form@p1' }));
     expectNoticeFirst(await call('fill-form', { form: 'F.form@p1', values: {} }));
   });
 
-  it('dispatch-ngrx-action puts the notice before the message and error the page sent', () => {
+  it('ngrx-dispatch puts the notice before the message and error the page sent', () => {
     expectNoticeFirst(dispatchResultText({ error: INJECTED }));
     expectNoticeFirst(dispatchResultText({ ok: true, message: INJECTED }));
   });
