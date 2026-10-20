@@ -1,3 +1,4 @@
+import { withMcpContent } from 'devframe';
 import { describe, expect, it } from 'vitest';
 import { formActionProblem } from '../forms-actions.ts';
 import { resolvePangularConfig } from '../config.ts';
@@ -280,7 +281,7 @@ describe('refusals', () => {
     expect(isRefusal(text)).toBe(true);
     expect(isRefusal('No page `x` is reporting things, really.')).toBe(false);
     expect(refusalOf({ markdown: text })).toBe(text);
-    expect(refusalOf({ mcpContent: [{ type: 'text', text }] })).toBe(text);
+    expect(refusalOf(withMcpContent({}, [{ type: 'text', text }]))).toBe(text);
     expect(refusalOf({ markdown: 'ok' })).toBeUndefined();
   });
 

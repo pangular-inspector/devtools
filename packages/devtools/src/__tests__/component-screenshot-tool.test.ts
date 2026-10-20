@@ -3,14 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PangularConfig } from '../config.ts';
 import pangular, { createPangular } from '../devframe.ts';
 import { initPangularHub } from '../hub.ts';
-import {
-  createComponentScreenshots,
-  toScreenshotResult,
-  withMcpContent,
-} from '../rpc/component-screenshots.ts';
+import { withMcpContent } from 'devframe';
+import { createComponentScreenshots, toScreenshotResult } from '../rpc/component-screenshots.ts';
 import { UNTRUSTED } from '../rpc/forms-tools.ts';
 import { makeProject } from './analog-fixture.ts';
-import { ToolRefusal } from '../rpc/refusal.ts';
+import { mcpContentOf, ToolRefusal } from '../rpc/refusal.ts';
 
 const PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -30,14 +27,17 @@ async function boot(config?: PangularConfig) {
   const call = (args: Record<string, unknown>) =>
     (
       ctx.agent.invoke('pangular:screenshot-component', args) as Promise<
-        string | { markdown: string; mcpContent?: unknown[] }
+        string | { markdown: string }
       >
     )
       .then((result) =>
-        typeof result === 'string' ? { markdown: result, mcpContent: undefined } : result,
+        typeof result === 'string'
+          ? { markdown: result, mcpContent: undefined, raw: undefined }
+          : { markdown: result.markdown, mcpContent: mcpContentOf(result), raw: result },
       )
       .catch((error: unknown) => {
-        if (error instanceof ToolRefusal) return { markdown: error.message, mcpContent: undefined };
+        if (error instanceof ToolRefusal)
+          return { markdown: error.message, mcpContent: undefined, raw: undefined };
         throw error;
       });
   return { ctx, push, call };
@@ -135,7 +135,7 @@ describe('screenshot-component', () => {
       { type: 'image', data: PNG, mimeType: 'image/png' },
     ]);
     // Serialized results (the panel RPC, an adapter without image support) carry no base64.
-    expect(JSON.stringify(answer)).not.toContain(PNG);
+    expect(JSON.stringify(answer.raw)).not.toContain(PNG);
   });
 
   it('sends a CSS selector to the newest page', async () => {
@@ -214,7 +214,7 @@ describe('toScreenshotResult', () => {
 });
 
 describe('MCP image content', () => {
-  it('sends the mcpContent blocks of a tool result as MCP content', async () => {
+  it('sends the MCP content blocks of a tool result as MCP content', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const hub = initPangularHub({
       cwd: makeProject({ 'package.json': '{}' }),

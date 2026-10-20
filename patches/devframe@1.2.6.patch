@@ -1,34 +1,31 @@
-diff --git a/dist/_shared-DlRoV7v3.mjs b/dist/_shared-DlRoV7v3.mjs
-index 6f112f6e47f992e17597b8e949e6d3cadcf34c4c..f0e11845ca39dc7d42de9e6c6e4e3ce6ad504f50 100644
---- a/dist/_shared-DlRoV7v3.mjs
-+++ b/dist/_shared-DlRoV7v3.mjs
-@@ -144,6 +144,10 @@ function resolveMcpConfig(mcp) {
- 		...mcp.path !== void 0 ? { path: mcp.path } : {},
+diff --git a/dist/_shared-B6K2DKhb.mjs b/dist/_shared-B6K2DKhb.mjs
+index acd9f01e8e02a9a96e6b9f16135499cbf24c5bf2..6817c542f90a1187a37de3cee80f0b99e2aaca4a 100644
+--- a/dist/_shared-B6K2DKhb.mjs
++++ b/dist/_shared-B6K2DKhb.mjs
+@@ -145,6 +145,9 @@ function resolveMcpConfig(mcp) {
  		...mcp.allowedOrigins !== void 0 ? { allowedOrigins: mcp.allowedOrigins } : {},
  		...mcp.exposeSharedState !== void 0 ? { exposeSharedState: mcp.exposeSharedState } : {},
-+		...mcp.instructions !== void 0 ? { instructions: mcp.instructions } : {},
+ 		...mcp.instructions !== void 0 ? { instructions: mcp.instructions } : {},
 +		...mcp.prompts !== void 0 ? { prompts: mcp.prompts } : {},
 +		...mcp.resourceTemplates !== void 0 ? { resourceTemplates: mcp.resourceTemplates } : {},
 +		...mcp.onResourcesChanged !== void 0 ? { onResourcesChanged: mcp.onResourcesChanged } : {},
  		authorization
  	};
  }
-diff --git a/dist/_shared-NSl4p_om.d.mts b/dist/_shared-NSl4p_om.d.mts
-index d6f43f5913434da962a95c3fe7e075a5edef546d..8047bba60d73846022a0b7aaeef0b4e6c0380354 100644
---- a/dist/_shared-NSl4p_om.d.mts
-+++ b/dist/_shared-NSl4p_om.d.mts
+diff --git a/dist/_shared-BvDsc83f.d.mts b/dist/_shared-BvDsc83f.d.mts
+index 6b6e8633e8c1d832ede07ab75088eab580d6a8b7..c2f3b7b691d8a5e00f7907be9b5a3129f112b1c6 100644
+--- a/dist/_shared-BvDsc83f.d.mts
++++ b/dist/_shared-BvDsc83f.d.mts
 @@ -1,4 +1,4 @@
--import { B as DevframeDefinition, Q as McpSetting, V as DevframeDeploymentKind, Wt as DevframeAgentHost, X as McpAuthorization, t as ConnectionMeta } from "./context-DhycZ2lx.mjs";
-+import { B as DevframeDefinition, Q as McpSetting, V as DevframeDeploymentKind, Wt as DevframeAgentHost, X as McpAuthorization, Z as McpRouteOptions, t as ConnectionMeta } from "./context-DhycZ2lx.mjs";
- import { t as AgenticMcpModule } from "./agentic-D61fXLzA.mjs";
+-import { $ as McpSetting, Gt as DevframeAgentHost, H as DevframeDeploymentKind, V as DevframeDefinition, Z as McpAuthorization, t as ConnectionMeta } from "./context-dOWXVHc6.mjs";
++import { $ as McpSetting, Gt as DevframeAgentHost, H as DevframeDeploymentKind, V as DevframeDefinition, Z as McpAuthorization, Q as McpRouteOptions, t as ConnectionMeta } from "./context-dOWXVHc6.mjs";
+ import { t as AgenticMcpModule } from "./agentic-JXlb0uiD.mjs";
  //#region src/adapters/_shared.d.ts
  /**
-@@ -37,6 +37,13 @@ interface ResolvedMcpConfig {
-   allowedOrigins?: readonly string[] | false;
-   /** Shared-state exposure from the route options; omitted means every key. */
+@@ -39,6 +39,11 @@ interface ResolvedMcpConfig {
    exposeSharedState?: boolean | ((key: string) => boolean);
-+  /** Usage guidance sent as `instructions` in the MCP `initialize` result. */
-+  instructions?: string;
+   /** Handshake `instructions` from the route options; omitted means none. */
+   instructions?: string;
 +  /** Prompt templates served through `prompts/list` and `prompts/get`. */
 +  prompts?: McpRouteOptions['prompts'];
 +  /** Resource templates, and the host's resource-change subscription. */
@@ -37,16 +34,14 @@ index d6f43f5913434da962a95c3fe7e075a5edef546d..8047bba60d73846022a0b7aaeef0b4e6
    /** The resolved identity policy: a bearer token, callback, or `false`. */
    authorization: McpAuthorization;
  }
-diff --git a/dist/context-DhycZ2lx.d.mts b/dist/context-DhycZ2lx.d.mts
-index 2f3e7035b31326e1de8c19526c8683896e9dbc30..f7ee324383715c223baf5f907599988078a7703b 100644
---- a/dist/context-DhycZ2lx.d.mts
-+++ b/dist/context-DhycZ2lx.d.mts
-@@ -1289,6 +1289,22 @@ interface McpRouteOptions {
-    * The states themselves stay available to the UI over RPC.
+diff --git a/dist/context-dOWXVHc6.d.mts b/dist/context-dOWXVHc6.d.mts
+index 333ea8b577f1ebda7f0aa6c7a8d10420161823fa..7118de6242b629c741565e8b2881fec2f6a68595 100644
+--- a/dist/context-dOWXVHc6.d.mts
++++ b/dist/context-dOWXVHc6.d.mts
+@@ -1296,6 +1296,20 @@ interface McpRouteOptions {
+    * Omitted or empty sends no instructions.
     */
-   exposeSharedState?: boolean | ((key: string) => boolean);
-+  /** Usage guidance sent as `instructions` in the MCP `initialize` result. */
-+  instructions?: string;
+   instructions?: string;
 +  /** Prompt templates served through `prompts/list` and `prompts/get`; omitted means no `prompts` capability. */
 +  prompts?: readonly McpPrompt[];
 +  /**
@@ -64,7 +59,7 @@ index 2f3e7035b31326e1de8c19526c8683896e9dbc30..f7ee324383715c223baf5f9075999880
  }
  interface DevframeCliOptions {
    /** Binary name; default: the devframe's `id`. */
-@@ -1601,6 +1617,70 @@ type DevframeSnapshotRpcEntry = string | {
+@@ -1608,6 +1622,70 @@ type DevframeSnapshotRpcEntry = string | {
   * `devframe/internal`) instead: `devframe/types` must stay lib-neutral, and
   * h3's declarations are not.
   */
@@ -135,61 +130,40 @@ index 2f3e7035b31326e1de8c19526c8683896e9dbc30..f7ee324383715c223baf5f9075999880
  interface CreateMcpServerOptions {
    /**
     * Transport to use. `createMcpServer` itself runs `'stdio'` (a standalone
-@@ -1616,6 +1696,22 @@ interface CreateMcpServerOptions {
-    * - `(key) => boolean`: filter
+@@ -1628,6 +1706,12 @@ interface CreateMcpServerOptions {
+    * `server/discover`) result. Omitted or empty sends no instructions.
     */
-   exposeSharedState?: boolean | ((key: string) => boolean);
-+  /** Usage guidance sent as `instructions` in the MCP `initialize` result. */
-+  instructions?: string;
+   instructions?: string;
 +  /** Prompt templates served through `prompts/list` and `prompts/get`; omitted means no `prompts` capability. */
 +  prompts?: readonly McpPrompt[];
-+  /**
-+   * Resource templates served through `resources/templates/list`, read through
-+   * `resources/read` when no other resource matches, with the concrete entries
-+   * of each template's `list` added to `resources/list`.
-+   */
++  /** Resource templates; see {@link McpRouteOptions.resourceTemplates}. */
 +  resourceTemplates?: readonly McpResourceTemplate[];
-+  /**
-+   * Subscribe to changes in the resources the host serves outside the agent
-+   * manifest (template entries, say). Each `notify()` sends
-+   * `notifications/resources/list_changed`. Returns the unsubscribe function.
-+   */
++  /** Host resource-change subscription; see {@link McpRouteOptions.onResourcesChanged}. */
 +  onResourcesChanged?: (notify: () => void, ctx: DevframeNodeContext) => () => void;
    /** Override the name reported in the MCP handshake. */
    serverName?: string;
    /** Override the version reported in the MCP handshake. Defaults to `definition.version ?? '0.0.0'`. */
-@@ -1635,6 +1731,22 @@ interface CreateMcpFetchHandlerOptions {
-   serverVersion: string;
-   /** Expose shared-state keys as MCP resources; see {@link CreateMcpServerOptions.exposeSharedState}. */
+@@ -1666,6 +1750,12 @@ interface CreateMcpFetchHandlerOptions {
    exposeSharedState: boolean | ((key: string) => boolean);
-+  /** Usage guidance sent as `instructions` in the MCP `initialize` result. */
-+  instructions?: string;
+   /** Usage guidance for the handshake; see {@link CreateMcpServerOptions.instructions}. */
+   instructions?: string;
 +  /** Prompt templates served through `prompts/list` and `prompts/get`; omitted means no `prompts` capability. */
 +  prompts?: readonly McpPrompt[];
-+  /**
-+   * Resource templates served through `resources/templates/list`, read through
-+   * `resources/read` when no other resource matches, with the concrete entries
-+   * of each template's `list` added to `resources/list`.
-+   */
++  /** Resource templates; see {@link McpRouteOptions.resourceTemplates}. */
 +  resourceTemplates?: readonly McpResourceTemplate[];
-+  /**
-+   * Subscribe to changes in the resources the host serves outside the agent
-+   * manifest (template entries, say). Each `notify()` sends
-+   * `notifications/resources/list_changed`. Returns the unsubscribe function.
-+   */
++  /** Host resource-change subscription; see {@link McpRouteOptions.onResourcesChanged}. */
 +  onResourcesChanged?: (notify: () => void, ctx: DevframeNodeContext) => () => void;
    /**
     * Optional identity check, layered on top of the origin gate and checked
     * **after** it: a bearer token string (matched in constant time against
-diff --git a/dist/dev-BViAfnlw.mjs b/dist/dev-BViAfnlw.mjs
-index 19f385cf45e59be7c0508a3c5a255f694003a347..c5dfbd5067baa74d859b8ae5b59f0f11807da67c 100644
---- a/dist/dev-BViAfnlw.mjs
-+++ b/dist/dev-BViAfnlw.mjs
-@@ -140,6 +140,10 @@ async function mountMcpRoute(app, context, def, base, setting) {
- 		serverName: `${def.id} (devframe)`,
+diff --git a/dist/dev-pIWWAGYd.mjs b/dist/dev-pIWWAGYd.mjs
+index 6aaf91cbf2968d2ffbe8037c4303a78161b2c882..8d199a056ec2f5469f0461593a3481bb2642c639 100644
+--- a/dist/dev-pIWWAGYd.mjs
++++ b/dist/dev-pIWWAGYd.mjs
+@@ -141,6 +141,9 @@ async function mountMcpRoute(app, context, def, base, setting) {
  		serverVersion: def.version ?? "0.0.0",
  		exposeSharedState: config.exposeSharedState ?? true,
-+		instructions: config.instructions,
+ 		instructions: config.instructions,
 +		prompts: config.prompts,
 +		resourceTemplates: config.resourceTemplates,
 +		onResourcesChanged: config.onResourcesChanged,

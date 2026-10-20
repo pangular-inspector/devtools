@@ -111,7 +111,7 @@ When a page starts reporting or expires, the server sends `notifications/resourc
 
 The HTTP endpoint is stateless, so the notification only reaches a client that keeps a stream open for it: one that speaks the 2026-07-28 protocol and calls `subscriptions/listen` with `resourcesListChanged`. A client on the 2025 protocol versions, such as one built on the MCP SDK 1.x defaults, gets no notification, even though `initialize` advertises `listChanged`. Such a client sees new pages the next time it calls `resources/list`, or through the [templates](#read-one-page), which need no list.
 
-Like the prompts, the templates need a devframe patch that devframe 1.2.5 does not ship. The stdio server has no templates, since no page connects to it.
+Like the prompts, the templates need a devframe patch that devframe 1.2.6 does not ship. The stdio server has no templates, since no page connects to it.
 
 ## Shared state
 

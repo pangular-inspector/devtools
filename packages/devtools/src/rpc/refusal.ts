@@ -38,17 +38,26 @@ export function isRefusal(text: unknown): text is string {
   return typeof text === 'string' && refused.has(text);
 }
 
+/** The key devframe's `withMcpContent` stores a result's MCP content blocks under. */
+const MCP_CONTENT = Symbol.for('devframe:mcp-content');
+
+/** The MCP content blocks attached with devframe's `withMcpContent`, or undefined. */
+export function mcpContentOf(result: unknown): unknown {
+  if (!result || typeof result !== 'object') return undefined;
+  return (result as Record<symbol, unknown>)[MCP_CONTENT];
+}
+
 /**
  * The refusal text of a tool answer (a string, `{ markdown }`, or one text
- * block in `mcpContent`), or undefined for an ordinary answer.
+ * block in its MCP content), or undefined for an ordinary answer.
  */
 export function refusalOf(result: unknown): string | undefined {
   if (isRefusal(result)) return result;
   if (!result || typeof result !== 'object') return undefined;
-  const record = result as { markdown?: unknown; mcpContent?: unknown; refused?: unknown };
+  const record = result as { markdown?: unknown; refused?: unknown };
   if (isRefusal(record.markdown)) return record.markdown;
   if (record.refused === true && typeof record.markdown === 'string') return record.markdown;
-  const blocks = record.mcpContent;
+  const blocks = mcpContentOf(result);
   if (Array.isArray(blocks) && blocks.length === 1) {
     const text = (blocks[0] as { text?: unknown } | null)?.text;
     if (isRefusal(text)) return text;

@@ -11,6 +11,6 @@ packageExtensions:
     dependencies:
       h3: ^1.15.0
 patchedDependencies:
-  '@devframes/agentic@1.2.5': patches/@devframes__agentic@1.2.5.patch
-  '@devframes/hub@1.2.5': patches/@devframes__hub@1.2.5.patch
-  devframe@1.2.5: patches/devframe@1.2.5.patch
+  '@devframes/agentic@1.2.6': patches/@devframes__agentic@1.2.6.patch
+  '@devframes/hub@1.2.6': patches/@devframes__hub@1.2.6.patch
+  devframe@1.2.6: patches/devframe@1.2.6.patch

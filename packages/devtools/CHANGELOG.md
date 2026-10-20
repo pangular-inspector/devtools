@@ -31,7 +31,7 @@ These changes can break a 0.0.7 setup without an error.
 - **Analog on pnpm needs one setting.** `@analogjs/vite-plugin-nitro` imports `h3` without declaring it, so under pnpm it can resolve to the h3 2 that this package brings in, and `vite build` fails with "does not provide an export named 'createEvent'". Declare `h3@^1` for the plugin with pnpm `packageExtensions`, as the Analog guide shows.
 - **Agent tools, arguments and resource templates are renamed, and old names are refused.** Update prompts, scripts and client allowlists. See **Agent tools renamed** below.
 - **Most entry points export less.** See **Removed exports** below.
-- **MCP prompts, server instructions and the `screenshot-component` image need a devframe release after 1.2.5.** With devframe 1.2.5 from npm, the HTTP endpoint sends no prompts or instructions, and the screenshot tool answers with a note and no image. The per-page resource templates and `list_changed` notifications come from the same devframe patch. The workspace runs a patched devframe, so this only affects installed packages.
+- **MCP prompts and the per-page resource templates need a devframe release after 1.2.6.** With devframe 1.2.6 from npm, the HTTP endpoint sends no prompts, and the resource templates and their `list_changed` notifications are missing. Server instructions and the `screenshot-component` image work with 1.2.6. The workspace runs a patched devframe, so this only affects installed packages.
 
 ### Agent tools renamed
 
@@ -210,7 +210,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The `leaks-real` test expects the rows the collector really reports (#430).
 - Pull requests run the security and MCP end-to-end checks, and a weekly job runs the rest.
 - The packed `package.json` leaves out `devDependencies`, `scripts` and the `nx` block, and declares `sideEffects`.
-- Dependencies: devframe and `@devframes/*` 1.2.5 (was 1.2.0). `@devframes/plugin-messages`, `@devframes/plugin-terminals` and `axe-core` are added. `h3` is no longer a dependency.
+- Dependencies: devframe and `@devframes/*` 1.2.6 (was 1.2.0). `@devframes/plugin-messages`, `@devframes/plugin-terminals` and `axe-core` are added. `h3` is no longer a dependency.
 
 ## 0.0.7
 

@@ -1,3 +1,4 @@
+import { withMcpContent } from 'devframe';
 import { describe, expect, it } from 'vitest';
 import { answerText, answeringText } from '../agent-output.ts';
 import { refusalOf, refusal } from '../refusal.ts';
@@ -7,10 +8,10 @@ describe('answerText', () => {
     expect(answerText({ markdown: '# Title\n\n"quoted"' })).toBe('# Title\n\n"quoted"');
   });
 
-  it('keeps an answer that carries its own MCP blocks, even when they are not enumerable', () => {
-    const answer = { markdown: 'Screenshot' };
-    const blocks = [{ type: 'text', text: 'Screenshot' }];
-    Object.defineProperty(answer, 'mcpContent', { value: blocks, enumerable: false });
+  it('keeps an answer that carries its own MCP blocks', () => {
+    const answer = withMcpContent({ markdown: 'Screenshot' }, [
+      { type: 'text', text: 'Screenshot' },
+    ]);
     expect(answerText(answer)).toBe(answer);
   });
 

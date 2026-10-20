@@ -1,5 +1,5 @@
 diff --git a/dist/mcp/index.mjs b/dist/mcp/index.mjs
-index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..4c1085fd8814c1dd706007f16ee5f9ff6e93a0d9 100644
+index 06c9682e0236aeb4a45bf9fe856fb4bfc373e9d0..5b1af31f21a652bd9fde40c0efb6f202bc2d6641 100644
 --- a/dist/mcp/index.mjs
 +++ b/dist/mcp/index.mjs
 @@ -1,6 +1,6 @@
@@ -8,24 +8,18 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..4c1085fd8814c1dd706007f16ee5f9ff
 -import { Server, createMcpHandler } from "@modelcontextprotocol/server";
 +import { ProtocolError, ProtocolErrorCode, Server, createMcpHandler } from "@modelcontextprotocol/server";
  import { DEVFRAME_EVENTS } from "devframe/constants";
- import { argsToJsonSchema, diagnostics, formatMcpError, returnToJsonSchema, stringifyForMcp } from "devframe/internal";
+ import { argsToJsonSchema, diagnostics, formatMcpError, getMcpContent, returnToJsonSchema, stringifyForMcp } from "devframe/internal";
  import { createHostContext } from "devframe/node";
-@@ -26,12 +26,19 @@ function buildMcpServerFromContext(ctx, options) {
- 	const server = new Server({
- 		name: options.serverName,
- 		version: options.serverVersion
--	}, { capabilities: {
--		tools: { listChanged: true },
--		resources: { listChanged: true }
--	} });
-+	}, {
-+		capabilities: {
-+			tools: { listChanged: true },
+@@ -29,12 +29,16 @@ function buildMcpServerFromContext(ctx, options) {
+ 	}, {
+ 		capabilities: {
+ 			tools: { listChanged: true },
+-			resources: { listChanged: true }
 +			resources: { listChanged: true },
 +			...options.prompts?.length ? { prompts: { listChanged: false } } : {}
-+		},
-+		...options.instructions ? { instructions: options.instructions } : {}
-+	});
+ 		},
+ 		...options.instructions ? { instructions: options.instructions } : {}
+ 	});
 +	if (options.resourceTemplates?.length) serverResourceTemplates.set(server, compileResourceTemplates(options.resourceTemplates));
  	registerToolHandlers(server, ctx, options.exposeSharedState);
  	registerResourceHandlers(server, ctx, options.exposeSharedState);
@@ -34,7 +28,7 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..4c1085fd8814c1dd706007f16ee5f9ff
  	return server;
  }
  /**
-@@ -44,9 +51,13 @@ function buildMcpServerFromContext(ctx, options) {
+@@ -47,9 +51,13 @@ function buildMcpServerFromContext(ctx, options) {
  * passes the pinned server's `send*ListChanged` methods, which `serveStdio`
  * routes onto the connection's active `subscriptions/listen` streams.
  *
@@ -49,7 +43,7 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..4c1085fd8814c1dd706007f16ee5f9ff
  	const offManifest = ctx.agent.events.on(DEVFRAME_EVENTS.bus.agentManifestChanged, () => {
  		sinks.tools();
  		sinks.resources();
-@@ -54,9 +65,13 @@ function bridgeListChanged(ctx, sinks) {
+@@ -57,9 +65,13 @@ function bridgeListChanged(ctx, sinks) {
  	const offKeyAdded = ctx.rpc.sharedState.onKeyAdded(() => {
  		sinks.resources();
  	});
@@ -63,12 +57,11 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..4c1085fd8814c1dd706007f16ee5f9ff
  	};
  }
  /**
-@@ -89,7 +104,11 @@ async function createMcpServer(definition, options = {}) {
- 	const buildOptions = {
+@@ -93,7 +105,10 @@ async function createMcpServer(definition, options = {}) {
  		serverName: options.serverName ?? `${definition.id} (devframe)`,
  		serverVersion: options.serverVersion ?? definition.version ?? "0.0.0",
--		exposeSharedState: options.exposeSharedState ?? true
-+		exposeSharedState: options.exposeSharedState ?? true,
+ 		exposeSharedState: options.exposeSharedState ?? true,
+-		instructions: options.instructions
 +		instructions: options.instructions,
 +		prompts: options.prompts,
 +		resourceTemplates: options.resourceTemplates,
@@ -76,7 +69,7 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..4c1085fd8814c1dd706007f16ee5f9ff
  	};
  	let handle;
  	try {
-@@ -103,7 +122,7 @@ async function createMcpServer(definition, options = {}) {
+@@ -107,7 +122,7 @@ async function createMcpServer(definition, options = {}) {
  				resources: () => {
  					server.sendResourceListChanged().catch(() => {});
  				}
@@ -85,42 +78,7 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..4c1085fd8814c1dd706007f16ee5f9ff
  			const priorOnClose = server.onclose;
  			server.onclose = () => {
  				unbridge();
-@@ -165,6 +184,25 @@ async function readStateResult(ctx, filter, key) {
- 		value: (await ctx.rpc.sharedState.get(key)).value()
- 	};
- }
-+/**
-+* A tool result that carries its own MCP content blocks (`mcpContent`), such
-+* as an image next to its text, is sent as those blocks. Only `text` and
-+* `image` blocks with string fields pass; anything else falls back to the
-+* stringified result.
-+*/
-+function mcpContentOf(result) {
-+	const blocks = result && typeof result === "object" ? result.mcpContent : void 0;
-+	if (!Array.isArray(blocks) || !blocks.length) return void 0;
-+	const valid = blocks.every((block) => block && (block.type === "text" && typeof block.text === "string" || block.type === "image" && typeof block.data === "string" && typeof block.mimeType === "string"));
-+	return valid ? blocks.map((block) => block.type === "text" ? {
-+		type: "text",
-+		text: block.text
-+	} : {
-+		type: "image",
-+		data: block.data,
-+		mimeType: block.mimeType
-+	}) : void 0;
-+}
- function registerToolHandlers(server, ctx, exposeSharedState) {
- 	const stateFilter = sharedStateFilter(exposeSharedState);
- 	const warnedCollisions = /* @__PURE__ */ new Set();
-@@ -216,6 +254,8 @@ function registerToolHandlers(server, ctx, exposeSharedState) {
- 			}
- 			const outputSchema = tool ? usableOutputSchema(tool.outputSchema ?? computeOutputSchema(tool, ctx)) : void 0;
- 			const result = await ctx.agent.invoke(tool?.id ?? name, args ?? {});
-+			const blocks = mcpContentOf(result);
-+			if (blocks) return { content: blocks };
- 			return {
- 				content: [{
- 					type: "text",
-@@ -252,6 +292,7 @@ function registerResourceHandlers(server, ctx, exposeSharedState) {
+@@ -256,6 +271,7 @@ function registerResourceHandlers(server, ctx, exposeSharedState) {
  				mimeType: "application/json"
  			});
  		}
@@ -128,7 +86,7 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..4c1085fd8814c1dd706007f16ee5f9ff
  		return { resources };
  	});
  	server.setRequestHandler("resources/read", async (request) => {
-@@ -274,10 +315,135 @@ function registerResourceHandlers(server, ctx, exposeSharedState) {
+@@ -278,10 +294,135 @@ function registerResourceHandlers(server, ctx, exposeSharedState) {
  				text: stringifyForMcp(state.value())
  			}] };
  		}
@@ -261,22 +219,21 @@ index 8d2d64dbe9397f74ccb8b9640605e0b1b38a3d40..4c1085fd8814c1dd706007f16ee5f9ff
 +	});
 +}
 +/**
- * MCP constrains a tool's `outputSchema` to a JSON Schema of `type:
- * "object"`; clients (the SDK included) reject anything else. Non-object
- * return schemas (e.g. a schema for `void` / a bare string) simply project
-@@ -398,7 +564,10 @@ function createMcpFetchHandler(ctx, options) {
- 	const handler = createMcpHandler(() => buildMcpServerFromContext(ctx, {
+ * The content blocks a tool result carries through `withMcpContent`, checked
+ * and copied field by field, or `undefined` when it carries none. Invalid
+ * blocks throw DF0081, which the `tools/call` handler turns into an
+@@ -433,7 +574,9 @@ function createMcpFetchHandler(ctx, options) {
  		serverName: options.serverName,
  		serverVersion: options.serverVersion,
--		exposeSharedState: options.exposeSharedState
-+		exposeSharedState: options.exposeSharedState,
+ 		exposeSharedState: options.exposeSharedState,
+-		instructions: options.instructions
 +		instructions: options.instructions,
 +		prompts: options.prompts,
 +		resourceTemplates: options.resourceTemplates
  	}));
  	const unbridge = bridgeListChanged(ctx, {
  		tools: () => {
-@@ -407,7 +576,7 @@ function createMcpFetchHandler(ctx, options) {
+@@ -442,7 +585,7 @@ function createMcpFetchHandler(ctx, options) {
  		resources: () => {
  			handler.notify.resourcesChanged();
  		}

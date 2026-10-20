@@ -1,3 +1,5 @@
+import { mcpContentOf } from './refusal.ts';
+
 /** What a markdown agent tool handler answers: the text an agent reads. */
 export interface MarkdownAnswer {
   markdown: string;
@@ -11,14 +13,14 @@ export interface MarkdownAnswer {
  * markdown itself, which devframe sends as the text content as is. No tool
  * declares an `outputSchema`, so no `structuredContent` copy goes with it.
  *
- * A result with its own `mcpContent` blocks (a screenshot next to its text)
- * keeps them, and anything else (a source scan's compact JSON, a string) is
- * sent as it is.
+ * A result with its own MCP content blocks (a screenshot next to its text,
+ * attached with devframe's `withMcpContent`) keeps them, and anything else (a
+ * source scan's compact JSON, a string) is sent as it is.
  */
 export function answerText(result: unknown): unknown {
   if (!result || typeof result !== 'object') return result;
-  const record = result as { markdown?: unknown; mcpContent?: unknown };
-  if (Array.isArray(record.mcpContent)) return result;
+  if (mcpContentOf(result) !== undefined) return result;
+  const record = result as { markdown?: unknown };
   return typeof record.markdown === 'string' ? record.markdown : result;
 }
 

@@ -1,3 +1,4 @@
+import { withMcpContent } from 'devframe';
 import { MAX_SCREENSHOT_DATA, type ScreenshotResult } from '../component-screenshot.ts';
 import { redactText } from '../serialize.ts';
 import { clip } from '../text.ts';
@@ -20,30 +21,6 @@ interface Deps {
   /** Whether a result for `target` may come from the connection that sent it for `pageId`. */
   answersFor: (target: string, pageId: unknown) => boolean;
   timeoutMs?: number;
-}
-
-/** An MCP content block: the image travels as its own block, next to the markdown. */
-export type McpContent =
-  { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
-
-export interface ScreenshotAnswer {
-  markdown: string;
-  /** The MCP tool result content, read by the MCP adapter (see `patches/@devframes__agentic`). */
-  mcpContent?: McpContent[];
-}
-
-/**
- * Adds the MCP content blocks as a non-enumerable property: the MCP adapter
- * reads them, and anything that serializes the result instead (the panel's
- * RPC, an adapter without `mcpContent` support) sees only the markdown, not
- * megabytes of base64.
- */
-export function withMcpContent(
-  answer: { markdown: string },
-  blocks: McpContent[],
-): ScreenshotAnswer {
-  Object.defineProperty(answer, 'mcpContent', { value: blocks, enumerable: false });
-  return answer;
 }
 
 const num = (value: unknown) =>
@@ -157,7 +134,7 @@ export function createComponentScreenshots(deps: Deps) {
         },
       },
     },
-    handler: async (args: Record<string, unknown>): Promise<ScreenshotAnswer> => {
+    handler: async (args: Record<string, unknown>): Promise<{ markdown: string }> => {
       const page = pageArgument(args);
       const all = byRecency(deps.pages());
       if (page && !all.some((entry) => entry.pageId === page)) {
@@ -226,6 +203,8 @@ export function createComponentScreenshots(deps: Deps) {
           .filter(Boolean)
           .join('\n\n'),
       );
+      // The image travels as its own MCP block next to the text. Devframe keeps
+      // the blocks off the plain value, so the panel's RPC never carries the base64.
       return withMcpContent({ markdown }, [
         { type: 'text', text: markdown },
         { type: 'image', data: result.data, mimeType: result.mimeType },
