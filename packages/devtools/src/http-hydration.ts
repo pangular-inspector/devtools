@@ -1,4 +1,5 @@
 import { redactMessage } from './forms-privacy.ts';
+import { className } from './injector-tree.ts';
 
 export const HYDRATION_CODE = /\bNG05\d\d\b/;
 
@@ -40,8 +41,33 @@ const detail = (value: unknown) =>
     ? redactMessage(value.slice(0, MAX_DETAIL * 4)).slice(0, MAX_DETAIL)
     : undefined;
 
-/** Counts the hydration status Angular patches on DOM nodes in dev mode. */
-export function scanHydration(root: Node): HydrationScan {
+/** The part of `window.ng` the scan reads: `getComponent` names a mismatched component host. */
+export interface HydrationScanNg {
+  getComponent?(el: Element): unknown;
+}
+
+/**
+ * The class of the component `node` hosts, through `ng.getComponent`, or the
+ * node's name (`app-card`, `#text`, `#comment`) when it hosts none.
+ */
+function mismatchName(node: Node, ng: HydrationScanNg | undefined): string {
+  if (node.nodeType === 1 && typeof ng?.getComponent === 'function') {
+    try {
+      const ctor = (ng.getComponent(node as Element) as { constructor?: unknown } | null)
+        ?.constructor;
+      if (typeof ctor === 'function' && ctor !== Object) return className(ctor);
+    } catch {
+      // not a component host
+    }
+  }
+  return node.nodeName.toLowerCase();
+}
+
+/**
+ * Counts the hydration status Angular patches on DOM nodes in dev mode. A
+ * mismatch is named by the component class its node hosts when `ng` is given.
+ */
+export function scanHydration(root: Node, ng?: HydrationScanNg): HydrationScan {
   const scan: HydrationScan = { hydrated: 0, skipped: 0, mismatched: 0, mismatches: [] };
   const doc = root.ownerDocument ?? (root as Document);
   // Angular marks elements, text nodes and the comments that anchor containers.
@@ -60,7 +86,7 @@ export function scanHydration(root: Node): HydrationScan {
         scan.mismatched++;
         if (scan.mismatches.length < MAX_MISMATCHES) {
           scan.mismatches.push({
-            component: node.nodeName.toLowerCase(),
+            component: mismatchName(node, ng),
             expected: detail(info.expectedNodeDetails),
             actual: detail(info.actualNodeDetails),
           });

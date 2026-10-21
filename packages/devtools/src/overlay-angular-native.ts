@@ -237,7 +237,7 @@ async function startSession(
     lastTreeJson = json;
     treeSentAt = Date.now();
     try {
-      await my.rpc.call('push-component-tree', { ...report, pageId });
+      await my.rpc.call('push-component-tree', { ...report, pageId, pageNow: Date.now() });
     } catch (error) {
       // Sent again on the next tick.
       if (lastTreeJson === json) lastTreeJson = '';

@@ -15,6 +15,7 @@ import {
   type CapacitorState,
 } from './rpc/capacitor-tools.ts';
 import { forBlocksText } from './rpc/for-blocks-tools.ts';
+import { pageHighlightTarget } from './rpc/page-highlight-target.ts';
 import {
   HYDRATION_DESCRIPTION,
   hydrationOverlayText,
@@ -53,7 +54,7 @@ import {
   signalStateForAgents,
   type InspectSignalsArgs,
 } from './rpc/signal-tools.ts';
-import { createSignalPeeks } from './rpc/signal-peeks.ts';
+import { createSignalPeeks, noSelectorMatchText, signalPeekFor } from './rpc/signal-peeks.ts';
 import {
   signalWatchRequest,
   watchSignalRequests,
@@ -1877,25 +1878,8 @@ const pangular = defineDevframe({
       name: 'request-page-highlight',
       type: 'action',
       jsonSerializable: true,
-      handler: (
-        selector:
-          string | { pageId?: unknown; id?: unknown; selector?: unknown; reveal?: unknown } | null,
-      ) => {
-        const target =
-          selector && typeof selector === 'object' && typeof selector.id === 'string'
-            ? {
-                id: selector.id.slice(0, 50),
-                ...(typeof selector.pageId === 'string' ? { pageId: selector.pageId } : {}),
-                ...(selector.reveal === true ? { reveal: true } : {}),
-              }
-            : selector && typeof selector === 'object' && typeof selector.selector === 'string'
-              ? {
-                  selector: selector.selector.slice(0, 500),
-                  ...(typeof selector.pageId === 'string' ? { pageId: selector.pageId } : {}),
-                }
-              : typeof selector === 'string'
-                ? selector
-                : '';
+      handler: (selector: unknown) => {
+        const target = pageHighlightTarget(selector);
         if (target) highlightSessions.bind('highlight-in-page');
         else highlightSessions.unbind('highlight-in-page');
         void my.rpc.broadcast({ method: 'highlight-in-page', args: [target], optional: true });
@@ -2057,9 +2041,9 @@ const pangular = defineDevframe({
       name: 'push-component-tree',
       type: 'action',
       jsonSerializable: true,
-      handler: deltaPush(componentDeltas, owns, (report) => {
+      handler: deltaPush(componentDeltas, owns, (report, pageNow) => {
         if (!isComponentReport(report) || !owns(report.pageId)) return false;
-        componentPages.set(report.pageId, toComponentPage(report));
+        componentPages.set(report.pageId, toComponentPage(report, Date.now(), pageNow));
         cdSeen(report.pageId);
         applyComponentPages();
         for (const check of [...componentWaiters]) check();
@@ -3476,7 +3460,7 @@ const pangular = defineDevframe({
       id: 'pangular:inspect-signals',
       title: 'Inspect signals',
       description:
-        'The signal graph the page last reported: nodes, edges (`consumer` reads `producer`, by node id), resources and value history. `component` names a component, `root` for root effects, or a route; `node` narrows to one node. Only signals something read appear.',
+        'Live signal graph: nodes, edges (`consumer` reads `producer`, by node id), resources and value history. `component` names a component, `root` or a route; `selector` a component host by CSS; `node` narrows to one node. Only signals something read appear.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -3484,6 +3468,12 @@ const pangular = defineDevframe({
             type: 'string',
             description:
               'Host tag, class name or instance id of the component (e.g. app-root), `root`, or a route path (e.g. /admin).',
+          },
+          selector: {
+            type: 'string',
+            maxLength: 500,
+            description:
+              'Instead of `component`: a CSS selector for a component host (e.g. app-card.featured). The first match on the page is read.',
           },
           node: {
             type: 'string',
@@ -3501,13 +3491,20 @@ const pangular = defineDevframe({
           },
           page: PAGE_ARGUMENT,
         },
-        required: ['component'],
       },
-      handler: async (args: { component: string; page?: string } & InspectSignalsArgs) => {
-        if (typeof args?.component !== 'string' || !args.component.trim()) {
+      handler: async (
+        args: { component?: string; selector?: string; page?: string } & InspectSignalsArgs,
+      ) => {
+        const bySelector = args?.selector !== undefined;
+        const wanted = bySelector ? args.selector : args?.component;
+        if (
+          (bySelector && args.component !== undefined) ||
+          typeof wanted !== 'string' ||
+          !wanted.trim()
+        ) {
           return {
             markdown: refusal(
-              'Pass `component`: a host tag, class name or instance id (such as app-root), `root` for root service effects, or a route path such as /admin.',
+              'Pass one of `component` (a host tag, class name or instance id such as app-root, `root` for root service effects, or a route path such as /admin) or `selector` (a CSS selector for a component host).',
             ),
           };
         }
@@ -3519,8 +3516,9 @@ const pangular = defineDevframe({
           return { markdown: unknownPageText(page, all, 'a signal graph') };
         }
         const matches = (g: PageGraph) =>
-          [g.componentSelector, g.component?.name, g.component?.id].includes(args.component) ||
-          (!!g.injector && injectorMatches(g.injector, args.component));
+          !bySelector &&
+          ([g.componentSelector, g.component?.name, g.component?.id].includes(wanted) ||
+            (!!g.injector && injectorMatches(g.injector, wanted)));
         const latestMatch = () =>
           byRecency(
             [...signalPages]
@@ -3528,9 +3526,17 @@ const pangular = defineDevframe({
               .filter((entry) => !page || entry.pageId === page),
           ).find((entry) => matches(entry.graph))?.graph;
         let matched = latestMatch();
-        if (!matched && signalPages.size && isEnvironmentRequest(args.component)) {
-          // Ask for this injector's graph once. The page answers without
-          // changing its selected target, so the Signals page keeps its view.
+        // Ask for this injector's graph once. The page answers without
+        // changing its selected target, so the Signals page keeps its view.
+        const peek =
+          matched || !signalPages.size
+            ? null
+            : signalPeekFor(
+                args,
+                bySelector || isEnvironmentRequest(wanted) ? [] : componentHits(wanted, page),
+              );
+        const peekPage = peek?.pageId ?? page;
+        if (peek && (!peekPage || signalPages.has(peekPage))) {
           const peeked = await signalPeeks.request(
             (request) =>
               void my.rpc.broadcast({
@@ -3538,12 +3544,15 @@ const pangular = defineDevframe({
                 args: [request],
                 optional: true,
               }),
-            args.component,
-            page,
-            page ? [page] : [...signalPages.keys()],
+            peek.target,
+            peekPage,
+            peekPage ? [peekPage] : [...signalPages.keys()],
             ENV_WAIT_MS,
           );
-          if (peeked && matches(peeked)) matched = peeked;
+          if (peeked && (bySelector || matches(peeked))) matched = peeked;
+        }
+        if (bySelector && !matched && signalPages.size) {
+          return { markdown: refusal(noSelectorMatchText(wanted, page)) };
         }
         const graph =
           matched ??
@@ -3571,13 +3580,13 @@ const pangular = defineDevframe({
         const view = { node: args.node, history: args.history, framework: args.framework };
         // Signal values come from the page, so the graph sits behind the notice, inside the cap.
         const budget = SIGNAL_TOOL_MAX - UNTRUSTED.length - 2;
-        if (!matches(graph)) {
+        if (graph !== matched && !matches(graph)) {
           const known = (graph.environments ?? []).map((e) => `\`${e.name}\``).join(', ');
           const covers = graph.componentSelector ?? graph.injector?.name ?? 'another target';
-          const hint = isEnvironmentRequest(args.component)
+          const hint = isEnvironmentRequest(wanted)
             ? ` No environment injector on the page matches it${known ? `; the page knows ${known}` : ''}.`
             : '';
-          const head = `No signal graph for \`${clip(args.component, 200)}\`.${hint} The live graph covers \`${covers}\`:\n\n`;
+          const head = `No signal graph for \`${clip(wanted, 200)}\`.${hint} The live graph covers \`${covers}\`:\n\n`;
           return {
             markdown: untrusted(
               (head + signalGraphText(graph, view, Math.max(0, budget - head.length))).slice(

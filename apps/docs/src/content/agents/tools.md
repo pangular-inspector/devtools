@@ -257,7 +257,7 @@ Without `page`, it lists the default page among the tabs that have a component t
 
 ### defer-blocks
 
-The `@defer` blocks of each page: the component that holds each one, its state, its incremental hydration state, its triggers and whether it has `@loading`, `@placeholder` and `@error` blocks. A **Needs attention** list names blocks that failed to load and blocks still on their placeholder after 10 seconds. A block whose triggers only wait for the user (`on viewport`, `on interaction` or `on hover`) is not listed there: its row notes that it is waiting for its trigger. Reads: page.
+The `@defer` blocks of each page: the component that holds each one, its state, its incremental hydration state, its triggers and whether it has `@loading`, `@placeholder` and `@error` blocks. A **Needs attention** list names blocks that failed to load and blocks still on their placeholder after 10 seconds. A block whose triggers only wait for the user (`on viewport`, `on interaction` or `on hover`) is not listed there: its row notes that it is waiting for its trigger. Times are counted on the page's clock, which the page sends with each report, so a page whose clock differs from the server's still gets the right age. Reads: page.
 
 It takes only `page`.
 
@@ -448,10 +448,13 @@ The signal graph the page reported: nodes (`signal`, `computed`, `linkedSignal`,
 
 | Argument    | Required | Value                                                                                                                                                        |
 | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `component` | yes      | Host tag, class name or instance id of the component, like `app-root`. Or `root`, or a route path like `/admin` or `Route: admin`.                           |
+| `component` | one of   | Host tag, class name or instance id of the component, like `app-root`. Or `root`, or a route path like `/admin` or `Route: admin`.                           |
+| `selector`  | one of   | A CSS selector for a component host, like `app-card.featured`. The first match is read. At most 500 characters.                                              |
 | `node`      | no       | A node id or label. The answer holds only that node, or every node with that label, with its direct producers and consumers and their resources and history. |
 | `history`   | no       | `false` leaves out the value history. Defaults to `true`.                                                                                                    |
 | `framework` | no       | `false` leaves out the nodes Angular itself created (`framework: true`). Defaults to `true`.                                                                 |
+
+Pass `component` or `selector`, not both. When the graph the page last reported belongs to another component or injector, the tool asks the page for the one you named, once, and the Signals page keeps showing what it showed. A `component` the component tree knows is read by its first instance. A `component` it doesn't know answers with the graph the page reported and says what that graph covers. A `selector` that matches no component host is refused.
 
 The answer also holds:
 
@@ -967,7 +970,7 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 | Tool                       | What it answers                                                                                                                                                                                                              | Reads       | Arguments                                                          |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------ |
-| `analog-inspect-page`      | The open page: its files, the `load()` data it received, server rendering and hydration state, and hydration errors.                                                                                                         | page        | none                                                               |
+| `analog-inspect-page`      | The open page: its files (layouts first, then pages in named outlets with the outlet name), the `load()` data it received, server rendering and hydration state, and hydration errors.                                       | page        | none                                                               |
 | `analog-list-server-calls` | Recent page renders, `load()` fetches, form actions (with their outcome), server functions by name and API calls, with status, time and size. Flags a `load()` fetched twice and a seeded server function read called again. | Vite plugin | `kind` (`page`, `load`, `action`, `fn` or `api`), `route`, `limit` |
 
 ### Rendering

@@ -25,14 +25,18 @@ export function highlightBox(el: Element): Box | null {
   const rect = el.getBoundingClientRect();
   if (!empty(rect))
     return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
+  // A `display: contents` host may render only through its shadow root.
+  return unionBox([...Array.from(el.shadowRoot?.children ?? []), ...Array.from(el.children)]);
+}
+
+/** One box around every element of `els` that is on the page, or `null` when none is. */
+export function unionBox(els: readonly Element[]): Box | null {
   let top = Infinity;
   let left = Infinity;
   let right = -Infinity;
   let bottom = -Infinity;
-  // A `display: contents` host may render only through its shadow root.
-  const children = [...Array.from(el.shadowRoot?.children ?? []), ...Array.from(el.children)];
-  for (const child of children) {
-    const box = highlightBox(child);
+  for (const el of els) {
+    const box = highlightBox(el);
     if (!box) continue;
     top = Math.min(top, box.top);
     left = Math.min(left, box.left);
@@ -44,19 +48,22 @@ export function highlightBox(el: Element): Box | null {
 
 /**
  * Draws the box over `el` until `clearHighlight()` or `durationMs` (default
- * `HIGHLIGHT_SAFETY_MS`), and returns whether anything was drawn. `reveal`
- * scrolls it into view first, for an explicit request rather than a hover.
+ * `HIGHLIGHT_SAFETY_MS`), and returns whether anything was drawn. A list of
+ * elements, such as the root elements of a `@defer` block, gets one box
+ * around all of them. `reveal` scrolls the first one into view first, for an
+ * explicit request rather than a hover.
  */
 export function showHighlight(
-  el: Element,
+  el: Element | readonly Element[],
   options: { reveal?: boolean; durationMs?: number } = {},
 ): boolean {
   clearHighlight();
-  const first = highlightBox(el);
+  const els: readonly Element[] = Array.isArray(el) ? el : [el as Element];
+  const first = unionBox(els);
   if (!first) return false;
   if (options.reveal) {
     try {
-      el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      els.find((one) => highlightBox(one))?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     } catch {
       // an element with no box of its own may refuse; the box still shows
     }
@@ -91,7 +98,7 @@ export function showHighlight(
   }
   const follow = () => {
     if (highlightEl !== box) return;
-    const rect = highlightBox(el);
+    const rect = unionBox(els);
     Object.assign(box.style, {
       display: rect ? 'block' : 'none',
       top: `${rect?.top ?? 0}px`,

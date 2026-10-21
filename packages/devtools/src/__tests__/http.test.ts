@@ -351,6 +351,31 @@ describe('hydration helpers', () => {
     });
   });
 
+  it('names a mismatch by the class of the component its node hosts', () => {
+    document.body.innerHTML = '<app-card></app-card><p>text</p>';
+    class _ProductCard {}
+    const card = document.querySelector('app-card')!;
+    const text = document.querySelector('p')!.firstChild!;
+    const mismatched = { status: 'mismatched', expectedNodeDetails: '<div>' };
+    (card as unknown as Record<string, unknown>)['__ngDebugHydrationInfo__'] = mismatched;
+    (text as unknown as Record<string, unknown>)['__ngDebugHydrationInfo__'] = mismatched;
+    const ng = {
+      getComponent: (el: Element) => (el === card ? new _ProductCard() : null),
+    };
+    expect(scanHydration(document, ng).mismatches.map((m) => m.component)).toEqual([
+      'ProductCard',
+      '#text',
+    ]);
+    // A debug API that throws, or none at all, falls back to the node name.
+    const throwing = {
+      getComponent: () => {
+        throw new Error('not an element');
+      },
+    };
+    expect(scanHydration(document, throwing).mismatches[0]?.component).toBe('app-card');
+    expect(scanHydration(document).mismatches[0]?.component).toBe('app-card');
+  });
+
   it('sanitizes the new hydration fields', () => {
     expect(
       sanitizeHydration({

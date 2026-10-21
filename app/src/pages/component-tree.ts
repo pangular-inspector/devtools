@@ -50,6 +50,7 @@ import { ValueTree } from './component-value-tree';
 import { ValueStore } from './component-value-store';
 import { nestedMatches } from './component-value-state';
 import { StoreGlobal } from '../ui/store-global';
+import { DeferBlocksSection, type DeferBlock } from './defer-blocks-section';
 import { ForBlocksSection, type ForBlock } from './for-blocks-section';
 import { LeaksSection, type LeaksPage } from './leaks-section';
 import { VirtualWindow } from '../ui/virtual-window';
@@ -115,16 +116,6 @@ interface Detail {
   expanded?: Record<string, unknown>;
 }
 
-interface DeferBlock {
-  id: string;
-  owner?: { id: string; name: string; tag: string };
-  state: string;
-  hydration: string;
-  hydrateNever?: boolean;
-  triggers: string[];
-  rootIds: string[];
-}
-
 interface Page {
   pageId: string;
   url?: string;
@@ -144,6 +135,8 @@ interface Page {
   truncatedBy?: { components?: number; depth?: number; directiveHosts?: number };
   detail: Detail | null;
   reportedAt: number;
+  /** The server clock minus the page clock, in ms, for ages of page times. */
+  clockOffset?: number;
 }
 
 interface OutletInfo {
@@ -204,6 +197,7 @@ function storedDirectiveHosts(): boolean {
     SourceLink,
     ValueTree,
     StoreGlobal,
+    DeferBlocksSection,
     ForBlocksSection,
     HydrationSection,
     LeaksSection,
@@ -759,43 +753,13 @@ function storedDirectiveHosts(): boolean {
         }
       </div>
 
-      @if (deferBlocks().length) {
-        <section class="defer" aria-labelledby="ct-defer-title">
-          <h2 id="ct-defer-title" class="defer-title">
-            Defer blocks
-            <span class="pill">{{ deferCount() }}</span>
-          </h2>
-          <ul class="defer-list">
-            @for (block of deferBlocks(); track block.id) {
-              <li>
-                <button
-                  type="button"
-                  class="defer-row"
-                  [attr.aria-disabled]="block.owner ? null : 'true'"
-                  (click)="showOwner(block)"
-                  (focus)="highlightBlock(block)"
-                  (blur)="highlight(null)"
-                  (mouseenter)="highlightBlock(block)"
-                  (mouseleave)="highlight(null)"
-                >
-                  <span class="name mono">{{ block.owner?.name ?? 'Unknown component' }}</span>
-                  <span class="defer-state" [class]="'defer-state-' + block.state">{{
-                    block.state
-                  }}</span>
-                  @if (block.hydrateNever) {
-                    <span class="flag">hydrate never</span>
-                  } @else if (block.hydration !== 'not-configured') {
-                    <span class="flag">{{ block.hydration }}</span>
-                  }
-                  <span class="triggers mono">{{
-                    block.triggers.join(', ') || 'no triggers'
-                  }}</span>
-                </button>
-              </li>
-            }
-          </ul>
-        </section>
-      }
+      <app-defer-blocks
+        [blocks]="deferBlocks()"
+        [truncated]="page()?.deferTruncated === true"
+        [clockOffset]="page()?.clockOffset ?? 0"
+        (showOwner)="showOwner($event)"
+        (highlight)="$event ? highlightBlock($event) : highlight(null)"
+      />
       @if (deferUnavailable()) {
         <app-angular-unavailable
           class="defer"
@@ -1130,58 +1094,6 @@ function storedDirectiveHosts(): boolean {
     }
     .defer {
       margin-top: 16px;
-    }
-    .defer-title {
-      @include m.label;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin: 0 0 8px;
-    }
-    .defer-list {
-      display: grid;
-      gap: 6px;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .defer-row {
-      justify-content: flex-start;
-      flex-wrap: wrap;
-      width: 100%;
-      height: auto;
-      min-height: var(--control-h);
-      padding: 6px 12px;
-      background: var(--surface);
-      border-color: var(--border);
-      text-align: left;
-    }
-    .defer-row[aria-disabled='true'] {
-      cursor: default;
-    }
-    .defer-state {
-      padding: 0 8px;
-      border-radius: 99px;
-      background: var(--surface-3);
-      color: var(--text-2);
-      font-size: 11px;
-      line-height: 18px;
-    }
-    .defer-state-complete {
-      @include m.tint(ok);
-    }
-    .defer-state-error {
-      @include m.tint(danger);
-    }
-    .defer-state-loading,
-    .defer-state-placeholder {
-      @include m.tint(warn);
-    }
-    .triggers {
-      min-width: 0;
-      color: var(--text-2);
-      font-size: 12px;
-      @include m.truncate;
     }
     .pick-message {
       margin: 0 0 12px;
@@ -1929,10 +1841,6 @@ export class ComponentTree {
   );
 
   readonly deferBlocks = computed(() => this.page()?.deferBlocks ?? []);
-  /** The block count, with a `+` when the page has more blocks than it reported. */
-  readonly deferCount = computed(
-    () => `${this.deferBlocks().length}${this.page()?.deferTruncated ? '+' : ''}`,
-  );
 
   readonly countLabel = computed(() =>
     countText(
@@ -2645,17 +2553,22 @@ export class ComponentTree {
   }
 
   highlight(id: string | null) {
-    const client = this.rpc();
-    if (!client) return;
-    const target = id ? { pageId: this.page()?.pageId, id } : null;
-    void client
-      .scope('pangular')
-      .rpc.call('request-page-highlight', target)
-      .catch(() => {});
+    this.requestHighlight(id ? { id } : null);
   }
 
+  /** One box around every root element of the block, or its owner when none is rendered. */
   highlightBlock(block: DeferBlock) {
-    this.highlight(block.rootIds[0] ?? block.owner?.id ?? null);
+    if (block.rootIds.length > 1) this.requestHighlight({ ids: block.rootIds });
+    else this.highlight(block.rootIds[0] ?? block.owner?.id ?? null);
+  }
+
+  private requestHighlight(target: { id: string } | { ids: string[] } | null) {
+    const client = this.rpc();
+    if (!client) return;
+    void client
+      .scope('pangular')
+      .rpc.call('request-page-highlight', target && { pageId: this.page()?.pageId, ...target })
+      .catch(() => {});
   }
 
   showOwner(block: DeferBlock) {
