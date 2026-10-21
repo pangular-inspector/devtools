@@ -81,11 +81,7 @@ jobs:
           pnpm devtools:build-pkg
           pnpm build --configuration development
 
-      # Starts the demo on port 5401 itself. Two checks fail today on open issues and are marked
-      # as known failures in the script, so they print XFAIL and do not fail the job:
-      # - expiry: a crashed tab stays listed for about 150 s (#422);
-      # - stress: the forms collector keeps 100 children per group and does not say so (#423).
-      # The soak check (`soak --minutes 30`) is manual only.
+      # Starts the demo on port 5401 itself. The soak check (`soak --minutes 30`) is manual only.
       - name: Check multitab, expiry, lifecycle and stress
         run: pnpm e2e:resilience multitab expiry lifecycle stress --json dist/e2e-resilience.json
 
