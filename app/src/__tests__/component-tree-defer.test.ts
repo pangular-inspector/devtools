@@ -22,6 +22,7 @@ function client(
 describe('defer blocks', () => {
   afterEach(() => {
     document.body.innerHTML = '';
+    vi.useRealTimers();
   });
 
   it('style the state badge apart from the empty-state box', async () => {
@@ -126,6 +127,9 @@ describe('defer blocks', () => {
 
   it('shows the notes the agent tool prints, the @error block and the block times', async () => {
     const hour = 3_600_000;
+    // Fix the panel clock so the ages stay exact; timers stay real for the waits.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(1_700_000_000_000);
     // The page's clock runs an hour ahead of the panel's.
     const pageNow = Date.now() + hour;
     const block = (id: string, extra: Record<string, unknown>) => ({

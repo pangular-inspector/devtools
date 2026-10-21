@@ -21,7 +21,7 @@ export function cdDiagnosisText(
   const page = pickCdPage(state, args.page);
   if (!page) {
     return args.page
-      ? `Page ${code(args.page)} has no change detection recording yet. Start one with ${cdStartHint(canRecord)}, use the app, then call this tool again.`
+      ? `Page ${code(args.page)} has no change detection recording yet. Start one with ${cdStartHint(canRecord, args.page)}, use the app, then call this tool again.`
       : `No change detection recording yet. Start one with ${cdStartHint(canRecord)}, use the app, then call this tool again.`;
   }
   if (!page.supported) return cdUnsupportedText(page.pageId, angularOf(page.pageId));

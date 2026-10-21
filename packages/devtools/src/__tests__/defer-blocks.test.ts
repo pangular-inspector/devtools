@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
+import { deferNotes } from '../config.ts';
 import { MAX_DEFER_BLOCKS, createDeferTracker, type DeferDebugNg } from '../defer-blocks.ts';
 import { elementById } from '../element-id.ts';
 import { DEFER_ROWS, deferBlocksText, toComponentPage } from '../rpc/component-tools.ts';
@@ -421,5 +422,17 @@ describe('deferBlocksText', () => {
     const text = deferBlocksText([page]);
     expect(text).not.toContain('s3cr3tvalue123');
     expect(text).not.toContain('abcdefabcdef');
+  });
+});
+
+describe('deferNotes', () => {
+  it('adds no age note for a block the page sent no time for', () => {
+    const block = {
+      state: 'placeholder',
+      hydration: 'not-configured',
+      triggers: ['on timer(5000ms)'],
+      since: 0,
+    };
+    expect(deferNotes(block, Date.now()).map((note) => note.kind)).toEqual([]);
   });
 });

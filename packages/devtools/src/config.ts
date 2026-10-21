@@ -2275,7 +2275,8 @@ function waitsForUser(triggers: string[]): boolean {
  */
 export function deferNotes(block: DeferNoteBlock, pageNow: number): DeferNote[] {
   const notes: DeferNote[] = [];
-  const age = Math.max(0, Math.round((pageNow - block.since) / 1000));
+  // A page that sent no time (`since` 0) gets no age, so no stuck or waiting note.
+  const age = block.since > 0 ? Math.max(0, Math.round((pageNow - block.since) / 1000)) : 0;
   if (block.state === 'error')
     notes.push({ kind: 'failed', text: 'failed to load', label: 'failed' });
   if (

@@ -63,6 +63,16 @@ describe('change detection recording hints', () => {
     }
   });
 
+  it('name the page in the hint when the answer is about one page', () => {
+    for (const answer of [
+      changeDetectionText(EMPTY, { page: 'p1' }),
+      cdDiagnosisText(EMPTY, { page: 'p1' }),
+      cdExportText(EMPTY, { page: 'p1', export: 'trace' }),
+    ]) {
+      expect(answer).toContain('this `page`');
+    }
+  });
+
   it('name only Record in the panel when the agent is read-only', async () => {
     const host = {
       mountStatic: () => {},
