@@ -268,6 +268,10 @@ Signals join the graph when a template or an effect reads them. If a signal is m
 
 The graph shows up to 400 nodes. When Angular reports more, a notice says **Showing 400 of N signals**, and the edges to the rest are left out. The drawing holds up to 120 nodes. Past that, it draws the selected node and as much of its chain as fits, or the first 120 nodes when none is selected, and says **Drawing N of M signals**. The history keeps 50 entries per signal, and the **N changes** count keeps counting past that.
 
+### Secret form fields are masked
+
+A Signal Forms field keeps its value in a signal with no name, which the graph shows as a `computed` or `linkedSignal` node without a label. When the field is secret (by name, `type="password"`, a credential `autocomplete` or a mask marker), that node, any other node that holds the value, and their history show `[redacted]`. See [Access and redaction](../security.md#components-signals-ngrx-and-pipes).
+
 ### Injector graphs hold effects only
 
 The root and route graphs start from the effects registered on that injector. A signal in a root service that no effect reads doesn't appear there. It appears in the graph of a component whose template reads it.

@@ -1,4 +1,5 @@
 import { injectorMatches, type SignalTarget } from './signal-graph.ts';
+import { maskHistory, secretsOfGraph } from './signal-masks.ts';
 import type { SignalChange, SignalGraph, SignalGraphNode } from './types.ts';
 
 /**
@@ -86,7 +87,10 @@ export function answerPeek(
         epoch: r.epoch,
         value: r.status,
       }));
-    graph.history = history.collect([...graph.nodes, ...statuses]);
+    graph.history = maskHistory(
+      history.collect([...graph.nodes, ...statuses]),
+      secretsOfGraph(graph),
+    );
     for (const item of [...graph.nodes, ...(graph.resources ?? [])]) {
       const changes = history.changesOf(item.id);
       if (changes) item.changes = changes;

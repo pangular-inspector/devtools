@@ -58,6 +58,7 @@ import {
   type PreloadRecord,
 } from './router-actions.ts';
 import { createSignalHistory, installSignalWriteHook } from './signal-history.ts';
+import { maskHistory, secretsOfGraph } from './signal-masks.ts';
 import { registerSignalPeek } from './signal-peek.ts';
 import { registerSignalRestore } from './signal-restore.ts';
 import { createSignalWatch, registerSignalWatch } from './signal-watch.ts';
@@ -460,10 +461,11 @@ async function startOverlay(
         epoch: r.epoch,
         value: r.status,
       }));
-    const { changes: history, rollback } = signalHistory.collectDeltaWithRollback(
+    const { changes: collected, rollback } = signalHistory.collectDeltaWithRollback(
       [...graph.nodes, ...statuses],
       full,
     );
+    const history = maskHistory(collected, secretsOfGraph(graph));
     for (const item of [...graph.nodes, ...(graph.resources ?? [])]) {
       const changes = signalHistory.changesOf(item.id);
       if (changes) item.changes = changes;
