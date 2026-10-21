@@ -229,7 +229,7 @@ Entries are sampled instead of exact in these cases:
 
 ### Switch the graph from an agent
 
-The `pangular:highlight` tool also switches the graph to the component it highlights. The picker does not show that choice. Calling `pangular:inspect-signals` with `root` or a route path reads that injector's graph once and does not change what the Signals page shows.
+The `pangular:highlight` tool also switches the graph to the component it highlights. The picker does not show that choice. Calling `pangular:inspect-signals` with `root`, a route path, a component the page is not showing, or a CSS `selector` for a component host reads that injector's graph once and does not change what the Signals page shows.
 
 ### Find a stuck effect in a root service
 
@@ -244,15 +244,15 @@ The `pangular:highlight` tool also switches the graph to the component it highli
 
 ## Agent tools
 
-| Tool or resource           | Kind     | What it does                                                                                                                       |
-| -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:scan-signals`    | tool     | Signal declarations from source, with signal inputs, models and queries. Pages through a large project with `filter` and `offset`. |
-| `pangular:inspect-signals` | tool     | The graph the page reported, with edges, resources and history. Takes a host tag, class name, instance id, `root` or a route path. |
-| `pangular:watch-signal`    | tool     | Watches a signal and turns write stacks on or off on a page.                                                                       |
-| `pangular:highlight`       | tool     | Highlights a component and makes it the target of the graph.                                                                       |
-| `pangular:signal-graph`    | resource | The live graph per page.                                                                                                           |
+| Tool or resource           | Kind     | What it does                                                                                                                                                  |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:scan-signals`    | tool     | Signal declarations from source, with signal inputs, models and queries. Pages through a large project with `filter` and `offset`.                            |
+| `pangular:inspect-signals` | tool     | The graph of a component or injector, with edges, resources and history. Takes a host tag, class name, instance id, `root`, a route path or a CSS `selector`. |
+| `pangular:watch-signal`    | tool     | Watches a signal and turns write stacks on or off on a page.                                                                                                  |
+| `pangular:highlight`       | tool     | Highlights a component and makes it the target of the graph.                                                                                                  |
+| `pangular:signal-graph`    | resource | The live graph per page.                                                                                                                                      |
 
-`inspect-signals` returns the graph of the chosen component. Call `highlight` first to switch it to another component. See [Tools](../agents/tools.md).
+`inspect-signals` reads the graph of the component or injector you name, without switching the Signals page. Call `highlight` to switch the page itself. See [Tools](../agents/tools.md).
 
 ## Limits and gotchas
 
