@@ -234,6 +234,25 @@ function useRegistry(dir) {
 
 const pmRun = (cell, [cmd, args], cwd) => run(cmd, args, cwd, pmEnv());
 
+/** What a package manager prints when the registry could not fetch a package from npmjs. */
+const REGISTRY_FETCH_ERROR =
+  /is not in the npm registry|ERR_PNPM_FETCH|ERR_PNPM_META_FETCH|ETIMEDOUT|ECONNRESET|EAI_AGAIN|socket hang up/;
+
+/**
+ * The cell's dependency install. The local registry fetches every dependency except the package
+ * under test from npmjs, and one fetch can fail on the way, so a fetch error is retried once.
+ */
+function installDependencies(cell, app) {
+  try {
+    return pmRun(cell, PM[cell.pm].install(), app);
+  } catch (error) {
+    if (!REGISTRY_FETCH_ERROR.test(String(error))) throw error;
+    log(cell, 'the registry could not fetch a package from npmjs; installing again');
+    pmRun(cell, PM[cell.pm].install(), app);
+    return 'installed on the second try, after a registry fetch error';
+  }
+}
+
 /** A port in this cell's block that nothing listens on, or an error naming it. */
 async function freePort(port) {
   await new Promise((done, fail) => {
@@ -446,7 +465,7 @@ async function newAngularApp(cell, { ssr }) {
     writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
   }
   useRegistry(app);
-  await step(cell, `${cell.pm} install`, () => pmRun(cell, PM[cell.pm].install(), app));
+  await step(cell, `${cell.pm} install`, () => installDependencies(cell, app));
   return app;
 }
 
@@ -638,7 +657,7 @@ async function analog(cell) {
       );
     });
   }
-  await step(cell, `${cell.pm} install`, () => pmRun(cell, PM[cell.pm].install(), app));
+  await step(cell, `${cell.pm} install`, () => installDependencies(cell, app));
   // vite.md: "Add @pangular-inspector/devtools as a dev dependency."
   await step(cell, 'install the package', () => {
     pmRun(cell, PM[cell.pm].add([manifest.name], true), app);
