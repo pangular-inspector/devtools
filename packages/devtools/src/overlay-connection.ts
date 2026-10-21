@@ -88,7 +88,7 @@ export function overlayConnectOptions(
     if (!meta.configs?.[PANGULAR_CONFIG_KEY] && !warnedNoConfig) {
       warnedNoConfig = true;
       console.warn(
-        "[pangular] connectionMeta has no configs, so the overlay uses the default inspectors, limits and redaction, and the server's redaction.secretNames are not applied on the page. Pass the whole __connection.json of the server as connectionMeta to use its config.",
+        '[pangular] connectionMeta has no configs, so the overlay uses the default inspectors and limits. Pass the whole __connection.json of the server as connectionMeta to use its config.',
       );
     }
   }

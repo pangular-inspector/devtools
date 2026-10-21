@@ -60,7 +60,8 @@ describe.sequential('overlay page key', () => {
     const [claim] = claims();
     expect(claim.pageId).toBe(window.__pangularPageId);
     expect(claim.key).toMatch(/^[0-9a-f]{32}$/);
-    expect(calls[0].name).toBe('claim-page');
+    // Before any report. Only the redaction config, which the page needs to read anything, comes first.
+    expect(calls.find((call) => call.name !== 'redaction-config')?.name).toBe('claim-page');
     expect(sessionStorage.getItem('pangular-page-key')).toBe(claim.key);
     dispose();
 

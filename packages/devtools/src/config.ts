@@ -844,6 +844,18 @@ export function pangularConfigWarning(config: unknown): string | undefined {
   return `[pangular] The devtools config has ${problems.length === 1 ? 'a problem' : `${problems.length} problems`}:\n${problems.map((problem) => `  - ${problem}`).join('\n')}`;
 }
 
+/**
+ * The config a server publishes in `__connection.json`, which answers before
+ * the one-time code: everything but `redaction`, so the names the app treats
+ * as secret go only to a trusted client (the `redaction-config` function).
+ */
+export function connectionConfig(
+  config: ResolvedPangularConfig,
+): Omit<ResolvedPangularConfig, 'redaction'> {
+  const { redaction: _redaction, ...rest } = config;
+  return rest;
+}
+
 /** Reads the config a server published in its connection info (`connectionMeta.configs`). */
 export function configFromConnection(
   meta: { configs?: object } | undefined,
@@ -1263,6 +1275,8 @@ export function actionBlockedMessage(action: PangularAction): string {
 export const SHARED_RPC: readonly string[] = [
   'build-meta',
   'claim-page',
+  // The redaction config, kept out of `__connection.json`: every page needs it.
+  'redaction-config',
   'report-page-visibility',
   // Each page's Angular version and debug API parts, read by every view.
   'report-page-angular',

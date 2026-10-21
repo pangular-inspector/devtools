@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { collectComponentTree, hostPath } from '../component-tree.ts';
 import { elementId } from '../element-id.ts';
+import { isSecretKey, setRedaction } from '../forms-privacy.ts';
 import { hostBySelector } from '../host-tree.ts';
 import { collectInjectorTree } from '../injector-tree.ts';
 import { createNgrxCollector } from '../ngrx-collector.ts';
@@ -280,7 +281,7 @@ describe('showOutline', () => {
 
 describe('initAngularNativeOverlay', () => {
   type Handler = (...args: unknown[]) => unknown;
-  function fakeRpc(trusted = true) {
+  function fakeRpc(trusted = true, replies: Record<string, unknown> = {}) {
     const calls: [string, unknown][] = [];
     const handlers = new Map<string, Handler>();
     const rpc = {
@@ -292,7 +293,7 @@ describe('initAngularNativeOverlay', () => {
         rpc: {
           call: vi.fn(async (name: string, arg: unknown) => {
             calls.push([name, arg]);
-            return { known: true };
+            return name in replies ? replies[name] : { known: true };
           }),
           register: (definition: { name: string; handler: Handler }) =>
             handlers.set(definition.name, definition.handler),
@@ -364,6 +365,33 @@ describe('initAngularNativeOverlay', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(session.calls.map(([name]) => name)).toContain('forget-component-page');
     expect(session.rpc.close).toHaveBeenCalled();
+  });
+
+  it('asks the trusted server for its redaction config before the first report', async () => {
+    const { root, ng } = fixture();
+    g['ng'] = ng;
+    const session = fakeRpc(true, {
+      'redaction-config': { secretNames: ['passport'], unmask: [] },
+    });
+    connectDevframe.mockResolvedValue(session.rpc);
+    const { initAngularNativeOverlay } = await import('../overlay-angular-native.ts');
+    const dispose = initAngularNativeOverlay({ root: asNode(root), intervalMs: 1000 });
+    try {
+      await vi.waitFor(() =>
+        expect(session.calls.some(([name]) => name === 'push-component-tree')).toBe(true),
+      );
+      const names = session.calls.map(([name]) => name);
+      expect(names.indexOf('redaction-config')).toBeGreaterThan(-1);
+      expect(names.indexOf('redaction-config')).toBeLessThan(
+        names.findIndex((name) => name.startsWith('push-')),
+      );
+      expect(session.rpc.ensureTrusted).toHaveBeenCalled();
+      expect(isSecretKey('passportNumber')).toBe(true);
+    } finally {
+      dispose();
+      await vi.advanceTimersByTimeAsync(0);
+      setRedaction();
+    }
   });
 
   it("runs the diagnosis collectors and hears React Native's global errors", async () => {

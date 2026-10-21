@@ -126,7 +126,6 @@ import {
   type PageReport,
   type FormsState,
   type InspectFormsArgs,
-  FORMS_PAGE_TTL_MS,
   UNTRUSTED,
   untrusted,
 } from './rpc/forms-tools.ts';
@@ -169,7 +168,6 @@ import {
   touchRouterPage,
   type RouterPage,
   type RouterState,
-  ROUTER_PAGE_TTL_MS,
 } from './rpc/router-tools.ts';
 import {
   explainRenderModeText,
@@ -259,10 +257,12 @@ import {
 } from './rpc/open-in-panel.ts';
 import { clip } from './text.ts';
 import { setRedaction } from './forms-privacy.ts';
+import { REDACTION_CONFIG_RPC } from './overlay-redaction.ts';
 import {
   FORM_WRITE_ACTIONS,
   FORMLESS_FORM_ACTIONS,
   PANGULAR_CONFIG_KEY,
+  connectionConfig,
   ROUTER_WRITE_ACTIONS,
   actionBlockedMessage,
   agentAllowed,
@@ -383,7 +383,7 @@ const pangular = defineDevframe({
     const on = config.inspectors;
     const limits = config.limits;
     const my = ctx.scope('pangular');
-    (ctx.staticConfig as Record<string, unknown>)[PANGULAR_CONFIG_KEY] = config;
+    (ctx.staticConfig as Record<string, unknown>)[PANGULAR_CONFIG_KEY] = connectionConfig(config);
     const rootRefusal = info?.notAProject && notAProjectText(info.notAProject);
     const register: typeof my.rpc.register = (definition) => {
       if (!rpcAllowed(definition.name, config)) return;
@@ -530,9 +530,8 @@ const pangular = defineDevframe({
         const pageId = message?.pageId;
         if (typeof pageId !== 'string' || !pageId || pageId.length >= 50) return undefined;
         if (!owners.write(pageId)) return undefined;
-        // The forms timeline and the router history outlive the page, counted
-        // from its last sign of life, so a beat counts as their report, in
-        // the shared states too: their tools call a page stale by it.
+        // The forms and router tools call a page stale by its last report, so
+        // a beat counts as their report, in the shared states too.
         const now = Date.now();
         touchFormsPage(pageId, now);
         touchRouter(pageId, now);
@@ -569,6 +568,14 @@ const pangular = defineDevframe({
       enabled: browserToolsSwitch.enabled,
       owns,
       switch: browserToolsSwitch,
+    });
+
+    // Not in `__connection.json`: only a trusted page learns which names are secret.
+    register({
+      name: REDACTION_CONFIG_RPC,
+      type: 'query',
+      jsonSerializable: true,
+      handler: () => config.redaction,
     });
 
     let onPageClaimed = (_pageId: string) => {};
@@ -793,15 +800,7 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: deltaPush(formDeltas, owns, (report) => {
         if (!isPageReport(report) || !owns(report.pageId)) return false;
-        applyForms(
-          mergePageReport(
-            formPages,
-            report,
-            Date.now(),
-            limits.formTimeline,
-            visibility.ttl(FORMS_PAGE_TTL_MS),
-          ),
-        );
+        applyForms(mergePageReport(formPages, report, Date.now(), limits.formTimeline, liveTtl));
         feed.ngErrors(report.pageId, 'forms', report.setupErrors ?? []);
         return true;
       }),
@@ -1048,9 +1047,7 @@ const pangular = defineDevframe({
         if (!isRouterReport(report, limits.navigations)) return { hasConfig: false };
         if (!owns(report.pageId)) return { hasConfig: true };
         try {
-          applyRouter(
-            mergeRouterReport(routerPages, report, Date.now(), visibility.ttl(ROUTER_PAGE_TTL_MS)),
-          );
+          applyRouter(mergeRouterReport(routerPages, report, Date.now(), liveTtl));
         } catch {
           routerPages.delete(report.pageId);
           applyRouter(currentRouter(routerPages));
@@ -1464,14 +1461,9 @@ const pangular = defineDevframe({
         for (const [id] of staleInjectors) injectorPages.delete(id);
         applyInjectorPages();
       }
-      const next = expirePages(
-        formPages,
-        now,
-        limits.formTimeline,
-        visibility.ttl(FORMS_PAGE_TTL_MS),
-      );
+      const next = expirePages(formPages, now, limits.formTimeline, liveTtl);
       if (next) applyForms(next);
-      const nextRouter = expireRouterPages(routerPages, now, visibility.ttl(ROUTER_PAGE_TTL_MS));
+      const nextRouter = expireRouterPages(routerPages, now, liveTtl);
       if (nextRouter) applyRouter(nextRouter);
       const nextPipes = expirePipePages(pipePages, now, liveTtl);
       if (nextPipes) applyPipes(nextPipes);
@@ -1488,8 +1480,7 @@ const pangular = defineDevframe({
       cdDeltas.prune((id) => cdPages.has(id));
       formDeltas.prune((id) => formPages.has(id));
       // A page that stopped reporting (a closed browser that never said
-      // goodbye) is gone, so a wake doesn't wait for it. Forms are left out:
-      // their reports outlive the page to keep the timeline.
+      // goodbye) is gone, so a wake doesn't wait for it.
       interest.prune(
         (id) =>
           owners.alive(id) || componentPages.has(id) || injectorPages.has(id) || cdPages.has(id),
@@ -4086,7 +4077,7 @@ const pangular = defineDevframe({
       id: 'pangular:inspect-forms',
       title: 'Inspect forms',
       description:
-        'Forms on the page (Signal Forms, reactive, template-driven). Without `form`: each form with status and error counts. With `form`: the field tree; narrow with `path`, `onlyInvalid`, `includeValues`. Masked; cut at 20,000 characters.',
+        'Forms on the page (Signal Forms, reactive, template-driven). Without `form`: each form with status and error counts. With `form`: the field tree; narrow with `path`, `onlyInvalid`, `includeValues`. Reads 100 fields per group and says when it cut one. Masked; cut at 20,000 characters.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4124,7 +4115,7 @@ const pangular = defineDevframe({
       id: 'pangular:explain-invalid-forms',
       title: 'Explain invalid forms',
       description:
-        'Why forms are invalid: each failing field with value, validator, message and touched state, plus pending async validators and disabled reasons. Without `form`, every invalid form.',
+        'Why forms are invalid: each failing field with value, validator, message and touched state, plus pending async validators and disabled reasons. Without `form`, every invalid form. Reads 100 fields per group; says when a failing field may be past that.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -88,6 +88,7 @@ import {
 import { serializeNamed } from './serialize.ts';
 import { configFromConnection } from './config.ts';
 import { setRedaction } from './forms-privacy.ts';
+import { serverRedaction, whenTrusted, type TrustClient } from './overlay-redaction.ts';
 import {
   keepaliveDue,
   outsideAngular,
@@ -321,7 +322,11 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   const on = devtoolsConfig.inspectors;
   const limits = devtoolsConfig.limits;
   allowClientRules(on.http && devtoolsConfig.actions.http);
-  setRedaction(devtoolsConfig.redaction);
+  // Before the first read of the app: the server sends its secret names only to a trusted page.
+  await whenTrusted(rpc as unknown as TrustClient);
+  if (!own(() => {})) return;
+  setRedaction(await serverRedaction(my.rpc, devtoolsConfig.redaction));
+  if (!own(() => {})) return;
   setNavigationLimit(limits.navigations);
   if (on.http) httpRegistry().maxCalls = limits.httpCalls;
 
@@ -1049,6 +1054,7 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     dropped: leave,
     restored: async () => {
       await claimPageOnServer(my.rpc, pageId, pageKey);
+      setRedaction(await serverRedaction(my.rpc, devtoolsConfig.redaction));
       resendConfig();
     },
   });

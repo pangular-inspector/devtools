@@ -36,6 +36,8 @@ The package publishes `dist/`, `skills/` (the [agent skills](../agents/skills.md
 | `@pangular-inspector/devtools/ssr`                    | `dist/ssr.mjs`                    |
 | `@pangular-inspector/devtools/vite`                   | `dist/vite.mjs`                   |
 
+`dist/hub.mjs` and `dist/devframe.mjs` are loaders that import no package. They load `dist/hub-server.mjs` and `dist/devframe-server.mjs` from the installed package at runtime, so an app's server bundle doesn't take in Devframe. The build fails when a loader reaches a package or a Node builtin.
+
 The `pangular` binary is `bin.mjs`. In the workspace, the exports point at the TypeScript sources instead.
 
 ### How the package builds

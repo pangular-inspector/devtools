@@ -3,7 +3,8 @@ import {
   BROWSER_ENTRIES,
   NODE_ENTRIES,
   assertBrowserSafe,
-  assertHubLoaderStandsAlone,
+  LOADER_ENTRIES,
+  assertLoaderStandsAlone,
 } from './build/entries.ts';
 
 const shared = {
@@ -37,7 +38,9 @@ export const nodeConfig = {
   entry: NODE_ENTRIES,
   platform: 'node',
   hooks: {
-    'build:done': ({ chunks }) => assertHubLoaderStandsAlone(chunks),
+    'build:done': ({ chunks }) => {
+      for (const entry of LOADER_ENTRIES) assertLoaderStandsAlone(chunks, entry);
+    },
   },
 } satisfies UserConfig;
 

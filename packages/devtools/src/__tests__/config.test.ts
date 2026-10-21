@@ -11,6 +11,7 @@ import {
   SHARED_RPC,
   agentAllowed,
   agentSafety,
+  connectionConfig,
   pangularConfigProblems,
   pickPangularConfig,
   resolvePangularConfig,
@@ -609,7 +610,9 @@ describe('hub', () => {
       await hub.handler(new Request('http://localhost/__devframes/pangular/__connection.json'))
     ).json();
     expect(meta.configs['pangular']).toEqual(
-      resolvePangularConfig({ inspectors: { ngrx: false }, agent: { readOnly: true } }),
+      connectionConfig(
+        resolvePangularConfig({ inspectors: { ngrx: false }, agent: { readOnly: true } }),
+      ),
     );
   });
 });

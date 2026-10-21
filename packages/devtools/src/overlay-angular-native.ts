@@ -6,6 +6,7 @@ import { registerComponentValues } from './component-values-overlay.ts';
 import { configFromConnection } from './config.ts';
 import { elementById } from './element-id.ts';
 import { setRedaction } from './forms-privacy.ts';
+import { serverRedaction } from './overlay-redaction.ts';
 import { hostBySelector } from './host-tree.ts';
 import { collectInjectorTree } from './injector-tree.ts';
 import { attachNativeDiagnostics, errorUtilsTarget, nativeDebugApi } from './native-diagnostics.ts';
@@ -188,7 +189,8 @@ async function startSession(
   const config = configFromConnection(rpc.connectionMeta);
   const on = config.inspectors;
   const tickMs = intervalMs ?? config.limits.refreshMs;
-  setRedaction(config.redaction);
+  // Sent only to a trusted connection, so it is not in `__connection.json`.
+  setRedaction(await serverRedaction(my.rpc, config.redaction));
   const tree = angularNativeTree(getRoot, angularDebugApi);
   if (!on.ngrx) uninstallReduxDevtoolsHook();
   const diagnostics = attachNativeDiagnostics(my, pageId, {

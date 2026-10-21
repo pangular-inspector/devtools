@@ -201,7 +201,8 @@ A web handler never sees WebSocket upgrades, and neither does a server that `ng 
 | Setting                                   | Use it when                                                                                              |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `ws: false`                               | Always works. The browser connects over server-sent events on the same port, including under `ng serve`. |
-| `ws: {sidecar: true}`                     | You want a WebSocket. It runs on its own port, picked automatically.                                     |
+| `ws: {sidecar: true}`                     | You want a WebSocket. It runs on its own port, the first free one from 9777 to 9877.                     |
+| `ws: {port: 4001}`                        | You want the side-car WebSocket on a port you choose, such as one a firewall or container lets through.  |
 | No `ws` option, `devtools.attach(server)` | You start a Node server yourself, such as `serve()` from `@hono/node-server` or Fastify's `app.server`.  |
 
 `attach(server)` routes the server's `upgrade` events to the hub's WebSocket at `<base>__ws`:

@@ -1,5 +1,6 @@
 import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { connect } from 'node:net';
+import { createServer } from 'node:http';
+import { connect, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
@@ -509,6 +510,92 @@ describe('Pangular Inspector hub on a server that reloads server.ts', () => {
     expect(mcp.status).toBe(200);
     expect(await listening(second.port)).toBe(true);
     if (first.port !== second.port) expect(await listening(first.port)).toBe(false);
+  });
+});
+
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once('error', reject);
+    server.listen(0, 'localhost', () => {
+      const { port } = server.address() as AddressInfo;
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+describe('Pangular Inspector hub WebSocket port', () => {
+  it('runs the side-car WebSocket on the port given in ws.port and advertises it', async () => {
+    const port = await freePort();
+    const hub = initPangularHub({
+      cwd: makeProject({ 'package.json': '{}' }),
+      ws: { port },
+      auth: false,
+      allowedOrigins: false,
+    });
+    hubs.push(hub);
+    await hub.ready;
+    const meta = hub.connectionMeta() as { backend: string; websocket: { port: number } };
+    expect(meta.backend).toBe('websocket');
+    expect(meta.websocket.port).toBe(port);
+    expect(await listening(port)).toBe(true);
+    await hub.close();
+    expect(await listening(port)).toBe(false);
+  });
+
+  it('does not move a pinned port that is taken', async () => {
+    const taken = createServer();
+    await new Promise<void>((resolve) => taken.listen(0, 'localhost', resolve));
+    const { port } = taken.address() as AddressInfo;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const hub = initPangularHub({
+        cwd: makeProject({ 'package.json': '{}' }),
+        ws: { port },
+        auth: false,
+        allowedOrigins: false,
+      });
+      hubs.push(hub);
+      await expect(hub.ready).rejects.toThrow(/EADDRINUSE/);
+    } finally {
+      await new Promise((resolve) => taken.close(resolve));
+    }
+  });
+
+  it('picks the first free port from 9777 for ws: {sidecar: true}', async () => {
+    const hub = initPangularHub({
+      cwd: makeProject({ 'package.json': '{}' }),
+      ws: { sidecar: true },
+      auth: false,
+      allowedOrigins: false,
+    });
+    hubs.push(hub);
+    await hub.ready;
+    const { port } = (hub.connectionMeta() as { websocket: { port: number } }).websocket;
+    expect(port).toBeGreaterThanOrEqual(9777);
+    expect(port).toBeLessThanOrEqual(9877);
+  });
+
+  it('serves the WebSocket on the app server after attach(server), without a side-car port', async () => {
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(0, 'localhost', resolve));
+    const hub = initPangularHub({
+      cwd: makeProject({ 'package.json': '{}' }),
+      auth: false,
+      allowedOrigins: false,
+    });
+    hubs.push(hub);
+    const detach = hub.attach(server);
+    try {
+      await hub.ready;
+      const meta = hub.connectionMeta() as { websocket: { port?: number; path: string } };
+      expect(meta.websocket.port).toBeUndefined();
+      expect(meta.websocket.path).toBe('/__devframes/__ws');
+      expect(server.listenerCount('upgrade')).toBeGreaterThan(0);
+    } finally {
+      detach();
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 });
 

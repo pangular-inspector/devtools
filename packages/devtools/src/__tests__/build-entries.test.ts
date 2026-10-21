@@ -1,6 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { build, type UserConfig } from 'tsdown';
 import {
@@ -8,6 +9,7 @@ import {
   NODE_ENTRIES,
   assertBrowserSafe,
   assertHubLoaderStandsAlone,
+  assertLoaderStandsAlone,
   nodeImportsFromEntries,
   type GraphChunk,
 } from '../../build/entries.ts';
@@ -147,5 +149,58 @@ describe('the real build', () => {
     expect(code).not.toMatch(/^import[^\n]*from\s*["'](?!\.\/)/m);
     // No top-level `createRequire` binding to collide with Angular 20's banner.
     expect(code).not.toMatch(/^(?:import|const|let|var|function|class)\b[^\n]*\bcreateRequire\b/m);
+  }, 60_000);
+
+  it('builds a devframe loader that imports no package and loads the installed definition', async () => {
+    const { outDir, chunks } = await buildInto(nodeConfig, 'node-devframe');
+    expect(() => assertLoaderStandsAlone(chunks, 'devframe')).not.toThrow();
+    // Every chunk the loader reaches: what an app's server bundle takes in.
+    const graph = chunks as readonly GraphChunk[];
+    const byFile = new Map(graph.map((chunk) => [chunk.fileName, chunk]));
+    const reached = new Set<string>();
+    const walk = (fileName: string) => {
+      if (reached.has(fileName)) return;
+      reached.add(fileName);
+      for (const id of byFile.get(fileName)?.imports ?? []) walk(id);
+    };
+    walk(graph.find((chunk) => chunk.isEntry && chunk.name === 'devframe')!.fileName);
+    for (const fileName of reached) {
+      const code = readFileSync(join(outDir, fileName), 'utf8');
+      expect(code, fileName).not.toMatch(/^import[^\n]*from\s*["'](?!\.\/)/m);
+      // No top-level `createRequire` binding to collide with Angular 20's banner.
+      expect(code, fileName).not.toMatch(
+        /^(?:import|const|let|var|function|class)\b[^\n]*\bcreateRequire\b/m,
+      );
+    }
+    // Put those chunks in an app's server bundle next to an installed package, as `ng build` does.
+    const app = join(work, 'devframe-app');
+    const pkg = join(app, 'node_modules/@pangular-inspector/devtools');
+    mkdirSync(join(pkg, 'dist'), { recursive: true });
+    mkdirSync(join(app, 'dist/server'), { recursive: true });
+    writeFileSync(
+      join(pkg, 'package.json'),
+      JSON.stringify({
+        name: '@pangular-inspector/devtools',
+        type: 'module',
+        exports: { './package.json': './package.json' },
+      }),
+    );
+    writeFileSync(
+      join(pkg, 'dist/devframe-server.mjs'),
+      "export const createPangular = () => 'installed';\nexport const initDevframe = () => 'init';\nexport default { id: 'pangular' };\n",
+    );
+    for (const fileName of reached) {
+      writeFileSync(join(app, 'dist/server', fileName), readFileSync(join(outDir, fileName)));
+    }
+    const entry = (await import(pathToFileURL(join(app, 'dist/server/devframe.mjs')).href)) as {
+      default: { id: string };
+      createPangular: () => string;
+      initDevframe: () => string;
+      PANGULAR_INSPECTORS: readonly string[];
+    };
+    expect(entry.default).toEqual({ id: 'pangular' });
+    expect(entry.createPangular()).toBe('installed');
+    expect(entry.initDevframe()).toBe('init');
+    expect(entry.PANGULAR_INSPECTORS).toContain('components');
   }, 60_000);
 });

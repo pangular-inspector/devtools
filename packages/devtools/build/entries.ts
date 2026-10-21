@@ -34,7 +34,10 @@ export const BROWSER_ENTRIES = {
 
 /** Entries that only run in Node: the servers, the Vite plugin and the CLI. */
 export const NODE_ENTRIES = {
-  devframe: 'src/entries/devframe.ts',
+  // The published `devframe` entry is a loader too: an Angular 20 server bundle can't take in
+  // devframe's own files (`package-loader.ts`), so it loads `devframe-server` at runtime.
+  devframe: 'src/entries/devframe-loader.ts',
+  'devframe-server': 'src/entries/devframe.ts',
   vite: 'src/entries/vite.ts',
   // The published `hub` entry is a loader that imports no package, so an
   // app's server bundle never takes in the hub's server code (`hub-entry.ts`).
@@ -111,9 +114,17 @@ export function assertBrowserSafe(
  * more, such as the on/off switch, are fine.
  */
 export function assertHubLoaderStandsAlone(chunks: readonly GraphChunk[]): void {
+  assertLoaderStandsAlone(chunks, 'hub');
+}
+
+/** The published entries that are loaders: they load their server code from the package at runtime. */
+export const LOADER_ENTRIES = ['hub', 'devframe'] as const;
+
+/** Throws when the published loader `entry` reaches a package or a builtin. See `assertHubLoaderStandsAlone`. */
+export function assertLoaderStandsAlone(chunks: readonly GraphChunk[], entry: string): void {
   const byFile = new Map(chunks.filter((c) => c.type !== 'asset').map((c) => [c.fileName, c]));
-  const hub = [...byFile.values()].find((c) => c.isEntry && c.name === 'hub');
-  if (!hub) throw new Error('No `hub` entry chunk was built.');
+  const loader = [...byFile.values()].find((c) => c.isEntry && c.name === entry);
+  if (!loader) throw new Error(`No \`${entry}\` entry chunk was built.`);
   const outside: string[] = [];
   const seen = new Set<string>();
   const walk = (chunk: GraphChunk): void => {
@@ -125,10 +136,10 @@ export function assertHubLoaderStandsAlone(chunks: readonly GraphChunk[]): void 
       else outside.push(`${chunk.fileName} -> ${id}`);
     }
   };
-  walk(hub);
+  walk(loader);
   if (outside.length) {
     throw new Error(
-      `The published hub loader must not import packages or builtins, but it reaches:\n  ${outside.join('\n  ')}`,
+      `The published ${entry} loader must not import packages or builtins, but it reaches:\n  ${outside.join('\n  ')}`,
     );
   }
 }

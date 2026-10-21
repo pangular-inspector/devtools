@@ -176,7 +176,7 @@ The server refuses a blocked action, and with `actions.components` the page refu
 | `redaction.secretNames` | `[]`    | Extra field names to treat as secret, on top of the built-in list. They match by words, like the built-in list, so `passport` also covers `passportNumber`. |
 | `redaction.unmask`      | `[]`    | Field names to show even when they look secret. They join the `unmask` list of `window.__PANGULAR_FORMS__`.                                                 |
 
-Forms, the router, component inputs, signals, NgRx, pipes, Analog previews, SSR & HTTP URLs and Capacitor plugin calls use the extra secret names. Each list keeps up to 100 names. See [Access and redaction](../security.md#what-is-redacted) for what is redacted and what unmasking allows.
+Forms, the router, component inputs, signals, NgRx, pipes, Analog previews, SSR & HTTP URLs and Capacitor plugin calls use the extra secret names. Each list keeps up to 100 names. The server sends both lists to a page only after the page is trusted, so they are not in `__connection.json`. See [Access and redaction](../security.md#what-is-redacted) for what is redacted and what unmasking allows.
 
 ### Limits
 
@@ -195,7 +195,7 @@ Values outside the bounds are clamped to the nearest one.
 
 When a timeline reaches its limit, the oldest entries are dropped. The timeline then shows a note above the list, such as "Showing the latest 200 HTTP calls. 12 older entries were dropped." with the limit to raise. This applies to the **SSR & HTTP** timeline, the router navigation timeline, the forms timeline, the NgRx change log, the change detection recording and the Capacitor plugin calls. The `explain-navigation`, `list-form-changes` and `change-detection` agent tools add the same note, and the `pangular:ngrx-store` resource reports a `dropped` count per page.
 
-On Angular 20 and later, the page reads the app about 250 ms after Angular runs change detection, and again every 4 seconds in case it missed a change. `refreshMs` doesn't change that. The page polls every `refreshMs` instead when it can't follow change detection, such as until the app bootstraps. The Analog inspector also reads the page every `refreshMs`. At any value, the page sends a small heartbeat every 10 seconds instead of data that didn't change, so the server never drops a page that is still open. If the server lost the page (it restarted, or the page went quiet for more than 15 seconds), the page sends all of its data again.
+On Angular 20 and later, the page reads the app about 250 ms after Angular runs change detection, and again every 4 seconds in case it missed a change. `refreshMs` doesn't change that. The page polls every `refreshMs` instead when it can't follow change detection, such as until the app bootstraps. The Analog inspector also reads the page every `refreshMs`. At any value, the page sends a small heartbeat every 10 seconds instead of data that didn't change, so the server never drops a page that is still open. If the server lost the page (it restarted, or the page went quiet for more than 30 seconds), the page sends all of its data again.
 
 ### Performance
 

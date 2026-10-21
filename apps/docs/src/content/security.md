@@ -71,6 +71,8 @@ export default defineConfig({
 
 The plugin's `auth` option decides whether the devtools also ask for the one-time code. The server prints the code in the terminal, and a browser reads data only after it exchanges that code. If the server later revokes a page's access, the page stops reporting and logs one warning in the console. It doesn't try to connect again until you reload it and enter a new code, or until a code entered in another tab of the same app trusts it again.
 
+`__connection.json` answers before the code is exchanged, since the page and the panel read it to connect. It leaves out the `redaction` config (`secretNames` and `unmask`), so it doesn't tell anyone which names your app treats as secret. A page gets that config from the server once it is trusted, and reads nothing from the app before that.
+
 | `auth`          | One-time code                                                                                    |
 | --------------- | ------------------------------------------------------------------------------------------------ |
 | not set, `true` | On. The HTTP MCP endpoint asks for a [token](#mcp-endpoint) too.                                 |
@@ -213,7 +215,7 @@ A page reconnects with the same page id after a reload. To take its page back, t
 | ---------------------------------------- | ---------------------------------------------------------------------------------------- |
 | It sends the page's secret               | At once, even while the old connection is still open.                                    |
 | The old connection closed                | On its next report.                                                                      |
-| The old connection sent nothing for 15 s | On its next report. A tab in the background stays owned while it says it is still there. |
+| The old connection sent nothing for 30 s | On its next report. A tab in the background stays owned while it says it is still there. |
 
 Agent tools and the panel don't report pages, so these rules don't apply to them. [`ngrx-dispatch`](./agents/tools.md#dispatch-an-action) without `page` is refused while more than one page reports NgRx state. The answer lists those pages, so you can call it again with one. Other tools that act on a page pick one when `page` is left out. `navigate`, for example, acts on the first page that reports a router. Pass `page` when more than one tab is open.
 

@@ -87,7 +87,23 @@ const devtools = initPangularHub({ws: {sidecar: true}});
 
 With `ws: false` there is no WebSocket, and the browser connects over SSE on the same port. It is the simplest choice: every request goes through your Express server, including under `ng serve`.
 
-With `ws: {sidecar: true}`, the WebSocket runs on its own port, picked automatically.
+With `ws: {sidecar: true}`, the WebSocket runs on its own port. The hub takes the first free port from 9777 to 9877, whatever port your app uses, and advertises it in `__connection.json`. Two apps started at once get different ports from that range.
+
+If a firewall or a container only lets known ports through, pin the port with `ws: {port}`. The hub then listens on that port only, and fails to start when it is taken, instead of moving to another one. To keep it next to the app's port, derive it from the port the app listens on:
+
+```ts
+// src/server.ts
+const port = Number(process.env['PORT'] ?? 4000);
+const devtools = initPangularHub({ws: {port: port + 1}});
+```
+
+To use no second port at all, run the WebSocket on the app's own server: leave out `ws` and pass the server that `app.listen()` returns to `devtools.attach()`. Upgrades to `<base>__ws` then go to the hub, behind the same request gate as `nodeMiddleware`. Under `ng serve`, `server.ts` doesn't start a server of its own, so use `ws: false` or a side-car there.
+
+```ts
+// src/server.ts
+const server = app.listen(port);
+devtools.attach(server);
+```
 
 ### Rebuilds under `ng serve`
 
@@ -100,7 +116,7 @@ With `ws: {sidecar: true}`, the WebSocket runs on its own port, picked automatic
 | Option           | Default                                   | What it does                                                                                                                                                                                                                        |
 | ---------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `base`           | `'/__devframes/'`                         | Where the hub is mounted. The devtools panel lives at `<base>pangular/`.                                                                                                                                                            |
-| `ws`             |                                           | `false` uses server-sent events only. `{ sidecar: true }` runs the WebSocket on its own port.                                                                                                                                       |
+| `ws`             |                                           | `false` uses server-sent events only. `{sidecar: true}` runs the WebSocket on its own port, the first free one from 9777. `{port: 4001}` pins that port. See [Pick a transport](#pick-a-transport).                                 |
 | `enabled`        | on unless this is production              | `false` mounts nothing: the middlewares only call `next()`. `true` mounts the hub in production too, with a warning. See [Production](#production).                                                                                 |
 | `auth`           | on                                        | `false` turns off the one-time code. `{tokens: [...]}` keeps it on and trusts clients that send one of the [pairing tokens](../security.md#pairing-tokens).                                                                         |
 | `allowedOrigins` | loopback origins and the Chrome extension | Extra origins allowed to reach the hub, such as a tunnel. `false` turns the origin check and the request gate off.                                                                                                                  |
@@ -292,6 +308,8 @@ app.use(devtools.nodeMiddleware);
 `ws: false` makes the page and the panel connect over server-sent events on the same Express app. Without it, Devframe advertises a WebSocket that `nodeMiddleware` alone does not serve, and the page never connects. To serve a WebSocket instead, pass the HTTP server as `server`. See the `ws` and `server` options of `initDevframe`.
 
 The overlay looks for `/__pangular/` too. Without the hub, every tab sits in one tab bar.
+
+Like `@pangular-inspector/devtools/hub`, the devframe entry point loads Devframe from `node_modules` when it is imported, instead of being bundled into your server. That keeps the Angular 20 server build working: Angular 20 adds a top-level `createRequire` import to every server chunk, which collides with the same import in Devframe's own files. Install the package as a dependency of the app that runs the server.
 
 ## Troubleshooting
 
