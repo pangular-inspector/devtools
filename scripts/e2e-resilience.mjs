@@ -787,15 +787,16 @@ async function checkExpiry() {
     Object.values(firstGone.close).every((s) => s <= 20) && !last[ids.close].keys.length,
     JSON.stringify(firstGone.close),
   );
-  // A tab that dies without pagehide goes with the one page expiry (#422).
+  // A tab that dies without pagehide goes with the one page expiry (#422): 30 s after its last
+  // report, plus up to 5 s until the sweep, the 2 s poll and the time the reads take.
   assert(
-    'a crashed tab leaves list-pages within the 30 s expiry (+5 s sweep)',
-    listedGone.crash !== undefined && listedGone.crash <= 37,
+    'a crashed tab leaves list-pages within 45 s (30 s expiry)',
+    listedGone.crash !== undefined && listedGone.crash <= 45,
     `${listedGone.crash ?? 'never'} s`,
   );
   assert(
-    'a crashed tab leaves every shared state within the 30 s expiry (+5 s sweep)',
-    Object.values(firstGone.crash).every((s) => s <= 37) && !last[ids.crash].keys.length,
+    'a crashed tab leaves every shared state within 45 s (30 s expiry)',
+    Object.values(firstGone.crash).every((s) => s <= 45) && !last[ids.crash].keys.length,
     JSON.stringify(firstGone.crash),
   );
   assert('the open tab is still listed', last[ids.keep].listed);
