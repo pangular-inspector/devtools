@@ -1,7 +1,7 @@
 import { cdExportFile, cdTraceFile } from '../cd-data.ts';
 import type { AngularPageInfo } from '../config.ts';
 import { redactCdRecording } from './cd-redact.ts';
-import { cdUnsupportedText, pickCdPage, type CdState } from './cd-tools.ts';
+import { cdStartHint, cdUnsupportedText, pickCdPage, type CdState } from './cd-tools.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 
 /** The longest export the `change-detection` tool answers with. */
@@ -19,19 +19,21 @@ function fence(text: string): string {
  * The `change-detection` tool's answer for `export`: the recording as the
  * panel's JSON file or as a Trace Event Format file for Perfetto, redacted.
  * A file over {@link CD_EXPORT_MAX_CHARS} is never cut, since cut JSON does
- * not parse; the answer gives its size and counts instead.
+ * not parse; the answer gives its size and counts instead. `canRecord` is
+ * false when `record-change-detection` is not offered.
  */
 export function cdExportText(
   state: CdState,
   args: { page?: string; export: CdExportKind },
   max = CD_EXPORT_MAX_CHARS,
   angularOf: (pageId: string) => AngularPageInfo | undefined = () => undefined,
+  canRecord = true,
 ): string {
   const page = pickCdPage(state, args.page);
   if (!page) {
     return args.page
-      ? `Page ${code(args.page)} has no change detection recording to export yet. Record one first with \`pangular:record-change-detection\` and \`record: "start"\` (or **Record** in the panel), then use the app.`
-      : 'No change detection recording to export yet. Record one first with `pangular:record-change-detection` and `record: "start"` (or **Record** in the panel), then use the app.';
+      ? `Page ${code(args.page)} has no change detection recording to export yet. Record one first with ${cdStartHint(canRecord)}, then use the app.`
+      : `No change detection recording to export yet. Record one first with ${cdStartHint(canRecord)}, then use the app.`;
   }
   if (!page.supported) return cdUnsupportedText(page.pageId, angularOf(page.pageId));
   const { pageId } = page;

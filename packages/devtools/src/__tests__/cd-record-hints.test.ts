@@ -1,13 +1,16 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHostContext } from 'devframe/node';
 import { describe, expect, it } from 'vitest';
+import { createPangular } from '../devframe.ts';
 import { buildAudit } from '../rpc/audit-findings.ts';
 import { cdDiagnosisText } from '../rpc/cd-diagnosis-tools.ts';
 import { cdExportText } from '../rpc/cd-export-tools.ts';
 import { cdRecordAnswer } from '../rpc/cd-record-tool.ts';
 import { changeDetectionText, type CdPage, type CdState } from '../rpc/cd-tools.ts';
 import { createPushAcks } from '../rpc/push-acks.ts';
+import { answerText } from './tool-answer.ts';
 
 /**
  * `record` moved from `change-detection` to `record-change-detection`, and
@@ -57,6 +60,44 @@ describe('change detection recording hints', () => {
     for (const answer of answers) {
       expect(stale(answer), answer).toEqual([]);
       expect(answer).toContain('pangular:record-change-detection');
+    }
+  });
+
+  it('name only Record in the panel when the agent is read-only', async () => {
+    const host = {
+      mountStatic: () => {},
+      resolveOrigin: () => 'http://localhost',
+      getStorageDir: () => '',
+    };
+    const ctx = await createHostContext({ cwd: process.cwd(), mode: 'dev', host: host as never });
+    await createPangular({ agent: { readOnly: true } }).setup(ctx as never);
+    const tools = ctx.agent.list().tools;
+    expect(tools.map((tool) => tool.id)).not.toContain('pangular:record-change-detection');
+    const read = tools.find((tool) => tool.id === 'pangular:change-detection')!;
+    expect(read.description).not.toContain('record-change-detection');
+    const call = (id: string, args: Record<string, unknown>) =>
+      answerText(ctx.agent.invoke(id, args));
+    await ctx.rpc.invokeLocal(
+      'pangular:push-component-tree' as never,
+      ...([{ pageId: 'p1', count: 1, detail: null, roots: [] }] as never),
+    );
+    const audit = await call('pangular:audit', { page: 'p1' });
+    expect(audit).toContain('Start one with Record in the panel');
+    const answers = [
+      audit,
+      await call('pangular:change-detection', {}),
+      await call('pangular:change-detection', { export: 'json' }),
+      await call('pangular:diagnose-change-detection', {}),
+      changeDetectionText(EMPTY, { page: 'p1' }, undefined, false),
+      cdDiagnosisText(EMPTY, { page: 'p1' }, undefined, false),
+      cdExportText(EMPTY, { page: 'p1', export: 'trace' }, undefined, undefined, false),
+      buildAudit({ cd: EMPTY, noCdRecord: true }, 'p1', {}, 0).sources.find(
+        (source) => source.area === 'change-detection',
+      )?.note ?? '',
+    ];
+    for (const answer of answers) {
+      expect(answer).not.toContain('record-change-detection');
+      expect(answer).toMatch(/Record\b.* in the panel/);
     }
   });
 

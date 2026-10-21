@@ -4,7 +4,10 @@ import { className } from './injector-tree.ts';
 export const HYDRATION_CODE = /\bNG05\d\d\b/;
 
 export interface HydrationMismatch {
+  /** The component class the node hosts (`ProductCard`), or the node name (`app-card`, `#text`). */
   component: string;
+  /** `true` when `component` is a class name rather than a node name. */
+  isClass?: true;
   expected?: string;
   actual?: string;
 }
@@ -50,17 +53,22 @@ export interface HydrationScanNg {
  * The class of the component `node` hosts, through `ng.getComponent`, or the
  * node's name (`app-card`, `#text`, `#comment`) when it hosts none.
  */
-function mismatchName(node: Node, ng: HydrationScanNg | undefined): string {
+function mismatchName(
+  node: Node,
+  ng: HydrationScanNg | undefined,
+): Pick<HydrationMismatch, 'component' | 'isClass'> {
   if (node.nodeType === 1 && typeof ng?.getComponent === 'function') {
     try {
       const ctor = (ng.getComponent(node as Element) as { constructor?: unknown } | null)
         ?.constructor;
-      if (typeof ctor === 'function' && ctor !== Object) return className(ctor);
+      if (typeof ctor === 'function' && ctor !== Object) {
+        return { component: className(ctor), isClass: true };
+      }
     } catch {
       // not a component host
     }
   }
-  return node.nodeName.toLowerCase();
+  return { component: node.nodeName.toLowerCase() };
 }
 
 /**
@@ -86,7 +94,7 @@ export function scanHydration(root: Node, ng?: HydrationScanNg): HydrationScan {
         scan.mismatched++;
         if (scan.mismatches.length < MAX_MISMATCHES) {
           scan.mismatches.push({
-            component: mismatchName(node, ng),
+            ...mismatchName(node, ng),
             expected: detail(info.expectedNodeDetails),
             actual: detail(info.actualNodeDetails),
           });

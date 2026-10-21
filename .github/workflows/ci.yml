@@ -165,13 +165,17 @@ jobs:
           npm init -y > /dev/null
           npm install --no-audit --no-fund "$RUNNER_TEMP"/pack/*.tgz
 
+      # The Node.js entry points from `exports` in packages/devtools/package.json. The browser
+      # entries (overlay, popup and the hooks) need a DOM. `http` is left out too: it imports
+      # the optional Angular peers, which load in plain Node.js only with `@angular/compiler`
+      # (JIT), and the app's build bundles it.
       - name: Run the CLI and load the entry points
         working-directory: ${{ runner.temp }}/floor
         run: |
           node --version
           npx pangular --version
-          for entry in cli hub ssr vite; do
-            node -e "import('@pangular-inspector/devtools/$entry')"
+          for entry in '' /devframe /config /cli /hub /ssr /vite; do
+            node -e "import('@pangular-inspector/devtools$entry')"
           done
           node -e "require('@pangular-inspector/devtools/hub')"
 

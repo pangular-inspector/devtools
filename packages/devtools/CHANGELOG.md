@@ -114,7 +114,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Refuse writes when the target tab is unclear, instead of acting on whichever tab changed last.
 - Pairing tokens (`auth: {tokens}`, `--auth-token`, `PANGULAR_AUTH_TOKEN`) let an app on a device connect without typing the code. The CLI prints only a short hash of each token.
 - Hide the shared state of a turned-off inspector from agents.
-- Mask secret route params in named outlets, such as the token in `/(side:reset/:token)`, before the navigation is recognized and in router link targets. The route config match read only the primary path. The active route walk also follows `firstChild` when `children` is missing, and stops after 200 routes.
+- Mask secret route params in named outlets, such as the token in `/(side:reset/:token)`, before the navigation is recognized and in router link targets. The route config match read only the primary path. It also follows an empty-path layout route into its named-outlet children, as the router does, so `/(side:reset/:token)` and `/home(side:reset/:token)` are masked when `reset/:token` sits under `{path: '', children: [...]}`. The active route walk also follows `firstChild` when `children` is missing, and stops after 200 routes.
 - Leave the `redaction` config (`secretNames`, `unmask`) out of `__connection.json`, which answers before the one-time code. Pages get it from the server once they are trusted, and read nothing from the app until they have it. `initOverlay()` still resolves once connected, without waiting for the code. The Dashboard asks for the config the same way to list **Extra secret names** and **Unmasked names**. A static report leaves those rows out (#419).
 
 ### Features
@@ -186,7 +186,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Fixes from the audit of every inspector, the panel shell, the hub, the extension and the native overlays (#361, #362, #363, #364), the follow-ups in #418, and the release blockers found by the test campaign (#432).
 - One malformed component report no longer breaks the agent tools for every page. Reports are checked when they reach the server.
 - Change detection counts only template runs, not skipped children or the `checkNoChanges` pass.
-- The change detection answers with no recording, the audit note and the `record-change-detection` result send agents to `record-change-detection`, not to `change-detection` with `record`, which that tool refuses.
+- The change detection answers with no recording, the audit note and the `record-change-detection` result send agents to `record-change-detection`, not to `change-detection` with `record`, which that tool refuses. With `agent.readOnly`, which leaves `record-change-detection` out, they name only **Record** in the panel.
 - The panel announces **Record** and **Stop recording** once the page reports the recording on or off. If no report comes within 3 seconds, it says the page did not confirm and keeps the button state the page last reported.
 - The forms tools answer with the forms of the tab they were asked about.
 - Signal graph edges name their nodes instead of positions.
@@ -208,9 +208,9 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `scan-signals` and `scan-components` cap their answer at 200 items or 20,000 characters, say how many items they left out, and take `filter`, `offset` and `limit` to read the rest. A list that fits is still the JSON array alone. One item longer than the cap is cut, with a note (#429).
 - The panel switches tabs when only the `#tab=` hash changes after load (#425).
 - The `defer-blocks` tool and the **Defer blocks** list count how long a block sat on its placeholder on the page's clock. The component report carries the page clock (`pageNow`) and the server keeps the offset as `clockOffset`, so a page whose clock runs ahead or behind no longer reads as stuck, or never stuck (#366).
-- The **Defer blocks** list shows the notes the `defer-blocks` tool prints (**failed**, **stuck** _N_ s, **waiting** _N_ s, **dehydrated**), an **&#64;error block** flag and the `@placeholder` and `@loading` times (#366).
+- The **Defer blocks** list shows the notes the `defer-blocks` tool prints (**failed**, **stuck** _N_ s, **waiting** _N_ s, **dehydrated**), an **&#64;error block** flag and the `@placeholder` and `@loading` times (#366). The age counts up only while a block is on its placeholder, and screen readers read the badge as **stuck** or **waiting** without the seconds, so a focused row's name does not change every second. The panel assumes its clock agrees with the server's.
 - Highlighting a `@defer` block draws one box around all of its root elements instead of the first one. `request-page-highlight` takes `ids` for several elements next to `id` (#366).
-- The **SSR & HTTP** hydration mismatches name the component class, such as `ProductCard`, instead of the DOM node name (#366).
+- The **SSR & HTTP** hydration mismatches name the component class, such as `ProductCard`, instead of the DOM node name (#366). A class name is shown as is and a node name in angle brackets (`<app-card>`), in the panel and in the hub messages.
 - The panel content is in the Tab order, with its tab name and a focus ring, so keyboard users can scroll a view that has nothing focusable in it, such as the **Forms** empty state in a short window.
 - At narrow widths the **Components** toolbar fits on two rows, with its tree actions as icons, and a cut off component name shows its full text on hover and focus (#421).
 - The **Forms** tab lists WebMCP tools that are not linked to a form under **Other WebMCP tools**, with the same parts as a form's **WebMCP tool** block (#368).

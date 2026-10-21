@@ -2251,6 +2251,8 @@ export interface DeferNote {
   text: string;
   /** The short badge the panel shows. */
   label: string;
+  /** For `stuck` and `waiting`: the age in seconds that `label` ends with. */
+  seconds?: number;
 }
 
 /** Triggers that wait for the user, so a long wait on the placeholder is normal. */
@@ -2282,8 +2284,18 @@ export function deferNotes(block: DeferNoteBlock, pageNow: number): DeferNote[] 
   ) {
     notes.push(
       waitsForUser(block.triggers)
-        ? { kind: 'waiting', text: `waiting for its trigger for ${age}s`, label: `waiting ${age}s` }
-        : { kind: 'stuck', text: `on its placeholder for ${age}s`, label: `stuck ${age}s` },
+        ? {
+            kind: 'waiting',
+            text: `waiting for its trigger for ${age}s`,
+            label: `waiting ${age}s`,
+            seconds: age,
+          }
+        : {
+            kind: 'stuck',
+            text: `on its placeholder for ${age}s`,
+            label: `stuck ${age}s`,
+            seconds: age,
+          },
     );
   }
   if (block.hydrateNever) {

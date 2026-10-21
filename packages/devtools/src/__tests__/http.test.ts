@@ -362,9 +362,14 @@ describe('hydration helpers', () => {
     const ng = {
       getComponent: (el: Element) => (el === card ? new _ProductCard() : null),
     };
-    expect(scanHydration(document, ng).mismatches.map((m) => m.component)).toEqual([
-      'ProductCard',
-      '#text',
+    expect(
+      scanHydration(document, ng).mismatches.map(({ component, isClass }) => ({
+        component,
+        isClass,
+      })),
+    ).toEqual([
+      { component: 'ProductCard', isClass: true },
+      { component: '#text', isClass: undefined },
     ]);
     // A debug API that throws, or none at all, falls back to the node name.
     const throwing = {
@@ -381,12 +386,19 @@ describe('hydration helpers', () => {
       sanitizeHydration({
         enabled: true,
         nodes: { hydrated: 3, skipped: 'x' },
-        mismatches: [{ component: 'app-card', expected: '<div>' }, { expected: 'x' }],
+        mismatches: [
+          { component: 'app-card', expected: '<div>', isClass: 'yes' },
+          { component: 'ProductCard', isClass: true },
+          { expected: 'x' },
+        ],
         warningsCaptured: true,
       }),
     ).toMatchObject({
       nodes: { hydrated: 3, skipped: 0, mismatched: 0 },
-      mismatches: [{ component: 'app-card', expected: '<div>' }],
+      mismatches: [
+        { component: 'app-card', expected: '<div>' },
+        { component: 'ProductCard', isClass: true },
+      ],
       warningsCaptured: true,
     });
     expect(sanitizeHydration({ enabled: false })?.warningsCaptured).toBe(false);

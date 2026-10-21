@@ -604,10 +604,14 @@ export function configSecretsFor(router: AnyRecord | undefined, url: string): st
     const segments = group.segments;
     for (const route of routes) {
       if (--budget < 0) return;
-      if (outletOf(route) !== outlet) continue;
-      const parts = read(() => String(route['path'] ?? ''), '')
-        .split('/')
-        .filter(Boolean);
+      const path = read(() => String(route['path'] ?? ''), '');
+      const own = outletOf(route) === outlet;
+      // Like Angular's recognizer: a route of another outlet only matches when it has
+      // an empty path and a named outlet is being matched, which then goes on in its children.
+      if (!own && (outlet === PRIMARY_OUTLET || path !== '')) continue;
+      const full = read(() => route['pathMatch'] === 'full', false);
+      if (!own && full && (at < segments.length || group.children.length)) continue;
+      const parts = path.split('/').filter(Boolean);
       if (at + parts.length > segments.length) continue;
       const found: string[] = [];
       const matches = parts.every((part, i) => {
@@ -622,7 +626,7 @@ export function configSecretsFor(router: AnyRecord | undefined, url: string): st
         ...read(() => (route['_loadedRoutes'] as AnyRecord[]) ?? [], []),
       ];
       const next = at + parts.length;
-      walk(children, group, next, PRIMARY_OUTLET, depth + 1);
+      walk(children, group, next, own ? PRIMARY_OUTLET : outlet, depth + 1);
       // This group's path is used up: its outlets match against the route's children.
       if (next === segments.length) {
         for (const [name, child] of group.children) matchGroup(children, child, name, depth + 1);

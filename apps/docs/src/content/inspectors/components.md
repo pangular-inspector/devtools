@@ -152,7 +152,7 @@ A row also carries the notes the [`defer-blocks`](../agents/tools.md#defer-block
 | **waiting** _N_ s    | The same, for a block whose triggers only wait for the user (`on viewport`, `on interaction` or `on hover`). |
 | **&#64;error block** | The block has an `@error` block.                                                                             |
 
-When the block sets times, the row lists them, such as `placeholder min 500ms · loading after 100ms, min 1s`. Ages are counted on the page's clock, so a page on another device with its clock set wrong still shows the right age.
+When the block sets times, the row lists them, such as `placeholder min 500ms · loading after 100ms, min 1s`. Ages are counted on the page's clock, so a page on another device with its clock set wrong still shows the right age. The panel counts on from its own clock, so it assumes the panel and the server agree on the time, as they do when both run on one machine. A screen reader reads the badge as **stuck** or **waiting** without the seconds, so the row's name does not change while the age counts up.
 
 Hover or focus a row to highlight the block in the page. A block with several root elements gets one box around all of them. Click it to select the component that holds it. The list is hidden when the page renders no defer blocks, or when its Angular version has no util to read them.
 

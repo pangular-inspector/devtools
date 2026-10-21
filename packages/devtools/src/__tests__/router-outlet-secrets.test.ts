@@ -151,3 +151,52 @@ describe.runIf(functionalRouter)('secret params in named outlets (real Router)',
     expect(JSON.stringify(navigations)).not.toContain('UNRECOGNIZED55');
   });
 });
+
+class Shell {}
+Component({ ...STANDALONE, selector: 'app-outlet-shell', template: '' })(Shell);
+
+/** A layout route with an empty path whose children hold a named outlet. */
+const shellRoutes: Routes = [
+  {
+    path: '',
+    component: Shell,
+    children: [
+      { path: 'home', component: Page },
+      { path: 'reset/:token', component: Page, outlet: 'side' },
+    ],
+  },
+  {
+    path: 'admin',
+    component: Shell,
+    children: [{ path: 'key/:apiKey', component: Page, outlet: 'side' }],
+  },
+];
+
+describe.runIf(functionalRouter)('secret params under an empty-path layout (real Router)', () => {
+  let router: Router;
+
+  beforeEach(() => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideRouter(shellRoutes)] });
+    router = TestBed.inject(Router);
+  });
+
+  /** The params of every activated route, so the test proves Angular matched the URL too. */
+  const activeParams = () =>
+    chainOf(router.routerState.snapshot.root as never).map((route) => ({ ...route['params'] }));
+
+  it.each([
+    ['/(side:reset/SHELLSIDE61)', 'SHELLSIDE61'],
+    ['/home(side:reset/SHELLSIDE62)', 'SHELLSIDE62'],
+  ])('matches %s like the router does', async (url, secret) => {
+    expect(await router.navigateByUrl(url)).toBe(true);
+    expect(activeParams()).toContainEqual({ token: secret });
+    expect(configSecretsFor(router as never, url)).toEqual([secret]);
+  });
+
+  it('does not let a named outlet through a route with a path', async () => {
+    // Angular only lets an empty-path route match for another outlet.
+    await expect(router.navigateByUrl('/(side:key/NOMATCH63)')).rejects.toThrow();
+    expect(configSecretsFor(router as never, '/(side:key/NOMATCH63)')).toEqual([]);
+  });
+});

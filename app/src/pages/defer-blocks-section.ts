@@ -1,4 +1,13 @@
-import { Component, DestroyRef, computed, inject, input, output, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { deferNotes, type DeferNote } from '@pangular-inspector/devtools/internal/config';
 
 export interface DeferBlock {
@@ -47,7 +56,8 @@ export function deferTimings(block: DeferBlock): string {
  * state, hydration, the notes the defer-blocks agent tool prints (failed, stuck
  * on its placeholder, dehydrated), whether it has an `@error` block, its
  * `@placeholder` and `@loading` times and its triggers. Ages are read on the
- * page's clock, through `clockOffset`.
+ * page's clock, through `clockOffset`, which assumes the panel's clock agrees
+ * with the server's.
  */
 @Component({
   selector: 'app-defer-blocks',
@@ -76,9 +86,14 @@ export function deferTimings(block: DeferBlock): string {
                   row.block.state
                 }}</span>
                 @for (note of row.notes; track note.kind) {
-                  <span class="flag" [class]="'note-' + note.kind" [attr.title]="note.text">{{
-                    note.label
-                  }}</span>
+                  <span class="flag" [class]="'note-' + note.kind" [attr.title]="note.text">
+                    @if (note.seconds === undefined) {
+                      {{ note.label }}
+                    } @else {
+                      <!-- The age ticks every second; keep it out of the row's name. -->
+                      {{ note.kind }} <span aria-hidden="true">{{ note.seconds }}s</span>
+                    }
+                  </span>
                 }
                 @if (row.block.hydration === 'hydrated') {
                   <span class="flag">hydrated</span>
@@ -218,8 +233,14 @@ export class DeferBlocksSection {
   /** The block to highlight in the app, or `null` to clear it. */
   readonly highlight = output<DeferBlock | null>();
 
-  /** Moves every second, so a block's time on its placeholder counts up. */
+  /** Moves every second while a block waits, so its time on its placeholder counts up. */
   private readonly now = signal(Date.now());
+  /** Some block is still on its placeholder, so its age can grow into a note. */
+  private readonly waiting = computed(() =>
+    this.blocks().some(
+      (block) => !!block.since && (block.state === 'placeholder' || block.state === 'initial'),
+    ),
+  );
 
   protected readonly rows = computed<Row[]>(() => {
     const pageNow = this.now() - this.clockOffset();
@@ -232,7 +253,17 @@ export class DeferBlocksSection {
   });
 
   constructor() {
-    const tick = setInterval(() => this.now.set(Date.now()), 1000);
-    inject(DestroyRef).onDestroy(() => clearInterval(tick));
+    let tick: ReturnType<typeof setInterval> | undefined;
+    const stop = () => {
+      clearInterval(tick);
+      tick = undefined;
+    };
+    effect(() => {
+      if (!this.waiting()) return stop();
+      if (tick !== undefined) return;
+      this.now.set(Date.now());
+      tick = setInterval(() => this.now.set(Date.now()), 1000);
+    });
+    inject(DestroyRef).onDestroy(stop);
   }
 }

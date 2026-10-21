@@ -267,6 +267,7 @@ import {
   ROUTER_WRITE_ACTIONS,
   actionBlockedMessage,
   agentAllowed,
+  agentToolOffered,
   clearRecordingTargets,
   agentSafety,
   agentTags,
@@ -3273,11 +3274,12 @@ const pangular = defineDevframe({
         ),
       );
 
+    // `agent.readOnly` leaves `record-change-detection` out: answers then name only the panel.
+    const canRecordCd = agentToolOffered('record-change-detection', config);
     agent.registerTool({
       id: 'pangular:change-detection',
       title: 'Read change detection',
-      description:
-        "Change detection cycles from Angular's profiler (Angular 20+ dev builds): slowest components, checks, durations and the zone mode. pangular:record-change-detection starts a recording. `export`: json or trace.",
+      description: `Change detection cycles from Angular's profiler (Angular 20+ dev builds): slowest components, checks, durations and the zone mode. ${canRecordCd ? 'pangular:record-change-detection starts a recording' : 'Record in the panel starts a recording'}. \`export\`: json or trace.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -3304,11 +3306,12 @@ const pangular = defineDevframe({
               { page: args.page, export: args.export },
               undefined,
               angularPages.get,
+              canRecordCd,
             ),
           };
         }
         const cd = cdState.value() as CdState;
-        const text = changeDetectionText(cd, args ?? {}, angularPages.get);
+        const text = changeDetectionText(cd, args ?? {}, angularPages.get, canRecordCd);
         // The zone mode comes from the same page as the recording, not the latest tab.
         const zonePage = args?.page ?? pickCdPage(cd)?.pageId;
         const injectors = zonePage ? injectorPages.get(zonePage) : latestInjectorPage();
@@ -3451,7 +3454,7 @@ const pangular = defineDevframe({
         const zonePage = args?.page ?? pickCdPage(cd)?.pageId;
         const injectors = zonePage ? injectorPages.get(zonePage) : latestInjectorPage();
         const mode = injectors ? zoneModeText(injectors.zone, injectors.pageId) : '';
-        const text = cdDiagnosisText(cd, args ?? {}, angularPages.get);
+        const text = cdDiagnosisText(cd, args ?? {}, angularPages.get, canRecordCd);
         return { markdown: [mode, text].filter(Boolean).join('\n\n') };
       },
     });
