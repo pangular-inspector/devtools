@@ -467,12 +467,41 @@ function normalize(url: string): string {
   return `${path.replace(/\/+$/, '') || '/'}${rest}`;
 }
 
+export const PRIMARY_OUTLET = 'primary';
+/** Most route nodes a walk of the route tree visits, so a huge or cyclic tree stays cheap. */
+export const MAX_ROUTE_NODES = 200;
+
+/** The outlet a route (snapshot or config) renders in, `primary` when it names none. */
+export function outletOf(route: AnyRecord): string {
+  const outlet = read(() => route['outlet'], undefined);
+  return typeof outlet === 'string' && outlet ? outlet.slice(0, 100) : PRIMARY_OUTLET;
+}
+
+/**
+ * Every child of an activated route, primary outlet first (Angular sorts it so),
+ * then named outlets. Falls back to `firstChild` when `children` is missing.
+ */
+export function routeChildrenOf(route: AnyRecord): AnyRecord[] {
+  const children = read(() => route['children'] as unknown, undefined);
+  if (Array.isArray(children)) return children.filter((c) => c && typeof c === 'object');
+  const first = read(() => route['firstChild'] as AnyRecord | null, null);
+  return first && typeof first === 'object' ? [first] : [];
+}
+
+/**
+ * The active route tree, depth first, with the routes of every outlet: the
+ * primary chain and the named (auxiliary) outlets. Capped at `MAX_DEPTH` levels
+ * and `MAX_ROUTE_NODES` routes, and each route is visited once.
+ */
 export function chainOf(root: AnyRecord | null): AnyRecord[] {
   const out: AnyRecord[] = [];
+  const seen = new Set<AnyRecord>();
   const visit = (route: AnyRecord, depth: number) => {
+    if (seen.has(route) || out.length >= MAX_ROUTE_NODES) return;
+    seen.add(route);
     out.push(route);
     if (depth >= MAX_DEPTH) return;
-    for (const child of read(() => route['children'] as AnyRecord[], [])) visit(child, depth + 1);
+    for (const child of routeChildrenOf(route)) visit(child, depth + 1);
   };
   if (root) visit(root, 0);
   return out;
@@ -510,17 +539,72 @@ export function fullPathOf(snapshot: AnyRecord): string {
   return `/${parts.join('/')}`;
 }
 
-export function configSecretsFor(router: AnyRecord | undefined, url: string): string[] {
-  if (!router) return [];
+interface UrlGroup {
+  segments: string[];
+  children: [string, UrlGroup][];
+}
+
+/** A `UrlSegmentGroup` as plain segments and named children, capped like the route walk. */
+function urlGroupOf(group: AnyRecord, depth = 0): UrlGroup {
+  const segments = read(() => group['segments'] as AnyRecord[], [])
+    .slice(0, 100)
+    .map((segment) => read(() => String(segment['path'] ?? ''), ''));
+  const children =
+    depth >= MAX_DEPTH
+      ? []
+      : Object.entries(read(() => (group['children'] ?? {}) as Record<string, AnyRecord>, {}))
+          .slice(0, 20)
+          .filter(([, child]) => child && typeof child === 'object')
+          .map(([name, child]): [string, UrlGroup] => [name, urlGroupOf(child, depth + 1)]);
+  return { segments, children };
+}
+
+/**
+ * The URL as segment groups. `router.parseUrl` splits the named outlets out of
+ * `/a(side:reset/x)`; without it only the primary path is read.
+ */
+function urlTreeOf(router: AnyRecord, url: string): UrlGroup {
+  const root = read(() => router['parseUrl'](url)['root'] as AnyRecord | null, null);
+  if (root && typeof root === 'object') return urlGroupOf(root);
   const segments = url
     .split(/[?#(]/)[0]
     .split('/')
     .filter(Boolean)
     .map((segment) => decode(segment.split(';')[0]));
+  return {
+    segments: [],
+    children: segments.length ? [[PRIMARY_OUTLET, { segments, children: [] }]] : [],
+  };
+}
+
+/**
+ * The values of secret path params (`:token`) in a URL, found by matching the
+ * URL against the router config. Every outlet counts, so `/(side:reset/x)`
+ * masks `x` when the `side` route is `reset/:token`.
+ */
+export function configSecretsFor(router: AnyRecord | undefined, url: string): string[] {
+  if (!router) return [];
   const out: string[] = [];
-  const walk = (routes: AnyRecord[], at: number, depth: number) => {
+  let budget = MAX_ROUTE_NODES * 10;
+  const matchGroup = (routes: AnyRecord[], group: UrlGroup, outlet: string, depth: number) => {
+    if (!group.segments.length) {
+      for (const [name, child] of group.children) matchGroup(routes, child, name, depth);
+      return;
+    }
+    walk(routes, group, 0, outlet, depth);
+  };
+  const walk = (
+    routes: AnyRecord[],
+    group: UrlGroup,
+    at: number,
+    outlet: string,
+    depth: number,
+  ) => {
     if (depth > MAX_DEPTH || !Array.isArray(routes)) return;
+    const segments = group.segments;
     for (const route of routes) {
+      if (--budget < 0) return;
+      if (outletOf(route) !== outlet) continue;
       const parts = read(() => String(route['path'] ?? ''), '')
         .split('/')
         .filter(Boolean);
@@ -537,12 +621,18 @@ export function configSecretsFor(router: AnyRecord | undefined, url: string): st
         ...read(() => (route['children'] as AnyRecord[]) ?? [], []),
         ...read(() => (route['_loadedRoutes'] as AnyRecord[]) ?? [], []),
       ];
-      walk(children, at + parts.length, depth + 1);
+      const next = at + parts.length;
+      walk(children, group, next, PRIMARY_OUTLET, depth + 1);
+      // This group's path is used up: its outlets match against the route's children.
+      if (next === segments.length) {
+        for (const [name, child] of group.children) matchGroup(children, child, name, depth + 1);
+      }
     }
   };
-  walk(
+  matchGroup(
     read(() => router['config'] as AnyRecord[], []),
-    0,
+    urlTreeOf(router, url),
+    PRIMARY_OUTLET,
     0,
   );
   const secrets = out.filter((secret) => secret.length >= 3);

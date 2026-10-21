@@ -297,7 +297,7 @@ These are replaced with `[redacted]` in URLs, params, data and messages:
 - URL passwords, `Authorization` credentials, JWTs, bearer tokens and long opaque tokens,
 - route params with secret-looking names.
 
-A secret route param is known from the route config before a navigation is recognized, so link targets and a navigation that was already running when the overlay attached are masked too. A navigation that fails before that (for example inside a lazy route that failed to load) can still show it in its URL. JWTs are masked before long values are cut, so a long token never leaves a readable start behind.
+A secret route param is known from the route config before a navigation is recognized, so link targets and a navigation that was already running when the overlay attached are masked too. This covers routes in every outlet, so the token in `/(side:reset/:token)` is masked like the one in `/reset/:token`. A navigation that fails before that (for example inside a lazy route that failed to load) can still show it in its URL. JWTs are masked before long values are cut, so a long token never leaves a readable start behind.
 
 <ngmd-alert severity="info">
   A navigation whose URL was redacted cannot be replayed.

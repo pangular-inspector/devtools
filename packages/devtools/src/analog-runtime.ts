@@ -7,8 +7,11 @@ import { tapConsole } from './console-tap.ts';
 import { setTimeoutOutside } from './outside-angular.ts';
 import {
   findRouters,
+  outletOf,
+  PRIMARY_OUTLET,
   redactText,
   redactUrl,
+  routeChildrenOf,
   secretParamsOf,
   type RouterDebugApi,
 } from './router.ts';
@@ -95,21 +98,8 @@ function isEmptyObject(value: unknown): boolean {
   );
 }
 
-const PRIMARY_OUTLET = 'primary';
 const MAX_CHAIN = 40;
 const MAX_NODES = 200;
-
-function outletOf(node: AnyRecord): string {
-  const outlet = read(() => node['outlet'], undefined);
-  return typeof outlet === 'string' && outlet ? outlet.slice(0, 100) : PRIMARY_OUTLET;
-}
-
-function childrenOf(node: AnyRecord): AnyRecord[] {
-  const children = read(() => node['children'] as unknown, undefined);
-  if (Array.isArray(children)) return children.filter((c) => c && typeof c === 'object');
-  const first = read(() => node['firstChild'] as AnyRecord | null, null);
-  return first ? [first] : [];
-}
 
 /**
  * The Analog pages on the active route tree. The primary outlet's chain comes
@@ -162,7 +152,7 @@ export function chainOf(root: AnyRecord | null): {
       }
       // Angular sorts the primary child first; named outlets wait their turn.
       let next: AnyRecord | undefined;
-      for (const child of childrenOf(current)) {
+      for (const child of routeChildrenOf(current)) {
         const name = outletOf(child);
         if (name === PRIMARY_OUTLET && !next) next = child;
         else if (branches.length < MAX_NODES) {

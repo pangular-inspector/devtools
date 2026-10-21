@@ -114,6 +114,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Refuse writes when the target tab is unclear, instead of acting on whichever tab changed last.
 - Pairing tokens (`auth: {tokens}`, `--auth-token`, `PANGULAR_AUTH_TOKEN`) let an app on a device connect without typing the code. The CLI prints only a short hash of each token.
 - Hide the shared state of a turned-off inspector from agents.
+- Mask secret route params in named outlets, such as the token in `/(side:reset/:token)`, before the navigation is recognized and in router link targets. The route config match read only the primary path. The active route walk also follows `firstChild` when `children` is missing, and stops after 200 routes.
 - Leave the `redaction` config (`secretNames`, `unmask`) out of `__connection.json`, which answers before the one-time code. Pages get it from the server once they are trusted, and read nothing from the app until they have it. `initOverlay()` still resolves once connected, without waiting for the code. The Dashboard asks for the config the same way to list **Extra secret names** and **Unmasked names**. A static report leaves those rows out (#419).
 
 ### Features
@@ -210,6 +211,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The **Defer blocks** list shows the notes the `defer-blocks` tool prints (**failed**, **stuck** _N_ s, **waiting** _N_ s, **dehydrated**), an **&#64;error block** flag and the `@placeholder` and `@loading` times (#366).
 - Highlighting a `@defer` block draws one box around all of its root elements instead of the first one. `request-page-highlight` takes `ids` for several elements next to `id` (#366).
 - The **SSR & HTTP** hydration mismatches name the component class, such as `ProductCard`, instead of the DOM node name (#366).
+- The panel content is in the Tab order, with its tab name and a focus ring, so keyboard users can scroll a view that has nothing focusable in it, such as the **Forms** empty state in a short window.
 - At narrow widths the **Components** toolbar fits on two rows, with its tree actions as icons, and a cut off component name shows its full text on hover and focus (#421).
 - The **Forms** tab lists WebMCP tools that are not linked to a form under **Other WebMCP tools**, with the same parts as a form's **WebMCP tool** block (#368).
 - The **Forms** tab shows the forms setup errors Angular logs on the page, such as `NG01203`, in a notice above the list (#368).
@@ -227,6 +229,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 - The `leaks-real` test expects the rows the collector really reports (#430).
 - Pull requests run the security and MCP end-to-end checks, and a weekly job runs the rest.
+- A CI job installs the packed package on Node.js 22.12.0, the `engines.node` floor, and loads its CLI and its `cli`, `hub`, `ssr` and `vite` entry points there (#373).
 - The packed `package.json` leaves out `devDependencies`, `scripts` and the `nx` block, and declares `sideEffects`.
 - Dependencies: devframe and `@devframes/*` 1.2.6 (was 1.2.0). `@devframes/plugin-messages`, `@devframes/plugin-terminals` and `axe-core` are added. `h3` is no longer a dependency.
 
