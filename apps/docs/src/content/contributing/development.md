@@ -189,6 +189,8 @@ pnpm commit:check                   # Commit messages on your branch
 
 A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`. A `node-22` job runs `pnpm test:devtools` on the newest Node.js 22, the oldest major `engines.node` (`>=22.12.0`) allows.
 
+The source tests can't run on Node.js 22.12 itself: Node.js runs `.ts` files only from 22.18, and the build tools need newer versions too. So when a pull request or push changes `packages/devtools`, `app`, the root manifests, the lockfile, `.nvmrc` or the CI setup, the `engines-floor` job (**Packed package on Node.js 22.12**) packs the package on the `.nvmrc` version, switches to Node.js 22.12.0 and installs the tarball into an empty project with npm. It then runs `npx pangular --version`, imports the `cli`, `hub`, `ssr` and `vite` entry points, and loads the `hub` entry with `require()`. When `engines.node` changes, change the version in that job too.
+
 Two more jobs run when a pull request or push changes `packages/devtools`, `app`, `e2e`, the lockfile or their scripts. `Security e2e` builds the package and runs `pnpm e2e:security`, the redaction and access checks. `MCP e2e` runs `pnpm e2e:mcp`, which builds the package and the SSR demo, then calls every agent tool, resource and prompt and compares the list with the agent tools page.
 
 ### End-to-end scripts
