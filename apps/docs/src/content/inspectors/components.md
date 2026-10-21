@@ -143,7 +143,18 @@ Set [`actions.components`](../getting-started/configuration.md#actions) to `fals
 
 When the page renders `@defer` blocks, a **Defer blocks** list follows the tree. Each row shows the component whose template holds the block, its state (`placeholder`, `loading`, `complete` or `error`) and its triggers. With [incremental hydration](https://angular.dev/guide/incremental-hydration), a row also shows `dehydrated` or `hydrated`, and a **hydrate never** flag marks a block that stays as server HTML.
 
-Hover or focus a row to highlight the block in the page. Click it to select the component that holds it. The list is hidden when the page renders no defer blocks, or when its Angular version has no util to read them.
+A row also carries the notes the [`defer-blocks`](../agents/tools.md#defer-blocks) tool prints. Hover a note to read it in full.
+
+| Badge                | Meaning                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **failed**           | The block failed to load.                                                                                    |
+| **stuck** _N_ s      | The block has been on its placeholder for 10 seconds or more.                                                |
+| **waiting** _N_ s    | The same, for a block whose triggers only wait for the user (`on viewport`, `on interaction` or `on hover`). |
+| **&#64;error block** | The block has an `@error` block.                                                                             |
+
+When the block sets times, the row lists them, such as `placeholder min 500ms · loading after 100ms, min 1s`. Ages are counted on the page's clock, so a page on another device with its clock set wrong still shows the right age.
+
+Hover or focus a row to highlight the block in the page. A block with several root elements gets one box around all of them. Click it to select the component that holds it. The list is hidden when the page renders no defer blocks, or when its Angular version has no util to read them.
 
 The list holds the first 500 blocks of a page. When the page has more, the count reads **500+**.
 
@@ -178,7 +189,7 @@ The list needs Angular 22.0 or later in a development build. On an older Angular
 
 ### Change detection
 
-Below the tree and the defer blocks, the **Change detection** section records change detection cycles with Angular's profiler. Click **Record**, use the app, then click **Stop recording**. A check is a component whose template Angular ran. A clean OnPush component that Angular only walked past is not a check, and neither is the second pass that development builds run to catch `ExpressionChangedAfterItHasBeenChecked` errors. The flash overlay and the Performance panel track count the same way. **Clear** empties the recording. Each new recording starts empty, but a start sent while the page records, such as an agent's `record: "start"`, keeps the cycles recorded so far.
+Below the tree and the defer blocks, the **Change detection** section records change detection cycles with Angular's profiler. Click **Record**, use the app, then click **Stop recording**. A check is a component whose template Angular ran. A clean OnPush component that Angular only walked past is not a check, and neither is the second pass that development builds run to catch `ExpressionChangedAfterItHasBeenChecked` errors. The flash overlay and the Performance panel track count the same way. **Clear** empties the recording. Each new recording starts empty, but a start sent while the page records, such as an agent's `record-change-detection` call with `record: "start"`, keeps the cycles recorded so far. **Record** and **Stop recording** wait up to 3 seconds for the page to report the recording on or off before they announce it. If no report comes, the status says the page did not confirm, and the button keeps the state the page last reported.
 
 - **Cycles**: a bar chart with one bar per recorded cycle, its height the cycle's duration. A line marks the 16.6 ms frame budget (one frame at 60 frames per second). A cycle over the budget has a striped bar, a triangle under it, and says "over budget" in its tooltip and in the table. Hover or focus a bar to see the cycle number, duration, output trigger, checks and its three slowest components.
 - **Spans in the picked cycles**: when the page reports timed spans, a flame graph of the picked cycles. Time runs left to right, cycle after cycle with the idle time between them left out, and a span nested in another sits one row lower. Each span is a component check (solid), a lifecycle hook (stripes), an `afterRender` callback (dots) or the output listener that triggered the cycle (lines, drawn before the cycle's start), with a key under the graph. Hover or focus a span to read its total and self time. The arrow keys move along a row, **Up** goes to the enclosing span and **Down** to the first nested one. **Enter** or a click on a component, hook or output selects that component in the tree. **Show the spans as a table** lists the same spans. The graph shows at most 30 cycles; pick a smaller range when more are picked.

@@ -275,7 +275,7 @@ function changeDetection(state: CdState | undefined, pageId: string): Collected 
         note:
           page && !page.supported
             ? 'The page cannot record change detection (Angular 20 or later, development build).'
-            : 'No recording. Start one with pangular:change-detection and `record: "start"`, or Record in the panel, then use the app.',
+            : 'No recording. Start one with pangular:record-change-detection and `record: "start"`, or Record in the panel, then use the app.',
       },
     };
   }

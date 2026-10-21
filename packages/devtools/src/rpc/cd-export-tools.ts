@@ -30,8 +30,8 @@ export function cdExportText(
   const page = pickCdPage(state, args.page);
   if (!page) {
     return args.page
-      ? `Page ${code(args.page)} has no change detection recording to export yet. Record one first with \`record: "start"\`.`
-      : 'No change detection recording to export yet. Record one first with `record: "start"`.';
+      ? `Page ${code(args.page)} has no change detection recording to export yet. Record one first with \`pangular:record-change-detection\` and \`record: "start"\` (or **Record** in the panel), then use the app.`
+      : 'No change detection recording to export yet. Record one first with `pangular:record-change-detection` and `record: "start"` (or **Record** in the panel), then use the app.';
   }
   if (!page.supported) return cdUnsupportedText(page.pageId, angularOf(page.pageId));
   const { pageId } = page;

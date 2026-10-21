@@ -74,10 +74,13 @@ describe('CdRecording status', () => {
       pageId: 'p1',
       on: true,
     });
-    expect(live()).toBe('Recording started.');
+    // The server took the request; the page has not said it records yet.
+    expect(live()).not.toContain('started');
+    expect(visible()).toBe('Starting…');
 
     await show(true, 3);
     expect(live()).toBe('Recording started.');
+    expect(visible()).toBe('Recording. 3 cycles so far.');
 
     await click('Stop recording');
     // The page's last report still brings cycles: the total waits for it.
@@ -89,20 +92,51 @@ describe('CdRecording status', () => {
     expect(live()).toBe('Cleared the recorded cycles.');
   });
 
-  it('announces the count it has when the last report does not come', async () => {
-    await show(true, 2);
+  /** Clicks with fake timers, so the confirmation wait can run out. */
+  async function clickAndWait(text: string, ms: number) {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
-      button('Stop recording').click();
+      button(text).click();
       await vi.advanceTimersByTimeAsync(0);
       fixture.detectChanges();
-      expect(live()).not.toContain('stopped');
-      await vi.advanceTimersByTimeAsync(3000);
+      const before = live();
+      await vi.advanceTimersByTimeAsync(ms);
       fixture.detectChanges();
-      expect(live()).toBe('Recording stopped. 2 cycles recorded.');
+      return before;
     } finally {
       vi.useRealTimers();
     }
+  }
+
+  it('says the page did not confirm when no report shows the recording on', async () => {
+    const before = await clickAndWait('Record', 3000);
+    expect(before).not.toContain('started');
+    const failed =
+      'The page did not confirm that the recording started. The tab may be in the background, closed or reloading.';
+    expect(live()).toBe(failed);
+    expect(visible()).toBe(failed);
+    // The page still reports no recording, so the button still offers Record.
+    expect(button('Record')).toBeTruthy();
+    expect(button('Stop recording')).toBeUndefined();
+  });
+
+  it('announces the start once a late report confirms it', async () => {
+    await clickAndWait('Record', 3000);
+    expect(live()).toContain('did not confirm');
+    await show(true, 1);
+    expect(live()).toBe('Recording started.');
+    expect(visible()).toBe('Recording. 1 cycle so far.');
+    expect(button('Stop recording')).toBeTruthy();
+  });
+
+  it('says the page did not confirm when the report after Stop does not come', async () => {
+    await show(true, 2);
+    const before = await clickAndWait('Stop recording', 3000);
+    expect(before).not.toContain('stopped');
+    expect(live()).toBe(
+      'The page did not confirm that the recording stopped. The tab may be in the background, closed or reloading.',
+    );
+    expect(button('Stop recording')).toBeTruthy();
   });
 
   it('announces a repeated message again', async () => {

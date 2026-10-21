@@ -132,7 +132,7 @@ export function expireCdPages(
 /**
  * The answer when `page` names a tab that is not connected: the shared
  * unknown-page text, listing the connected tabs. A connected tab that has not
- * recorded yet is not unknown, since `record` can start a recording there.
+ * recorded yet is not unknown, since `record-change-detection` can start a recording there.
  * Undefined when the page is known.
  */
 export function cdUnknownPageText(
@@ -276,8 +276,8 @@ export function changeDetectionText(
   const page = pickCdPage(state, args.page);
   if (!page) {
     return args.page
-      ? `Page ${code(args.page)} has no change detection recording yet. Call this tool with \`record: "start"\` and this \`page\`, use the app, then call it again.`
-      : 'No change detection recording yet. Call this tool with `record: "start"`, use the app, then call it again.';
+      ? `Page ${code(args.page)} has no change detection recording yet. Start one with \`pangular:record-change-detection\`, \`record: "start"\` and this \`page\` (or **Record** in the panel), use the app, then call this tool again.`
+      : 'No change detection recording yet. Start one with `pangular:record-change-detection` and `record: "start"` (or **Record** in the panel), use the app, then call this tool again.';
   }
   if (!page.supported) return cdUnsupportedText(page.pageId, angularOf(page.pageId));
   // Agents send strings, NaN and null too: anything that is not a finite number is the default.

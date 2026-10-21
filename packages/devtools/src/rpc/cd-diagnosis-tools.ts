@@ -19,8 +19,8 @@ export function cdDiagnosisText(
   const page = pickCdPage(state, args.page);
   if (!page) {
     return args.page
-      ? `Page ${code(args.page)} has no change detection recording yet. Start one with \`pangular:change-detection\` and \`record: "start"\` (or **Record** in the panel), use the app, then call this tool again.`
-      : 'No change detection recording yet. Start one with `pangular:change-detection` and `record: "start"` (or **Record** in the panel), use the app, then call this tool again.';
+      ? `Page ${code(args.page)} has no change detection recording yet. Start one with \`pangular:record-change-detection\` and \`record: "start"\` (or **Record** in the panel), use the app, then call this tool again.`
+      : 'No change detection recording yet. Start one with `pangular:record-change-detection` and `record: "start"` (or **Record** in the panel), use the app, then call this tool again.';
   }
   if (!page.supported) return cdUnsupportedText(page.pageId, angularOf(page.pageId));
   const diagnosis = page.diagnosis;

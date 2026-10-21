@@ -185,8 +185,11 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Fixes from the audit of every inspector, the panel shell, the hub, the extension and the native overlays (#361, #362, #363, #364), the follow-ups in #418, and the release blockers found by the test campaign (#432).
 - One malformed component report no longer breaks the agent tools for every page. Reports are checked when they reach the server.
 - Change detection counts only template runs, not skipped children or the `checkNoChanges` pass.
+- The change detection answers with no recording, the audit note and the `record-change-detection` result send agents to `record-change-detection`, not to `change-detection` with `record`, which that tool refuses.
+- The panel announces **Record** and **Stop recording** once the page reports the recording on or off. If no report comes within 3 seconds, it says the page did not confirm and keeps the button state the page last reported.
 - The forms tools answer with the forms of the tab they were asked about.
 - Signal graph edges name their nodes instead of positions.
+- `inspect-signals` reads the graph of a component the page is not showing: a `component` the component tree knows, or a component host matched by the new `selector` argument (CSS). A selector that matches no component host is refused at once (#367).
 - A `Store` provided in a route is found, and the DI tools keep each signal store's name instead of `SignalStore`.
 - The SSR hydration count is right, and a request is no longer reported as a transfer cache hit when it was not.
 - A failed write answers with `isError: true`, and a failing call keeps its response body.
@@ -194,6 +197,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `@pangular-inspector/devtools/devframe` (and the package root) load Devframe from `node_modules` when imported, as the hub entry does, so an Angular 20 server bundle that imports them no longer fails with `Identifier 'createRequire' has already been declared` (#427).
 - Picking works inside shadow roots and `ShadowDom` components.
 - Analog server calls link only to the request they ran under (#405).
+- The Analog page chain includes pages in named outlets and sibling child routes, not only the first child. The primary chain comes first, and each other page names its outlet in the **Routes** tab and in `analog-inspect-page` (#369).
 - Signal Forms checkboxes, radios and selects are written in user mode (#360).
 - Live counts in **Timeline**, **Errors** and **Audit** speak only after a filter change, so they no longer flood screen readers.
 - Control outlines and **Signals** graph edges meet 3:1 contrast in both themes, and status pills keep their contrast on selected rows.
@@ -202,7 +206,13 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `explain-invalid-forms` no longer says no field has an error when the failing field is past the forms collector's limit of 100 fields per group. A cut group carries `truncatedInvalid` with the invalid fields it left out, `explain-invalid-forms` and `explain-submit` name them, and `inspect-forms` says which group was cut and how many fields it left out, or that a group past the 8-level depth limit was not read (#423).
 - `scan-signals` and `scan-components` cap their answer at 200 items or 20,000 characters, say how many items they left out, and take `filter`, `offset` and `limit` to read the rest. A list that fits is still the JSON array alone. One item longer than the cap is cut, with a note (#429).
 - The panel switches tabs when only the `#tab=` hash changes after load (#425).
+- The `defer-blocks` tool and the **Defer blocks** list count how long a block sat on its placeholder on the page's clock. The component report carries the page clock (`pageNow`) and the server keeps the offset as `clockOffset`, so a page whose clock runs ahead or behind no longer reads as stuck, or never stuck (#366).
+- The **Defer blocks** list shows the notes the `defer-blocks` tool prints (**failed**, **stuck** _N_ s, **waiting** _N_ s, **dehydrated**), an **&#64;error block** flag and the `@placeholder` and `@loading` times (#366).
+- Highlighting a `@defer` block draws one box around all of its root elements instead of the first one. `request-page-highlight` takes `ids` for several elements next to `id` (#366).
+- The **SSR & HTTP** hydration mismatches name the component class, such as `ProductCard`, instead of the DOM node name (#366).
 - At narrow widths the **Components** toolbar fits on two rows, with its tree actions as icons, and a cut off component name shows its full text on hover and focus (#421).
+- The **Forms** tab lists WebMCP tools that are not linked to a form under **Other WebMCP tools**, with the same parts as a form's **WebMCP tool** block (#368).
+- The **Forms** tab shows the forms setup errors Angular logs on the page, such as `NG01203`, in a notice above the list (#368).
 
 ### Docs
 
