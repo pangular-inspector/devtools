@@ -252,57 +252,63 @@ function storedDirectiveHosts(): boolean {
           />
         }
         <span class="count">{{ countLabel() }}</span>
-        @if (page()!.directiveHostCount) {
+        <div class="tree-actions">
+          @if (page()!.directiveHostCount) {
+            <button
+              type="button"
+              class="tree-action"
+              title="Directive hosts"
+              [attr.aria-pressed]="showDirectiveHosts()"
+              (click)="toggleDirectiveHosts()"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 4H5v16h3" />
+                <path d="M16 4h3v16h-3" />
+              </svg>
+              <span class="label">Directive hosts</span>
+            </button>
+          }
           <button
             type="button"
             class="tree-action"
-            [attr.aria-pressed]="showDirectiveHosts()"
-            (click)="toggleDirectiveHosts()"
+            title="Expand all"
+            [disabled]="!!filter().trim()"
+            (click)="expandAll()"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M8 4H5v16h3" />
-              <path d="M16 4h3v16h-3" />
+              <path d="m7 15 5 5 5-5" />
+              <path d="m7 9 5-5 5 5" />
             </svg>
-            Directive hosts
+            <span class="label">Expand all</span>
           </button>
-        }
-        <button
-          type="button"
-          class="tree-action"
-          [disabled]="!!filter().trim()"
-          (click)="expandAll()"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m7 15 5 5 5-5" />
-            <path d="m7 9 5-5 5 5" />
-          </svg>
-          Expand all
-        </button>
-        <button
-          type="button"
-          class="tree-action"
-          [disabled]="!!filter().trim()"
-          (click)="collapseAll()"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m7 20 5-5 5 5" />
-            <path d="m7 4 5 5 5-5" />
-          </svg>
-          Collapse all
-        </button>
-        @if (!native()) {
           <button
             type="button"
-            class="pick"
-            [class.on]="picking()"
-            (click)="picking() ? cancelPick() : pick()"
+            class="tree-action"
+            title="Collapse all"
+            [disabled]="!!filter().trim()"
+            (click)="collapseAll()"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 4l6.5 16 2.3-6.7L19.5 11z" />
+              <path d="m7 20 5-5 5 5" />
+              <path d="m7 4 5 5 5-5" />
             </svg>
-            {{ picking() ? 'Cancel pick' : 'Pick component on page' }}
+            <span class="label">Collapse all</span>
           </button>
-        }
+          @if (!native()) {
+            <button
+              type="button"
+              class="pick"
+              [class.on]="picking()"
+              [attr.title]="pickLabel()"
+              (click)="picking() ? cancelPick() : pick()"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 4l6.5 16 2.3-6.7L19.5 11z" />
+              </svg>
+              <span class="label">{{ pickLabel() }}</span>
+            </button>
+          }
+        </div>
       </div>
       <p class="sr-only" role="status">{{ announcement() }}</p>
       @if (pickMessage()) {
@@ -313,7 +319,7 @@ function storedDirectiveHosts(): boolean {
       }
 
       <div class="layout">
-        <div>
+        <div class="tree-col">
           <h2 class="sr-only">Component tree</h2>
           @if (!rows().length) {
             <div class="state compact tree">
@@ -361,8 +367,9 @@ function storedDirectiveHosts(): boolean {
                 [class.dir-host]="row.node.kind === 'directive'"
                 [style.--depth]="row.depth"
                 (click)="select(row.node.id)"
-                (focus)="focusId.set(row.node.id); highlight(row.node.id)"
-                (blur)="highlight(null)"
+                (focus)="focusId.set(row.node.id); highlight(row.node.id); showNameTip($event)"
+                (blur)="highlight(null); nameTip.set(null)"
+                (keydown.escape)="nameTip.set(null)"
                 (mouseenter)="highlight(row.node.id)"
                 (mouseleave)="highlight(null)"
               >
@@ -385,8 +392,10 @@ function storedDirectiveHosts(): boolean {
                   }}</span>
                   <span class="sr-only">directive host</span>
                 } @else {
-                  <span class="name mono">{{ row.node.name }}</span>
-                  <span class="tag mono">&lt;{{ row.node.tag }}&gt;</span>
+                  <span class="name mono" [attr.title]="row.node.name">{{ row.node.name }}</span>
+                  <span class="tag mono" [attr.title]="'<' + row.node.tag + '>'"
+                    >&lt;{{ row.node.tag }}&gt;</span
+                  >
                 }
                 @if (row.node.hydration; as status) {
                   <span [class]="'hyd hyd-' + status"
@@ -415,6 +424,11 @@ function storedDirectiveHosts(): boolean {
               </div>
             }
           </div>
+          @if (nameTip(); as tip) {
+            <div class="name-tip mono" aria-hidden="true" [style.top.px]="tip.top">
+              {{ tip.text }}
+            </div>
+          }
         </div>
 
         @if (selectedHost(); as host) {
@@ -1345,6 +1359,73 @@ function storedDirectiveHosts(): boolean {
       border-color: var(--accent-line);
       color: var(--text-strong);
     }
+    /* A narrow panel keeps the search and count on one row and the tree
+       actions on a second one, as icons named by their hidden labels. */
+    .tree-actions {
+      display: contents;
+    }
+    @media (max-width: 600px) {
+      .toolbar {
+        gap: 8px;
+      }
+      .search {
+        flex-basis: 100%;
+      }
+      .toolbar:has(.page-select) .search {
+        flex-basis: 160px;
+      }
+      .page-select {
+        flex: 1 1 120px;
+      }
+      .count {
+        flex: 1 1 80px;
+        min-width: 0;
+        white-space: normal;
+        line-height: 1.3;
+      }
+      .tree-actions {
+        display: flex;
+        flex: none;
+        gap: 8px;
+        margin-left: auto;
+      }
+      .tree-action,
+      .pick {
+        flex: none;
+        width: var(--control-h);
+        padding: 0;
+      }
+      .tree-action .label,
+      .pick .label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+    }
+    .tree-col {
+      position: relative;
+      min-width: 0;
+    }
+    .name-tip {
+      position: absolute;
+      z-index: 1;
+      left: 8px;
+      max-width: calc(100% - 16px);
+      padding: 4px 8px;
+      background: var(--surface-3);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow);
+      color: var(--text-strong);
+      font-size: 12px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+      pointer-events: none;
+      @include m.enter(150ms);
+    }
     .owner-action {
       margin-top: 10px;
     }
@@ -1726,6 +1807,9 @@ export class ComponentTree {
   private pickPageId: string | null = null;
   private pickSeq = 0;
   readonly focusId = signal<string | null>(null);
+  /** The full text of the focused row when its name or tag is cut off, shown below the row. */
+  readonly nameTip = signal<{ text: string; top: number } | null>(null);
+  readonly pickLabel = computed(() => (this.picking() ? 'Cancel pick' : 'Pick component on page'));
   private readonly bridge = inject(ExtensionBridge);
   readonly actionMessage = linkedSignal<string | null, string>({
     source: this.selectedId,
@@ -2545,6 +2629,19 @@ export class ComponentTree {
       for (const sibling of siblings) next.delete(sibling.id);
       return next;
     });
+  }
+
+  /** Shows the full text of a focused row whose name, tag or directives are cut off. */
+  showNameTip(event: FocusEvent) {
+    const row = event.currentTarget as HTMLElement;
+    const parts = Array.from(row.querySelectorAll<HTMLElement>('.name, .tag, .host-dirs'));
+    const cut = parts.some((part) => part.scrollWidth > part.clientWidth + 1);
+    if (!cut) {
+      this.nameTip.set(null);
+      return;
+    }
+    const text = parts.map((part) => part.title || part.textContent?.trim()).join(' ');
+    this.nameTip.set({ text, top: row.offsetTop + row.offsetHeight + 2 });
   }
 
   highlight(id: string | null) {

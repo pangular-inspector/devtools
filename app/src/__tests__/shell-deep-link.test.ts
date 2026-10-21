@@ -91,6 +91,25 @@ describe('deep links', () => {
     booted.fixture.destroy();
   });
 
+  it('switches tabs when only the hash changes after load', async () => {
+    const { fixture, app } = await boot('#tab=signals');
+    expect(app.tab()).toBe('signals');
+    location.hash = '#tab=forms';
+    await settle(fixture);
+    expect(app.tab()).toBe('forms');
+    location.hash = '#tab=components&id=9&page=p3';
+    await settle(fixture);
+    expect(app.tab()).toBe('components');
+    expect(app.componentFocus()).toEqual({ id: '9', pageId: 'p3' });
+    location.hash = '#tab=settings';
+    await settle(fixture);
+    expect(app.tab()).toBe('settings');
+    location.hash = '#tab=nope';
+    await settle(fixture);
+    expect(app.tab()).toBe('settings');
+    fixture.destroy();
+  });
+
   it('follows a link the server sends to open panels', async () => {
     const { fixture, app } = await boot();
     server.handlers.get('open-in-panel')!({ tab: 'components', id: '7', page: 'p2' });

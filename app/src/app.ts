@@ -201,6 +201,7 @@ function readView(): View | null {
     '[style.--accent]': 'viewAccent()?.accent ?? null',
     '[style.--accent-text]': 'viewAccent()?.text ?? null',
     '(window:message)': 'inspectFromPanel($event)',
+    '(window:hashchange)': 'followHash()',
     '(document:keydown)': 'onGlobalKey($event)',
   },
   imports: [
@@ -1629,6 +1630,20 @@ export class App implements OnInit, OnDestroy {
     }
     history.replaceState(history.state, '', panelLinkHash(link));
     return true;
+  }
+
+  /**
+   * Follows a `#tab=` link that changes after load (a link inside the panel, or
+   * a script setting `location.hash`), the same way as one on load.
+   */
+  followHash() {
+    const link = parsePanelLink(location.hash);
+    if (!link) return;
+    if (link.tab === 'settings') {
+      if (this.tab() !== 'settings') this.toggleSettings();
+      return;
+    }
+    this.openLink(link);
   }
 
   /** Listens for the commands and links the server sends to every open panel. */
