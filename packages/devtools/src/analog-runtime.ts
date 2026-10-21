@@ -21,6 +21,8 @@ export interface AnalogPageInfo {
   path: string;
   file?: string;
   serverFile?: string;
+  /** The named outlet the page renders in; absent for the primary outlet. */
+  outlet?: string;
 }
 
 export interface AnalogRuntimeReport {
@@ -93,6 +95,28 @@ function isEmptyObject(value: unknown): boolean {
   );
 }
 
+const PRIMARY_OUTLET = 'primary';
+const MAX_CHAIN = 40;
+const MAX_NODES = 200;
+
+function outletOf(node: AnyRecord): string {
+  const outlet = read(() => node['outlet'], undefined);
+  return typeof outlet === 'string' && outlet ? outlet.slice(0, 100) : PRIMARY_OUTLET;
+}
+
+function childrenOf(node: AnyRecord): AnyRecord[] {
+  const children = read(() => node['children'] as unknown, undefined);
+  if (Array.isArray(children)) return children.filter((c) => c && typeof c === 'object');
+  const first = read(() => node['firstChild'] as AnyRecord | null, null);
+  return first ? [first] : [];
+}
+
+/**
+ * The Analog pages on the active route tree. The primary outlet's chain comes
+ * first, outermost page first. Then come the pages of named (auxiliary)
+ * outlets, outer outlets first, each labelled with its outlet. Only the
+ * primary chain picks the load() data.
+ */
 export function chainOf(root: AnyRecord | null): {
   chain: AnalogPageInfo[];
   data: unknown;
@@ -101,25 +125,52 @@ export function chainOf(root: AnyRecord | null): {
   const chain: AnalogPageInfo[] = [];
   let data: unknown;
   let loadFrom: number | undefined;
-  const segments: string[] = [];
-  for (let node = root, guard = 0; node && guard < 40; guard++) {
-    const config = read(() => node!['routeConfig'] as AnyRecord | null, null);
-    const path = read(() => String(config?.['path'] ?? ''), '');
-    if (path) segments.push(path);
-    const meta = analogMetaOf(config);
-    if (meta) {
-      chain.push({ path: `/${segments.join('/')}`, ...fileOfEndpoint(meta.endpointKey) });
-      const load = read(() => node!['data']?.['load'], undefined);
-      // An empty-path child inherits its parent's resolved data, so the same
-      // object again is the parent's load(), unless this route resolves its own.
-      const own = read(() => !!config?.['resolve']?.['load'], false);
-      const inherited = load === data && !own;
-      if (load !== undefined && !inherited && (loadFrom === undefined || !isEmptyObject(load))) {
-        data = load;
-        loadFrom = chain.length - 1;
+  let visited = 0;
+  const branches: { node: AnyRecord; segments: string[]; outlet?: string }[] = [];
+  if (root) branches.push({ node: root, segments: [] });
+  for (let b = 0; b < branches.length && chain.length < MAX_CHAIN; b++) {
+    const { outlet } = branches[b];
+    const segments = [...branches[b].segments];
+    let node: AnyRecord | undefined = branches[b].node;
+    for (let depth = 0; node && depth < 40 && visited < MAX_NODES; depth++, visited++) {
+      const current: AnyRecord = node;
+      const config = read(() => current['routeConfig'] as AnyRecord | null, null);
+      const path = read(() => String(config?.['path'] ?? ''), '');
+      if (path) segments.push(path);
+      const meta = analogMetaOf(config);
+      if (meta && chain.length < MAX_CHAIN) {
+        chain.push({
+          path: `/${segments.join('/')}`,
+          ...fileOfEndpoint(meta.endpointKey),
+          ...(outlet ? { outlet } : {}),
+        });
+        if (!outlet) {
+          const load = read(() => current['data']?.['load'], undefined);
+          // An empty-path child inherits its parent's resolved data, so the same
+          // object again is the parent's load(), unless this route resolves its own.
+          const own = read(() => !!config?.['resolve']?.['load'], false);
+          const inherited = load === data && !own;
+          if (
+            load !== undefined &&
+            !inherited &&
+            (loadFrom === undefined || !isEmptyObject(load))
+          ) {
+            data = load;
+            loadFrom = chain.length - 1;
+          }
+        }
       }
+      // Angular sorts the primary child first; named outlets wait their turn.
+      let next: AnyRecord | undefined;
+      for (const child of childrenOf(current)) {
+        const name = outletOf(child);
+        if (name === PRIMARY_OUTLET && !next) next = child;
+        else if (branches.length < MAX_NODES) {
+          branches.push({ node: child, segments: [...segments], outlet: name });
+        }
+      }
+      node = next;
     }
-    node = read(() => node!['firstChild'] as AnyRecord | null, null);
   }
   return { chain, data, loadFrom };
 }
