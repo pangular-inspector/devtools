@@ -20,6 +20,15 @@ function fakeClient(call: Call, forms: CollectedForm[] = []): DevframeRpcClient 
   return { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
 }
 
+function stateClient(snapshot: Record<string, unknown>): DevframeRpcClient {
+  const rpc = {
+    call: () => Promise.resolve(''),
+    callEvent: () => Promise.resolve(),
+    sharedState: () => Promise.resolve({ value: () => snapshot, on: () => () => {} }),
+  };
+  return { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
+}
+
 const fail: Call = () => Promise.reject(new Error('offline'));
 
 function field(path: string, extra: Partial<FormFieldNode> = {}): FormFieldNode {
@@ -738,6 +747,148 @@ describe('FormsWebMcp', () => {
     await settle(fixture);
     expect(text(fixture)).toContain('WebMCP tool');
     expect(text(fixture)).toContain('sign_up');
+  });
+});
+
+describe('FormsInspector WebMCP tools not linked to a form', () => {
+  const unlinked = {
+    name: 'search_flights',
+    description: 'Find flights',
+    status: 'registered' as const,
+    seen: 'register' as const,
+    inputs: ['from: string'],
+    required: ['from'],
+  };
+
+  afterEach(() => scopeToPage(null));
+
+  it('lists them in their own section, with what the per-form block shows', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      stateClient({
+        forms: [form],
+        webMcp: [{ pageId: 'p1', modelContext: true, tools: [unlinked] }],
+      }),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const section = host.querySelector('app-forms-webmcp-others section')!;
+    expect(section.querySelector('h2')?.textContent).toContain('Other WebMCP tools');
+    expect(section.textContent).toContain('search_flights');
+    expect(section.textContent).toContain('Find flights');
+    expect(section.querySelector('.inputs li')?.textContent).toContain('required');
+    expect(section.textContent).toContain('No agent has called this tool');
+  });
+
+  it('shows them when the page has no form, and gives each tool a unique name', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      stateClient({
+        webMcp: [
+          {
+            pageId: 'p1',
+            modelContext: true,
+            tools: [unlinked, { ...unlinked, name: 'book_hotel', inputs: undefined }],
+          },
+        ],
+      }),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(text(fixture)).toContain('No forms on the page yet');
+    const tools = Array.from(host.querySelectorAll('app-forms-webmcp-others .webmcp'));
+    expect(tools).toHaveLength(2);
+    const ids = Array.from(host.querySelectorAll('[id]'), (el) => el.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const names = tools.map((tool) =>
+      tool
+        .getAttribute('aria-labelledby')!
+        .split(' ')
+        .map((id) => host.querySelector(`#${id}`)?.textContent?.trim())
+        .join(' '),
+    );
+    expect(names).toEqual(['WebMCP tool search_flights', 'WebMCP tool book_hotel']);
+  });
+
+  it('shows nothing when every tool is linked, and only the tools of the page it runs in', async () => {
+    scopeToPage('p1');
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      stateClient({
+        forms: [form],
+        webMcp: [
+          { pageId: 'p1', modelContext: true, tools: [] },
+          { pageId: 'p2', modelContext: true, tools: [unlinked] },
+        ],
+      }),
+    );
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('app-forms-webmcp-others section')).toBeNull();
+    fixture.componentInstance.allPages.set(true);
+    await settle(fixture);
+    expect(host.querySelector('app-forms-webmcp-others section')?.textContent).toContain(
+      'search_flights',
+    );
+  });
+});
+
+describe('FormsInspector setup errors', () => {
+  afterEach(() => scopeToPage(null));
+
+  it('lists them in a status notice, even when no form reached the list', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      stateClient({
+        setupErrors: [
+          { pageId: 'p1', message: "NG01203: No value accessor for form control name: 'age'" },
+        ],
+      }),
+    );
+    await settle(fixture);
+    const notice = (fixture.nativeElement as HTMLElement).querySelector('.setup-errors')!;
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(notice.textContent).toContain('1 forms setup error');
+    expect(notice.textContent).toContain('NG01203: No value accessor');
+    expect(text(fixture)).toContain('No forms on the page yet');
+  });
+
+  it('shows only the errors of the page it runs in until All pages is checked', async () => {
+    scopeToPage('p1');
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      stateClient({
+        forms: [form, { ...form, id: 'signup@p2' }],
+        setupErrors: [
+          { pageId: 'p1', message: 'NG01050: one' },
+          { pageId: 'p2', message: 'NG01050: two' },
+        ],
+      }),
+    );
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const notice = () => host.querySelector('.setup-errors')?.textContent ?? '';
+    expect(notice()).toContain('NG01050: one');
+    expect(notice()).not.toContain('NG01050: two');
+    expect(notice()).not.toContain('on page');
+    fixture.componentInstance.allPages.set(true);
+    await settle(fixture);
+    expect(notice()).toContain('2 forms setup errors');
+    expect(notice()).toContain('on page p2');
+  });
+
+  it('shows no notice without setup errors', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput('rpc', stateClient({ forms: [form], setupErrors: [] }));
+    await settle(fixture);
+    expect((fixture.nativeElement as HTMLElement).querySelector('.setup-errors')).toBeNull();
   });
 });
 

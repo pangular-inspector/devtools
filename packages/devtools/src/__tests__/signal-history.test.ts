@@ -30,6 +30,20 @@ function write(onWrite: (n: RawSignalNode) => void, raw: RawSignalNode, value: u
 }
 
 describe('createSignalHistory', () => {
+  it('matches writes to a node whose graph value is masked', () => {
+    const h = createSignalHistory(identity);
+    const raw: RawSignalNode = { debugName: 'token', kind: 'signal', value: 't0', version: 0 };
+    const first = graphNode('a', 'token', 0, '••••');
+    setRawValue(first, 't0');
+    h.collect([first]);
+    write(h.onWrite, raw, 't1');
+    write(h.onWrite, raw, 't2');
+    const next = graphNode('a', 'token', 2, '••••');
+    setRawValue(next, 't2');
+    const out = h.collect([next]);
+    expect(out['a'].filter((c) => c.source === 'write')).toHaveLength(2);
+  });
+
   it('records the first snapshot as initial', () => {
     const h = createSignalHistory(identity, () => 1);
     const out = h.collect([graphNode('a', 'count', 0, 0)]);

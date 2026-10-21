@@ -27,7 +27,8 @@ const VERB: Record<CdRecordAction, string> = {
 };
 
 const NEXT: Record<CdRecordAction, string> = {
-  start: ' Use the app, then call this tool again without `record`.',
+  start:
+    ' Use the app, then read the recording with `pangular:change-detection`, or `pangular:diagnose-change-detection` for what started the cycles.',
   stop: ' The cycles recorded so far stay available.',
   clear: '',
 };
@@ -35,7 +36,7 @@ const NEXT: Record<CdRecordAction, string> = {
 const pageList = (ids: readonly string[]) => ids.map(code).join(', ');
 
 /**
- * `change-detection` with `record`: sends the request, then waits until the
+ * `record-change-detection` with `record`: sends the request, then waits until the
  * pages push a report that shows it took (recording on, off, or emptied), and
  * names the pages that confirmed. Nothing to send it to, or no page
  * confirming, is a refusal.

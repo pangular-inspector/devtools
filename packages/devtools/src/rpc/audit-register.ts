@@ -187,6 +187,7 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       ...(sources.pipes && sees('pipes') ? { pipes: sources.pipes } : {}),
       axe: sessions.get(pageId)?.axe ?? null,
       ...(noAxe(pageId) ? { noAxe: noAxe(pageId) } : {}),
+      ...(audience === 'agent' && host.agentReadOnly ? { noCdRecord: true } : {}),
     };
   };
 

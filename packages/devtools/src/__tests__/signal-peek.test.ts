@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { collectSignalGraph, type SignalDebugNg, type SignalTarget } from '../signal-graph.ts';
 import { createSignalHistory } from '../signal-history.ts';
 import { PEEK_EVENT, PEEK_RESULT, registerSignalPeek, toPeekRequest } from '../signal-peek.ts';
-import { createSignalPeeks } from '../rpc/signal-peeks.ts';
+import { elementId } from '../element-id.ts';
+import { createSignalPeeks, signalPeekFor } from '../rpc/signal-peeks.ts';
 
 class Root {}
 class Page {}
@@ -112,6 +113,57 @@ describe('registerSignalPeek', () => {
     ]);
   });
 
+  it('answers with the graph of the component host a selector or instance id names', async () => {
+    document.body.innerHTML = page;
+    const session = fakeRpc();
+    const collect = vi.fn((wanted: SignalTarget) => collectSignalGraph(fakeNg(), wanted));
+    registerSignalPeek(session.rpc, 'p1', collect);
+    const rootId = elementId(document.querySelector('app-root')!);
+
+    session.handlers.get(PEEK_EVENT)!({ requestId: 'peek4', selector: 'app-root' });
+    session.handlers.get(PEEK_EVENT)!({ requestId: 'peek5', id: rootId });
+    await Promise.resolve();
+
+    expect(collect.mock.calls).toEqual([[{ selector: 'app-root' }], [{ id: rootId }]]);
+    const expected = {
+      pageId: 'p1',
+      graph: {
+        pageId: 'p1',
+        source: 'selected',
+        component: { id: rootId, name: 'Root', tag: 'app-root' },
+        nodes: [{ label: 'app-root' }],
+      },
+    };
+    expect(session.calls).toEqual([
+      [PEEK_RESULT, expect.objectContaining({ requestId: 'peek4' })],
+      [PEEK_RESULT, expect.objectContaining({ requestId: 'peek5' })],
+    ]);
+    expect(session.calls[0]![1]).toMatchObject(expected);
+    expect(session.calls[1]![1]).toMatchObject(expected);
+  });
+
+  it('answers null instead of the routed graph when no component host matches', async () => {
+    document.body.innerHTML = `${page}<p class="plain"></p>`;
+    const session = fakeRpc();
+    registerSignalPeek(session.rpc, 'p1', (wanted) => collectSignalGraph(fakeNg(), wanted));
+    for (const [requestId, target] of [
+      ['peek6', { selector: 'app-nope' }],
+      ['peek7', { selector: 'p.plain' }],
+      ['peek8', { selector: '[[bad' }],
+      ['peek9', { id: 'e999' }],
+    ] as const) {
+      session.handlers.get(PEEK_EVENT)!({ requestId, ...target });
+    }
+    await Promise.resolve();
+    expect(session.calls.map(([, answer]) => answer)).toEqual(
+      ['peek6', 'peek7', 'peek8', 'peek9'].map((requestId) => ({
+        requestId,
+        pageId: 'p1',
+        graph: null,
+      })),
+    );
+  });
+
   it('ignores requests for another page and malformed requests', async () => {
     document.body.innerHTML = page;
     const session = fakeRpc();
@@ -119,6 +171,10 @@ describe('registerSignalPeek', () => {
     session.handlers.get(PEEK_EVENT)!({ requestId: 'peek3', env: 'root', pageId: 'p2' });
     session.handlers.get(PEEK_EVENT)!({ env: 'root' });
     session.handlers.get(PEEK_EVENT)!(null);
+    // One target only, and a string each.
+    session.handlers.get(PEEK_EVENT)!({ requestId: 'peek10', env: 'root', selector: 'app-root' });
+    session.handlers.get(PEEK_EVENT)!({ requestId: 'peek11', selector: 42 });
+    session.handlers.get(PEEK_EVENT)!({ requestId: 'peek12', selector: 'x'.repeat(501) });
     await Promise.resolve();
     expect(session.calls).toEqual([]);
     expect(toPeekRequest({ requestId: 'r', env: 'root', pageId: 'p1' }, 'p1')).toEqual({
@@ -133,8 +189,14 @@ describe('createSignalPeeks', () => {
 
   it('resolves with the first graph from the asked page and ignores other pages', async () => {
     const peeks = createSignalPeeks();
-    const sent: { requestId: string; env: string; pageId?: string }[] = [];
-    const answer = peeks.request((message) => sent.push(message), 'root', 'p1', ['p1'], 1000);
+    const sent: Record<string, unknown>[] = [];
+    const answer = peeks.request(
+      (message) => sent.push(message),
+      { env: 'root' },
+      'p1',
+      ['p1'],
+      1000,
+    );
     const { requestId } = sent[0]!;
     expect(sent[0]).toEqual({ requestId, env: 'root', pageId: 'p1' });
     peeks.answer({ requestId, pageId: 'p2', graph: { nodes: [], edges: [] } });
@@ -147,7 +209,7 @@ describe('createSignalPeeks', () => {
     let requestId = '';
     const answer = peeks.request(
       (m) => (requestId = m.requestId),
-      'root',
+      { env: 'root' },
       undefined,
       ['p1', 'p2'],
       60_000,
@@ -164,7 +226,7 @@ describe('createSignalPeeks', () => {
     let settled = false;
     const answer = peeks.request(
       (m) => (requestId = m.requestId),
-      'root',
+      { env: 'root' },
       undefined,
       ['p1', 'p2'],
       60_000,
@@ -181,8 +243,31 @@ describe('createSignalPeeks', () => {
   it('resolves null when no page answers in time', async () => {
     vi.useFakeTimers();
     const peeks = createSignalPeeks();
-    const answer = peeks.request(() => {}, 'root', undefined, ['p1'], 1500);
+    const answer = peeks.request(() => {}, { env: 'root' }, undefined, ['p1'], 1500);
     await vi.advanceTimersByTimeAsync(1500);
     expect(await answer).toBeNull();
+  });
+});
+
+describe('signalPeekFor', () => {
+  const hits = [
+    { pageId: 'p1', node: { id: 'c3', kind: 'directive' as const } },
+    { pageId: 'p2', node: { id: 'c7' } },
+  ];
+
+  it('asks for a selector as given, an environment injector, or the first component instance', () => {
+    expect(signalPeekFor({ selector: 'app-card.featured' }, hits)).toEqual({
+      target: { selector: 'app-card.featured' },
+    });
+    expect(signalPeekFor({ component: '/admin' }, hits)).toEqual({ target: { env: '/admin' } });
+    expect(signalPeekFor({ component: 'Card' }, hits)).toEqual({
+      target: { id: 'c7' },
+      pageId: 'p2',
+    });
+  });
+
+  it('asks nothing when the component tree has no such component', () => {
+    expect(signalPeekFor({ component: 'Card' }, [])).toBeNull();
+    expect(signalPeekFor({ component: 'Card' }, [hits[0]!])).toBeNull();
   });
 });

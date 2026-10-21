@@ -1,6 +1,6 @@
 import { CD_CAUSE_KINDS, CD_CAUSE_LABEL, cdCauseText, cdHints } from '../cd-data.ts';
 import type { AngularPageInfo, CdCycle } from '../config.ts';
-import { cdUnsupportedText, pickCdPage, type CdState } from './cd-tools.ts';
+import { cdStartHint, cdUnsupportedText, pickCdPage, type CdState } from './cd-tools.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 
 const percent = (part: number, whole: number) =>
@@ -10,17 +10,19 @@ const percent = (part: number, whole: number) =>
  * Markdown for the `diagnose-change-detection` agent tool: what started the
  * recorded cycles, which components only zone.js keeps up to date, which
  * checks changed nothing, inputs that broke OnPush, and the hints from them.
+ * `canRecord` is false when `record-change-detection` is not offered.
  */
 export function cdDiagnosisText(
   state: CdState,
   args: { page?: string; limit?: number } = {},
   angularOf: (pageId: string) => AngularPageInfo | undefined = () => undefined,
+  canRecord = true,
 ): string {
   const page = pickCdPage(state, args.page);
   if (!page) {
     return args.page
-      ? `Page ${code(args.page)} has no change detection recording yet. Start one with \`pangular:change-detection\` and \`record: "start"\` (or **Record** in the panel), use the app, then call this tool again.`
-      : 'No change detection recording yet. Start one with `pangular:change-detection` and `record: "start"` (or **Record** in the panel), use the app, then call this tool again.';
+      ? `Page ${code(args.page)} has no change detection recording yet. Start one with ${cdStartHint(canRecord, args.page)}, use the app, then call this tool again.`
+      : `No change detection recording yet. Start one with ${cdStartHint(canRecord)}, use the app, then call this tool again.`;
   }
   if (!page.supported) return cdUnsupportedText(page.pageId, angularOf(page.pageId));
   const diagnosis = page.diagnosis;

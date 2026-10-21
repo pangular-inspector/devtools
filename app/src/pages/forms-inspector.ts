@@ -21,7 +21,7 @@ import { LimitNote } from '../ui/limit-note';
 import { FormsFieldDetail } from './forms-field-detail';
 import { FormsLint, FormsSubmit } from './forms-report';
 import { FormsTimeline } from './forms-timeline';
-import { FormsWebMcp } from './forms-webmcp';
+import { FormsWebMcp, FormsWebMcpOthers } from './forms-webmcp';
 import {
   FORMS_STYLES,
   KIND_LABELS,
@@ -34,6 +34,7 @@ import {
   type FormEvent,
   type FormFieldError,
   type FormFieldNode,
+  type FormSetupError,
   type WebMcpPage,
 } from './forms-types';
 
@@ -76,6 +77,7 @@ interface FormsSnapshot {
   instrumented?: string[];
   dropped?: Record<string, number>;
   webMcp?: WebMcpPage[];
+  setupErrors?: FormSetupError[];
 }
 
 interface FieldRow {
@@ -101,6 +103,7 @@ function countFields(node: FormFieldNode): number {
     FormsSubmit,
     FormsLint,
     FormsWebMcp,
+    FormsWebMcpOthers,
     LimitNote,
   ],
   host: { '(keydown.escape)': 'cancelPick()' },
@@ -109,6 +112,28 @@ function countFields(node: FormFieldNode): number {
       Signal Forms, reactive and template-driven forms on the live page, with each field's state and
       errors, a change timeline, submit explanations and a lint. Development builds only.
     </p>
+    @if (pageSetupErrors().length) {
+      <div class="setup-errors" role="status">
+        <p class="setup-title">
+          Angular reported {{ pageSetupErrors().length }} forms setup
+          {{ pageSetupErrors().length === 1 ? 'error' : 'errors' }}
+        </p>
+        <p class="setup-hint">
+          A form with a setup error can be missing from the list or behave unlike its template.
+          Check the directives and value accessors it names.
+        </p>
+        <ul>
+          @for (error of pageSetupErrors(); track $index) {
+            <li>
+              <code>{{ error.message }}</code>
+              @if (setupErrorPages()) {
+                <span class="setup-page">on page {{ error.pageId }}</span>
+              }
+            </li>
+          }
+        </ul>
+      </div>
+    }
     @if (!rpc()) {
       <div class="empty" role="status">
         <span class="spinner" aria-hidden="true"></span>
@@ -610,6 +635,9 @@ function countFields(node: FormFieldNode): number {
         }
       </div>
     }
+    @if (rpc() && !failed() && !loading()) {
+      <app-forms-webmcp-others [pages]="pageWebMcp()" />
+    }
   `,
   styles: `
     ${FORMS_STYLES}
@@ -617,6 +645,38 @@ function countFields(node: FormFieldNode): number {
       margin: 0 0 12px;
       color: var(--text-2);
       line-height: 1.5;
+    }
+    .setup-errors {
+      display: grid;
+      gap: 4px;
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border: 1px solid;
+      @include m.tint(warn);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .setup-errors p {
+      margin: 0;
+    }
+    .setup-title {
+      font-weight: 600;
+    }
+    .setup-errors ul {
+      display: grid;
+      gap: 2px;
+      margin: 0;
+      padding: 0 0 0 16px;
+      min-width: 0;
+    }
+    .setup-errors code {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      overflow-wrap: anywhere;
+    }
+    .setup-page {
+      margin-left: 6px;
     }
     .search {
       position: relative;
@@ -1385,6 +1445,22 @@ export class FormsInspector {
   readonly version = signal(0);
   readonly message = signal('');
 
+  readonly setupErrors = signal<FormSetupError[]>([]);
+  /** Setup errors of the pages the form list shows. */
+  readonly pageSetupErrors = computed(() => this.onShownPages(this.setupErrors()));
+  readonly setupErrorPages = computed(
+    () => new Set(this.pageSetupErrors().map((error) => error.pageId)).size > 1,
+  );
+  /** WebMCP state of the pages the form list shows, for the tools not linked to a form. */
+  readonly pageWebMcp = computed(() =>
+    this.onShownPages(this.webMcp()).filter((entry) => entry.tools.length),
+  );
+
+  private onShownPages<T extends { pageId?: string }>(entries: T[]): T[] {
+    const page = this.hostPageId;
+    return page && !this.allPages() ? entries.filter((entry) => entry.pageId === page) : entries;
+  }
+
   webMcpPage(formId: string): WebMcpPage | undefined {
     const page = pageOf(formId);
     return this.webMcp().find((entry) => entry.pageId === page);
@@ -1530,6 +1606,7 @@ export class FormsInspector {
         this.instrumented.set(snapshot?.instrumented ?? []);
         this.dropped.set(snapshot?.dropped ?? {});
         this.webMcp.set(snapshot?.webMcp ?? []);
+        this.setupErrors.set(snapshot?.setupErrors ?? []);
         this.version.update((v) => v + 1);
       };
       apply(state.value());

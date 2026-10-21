@@ -74,7 +74,8 @@ export function isAnalogReport(value: unknown): value is AnalogRuntimeReport {
         isRecord(c) &&
         typeof c['path'] === 'string' &&
         optionalString(c['file']) &&
-        optionalString(c['serverFile']),
+        optionalString(c['serverFile']) &&
+        optionalString(c['outlet']),
     ) &&
     optionalString(r.serverContext) &&
     (r.loadFrom === undefined ||
@@ -241,9 +242,12 @@ export function analogExplainUrlText(
   }
   const live = state?.pages.find((p) => p.url.split(/[?#]/)[0] === url.split(/[?#]/)[0]);
   if (live) {
-    const files = live.chain.map((c) => c.file).filter(Boolean);
+    const files = live.chain.filter((c) => c.file && !c.outlet).map((c) => code(c.file!));
+    const outlets = live.chain
+      .filter((c) => c.file && c.outlet)
+      .map((c) => `${code(c.file!)} in the ${code(c.outlet!)} outlet`);
     lines.push(
-      `Live page: ${files.length ? files.map((f) => code(f!)).join(' > ') : 'no Analog page file on the active route'}.`,
+      `Live page: ${files.length ? files.join(' > ') : 'no Analog page file on the active route'}${outlets.length ? `, plus ${outlets.join(', ')}` : ''}.`,
     );
   }
   return `${UNTRUSTED}\n\n${lines.join('\n')}`;
@@ -287,10 +291,10 @@ export function analogCurrentPageText(
   }
   const lines = [`Page ${report.pageId} at ${code(report.url)}:`];
   if (report.chain.length) {
-    lines.push('Files, outermost first:');
+    lines.push('Files, outermost first (named outlets after the primary chain):');
     for (const item of report.chain) {
       lines.push(
-        `- ${code(item.path)} ${item.file ? code(item.file) : ''}${item.serverFile ? ` + ${code(item.serverFile)}` : ''}`,
+        `- ${code(item.path)} ${item.file ? code(item.file) : ''}${item.serverFile ? ` + ${code(item.serverFile)}` : ''}${item.outlet ? ` (outlet ${code(item.outlet)})` : ''}`,
       );
     }
   } else

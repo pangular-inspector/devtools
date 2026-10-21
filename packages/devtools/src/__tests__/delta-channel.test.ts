@@ -54,6 +54,51 @@ describe('delta channel', () => {
     expect(stored.at(-1)).toEqual({ ...tree(2), pageId: 'p1' });
   });
 
+  it('carries the page clock outside the report, so it never makes a change', async () => {
+    let now = 1000;
+    const stored: { report: Record<string, unknown>; pageNow: unknown }[] = [];
+    const handler = deltaPush(
+      createReportDeltas(COMPONENT_TREE_SHAPE),
+      () => true,
+      (report, pageNow) => {
+        stored.push({ report, pageNow });
+        return true;
+      },
+    );
+    const calls: unknown[] = [];
+    const channel = createDeltaChannel({
+      call: async (_name, arg) => {
+        calls.push(arg);
+        return handler(JSON.parse(JSON.stringify(arg)));
+      },
+      pageId: 'p1',
+      push: 'push-component-tree',
+      shape: COMPONENT_TREE_SHAPE,
+      keepaliveMs: 60_000,
+      now: () => now,
+      clock: true,
+    });
+    await channel.send(tree(1));
+    now = 2000;
+    await channel.send(tree(2));
+    now = 3000;
+    await channel.send(tree(2));
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toEqual({
+      pageId: 'p1',
+      delta: { base: 1, seq: 2, set: { count: 2 } },
+      pageNow: 2000,
+    });
+    expect(stored.map((entry) => entry.pageNow)).toEqual([1000, 2000]);
+    // The clock never lands in the stored report, full or rebuilt from a delta.
+    expect(stored.at(-1)!.report).toEqual({ ...tree(2), pageId: 'p1' });
+    expect(stored[0]!.report).not.toHaveProperty('pageNow');
+    // A page that sends full reports only passes its clock the same way.
+    stored.length = 0;
+    handler({ ...tree(3), pageId: 'p2', pageNow: 4000 });
+    expect(stored).toEqual([{ report: { ...tree(3), pageId: 'p2' }, pageNow: 4000 }]);
+  });
+
   it('skips an unchanged report and pings when a keepalive is due', async () => {
     let now = 0;
     const { call, calls, forget, stored } = server();

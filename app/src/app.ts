@@ -479,7 +479,8 @@ function readView(): View | null {
         }}
       </span>
     </header>
-    <main #main tabindex="-1" [attr.aria-label]="mainLabel()">
+    <!-- In the Tab order, so keyboard users can scroll content that has nothing focusable. -->
+    <main #main tabindex="0" [attr.aria-label]="mainLabel()">
       <p class="background-note" role="status">{{ backgroundNote() }}</p>
       <p class="sr-only" role="status">{{ connectedNote() }}</p>
       @if (tab() === 'settings') {
@@ -960,6 +961,9 @@ function readView(): View | null {
     }
     main:focus {
       outline: none;
+    }
+    main:focus-visible {
+      @include m.focus-ring(-2px);
     }
     main > * {
       animation: enter 0.28s var(--ease) both;

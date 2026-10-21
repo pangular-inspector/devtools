@@ -34,8 +34,11 @@ export type {
   CdCycle,
 } from '@pangular-inspector/devtools/internal/config';
 
-/** How long Stop waits for the page's last report before it announces the count it has. */
-const STOP_REPORT_WAIT_MS = 3000;
+/**
+ * How long Record and Stop wait for the page's report that says the recording is on or off
+ * before they say the page did not confirm. The same wait as `record-change-detection`.
+ */
+const CONFIRM_WAIT_MS = 3000;
 /** One page's recording, as the page reports it. */
 export type CdPage = CdReport;
 
@@ -541,38 +544,60 @@ export class CdRecording {
     return cdCauseText(cause);
   }
 
-  /** Set after Stop: the total is announced once the page's last report says it stopped. */
-  private readonly stopping = signal(false);
-  private stopTimer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * Set after Record (`true`) or Stop (`false`) reached the server: the result is announced
+   * once the page reports the recording on or off. Stop's report also brings the last cycles.
+   */
+  private readonly confirming = signal<boolean | null>(null);
+  private confirmTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     effect(() => {
-      if (!this.stopping() || this.livePage()?.recording === true) return;
-      untracked(() => this.announceStopped());
+      const on = this.confirming();
+      if (on === null) return;
+      const recording = this.livePage()?.recording === true;
+      if (recording !== on) return;
+      untracked(() => this.confirmed(on));
     });
-    inject(DestroyRef).onDestroy(() => clearTimeout(this.stopTimer));
+    inject(DestroyRef).onDestroy(() => clearTimeout(this.confirmTimer));
   }
 
-  private announceStopped() {
-    clearTimeout(this.stopTimer);
-    this.stopping.set(false);
+  private confirmed(on: boolean) {
+    clearTimeout(this.confirmTimer);
+    this.confirming.set(null);
+    this.message.set('');
     const count = this.livePage()?.cycles.length ?? 0;
-    this.announce(`Recording stopped. ${count} ${count === 1 ? 'cycle' : 'cycles'} recorded.`);
+    this.announce(
+      on
+        ? 'Recording started.'
+        : `Recording stopped. ${count} ${count === 1 ? 'cycle' : 'cycles'} recorded.`,
+    );
+  }
+
+  /** No report confirmed in time: the button keeps the state the page last reported. */
+  private unconfirmed(on: boolean) {
+    const failed = `The page did not confirm that the recording ${on ? 'started' : 'stopped'}. The tab may be in the background, closed or reloading.`;
+    this.message.set(failed);
+    this.announce(failed);
   }
 
   async toggle() {
-    if (this.recording()) {
-      const sent = await this.send({ on: false }, '', () => '', 'request-change-detection-record', {
-        quiet: true,
-      });
-      if (!sent) return;
-      // The page sends its last cycles with the report that says it stopped.
-      this.stopping.set(true);
-      clearTimeout(this.stopTimer);
-      this.stopTimer = setTimeout(() => this.announceStopped(), STOP_REPORT_WAIT_MS);
-    } else {
-      await this.send({ on: true }, 'Starting…', () => 'Recording started.');
-    }
+    const on = !this.recording();
+    clearTimeout(this.confirmTimer);
+    this.confirming.set(null);
+    const sent = await this.send(
+      { on },
+      on ? 'Starting…' : 'Stopping…',
+      () => '',
+      'request-change-detection-record',
+      { quiet: true, keepPending: true },
+    );
+    if (!sent) return;
+    this.confirming.set(on);
+    // A report that comes after the wait still confirms, and replaces the note.
+    this.confirmTimer = setTimeout(() => {
+      if (this.confirming() === on) this.unconfirmed(on);
+    }, CONFIRM_WAIT_MS);
   }
 
   showImport(file: CdImported) {
@@ -621,7 +646,7 @@ export class CdRecording {
     pending: string,
     done: () => string,
     rpc = 'request-change-detection-record',
-    { quiet = false } = {},
+    { quiet = false, keepPending = false } = {},
   ): Promise<boolean> {
     this.message.set(pending);
     try {
@@ -630,7 +655,7 @@ export class CdRecording {
         pageId: this.pageId(),
         ...request,
       });
-      this.message.set('');
+      if (!keepPending) this.message.set('');
       if (!quiet) this.announce(done());
       return true;
     } catch {

@@ -5,6 +5,7 @@ import { className, injectorRef } from './injector-tree.ts';
 import { serializeNamed } from './serialize.ts';
 import { frameworkNodes, type OwnSignal } from './signal-framework.ts';
 import { locateWritable, setRawValue } from './signal-locator.ts';
+import { setGraphSecrets, signalSecrets } from './signal-masks.ts';
 import { cleanValue, groupResources, rawNodeOf, type RawNode } from './signal-resources.ts';
 import type {
   SignalGraph,
@@ -28,8 +29,16 @@ const MAX_ENVIRONMENTS = 30;
 const MAX_FALLBACK_HOSTS = 50;
 const VALUE_LIMITS = { depth: 4, keys: 40, items: 40, text: 500 };
 
-export function graphValue(label: string | undefined, value: unknown): unknown {
-  return serializeNamed(label, value, VALUE_LIMITS);
+/**
+ * A node value as the graph sends it. `secrets` are the form values the graph
+ * masks wherever they appear (`signal-masks.ts`).
+ */
+export function graphValue(
+  label: string | undefined,
+  value: unknown,
+  secrets?: ReadonlySet<string>,
+): unknown {
+  return serializeNamed(label, value, secrets?.size ? { ...VALUE_LIMITS, secrets } : VALUE_LIMITS);
 }
 
 function read<T>(fn: () => T, fallback: T): T {
@@ -216,8 +225,10 @@ function buildGraph<H extends object>(
   raw: RawGraph,
   instance: object | null,
   ng: SignalDebugNg<H>,
+  secrets: ReadonlySet<string>,
   componentId?: string,
 ) {
+  const value = (label: string | undefined, raw: unknown) => graphValue(label, raw, secrets);
   let linked: LinkedReader[] | null = null;
   const kept = raw.nodes.slice(0, MAX_NODES);
   const located =
@@ -240,10 +251,10 @@ function buildGraph<H extends object>(
     // Angular sends no value for linkedSignal nodes; the matched field holds it.
     const fieldValue = field && !('value' in n) ? cleanValue(field.node) : null;
     if ('value' in n) {
-      node.value = graphValue(n.label, n.value);
+      node.value = value(n.label, n.value);
       setRawValue(node, n.value);
     } else if (fieldValue) {
-      node.value = graphValue(n.label, fieldValue.value);
+      node.value = value(n.label, fieldValue.value);
       setRawValue(node, fieldValue.value);
     } else if (
       n.kind === 'linkedSignal' &&
@@ -254,7 +265,7 @@ function buildGraph<H extends object>(
       linked ??= linkedSignalReaders(ng, instance);
       const found = linkedValue(linked, n.label, node.epoch);
       if (found) {
-        node.value = graphValue(n.label, found.value);
+        node.value = value(n.label, found.value);
         setRawValue(node, found.value);
       }
     }
@@ -263,10 +274,9 @@ function buildGraph<H extends object>(
   const edges = (raw.edges ?? []).filter(
     (e) => e.consumer < kept.length && e.producer < kept.length,
   );
-  const resources = groupResources(nodes, edges, instance ? [instance] : [], (label, value) =>
-    graphValue(label, value),
-  );
+  const resources = groupResources(nodes, edges, instance ? [instance] : [], value);
   markFramework(nodes, edges, new Set(resources.flatMap((r) => r.nodeIds)), instance, ng);
+  setGraphSecrets(nodes, secrets);
   const graph: Pick<SignalGraph, 'nodes' | 'edges' | 'resources' | 'nodeCount'> = { nodes, edges };
   if (resources.length) graph.resources = resources;
   if (raw.nodes.length > kept.length) graph.nodeCount = raw.nodes.length;
@@ -300,7 +310,8 @@ function graphFor<H extends object>(
   const tag = tree.tag(el);
   const id = elementId(el);
   return {
-    ...buildGraph(raw, instance, ng, id),
+    // Secret form fields of the component, masked before the graph leaves the page.
+    ...buildGraph(raw, instance, ng, signalSecrets(ng, el, instance), id),
     componentSelector: tag,
     component: {
       id,
@@ -371,7 +382,7 @@ function graphForEnvironment<H extends object>(
   if (!raw) return null;
   if (!hasIds(raw)) return UNSUPPORTED;
   return {
-    ...buildGraph(raw, null, ng),
+    ...buildGraph(raw, null, ng, signalSecrets(ng, null, null)),
     injector: { id: env.id, name: env.name },
     source: 'selected',
   };

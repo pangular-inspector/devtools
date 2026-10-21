@@ -481,6 +481,101 @@ describe('agent tools', () => {
     });
   });
 
+  it('peeks at a component injector by CSS selector or by a component the tree knows', async () => {
+    const { ctx, push, call } = await boot();
+    await push('push-component-tree', {
+      pageId: 'p1',
+      roots: [
+        {
+          id: 'c1',
+          name: 'App',
+          tag: 'app-root',
+          children: [{ id: 'c4', name: 'Promo', tag: 'app-promo', children: [] }],
+        },
+      ],
+      count: 2,
+      detail: null,
+    });
+    await push('push-signal-graph', {
+      pageId: 'p1',
+      nodes: [{ id: 'a', kind: 'signal', label: 'count', epoch: 0 }],
+      edges: [],
+      componentSelector: 'app-root',
+      component: { id: 'c1', name: 'App', tag: 'app-root', path: 'app-root' },
+    });
+    const promo = {
+      nodes: [{ id: 'p', kind: 'signal', label: 'discount', epoch: 1 }],
+      edges: [],
+      componentSelector: 'app-promo',
+      component: { id: 'c4', name: 'Promo', tag: 'app-promo', path: 'app-root > app-promo' },
+      source: 'selected',
+    };
+    const asked: Record<string, unknown>[] = [];
+    const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
+    broadcast.mockImplementation(async (options: { method: string; args: unknown[] }) => {
+      if (options.method !== 'pangular:peek-signal-graph') return;
+      const request = options.args[0] as { requestId: string; selector?: string; id?: string };
+      asked.push(request);
+      // The page answers the way answerPeek does: a graph only for a component host.
+      const found = request.selector === '.promo' || request.id === 'c4';
+      setTimeout(() => {
+        void push('signal-graph-peek-result', {
+          requestId: request.requestId,
+          pageId: 'p1',
+          graph: found ? { ...promo, pageId: 'p1' } : null,
+        });
+      }, 5);
+    });
+
+    expect(signalJson(await call('inspect-signals', '.promo'))).toMatchObject({
+      pageId: 'p1',
+      component: { id: 'c4' },
+      nodes: [{ label: 'discount' }],
+    });
+    expect(asked[0]).toEqual({ requestId: expect.any(String), selector: '.promo' });
+    // A class name the component tree knows is asked for by instance id, on its page.
+    expect(signalJson(await call('inspect-signals', 'Promo'))).toMatchObject({
+      component: { name: 'Promo' },
+    });
+    expect(asked[1]).toEqual({ requestId: expect.any(String), id: 'c4', pageId: 'p1' });
+    // The pushed graph still answers without a peek, and the panel keeps its selection.
+    expect(signalJson(await call('inspect-signals', 'app-root'))).toMatchObject({
+      component: { id: 'c1' },
+    });
+    expect(asked).toHaveLength(2);
+    const methods = broadcast.mock.calls.map(([options]) => (options as { method: string }).method);
+    expect(methods).not.toContain('pangular:select-signal-component');
+  });
+
+  it('refuses a selector that matches no component host without waiting out the peek', async () => {
+    const { ctx, push } = await boot();
+    await push('push-signal-graph', {
+      pageId: 'p1',
+      nodes: [],
+      edges: [],
+      componentSelector: 'app-root',
+    });
+    vi.spyOn(ctx.rpc, 'broadcast').mockImplementation(
+      async (options: { method: string; args: unknown[] }) => {
+        if (options.method !== 'pangular:peek-signal-graph') return;
+        const { requestId } = options.args[0] as { requestId: string };
+        void push('signal-graph-peek-result', { requestId, pageId: 'p1', graph: null });
+      },
+    );
+    const started = Date.now();
+    const invoke = (args: Record<string, unknown>) =>
+      ctx.agent.invoke('pangular:inspect-signals', args);
+    await expect(invoke({ selector: '.nope' })).rejects.toThrow(
+      /No component host matches the CSS selector `\.nope`/,
+    );
+    expect(Date.now() - started).toBeLessThan(500);
+    // One target at a time, and the schema bounds the selector.
+    await expect(invoke({ selector: '.a', component: 'app-root' })).rejects.toThrow(
+      /Pass one of `component`/,
+    );
+    await expect(invoke({ selector: 'x'.repeat(501) })).rejects.toThrow(/at most 500/);
+  });
+
   it('ignores a peek answer for another request or a non-matching injector', async () => {
     const { ctx, push, call } = await boot();
     await push('push-signal-graph', {

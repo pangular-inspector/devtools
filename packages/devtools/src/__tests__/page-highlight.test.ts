@@ -9,6 +9,8 @@ import {
   highlightBox,
   showHighlight,
 } from '../page-highlight.ts';
+import { elementId } from '../element-id.ts';
+import { pageHighlightTarget } from '../rpc/page-highlight-target.ts';
 
 const handlers = new Map<string, (arg: unknown) => void>();
 
@@ -150,6 +152,43 @@ describe('page highlight', () => {
     }
   });
 
+  it('draws one box around several elements', () => {
+    document.body.innerHTML = '<p id="a"></p><p id="b"></p><p id="c" hidden></p>';
+    const [a, b, c] = ['a', 'b', 'c'].map((id) => document.getElementById(id)!);
+    place(a, { x: 10, y: 20, width: 100, height: 30 });
+    place(b, { x: 40, y: 200, width: 200, height: 50 });
+    place(c, { x: 0, y: 0, width: 0, height: 0 });
+    expect(showHighlight([a, b, c])).toBe(true);
+    expect(box()?.style).toMatchObject({
+      left: '10px',
+      top: '20px',
+      width: '230px',
+      height: '230px',
+    });
+    expect(showHighlight([c])).toBe(false);
+    expect(showHighlight([])).toBe(false);
+  });
+
+  it('draws one box around every id of a highlight-in-page request', async () => {
+    vi.stubGlobal('BroadcastChannel', undefined);
+    const stop = await initOverlay();
+    try {
+      document.body.innerHTML = '<p id="a"></p><p id="b"></p>';
+      const [a, b] = ['a', 'b'].map((id) => document.getElementById(id)!);
+      place(a, { x: 0, y: 0, width: 50, height: 10 });
+      place(b, { x: 0, y: 90, width: 80, height: 10 });
+      handlers.get('highlight-in-page')!({ ids: [elementId(a), elementId(b), 'gone'] });
+      expect(box()?.style).toMatchObject({ top: '0px', width: '80px', height: '100px' });
+      handlers.get('highlight-in-page')!({ id: elementId(a) });
+      expect(box()?.style).toMatchObject({ width: '50px', height: '10px' });
+      handlers.get('highlight-in-page')!({ pageId: 'another-tab', ids: [elementId(a)] });
+      expect(box()).toBeUndefined();
+    } finally {
+      stop();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('accepts an SVG element from the highlight-in-page request', async () => {
     vi.stubGlobal('BroadcastChannel', undefined);
     const stop = await initOverlay();
@@ -164,5 +203,26 @@ describe('page highlight', () => {
       stop();
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('pageHighlightTarget', () => {
+  it('keeps the single id, several ids, selectors and a clear', () => {
+    expect(pageHighlightTarget({ pageId: 'p1', id: 'c1', reveal: true })).toEqual({
+      pageId: 'p1',
+      id: 'c1',
+      reveal: true,
+    });
+    expect(pageHighlightTarget({ pageId: 'p1', ids: ['e1', 2, '', 'e2'] })).toEqual({
+      pageId: 'p1',
+      ids: ['e1', 'e2'],
+    });
+    expect(pageHighlightTarget({ ids: [], id: 'c1' })).toEqual({ id: 'c1' });
+    expect(pageHighlightTarget({ selector: 'app-card' })).toEqual({ selector: 'app-card' });
+    expect(pageHighlightTarget('app-card')).toBe('app-card');
+    expect(pageHighlightTarget(null)).toBe('');
+    expect(pageHighlightTarget({ ids: Array.from({ length: 80 }, (_, i) => `e${i}`) })).toEqual({
+      ids: Array.from({ length: 50 }, (_, i) => `e${i}`),
+    });
   });
 });

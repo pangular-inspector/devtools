@@ -1,16 +1,12 @@
-import type { AngularPageInfo } from '../config.ts';
+import { deferNotes, type AngularPageInfo } from '../config.ts';
 import { unsupportedToolText } from './angular-pages.ts';
 import { MAX_DEFER_BLOCKS } from '../defer-blocks.ts';
 import { MAX_FOR_BLOCKS } from '../for-blocks.ts';
-import type {
-  ComponentPage,
-  DeferBlockInfo,
-  HydrationReport,
-  LiveComponentNode,
-} from '../types.ts';
+import type { ComponentPage, HydrationReport, LiveComponentNode } from '../types.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import { untrusted } from './forms-tools.ts';
 import {
+  guardClockOffset,
   guardComponentDetail,
   guardComponentRoots,
   guardDeferBlocks,
@@ -33,7 +29,12 @@ export function isComponentReport(value: unknown): value is Omit<ComponentPage, 
   );
 }
 
-export function toComponentPage(report: Omit<ComponentPage, 'reportedAt'>, now = Date.now()) {
+/** `pageNow` is the page clock the push carried, to age page times in page time. */
+export function toComponentPage(
+  report: Omit<ComponentPage, 'reportedAt'>,
+  now = Date.now(),
+  pageNow?: unknown,
+) {
   const page: ComponentPage = {
     pageId: report.pageId,
     // Checked node by node: one page's bad entry must not break the tools for every page.
@@ -76,6 +77,8 @@ export function toComponentPage(report: Omit<ComponentPage, 'reportedAt'>, now =
   if (report.platform === 'angular-native' || report.platform === 'nativescript') {
     page.platform = report.platform;
   }
+  const clockOffset = guardClockOffset(pageNow, now);
+  if (clockOffset !== undefined) page.clockOffset = clockOffset;
   return page;
 }
 
@@ -201,39 +204,6 @@ export function otherMatchesText(hits: ComponentHit[], query: string): string {
   return `${hits.length} instances match \`${query}\`: ${listed}${more}. This used the first one; pass an instance id to pick another.`;
 }
 
-export const STUCK_PLACEHOLDER_MS = 10_000;
-
-/** Triggers that wait for the user, so a long wait on the placeholder is normal. */
-const USER_TRIGGER = /^on (viewport|interaction|hover)\b/;
-
-/**
- * Whether a block waits only for the user: every main trigger (not `prefetch`
- * or `hydrate`) is `on viewport`, `on interaction` or `on hover`.
- */
-function waitsForUser(triggers: string[]): boolean {
-  const main = triggers.filter((trigger) => !/^(prefetch|hydrate) /.test(trigger));
-  return main.length > 0 && main.every((trigger) => USER_TRIGGER.test(trigger));
-}
-
-function deferNotes(block: DeferBlockInfo, now: number): string[] {
-  const notes: string[] = [];
-  const age = Math.max(0, Math.round((now - block.since) / 1000));
-  if (block.state === 'error') notes.push('failed to load');
-  if (
-    (block.state === 'placeholder' || block.state === 'initial') &&
-    age * 1000 >= STUCK_PLACEHOLDER_MS
-  ) {
-    notes.push(
-      waitsForUser(block.triggers)
-        ? `waiting for its trigger for ${age}s`
-        : `on its placeholder for ${age}s`,
-    );
-  }
-  if (block.hydrateNever) notes.push('hydrate never: the server HTML stays static');
-  else if (block.hydration === 'dehydrated') notes.push('still dehydrated');
-  return notes;
-}
-
 /** Table rows, and entries under "Needs attention", the defer-blocks tool lists per page. */
 export const DEFER_ROWS = 50;
 
@@ -263,10 +233,13 @@ export function deferBlocksText(
     }
     if (!page.deferBlocks.length) return `${title}: no \`@defer\` blocks are rendered.`;
     const attention: string[] = [];
+    // `since` is page clock: a page whose clock runs ahead must not read as stuck.
+    const pageNow = now - (page.clockOffset ?? 0);
     const rows = page.deferBlocks.map((block) => {
-      const notes = deferNotes(block, now);
+      const found = deferNotes(block, pageNow);
+      const notes = found.map((note) => note.text);
       const owner = block.owner ? `${block.owner.name} (\`${block.owner.id}\`)` : 'unknown';
-      if (block.state === 'error' || notes.some((n) => n.startsWith('on its placeholder'))) {
+      if (found.some((note) => note.kind === 'failed' || note.kind === 'stuck')) {
         attention.push(
           `- \`${block.id}\` in ${owner}: ${notes.join(', ')}. Triggers: ${block.triggers.join(', ') || 'none'}${block.hasErrorBlock ? '' : '. It has no @error block'}.`,
         );

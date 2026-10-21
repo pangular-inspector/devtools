@@ -37,6 +37,7 @@ import {
   type SignalTarget,
 } from './signal-graph.ts';
 import { createSignalHistory, installSignalWriteHook } from './signal-history.ts';
+import { maskHistory, secretsOfGraph } from './signal-masks.ts';
 import { registerSignalPeek } from './signal-peek.ts';
 import { serializeNamed } from './serialize.ts';
 import {
@@ -257,7 +258,7 @@ async function startSession(
     lastTreeJson = json;
     treeSentAt = Date.now();
     try {
-      await my.rpc.call('push-component-tree', { ...report, pageId });
+      await my.rpc.call('push-component-tree', { ...report, pageId, pageNow: Date.now() });
     } catch (error) {
       // Sent again on the next tick.
       if (lastTreeJson === json) lastTreeJson = '';
@@ -302,10 +303,11 @@ async function startSession(
         epoch: r.epoch,
         value: r.status,
       }));
-    const { changes: history, rollback } = signalHistory.collectDeltaWithRollback(
+    const { changes: collected, rollback } = signalHistory.collectDeltaWithRollback(
       [...graph.nodes, ...statuses],
       full,
     );
+    const history = maskHistory(collected, secretsOfGraph(graph));
     for (const item of [...graph.nodes, ...(graph.resources ?? [])]) {
       const changes = signalHistory.changesOf(item.id);
       if (changes) item.changes = changes;

@@ -153,6 +153,8 @@ interface PayloadEntry {
 
 interface HydrationMismatch {
   component: string;
+  /** `component` is a class name (`ProductCard`), not a node name (`app-card`). */
+  isClass?: boolean;
   expected?: string;
   actual?: string;
 }
@@ -1168,7 +1170,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             <ul class="plain mismatches">
               @for (m of h.mismatches; track $index) {
                 <li>
-                  <code>{{ '<' + m.component + '>' }}</code>
+                  <code>{{ m.isClass ? m.component : '<' + m.component + '>' }}</code>
                   @if (m.expected) {
                     <span class="mismatch-row"
                       ><span class="mismatch-label">Expected</span>

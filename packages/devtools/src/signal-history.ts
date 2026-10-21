@@ -196,7 +196,10 @@ export function createSignalHistory(
 
   function sameValue(raw: RawSignalNode, node: SignalGraphNode): boolean {
     if (!('value' in node)) return true;
-    return JSON.stringify(snapshot(raw.value, node.label)) === JSON.stringify(node.value);
+    // The node's `value` can be masked; compare with the raw value kept on the page instead.
+    const kept = rawValueOf(node);
+    const nodeValue = kept ? snapshot(kept.value, node.label) : node.value;
+    return JSON.stringify(snapshot(raw.value, node.label)) === JSON.stringify(nodeValue);
   }
 
   function findTrack(node: SignalGraphNode, taken: Set<string>): Track | undefined {

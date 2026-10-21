@@ -226,7 +226,7 @@ The tab lists only the last one, marked **before Pangular Inspector connected**,
 
 ### Redaction
 
-The devtools replace query, matrix and fragment values with secret-looking keys with `[redacted]`. They also redact tokens, `Bearer` values, and route params with secret-looking names such as `:token`. You can't replay a navigation with a redacted URL. See [what the devtools redact](../security.md).
+The devtools replace query, matrix and fragment values with secret-looking keys with `[redacted]`. They also redact tokens, `Bearer` values, and route params with secret-looking names such as `:token`, in the primary outlet and in named outlets. You can't replay a navigation with a redacted URL. See [what the devtools redact](../security.md).
 
 ### History and config caps
 
