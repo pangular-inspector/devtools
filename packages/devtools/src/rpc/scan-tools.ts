@@ -5,11 +5,13 @@ import { getPipes } from './get-pipes.ts';
 import { getProviders } from './get-providers.ts';
 import { getRoutes } from './get-routes.ts';
 import { getSignals } from './get-signals.ts';
+import { scanListAnswer, scanListSchema, type ScanList, type ScanListArgs } from './scan-list.ts';
 
 /**
  * The source scan agent tools (`scan-*`, `ngrx-scan`). Each runs the RPC
  * function the panel reads (`get-routes`, `build-meta` and so on) and
- * answers with its result as compact JSON, one text block. The RPC functions
+ * answers with its result as compact JSON, one text block. A scan with a
+ * `list` answers one capped part of its list (`scan-list.ts`). The RPC functions
  * keep their names for the panel; only the agent tool is named after the
  * scan rule (a tool that reads only the project's files starts with `scan-`).
  */
@@ -24,6 +26,8 @@ interface ScanToolSpec {
   title: string;
   description: string;
   definition: ScanDefinition;
+  /** A scan that answers a list: it takes `filter`, `offset` and `limit`, and caps its answer. */
+  list?: ScanList;
 }
 
 export const SCAN_TOOLS: readonly ScanToolSpec[] = [
@@ -38,8 +42,9 @@ export const SCAN_TOOLS: readonly ScanToolSpec[] = [
     id: 'pangular:scan-components',
     title: 'Scan Angular components',
     description:
-      'Source scan of @Component and @Directive classes as JSON: class, selector (empty for routed components), `kind`, inputs, outputs, file and line. pangular:list-components reads the live instances.',
+      'Source scan of @Component and @Directive classes as JSON: class, selector (empty for routed components), `kind`, inputs, outputs, file and line. At most 200 items or 20,000 characters; a cut answer gives the next `offset`. Narrow with `filter`.',
     definition: getComponents as unknown as ScanDefinition,
+    list: { noun: 'components', fields: ['className', 'selector', 'kind', 'file'] },
   },
   {
     id: 'pangular:scan-pipes',
@@ -52,8 +57,9 @@ export const SCAN_TOOLS: readonly ScanToolSpec[] = [
     id: 'pangular:scan-signals',
     title: 'Scan Angular signals',
     description:
-      'Source scan as JSON of signal(), computed(), linkedSignal(), effect(), toSignal(), resources, signal inputs, models and queries: name, kind, file and line. pangular:inspect-signals reads the live graph.',
+      'Source scan as JSON of signal(), computed(), linkedSignal(), effect(), toSignal(), resources, signal inputs, models and queries: name, kind, file and line. At most 200 items or 20,000 characters; a cut answer gives the next `offset`. Narrow with `filter`.',
     definition: getSignals as unknown as ScanDefinition,
+    list: { noun: 'signals', fields: ['name', 'kind', 'file', 'component'] },
   },
   {
     id: 'pangular:scan-providers',
@@ -97,13 +103,17 @@ export function scanTool(spec: ScanToolSpec, ctx: unknown) {
     id: spec.id,
     title: spec.title,
     description: spec.description,
-    inputSchema: { type: 'object', properties: {} },
-    handler: async () => {
+    inputSchema: {
+      type: 'object',
+      properties: spec.list ? scanListSchema(spec.list) : {},
+    },
+    handler: async (args: ScanListArgs = {}) => {
       run ??= handlerOf().catch((error: unknown) => {
         run = undefined;
         throw error;
       });
       const result = await (await run)();
+      if (spec.list && Array.isArray(result)) return scanListAnswer(result, args ?? {}, spec.list);
       return JSON.stringify(result);
     },
   };

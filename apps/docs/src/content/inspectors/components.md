@@ -25,6 +25,8 @@ Each row shows the class name and the host tag. Routed components get a chip wit
 - **Click** a row, or press Enter or Space, to select it. Click it again to clear the selection.
 - **Expand all** opens every row and **Collapse all** closes them down to the top level. Both are off while you filter, because the filter already opens every row that leads to a match.
 - **Pick component on page** selects the component behind an element you click in the app. See [Pick a component on the page](#pick-a-component-on-the-page).
+- In a panel narrower than 600px, **Directive hosts**, **Expand all**, **Collapse all** and **Pick component on page** show as icons next to the count. Hover an icon to see its name. Screen readers still hear the full name.
+- A name or tag that doesn't fit its row ends with an ellipsis. Hover it to see the full text, or focus the row to show the full name and tag below it. Press Escape to hide it.
 
 ### Directive hosts
 
@@ -317,7 +319,7 @@ The live tree reads `window.ng`, which only development builds expose. It uses t
 
 ### Refresh rate
 
-On Angular 20 and later, the page reads the tree about 250 ms after Angular runs change detection, and every 4 seconds as a heartbeat. Until the app bootstraps, it reads the tree every 3 seconds. It also reads it at once when you select an instance. It reads the detail block only for the selected instance. The server drops a page after 15 seconds without a report or a heartbeat, unless its tab is in the background. See [Tabs in the background](../getting-started/popup-and-hub.md#tabs-in-the-background).
+On Angular 20 and later, the page reads the tree about 250 ms after Angular runs change detection, and every 4 seconds as a heartbeat. Until the app bootstraps, it reads the tree every 3 seconds. It also reads it at once when you select an instance. It reads the detail block only for the selected instance. The server drops a page after 30 seconds without a report or a heartbeat, unless its tab is in the background. See [Tabs in the background](../getting-started/popup-and-hub.md#tabs-in-the-background).
 
 ## How to use it
 

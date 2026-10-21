@@ -33,6 +33,7 @@ import {
   valueJson,
 } from './forms-cap.ts';
 import { refusal } from './refusal.ts';
+import { cutGroups, cutSentence } from './forms-collector-cap.ts';
 
 export interface FieldArgs {
   form?: string;
@@ -325,6 +326,14 @@ export function explainSubmitText(state: FormsState, args: FieldArgs, now = Date
   if (pending.length) {
     lines.push(`Pending: ${pending.map((n) => code(n.path || '(form)')).join(', ')}.`);
   }
+  const cut = cutGroups(form.root);
+  const pastCap = cut.flatMap((g) => g.invalid);
+  if (pastCap.length) {
+    lines.push(
+      `Also invalid, past the collector's limit: ${pastCap.map((p) => code(p)).join(', ')}.`,
+    );
+  }
+  if (cut.length) lines.push(`Not every field was read: ${cutSentence(cut)}`);
   const submits = state.events.filter((e) => e.formId === form.id && e.type === 'submit').slice(-5);
   if (submits.length) lines.push('Recent submits:', ...submits.map(eventLine));
   return `${UNTRUSTED}\n\n**${form.label.replace(/[`*]/g, "'")}** (${form.id})\n${lines.join('\n')}${freshness(state, now, [form])}`;

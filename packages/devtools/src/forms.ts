@@ -66,7 +66,10 @@ export interface FormFieldNode {
   accessor?: string;
   errors: FormFieldError[];
   children?: FormFieldNode[];
+  /** Children left out by the collector's caps (`MAX_CHILDREN` per group, `MAX_DEPTH` levels). */
   truncated?: number;
+  /** Paths of invalid children left out by `MAX_CHILDREN`, at most `MAX_INVALID_PAST_CAP`. */
+  truncatedInvalid?: string[];
   uid?: string;
   skipped?: SkipReason;
   asyncWaiting?: boolean;
@@ -162,7 +165,10 @@ export interface FoundForms {
 }
 
 const MAX_DEPTH = 8;
-const MAX_CHILDREN = 100;
+/** Children kept per group or array. The rest are counted in `truncated`. */
+export const MAX_CHILDREN = 100;
+/** Invalid children past {@link MAX_CHILDREN} that a group still names. */
+const MAX_INVALID_PAST_CAP = 20;
 const MAX_STRING = 200;
 const MAX_REDACT_WINDOW = 65536;
 const MAX_VALUE_ITEMS = 20;
@@ -602,8 +608,34 @@ export function serializeControl(
     .map(([childKey, child]) =>
       serializeControl(child, elements, childKey, childPath(path, childKey), depth + 1, secret),
     );
-  if (entries.length > MAX_CHILDREN) node.truncated = entries.length - MAX_CHILDREN;
+  if (entries.length > MAX_CHILDREN) {
+    node.truncated = entries.length - MAX_CHILDREN;
+    keepInvalidPastCap(
+      node,
+      entries.slice(MAX_CHILDREN),
+      ([, child]) => read(() => child['status'], 'VALID') === 'INVALID',
+      ([childKey]) => childPath(path, childKey),
+    );
+  }
   return node;
+}
+
+/**
+ * Names the invalid children a group left out past {@link MAX_CHILDREN}, so the
+ * tools can point at a failing field the tree doesn't hold. Reads only status.
+ */
+function keepInvalidPastCap<T>(
+  node: FormFieldNode,
+  rest: T[],
+  invalid: (child: T) => boolean,
+  pathOf: (child: T) => string,
+): void {
+  const paths: string[] = [];
+  for (const child of rest) {
+    if (paths.length >= MAX_INVALID_PAST_CAP) break;
+    if (invalid(child)) paths.push(pathOf(child));
+  }
+  if (paths.length) node.truncatedInvalid = paths;
 }
 
 function fieldStatus(state: AnyRecord): FieldStatus {
@@ -810,7 +842,19 @@ export function serializeField(
       ? serializeField(child, elements, childKey, nextPath, depth + 1, secret)
       : unmaterializedField((value as AnyRecord)[childKey], childKey, nextPath, secret);
   });
-  if (fieldKeys.length > MAX_CHILDREN) node.truncated = fieldKeys.length - MAX_CHILDREN;
+  if (fieldKeys.length > MAX_CHILDREN) {
+    node.truncated = fieldKeys.length - MAX_CHILDREN;
+    // Only fields Angular already created can be invalid; their status is a computed it keeps.
+    keepInvalidPastCap(
+      node,
+      fieldKeys.slice(MAX_CHILDREN),
+      (childKey) => {
+        const child = created.get(childKey);
+        return !!child && fieldStatus(child) === 'INVALID';
+      },
+      (childKey) => childPath(path, childKey),
+    );
+  }
   return node;
 }
 

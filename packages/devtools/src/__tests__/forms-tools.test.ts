@@ -13,6 +13,7 @@ import {
   mergePageReport,
 } from '../rpc/forms-tools.ts';
 import { formHistoryText } from '../rpc/forms-explain.ts';
+import { PAGE_TTL_MS } from '../rpc/page-ttl.ts';
 
 function control(path: string, overrides: Partial<FormFieldNode> = {}): FormFieldNode {
   return {
@@ -287,8 +288,8 @@ describe('mergePageReport', () => {
     expect(later.forms.map((f) => f.id)).toEqual(['form-1@bbbb']);
     expect(later.reportedAt).toBe(200_000);
 
-    expect(expirePages(pages, 300_000)).toBeNull();
-    const gone = expirePages(pages, 400_000);
+    expect(expirePages(pages, 200_000 + PAGE_TTL_MS)).toBeNull();
+    const gone = expirePages(pages, 200_000 + PAGE_TTL_MS + 1);
     expect(gone).toEqual({
       forms: [],
       events: [],

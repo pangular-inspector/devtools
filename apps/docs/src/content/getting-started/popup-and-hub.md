@@ -211,7 +211,7 @@ Without the hub (for example the standalone CLI, or a panel mounted with `initDe
 
 ### Tab hashes
 
-The URL hash selects a tab. Open `/__devframes/pangular/#tab=signals` to land on the Signals tab. Switching tabs updates the hash, so you can copy the URL at any time.
+The URL hash selects a tab. Open `/__devframes/pangular/#tab=signals` to land on the Signals tab. Switching tabs updates the hash, so you can copy the URL at any time. The panel also follows a hash that changes after it loads, such as a link inside the panel or `location.hash = '#tab=forms'`.
 
 | Tab        | Hash              |
 | ---------- | ----------------- |
@@ -265,7 +265,7 @@ If the panel cannot reach the server when it opens, it says so and tries again a
 
 ### Tabs in the background
 
-A browser tab in the background runs its timers about once a minute. The app page stops reading itself while its tab is hidden and tells the server, and the server keeps its last data instead of dropping it. The panel then says **Page in background, showing the last data.** When you switch back, the page sends fresh data. If a hidden tab stops answering for 5 minutes, the server drops it.
+A browser tab in the background runs its timers about once a minute. The app page stops reading itself while its tab is hidden and tells the server, and the server keeps its last data instead of dropping it. The panel then says **Page in background, showing the last data.** When you switch back, the page sends fresh data. If a hidden tab stops answering for 5 minutes, the server drops it. A visible tab that crashes or is killed without closing is dropped, with the data of every inspector, 30 seconds after its last report or heartbeat.
 
 ## Troubleshooting
 

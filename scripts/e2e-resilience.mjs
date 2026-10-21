@@ -766,7 +766,7 @@ async function checkExpiry() {
     }
     if (hiddenMarked === null && last[ids.hidden].background) hiddenMarked = s;
     const done = ['close', 'crash'].every((w) => !last[ids[w]].listed && !last[ids[w]].keys.length);
-    if (done && Date.now() - t0 > 40_000) break;
+    if (done && Date.now() - t0 > 45_000) break;
     await sleep(2000);
   }
   const elapsed = Math.round((Date.now() - t0) / 1000);
@@ -787,17 +787,15 @@ async function checkExpiry() {
     Object.values(firstGone.close).every((s) => s <= 20) && !last[ids.close].keys.length,
     JSON.stringify(firstGone.close),
   );
-  // #422: a tab that dies without pagehide stays listed for about 150 s.
-  knownFailure(
-    422,
-    'a crashed tab leaves list-pages within the 15 s expiry (+5 s sweep)',
-    listedGone.crash !== undefined && listedGone.crash <= 22,
+  // A tab that dies without pagehide goes with the one page expiry (#422).
+  assert(
+    'a crashed tab leaves list-pages within the 30 s expiry (+5 s sweep)',
+    listedGone.crash !== undefined && listedGone.crash <= 37,
     `${listedGone.crash ?? 'never'} s`,
   );
-  knownFailure(
-    422,
-    'a crashed tab leaves every shared state within the 15 s expiry (+5 s sweep)',
-    Object.values(firstGone.crash).every((s) => s <= 22) && !last[ids.crash].keys.length,
+  assert(
+    'a crashed tab leaves every shared state within the 30 s expiry (+5 s sweep)',
+    Object.values(firstGone.crash).every((s) => s <= 37) && !last[ids.crash].keys.length,
     JSON.stringify(firstGone.crash),
   );
   assert('the open tab is still listed', last[ids.keep].listed);
@@ -807,7 +805,7 @@ async function checkExpiry() {
     `after ${hiddenMarked} s`,
   );
   assert(
-    'a background tab keeps its last data past the 15 s expiry',
+    'a background tab keeps its last data past the 30 s expiry',
     last[ids.hidden].listed &&
       before[ids.hidden].keys.every((k) => last[ids.hidden].keys.includes(k)),
     `missing: ${before[ids.hidden].keys.filter((k) => !last[ids.hidden].keys.includes(k))}`,
@@ -1101,9 +1099,8 @@ async function checkStress() {
     formDetail.match(/"truncated":\d+/g) ?? [],
   );
   const listed = Number(/(\d+) fields/.exec(formsList)?.[1]);
-  // #423: the forms collector keeps 100 children per group and does not say so.
-  knownFailure(
-    423,
+  // The forms collector keeps 100 children per group and says so (#423).
+  assert(
     'inspect-forms counts the 300 controls of the form (or says it stopped at a limit)',
     listed >= 300 || formNotes.some((l) => /300|200 more|limit of 100|first 100/i.test(l)),
     `${listed} fields; ${formNotes[0] ?? ''}`,
@@ -1112,8 +1109,7 @@ async function checkStress() {
   await sleep(2500);
   const invalid = await mcp.tool('explain-invalid-forms', { page: id, form: formId });
   record('explain-invalid-forms with field250 failing', invalid.replace(/\s+/g, ' ').slice(0, 300));
-  knownFailure(
-    423,
+  assert(
     'explain-invalid-forms names a failing field past the 100th control',
     invalid.includes('field250'),
   );

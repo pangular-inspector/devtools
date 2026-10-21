@@ -4,6 +4,7 @@ import pangular from '../devframe.ts';
 import { UNTRUSTED } from '../rpc/forms-tools.ts';
 import { answerText } from './tool-answer.ts';
 import { ToolRefusal } from '../rpc/refusal.ts';
+import { PAGE_TTL_MS } from '../rpc/page-ttl.ts';
 
 async function boot() {
   const host = {
@@ -1052,7 +1053,7 @@ describe('agent tools', () => {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     const { push, call } = await boot();
     await push('push-injector-tree', { pageId: 'p1', roots: [injectorRoot('A')], environment: [] });
-    vi.advanceTimersByTime(10_000);
+    vi.advanceTimersByTime(PAGE_TTL_MS - 5000);
     expect(await call('inspect-providers', '')).toMatch(/`p1`/);
     vi.advanceTimersByTime(10_000);
     expect(await call('inspect-providers', '')).toMatch(/no injector data/i);

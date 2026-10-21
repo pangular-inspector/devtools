@@ -23,6 +23,7 @@ import {
   type RouterPage,
   type RouterReport,
 } from '../rpc/router-tools.ts';
+import { PAGE_TTL_MS } from '../rpc/page-ttl.ts';
 
 function route(path: string, extra: Partial<ActiveRoute> = {}): ActiveRoute {
   return { path, url: path, outlet: 'primary', params: {}, data: {}, children: [], ...extra };
@@ -283,8 +284,10 @@ describe('router reports', () => {
     mergeRouterReport(pages, { pageId: 'a', snapshot: null, navigations: [] }, 1_000);
     const both = mergeRouterReport(pages, { pageId: 'b', snapshot, navigations: [] }, 2_000);
     expect(both.pages.map((p) => p.pageId)).toEqual(['b', 'a']);
-    expect(expireRouterPages(pages, 100_000)).toBeNull();
-    expect(expireRouterPages(pages, 151_500)?.pages.map((p) => p.pageId)).toEqual(['b']);
+    expect(expireRouterPages(pages, 1_000 + PAGE_TTL_MS)).toBeNull();
+    expect(expireRouterPages(pages, 1_500 + PAGE_TTL_MS)?.pages.map((p) => p.pageId)).toEqual([
+      'b',
+    ]);
   });
 });
 

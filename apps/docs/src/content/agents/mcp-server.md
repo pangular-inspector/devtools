@@ -271,7 +271,7 @@ The server registers tools with a colon, as `pangular:scan-routes`. MCP clients 
 
 Each tool also has a short title, such as **List connected pages** for `pangular_list-pages`. The server sends it as the tool's `title` and `annotations.title`, and clients show it in their tool lists and approval prompts.
 
-Every tool answers with one plain text block, the answer as written: markdown for the live tools, and compact JSON for the source scans (`scan-*` and `ngrx-scan`). No tool declares an `outputSchema`, so no answer comes with `structuredContent`. `screenshot-component` adds an image block after its text. A refusal is one text block with `isError: true`.
+Every tool answers with one plain text block, the answer as written: markdown for the live tools, and compact JSON for the source scans (`scan-*` and `ngrx-scan`). A cut `scan-components` or `scan-signals` answer adds a note after its JSON with the `offset` of the next part. No tool declares an `outputSchema`, so no answer comes with `structuredContent`. `screenshot-component` adds an image block after its text. A refusal is one text block with `isError: true`.
 
 ### Read and action tools
 

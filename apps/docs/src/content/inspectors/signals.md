@@ -246,7 +246,7 @@ The `pangular:highlight` tool also switches the graph to the component it highli
 
 | Tool or resource           | Kind     | What it does                                                                                                                       |
 | -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:scan-signals`    | tool     | Signal declarations from source, with signal inputs, models and queries.                                                           |
+| `pangular:scan-signals`    | tool     | Signal declarations from source, with signal inputs, models and queries. Pages through a large project with `filter` and `offset`. |
 | `pangular:inspect-signals` | tool     | The graph the page reported, with edges, resources and history. Takes a host tag, class name, instance id, `root` or a route path. |
 | `pangular:watch-signal`    | tool     | Watches a signal and turns write stacks on or off on a page.                                                                       |
 | `pangular:highlight`       | tool     | Highlights a component and makes it the target of the graph.                                                                       |

@@ -1,6 +1,7 @@
 import { createHostContext } from 'devframe/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pangular from '../devframe.ts';
+import { PAGE_TTL_MS } from '../rpc/page-ttl.ts';
 
 // The activity lease as devframe.ts wires it: pages that left are not waited
 // for, and an idle forms page keeps itself alive with a ping.
@@ -57,9 +58,9 @@ describe('page interest on the server', () => {
     });
     await push('page-interest', { pageId: 'closed' });
     await push('push-forms', formsReport('closed'));
-    // The browser closed without a pagehide: it stops reporting. Its forms
-    // timeline is kept for a while, but the page is not waited for.
-    await vi.advanceTimersByTimeAsync(30_000);
+    // The browser closed without a pagehide: it stops reporting, and once its
+    // reports expire the page is not waited for.
+    await vi.advanceTimersByTimeAsync(PAGE_TTL_MS + 6000);
     let answered = false;
     const reading = ctx.agent.invoke('pangular:inspect-forms', {}).then(() => (answered = true));
     await vi.advanceTimersByTimeAsync(0);

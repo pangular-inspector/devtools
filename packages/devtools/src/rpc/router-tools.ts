@@ -4,7 +4,7 @@ import type { RouteNode } from '../router-config.ts';
 import type { RouterSetup } from '../router-setup.ts';
 import type { LinkInfo, OutletInfo } from '../router-links.ts';
 import type { PreloadRecord } from '../router-actions.ts';
-import { fixedTtl, type PageTtl } from './page-ttl.ts';
+import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 import { callerPage } from './page-scope.ts';
 import { unknownPageText } from './pages.ts';
@@ -56,8 +56,7 @@ export interface RouterState {
 type Pages = Map<string, RouterPage>;
 
 const STALE_AFTER_MS = 10_000;
-export const ROUTER_PAGE_TTL_MS = 150_000;
-const PAGE_EXPIRES_MS = ROUTER_PAGE_TTL_MS;
+const PAGE_EXPIRES_MS = PAGE_TTL_MS;
 const MAX_NAVIGATIONS = 50;
 const MAX_PAGES = 20;
 const MAX_RESOURCE_CHARS = 100_000;

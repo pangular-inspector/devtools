@@ -99,7 +99,7 @@ When the page's Angular lacks the debug API a tool needs, the tool answers **Uns
 
 Lists the tabs, [Angular Native](../getting-started/angular-native.md) apps, [NativeScript](../getting-started/nativescript.md) apps and [Capacitor](../guides/capacitor.md) apps that report to the server, default page first (see [The page argument](#the-page-argument)): page id, URL, title, platform (`browser`, `Angular Native`, `NativeScript`, or `Capacitor (android)` and `Capacitor (ios)` for an app in a native WebView, followed by the page's Angular version when it reported one, as in `browser, Angular 15.2`), seconds since the last report or heartbeat, and which inspectors report. Takes no arguments. Reads: page. Use it to find the id to pass as `page`.
 
-The URL comes from the HTTP or router report. A page that sends neither (no router, and no [HTTP setup](../getting-started/express.md)) still shows the URL its component tree reports, which also stands in when the other reports are more than 15 seconds older. A tab in the background stops reporting until it is shown again, so its last report is marked `(background)`: an old time there means the data is the last known state, not that the page is gone.
+The URL comes from the HTTP or router report. A page that sends neither (no router, and no [HTTP setup](../getting-started/express.md)) still shows the URL its component tree reports, which also stands in when the other reports are more than 30 seconds older. A tab in the background stops reporting until it is shown again, so its last report is marked `(background)`: an old time there means the data is the last known state, not that the page is gone. A tab that closes leaves the list at once. A tab that crashes or is killed without closing leaves it, with all its data, 30 seconds after its last report or heartbeat.
 
 ### snapshot
 
@@ -188,17 +188,19 @@ The server decides which tools exist. Set `agent.readOnly` to keep only the `rea
 
 ## Source scan
 
-These seven tools take no arguments. They all read your source, and answer compact JSON. Every tool that reads only your files starts with `scan-` (after its library prefix, as in `ngrx-scan` and `analog-scan-routes`).
+These seven tools read your source and answer compact JSON. Every tool that reads only your files starts with `scan-` (after its library prefix, as in `ngrx-scan` and `analog-scan-routes`).
 
-| Tool              | What it answers                                                                                                                                                                                                                |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `scan-routes`     | Angular routes from your route files, with full URL path (parents and `loadChildren` prefixes included), kind (page, group, redirect or wildcard), guards, resolvers, and file and line.                                       |
-| `scan-components` | Components and directives from `@Component` and `@Directive` classes, with class name, selector, kind, inputs, outputs, change detection (components only), and file and line.                                                 |
-| `scan-signals`    | `signal()`, `computed()`, `linkedSignal()`, `effect()`, `toSignal()` and resource declarations (`resource`, `httpResource`, `rxResource`), plus signal inputs, models and queries.                                             |
-| `scan-providers`  | DI providers: `@Injectable` services, `inject()` calls, constructor parameters and `providers` arrays, with token, file and where each one is provided.                                                                        |
-| `ngrx-scan`       | NgRx declarations: `@ngrx/store` actions (with their type strings in `types`), reducers, effects, selectors, features and store setup, and `@ngrx/signals` `signalStore` (with its members), `signalState` and `signalMethod`. |
-| `scan-pipes`      | Custom `@Pipe` classes, and built-in pipes from `@angular/common` in use in templates, with purity, standalone status, and where each is declared or used.                                                                     |
-| `scan-build`      | The project name, the Angular and TypeScript versions, SSR status, the Analog version in Analog apps, and a `builtAt` timestamp.                                                                                               |
+| Tool              | What it answers                                                                                                                                                                                                                | Arguments                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------- |
+| `scan-routes`     | Angular routes from your route files, with full URL path (parents and `loadChildren` prefixes included), kind (page, group, redirect or wildcard), guards, resolvers, and file and line.                                       | None                        |
+| `scan-components` | Components and directives from `@Component` and `@Directive` classes, with class name, selector, kind, inputs, outputs, change detection (components only), and file and line.                                                 | `filter`, `offset`, `limit` |
+| `scan-signals`    | `signal()`, `computed()`, `linkedSignal()`, `effect()`, `toSignal()` and resource declarations (`resource`, `httpResource`, `rxResource`), plus signal inputs, models and queries.                                             | `filter`, `offset`, `limit` |
+| `scan-providers`  | DI providers: `@Injectable` services, `inject()` calls, constructor parameters and `providers` arrays, with token, file and where each one is provided.                                                                        | None                        |
+| `ngrx-scan`       | NgRx declarations: `@ngrx/store` actions (with their type strings in `types`), reducers, effects, selectors, features and store setup, and `@ngrx/signals` `signalStore` (with its members), `signalState` and `signalMethod`. | None                        |
+| `scan-pipes`      | Custom `@Pipe` classes, and built-in pipes from `@angular/common` in use in templates, with purity, standalone status, and where each is declared or used.                                                                     | None                        |
+| `scan-build`      | The project name, the Angular and TypeScript versions, SSR status, the Analog version in Analog apps, and a `builtAt` timestamp.                                                                                               | None                        |
+
+`scan-components` and `scan-signals` answer at most `limit` items (default 200, at most 1,000) and at most 20,000 characters. A list that fits is the JSON array alone. A cut list is followed by a note with the items shown, the total and the `offset` of the next part, such as `Showing signals 1-200 of 450; 250 more not shown. Pass offset: 200 for the next part`. `filter` keeps the items whose fields contain the text, in any case: class name, selector, kind and file for components, and name, kind, file and component for signals.
 
 ## Components, signals and DI
 
@@ -755,6 +757,8 @@ Answers about large forms are cut to keep an agent's context small. Each cut end
 | `explain-form-changes`  | 100 changed fields.                                                                                                                                                                                                                                                                                                         | `form` or a later `after` marker                      |
 
 With `path`, `inspect-forms`, `explain-invalid-forms` and `inspect-form-payload` start at that group or field, so a cut part of the form can be read one group at a time.
+
+The page itself reads at most 100 fields per group or array, and 8 levels deep. A group cut there carries `truncated` (the fields left out) and `truncatedInvalid` (up to 20 paths of invalid fields left out). The tools then say which group was cut, as in `keeps the first 100 of 150 fields (50 more not read)`, and `path` can't reach those fields. `explain-invalid-forms` and `explain-submit` name each invalid field past the cap, with its error when a Signal Form's `errorSummary` has it. If the form is invalid and no field the page read has an error, `explain-invalid-forms` says the failing field may be past the cap.
 
 ### Track changes
 

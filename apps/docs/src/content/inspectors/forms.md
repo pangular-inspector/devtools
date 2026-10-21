@@ -261,6 +261,8 @@ If you load `/examples/forms` directly, the form registers before the overlay lo
 
 The agent tools cut answers about large forms, so one form cannot fill an agent's context. A cut answer says how many fields or lines it left out and how to narrow the answer, for example with `path`, `form` or a later `since` marker. See [Tools](../agents/tools.md#read-form-state) for each limit.
 
+The page reads at most 100 fields per group or array, so a form with a wider group never sends the rest. The agent tools say which group was cut and how many fields it left out, and `explain-invalid-forms` names the invalid fields past the cap.
+
 ### Snapshot limits
 
 The page keeps up to 20 snapshots, and a reload clears them. Restore fails when the form's shape has changed, and it keeps the current value of secret fields.

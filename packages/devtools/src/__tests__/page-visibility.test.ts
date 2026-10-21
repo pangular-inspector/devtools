@@ -1,7 +1,7 @@
 import { createHostContext } from 'devframe/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pangular from '../devframe.ts';
-import { HIDDEN_PAGE_TTL_MS, createPageVisibility } from '../rpc/page-ttl.ts';
+import { HIDDEN_PAGE_TTL_MS, PAGE_TTL_MS, createPageVisibility } from '../rpc/page-ttl.ts';
 
 async function boot() {
   const host = {
@@ -47,7 +47,7 @@ describe('pages in a background tab', () => {
     const { report, shown } = await boot();
     await report();
     expect(await shown()).toEqual(all);
-    vi.advanceTimersByTime(20_000);
+    vi.advanceTimersByTime(PAGE_TTL_MS + 6000);
     expect(await shown()).toEqual(none);
   });
 
@@ -67,7 +67,7 @@ describe('pages in a background tab', () => {
     await push('report-page-visibility', { pageId: 'p1', hidden: false });
     expect(await state('page-visibility')).toEqual({ hidden: [] });
     await report();
-    vi.advanceTimersByTime(20_000);
+    vi.advanceTimersByTime(PAGE_TTL_MS + 6000);
     expect(await shown()).toEqual(none);
   });
 

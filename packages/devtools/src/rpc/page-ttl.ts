@@ -1,5 +1,11 @@
-/** How long a page may go without a report before its data is dropped. */
-export const PAGE_TTL_MS = 15_000;
+/**
+ * How long a page may go without a report or a heartbeat before its data is
+ * dropped. Every per-page store uses it. Three heartbeat intervals
+ * (`PAGE_HEARTBEAT_MS`, 10 s), so one or two late or lost beats don't drop a
+ * page that is still open, and a tab that died without `pagehide` goes within
+ * half a minute.
+ */
+export const PAGE_TTL_MS = 30_000;
 
 /**
  * How long a tab in the background may go without saying it is still there.

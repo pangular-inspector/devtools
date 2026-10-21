@@ -10,8 +10,9 @@ interface Rpc {
 }
 
 /**
- * How often the page says it is there. Under the server's page expiry
- * (`PAGE_TTL_MS`, 15 s) with room for a late timer, and at most 6 calls a minute.
+ * How often the page says it is there. A third of the server's page expiry
+ * (`PAGE_TTL_MS`, 30 s), so a late or lost beat doesn't drop the page, and at
+ * most 6 calls a minute.
  */
 export const PAGE_HEARTBEAT_MS = 10_000;
 

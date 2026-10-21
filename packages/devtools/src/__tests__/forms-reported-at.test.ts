@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { CollectedForm, FormFieldNode } from '../forms.ts';
-import {
-  explainFormsText,
-  FORMS_PAGE_TTL_MS,
-  inspectFormsText,
-  mergePageReport,
-} from '../rpc/forms-tools.ts';
+import { explainFormsText, inspectFormsText, mergePageReport } from '../rpc/forms-tools.ts';
 import { explainSubmitText } from '../rpc/forms-explain.ts';
-import { createPageVisibility } from '../rpc/page-ttl.ts';
+import { PAGE_TTL_MS, createPageVisibility } from '../rpc/page-ttl.ts';
 
 const STALE = 'The page may have closed';
 
@@ -43,7 +38,7 @@ describe('forms staleness note with a background tab', () => {
   // so its old `reportedAt` must not make answers about the live tab look stale.
   const visibility = createPageVisibility();
   const pages = new Map();
-  const ttl = visibility.ttl(FORMS_PAGE_TTL_MS);
+  const ttl = visibility.ttl(PAGE_TTL_MS);
   visibility.set('bg', true, 0);
   mergePageReport(pages, { pageId: 'bg', forms: [form('bg')], events: [] }, 0, 200, ttl);
   const now = 120_000;

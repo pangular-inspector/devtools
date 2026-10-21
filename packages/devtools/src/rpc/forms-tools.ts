@@ -17,7 +17,8 @@ import {
   capText,
   pathHint,
 } from './forms-cap.ts';
-import { fixedTtl, type PageTtl } from './page-ttl.ts';
+import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
+import { cutGroups, cutSentence, pastCapLines } from './forms-collector-cap.ts';
 import { clip } from '../text.ts';
 import { RESOURCE_UNTRUSTED, withUntrustedNotice } from './resource-text.ts';
 import { refusal } from './refusal.ts';
@@ -54,8 +55,7 @@ export interface PageReport {
 }
 
 const STALE_AFTER_MS = 10_000;
-export const FORMS_PAGE_TTL_MS = 150_000;
-const PAGE_EXPIRES_MS = FORMS_PAGE_TTL_MS;
+const PAGE_EXPIRES_MS = PAGE_TTL_MS;
 const MAX_EVENTS = 200;
 const MAX_TOOL_CHARS = FORM_TOOL_MAX_CHARS;
 const RESOURCE_EVENTS = 50;
@@ -226,6 +226,9 @@ export function explainForm(form: CollectedForm, now = Date.now(), path?: string
   };
   const start = path ? subtreeAt(form.root, path) : form.root;
   if (start) visit(start);
+  if (start) lines.push(...pastCapLines(form, start));
+  // Groups the collector cut: a failing field can be among the fields it left out.
+  const cut = start ? cutSentence(cutGroups(start)) : '';
   const submitted =
     form.submitted === undefined ? '' : form.submitted ? ', submitted' : ', not submitted';
   const header = `**${form.label.replace(/[`*]/g, "'")}** (${form.kind}, id ${form.id}) is ${form.root.status}${submitted}.`;
@@ -234,15 +237,22 @@ export function explainForm(form: CollectedForm, now = Date.now(), path?: string
     return `${header} No field at ${code(path ?? '')}; top-level fields: ${top}.`;
   }
   if (!lines.length) {
-    if (start !== form.root) return `${header} No field under ${code(start.path)} has an error.`;
+    const failing = start.status === 'INVALID' || start.status === 'PENDING';
+    if (cut && failing) {
+      return `${header} No field the collector read reports an error, but the failing field may be past its limit: ${cut}`;
+    }
+    const note = cut ? ` ${cut}` : '';
+    if (start !== form.root)
+      return `${header} No field under ${code(start.path)} has an error.${note}`;
     return form.root.status === 'VALID'
-      ? `${header} No field has an error.`
-      : `${header} No field reports an error of its own; check disabled, hidden or not-yet-created fields.`;
+      ? `${header} No field has an error.${note}`
+      : `${header} No field reports an error of its own; check disabled, hidden or not-yet-created fields.${note}`;
   }
   const narrow = start === form.root ? '`path`' : 'a deeper `path`';
   return [
     header,
     ...capLines(lines, `pass ${narrow} to explain one group${pathHint(cutPaths(start, lines))}`),
+    ...(cut ? [`_Not every field was read: ${cut}_`] : []),
   ].join('\n');
 }
 
@@ -264,7 +274,11 @@ export function inspectFormsText(
     const lines = forms.map((f) => {
       const fields = countNodes(f.root, () => 1);
       const errors = countNodes(f.root, (n) => n.errors.length);
-      return `- ${f.id} ${code(f.label)} (${f.kind}): ${f.root.status}, ${fields} fields, ${errors} errors${webMcpLine(f)}`;
+      const notRead = countNodes(f.root, (n) => n.truncated ?? 0);
+      const read = notRead
+        ? `${fields} fields read and ${notRead} more past the collector's limit`
+        : `${fields} fields`;
+      return `- ${f.id} ${code(f.label)} (${f.kind}): ${f.root.status}, ${read}, ${errors} errors${webMcpLine(f)}`;
     });
     return `${UNTRUSTED}\n\n${forms.length} form(s) on the page. Pass \`form\` for a field tree, or use explain-invalid-forms for validation problems.\n\n${lines.join('\n')}${webMcpNotes(state, args.page)}${stale}`;
   }
@@ -341,6 +355,10 @@ function renderTrees(
       clipped += capped.clipped;
       trimmed += capped.trimmed;
     }
+    // Read the cut from the unpruned tree: `onlyInvalid` drops kept fields too.
+    const whole = root && subtreeAt(f.root, root.path);
+    const cut = whole ? cutSentence(cutGroups(whole)) : '';
+    if (cut) notes.push(`_${f.id}: not every field was read: ${cut}_`);
     if (capped && capped.shown < capped.total) {
       notes.push(
         `_${f.id}: showing ${capped.shown} of ${capped.total} fields; ${capped.total - capped.shown} more not shown. Groups that lost fields carry \`notShown\`. Pass \`path\` to start the tree at a group or field${pathHint(capped.cut)}, or \`onlyInvalid\` to keep only failing fields._`,
@@ -439,6 +457,7 @@ const OPTIONAL_TYPES: Record<string, string> = {
   changed: 'boolean',
   redacted: 'string',
   pendingSince: 'number',
+  truncated: 'number',
   rules: 'object',
   binding: 'object',
   dom: 'object',
@@ -452,7 +471,7 @@ function optionalOk(node: Record<string, unknown>): boolean {
     if (value === undefined) continue;
     if (type === 'object' ? !isRecord(value) : typeof value !== type) return false;
   }
-  for (const key of ['validatorNames', 'asyncValidatorNames', 'stale']) {
+  for (const key of ['validatorNames', 'asyncValidatorNames', 'stale', 'truncatedInvalid']) {
     if (node[key] !== undefined && !isStringArray(node[key])) return false;
   }
   if (node['metadata'] !== undefined && !Array.isArray(node['metadata'])) return false;

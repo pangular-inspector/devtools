@@ -17,7 +17,7 @@ export const POLL_MS = 3000;
 export const HEARTBEAT_MS = 4000;
 /**
  * Without the page heartbeat (`page-heartbeat.ts`), an unchanged report is
- * sent again this often, well inside the server's 15 s TTL.
+ * sent again this often, well inside the server's 30 s TTL.
  */
 export const KEEPALIVE_MS = 8000;
 

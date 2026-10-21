@@ -217,6 +217,22 @@ describe('reactive serialization', () => {
     );
   });
 
+  it('names the invalid controls a wide group leaves out past the cap (#423)', () => {
+    const controls = Object.fromEntries(
+      Array.from({ length: 150 }, (_, i) => [`f${i}`, new FormControl('ok', Validators.required)]),
+    );
+    const form = new FormGroup(controls);
+    form.controls['f140'].setValue('');
+    const root = serializeControl(form);
+    expect(root.status).toBe('INVALID');
+    expect(root.children).toHaveLength(100);
+    expect(root.truncated).toBe(50);
+    expect(root.truncatedInvalid).toEqual(['f140']);
+    // Nothing past the cap is invalid: no list.
+    form.controls['f140'].setValue('back');
+    expect(serializeControl(form).truncatedInvalid).toBeUndefined();
+  });
+
   it('keeps an own "…" key when adding the overflow marker to a wide value', () => {
     const wide = (extra: Record<string, unknown>) =>
       Object.assign(extra, Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`k${i}`, i])));
@@ -264,6 +280,25 @@ describe('signal serialization', () => {
     expect(node.children![2].disabledReasons).toEqual(['locked for review']);
     expect(node.children![3]).toMatchObject({ materialized: false, value: 'soon' });
     expect(node.children!.map((c) => c.key)).not.toContain('gone');
+  });
+
+  it('names the invalid fields a wide group leaves out past the cap (#423)', () => {
+    const value: Record<string, string> = {};
+    const children: Record<string, FakeField> = {};
+    for (let i = 0; i < 150; i++) {
+      value[`f${i}`] = i === 140 ? '' : 'ok';
+      children[`f${i}`] = fakeField({
+        value: value[`f${i}`],
+        errors: i === 140 ? [{ kind: 'required' }] : [],
+      });
+    }
+    // One more field Angular has not created: it is never read, so never named.
+    value['later'] = '';
+    const node = serializeField(fakeField({ value, children }).node);
+    expect(node.status).toBe('INVALID');
+    expect(node.children).toHaveLength(100);
+    expect(node.truncated).toBe(51);
+    expect(node.truncatedInvalid).toEqual(['f140']);
   });
 
   it('does not create children that Angular has not created', () => {

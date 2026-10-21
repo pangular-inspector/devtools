@@ -13,6 +13,7 @@ import {
   type CapacitorReport,
 } from '../rpc/capacitor-tools.ts';
 import { answerText } from './tool-answer.ts';
+import { PAGE_TTL_MS } from '../rpc/page-ttl.ts';
 
 // The demo project does not depend on @capacitor/core, so the tools are turned on here.
 async function boot(definition = createPangular({ inspectors: { capacitor: true } })) {
@@ -526,7 +527,7 @@ describe('capacitor pages over time', () => {
     await push('push-capacitor', report());
     expect(Object.keys((await state()).pages)).toEqual(['cap1']);
 
-    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(PAGE_TTL_MS + 6000);
     expect((await state()).pages).toEqual({});
   });
 
