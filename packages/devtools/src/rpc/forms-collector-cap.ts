@@ -1,4 +1,5 @@
 import type { CollectedForm, FormFieldNode } from '../forms.ts';
+import { code } from '../text.ts';
 
 /**
  * Children the forms collector keeps per group or array (`MAX_CHILDREN` in
@@ -6,6 +7,12 @@ import type { CollectedForm, FormFieldNode } from '../forms.ts';
  * `truncated` and names the invalid ones in `truncatedInvalid`.
  */
 export const COLLECTOR_MAX_CHILDREN = 100;
+/** Levels the collector reads (`MAX_DEPTH` in `forms.ts`); a group at the last one keeps no children. */
+export const COLLECTOR_MAX_DEPTH = 8;
+/** Invalid children past the cap a group names at most (`MAX_INVALID_PAST_CAP` in `forms.ts`). */
+export const COLLECTOR_MAX_INVALID = 20;
+/** The longest path the collector names in `truncatedInvalid` (`MAX_INVALID_PATH` in `forms.ts`). */
+export const COLLECTOR_MAX_INVALID_PATH = 500;
 
 /** A group the collector cut: how many of its direct children it kept, of how many. */
 export interface CutGroup {
@@ -14,6 +21,8 @@ export interface CutGroup {
   total: number;
   /** Paths of invalid children left out, as far as the collector named them. */
   invalid: string[];
+  /** Cut by the depth limit: none of its children were read. */
+  tooDeep: boolean;
 }
 
 /** The groups under `node` (itself included) that the collector cut, in tree order. */
@@ -27,6 +36,7 @@ export function cutGroups(node: FormFieldNode): CutGroup[] {
         kept,
         total: kept + n.truncated,
         invalid: n.truncatedInvalid ?? [],
+        tooDeep: !n.children,
       });
     }
     for (const child of n.children ?? []) visit(child);
@@ -36,7 +46,7 @@ export function cutGroups(node: FormFieldNode): CutGroup[] {
 }
 
 const MAX_NAMED = 3;
-const where = (path: string) => `\`${path || '(form)'}\``;
+const where = (path: string) => code(path || '(form)');
 
 /**
  * One sentence on the groups the collector cut, such as "`items` keeps the
@@ -47,12 +57,13 @@ export function cutSentence(groups: CutGroup[]): string {
   if (!groups.length) return '';
   const named = groups
     .slice(0, MAX_NAMED)
-    .map(
-      (g) =>
-        `${where(g.path)} keeps the first ${g.kept} of ${g.total} fields (${g.total - g.kept} more not read)`,
+    .map((g) =>
+      g.tooDeep
+        ? `${where(g.path)} is past the depth limit (${g.total} fields not read)`
+        : `${where(g.path)} keeps the first ${g.kept} of ${g.total} fields (${g.total - g.kept} more not read)`,
     );
   const more = groups.length > MAX_NAMED ? `, and ${groups.length - MAX_NAMED} more groups` : '';
-  return `${named.join('; ')}${more}. The collector reads at most ${COLLECTOR_MAX_CHILDREN} fields per group and 8 levels deep.`;
+  return `${named.join('; ')}${more}. The collector reads at most ${COLLECTOR_MAX_CHILDREN} fields per group and ${COLLECTOR_MAX_DEPTH} levels deep.`;
 }
 
 /**

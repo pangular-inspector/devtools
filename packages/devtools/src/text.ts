@@ -8,3 +8,8 @@ export function overflowKey(out: object): string {
   for (let n = 2; Object.hasOwn(out, key); n++) key = `… (${n})`;
   return key;
 }
+
+/** `text` as inline markdown code: backticks become quotes and whitespace one space, so page text can't break out. */
+export function code(text: string): string {
+  return `\`${text.replace(/`/g, "'").replace(/\s+/g, ' ')}\``;
+}

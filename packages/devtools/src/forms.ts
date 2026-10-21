@@ -164,11 +164,13 @@ export interface FoundForms {
   hosts?: Element[];
 }
 
-const MAX_DEPTH = 8;
+export const MAX_DEPTH = 8;
 /** Children kept per group or array. The rest are counted in `truncated`. */
 export const MAX_CHILDREN = 100;
 /** Invalid children past {@link MAX_CHILDREN} that a group still names. */
-const MAX_INVALID_PAST_CAP = 20;
+export const MAX_INVALID_PAST_CAP = 20;
+/** Longer paths are not named past the cap, so the server's check of the report holds. */
+export const MAX_INVALID_PATH = 500;
 const MAX_STRING = 200;
 const MAX_REDACT_WINDOW = 65536;
 const MAX_VALUE_ITEMS = 20;
@@ -633,7 +635,9 @@ function keepInvalidPastCap<T>(
   const paths: string[] = [];
   for (const child of rest) {
     if (paths.length >= MAX_INVALID_PAST_CAP) break;
-    if (invalid(child)) paths.push(pathOf(child));
+    if (!invalid(child)) continue;
+    const path = pathOf(child);
+    if (path.length <= MAX_INVALID_PATH) paths.push(path);
   }
   if (paths.length) node.truncatedInvalid = paths;
 }

@@ -16,8 +16,8 @@ import {
 import { hostPageId } from '../page-id';
 import { injectorTreeFor, signalGraphFor } from '../live-pages';
 import { pageOf } from './forms-types';
-import { isStaticReport } from '../rpc';
-import { panelConfig, tabEnabled } from '../devtools-config';
+import { isStaticReport, rpcCall } from '../rpc';
+import { panelConfig, tabEnabled, withRedaction } from '../devtools-config';
 import { TabIcon } from './tab-icon';
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -601,7 +601,11 @@ export class Dashboard {
   staticReport = computed(() => isStaticReport(this.rpc()));
 
   meta = signal<BuildMeta | null>(null);
-  private readonly config = computed(() => panelConfig(this.rpc()));
+  /** The server's answer to `redaction-config`; a static report has none. */
+  private readonly redaction = signal<unknown>(null);
+  private readonly config = computed(() =>
+    withRedaction(panelConfig(this.rpc()), this.redaction()),
+  );
   protected readonly stats = computed(() => (this.rpc() ? dashboardStats(this.config()) : []));
   protected readonly configItems = computed(() => summarizePangularConfig(this.config()));
   protected readonly metaState = signal<LoadState>('loading');
@@ -699,6 +703,17 @@ export class Dashboard {
       });
   }
 
+  /** The secret names are kept out of the connection info, so they are asked for. */
+  private loadRedaction(client: DevframeRpcClient) {
+    this.redaction.set(null);
+    if (isStaticReport(client)) return;
+    rpcCall(client, 'redaction-config')
+      .then((answer) => {
+        if (this.rpc() === client) this.redaction.set(answer);
+      })
+      .catch(() => {});
+  }
+
   constructor() {
     effect(() => {
       const client = this.rpc();
@@ -710,6 +725,7 @@ export class Dashboard {
       this.formsState.set(null);
       this.httpState.set(null);
       this.loadMeta(client);
+      this.loadRedaction(client);
       const config = panelConfig(client);
       const on = (tab: StatTab) => tabEnabled(tab, config);
       if (on('components')) this.load(my.rpc.call('get-components'), 'components');

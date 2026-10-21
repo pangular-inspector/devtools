@@ -42,7 +42,7 @@ export const SCAN_TOOLS: readonly ScanToolSpec[] = [
     id: 'pangular:scan-components',
     title: 'Scan Angular components',
     description:
-      'Source scan of @Component and @Directive classes as JSON: class, selector (empty for routed components), `kind`, inputs, outputs, file and line. At most 200 items or 20,000 characters; a cut answer gives the next `offset`. Narrow with `filter`.',
+      'Source scan of @Component and @Directive classes as JSON: class, selector (empty for routed components), `kind`, inputs, outputs, file and line. Up to 200 items or 20,000 characters; a cut answer gives the next `offset`; `filter` narrows. pangular:list-components reads the live instances.',
     definition: getComponents as unknown as ScanDefinition,
     list: { noun: 'components', fields: ['className', 'selector', 'kind', 'file'] },
   },
@@ -57,7 +57,7 @@ export const SCAN_TOOLS: readonly ScanToolSpec[] = [
     id: 'pangular:scan-signals',
     title: 'Scan Angular signals',
     description:
-      'Source scan as JSON of signal(), computed(), linkedSignal(), effect(), toSignal(), resources, signal inputs, models and queries: name, kind, file and line. At most 200 items or 20,000 characters; a cut answer gives the next `offset`. Narrow with `filter`.',
+      'Source scan as JSON of signal(), computed(), linkedSignal(), effect(), toSignal(), resources, signal inputs, models and queries: name, kind, file and line. Up to 200 items or 20,000 characters; a cut answer gives the next `offset`; `filter` narrows. pangular:inspect-signals reads the live graph.',
     definition: getSignals as unknown as ScanDefinition,
     list: { noun: 'signals', fields: ['name', 'kind', 'file', 'component'] },
   },

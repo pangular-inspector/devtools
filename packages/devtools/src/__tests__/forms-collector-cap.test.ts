@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { CollectedForm, FormFieldNode } from '../forms.ts';
-import { MAX_CHILDREN } from '../forms.ts';
+import { MAX_CHILDREN, MAX_DEPTH, MAX_INVALID_PAST_CAP, MAX_INVALID_PATH } from '../forms.ts';
 import { explainSubmitText } from '../rpc/forms-explain.ts';
-import { COLLECTOR_MAX_CHILDREN, cutGroups } from '../rpc/forms-collector-cap.ts';
+import {
+  COLLECTOR_MAX_CHILDREN,
+  COLLECTOR_MAX_DEPTH,
+  COLLECTOR_MAX_INVALID,
+  COLLECTOR_MAX_INVALID_PATH,
+  cutGroups,
+  cutSentence,
+} from '../rpc/forms-collector-cap.ts';
 import {
   explainFormsText,
   inspectFormsText,
@@ -58,11 +65,34 @@ const stateOf = (...forms: CollectedForm[]): FormsState => ({ forms, events: [],
 describe('forms past the collector cap', () => {
   it('uses the collector cap the page uses', () => {
     expect(COLLECTOR_MAX_CHILDREN).toBe(MAX_CHILDREN);
+    expect(COLLECTOR_MAX_DEPTH).toBe(MAX_DEPTH);
+    expect(COLLECTOR_MAX_INVALID).toBe(MAX_INVALID_PAST_CAP);
+    expect(COLLECTOR_MAX_INVALID_PATH).toBe(MAX_INVALID_PATH);
+  });
+
+  it('escapes page-controlled paths in the cut note and the past-cap lines', () => {
+    const form = cappedForm(true);
+    form.root.path = 'a`b\nc';
+    form.root.truncatedInvalid = ['x` **bold** `y'];
+    expect(cutSentence(cutGroups(form.root))).toContain("`a'b c` keeps the first 100 of 150");
+    const text = explainFormsText(stateOf(form), { form: 'Wide.form' });
+    expect(text).toContain("`x' **bold** 'y` is INVALID");
+    expect(text).not.toContain('x` **bold**');
+  });
+
+  it('words a group cut by the depth limit as unread, not as keeping 0 fields', () => {
+    const deep: FormFieldNode = { ...control('a.b'), type: 'group', truncated: 4 };
+    delete deep.value;
+    const groups = cutGroups(deep);
+    expect(groups).toEqual([{ path: 'a.b', kept: 0, total: 4, invalid: [], tooDeep: true }]);
+    const sentence = cutSentence(groups);
+    expect(sentence).toContain('`a.b` is past the depth limit (4 fields not read)');
+    expect(sentence).not.toContain('first 0');
   });
 
   it('counts kept and total fields of each cut group', () => {
     expect(cutGroups(cappedForm(true).root)).toEqual([
-      { path: '', kept: 100, total: 150, invalid: ['f140'] },
+      { path: '', kept: 100, total: 150, invalid: ['f140'], tooDeep: false },
     ]);
   });
 
@@ -127,5 +157,13 @@ describe('forms past the collector cap', () => {
       false,
     );
     expect(isPageReport(report({ ...cappedForm(true).root, truncated: '5' as never }))).toBe(false);
+    const paths = (n: number, length = 4) =>
+      Array.from({ length: n }, (_, i) => `f${i}`.padEnd(length, '0'));
+    const named = (truncatedInvalid: string[]) =>
+      isPageReport(report({ ...cappedForm(true).root, truncatedInvalid }));
+    expect(named(paths(COLLECTOR_MAX_INVALID))).toBe(true);
+    expect(named(paths(COLLECTOR_MAX_INVALID + 1))).toBe(false);
+    expect(named(paths(1, COLLECTOR_MAX_INVALID_PATH))).toBe(true);
+    expect(named(paths(1, COLLECTOR_MAX_INVALID_PATH + 1))).toBe(false);
   });
 });

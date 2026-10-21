@@ -88,7 +88,12 @@ import {
 import { serializeNamed } from './serialize.ts';
 import { configFromConnection } from './config.ts';
 import { setRedaction } from './forms-privacy.ts';
-import { serverRedaction, whenTrusted, type TrustClient } from './overlay-redaction.ts';
+import {
+  legacyRedaction,
+  loadRedaction,
+  serverRedaction,
+  type TrustClient,
+} from './overlay-redaction.ts';
 import {
   keepaliveDue,
   outsideAngular,
@@ -239,15 +244,22 @@ export function initOverlay(options: OverlayOptions = {}): Promise<() => void> {
     else cleanups.push(cleanup);
     return !stopped;
   };
-  return outsideAngular(() => startOverlay(options, own)).then(
-    () => instance.stop,
-    (error) => {
+  // Resolves once the overlay is running, or once it is connected and waits
+  // for the page to be trusted, so `await initOverlay()` never waits for a code.
+  let resolved = false;
+  return new Promise((resolve, reject) => {
+    const done = () => {
+      resolved = true;
+      resolve(instance.stop);
+    };
+    outsideAngular(() => startOverlay(options, own, done)).then(done, (error) => {
       // A stopped or replaced overlay failing to connect is expected, not an error.
-      if (stopped) return instance.stop;
+      if (stopped) return done();
       instance.stop();
-      throw error;
-    },
-  );
+      if (resolved) console.warn('[pangular] The overlay stopped:', error);
+      else reject(error);
+    });
+  });
 }
 
 /** Stops the running overlay and removes the floating devtools button. */
@@ -283,7 +295,12 @@ function noServerError(
   return new Error(`[pangular] No devtools server found (tried ${tried}). ${hints}`, { cause });
 }
 
-async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) => boolean) {
+/** `waiting` runs when the start has to wait for the page to be trusted: `initOverlay` resolves then. */
+async function startOverlay(
+  options: OverlayOptions,
+  own: (cleanup: () => void) => boolean,
+  waiting: () => void,
+) {
   const bases = options.baseURL ?? DEFAULT_BASES;
   const where = {
     device: !!(globalThis as { Capacitor?: unknown }).Capacitor,
@@ -322,11 +339,21 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
   const on = devtoolsConfig.inspectors;
   const limits = devtoolsConfig.limits;
   allowClientRules(on.http && devtoolsConfig.actions.http);
-  // Before the first read of the app: the server sends its secret names only to a trusted page.
-  await whenTrusted(rpc as unknown as TrustClient);
-  if (!own(() => {})) return;
-  setRedaction(await serverRedaction(my.rpc, devtoolsConfig.redaction));
-  if (!own(() => {})) return;
+  // Before the first read of the app: the server sends its secret names only
+  // to a trusted page. While it waits (for the code, or a dropped call to be
+  // retried on reconnect), `initOverlay` has already resolved.
+  const fallbackRedaction = legacyRedaction(rpc.connectionMeta);
+  const redaction = loadRedaction(
+    rpc as unknown as TrustClient,
+    my.rpc,
+    fallbackRedaction,
+    waiting,
+  );
+  if (!own(redaction.stop)) return;
+  link.follow({ dropped: () => {}, restored: () => redaction.retry() });
+  const redactionConfig = await redaction.ready;
+  if (!redactionConfig || !own(() => {})) return;
+  setRedaction(redactionConfig);
   setNavigationLimit(limits.navigations);
   if (on.http) httpRegistry().maxCalls = limits.httpCalls;
 
@@ -1054,7 +1081,9 @@ async function startOverlay(options: OverlayOptions, own: (cleanup: () => void) 
     dropped: leave,
     restored: async () => {
       await claimPageOnServer(my.rpc, pageId, pageKey);
-      setRedaction(await serverRedaction(my.rpc, devtoolsConfig.redaction));
+      // A failed call keeps the config the page already has.
+      const next = await serverRedaction(my.rpc, fallbackRedaction);
+      if (next) setRedaction(next);
       resendConfig();
     },
   });

@@ -111,7 +111,7 @@ bootstrapApplication(App, appConfig).then(async () => {
 });
 ```
 
-`baseURL` takes one path or a list of paths to try in order. `initOverlay` resolves to a function that stops the overlay it started and removes its hooks.
+`baseURL` takes one path or a list of paths to try in order. `initOverlay` resolves to a function that stops the overlay it started and removes its hooks. If the page still needs the one-time code, `initOverlay` resolves once it is connected, and the overlay starts reading the app after the code is entered.
 
 The floating button follows the path the overlay connected to. If that path is `<base>pangular/` and a hub answers at `<base>`, the button opens the hub. Otherwise it opens the devtools panel at that path.
 

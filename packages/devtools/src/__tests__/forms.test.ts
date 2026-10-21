@@ -233,6 +233,18 @@ describe('reactive serialization', () => {
     expect(serializeControl(form).truncatedInvalid).toBeUndefined();
   });
 
+  it('names no invalid control past the cap whose path is too long for the report', () => {
+    const long = 'x'.repeat(600);
+    const controls: Record<string, FormControl> = Object.fromEntries(
+      Array.from({ length: 100 }, (_, i) => [`f${i}`, new FormControl('ok')]),
+    );
+    controls[long] = new FormControl('', Validators.required);
+    controls['short'] = new FormControl('', Validators.required);
+    const root = serializeControl(new FormGroup(controls));
+    expect(root.truncated).toBe(2);
+    expect(root.truncatedInvalid).toEqual(['short']);
+  });
+
   it('keeps an own "…" key when adding the overflow marker to a wide value', () => {
     const wide = (extra: Record<string, unknown>) =>
       Object.assign(extra, Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`k${i}`, i])));

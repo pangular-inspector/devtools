@@ -2,7 +2,13 @@
 import '@angular/compiler';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isSecretKey, setRedaction } from '../forms-privacy.ts';
-import { serverRedaction, whenTrusted, type TrustClient } from '../overlay-redaction.ts';
+import {
+  legacyRedaction,
+  loadRedaction,
+  serverRedaction,
+  whenTrusted,
+  type TrustClient,
+} from '../overlay-redaction.ts';
 
 type Listener = (status: string) => void;
 
@@ -37,6 +43,10 @@ function fakeClient(trusted: boolean) {
       client.isTrusted = true;
       client.status = 'connected';
       for (const listener of [...listeners]) listener('connected');
+    },
+    drop() {
+      client.status = 'disconnected';
+      for (const listener of [...listeners]) listener('disconnected');
     },
   };
   return { client, calls, replies, listeners };
@@ -113,6 +123,57 @@ describe('serverRedaction', () => {
   });
 });
 
+describe('legacyRedaction', () => {
+  it('reads the config only from a server that still sends it in the connection info', () => {
+    expect(legacyRedaction({ configs: { pangular: {} } })).toBeUndefined();
+    expect(legacyRedaction(undefined)).toBeUndefined();
+    expect(
+      legacyRedaction({ configs: { pangular: { redaction: { secretNames: ['old'] } } } }),
+    ).toEqual({ secretNames: ['old'], unmask: [] });
+  });
+
+  it('gives no config when a current server cannot be asked', async () => {
+    const failing = { call: async () => Promise.reject(new Error('dropped')) };
+    expect(await serverRedaction(failing, undefined)).toBeUndefined();
+  });
+
+  it('applies the built-in rules only when the server answers without a config', async () => {
+    expect(await serverRedaction({ call: async () => undefined }, undefined)).toEqual({
+      secretNames: [],
+      unmask: [],
+    });
+  });
+});
+
+describe('loadRedaction', () => {
+  it('asks again on retry after a failed call, and says when it waits', async () => {
+    let fail = true;
+    const rpc = {
+      call: async () => {
+        if (fail) throw new Error('offline');
+        return { secretNames: ['passport'], unmask: [] };
+      },
+    };
+    let waits = 0;
+    const loader = loadRedaction({}, rpc, undefined, () => waits++);
+    let config: unknown = 'pending';
+    void loader.ready.then((value) => (config = value));
+    await tick(10);
+    expect(config).toBe('pending');
+    expect(waits).toBe(1);
+    fail = false;
+    loader.retry();
+    await tick(10);
+    expect(config).toEqual({ secretNames: ['passport'], unmask: [] });
+  });
+
+  it('ends with nothing once stopped, even while waiting for trust', async () => {
+    const loader = loadRedaction(fakeClient(false).client, { call: async () => ({}) }, undefined);
+    loader.stop();
+    await expect(loader.ready).resolves.toBeUndefined();
+  });
+});
+
 describe('the overlay and the redaction config', () => {
   it('applies the server redaction config before its first report', async () => {
     const fake = fakeClient(true);
@@ -133,14 +194,40 @@ describe('the overlay and the redaction config', () => {
     fake.replies.set('redaction-config', { secretNames: ['passport'], unmask: [] });
     next = fake.client;
     const { initOverlay } = await import('../overlay.ts');
+    let resolved = false;
     const started = initOverlay();
+    void started.then(() => (resolved = true));
     await tick(100);
     expect(fake.calls).toEqual([]);
+    // Connected and waiting for the code: `await initOverlay()` does not wait for it.
+    expect(resolved).toBe(true);
     expect(isSecretKey('passportNumber')).toBe(false);
     fake.client.trust();
     stops.push(await started);
     await tick(100);
     expect(fake.calls[0]).toBe('redaction-config');
     expect(isSecretKey('passportNumber')).toBe(true);
+  });
+
+  it('keeps the collectors off when a page waiting for the code drops, until a trusted reconnect', async () => {
+    const fake = fakeClient(false);
+    next = fake.client;
+    const { initOverlay } = await import('../overlay.ts');
+    stops.push(await initOverlay());
+    const back = fakeClient(true);
+    back.replies.set('redaction-config', { secretNames: ['passport'], unmask: [] });
+    next = back.client;
+    fake.client.drop();
+    await tick(100);
+    // No config from the server and no older server's config: nothing is read.
+    expect(fake.calls.some((name) => name.startsWith('push-'))).toBe(false);
+    expect(back.calls).toEqual([]);
+    // The link reconnects after its first wait, trusted this time.
+    await tick(800);
+    expect(back.calls).toContain('redaction-config');
+    expect(isSecretKey('passportNumber')).toBe(true);
+    await tick(100);
+    const firstPush = back.calls.findIndex((name) => name.startsWith('push-'));
+    expect(firstPush).toBeGreaterThan(back.calls.indexOf('redaction-config'));
   });
 });

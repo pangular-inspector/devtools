@@ -18,8 +18,14 @@ import {
   pathHint,
 } from './forms-cap.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
-import { cutGroups, cutSentence, pastCapLines } from './forms-collector-cap.ts';
-import { clip } from '../text.ts';
+import {
+  COLLECTOR_MAX_INVALID,
+  COLLECTOR_MAX_INVALID_PATH,
+  cutGroups,
+  cutSentence,
+  pastCapLines,
+} from './forms-collector-cap.ts';
+import { clip, code } from '../text.ts';
 import { RESOURCE_UNTRUSTED, withUntrustedNotice } from './resource-text.ts';
 import { refusal } from './refusal.ts';
 
@@ -67,9 +73,7 @@ export function untrusted(text: string): string {
   return `${UNTRUSTED}\n\n${text}`;
 }
 
-export function code(text: string): string {
-  return `\`${text.replace(/`/g, "'").replace(/\s+/g, ' ')}\``;
-}
+export { code };
 
 export function countNodes(node: FormFieldNode, test: (n: FormFieldNode) => number): number {
   return (
@@ -431,6 +435,15 @@ function isRecord(value: unknown): value is object {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** `truncatedInvalid` as the collector sends it: a few paths of bounded length. */
+function isNamedPastCap(value: unknown): boolean {
+  return (
+    isStringArray(value) &&
+    (value as string[]).length <= COLLECTOR_MAX_INVALID &&
+    (value as string[]).every((path) => path.length <= COLLECTOR_MAX_INVALID_PATH)
+  );
+}
+
 function isStringArray(value: unknown): boolean {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
@@ -471,8 +484,11 @@ function optionalOk(node: Record<string, unknown>): boolean {
     if (value === undefined) continue;
     if (type === 'object' ? !isRecord(value) : typeof value !== type) return false;
   }
-  for (const key of ['validatorNames', 'asyncValidatorNames', 'stale', 'truncatedInvalid']) {
+  for (const key of ['validatorNames', 'asyncValidatorNames', 'stale']) {
     if (node[key] !== undefined && !isStringArray(node[key])) return false;
+  }
+  if (node['truncatedInvalid'] !== undefined && !isNamedPastCap(node['truncatedInvalid'])) {
+    return false;
   }
   if (node['metadata'] !== undefined && !Array.isArray(node['metadata'])) return false;
   return true;

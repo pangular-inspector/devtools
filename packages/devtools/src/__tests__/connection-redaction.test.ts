@@ -1,4 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { connectDevframe } from 'devframe/client';
+import { getTempAuthCode } from 'devframe/node/auth';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { initPangularHub } from '../hub.ts';
 import { REDACTION_CONFIG_RPC } from '../overlay-redaction.ts';
 import { makeProject } from './analog-fixture.ts';
@@ -51,5 +58,58 @@ describe('the redaction config and __connection.json', () => {
       secretNames: ['passport'],
       unmask: ['pin'],
     });
+  });
+});
+
+describe('the redaction config over the real transport, with the one-time code on', () => {
+  const cleanups: (() => Promise<void> | void)[] = [];
+  afterEach(async () => {
+    for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('refuses the redaction config to a client that has not entered the code', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pangular-home-'));
+    vi.stubEnv('HOME', home);
+    const hub = initPangularHub({
+      cwd: makeProject({ 'package.json': '{}' }),
+      ws: false,
+      mcp: false,
+      redaction: { secretNames: ['passport'], unmask: [] },
+    });
+    const server: Server = createServer((req, res) =>
+      hub.nodeMiddleware(req, res, () => {
+        res.statusCode = 404;
+        res.end();
+      }),
+    );
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    cleanups.push(() => rmSync(home, { recursive: true, force: true }));
+    cleanups.push(() => new Promise<void>((resolve) => server.close(() => resolve())));
+    cleanups.push(() => hub.close());
+    vi.stubGlobal('location', new URL(`http://127.0.0.1:${port}/`));
+    await hub.context;
+    const rpc = await connectDevframe({
+      baseURL: `http://127.0.0.1:${port}/__devframes/pangular/`,
+      simpleAuth: false,
+      otpParam: false,
+      webmcp: false,
+    });
+    cleanups.push(() => rpc.close?.());
+    const call = () => rpc.scope('pangular').rpc.call(REDACTION_CONFIG_RPC as never);
+
+    expect(rpc.isTrusted).toBe(false);
+    const refused = await call().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(String(refused)).toContain('Not authorized');
+    expect(String(refused)).not.toContain('passport');
+
+    // The same client gets it once trusted, so the refusal was about trust.
+    expect(await rpc.requestTrustWithCode(getTempAuthCode())).toBeTruthy();
+    expect(await call()).toEqual({ secretNames: ['passport'], unmask: [] });
   });
 });

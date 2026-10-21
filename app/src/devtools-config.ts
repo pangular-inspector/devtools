@@ -15,6 +15,28 @@ export function panelConfig(client: DevframeRpcClient | null): ResolvedPangularC
   return configFromConnection(client?.connectionMeta);
 }
 
+function names(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every((name) => typeof name === 'string')
+    ? [...value]
+    : undefined;
+}
+
+/**
+ * `config` with the server's redaction config, which a trusted client reads
+ * with `redaction-config`: `__connection.json` leaves it out. A missing or
+ * malformed answer leaves `config` as it is.
+ */
+export function withRedaction(
+  config: ResolvedPangularConfig,
+  answer: unknown,
+): ResolvedPangularConfig {
+  if (!answer || typeof answer !== 'object') return config;
+  const secretNames = names((answer as { secretNames?: unknown }).secretNames);
+  const unmask = names((answer as { unmask?: unknown }).unmask);
+  if (!secretNames || !unmask) return config;
+  return { ...config, redaction: { secretNames, unmask } };
+}
+
 export function actionAllowed(client: DevframeRpcClient | null, action: PangularAction): boolean {
   return panelConfig(client).actions[action];
 }

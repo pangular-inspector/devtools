@@ -276,7 +276,7 @@ The server checks the options when it starts. An unknown key, a value of the wro
 
 A value that the server ignores falls back to its default, which is usually the open setting. Read the warning after you change the options, especially when they come from environment variables or a JavaScript file.
 
-The [Dashboard](../inspectors/dashboard.md#configuration-block) has a **Configuration** block. It lists the options that differ from the defaults, or says **Defaults** when nothing is changed.
+The [Dashboard](../inspectors/dashboard.md#configuration-block) has a **Configuration** block. It lists the options that differ from the defaults, or says **Defaults** when nothing is changed. The panel reads the `redaction` rows from the server once it is trusted, since `__connection.json` leaves them out. A static report has no server to ask, so it shows no **Extra secret names** or **Unmasked names** rows.
 
 | Row                             | Lists                                             |
 | ------------------------------- | ------------------------------------------------- |

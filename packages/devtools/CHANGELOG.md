@@ -114,7 +114,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Refuse writes when the target tab is unclear, instead of acting on whichever tab changed last.
 - Pairing tokens (`auth: {tokens}`, `--auth-token`, `PANGULAR_AUTH_TOKEN`) let an app on a device connect without typing the code. The CLI prints only a short hash of each token.
 - Hide the shared state of a turned-off inspector from agents.
-- Leave the `redaction` config (`secretNames`, `unmask`) out of `__connection.json`, which answers before the one-time code. Pages get it from the server once they are trusted (#419).
+- Leave the `redaction` config (`secretNames`, `unmask`) out of `__connection.json`, which answers before the one-time code. Pages get it from the server once they are trusted, and read nothing from the app until they have it. `initOverlay()` still resolves once connected, without waiting for the code. The Dashboard asks for the config the same way to list **Extra secret names** and **Unmasked names**. A static report leaves those rows out (#419).
 
 ### Features
 
@@ -199,8 +199,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Control outlines and **Signals** graph edges meet 3:1 contrast in both themes, and status pills keep their contrast on selected rows.
 - The extension panel retries the connection on its own.
 - A tab that crashes or is killed without `pagehide` leaves `list-pages`, the forms data and the router data with the rest of its data. Every per-page store uses one expiry, 30 seconds after the page's last report or heartbeat (three heartbeat intervals), instead of 150 seconds for forms and router (#422).
-- `explain-invalid-forms` no longer says no field has an error when the failing field is past the forms collector's limit of 100 fields per group. A cut group carries `truncatedInvalid` with the invalid fields it left out, `explain-invalid-forms` and `explain-submit` name them, and `inspect-forms` says which group was cut and how many fields it left out (#423).
-- `scan-signals` and `scan-components` cap their answer at 200 items or 20,000 characters, say how many items they left out, and take `filter`, `offset` and `limit` to read the rest. A list that fits is still the JSON array alone (#429).
+- `explain-invalid-forms` no longer says no field has an error when the failing field is past the forms collector's limit of 100 fields per group. A cut group carries `truncatedInvalid` with the invalid fields it left out, `explain-invalid-forms` and `explain-submit` name them, and `inspect-forms` says which group was cut and how many fields it left out, or that a group past the 8-level depth limit was not read (#423).
+- `scan-signals` and `scan-components` cap their answer at 200 items or 20,000 characters, say how many items they left out, and take `filter`, `offset` and `limit` to read the rest. A list that fits is still the JSON array alone. One item longer than the cap is cut, with a note (#429).
 - The panel switches tabs when only the `#tab=` hash changes after load (#425).
 - At narrow widths the **Components** toolbar fits on two rows, with its tree actions as icons, and a cut off component name shows its full text on hover and focus (#421).
 

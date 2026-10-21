@@ -7,7 +7,7 @@ import {
   scanListAnswer,
   type ScanList,
 } from '../scan-list.ts';
-import { scanTool } from '../scan-tools.ts';
+import { SCAN_TOOLS, scanTool } from '../scan-tools.ts';
 import { guardHandler } from '../tool-input.ts';
 
 // #429: scan-signals and scan-components cap their answer, say how much they
@@ -99,6 +99,24 @@ describe('listed scan tools', () => {
       },
       {},
     );
+
+  it('cuts a single item longer than the cap, so the cap still holds', () => {
+    const list = signals(3);
+    (list[1] as Record<string, unknown>)['component'] = 'x'.repeat(SCAN_LIST_MAX_CHARS * 2);
+    const text = scanListAnswer(list, { offset: 1 }, SIGNALS);
+    expect(text.length).toBeLessThanOrEqual(SCAN_LIST_MAX_CHARS);
+    expect(text).toContain('_Item 2 of 3 is ');
+    expect(text).toContain('Pass `offset: 2` for the next part.');
+    const last = scanListAnswer([list[1]], {}, SIGNALS);
+    expect(last.length).toBeLessThanOrEqual(SCAN_LIST_MAX_CHARS);
+    expect(last).toContain('This is the last part.');
+  });
+
+  it('points the scans at the live tools that read the running page', () => {
+    const description = (id: string) => SCAN_TOOLS.find((tool) => tool.id === id)!.description;
+    expect(description('pangular:scan-components')).toContain('pangular:list-components');
+    expect(description('pangular:scan-signals')).toContain('pangular:inspect-signals');
+  });
 
   it('checks filter, offset and limit against the input schema', async () => {
     const tool = fake(signals(300));

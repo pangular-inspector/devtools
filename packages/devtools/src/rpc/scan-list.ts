@@ -1,4 +1,5 @@
 import type { ToolInputSchema } from './tool-input.ts';
+import { clip } from '../text.ts';
 
 /** Longest answer of a listed source scan, note included, as for the live tools. */
 export const SCAN_LIST_MAX_CHARS = 20_000;
@@ -80,7 +81,7 @@ export function scanListAnswer(items: unknown[], args: ScanListArgs, list: ScanL
   let part = matched.slice(offset, offset + limit);
   let json = JSON.stringify(part);
   if (json.length > JSON_ROOM && part.length > 1) {
-    // The most items that fit, found by bisection; at least one.
+    // The most items that fit, found by bisection; at least one, cut below if it alone is too long.
     let low = 1;
     let high = part.length - 1;
     while (low < high) {
@@ -90,6 +91,14 @@ export function scanListAnswer(items: unknown[], args: ScanListArgs, list: ScanL
     }
     part = part.slice(0, low);
     json = JSON.stringify(part);
+  }
+  if (json.length > JSON_ROOM) {
+    // One item alone is longer than the cap: cut it, so the cap still holds.
+    const after =
+      offset + 1 < matched.length
+        ? ` Pass \`offset: ${offset + 1}\` for the next part.`
+        : ' This is the last part.';
+    return `${clip(json, JSON_ROOM)}\n\n_Item ${offset + 1} of ${matched.length} is ${json.length.toLocaleString('en-US')} characters as JSON, so it is cut at ${JSON_ROOM.toLocaleString('en-US')} and the answer is not valid JSON.${after}_`;
   }
   if (offset === 0 && part.length === matched.length) return json;
 
