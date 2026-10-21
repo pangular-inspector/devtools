@@ -2033,11 +2033,17 @@ async function runActions(state) {
     booked,
     r.markdown.slice(0, 300),
   );
-  const stores = await read('ngrx-inspect-store', { store: ctx.storeId('TravelStore') });
+  // The page reports the store change a moment after it shows the confirmation, so wait for it.
+  const holdsBooking = (text) => /Ada Lovelace|BK-?\d+|booking[^\n]*\(1\)/i.test(text);
+  let stores = '';
+  await waitUntil(async () => {
+    stores = await read('ngrx-inspect-store', { store: ctx.storeId('TravelStore') });
+    return holdsBooking(stores);
+  }, 5000);
   write(
     'run-form-action',
     'TravelStore holds the booking',
-    /Ada Lovelace|BK-?\d+|booking[^\n]*\(1\)/i.test(stores),
+    holdsBooking(stores),
     stores.slice(0, 300),
   );
   const submitHistory = await read('list-form-changes', { form, type: 'submit' });
