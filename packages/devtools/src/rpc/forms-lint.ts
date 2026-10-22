@@ -35,6 +35,7 @@ export function lintForm(
   form: CollectedForm,
   events: FormEvent[] = [],
   now = Date.now(),
+  options?: { rules?: Record<string, boolean> },
 ): FormLintFinding[] {
   const out: FormLintFinding[] = [];
   const add = (
@@ -211,7 +212,8 @@ export function lintForm(
       'Focus the first invalid field on submit (Signal Forms: field().focusBoundControl()).',
     );
   }
-  return out;
+  const rules = options?.rules;
+  return rules ? out.filter((f) => rules[f.rule] !== false) : out;
 }
 
 export function lintSetupErrors(errors: string[]): FormLintFinding[] {

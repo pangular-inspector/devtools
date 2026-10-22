@@ -12,6 +12,7 @@ import {
   agentAllowed,
   agentSafety,
   connectionConfig,
+  isLintRuleEnabled,
   pangularConfigProblems,
   pickPangularConfig,
   resolvePangularConfig,
@@ -76,6 +77,27 @@ describe('resolvePangularConfig', () => {
       tanstackQuery: true,
       plugins: true,
     });
+    expect(config.lint).toEqual({ rules: {} });
+  });
+
+  it('resolves lint rules and tests whether a rule is enabled', () => {
+    const config = resolvePangularConfig({
+      lint: {
+        rules: {
+          'img-missing-alt': false,
+          'track-by-index': true,
+          invalid: 'no' as unknown as boolean,
+        },
+      },
+    });
+    expect(config.lint.rules).toEqual({
+      'img-missing-alt': false,
+      'track-by-index': true,
+    });
+    expect(isLintRuleEnabled('img-missing-alt', config)).toBe(false);
+    expect(isLintRuleEnabled('track-by-index', config)).toBe(true);
+    expect(isLintRuleEnabled('other-rule', config)).toBe(true);
+    expect(isLintRuleEnabled('img-missing-alt', undefined)).toBe(true);
   });
 
   it('carries a disabled inspector into its agent tools and panel actions', () => {
@@ -226,6 +248,7 @@ describe('summarizePangularConfig', () => {
       actions: { forms: false, http: false, ngrx: false },
       redaction: { secretNames: ['passport'], unmask: ['pin'] },
       limits: { refreshMs: 1000, httpCalls: 50 },
+      lint: { rules: { 'img-missing-alt': false, 'track-by-index': true } },
     });
     expect(summarizePangularConfig(config)).toEqual([
       { label: 'Inspectors off', value: 'NgRx, Pipes' },
@@ -235,6 +258,7 @@ describe('summarizePangularConfig', () => {
       { label: 'Extra secret names', value: 'passport' },
       { label: 'Unmasked names', value: 'pin' },
       { label: 'Limits', value: 'poll every 1000 ms, 50 HTTP calls' },
+      { label: 'Lint rules off', value: 'img-missing-alt' },
     ]);
   });
 });
@@ -631,6 +655,7 @@ describe('pangularConfigProblems', () => {
       actions: { ngrx: false },
       redaction: { secretNames: ['passport'], unmask: ['pin'] },
       limits: { refreshMs: 1000 },
+      lint: { rules: { 'img-missing-alt': false } },
     };
     expect(pangularConfigProblems(valid)).toEqual([]);
     expect(pangularConfigProblems(resolvePangularConfig(valid))).toEqual([]);
@@ -660,6 +685,20 @@ describe('pangularConfigProblems', () => {
     ]);
     expect(pangularConfigProblems({ agent: { readOnly: 'true' } })).toEqual([
       '`agent.readOnly` should be true or false, got the string "true". It was ignored, so it is off.',
+    ]);
+    expect(pangularConfigProblems({ lint: 'false' as never })).toEqual([
+      '`lint` should be an object, got the string "false". It was ignored.',
+    ]);
+    expect(pangularConfigProblems({ lint: { rules: 'none' as never } })).toEqual([
+      '`lint.rules` should be an object, got the string "none". It was ignored.',
+    ]);
+    expect(
+      pangularConfigProblems({ lint: { rules: { 'img-missing-alt': 'no' as never } } }),
+    ).toEqual([
+      '`lint.rules.img-missing-alt` should be true or false, got the string "no". It was ignored, so it is on.',
+    ]);
+    expect(pangularConfigProblems({ lint: { ruls: {} } as never })).toEqual([
+      'Unknown option `lint.ruls` was ignored. Did you mean `rules`?',
     ]);
   });
 

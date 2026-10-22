@@ -101,6 +101,8 @@ export interface AuditHost {
   agentSees(inspector: PangularInspector): boolean;
   /** Whether the agent may run axe on the page: off in `agent.readOnly`. */
   agentAxe: boolean;
+  /** Configured lint rules to enable or turn off. */
+  rules?: Record<string, boolean>;
   /**
    * `agent.readOnly`: the agent may read the audit and compare with a
    * baseline, but not drop or replace the baseline the user took.
@@ -187,6 +189,7 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       ...(sources.pipes && sees('pipes') ? { pipes: sources.pipes } : {}),
       axe: sessions.get(pageId)?.axe ?? null,
       ...(noAxe(pageId) ? { noAxe: noAxe(pageId) } : {}),
+      ...(host.rules ? { rules: host.rules } : {}),
     };
   };
 

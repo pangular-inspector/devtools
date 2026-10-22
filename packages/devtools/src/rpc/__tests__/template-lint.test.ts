@@ -283,6 +283,14 @@ export class V {}
     expect((await lintTemplates(dir, { compiler: counting })).findings).toEqual([]);
     expect(parses).toBe(3);
   });
+
+  it('omits findings for rules turned off in options.rules', async () => {
+    const dir = project({ 'src/view.ts': component('<img src="a.png">') });
+    const on = await lintTemplates(dir, { compiler });
+    expect(on.findings.map((f) => f.rule)).toEqual(['img-missing-alt']);
+    const off = await lintTemplates(dir, { compiler, rules: { 'img-missing-alt': false } });
+    expect(off.findings).toEqual([]);
+  });
 });
 
 describe('templateLintText', () => {
@@ -348,5 +356,12 @@ describe('scan-templates tool', () => {
     expect(tool.description.length).toBeLessThanOrEqual(600);
     const answer = await tool.handler({ rule: 'img-missing-alt' });
     expect(answer.markdown).toContain('img-missing-alt at `src');
+  });
+
+  it('respects rules turned off in options.rules', async () => {
+    const dir = project({ 'src/view.ts': component('<img src="a.png">') });
+    const tool = templateLintTool(dir, { compiler, rules: { 'img-missing-alt': false } });
+    const answer = await tool.handler();
+    expect(answer.markdown).toContain('No template problems found');
   });
 });

@@ -234,7 +234,13 @@ export function stopAnalog(owner?: unknown) {
 export async function registerAnalog(
   my: Scoped,
   ctx: AgentHost,
-  options: { blockCalls?: string; owner?: unknown; ttl?: PageTtl; owners?: PageOwners } = {},
+  options: {
+    blockCalls?: string;
+    owner?: unknown;
+    ttl?: PageTtl;
+    owners?: PageOwners;
+    rules?: Record<string, boolean>;
+  } = {},
 ) {
   disposeAnalog?.();
   const ttl = options.ttl ?? fixedTtl(PAGE_TTL_MS);
@@ -352,7 +358,9 @@ export async function registerAnalog(
     type: 'query',
     jsonSerializable: true,
     handler: (page: unknown) =>
-      analogLint(project(), current(), typeof page === 'string' ? page : undefined),
+      analogLint(project(), current(), typeof page === 'string' ? page : undefined, {
+        rules: options.rules,
+      }),
   });
   my.rpc.register({
     name: 'analog-render',
@@ -514,6 +522,6 @@ export async function registerAnalog(
       'Analog checks: conflicting page files, missing exports, layouts without router-outlet, server file mistakes, API route issues, prerender entries matching nothing, content frontmatter, plus live problems from the default page.',
     inputSchema: { type: 'object', properties: { page } },
     handler: async (args: { page?: string }) =>
-      text(analogLintText(project(), current(), args?.page)),
+      text(analogLintText(project(), current(), args?.page, { rules: options.rules })),
   });
 }

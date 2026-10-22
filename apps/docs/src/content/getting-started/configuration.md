@@ -131,6 +131,7 @@ interface PangularConfig {
   };
   popup?: {hotkey?: string | false};
   plugins?: Record<string, boolean | {enabled?: boolean; tools?: boolean; actions?: boolean}>;
+  lint?: {rules?: Record<string, boolean>};
 }
 ```
 
@@ -264,6 +265,25 @@ The server plugins themselves go in `serverPlugins`, an option of the Express hu
 
 It is off by default because it starts processes on your machine. A value other than `true` or `false` prints a warning and keeps it off.
 
+### Lint rules
+
+| Option              | Default | What it does                                                                                                                |
+| ------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `lint.rules.<rule>` | `true`  | `false` turns off an individual lint rule across linters (template lint, pipe usage, routes, forms and Analog diagnostics). |
+
+```json
+{
+  "lint": {
+    "rules": {
+      "img-missing-alt": false,
+      "track-by-index": false
+    }
+  }
+}
+```
+
+Rules set to `false` are omitted from panel findings, agent tools (`scan-templates`, `scan-pipe-usage`, `lint-routes`, `lint-forms`, `analog-lint`), `pangular audit` and the CI exporter (`pangular lint`).
+
 ## Check the active configuration
 
 The server checks the options when it starts. An unknown key, a value of the wrong type or a limit outside its bounds prints one `[pangular]` warning in the terminal that lists each problem and the value used instead. An unknown key names the closest known key:
@@ -290,6 +310,7 @@ The [Dashboard](../inspectors/dashboard.md#configuration-block) has a **Configur
 | **Popup shortcut**              | `popup.hotkey`, or **Off** when it is `false`.    |
 | **Plugins off**                 | Plugins set to `false` in `plugins`.              |
 | **Plugin tools or actions off** | Plugins with `tools` or `actions` set to `false`. |
+| **Lint rules off**              | Rules set to `false` in `lint.rules`.             |
 
 ## Where to next
 

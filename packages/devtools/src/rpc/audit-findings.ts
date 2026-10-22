@@ -194,6 +194,8 @@ export interface AuditInputs {
   axe?: AxeReport | null;
   /** Why axe can't run on this page, such as an app on a device with no DOM. */
   noAxe?: string;
+  /** Configured lint rules to enable or turn off. */
+  rules?: Record<string, boolean>;
 }
 
 /** Most findings an audit keeps. */
@@ -427,7 +429,11 @@ function errors(state: ErrorsState | undefined, pageId: string): Collected {
   };
 }
 
-function router(state: RouterState | undefined, pageId: string): Collected {
+function router(
+  state: RouterState | undefined,
+  pageId: string,
+  rules?: Record<string, boolean>,
+): Collected {
   const area = 'router';
   if (!state) return { findings: [], source: { area, state: 'off' } };
   const page = state.pages.find((entry) => entry.pageId === pageId);
@@ -444,7 +450,7 @@ function router(state: RouterState | undefined, pageId: string): Collected {
       },
     };
   }
-  const findings = lintRoutes(page).map((finding) =>
+  const findings = lintRoutes(page, { rules }).map((finding) =>
     make(area, finding.rule, finding.severity, finding.message, 'pangular:lint-routes', {
       subject: finding.route || '/',
       args: { page: pageId },
@@ -453,7 +459,12 @@ function router(state: RouterState | undefined, pageId: string): Collected {
   return { findings: merge(findings), source: { area, state: 'ok' } };
 }
 
-function forms(state: FormsState | undefined, pageId: string, now: number): Collected {
+function forms(
+  state: FormsState | undefined,
+  pageId: string,
+  now: number,
+  rules?: Record<string, boolean>,
+): Collected {
   const area = 'forms';
   if (!state) return { findings: [], source: { area, state: 'off' } };
   const onPage = formsOnPage(state.forms, pageId).length > 0;
@@ -461,7 +472,7 @@ function forms(state: FormsState | undefined, pageId: string, now: number): Coll
   if (!onPage && !setup) {
     return { findings: [], source: { area, state: 'empty', note: 'No form on the page.' } };
   }
-  const findings = lintFormsFor(state, { page: pageId }, now).map((finding) =>
+  const findings = lintFormsFor(state, { page: pageId }, now, { rules }).map((finding) =>
     make(area, finding.rule, finding.severity, finding.message, 'pangular:lint-forms', {
       // A setup error names no form, so its message tells it apart.
       subject: [finding.label, finding.path].filter(Boolean).join(' ') || clip(finding.message, 80),
@@ -716,8 +727,8 @@ export function buildAudit(
     hydration(inputs.components),
     changeDetection(inputs.cd, id),
     leaks(inputs.leaks, id, now),
-    router(inputs.router, id),
-    forms(inputs.forms, id, now),
+    router(inputs.router, id, inputs.rules),
+    forms(inputs.forms, id, now, inputs.rules),
     http(inputs.http, id),
     pipes(inputs.pipes),
   ];

@@ -672,9 +672,10 @@ export function analogLint(
   project: AnalogProject,
   state: AnalogState,
   page?: string,
+  options?: { rules?: Record<string, boolean> },
 ): AnalogLintFinding[] {
   if (!project.analog) return [];
-  const findings = lintAnalog(project);
+  const findings = lintAnalog(project, options);
   const dupes = new Map(duplicateLoads(state.calls).map((d) => [d.route, d]));
   for (const dupe of dupes.values()) {
     findings.push({
@@ -732,12 +733,18 @@ export function analogLint(
       });
     }
   }
-  return findings;
+  const rules = options?.rules;
+  return rules ? findings.filter((f) => rules[f.rule] !== false) : findings;
 }
 
-export function analogLintText(project: AnalogProject, state: AnalogState, page?: string): string {
+export function analogLintText(
+  project: AnalogProject,
+  state: AnalogState,
+  page?: string,
+  options?: { rules?: Record<string, boolean> },
+): string {
   if (!project.analog) return NOT_ANALOG;
-  const findings = analogLint(project, state, page);
+  const findings = analogLint(project, state, page, options);
   const missing = page && !state.pages.some((p) => p.pageId === page) ? page : undefined;
   if (!findings.length && !missing) return 'No Analog problems found.';
   const order = { error: 0, warning: 1, info: 2 };

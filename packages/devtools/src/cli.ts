@@ -346,7 +346,11 @@ export function createPangularCli(options: PangularCliOptions = {}) {
     cli.option('--config <file>', `Devtools config as JSON (default: ${PANGULAR_CONFIG_FILE})`);
     cli.option('--read-only', 'Drop the agent tools that act on the page or the server');
     registerSkillsCommand(cli, { cwd: (flags) => resolveCliRoot(flags, env), log });
-    registerLintCommand(cli, { cwd: (flags) => resolveCliRoot(flags, env), log });
+    registerLintCommand(cli, {
+      cwd: (flags) => resolveCliRoot(flags, env),
+      config: (flags, root) => loadCliConfig(flags, root, env),
+      log,
+    });
     const defaultCommand = cli.commands.find((command) => command.isDefaultCommand);
     if (defaultCommand) {
       const run = async (

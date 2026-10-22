@@ -85,6 +85,21 @@ describe('runSourceLints', () => {
     expect(failsAt(result, 'warning')).toBe(true);
     expect(failsAt(result, 'info')).toBe(true);
   });
+
+  it('omits findings for rules disabled via options.rules or options.config', async () => {
+    const dir = project();
+    const withRules = await runSourceLints(dir, {
+      compiler,
+      rules: { 'img-missing-alt': false },
+    });
+    expect(withRules.findings.map((f) => f.rule)).toEqual(['impure-pipe-in-for']);
+
+    const withConfig = await runSourceLints(dir, {
+      compiler,
+      config: { lint: { rules: { 'impure-pipe-in-for': false } } },
+    });
+    expect(withConfig.findings.map((f) => f.rule)).toEqual(['img-missing-alt']);
+  });
 });
 
 describe('toSarif', () => {
@@ -185,5 +200,16 @@ describe('pangular lint', () => {
     process.exitCode = undefined;
     const unknown = await run(['lint', '--root', dir, '--only', 'forms']);
     expect(unknown.notes.join('\n')).toContain('Unknown lint "forms"');
+  });
+
+  it('respects rules turned off in pangular.config.json', async () => {
+    const dir = project();
+    writeFileSync(
+      join(dir, 'pangular.config.json'),
+      JSON.stringify({ lint: { rules: { 'impure-pipe-in-for': false } } }),
+    );
+    const { out } = await run(['lint', '--root', dir, '--only', 'pipes']);
+    const json = JSON.parse(out);
+    expect(json.findings).toEqual([]);
   });
 });

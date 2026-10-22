@@ -412,4 +412,23 @@ describe('the audit RPC functions for the panel', () => {
       ok: false,
     });
   });
+
+  it('excludes findings for rules turned off in config.lint.rules', async () => {
+    const { call } = await boot({
+      lint: { rules: { 'wildcard-not-last': false } },
+      inspectors: { pipes: false },
+    });
+    await call('push-component-tree', tree('tab1'));
+    await call('push-router', {
+      pageId: 'tab1',
+      reportedAt: Date.now(),
+      config: [
+        { path: '**', fullPath: '**' },
+        { path: 'home', fullPath: 'home' },
+      ],
+      setup: { features: {}, guards: {} },
+    });
+    const result = await call('get-audit', { pageId: 'tab1' });
+    expect(result.report.findings.filter((f: { area: string }) => f.area === 'router')).toEqual([]);
+  });
 });
