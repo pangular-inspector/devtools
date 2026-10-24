@@ -121,6 +121,15 @@ function guardOwner(value: unknown): DeferBlockInfo['owner'] {
   return { id: value['id'], name: value['name'], tag: str(value['tag']) ? value['tag'] : '' };
 }
 
+/**
+ * The server clock minus the page clock, from the `pageNow` a push carried and
+ * the server time it arrived, or `undefined` when `pageNow` is not a time.
+ */
+export function guardClockOffset(pageNow: unknown, now: number): number | undefined {
+  const page = finite(pageNow);
+  return page !== undefined && page > 0 ? Math.round(now - page) : undefined;
+}
+
 /** The defer blocks that have an `id`, with every field the tools read set to a safe value. */
 export function guardDeferBlocks(value: unknown): DeferBlockInfo[] {
   return records(value)

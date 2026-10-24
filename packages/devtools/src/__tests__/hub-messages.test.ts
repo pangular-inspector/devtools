@@ -293,13 +293,17 @@ describe('hub messages', () => {
   it('posts hydration mismatches and NG05xx messages once per page', () => {
     const { feed, list } = setup();
     const report = stats({
-      mismatches: [{ component: 'app-cart', expected: '<div>', actual: '<span>' }],
+      mismatches: [
+        { component: 'app-cart', expected: '<div>', actual: '<span>' },
+        { component: 'ProductCard', isClass: true },
+      ],
       warnings: ['NG0505: no hydration info in the server response'],
     });
     feed.hydration('p1', report);
     feed.hydration('p1', report);
     expect(list().map((m) => [m.message, m.level, m.category])).toEqual([
       ['Hydration mismatch at <app-cart>', 'error', 'hydration'],
+      ['Hydration mismatch at ProductCard', 'error', 'hydration'],
       ['NG0505: no hydration info in the server response', 'warn', 'hydration'],
     ]);
     expect(list()[0]!.description).toBe('Expected: <div>\nActual: <span>\n\nPage p1.');

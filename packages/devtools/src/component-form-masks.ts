@@ -176,6 +176,17 @@ export function maskedFormValues<H extends object>(
   return new Set([...seen, ...out, ...formSecretValues()]);
 }
 
+/**
+ * Keeps secret values found another way than the element scan, such as the
+ * secret Signal Forms fields of a component instance (`signal-masks.ts`), so
+ * they stay hidden like the scanned ones, also after they change.
+ */
+export function rememberMaskedValues(values: Iterable<string>) {
+  const out = new Set<string>();
+  for (const value of values) addValue(out, value);
+  if (out.size) remember(out);
+}
+
 /** Forgets the values seen so far, for tests. */
 export function forgetMaskedFormValues() {
   seen.clear();

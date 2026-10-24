@@ -190,6 +190,7 @@ export async function registerAudit(host: AuditHost): Promise<AuditRegistration>
       axe: sessions.get(pageId)?.axe ?? null,
       ...(noAxe(pageId) ? { noAxe: noAxe(pageId) } : {}),
       ...(host.rules ? { rules: host.rules } : {}),
+      ...(audience === 'agent' && host.agentReadOnly ? { noCdRecord: true } : {}),
     };
   };
 

@@ -57,7 +57,7 @@ Call `list-pages`. If more than one tab reports, pass its id as `page` to every 
 The audit reads what the inspectors already hold. Errors, hydration, router, form and HTTP findings are there as soon as the page reports. Change detection numbers need a recording:
 
 ```json
-{"tool": "pangular:change-detection", "arguments": {"record": "start", "page": "k3x9"}}
+{"tool": "pangular:record-change-detection", "arguments": {"record": "start", "page": "k3x9"}}
 ```
 
 Then use the app: open the screens and click what the change is about. Subscriptions after destroy need tracking, so call `track-subscriptions` with `action: "start"` too if leaks matter to the change.
@@ -104,7 +104,7 @@ Call `open-in-panel` with `tab: "audit"` to give the user a link to the same lis
 ## Gotchas
 
 <ngmd-callout type="warning" title="Read-only agents">
-  With <code>agent.readOnly</code>, <code>audit</code> has no <code>axe</code> argument and <code>change-detection</code> can't record. Run axe and the recording from the panel, and the agent's audit reads them.
+  With <code>agent.readOnly</code>, <code>audit</code> has no <code>axe</code> argument and <code>record-change-detection</code> is not registered. Run axe and the recording from the panel, and the agent's audit reads them.
 </ngmd-callout>
 
 - Findings are matched by area, rule and subject, not by position. A renamed component or route counts as one finding resolved and one new.

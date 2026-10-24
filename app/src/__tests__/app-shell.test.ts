@@ -305,4 +305,18 @@ describe('App tab bar', () => {
     expect(now.filter((b) => b.tabIndex === 0)).toEqual([now[2]]);
     fixture.destroy();
   });
+
+  it('puts the scrolling content in the Tab order with a name, and still focuses it from code', async () => {
+    connection.answers = [true];
+    const fixture = TestBed.createComponent(App);
+    document.body.appendChild(host(fixture));
+    await settle(fixture);
+
+    const main = host(fixture).querySelector<HTMLElement>('main')!;
+    expect(main.tabIndex).toBe(0);
+    expect(main.getAttribute('aria-label')).toBeTruthy();
+    main.focus();
+    expect(document.activeElement).toBe(main);
+    fixture.destroy();
+  });
 });

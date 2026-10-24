@@ -96,14 +96,16 @@ jobs:
         run: pnpm test:axe
 
   # The e2e jobs below are slow, so they run only when the package, the panel, the SSR demo, the
-  # tools docs (e2e:mcp reads them) or the scripts and fixtures they use change. A diff that cannot
-  # be computed (a new branch, a force push) runs them.
+  # tools docs (e2e:mcp reads them) or the scripts and fixtures they use change. The engines-floor
+  # job runs only when what the packed package is built from changes. A diff that cannot be
+  # computed (a new branch, a force push) runs them all.
   changes:
     name: Changed paths
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       e2e: ${{ steps.diff.outputs.e2e }}
+      package: ${{ steps.diff.outputs.package }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -121,6 +123,61 @@ jobs:
           else
             echo "e2e=true" >> "$GITHUB_OUTPUT"
           fi
+          # What the packed package is built from: the package, the panel it bundles and the toolchain.
+          packed=(packages/devtools app package.json pnpm-lock.yaml pnpm-workspace.yaml .nvmrc
+            .github/actions/setup .github/workflows/ci.yml)
+          if git diff --quiet "$BASE" HEAD -- "${packed[@]}"; then
+            echo "package=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "package=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The source tests can't run on 22.12 (Node runs .ts files only from 22.18, and the build tools
+  # need newer versions), so this job checks the packed package there instead.
+  engines-floor:
+    name: Packed package on Node.js 22.12
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      # `prepack` builds the library and the panel first, on the `.nvmrc` version.
+      - name: Pack the package
+        run: pnpm --filter @pangular-inspector/devtools pack --pack-destination "$RUNNER_TEMP/pack"
+
+      # The engines floor: the lowest version `engines.node` in packages/devtools/package.json allows.
+      # Keep the two in step.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.12.0
+
+      - name: Install the tarball into an empty project
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir floor
+          cd floor
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "$RUNNER_TEMP"/pack/*.tgz
+
+      # The Node.js entry points from `exports` in packages/devtools/package.json. The browser
+      # entries (overlay, popup and the hooks) need a DOM. `http` is left out too: it imports
+      # the optional Angular peers, which load in plain Node.js only with `@angular/compiler`
+      # (JIT), and the app's build bundles it.
+      - name: Run the CLI and load the entry points
+        working-directory: ${{ runner.temp }}/floor
+        run: |
+          node --version
+          npx pangular --version
+          for entry in '' /devframe /config /cli /hub /ssr /vite; do
+            node -e "import('@pangular-inspector/devtools$entry')"
+          done
+          node -e "require('@pangular-inspector/devtools/hub')"
 
   e2e-security:
     name: Security e2e

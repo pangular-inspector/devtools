@@ -1,6 +1,6 @@
 import { keepaliveDue } from './change-detection.ts';
 import { watchDeferHydration } from './defer-hydration-watch.ts';
-import { appIdOf, scanHydration } from './http-hydration.ts';
+import { appIdOf, scanHydration, type HydrationScanNg } from './http-hydration.ts';
 import { decodePayload, sanitizePayload, type PayloadSummary } from './http-payload.ts';
 import { withCapturedHeaders } from './http-headers.ts';
 import { redactCall } from './http-redact.ts';
@@ -24,10 +24,15 @@ interface RpcScope {
 
 type HydrationScan = ReturnType<typeof scanHydration>;
 
+/** The page's debug API, for the class names of mismatched components. */
+const pageNg = () => (globalThis as { ng?: HydrationScanNg }).ng;
+
 /** How long a scan is reused when `ngDevMode` has no counters to tell when hydration changed. */
 const RESCAN_MS = 5000;
 
-export function createHydrationScanner(scan: () => HydrationScan = () => scanHydration(document)) {
+export function createHydrationScanner(
+  scan: () => HydrationScan = () => scanHydration(document, pageNg()),
+) {
   let cached: HydrationScan | null = null;
   let key = '';
   let scans = 0;

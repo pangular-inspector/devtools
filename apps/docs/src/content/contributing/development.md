@@ -158,7 +158,7 @@ pnpm commit:check                   # Commit messages on your branch
 
 `pnpm typecheck` runs `ngc` on `app/tsconfig.json` and `examples/analog/tsconfig.app.json`, so template errors fail it. `app/tsconfig.json` turns on `strictTemplates`.
 
-`pnpm test:panel` runs the tests in `app/src/__tests__` in jsdom, with the Analog Angular plugin compiling the components. `pnpm test:axe` builds the package, writes a static report of Angular Travel to `dist/panel-axe`, serves it, and runs axe on every tab and on each hub view (`?view=ngrx`, `analog`, `nativescript`, `capacitor`) in both dark and light color schemes. It fails on any violation or page error. Run `pnpm exec playwright install chromium` once before the first run.
+`pnpm test:panel` runs the tests in `app/src/__tests__` in jsdom, with the Analog Angular plugin compiling the components. `pnpm test:axe` builds the package, writes a static report of Angular Travel to `dist/panel-axe`, serves it, and runs axe on every tab and on each hub view (`?view=ngrx`, `analog`, `nativescript`, `capacitor`) in both dark and light color schemes. It also checks each tab's states: a filter that matches nothing in every search box, a project whose source scans come back empty, a server that answers every call with an error, and a server that has not answered yet. Seeded pages stand in for a live app on the Capacitor, Errors, Plugins, Queries and Forms tabs, and for long lists on Components and **SSR & HTTP**. It fails on any violation, page error or state that does not show. Run `pnpm exec playwright install chromium` once before the first run.
 
 `pnpm skills:check` validates the frontmatter of every skill and role and checks that the files and links they mention exist. `pnpm commit:check` checks every commit on your branch that is not on `main` (it compares with `upstream/main`, then `origin/main`, then `main`).
 
@@ -188,6 +188,8 @@ pnpm commit:check                   # Commit messages on your branch
 </ngmd-workflow>
 
 A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`. A `node-22` job runs `pnpm test:devtools` on the newest Node.js 22, the oldest major `engines.node` (`>=22.12.0`) allows.
+
+The source tests can't run on Node.js 22.12 itself: Node.js runs `.ts` files only from 22.18, and the build tools need newer versions too. So when a pull request or push changes `packages/devtools`, `app`, the root manifests, the lockfile, `.nvmrc` or the CI setup, the `engines-floor` job (**Packed package on Node.js 22.12**) packs the package on the `.nvmrc` version, switches to Node.js 22.12.0 and installs the tarball into an empty project with npm. It then runs `npx pangular --version`, imports the `cli`, `hub`, `ssr` and `vite` entry points, and loads the `hub` entry with `require()`. When `engines.node` changes, change the version in that job too.
 
 Two more jobs run when a pull request or push changes `packages/devtools`, `app`, `e2e`, the lockfile or their scripts. `Security e2e` builds the package and runs `pnpm e2e:security`, the redaction and access checks. `MCP e2e` runs `pnpm e2e:mcp`, which builds the package and the SSR demo, then calls every agent tool, resource and prompt and compares the list with the agent tools page.
 

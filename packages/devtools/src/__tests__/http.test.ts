@@ -351,17 +351,54 @@ describe('hydration helpers', () => {
     });
   });
 
+  it('names a mismatch by the class of the component its node hosts', () => {
+    document.body.innerHTML = '<app-card></app-card><p>text</p>';
+    class _ProductCard {}
+    const card = document.querySelector('app-card')!;
+    const text = document.querySelector('p')!.firstChild!;
+    const mismatched = { status: 'mismatched', expectedNodeDetails: '<div>' };
+    (card as unknown as Record<string, unknown>)['__ngDebugHydrationInfo__'] = mismatched;
+    (text as unknown as Record<string, unknown>)['__ngDebugHydrationInfo__'] = mismatched;
+    const ng = {
+      getComponent: (el: Element) => (el === card ? new _ProductCard() : null),
+    };
+    expect(
+      scanHydration(document, ng).mismatches.map(({ component, isClass }) => ({
+        component,
+        isClass,
+      })),
+    ).toEqual([
+      { component: 'ProductCard', isClass: true },
+      { component: '#text', isClass: undefined },
+    ]);
+    // A debug API that throws, or none at all, falls back to the node name.
+    const throwing = {
+      getComponent: () => {
+        throw new Error('not an element');
+      },
+    };
+    expect(scanHydration(document, throwing).mismatches[0]?.component).toBe('app-card');
+    expect(scanHydration(document).mismatches[0]?.component).toBe('app-card');
+  });
+
   it('sanitizes the new hydration fields', () => {
     expect(
       sanitizeHydration({
         enabled: true,
         nodes: { hydrated: 3, skipped: 'x' },
-        mismatches: [{ component: 'app-card', expected: '<div>' }, { expected: 'x' }],
+        mismatches: [
+          { component: 'app-card', expected: '<div>', isClass: 'yes' },
+          { component: 'ProductCard', isClass: true },
+          { expected: 'x' },
+        ],
         warningsCaptured: true,
       }),
     ).toMatchObject({
       nodes: { hydrated: 3, skipped: 0, mismatched: 0 },
-      mismatches: [{ component: 'app-card', expected: '<div>' }],
+      mismatches: [
+        { component: 'app-card', expected: '<div>' },
+        { component: 'ProductCard', isClass: true },
+      ],
       warningsCaptured: true,
     });
     expect(sanitizeHydration({ enabled: false })?.warningsCaptured).toBe(false);

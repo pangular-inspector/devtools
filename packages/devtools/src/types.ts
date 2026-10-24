@@ -309,6 +309,13 @@ export interface ComponentTreeReport {
 
 export interface ComponentPage extends ComponentTreeReport {
   reportedAt: number;
+  /**
+   * The server clock minus the page clock, in ms, from the page clock
+   * (`pageNow`) the last push carried. Page times such as a defer block's
+   * `since` are aged against `Date.now() - clockOffset`. Missing when the
+   * page sent no clock.
+   */
+  clockOffset?: number;
 }
 
 export interface InjectorInfo {

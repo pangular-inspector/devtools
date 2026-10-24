@@ -81,6 +81,12 @@ export interface WebMcpPage {
   tools: WebMcpTool[];
 }
 
+/** An Angular forms error the page logged while setting up a form, such as `NG01203`. */
+export interface FormSetupError {
+  pageId: string;
+  message: string;
+}
+
 export function pageOf(formId: string): string {
   return formId.split('@')[1] ?? '';
 }

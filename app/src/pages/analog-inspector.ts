@@ -84,7 +84,7 @@ interface AnalogCall {
 interface AnalogPage {
   pageId: string;
   url: string;
-  chain: { path: string; file?: string; serverFile?: string }[];
+  chain: { path: string; file?: string; serverFile?: string; outlet?: string }[];
   load?: { preview: string; bytes: number; keys: string[] };
   serverContext?: string;
   hydrated: number;
@@ -497,7 +497,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                             kindText(row.route)
                           }}</span>
                           @if (isOpen(row.route)) {
-                            <span class="pill live">open</span>
+                            <span class="pill live">{{ openText(row.route) }}</span>
                           }
                         </div>
                       </td>
@@ -2198,7 +2198,15 @@ export class AnalogInspector {
     const pages = this.state().pages ?? [];
     return (this.hostPageId ? pages.find((p) => p.pageId === this.hostPageId) : pages[0]) ?? null;
   });
-  readonly openFiles = computed(() => new Set((this.page()?.chain ?? []).map((c) => c.file)));
+  /** Open page files, mapped to their named outlet ('' for the primary outlet). */
+  readonly openFiles = computed(() => {
+    const open = new Map<string, string>();
+    for (const c of this.page()?.chain ?? []) {
+      // The primary outlet wins when one file renders in several outlets.
+      if (c.file && (!open.has(c.file) || !c.outlet)) open.set(c.file, c.outlet ?? '');
+    }
+    return open;
+  });
   readonly allCalls = computed(() => this.state().calls ?? []);
   readonly maxServerCalls = MAX_SERVER_CALLS;
   readonly callQuery = signal('');
@@ -2379,6 +2387,11 @@ export class AnalogInspector {
 
   isOpen(route: AnalogRoute): boolean {
     return !!route.file && this.openFiles().has(route.file);
+  }
+
+  openText(route: AnalogRoute): string {
+    const outlet = route.file ? this.openFiles().get(route.file) : undefined;
+    return outlet ? `open in ${outlet}` : 'open';
   }
 
   kindText(route: AnalogRoute): string {
