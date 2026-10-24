@@ -33,10 +33,11 @@ export function explainPipeText(
   cwd: string,
   live: PipesState,
   connectedPages: number,
+  options?: { rules?: Record<string, boolean> },
 ): string {
   const declared = scanPipes(cwd).filter((p) => p.name === name);
   const runtime = live.pipes.find((p) => p.name === name);
-  const findings = lintPipes(cwd).filter((f) => f.pipe === name);
+  const findings = lintPipes(cwd, options).filter((f) => f.pipe === name);
 
   if (!declared.length && !runtime) {
     return `No pipe named ${code(name)} was found in source or on the running page.`;

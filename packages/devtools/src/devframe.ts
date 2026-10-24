@@ -4334,7 +4334,11 @@ const pangular = defineDevframe({
       },
       handler: async (args: { name?: string; page?: string }) => {
         if (!args?.name) return { markdown: 'Pass a pipe `name`.' };
-        return { markdown: explainPipeOnPage(args.name, ctx.cwd, pipePages, pageArgument(args)) };
+        return {
+          markdown: explainPipeOnPage(args.name, ctx.cwd, pipePages, pageArgument(args), {
+            rules: config.lint.rules,
+          }),
+        };
       },
     });
 

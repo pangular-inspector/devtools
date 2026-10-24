@@ -187,3 +187,40 @@ describe('explainPipeText', () => {
     expect(text).not.toContain('Duplicate subscriptions');
   });
 });
+
+describe('explainPipeText lint findings', () => {
+  function impureFixture(): string {
+    const dir = fixtureDir('pangular-pipe-explain-lint-');
+    mkdirSync(join(dir, 'src'));
+    writeFileSync(
+      join(dir, 'src', 'app.ts'),
+      `
+        @Pipe({ name: 'appLive', pure: false })
+        export class LivePipe implements PipeTransform {
+          transform(value: number) { return value; }
+        }
+
+        @Component({
+          selector: 'app-list',
+          imports: [LivePipe],
+          template: \`
+            @for (item of items; track item.id) {
+              <p>{{ item.price | appLive }}</p>
+            }
+          \`,
+        })
+        export class ListView {}
+      `,
+    );
+    return dir;
+  }
+
+  it('leaves out findings for rules turned off in lint.rules', () => {
+    const dir = impureFixture();
+    expect(explainPipeText('appLive', dir, state([]), 0)).toContain('impure-pipe-in-for');
+    const off = explainPipeText('appLive', dir, state([]), 0, {
+      rules: { 'impure-pipe-in-for': false },
+    });
+    expect(off).not.toContain('impure-pipe-in-for');
+  });
+});

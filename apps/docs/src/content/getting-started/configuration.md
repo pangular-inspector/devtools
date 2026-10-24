@@ -282,7 +282,7 @@ It is off by default because it starts processes on your machine. A value other 
 }
 ```
 
-Rules set to `false` are omitted from panel findings, agent tools (`scan-templates`, `scan-pipe-usage`, `lint-routes`, `lint-forms`, `analog-lint`), `pangular audit` and the CI exporter (`pangular lint`).
+A rule set to `false` is left out of the panel, the **Audit** tab, the agent tools (`scan-templates`, `scan-pipe-usage`, `explain-pipe`, `lint-routes`, `lint-forms`, `analog-lint` and `audit`) and the CI export (`pangular lint`). Use the rule name a finding shows. The template rules are listed under [scan-templates](../agents/tools.md#scan-templates).
 
 ## Check the active configuration
 
