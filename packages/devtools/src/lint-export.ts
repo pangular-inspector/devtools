@@ -55,6 +55,8 @@ export interface LintRun {
 export interface LintExport {
   lints: LintRun[];
   findings: ExportFinding[];
+  /** Rules turned off in `lint.rules`, which the SARIF rule list leaves out. */
+  rulesOff?: string[];
 }
 
 const SEVERITY_ORDER: Record<LintSeverity, number> = { error: 0, warning: 1, info: 2 };
@@ -146,7 +148,8 @@ export async function runSourceLints(
       (a.file ?? '').localeCompare(b.file ?? '') ||
       (a.line ?? 0) - (b.line ?? 0),
   );
-  return { lints, findings };
+  const rulesOff = Object.keys(rules ?? {}).filter((rule) => rules?.[rule] === false);
+  return { lints, findings, ...(rulesOff.length ? { rulesOff } : {}) };
 }
 
 export function lintNames(): SourceLint[] {
@@ -189,6 +192,7 @@ export function toSarif(result: LintExport) {
   for (const lint of result.lints) {
     if (lint.lint !== 'templates' || !lint.ran) continue;
     for (const [rule, level] of Object.entries(TEMPLATE_LINT_RULES)) {
+      if (result.rulesOff?.includes(rule)) continue;
       rules.set(`templates/${rule}`, { id: `templates/${rule}`, level, lint: 'templates' });
     }
   }

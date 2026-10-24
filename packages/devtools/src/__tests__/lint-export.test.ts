@@ -103,6 +103,15 @@ describe('runSourceLints', () => {
 });
 
 describe('toSarif', () => {
+  it('leaves template rules turned off out of the rule list', async () => {
+    const sarif = toSarif(
+      await runSourceLints(project(), { compiler, rules: { 'img-missing-alt': false } }),
+    );
+    const ids = sarif.runs[0]!.tool.driver.rules.map((rule) => rule.id);
+    expect(ids).not.toContain('templates/img-missing-alt');
+    expect(ids).toContain('templates/track-by-index');
+  });
+
   it('writes a SARIF 2.1.0 log with rules, levels and physical locations', async () => {
     const sarif = toSarif(await runSourceLints(project(), { compiler }));
     expect(sarif.version).toBe('2.1.0');
