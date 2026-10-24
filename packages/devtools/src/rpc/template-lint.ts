@@ -133,7 +133,7 @@ const cache = new WeakMap<TemplateCompiler, Map<string, Map<string, TemplateLint
 
 export async function lintTemplates(
   cwd: string,
-  options: { compiler?: TemplateCompiler } = {},
+  options: { compiler?: TemplateCompiler; rules?: Record<string, boolean> } = {},
 ): Promise<TemplateLintResult> {
   const compiler = options.compiler ?? (await projectCompiler(cwd));
   if (!compiler) return { parsed: false, templates: 0, findings: [] };
@@ -166,6 +166,7 @@ export async function lintTemplates(
         const own = next.get(key) ?? previous.get(key) ?? lintTemplate(compiler, template, text);
         next.set(key, own);
         for (const finding of own) {
+          if (options.rules && options.rules[finding.rule] === false) continue;
           if (finding.rule === 'legacy-control-flow' && !hasControlFlow) continue;
           findings.push(finding);
         }

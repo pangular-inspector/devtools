@@ -515,23 +515,27 @@ export function lintFormsFor(
   state: FormsState,
   args: { form?: string; page?: string },
   now = Date.now(),
+  options?: { rules?: Record<string, boolean> },
 ): FormLintFinding[] {
   const forms = matchForms(state.forms, args.form, args.page);
   const setup = (state.setupErrors ?? [])
     .filter((e) => !args.page || e.pageId === args.page)
     .map((e) => e.message);
-  return [
+  const findings = [
     ...lintSetupErrors(args.form ? [] : setup),
-    ...forms.flatMap((form) => lintForm(form, state.events, now)),
+    ...forms.flatMap((form) => lintForm(form, state.events, now, options)),
   ];
+  const rules = options?.rules;
+  return rules ? findings.filter((f) => rules[f.rule] !== false) : findings;
 }
 
 export function lintFormsText(
   state: FormsState,
   args: { form?: string; page?: string },
   now = Date.now(),
+  options?: { rules?: Record<string, boolean> },
 ): string {
-  const findings = lintFormsFor(state, args, now);
+  const findings = lintFormsFor(state, args, now, options);
   if (!findings.length)
     return 'No form problems found by the lint rules. For generic accessibility, run axe-core scoped to the form.';
   const order = { error: 0, warning: 1, info: 2 };

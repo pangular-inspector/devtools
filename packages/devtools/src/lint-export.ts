@@ -5,6 +5,11 @@ import type { CAC } from 'cac';
 import { lintAnalog, scanAnalog } from './rpc/analog-scan.ts';
 import { lintPipes, type LintSeverity } from './rpc/pipe-lint.ts';
 import { TEMPLATE_LINT_RULES, lintTemplates, type TemplateCompiler } from './rpc/template-lint.ts';
+import {
+  resolvePangularConfig,
+  type PangularConfig,
+  type ResolvedPangularConfig,
+} from './config.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 /**
@@ -50,6 +55,8 @@ export interface LintRun {
 export interface LintExport {
   lints: LintRun[];
   findings: ExportFinding[];
+  /** Rules turned off in `lint.rules`, which the SARIF rule list leaves out. */
+  rulesOff?: string[];
 }
 
 const SEVERITY_ORDER: Record<LintSeverity, number> = { error: 0, warning: 1, info: 2 };
@@ -61,9 +68,17 @@ function posix(path: string): string {
 /** Runs the chosen source lints on `cwd`, all of them by default. */
 export async function runSourceLints(
   cwd: string,
-  options: { only?: SourceLint[]; compiler?: TemplateCompiler } = {},
+  options: {
+    only?: SourceLint[];
+    compiler?: TemplateCompiler;
+    rules?: Record<string, boolean>;
+    config?: PangularConfig | ResolvedPangularConfig;
+  } = {},
 ): Promise<LintExport> {
   const chosen = new Set<SourceLint>(options.only?.length ? options.only : lintNames());
+  const rules =
+    options.rules ??
+    (options.config ? resolvePangularConfig(options.config).lint.rules : undefined);
   const lints: LintRun[] = [];
   const findings: ExportFinding[] = [];
   const add = (lint: SourceLint, found: ExportFinding[], skipped?: string) => {
@@ -78,7 +93,7 @@ export async function runSourceLints(
   };
 
   if (chosen.has('templates')) {
-    const result = await lintTemplates(cwd, { compiler: options.compiler });
+    const result = await lintTemplates(cwd, { compiler: options.compiler, rules });
     add(
       'templates',
       result.findings.map((f) => ({
@@ -96,7 +111,7 @@ export async function runSourceLints(
   if (chosen.has('pipes')) {
     add(
       'pipes',
-      lintPipes(cwd).map((f) => ({
+      lintPipes(cwd, { rules }).map((f) => ({
         lint: 'pipes',
         rule: f.rule,
         severity: f.severity,
@@ -114,7 +129,7 @@ export async function runSourceLints(
       const root = project.root;
       add(
         'analog',
-        lintAnalog(project).map((f) => ({
+        lintAnalog(project, { rules }).map((f) => ({
           lint: 'analog',
           rule: f.rule,
           severity: f.severity,
@@ -133,7 +148,8 @@ export async function runSourceLints(
       (a.file ?? '').localeCompare(b.file ?? '') ||
       (a.line ?? 0) - (b.line ?? 0),
   );
-  return { lints, findings };
+  const rulesOff = Object.keys(rules ?? {}).filter((rule) => rules?.[rule] === false);
+  return { lints, findings, ...(rulesOff.length ? { rulesOff } : {}) };
 }
 
 export function lintNames(): SourceLint[] {
@@ -176,6 +192,7 @@ export function toSarif(result: LintExport) {
   for (const lint of result.lints) {
     if (lint.lint !== 'templates' || !lint.ran) continue;
     for (const [rule, level] of Object.entries(TEMPLATE_LINT_RULES)) {
+      if (result.rulesOff?.includes(rule)) continue;
       rules.set(`templates/${rule}`, { id: `templates/${rule}`, level, lint: 'templates' });
     }
   }
@@ -269,6 +286,7 @@ export function registerLintCommand(
   cli: CAC,
   options: {
     cwd: (flags: Record<string, unknown>) => string;
+    config?: (flags: Record<string, unknown>, root: string) => PangularConfig;
     log: (message: string) => void;
     /** Lines for the person at the terminal, kept off stdout so the export stays parseable. */
     note?: (message: string) => void;
@@ -298,7 +316,10 @@ export function registerLintCommand(
       }
       const only = parseOnly(flags.only);
       const cwd = options.cwd(flags as Record<string, unknown>);
-      const result = await runSourceLints(cwd, { only, compiler: options.compiler });
+      const config = options.config
+        ? options.config(flags as Record<string, unknown>, cwd)
+        : undefined;
+      const result = await runSourceLints(cwd, { only, compiler: options.compiler, config });
       const text = formatLintExport(result, format);
       for (const lint of result.lints) {
         if (lint.skipped) note(`[pangular] ${lint.tool} did not run: ${lint.skipped}`);

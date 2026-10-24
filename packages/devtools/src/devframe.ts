@@ -883,7 +883,7 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       // A source scan like scan-pipes, so a static report bakes it in too.
       snapshot: true,
-      handler: () => lintPipes(ctx.cwd),
+      handler: () => lintPipes(ctx.cwd, { rules: config.lint.rules }),
     });
 
     const capacitorPages = new Map<string, CapacitorPage>();
@@ -1157,7 +1157,7 @@ const pangular = defineDevframe({
       name: 'router-lint',
       type: 'query',
       jsonSerializable: true,
-      handler: (pageId: unknown) => routerLintResult(pageFor(pageId)),
+      handler: (pageId: unknown) => routerLintResult(pageFor(pageId), { rules: config.lint.rules }),
     });
 
     register({
@@ -1974,10 +1974,15 @@ const pangular = defineDevframe({
       type: 'query',
       jsonSerializable: true,
       handler: (args: { form?: unknown; page?: unknown } | null) =>
-        lintFormsFor(formsState.value() as FormsState, {
-          form: typeof args?.form === 'string' ? args.form : undefined,
-          page: typeof args?.page === 'string' ? args.page : undefined,
-        }),
+        lintFormsFor(
+          formsState.value() as FormsState,
+          {
+            form: typeof args?.form === 'string' ? args.form : undefined,
+            page: typeof args?.page === 'string' ? args.page : undefined,
+          },
+          undefined,
+          { rules: config.lint.rules },
+        ),
     });
 
     register({
@@ -3209,7 +3214,7 @@ const pangular = defineDevframe({
       },
     });
 
-    agent.registerTool(templateLintTool(ctx.cwd));
+    agent.registerTool(templateLintTool(ctx.cwd, { rules: config.lint.rules }));
 
     agent.registerTool({
       id: 'pangular:for-blocks',
@@ -3807,7 +3812,7 @@ const pangular = defineDevframe({
       handler: async (args: { page?: string }) => {
         const state = routerState.value() as RouterState;
         if (!state.pages.length) return { markdown: noRouter };
-        return { markdown: lintRoutesText(state, args) };
+        return { markdown: lintRoutesText(state, args, undefined, { rules: config.lint.rules }) };
       },
     });
 
@@ -4297,7 +4302,11 @@ const pangular = defineDevframe({
         if (!state.forms.length && !state.setupErrors?.length) return { markdown: noForms };
         const elsewhere = unknownFormPage(args);
         if (elsewhere) return elsewhere;
-        return { markdown: lintFormsText(state, onDefaultFormPage(args ?? {})) };
+        return {
+          markdown: lintFormsText(state, onDefaultFormPage(args ?? {}), undefined, {
+            rules: config.lint.rules,
+          }),
+        };
       },
     });
 
@@ -4307,7 +4316,7 @@ const pangular = defineDevframe({
       description:
         'Source checks of pipes: impure pipes inside @for, `| json` left in templates, pure pipes that read signals, and method calls piped to `| async`.',
       inputSchema: { type: 'object', properties: {} },
-      handler: async () => ({ markdown: lintPipesText(ctx.cwd) }),
+      handler: async () => ({ markdown: lintPipesText(ctx.cwd, { rules: config.lint.rules }) }),
     });
 
     agent.registerTool({
@@ -4325,7 +4334,11 @@ const pangular = defineDevframe({
       },
       handler: async (args: { name?: string; page?: string }) => {
         if (!args?.name) return { markdown: 'Pass a pipe `name`.' };
-        return { markdown: explainPipeOnPage(args.name, ctx.cwd, pipePages, pageArgument(args)) };
+        return {
+          markdown: explainPipeOnPage(args.name, ctx.cwd, pipePages, pageArgument(args), {
+            rules: config.lint.rules,
+          }),
+        };
       },
     });
 
@@ -4702,6 +4715,7 @@ const pangular = defineDevframe({
       agentAxe: !config.agent.readOnly,
       agentReadOnly: config.agent.readOnly,
       platform: (pageId) => componentPages.get(pageId)?.platform,
+      rules: config.lint.rules,
       // Every page the overlay claimed, so axe works with any set of inspectors on.
       pages: () =>
         withPageUrls([
@@ -4725,7 +4739,9 @@ const pangular = defineDevframe({
         ...(on.router ? { router: () => routerState.value() as RouterState } : {}),
         ...(on.forms ? { forms: () => formsState.value() as FormsState } : {}),
         ...(on.http ? { http: () => httpState.value() as HttpState } : {}),
-        ...(on.pipes ? { pipes: cachedPipeLint(() => lintPipes(ctx.cwd)) } : {}),
+        ...(on.pipes
+          ? { pipes: cachedPipeLint(() => lintPipes(ctx.cwd, { rules: config.lint.rules })) }
+          : {}),
       },
     });
     onPageClaimed = audit.pageLoaded;
@@ -4736,6 +4752,7 @@ const pangular = defineDevframe({
         owner: ctx,
         ttl: liveTtl,
         owners,
+        rules: config.lint.rules,
       });
     }
     feed.attachDocks(

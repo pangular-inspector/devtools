@@ -229,6 +229,11 @@ export interface PangularConfig {
    * `inspectors.plugins: false` turns every plugin off.
    */
   plugins?: Record<string, boolean | PluginSwitchInput>;
+  /** Turn individual lint rules off: `{ 'img-missing-alt': false }`. */
+  lint?: {
+    /** Rule status by rule name. `false` turns the rule off; `true` or omitted keeps it on. */
+    rules?: Record<string, boolean>;
+  };
 }
 
 /** What a `plugins` entry can turn off; each is on when left out. */
@@ -263,6 +268,9 @@ export interface ResolvedPangularConfig {
   popup: { hotkey: string | false };
   /** The `plugins` entries that were given, by plugin id. */
   plugins: Record<string, PluginSwitches>;
+  lint: {
+    rules: Record<string, boolean>;
+  };
 }
 
 /** The switches of one plugin under `config`, whether or not it has a `plugins` entry. */
@@ -648,7 +656,35 @@ export function resolvePangularConfig(config?: unknown): ResolvedPangularConfig 
     ) as Record<PangularLimit, number>,
     popup: { hotkey: popupHotkey(record(input['popup'])['hotkey']) },
     plugins: pluginEntries(input['plugins']),
+    lint: { rules: lintRules(input['lint']) },
   };
+}
+
+const MAX_LINT_RULE_ENTRIES = 200;
+
+function lintRules(value: unknown): Record<string, boolean> {
+  const rules = record(record(value)['rules']);
+  const resolved: Record<string, boolean> = {};
+  for (const [key, val] of Object.entries(rules).slice(0, MAX_LINT_RULE_ENTRIES)) {
+    if (typeof val === 'boolean') {
+      resolved[key] = val;
+    }
+  }
+  return resolved;
+}
+
+/**
+ * Whether a lint rule is enabled by the devtools config: on unless the config
+ * explicitly sets `lint.rules[rule]` to `false`.
+ */
+export function isLintRuleEnabled(
+  rule: string,
+  config?: ResolvedPangularConfig | PangularConfig,
+): boolean {
+  if (!config) return true;
+  const rules = 'lint' in config && config.lint ? config.lint.rules : undefined;
+  if (!rules || typeof rules !== 'object') return true;
+  return rules[rule] !== false;
 }
 
 const MAX_PLUGIN_ENTRIES = 100;
@@ -713,6 +749,7 @@ const CONFIG_KEYS = [
   'limits',
   'popup',
   'plugins',
+  'lint',
 ] as const;
 
 /**
@@ -834,6 +871,21 @@ export function pangularConfigProblems(config: unknown): string[] {
       booleans(`plugins.${id}`, entry, ['enabled', 'tools', 'actions'], 'on');
     }
   }
+  const lint = object('lint', input['lint'], ['rules']);
+  const rules = lint['rules'];
+  if (rules !== undefined) {
+    if (!isRecord(rules)) {
+      problems.push(`\`lint.rules\` should be an object, got ${describe(rules)}. It was ignored.`);
+    } else {
+      for (const [key, value] of Object.entries(rules)) {
+        if (typeof value !== 'boolean') {
+          problems.push(
+            `\`lint.rules.${key}\` should be true or false, got ${describe(value)}. It was ignored, so it is on.`,
+          );
+        }
+      }
+    }
+  }
   return problems;
 }
 
@@ -868,8 +920,8 @@ export function configFromConnection(
 export function pickPangularConfig<T extends PangularConfig>(
   options: T,
 ): { config: PangularConfig; rest: Omit<T, keyof PangularConfig> } {
-  const { inspectors, agent, actions, redaction, limits, popup, plugins, ...rest } = options;
-  return { config: { inspectors, agent, actions, redaction, limits, popup, plugins }, rest };
+  const { inspectors, agent, actions, redaction, limits, popup, plugins, lint, ...rest } = options;
+  return { config: { inspectors, agent, actions, redaction, limits, popup, plugins, lint }, rest };
 }
 
 /** Form actions that work without a `formId`: they act on the page, not on one form. */
@@ -1779,6 +1831,12 @@ export function summarizePangularConfig(
         ([id, entry]) =>
           `${id} (${[!entry.tools && 'tools', !entry.actions && 'actions'].filter(Boolean).join(', ')})`,
       ),
+  );
+  add(
+    'Lint rules off',
+    Object.entries(config.lint?.rules ?? {})
+      .filter(([, enabled]) => !enabled)
+      .map(([rule]) => rule),
   );
   return items;
 }

@@ -29,8 +29,8 @@ export interface PipeLintFinding {
  * from `BUILTIN_PIPES` directly. */
 type PurityMap = Map<string, boolean>;
 
-export function lintPipesText(cwd: string): string {
-  const findings = lintPipes(cwd);
+export function lintPipesText(cwd: string, options?: { rules?: Record<string, boolean> }): string {
+  const findings = lintPipes(cwd, options);
   if (!findings.length) return 'No pipe problems found by the lint rules.';
   const order = { error: 0, warning: 1, info: 2 };
   const lines = findings
@@ -46,7 +46,10 @@ export function lintPipesText(cwd: string): string {
  * is idiomatic and cheap, and `json` has a rule of its own. */
 const EXEMPT_IN_FOR = new Set(['async', 'json']);
 
-export function lintPipes(cwd: string): PipeLintFinding[] {
+export function lintPipes(
+  cwd: string,
+  options?: { rules?: Record<string, boolean> },
+): PipeLintFinding[] {
   const files: { content: string; relPath: string; fullPath: string }[] = [];
   for (const root of sourceRoots(cwd)) {
     walkFiles(root, (full, entry) => {
@@ -88,7 +91,8 @@ export function lintPipes(cwd: string): PipeLintFinding[] {
     }
     findings.push(...signalInPurePipeFindings(content, relPath));
   }
-  return findings;
+  const rules = options?.rules;
+  return rules ? findings.filter((f) => rules[f.rule] !== false) : findings;
 }
 
 function interpolationEnd(text: string, open: number): number {

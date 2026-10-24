@@ -45,7 +45,8 @@ The file holds the same options as `createPangular()`, as JSON. Save this as `pa
 {
   "inspectors": {"analog": false},
   "agent": {"readOnly": true},
-  "redaction": {"secretNames": ["passport"]}
+  "redaction": {"secretNames": ["passport"]},
+  "lint": {"rules": {"img-missing-alt": false}}
 }
 ```
 

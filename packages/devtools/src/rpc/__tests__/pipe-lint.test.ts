@@ -293,4 +293,26 @@ describe('lintPipes', () => {
       expect(findings.filter((f) => f.rule === 'signal-read-in-pure-pipe')).toEqual([]);
     });
   });
+
+  it('omits findings for rules turned off in options.rules', () => {
+    const dir = fixtureDir('pangular-pipe-lint-');
+    mkdirSync(join(dir, 'src'));
+    writeFileSync(
+      join(dir, 'src', 'app.ts'),
+      `
+        @Component({
+          selector: 'app-list',
+          imports: [SlicePipe],
+          template: \`
+            @for (item of items; track item.id) {
+              <p>{{ item.tail | slice:1 }}</p>
+            }
+          \`,
+        })
+        export class ListView {}
+      `,
+    );
+    expect(lintPipes(dir).map((f) => f.rule)).toEqual(['impure-pipe-in-for']);
+    expect(lintPipes(dir, { rules: { 'impure-pipe-in-for': false } })).toEqual([]);
+  });
 });

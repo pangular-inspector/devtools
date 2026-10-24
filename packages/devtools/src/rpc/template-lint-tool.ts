@@ -8,7 +8,10 @@ import {
 } from './template-lint.ts';
 
 /** The `scan-templates` agent tool: reads source only, so the stdio server keeps it. */
-export function templateLintTool(cwd: string, options: { compiler?: TemplateCompiler } = {}) {
+export function templateLintTool(
+  cwd: string,
+  options: { compiler?: TemplateCompiler; rules?: Record<string, boolean> } = {},
+) {
   return {
     id: 'pangular:scan-templates',
     title: 'Lint templates',

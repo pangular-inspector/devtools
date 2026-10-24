@@ -879,7 +879,10 @@ function hasPageExports(source: string): boolean {
   return exportsOf(maskStrings(stripComments(source))).some((e) => e === 'load' || e === 'action');
 }
 
-export function lintAnalog(project: AnalogProject): AnalogLintFinding[] {
+export function lintAnalog(
+  project: AnalogProject,
+  options?: { rules?: Record<string, boolean> },
+): AnalogLintFinding[] {
   const out: AnalogLintFinding[] = [];
   for (const error of project.scanErrors ?? []) {
     out.push({
@@ -1132,5 +1135,6 @@ export function lintAnalog(project: AnalogProject): AnalogLintFinding[] {
       });
     } else slugs.set(file.slug, file.file);
   }
-  return out;
+  const rules = options?.rules;
+  return rules ? out.filter((f) => rules[f.rule] !== false) : out;
 }

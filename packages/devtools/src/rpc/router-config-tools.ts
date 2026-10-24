@@ -315,14 +315,17 @@ export type RouterLintResult =
   | { checked: false; reason: 'no-page' | 'events-only' | 'no-config' };
 
 /** Lint findings for the panel, or why no check could run. */
-export function routerLintResult(page: RouterPage | undefined): RouterLintResult {
+export function routerLintResult(
+  page: RouterPage | undefined,
+  options?: { rules?: Record<string, boolean> },
+): RouterLintResult {
   if (!page) return { checked: false, reason: 'no-page' };
   if (!page.config)
     return {
       checked: false,
       reason: page.setup?.mode === 'events-only' ? 'events-only' : 'no-config',
     };
-  return { checked: true, findings: lintRoutes(page) };
+  return { checked: true, findings: lintRoutes(page, options) };
 }
 
 /**
@@ -330,7 +333,10 @@ export function routerLintResult(page: RouterPage | undefined): RouterLintResult
  * setup and navigations) for mistakes Angular throws on, warns about, or
  * silently accepts.
  */
-export function lintRoutes(page: RouterPage): LintFinding[] {
+export function lintRoutes(
+  page: RouterPage,
+  options?: { rules?: Record<string, boolean> },
+): LintFinding[] {
   const findings: LintFinding[] = [];
   const config = page.config ?? [];
   const inputBinding = page.setup?.features['componentInputBinding'] === 'on';
@@ -576,13 +582,15 @@ export function lintRoutes(page: RouterPage): LintFinding[] {
       break;
     }
   }
-  return findings;
+  const rules = options?.rules;
+  return rules ? findings.filter((f) => rules[f.rule] !== false) : findings;
 }
 
 export function lintRoutesText(
   state: RouterState,
   args: { page?: string },
   now = Date.now(),
+  options?: { rules?: Record<string, boolean> },
 ): string {
   const page = pickPage(state, args.page);
   if (!page) return noPage(args.page, state);
@@ -590,7 +598,7 @@ export function lintRoutesText(
     return page.setup?.mode === 'events-only'
       ? `No checks ran: page ${code(page.pageId)} has not reported its route config yet. It runs in events-only mode, which only limits setup detection, so the checks run once the config arrives.${freshness(page, now)}`
       : `Page ${code(page.pageId)} has not reported its route config yet.${freshness(page, now)}`;
-  const findings = lintRoutes(page);
+  const findings = lintRoutes(page, options);
   const note = skippedLinksNote(page, 'checked');
   const skipped = note ? ` ${note}` : '';
   if (!findings.length)
