@@ -256,7 +256,7 @@ describe('agent tool arguments', () => {
     for (const args of [{}, { component: '   ' }]) {
       const result = await invoke('pangular_inspect-signals', args);
       expect(result.isError).toBe(true);
-      expect(result.content[0]!.text).toMatch(/Pass `component`/);
+      expect(result.content[0]!.text).toMatch(/Pass one of `component`.*`selector`/);
       expect(result.content[0]!.text).not.toMatch(RAW_ERROR);
     }
   });

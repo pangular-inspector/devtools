@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
+import { deferNotes } from '../config.ts';
 import { MAX_DEFER_BLOCKS, createDeferTracker, type DeferDebugNg } from '../defer-blocks.ts';
 import { elementById } from '../element-id.ts';
 import { DEFER_ROWS, deferBlocksText, toComponentPage } from '../rpc/component-tools.ts';
@@ -326,6 +327,31 @@ describe('deferBlocksText', () => {
     expect(text).toContain('`d8` in TripReviews (`c2`): on its placeholder for 29s');
   });
 
+  it('ages blocks on the page clock, not the server clock', () => {
+    const hour = 3_600_000;
+    const serverNow = 1_700_000_000_000;
+    // The page's clock runs an hour ahead: its block went to the placeholder 20 s ago.
+    const pageNow = serverNow + hour;
+    const blocks = [
+      info({ id: 'd1', state: 'placeholder', since: pageNow - 20_000, triggers: ['on idle'] }),
+      info({ id: 'd2', state: 'placeholder', since: pageNow - 2_000, triggers: ['on idle'] }),
+    ];
+    const page = toComponentPage(report(blocks), serverNow, pageNow);
+    expect(page.clockOffset).toBe(-hour);
+    // Read 5 s after the push arrived.
+    const text = deferBlocksText([page], serverNow + 5_000);
+    expect(text).toContain('`d1` in TripReviews (`c2`): on its placeholder for 25s');
+    expect(text).not.toContain('`d2` in');
+    // Without the page clock, the same blocks would read as not stuck at all.
+    const unaware = toComponentPage(report(blocks), serverNow);
+    expect(unaware).not.toHaveProperty('clockOffset');
+    expect(deferBlocksText([unaware], serverNow + 5_000)).not.toContain('Needs attention');
+    // A page clock that is not a time is ignored.
+    for (const bad of ['1', Number.NaN, -5, null]) {
+      expect(toComponentPage(report(blocks), serverNow, bad)).not.toHaveProperty('clockOffset');
+    }
+  });
+
   it('lists at most DEFER_ROWS blocks per page and says how many more are not shown', () => {
     const blocks = Array.from({ length: DEFER_ROWS + 7 }, (_, n) =>
       info({ id: `d${n}`, state: 'error' }),
@@ -396,5 +422,17 @@ describe('deferBlocksText', () => {
     const text = deferBlocksText([page]);
     expect(text).not.toContain('s3cr3tvalue123');
     expect(text).not.toContain('abcdefabcdef');
+  });
+});
+
+describe('deferNotes', () => {
+  it('adds no age note for a block the page sent no time for', () => {
+    const block = {
+      state: 'placeholder',
+      hydration: 'not-configured',
+      triggers: ['on timer(5000ms)'],
+      since: 0,
+    };
+    expect(deferNotes(block, Date.now()).map((note) => note.kind)).toEqual([]);
   });
 });

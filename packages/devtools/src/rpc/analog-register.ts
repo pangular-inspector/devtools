@@ -410,7 +410,7 @@ export async function registerAnalog(
     id: 'pangular:analog-inspect-page',
     title: 'Show the current Analog page',
     description:
-      'The Analog page open in the browser: its files (layouts first), load() data it received, server rendering and hydration state, hydration errors, and page files the running router does not know yet (restart needed).',
+      'The Analog page open in the browser: its files (layouts first, then pages in named outlets), load() data it received, server rendering and hydration state, hydration errors, and page files the running router does not know yet (restart needed).',
     inputSchema: { type: 'object', properties: { page } },
     handler: async (args: { page?: string }) =>
       text(analogCurrentPageText(project(), current(), args?.page)),

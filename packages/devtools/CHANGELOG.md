@@ -114,7 +114,9 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Refuse writes when the target tab is unclear, instead of acting on whichever tab changed last.
 - Pairing tokens (`auth: {tokens}`, `--auth-token`, `PANGULAR_AUTH_TOKEN`) let an app on a device connect without typing the code. The CLI prints only a short hash of each token.
 - Hide the shared state of a turned-off inspector from agents.
+- Mask secret route params in named outlets, such as the token in `/(side:reset/:token)`, before the navigation is recognized and in router link targets. The route config match read only the primary path. It also follows an empty-path layout route into its named-outlet children, as the router does, so `/(side:reset/:token)` and `/home(side:reset/:token)` are masked when `reset/:token` sits under `{path: '', children: [...]}`. The active route walk also follows `firstChild` when `children` is missing, and stops after 200 routes.
 - Leave the `redaction` config (`secretNames`, `unmask`) out of `__connection.json`, which answers before the one-time code. Pages get it from the server once they are trusted, and read nothing from the app until they have it. `initOverlay()` still resolves once connected, without waiting for the code. The Dashboard asks for the config the same way to list **Extra secret names** and **Unmasked names**. A static report leaves those rows out (#419).
+- Mask secret Signal Forms field values in signal graphs and their history. Signal Forms keeps each field value in an unnamed signal, so a `password`, `token` or `apiKey` field showed in the graph of its component on the Signals page, in `inspect-signals` (also when it reads a component by `component` or `selector`), in the `signal-graph` resource, over WebMCP and in the static report. The page now masks the values of the component's secret fields (by name, `redaction.secretNames`, `type="password"`, a credential `autocomplete` or a mask marker, and their last 50 values) in every node, resource and history entry before the graph leaves it.
 
 ### Features
 
@@ -185,8 +187,11 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Fixes from the audit of every inspector, the panel shell, the hub, the extension and the native overlays (#361, #362, #363, #364), the follow-ups in #418, and the release blockers found by the test campaign (#432).
 - One malformed component report no longer breaks the agent tools for every page. Reports are checked when they reach the server.
 - Change detection counts only template runs, not skipped children or the `checkNoChanges` pass.
+- The change detection answers with no recording, the audit note and the `record-change-detection` result send agents to `record-change-detection`, not to `change-detection` with `record`, which that tool refuses. With `agent.readOnly`, which leaves `record-change-detection` out, they name only **Record** in the panel.
+- The panel announces **Record** and **Stop recording** once the page reports the recording on or off. If no report comes within 3 seconds, it says the page did not confirm and keeps the button state the page last reported.
 - The forms tools answer with the forms of the tab they were asked about.
 - Signal graph edges name their nodes instead of positions.
+- `inspect-signals` reads the graph of a component the page is not showing: a `component` the component tree knows, or a component host matched by the new `selector` argument (CSS). A selector that matches no component host is refused at once (#367).
 - A `Store` provided in a route is found, and the DI tools keep each signal store's name instead of `SignalStore`.
 - The SSR hydration count is right, and a request is no longer reported as a transfer cache hit when it was not.
 - A failed write answers with `isError: true`, and a failing call keeps its response body.
@@ -194,6 +199,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `@pangular-inspector/devtools/devframe` (and the package root) load Devframe from `node_modules` when imported, as the hub entry does, so an Angular 20 server bundle that imports them no longer fails with `Identifier 'createRequire' has already been declared` (#427).
 - Picking works inside shadow roots and `ShadowDom` components.
 - Analog server calls link only to the request they ran under (#405).
+- The Analog page chain includes pages in named outlets and sibling child routes, not only the first child. The primary chain comes first, and each other page names its outlet in the **Routes** tab and in `analog-inspect-page` (#369).
 - Signal Forms checkboxes, radios and selects are written in user mode (#360).
 - Live counts in **Timeline**, **Errors** and **Audit** speak only after a filter change, so they no longer flood screen readers.
 - Control outlines and **Signals** graph edges meet 3:1 contrast in both themes, and status pills keep their contrast on selected rows.
@@ -202,7 +208,14 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `explain-invalid-forms` no longer says no field has an error when the failing field is past the forms collector's limit of 100 fields per group. A cut group carries `truncatedInvalid` with the invalid fields it left out, `explain-invalid-forms` and `explain-submit` name them, and `inspect-forms` says which group was cut and how many fields it left out, or that a group past the 8-level depth limit was not read (#423).
 - `scan-signals` and `scan-components` cap their answer at 200 items or 20,000 characters, say how many items they left out, and take `filter`, `offset` and `limit` to read the rest. A list that fits is still the JSON array alone. One item longer than the cap is cut, with a note (#429).
 - The panel switches tabs when only the `#tab=` hash changes after load (#425).
+- The `defer-blocks` tool and the **Defer blocks** list count how long a block sat on its placeholder on the page's clock. The component report carries the page clock (`pageNow`) and the server keeps the offset as `clockOffset`, so a page whose clock runs ahead or behind no longer reads as stuck, or never stuck (#366).
+- The **Defer blocks** list shows the notes the `defer-blocks` tool prints (**failed**, **stuck** _N_ s, **waiting** _N_ s, **dehydrated**), an **&#64;error block** flag and the `@placeholder` and `@loading` times (#366). The age counts up only while a block is on its placeholder, and screen readers read the badge as **stuck** or **waiting** without the seconds, so a focused row's name does not change every second. The panel assumes its clock agrees with the server's.
+- Highlighting a `@defer` block draws one box around all of its root elements instead of the first one. `request-page-highlight` takes `ids` for several elements next to `id` (#366).
+- The **SSR & HTTP** hydration mismatches name the component class, such as `ProductCard`, instead of the DOM node name (#366). A class name is shown as is and a node name in angle brackets (`<app-card>`), in the panel and in the hub messages.
+- The panel content is in the Tab order, with its tab name and a focus ring, so keyboard users can scroll a view that has nothing focusable in it, such as the **Forms** empty state in a short window.
 - At narrow widths the **Components** toolbar fits on two rows, with its tree actions as icons, and a cut off component name shows its full text on hover and focus (#421).
+- The **Forms** tab lists WebMCP tools that are not linked to a form under **Other WebMCP tools**, with the same parts as a form's **WebMCP tool** block (#368).
+- The **Forms** tab shows the forms setup errors Angular logs on the page, such as `NG01203`, in a notice above the list (#368).
 
 ### Docs
 
@@ -217,6 +230,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 - The `leaks-real` test expects the rows the collector really reports (#430).
 - Pull requests run the security and MCP end-to-end checks, and a weekly job runs the rest.
+- A CI job installs the packed package on Node.js 22.12.0, the `engines.node` floor, and loads its CLI and its `cli`, `hub`, `ssr` and `vite` entry points there (#373).
 - The packed `package.json` leaves out `devDependencies`, `scripts` and the `nx` block, and declares `sideEffects`.
 - Dependencies: devframe and `@devframes/*` 1.2.6 (was 1.2.0). `@devframes/plugin-messages`, `@devframes/plugin-terminals` and `axe-core` are added. `h3` is no longer a dependency.
 

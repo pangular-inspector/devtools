@@ -133,6 +133,7 @@ export function sanitizeHydration(input: unknown): HydrationStats | null {
     if (!component) continue;
     mismatches.push({
       component,
+      ...(m['isClass'] === true && { isClass: true as const }),
       expected: masked(m['expected'], 500),
       actual: masked(m['actual'], 500),
     });

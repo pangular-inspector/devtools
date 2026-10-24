@@ -288,27 +288,34 @@ export function createReportDeltas(shape: DeltaShape): ReportDeltas {
 
 /**
  * Wraps a push handler so it takes deltas. `store` gets the full report and
- * returns whether it kept it. A page that sent a delta mark is answered
- * `{delta: true}` once its report is stored, or `{known: false}` to ask for a
- * full one; a page that sends full reports only gets what `store` returns.
+ * the page clock the push carried as `pageNow` (outside the report, so it
+ * never makes a delta), and returns whether it kept the report. A page that
+ * sent a delta mark is answered `{delta: true}` once its report is stored, or
+ * `{known: false}` to ask for a full one; a page that sends full reports only
+ * gets what `store` returns.
  */
 export function deltaPush(
   deltas: ReportDeltas,
   owns: (pageId: unknown) => boolean,
-  store: (report: Record<string, unknown>) => unknown,
+  store: (report: Record<string, unknown>, pageNow?: unknown) => unknown,
 ) {
-  return (message: unknown) => {
+  return (raw: unknown) => {
+    let message = raw;
+    let pageNow: unknown;
+    if (isRecord(raw) && 'pageNow' in raw) {
+      ({ pageNow, ...message } = raw);
+    }
     const pageId = isRecord(message) ? message['pageId'] : undefined;
     const marked = isRecord(message) && isRecord(message['delta']);
     if (!marked) {
-      const answer = store(message as Record<string, unknown>);
+      const answer = store(message as Record<string, unknown>, pageNow);
       if (answer === true && typeof pageId === 'string') deltas.forget(pageId);
       return typeof answer === 'boolean' ? undefined : answer;
     }
     if (typeof pageId !== 'string' || !pageId || pageId.length >= 50 || !owns(pageId)) return;
     const receipt = deltas.receive(message);
     if (receipt.kind === 'unknown') return { known: false };
-    if (store(receipt.report) === false) {
+    if (store(receipt.report, pageNow) === false) {
       deltas.forget(pageId);
       return { known: false };
     }

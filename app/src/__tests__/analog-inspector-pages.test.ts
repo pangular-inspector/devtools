@@ -110,3 +110,41 @@ describe('Analog route filter', () => {
     expect(box.value).toBe('');
   });
 });
+
+describe('Analog open pages', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('marks pages in named outlets with the outlet name', async () => {
+    const route = (file: string) => ({
+      id: file,
+      fullPath: '/',
+      file,
+      kind: 'page' as const,
+      params: [],
+      children: [],
+    });
+    const fixture = await render(
+      client({
+        state: {
+          pages: [
+            {
+              pageId: 'A',
+              url: '/inbox(sidebar:chat)',
+              chain: [
+                { path: '/inbox', file: '/src/app/pages/inbox.page.ts' },
+                { path: '/chat', file: '/src/app/pages/chat.page.ts', outlet: 'sidebar' },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    const inspector = fixture.componentInstance;
+    expect(inspector.openText(route('/src/app/pages/inbox.page.ts'))).toBe('open');
+    expect(inspector.isOpen(route('/src/app/pages/chat.page.ts'))).toBe(true);
+    expect(inspector.openText(route('/src/app/pages/chat.page.ts'))).toBe('open in sidebar');
+    expect(inspector.isOpen(route('/src/app/pages/about.page.ts'))).toBe(false);
+  });
+});

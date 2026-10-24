@@ -132,7 +132,7 @@ export function expireCdPages(
 /**
  * The answer when `page` names a tab that is not connected: the shared
  * unknown-page text, listing the connected tabs. A connected tab that has not
- * recorded yet is not unknown, since `record` can start a recording there.
+ * recorded yet is not unknown, since `record-change-detection` can start a recording there.
  * Undefined when the page is known.
  */
 export function cdUnknownPageText(
@@ -267,17 +267,33 @@ export function cdUnsupportedText(pageId: string, info: AngularPageInfo | undefi
   return `Page ${code(pageId)} can't record change detection: it needs Angular 20 or later in a development build.`;
 }
 
-/** Markdown for the `change-detection` agent tool. */
+/**
+ * How an answer with no recording says to start one: `record-change-detection`
+ * and **Record** in the panel, or only **Record** when the agent can't record
+ * (`agent.readOnly` leaves the tool out). `page` names the page in the tool call.
+ */
+export function cdStartHint(canRecord: boolean, page?: string): string {
+  if (!canRecord) return '**Record** in the panel (this server is read-only for agents)';
+  return page
+    ? '`pangular:record-change-detection`, `record: "start"` and this `page` (or **Record** in the panel)'
+    : '`pangular:record-change-detection` and `record: "start"` (or **Record** in the panel)';
+}
+
+/**
+ * Markdown for the `change-detection` agent tool. `canRecord` is false when
+ * `record-change-detection` is not offered, so the answer names only the panel.
+ */
 export function changeDetectionText(
   state: CdState,
   args: { page?: string; limit?: number } = {},
   angularOf: (pageId: string) => AngularPageInfo | undefined = () => undefined,
+  canRecord = true,
 ): string {
   const page = pickCdPage(state, args.page);
   if (!page) {
     return args.page
-      ? `Page ${code(args.page)} has no change detection recording yet. Call this tool with \`record: "start"\` and this \`page\`, use the app, then call it again.`
-      : 'No change detection recording yet. Call this tool with `record: "start"`, use the app, then call it again.';
+      ? `Page ${code(args.page)} has no change detection recording yet. Start one with ${cdStartHint(canRecord, args.page)}, use the app, then call this tool again.`
+      : `No change detection recording yet. Start one with ${cdStartHint(canRecord)}, use the app, then call this tool again.`;
   }
   if (!page.supported) return cdUnsupportedText(page.pageId, angularOf(page.pageId));
   // Agents send strings, NaN and null too: anything that is not a finite number is the default.

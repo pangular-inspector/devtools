@@ -2,6 +2,8 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
 import type { WebMcpPage, WebMcpTool } from './forms-types';
 
+let nextId = 0;
+
 const OUTCOMES: Record<string, string> = {
   running: 'running',
   submitted: 'submitted',
@@ -15,10 +17,10 @@ const OUTCOMES: Record<string, string> = {
   imports: [DatePipe],
   template: `
     @if (tool(); as tool) {
-      <section class="webmcp" aria-labelledby="forms-webmcp-title">
+      <section class="webmcp" [attr.aria-labelledby]="uid + '-title ' + uid + '-name'">
         <div class="head">
-          <h3 id="forms-webmcp-title" class="section-label">WebMCP tool</h3>
-          <code class="name">{{ tool.name }}</code>
+          <h3 [id]="uid + '-title'" class="section-label">WebMCP tool</h3>
+          <code class="name" [id]="uid + '-name'">{{ tool.name }}</code>
           <span class="state" [attr.data-state]="tool.status">{{ statusText() }}</span>
           @if (tool.duplicate) {
             <span class="state" data-state="failed">duplicate name</span>
@@ -216,6 +218,7 @@ const OUTCOMES: Record<string, string> = {
   `,
 })
 export class FormsWebMcp {
+  protected readonly uid = `forms-webmcp-${++nextId}`;
   tool = input<WebMcpTool | undefined>();
   page = input<WebMcpPage | undefined>();
   signalForm = input(false);
@@ -245,4 +248,106 @@ export class FormsWebMcp {
   iso(at: number): string {
     return new Date(at).toISOString();
   }
+}
+
+/** WebMCP tools the page registered that the collector could not link to a form. */
+@Component({
+  selector: 'app-forms-webmcp-others',
+  imports: [FormsWebMcp],
+  template: `
+    @if (tools().length) {
+      <section class="others" aria-labelledby="forms-webmcp-others-title">
+        <h2 id="forms-webmcp-others-title">
+          Other WebMCP tools <span class="count">{{ tools().length }}</span>
+        </h2>
+        <p class="muted">
+          Tools registered on the page that are not linked to a form in the list, such as tools the
+          app registers itself.
+        </p>
+        <ul class="tools">
+          @for (entry of tools(); track $index) {
+            <li>
+              @if (manyPages()) {
+                <p class="page">
+                  Page <code>{{ entry.pageId }}</code>
+                </p>
+              }
+              <app-forms-webmcp [tool]="entry.tool" />
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  `,
+  styles: `
+    @use 'mixins' as m;
+
+    :host {
+      display: block;
+    }
+    .others {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+      margin-top: 16px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    h2 {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin: 0;
+      color: var(--text-3);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .count {
+      padding: 0 6px;
+      border-radius: 99px;
+      background: var(--surface-3);
+      color: var(--text-2);
+      font-size: 11px;
+      letter-spacing: 0;
+      line-height: 18px;
+      font-variant-numeric: tabular-nums;
+    }
+    .muted,
+    .page {
+      margin: 0;
+      color: var(--text-2);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    code {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      overflow-wrap: anywhere;
+    }
+    .tools {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .tools > li {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+  `,
+})
+export class FormsWebMcpOthers {
+  pages = input<WebMcpPage[]>([]);
+
+  readonly tools = computed(() =>
+    this.pages().flatMap((page) => page.tools.map((tool) => ({ tool, pageId: page.pageId }))),
+  );
+
+  readonly manyPages = computed(() => new Set(this.tools().map((t) => t.pageId)).size > 1);
 }

@@ -21,6 +21,8 @@ The sidebar lists each form with its label, its kind (**Signal Forms**, **Reacti
 
 Select a form to see its status, whether it is dirty or touched, whether it was submitted or is submitting, and an **Error summary**.
 
+If Angular logs a forms setup error on the page, such as `NG01203` (no value accessor) or `NG01050` (`formControlName` without a parent `formGroup`), a notice above the list shows each message. A form with a setup error can be missing from the list. The notice follows the **All pages** setting, and names the page of each error when it shows more than one page.
+
 Click an entry in the **Error summary** to open that field. The tab switches to the **Fields** view, opens the field's [details](#field-details) and moves focus to them. If the path filter or the chips hide the field, the tab clears them, the filter first and the chips only if the field is still hidden.
 
 ### WebMCP tool
@@ -39,6 +41,8 @@ A Signal Form that sets `experimentalWebMcpTool` (with `provideExperimentalWebMc
 Agent calls set the value and submit the form. Those changes show in the timeline with the **agent** origin.
 
 If the app provides `provideExperimentalWebMcpForms()` but the browser has no `modelContext`, Angular registers no tool. The block says so instead.
+
+A tool the overlay cannot link to a form, such as a tool the app registers with `modelContext.registerTool` itself, shows under **Other WebMCP tools** below the forms, with the same parts. The section appears only when the page has such a tool, and it follows the **All pages** setting.
 
 ### Fields view
 
@@ -237,7 +241,7 @@ In `user` mode, a write to a `date`, `datetime-local`, `time`, `month` or `week`
 
 ### WebMCP is best effort
 
-`experimentalWebMcpTool` is experimental in Angular. The overlay wraps `modelContext.registerTool` when it loads, so it records registrations and calls from then on. The overlay has no hook that runs before your app. For a tool registered earlier, it reads the browser's tool list when the browser offers one (`getTools()` or `listTools()`), and the block says **registered before the inspector attached**. Calls to those tools are not recorded. If the browser offers no tool list, a form that registered before the overlay loaded shows no **WebMCP tool** block. To see every registration and call, register the form after the overlay loads, for example on a route you open later. The overlay links a tool to its form by its input schema, or by the form an agent call submits. A tool it cannot link shows in the `inspect-forms` output under **WebMCP**.
+`experimentalWebMcpTool` is experimental in Angular. The overlay wraps `modelContext.registerTool` when it loads, so it records registrations and calls from then on. The overlay has no hook that runs before your app. For a tool registered earlier, it reads the browser's tool list when the browser offers one (`getTools()` or `listTools()`), and the block says **registered before the inspector attached**. Calls to those tools are not recorded. If the browser offers no tool list, a form that registered before the overlay loaded shows no **WebMCP tool** block. To see every registration and call, register the form after the overlay loads, for example on a route you open later. The overlay links a tool to its form by its input schema, or by the form an agent call submits. A tool it cannot link shows under **Other WebMCP tools** in the tab, and in the `inspect-forms` output under **WebMCP**.
 
 ### Try WebMCP in the demo
 

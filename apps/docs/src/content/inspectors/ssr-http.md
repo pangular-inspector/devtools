@@ -180,7 +180,7 @@ The Prerender fallback mode can't be forced. The engine reads render modes from 
 - **App stable after**: the time from navigation start until the app first became stable, which is when hydration is done. It needs `providePangularHttp()`.
 - Hydrated components and nodes, skipped components, and incremental defer blocks. When a `@defer (hydrate on interaction)` or `(hydrate on hover)` block hydrates, the tab counts its nodes again right away. Blocks with other hydrate triggers show up with the next update.
 - DOM nodes hydrated and skipped, and `ngSkipHydration` hosts.
-- Mismatched components, with the expected and actual DOM.
+- Mismatched components, with the expected and actual DOM. A mismatch is named by its component class, such as `ProductCard`, or by the node name (`app-card`, `#text`) when the node hosts no component.
 - The hydration warnings (NG05xx) Angular logged in the browser.
 
 ### TransferState payload

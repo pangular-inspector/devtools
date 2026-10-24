@@ -15,6 +15,11 @@ export interface DeltaChannelOptions {
   /** How long an unchanged report may go unsent; `keepaliveDue` decides by default. */
   keepaliveMs?: number;
   now?: () => number;
+  /**
+   * Adds the page clock as `pageNow` to every push, outside the compared
+   * report, so the server can age the page's timestamps in page time.
+   */
+  clock?: boolean;
 }
 
 export interface DeltaChannel {
@@ -72,9 +77,10 @@ export function createDeltaChannel(options: DeltaChannelOptions): DeltaChannel {
     }
     forceFull = false;
     sentAt = now();
+    const message = options.clock ? { ...next.message, pageNow: sentAt } : next.message;
     let answer: Answer | undefined;
     try {
-      answer = (await options.call(options.push, next.message)) as Answer | undefined;
+      answer = (await options.call(options.push, message)) as Answer | undefined;
     } catch (error) {
       sender.reset();
       forceFull = true;

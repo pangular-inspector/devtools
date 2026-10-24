@@ -727,6 +727,7 @@ const READ_PLAN = [
     () => ({ component: 'app-signals-example', node: 'count', history: false }),
   ],
   ['inspect-signals', '/examples/signals', () => ({ component: 'root' })],
+  ['inspect-signals', '/examples/signals', () => ({ selector: 'app-signals-example' })],
 
   ['inspect-providers', '/examples/di', () => ({})],
   ['inspect-providers', '/examples/di', () => ({ injector: 'Root' })],

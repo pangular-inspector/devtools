@@ -194,6 +194,8 @@ export interface AuditInputs {
   axe?: AxeReport | null;
   /** Why axe can't run on this page, such as an app on a device with no DOM. */
   noAxe?: string;
+  /** The reader can't call `record-change-detection` (a read-only agent), so notes name only the panel. */
+  noCdRecord?: boolean;
 }
 
 /** Most findings an audit keeps. */
@@ -261,7 +263,7 @@ function merge(findings: AuditFinding[]): AuditFinding[] {
   return [...byKey.values()];
 }
 
-function changeDetection(state: CdState | undefined, pageId: string): Collected {
+function changeDetection(state: CdState | undefined, pageId: string, noRecord = false): Collected {
   const area = 'change-detection';
   const tool = 'pangular:diagnose-change-detection';
   if (!state) return { findings: [], source: { area, state: 'off' } };
@@ -275,7 +277,9 @@ function changeDetection(state: CdState | undefined, pageId: string): Collected 
         note:
           page && !page.supported
             ? 'The page cannot record change detection (Angular 20 or later, development build).'
-            : 'No recording. Start one with pangular:change-detection and `record: "start"`, or Record in the panel, then use the app.',
+            : noRecord
+              ? 'No recording. Start one with Record in the panel, then use the app.'
+              : 'No recording. Start one with pangular:record-change-detection and `record: "start"`, or Record in the panel, then use the app.',
       },
     };
   }
@@ -714,7 +718,7 @@ export function buildAudit(
     accessibility(inputs.axe, id, inputs.noAxe),
     errors(inputs.errors, id),
     hydration(inputs.components),
-    changeDetection(inputs.cd, id),
+    changeDetection(inputs.cd, id, inputs.noCdRecord),
     leaks(inputs.leaks, id, now),
     router(inputs.router, id),
     forms(inputs.forms, id, now),

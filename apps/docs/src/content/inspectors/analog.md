@@ -48,6 +48,8 @@ The summary at the top shows the Analog version, and the number of pages, API ro
 
 Every page (`.page.ts`, `.page.analog` or `.page.ag`), layout and markdown file with its URL, route groups, `[param]` and catch-all segments, `.server.ts` files and `routeMeta`.
 
+The pages that render the URL open in the browser show an **open** pill. A page in a named outlet, such as `<router-outlet name="sidebar">`, shows the outlet name too, like **open in sidebar**.
+
 Type a URL into **Test a URL** and click **Explain** to see which files render it: the layout chain, the page and its params. A URL that matches nothing gets the closest candidates. The result names the URL it explains, so it stays correct while you type the next one. If the devtools server does not answer, the result says so.
 
 ### Server

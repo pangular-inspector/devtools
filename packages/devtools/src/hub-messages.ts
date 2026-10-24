@@ -399,7 +399,7 @@ export function createHubFeed(
           key,
           dockOf('http'),
           {
-            message: `Hydration mismatch at <${component}>`,
+            message: `Hydration mismatch at ${mismatch.isClass ? component : `<${component}>`}`,
             level: 'error',
             category: HUB_MESSAGE_CATEGORIES.hydration,
             detail: [expected && `Expected: ${expected}`, actual && `Actual: ${actual}`]

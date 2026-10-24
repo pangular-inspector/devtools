@@ -58,6 +58,7 @@ import {
   type PreloadRecord,
 } from './router-actions.ts';
 import { createSignalHistory, installSignalWriteHook } from './signal-history.ts';
+import { maskHistory, secretsOfGraph } from './signal-masks.ts';
 import { registerSignalPeek } from './signal-peek.ts';
 import { registerSignalRestore } from './signal-restore.ts';
 import { createSignalWatch, registerSignalWatch } from './signal-watch.ts';
@@ -460,10 +461,11 @@ async function startOverlay(
         epoch: r.epoch,
         value: r.status,
       }));
-    const { changes: history, rollback } = signalHistory.collectDeltaWithRollback(
+    const { changes: collected, rollback } = signalHistory.collectDeltaWithRollback(
       [...graph.nodes, ...statuses],
       full,
     );
+    const history = maskHistory(collected, secretsOfGraph(graph));
     for (const item of [...graph.nodes, ...(graph.resources ?? [])]) {
       const changes = signalHistory.changesOf(item.id);
       if (changes) item.changes = changes;
@@ -511,6 +513,8 @@ async function startOverlay(
       ping,
       shape,
       tickMs,
+      // The page clock ages the `@defer` block times in page time on the server.
+      clock: push === 'push-component-tree',
     });
   const treeChannel = channel('push-component-tree', 'ping-component-tree', COMPONENT_TREE_SHAPE);
   const injectorChannel = channel('push-injector-tree', 'ping-injector-tree', INJECTOR_TREE_SHAPE);
@@ -859,6 +863,8 @@ async function startOverlay(
         | {
             pageId?: string;
             id?: string;
+            /** Several elements, such as the roots of a `@defer` block, get one box. */
+            ids?: string[];
             selector?: string;
             reveal?: boolean;
             durationMs?: number;
@@ -872,6 +878,14 @@ async function startOverlay(
           reveal: selector.reveal === true,
           ...(typeof selector.durationMs === 'number' ? { durationMs: selector.durationMs } : {}),
         };
+        if (Array.isArray(selector.ids)) {
+          const hosts = selector.ids.map((id) => elementById(String(id)));
+          showHighlight(
+            hosts.filter((host): host is Element => host instanceof Element),
+            options,
+          );
+          return;
+        }
         if (typeof selector.id === 'string') {
           const host = elementById(selector.id);
           if (host instanceof Element) showHighlight(host, options);
