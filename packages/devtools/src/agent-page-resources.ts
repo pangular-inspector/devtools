@@ -8,7 +8,7 @@ import { routerResourceText, type RouterState } from './rpc/router-tools.ts';
 import { withIdEdges } from './rpc/signal-tools.ts';
 import type { ComponentPage, InjectorPage } from './types.ts';
 
-/** One MCP resource template, as the patched `@devframes/agentic` server takes it. */
+/** One MCP resource template, as `@devframes/agentic` takes it. */
 export type PangularMcpResourceTemplate = NonNullable<McpRouteOptions['resourceTemplates']>[number];
 
 /**

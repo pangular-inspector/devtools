@@ -31,7 +31,7 @@ These changes can break a 0.0.7 setup without an error.
 - **Analog on pnpm needs one setting.** `@analogjs/vite-plugin-nitro` imports `h3` without declaring it, so under pnpm it can resolve to the h3 2 that this package brings in, and `vite build` fails with "does not provide an export named 'createEvent'". Declare `h3@^1` for the plugin with pnpm `packageExtensions`, as the Analog guide shows.
 - **Agent tools, arguments and resource templates are renamed, and old names are refused.** Update prompts, scripts and client allowlists. See **Agent tools renamed** below.
 - **Most entry points export less.** See **Removed exports** below.
-- **MCP prompts and the per-page resource templates need a devframe release after 1.2.6.** With devframe 1.2.6 from npm, the HTTP endpoint sends no prompts, and the resource templates and their `list_changed` notifications are missing. Server instructions and the `screenshot-component` image work with 1.2.6. The workspace runs a patched devframe, so this only affects installed packages.
+- **MCP prompts need a devframe release after 1.3.0.** The package depends on devframe 1.3.0, which serves the per-page resource templates and their `list_changed` notifications. With devframe 1.3.0 from npm, the HTTP endpoint sends no prompts. The workspace runs a patched devframe, so this only affects installed packages.
 
 ### Agent tools renamed
 

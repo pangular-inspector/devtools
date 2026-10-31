@@ -1,14 +1,12 @@
 diff --git a/dist/node/initiate.mjs b/dist/node/initiate.mjs
-index e6582fb96ca4c73762d3850cfbef2e78f96ffc8c..42c9eb0fd5d4c584c4f411dd7e4e35d38bd2b649 100644
+index c7a97cc..9548fc0 100644
 --- a/dist/node/initiate.mjs
 +++ b/dist/node/initiate.mjs
-@@ -151,6 +151,9 @@ function initHub(options) {
+@@ -151,6 +151,7 @@ function initHub(options) {
  				serverVersion: options.version ?? "0.0.0",
  				exposeSharedState: mcpConfig.exposeSharedState ?? true,
  				instructions: mcpConfig.instructions,
 +				prompts: mcpConfig.prompts,
-+				resourceTemplates: mcpConfig.resourceTemplates,
-+				onResourcesChanged: mcpConfig.onResourcesChanged,
+ 				resourceTemplates: mcpConfig.resourceTemplates,
+ 				onResourcesChanged: mcpConfig.onResourcesChanged,
  				authorization: mcpConfig.authorization,
- 				allowedOrigins: mcpConfig.allowedOrigins
- 			});

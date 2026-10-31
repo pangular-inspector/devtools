@@ -318,6 +318,61 @@ export async function checkHub(
   return checkPanelHtml(`${base}${panel}`);
 }
 
+/**
+ * One JSON-RPC request to a streamable HTTP MCP endpoint, which answers with JSON or with one SSE
+ * `data:` event. Returns the `result`, or throws with the `error`.
+ */
+async function mcpRequest(url, session, id, method, params = {}) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      origin: new URL(url).origin,
+      ...(session.token ? { authorization: `Bearer ${session.token}` } : {}),
+      ...(session.id ? { 'mcp-session-id': session.id } : {}),
+      ...(session.version ? { 'mcp-protocol-version': session.version } : {}),
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', ...(id === undefined ? {} : { id }), method, params }),
+  });
+  session.id ??= response.headers.get('mcp-session-id') ?? undefined;
+  const text = await response.text();
+  if (id === undefined) return undefined;
+  const body = response.headers.get('content-type')?.includes('text/event-stream')
+    ? /^data: ?(.*)$/m.exec(text)?.[1]
+    : text;
+  let message;
+  try {
+    message = JSON.parse(body ?? '');
+  } catch {
+    throw new Error(`${method} at ${url} answered ${response.status}:\n${text.slice(0, 500)}`);
+  }
+  if (message.error) throw new Error(`${method}: ${message.error.message}`);
+  return message.result;
+}
+
+/**
+ * The installed package's MCP endpoint lists resource templates, which devframe 1.3.0 and later
+ * serve. Prompts still come from a workspace patch that doesn't ship, so their count is reported
+ * but not required. `token` is the bearer token the server asks for, if any.
+ */
+export async function checkMcpLists(url, token) {
+  const session = { token };
+  const init = await mcpRequest(url, session, 1, 'initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'e2e-install', version: '0.0.0' },
+  });
+  session.version = init.protocolVersion;
+  await mcpRequest(url, session, undefined, 'notifications/initialized');
+  const { resourceTemplates } = await mcpRequest(url, session, 2, 'resources/templates/list');
+  if (!resourceTemplates?.length) throw new Error(`resources/templates/list at ${url} is empty`);
+  const prompts = init.capabilities?.prompts
+    ? ((await mcpRequest(url, session, 3, 'prompts/list')).prompts?.length ?? 0)
+    : 0;
+  return `${resourceTemplates.length} resource templates and ${prompts} prompts over MCP`;
+}
+
 /** The panel page has its title and names a script that loads. */
 export async function checkPanelHtml(panelUrl) {
   const panel = await fetch(panelUrl);
