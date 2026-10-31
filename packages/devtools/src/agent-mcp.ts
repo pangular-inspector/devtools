@@ -36,10 +36,10 @@ export function pangularMcpInstructions(config: ResolvedPangularConfig): string 
  * mounts the route. That matches `'auto'` here: `@devframes/agentic` is a
  * dependency, and Pangular always registers agent tools.
  *
- * `exposeSharedState` (1.2.4 and later) and `instructions` (1.2.6 and later)
- * are devframe route options, so they also hold for the published package.
- * `prompts`, `resourceTemplates` and `onResourcesChanged` still come from the
- * patches in `patches/`; without them devframe ignores them.
+ * `exposeSharedState` (1.2.4 and later), `instructions` (1.2.6 and later),
+ * `resourceTemplates` and `onResourcesChanged` (1.3.0 and later) are devframe
+ * route options, so they also hold for the published package. `prompts` still
+ * comes from the patches in `patches/`; without them devframe ignores it.
  */
 export function pangularMcp(
   setting: McpSetting | undefined,

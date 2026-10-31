@@ -257,7 +257,7 @@ The prompts follow the same config as the tools. A prompt is left out when a too
 
 The argument is your own text. The server puts it on one line, cuts it at 200 characters and masks JWTs, bearer tokens and secret values in it, the same way it masks tool answers.
 
-The stdio server offers no prompts. The prompts need a devframe patch that devframe 1.2.6 does not ship, so an installed package offers none until devframe ships it.
+The stdio server offers no prompts. The prompts need a devframe patch that devframe 1.3.0 does not ship, so an installed package offers none until devframe ships it.
 
 ### Resource templates
 

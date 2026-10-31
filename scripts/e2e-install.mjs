@@ -18,7 +18,8 @@
  *   analog             `create-analog`, the Vite plugin as vite.md shows (no overlay import), a
  *                      `vite build`, then the Vite dev server.
  *   cli                The standalone CLI in cli.md: `npx @pangular-inspector/devtools dev` without
- *                      installing, then the installed `pangular build` static report.
+ *                      installing, with its MCP endpoint listing resource templates, then the
+ *                      installed `pangular build` static report.
  *
  * Package managers: npm, pnpm, yarn and bun. One that is not installed is skipped and says so.
  * Angular versions: any npm range of `@angular/cli`, such as `20.0`, `20.3`, `21` or `22`. A
@@ -42,6 +43,7 @@
  * three per cell.
  */
 import { execFileSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import {
   copyFileSync,
   createReadStream,
@@ -61,6 +63,7 @@ import path from 'node:path';
 import {
   arg,
   checkHub,
+  checkMcpLists,
   checkPanelHtml,
   createRegistry,
   flag,
@@ -706,7 +709,9 @@ async function cliScenario(cell) {
   cell.logs.push(devLog);
   // cli.md, "Run it without installing": `npx @pangular-inspector/devtools dev`.
   const [cmd, args] = PM[cell.pm].dlx(manifest.name, ['dev', '--port', String(devPort)]);
-  const dev = start(cmd, args, app, devEnv(), devLog);
+  // A known MCP token, so the MCP check needs no token file.
+  const mcpToken = randomBytes(16).toString('hex');
+  const dev = start(cmd, args, app, devEnv({ PANGULAR_MCP_TOKEN: mcpToken }), devLog);
   try {
     const base = `http://localhost:${devPort}`;
     await step(cell, `${[cmd, ...args].join(' ')}: server answers`, () =>
@@ -714,6 +719,9 @@ async function cliScenario(cell) {
     );
     await step(cell, 'browser: the dev panel shows the source scan', () =>
       checkInBrowser(cell, { panelUrl: `${base}/`, codeLog: devLog, live: false }),
+    );
+    await step(cell, 'MCP: resources/templates/list is not empty', () =>
+      checkMcpLists(`${base}/__mcp`, mcpToken),
     );
   } finally {
     await stop(dev);

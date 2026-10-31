@@ -1,0 +1,85 @@
+diff --git a/dist/mcp/index.mjs b/dist/mcp/index.mjs
+index 278e426..33784f8 100644
+--- a/dist/mcp/index.mjs
++++ b/dist/mcp/index.mjs
+@@ -1,6 +1,6 @@
+ import { homedir } from "node:os";
+ import process from "node:process";
+-import { Server, createMcpHandler } from "@modelcontextprotocol/server";
++import { ProtocolError, ProtocolErrorCode, Server, createMcpHandler } from "@modelcontextprotocol/server";
+ import { DEVFRAME_EVENTS } from "devframe/constants";
+ import { argsToJsonSchema, diagnostics, formatMcpError, getMcpContent, returnToJsonSchema, stringifyForMcp } from "devframe/internal";
+ import { createHostContext } from "devframe/node";
+@@ -29,13 +29,15 @@ function buildMcpServerFromContext(ctx, options) {
+ 	}, {
+ 		capabilities: {
+ 			tools: { listChanged: true },
+-			resources: { listChanged: true }
++			resources: { listChanged: true },
++			...options.prompts?.length ? { prompts: { listChanged: false } } : {}
+ 		},
+ 		...options.instructions ? { instructions: options.instructions } : {}
+ 	});
+ 	registerToolHandlers(server, ctx, options.exposeSharedState);
+ 	const templates = options.resourceTemplates ?? [];
+ 	registerResourceHandlers(server, ctx, options.exposeSharedState, templates);
++	if (options.prompts?.length) registerPromptHandlers(server, options.prompts);
+ 	if (templates.length) server.setRequestHandler("resources/templates/list", async () => ({ resourceTemplates: templates.map(({ template: { uriTemplate, name, title, description, mimeType } }) => ({
+ 		uriTemplate,
+ 		name,
+@@ -111,6 +113,7 @@ async function createMcpServer(definition, options = {}) {
+ 		serverVersion: options.serverVersion ?? definition.version ?? "0.0.0",
+ 		exposeSharedState: options.exposeSharedState ?? true,
+ 		instructions: options.instructions,
++		prompts: options.prompts,
+ 		resourceTemplates
+ 	};
+ 	let handle;
+@@ -256,6 +259,39 @@ function registerToolHandlers(server, ctx, exposeSharedState) {
+ 		}
+ 	});
+ }
++/**
++* Serve a fixed list of prompt templates. `prompts/list` projects each one;
++* `prompts/get` checks the required arguments and returns the messages its
++* `get` builds. An unknown name or a missing required argument is an
++* invalid-params error. The first prompt with a name wins.
++*/
++function registerPromptHandlers(server, prompts) {
++	const byName = /* @__PURE__ */ new Map();
++	for (const prompt of prompts) if (!byName.has(prompt.name)) byName.set(prompt.name, prompt);
++	server.setRequestHandler("prompts/list", async () => ({ prompts: [...byName.values()].map((prompt) => ({
++		name: prompt.name,
++		...prompt.title !== void 0 ? { title: prompt.title } : {},
++		...prompt.description !== void 0 ? { description: prompt.description } : {},
++		...prompt.arguments?.length ? { arguments: prompt.arguments.map((argument) => ({
++			name: argument.name,
++			...argument.description !== void 0 ? { description: argument.description } : {},
++			...argument.required !== void 0 ? { required: argument.required } : {}
++		})) } : {}
++	})) }));
++	server.setRequestHandler("prompts/get", async (request) => {
++		const { name, arguments: args } = request.params;
++		const prompt = byName.get(name);
++		if (!prompt) throw new ProtocolError(ProtocolErrorCode.InvalidParams, `[devframe/mcp] unknown prompt "${name}"`);
++		const given = args ?? {};
++		const missing = (prompt.arguments ?? []).filter((argument) => argument.required && !given[argument.name]).map((argument) => argument.name);
++		if (missing.length) throw new ProtocolError(ProtocolErrorCode.InvalidParams, `[devframe/mcp] prompt "${name}" needs the argument(s): ${missing.join(", ")}`);
++		const result = await prompt.get(given);
++		return {
++			...result.description !== void 0 ? { description: result.description } : {},
++			messages: result.messages
++		};
++	});
++}
+ function registerResourceHandlers(server, ctx, exposeSharedState, templates) {
+ 	const stateFilter = sharedStateFilter(exposeSharedState);
+ 	server.setRequestHandler("resources/list", async () => {
+@@ -547,6 +583,7 @@ function createMcpFetchHandler(ctx, options) {
+ 		serverVersion: options.serverVersion,
+ 		exposeSharedState: options.exposeSharedState,
+ 		instructions: options.instructions,
++		prompts: options.prompts,
+ 		resourceTemplates
+ 	}));
+ 	const unbridge = bridgeListChanged(ctx, {

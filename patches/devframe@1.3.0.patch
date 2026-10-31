@@ -1,0 +1,113 @@
+diff --git a/dist/_shared-C06DH07o.mjs b/dist/_shared-C06DH07o.mjs
+index 0f9aed5..5dc62bc 100644
+--- a/dist/_shared-C06DH07o.mjs
++++ b/dist/_shared-C06DH07o.mjs
+@@ -145,6 +145,7 @@ function resolveMcpConfig(mcp) {
+ 		...mcp.allowedOrigins !== void 0 ? { allowedOrigins: mcp.allowedOrigins } : {},
+ 		...mcp.exposeSharedState !== void 0 ? { exposeSharedState: mcp.exposeSharedState } : {},
+ 		...mcp.instructions !== void 0 ? { instructions: mcp.instructions } : {},
++		...mcp.prompts !== void 0 ? { prompts: mcp.prompts } : {},
+ 		...mcp.resourceTemplates !== void 0 ? { resourceTemplates: mcp.resourceTemplates } : {},
+ 		...mcp.onResourcesChanged !== void 0 ? { onResourcesChanged: mcp.onResourcesChanged } : {},
+ 		authorization
+diff --git a/dist/_shared-DbO-OtUC.d.mts b/dist/_shared-DbO-OtUC.d.mts
+index add8d6a..fc113c3 100644
+--- a/dist/_shared-DbO-OtUC.d.mts
++++ b/dist/_shared-DbO-OtUC.d.mts
+@@ -1,4 +1,4 @@
+-import { F as DevframeDefinition, G as McpAuthorization, I as DevframeDeploymentKind, Pt as McpResourcesChangedHook, Xt as DevframeAgentHost, jt as McpResourceTemplate, q as McpSetting, t as ConnectionMeta } from "./context-Dko5QFWF.mjs";
++import { F as DevframeDefinition, G as McpAuthorization, I as DevframeDeploymentKind, Pt as McpResourcesChangedHook, Xt as DevframeAgentHost, jt as McpResourceTemplate, K as McpRouteOptions, q as McpSetting, t as ConnectionMeta } from "./context-Dko5QFWF.mjs";
+ import { t as AgenticMcpModule } from "./agentic-D6HePbWg.mjs";
+ //#region src/adapters/_shared.d.ts
+ /**
+@@ -39,6 +39,8 @@ interface ResolvedMcpConfig {
+   exposeSharedState?: boolean | ((key: string) => boolean);
+   /** Handshake `instructions` from the route options; omitted means none. */
+   instructions?: string;
++  /** Prompt templates from the route options; omitted means none. */
++  prompts?: McpRouteOptions['prompts'];
+   /** Resource templates from the route options; omitted means none. */
+   resourceTemplates?: McpResourceTemplate[];
+   /** Resource-list change subscription from the route options; omitted means none. */
+diff --git a/dist/context-Dko5QFWF.d.mts b/dist/context-Dko5QFWF.d.mts
+index 83f7c35..fc8c6e0 100644
+--- a/dist/context-Dko5QFWF.d.mts
++++ b/dist/context-Dko5QFWF.d.mts
+@@ -404,6 +404,8 @@ interface CreateMcpServerOptions {
+    * `server/discover`) result. Omitted or empty sends no instructions.
+    */
+   instructions?: string;
++  /** Prompt templates served through `prompts/list` and `prompts/get`; omitted means no `prompts` capability. */
++  prompts?: readonly McpPrompt[];
+   /**
+    * Resource templates served through `resources/templates/list`, and read
+    * through `resources/read`. Omitted or empty keeps the resources unchanged.
+@@ -452,6 +454,8 @@ interface CreateMcpFetchHandlerOptions {
+   exposeSharedState: boolean | ((key: string) => boolean);
+   /** Usage guidance for the handshake; see {@link CreateMcpServerOptions.instructions}. */
+   instructions?: string;
++  /** Prompt templates served through `prompts/list` and `prompts/get`; omitted means no `prompts` capability. */
++  prompts?: readonly McpPrompt[];
+   /** Resource templates; see {@link CreateMcpServerOptions.resourceTemplates}. */
+   resourceTemplates?: McpResourceTemplate[];
+   /** Host subscription for resource-list changes; see {@link CreateMcpServerOptions.onResourcesChanged}. */
+@@ -499,6 +503,38 @@ interface McpFetchHandler {
+   /** Tear down the handler (aborts in-flight exchanges, drops the change bridge). */
+   dispose: () => Promise<void>;
+ }
++/** One argument of an {@link McpPrompt}. */
++interface McpPromptArgument {
++  name: string;
++  description?: string;
++  /** `prompts/get` fails with invalid params when a required argument is missing or empty. */
++  required?: boolean;
++}
++/** One message of a prompt's answer. */
++interface McpPromptMessage {
++  role: 'user' | 'assistant';
++  content: {
++    type: 'text';
++    text: string;
++  };
++}
++/** What `prompts/get` returns for a prompt. */
++interface McpPromptResult {
++  description?: string;
++  messages: McpPromptMessage[];
++}
++/**
++ * A prompt template the MCP server lists in `prompts/list` and builds in
++ * `prompts/get`. A client usually offers it to the user as a slash command.
++ */
++interface McpPrompt {
++  name: string;
++  title?: string;
++  description?: string;
++  arguments?: readonly McpPromptArgument[];
++  /** Build the messages from the arguments the client sent. */
++  get: (args: Record<string, string>) => McpPromptResult | Promise<McpPromptResult>;
++}
+ /** One concrete resource that an {@link McpResourceTemplate} lists in `resources/list`. */
+ interface McpResourceTemplateEntry {
+   /** The resource URI. It SHOULD match the `uriTemplate` of its template, so `resources/read` finds it. */
+@@ -1484,6 +1520,8 @@ interface McpRouteOptions {
+    * Omitted or empty sends no instructions.
+    */
+   instructions?: string;
++  /** Prompt templates served through `prompts/list` and `prompts/get`; omitted means no `prompts` capability. */
++  prompts?: readonly McpPrompt[];
+   /**
+    * Resource templates the route serves through MCP
+    * `resources/templates/list`. `resources/read` tries them after the
+diff --git a/dist/dev-C-wQTIrV.mjs b/dist/dev-C-wQTIrV.mjs
+index 43177ce..c66ab4d 100644
+--- a/dist/dev-C-wQTIrV.mjs
++++ b/dist/dev-C-wQTIrV.mjs
+@@ -141,6 +141,7 @@ async function mountMcpRoute(app, context, def, base, setting) {
+ 		serverVersion: def.version ?? "0.0.0",
+ 		exposeSharedState: config.exposeSharedState ?? true,
+ 		instructions: config.instructions,
++		prompts: config.prompts,
+ 		resourceTemplates: config.resourceTemplates,
+ 		onResourcesChanged: config.onResourcesChanged,
+ 		authorization: config.authorization,
