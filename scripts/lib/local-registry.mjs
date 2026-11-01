@@ -352,9 +352,8 @@ async function mcpRequest(url, session, id, method, params = {}) {
 }
 
 /**
- * The installed package's MCP endpoint lists resource templates, which devframe 1.3.0 and later
- * serve. Prompts still come from a workspace patch that doesn't ship, so their count is reported
- * but not required. `token` is the bearer token the server asks for, if any.
+ * The installed package's MCP endpoint lists resource templates (devframe 1.3.0 and later) and
+ * prompts (devframe 1.3.1 and later). `token` is the bearer token the server asks for, if any.
  */
 export async function checkMcpLists(url, token) {
   const session = { token };
@@ -367,10 +366,10 @@ export async function checkMcpLists(url, token) {
   await mcpRequest(url, session, undefined, 'notifications/initialized');
   const { resourceTemplates } = await mcpRequest(url, session, 2, 'resources/templates/list');
   if (!resourceTemplates?.length) throw new Error(`resources/templates/list at ${url} is empty`);
-  const prompts = init.capabilities?.prompts
-    ? ((await mcpRequest(url, session, 3, 'prompts/list')).prompts?.length ?? 0)
-    : 0;
-  return `${resourceTemplates.length} resource templates and ${prompts} prompts over MCP`;
+  if (!init.capabilities?.prompts) throw new Error(`${url} declares no prompts capability`);
+  const { prompts } = await mcpRequest(url, session, 3, 'prompts/list');
+  if (!prompts?.length) throw new Error(`prompts/list at ${url} is empty`);
+  return `${resourceTemplates.length} resource templates and ${prompts.length} prompts over MCP`;
 }
 
 /** The panel page has its title and names a script that loads. */
