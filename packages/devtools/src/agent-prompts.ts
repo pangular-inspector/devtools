@@ -3,7 +3,7 @@ import { agentToolOffered, type ResolvedPangularConfig } from './config.ts';
 import { redactText } from './serialize.ts';
 import { clip } from './text.ts';
 
-/** One MCP prompt, as the patched `@devframes/agentic` server takes it. */
+/** One MCP prompt, as `@devframes/agentic` takes it. */
 export type PangularMcpPrompt = NonNullable<McpRouteOptions['prompts']>[number];
 
 /** Whether a built-in agent tool is offered, by its name without `pangular:`. */

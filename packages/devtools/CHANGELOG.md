@@ -31,7 +31,6 @@ These changes can break a 0.0.7 setup without an error.
 - **Analog on pnpm needs one setting.** `@analogjs/vite-plugin-nitro` imports `h3` without declaring it, so under pnpm it can resolve to the h3 2 that this package brings in, and `vite build` fails with "does not provide an export named 'createEvent'". Declare `h3@^1` for the plugin with pnpm `packageExtensions`, as the Analog guide shows.
 - **Agent tools, arguments and resource templates are renamed, and old names are refused.** Update prompts, scripts and client allowlists. See **Agent tools renamed** below.
 - **Most entry points export less.** See **Removed exports** below.
-- **MCP prompts need a devframe release after 1.3.0.** The package depends on devframe 1.3.0, which serves the per-page resource templates and their `list_changed` notifications. With devframe 1.3.0 from npm, the HTTP endpoint sends no prompts. The workspace runs a patched devframe, so this only affects installed packages.
 
 ### Agent tools renamed
 
@@ -161,7 +160,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Tool titles, inspector tags and safety tiers (`action` and `destructive`).
 - Every answer names the page it read, and one rule picks the default page for every tool.
 - Per-page resource templates and `list_changed` notifications (#417).
-- Five MCP prompts for common workflows: `inspect-page`, `debug-error`, `fix-form`, `performance-pass` and `verify-fix` (#416). Server instructions describe the tiers and the tools. Both need the patched devframe (see **Upgrading from 0.0.7**).
+- Five MCP prompts for common workflows: `inspect-page`, `debug-error`, `fix-form`, `performance-pass` and `verify-fix` (#416). Server instructions describe the tiers and the tools.
 - Agent skills shipped in the package, installed with `pangular skills install`.
 - Read-only tools for browser agents through WebMCP, off by default (`agent.browserTools`).
 - `pangular mcp --print-config` prints the client config for Claude Code, Cursor and VS Code.

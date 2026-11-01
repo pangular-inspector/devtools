@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createDevServer } from 'devframe/adapters/dev';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -252,23 +252,12 @@ describe('pangular dev MCP route', () => {
 describe('shared-state filter source', () => {
   const repo = fileURLToPath(new URL('../../../../', import.meta.url));
 
-  // The filter must come from published devframe, not from `patches/`, which
-  // apply only inside this repository: an app that installs the package would
-  // otherwise get every key again (issue #238).
-  it('needs no local patch', () => {
-    for (const file of readdirSync(`${repo}patches`)) {
-      const lines = readFileSync(`${repo}patches/${file}`, 'utf8').split('\n');
-      // A line a hunk only touches (to add a comma) is removed and added again.
-      const removed = new Set(
-        lines
-          .filter((line) => /^-(?!--)/.test(line))
-          .map((line) => line.slice(1).replace(/,$/, '')),
-      );
-      const added = lines
-        .filter((line) => /^\+(?!\+\+)/.test(line))
-        .filter((line) => !removed.has(line.slice(1).replace(/,$/, '')));
-      expect(added.join('\n'), file).not.toContain('exposeSharedState');
-    }
+  // The route options must come from published devframe, not from pnpm
+  // patches, which apply only inside this repository: an app that installs
+  // the package would otherwise miss them (issues #238 and #428).
+  it('needs no local patch of devframe', () => {
+    const workspace = readFileSync(`${repo}pnpm-workspace.yaml`, 'utf8');
+    expect(workspace).not.toMatch(/^\s*'?(?:devframe|@devframes\/[\w-]+)@[^:]*'?:\s*patches\//m);
   });
 
   it('requires a devframe release that has the route option', () => {

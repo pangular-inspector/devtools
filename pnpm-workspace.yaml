@@ -10,7 +10,3 @@ packageExtensions:
   '@analogjs/vite-plugin-nitro':
     dependencies:
       h3: ^1.15.0
-patchedDependencies:
-  '@devframes/agentic@1.3.0': patches/@devframes__agentic@1.3.0.patch
-  '@devframes/hub@1.3.0': patches/@devframes__hub@1.3.0.patch
-  devframe@1.3.0: patches/devframe@1.3.0.patch

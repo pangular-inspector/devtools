@@ -41,17 +41,18 @@ pnpm install
 | `pre-commit` | Formats the staged files with Prettier and stages the result. It skips a file that also has unstaged changes, so hunks you left out with `git add -p` stay out of the commit.                                         |
 | `commit-msg` | Checks the message against the [commit message guidelines](https://github.com/pangular-inspector/devtools/blob/main/docs/contributing/commit-message-guidelines.md). It prints a warning and never blocks the commit. |
 
-### Patched dependencies
+### Devframe versions
 
-`patches/` holds `pnpm patch` changes to the built files of `devframe`, `@devframes/agentic` and `@devframes/hub` 1.3.0, listed under `patchedDependencies` in `pnpm-workspace.yaml`. They add what devframe doesn't ship:
+Some MCP route options that `pangularMcp()` in `packages/devtools/src/agent-mcp.ts` sets need a minimum devframe version. The package depends on devframe 1.3.1, which has them all.
 
-| Patch     | What it adds                                                                                                                                                                                                                                                                            | Used by                                                                                     |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `prompts` | An MCP route option with prompt templates. `@devframes/agentic` declares the `prompts` capability and answers `prompts/list` and `prompts/get` (invalid params for an unknown prompt or a missing required argument). Patched in `devframe`, `@devframes/hub` and `@devframes/agentic`. | `pangularMcpPrompts()` in `packages/devtools/src/agent-prompts.ts`, through `pangularMcp()` |
+| Route option                                 | Used for                                                                                                                 | Devframe |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------- |
+| `exposeSharedState`                          | Hiding the shared-state keys of an inspector with `agent.tools.<name>: false`                                            | 1.2.4    |
+| `instructions`                               | The server instructions                                                                                                  | 1.2.6    |
+| `resourceTemplates` and `onResourcesChanged` | The per-page resource templates and their `list_changed` notifications (`packages/devtools/src/agent-page-resources.ts`) | 1.3.0    |
+| `prompts`                                    | The workflow prompts (`packages/devtools/src/agent-prompts.ts`)                                                          | 1.3.1    |
 
-Some route options need no patch. The `exposeSharedState` filter, which hides the shared-state keys of an inspector with `agent.tools.<name>: false`, is part of devframe since 1.2.4. The server `instructions` and `withMcpContent`, which `screenshot-component` uses to send its image as its own MCP block, are part of devframe since 1.2.6. The `resourceTemplates` and `onResourcesChanged` route options, which `pangularMcpResourceTemplates()` and `pangularMcpPagesChanged()` in `packages/devtools/src/agent-page-resources.ts` use, are part of devframe since 1.3.0.
-
-The patches apply only inside this repository. An app that installs the published package gets no prompts until devframe ships them. `pnpm e2e:install` checks that the installed package lists resource templates over MCP. Each patch names an exact version and file names with build hashes, so a devframe upgrade needs the patches redone with `pnpm patch`, or removed once devframe has the feature.
+`withMcpContent`, which `screenshot-component` uses to send its image as its own MCP block, is part of devframe since 1.2.6. `pnpm e2e:install` checks that the installed package lists resource templates and prompts over MCP.
 
 ## Project structure
 

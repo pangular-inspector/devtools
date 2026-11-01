@@ -18,7 +18,7 @@
  *   analog             `create-analog`, the Vite plugin as vite.md shows (no overlay import), a
  *                      `vite build`, then the Vite dev server.
  *   cli                The standalone CLI in cli.md: `npx @pangular-inspector/devtools dev` without
- *                      installing, with its MCP endpoint listing resource templates, then the
+ *                      installing, with its MCP endpoint listing resource templates and prompts, then the
  *                      installed `pangular build` static report.
  *
  * Package managers: npm, pnpm, yarn and bun. One that is not installed is skipped and says so.
@@ -720,7 +720,7 @@ async function cliScenario(cell) {
     await step(cell, 'browser: the dev panel shows the source scan', () =>
       checkInBrowser(cell, { panelUrl: `${base}/`, codeLog: devLog, live: false }),
     );
-    await step(cell, 'MCP: resources/templates/list is not empty', () =>
+    await step(cell, 'MCP: resource templates and prompts are listed', () =>
       checkMcpLists(`${base}/__mcp`, mcpToken),
     );
   } finally {
