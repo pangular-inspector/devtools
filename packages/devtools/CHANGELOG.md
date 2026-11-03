@@ -2,7 +2,7 @@
 
 All notable changes to `@pangular-inspector/devtools` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com).
 
-## Unreleased
+## 0.0.8
 
 Most setups need changes when they come from 0.0.7, so read **Upgrading from 0.0.7** first.
 
