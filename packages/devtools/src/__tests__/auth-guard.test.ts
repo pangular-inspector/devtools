@@ -15,7 +15,12 @@ import { connectDevframe } from 'devframe/client';
 import { getTempAuthCode } from 'devframe/node/auth';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CodeGuard, guardedExchange } from '../auth-guard.ts';
-import { authStoreDir, pruneExpiredTokens, AUTH_TOKEN_TTL_MS } from '../auth-store.ts';
+import {
+  authStoreDir,
+  hardenTokenStore,
+  pruneExpiredTokens,
+  AUTH_TOKEN_TTL_MS,
+} from '../auth-store.ts';
 import { initPangularHub } from '../hub.ts';
 
 describe('CodeGuard', () => {
@@ -140,6 +145,27 @@ describe('pruneExpiredTokens', () => {
     expect(Object.keys(state.trusted)).toEqual(['fresh']);
   });
 
+  it('rebuilds the store without a prototype and drops entries that are not token records', () => {
+    const state = {
+      trusted: {
+        good: { authToken: 'good', timestamp: 1 },
+        legacy: { timestamp: 1 },
+        swapped: { authToken: 'other', timestamp: 1 },
+        bare: true,
+      } as Record<string, unknown>,
+    };
+    const storage = {
+      value: () => state as never,
+      mutate: (fn: (s: never) => void) => fn(state as never),
+    };
+    expect(hardenTokenStore(storage)).toBe(2);
+    expect(Object.getPrototypeOf(state.trusted)).toBeNull();
+    expect(Object.keys(state.trusted)).toEqual(['good', 'legacy']);
+    expect(state.trusted['constructor']).toBeUndefined();
+    expect(state.trusted['toString']).toBeUndefined();
+    expect(hardenTokenStore(storage)).toBe(0);
+  });
+
   it('names the store after a hash of the project, not its path', () => {
     const dir = authStoreDir('/work/secret-project', '/home/me');
     expect(dir).toMatch(/^\/home\/me\/\.pangular-inspector\/auth\/[0-9a-f]{16}$/);
@@ -151,6 +177,15 @@ describe('initPangularHub one-time code', () => {
   const cleanups: (() => Promise<void> | void)[] = [];
   afterEach(async () => {
     for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+    // The devframe client keeps its last connection and token on globalThis.
+    const stored = globalThis as Record<string, unknown>;
+    for (const key of [
+      '__DEVFRAME_CONNECTION__',
+      '__DEVFRAME_CONNECTION_META__',
+      '__DEVFRAME_CONNECTION_AUTH_TOKEN__',
+    ]) {
+      delete stored[key];
+    }
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
@@ -173,15 +208,36 @@ describe('initPangularHub one-time code', () => {
     cleanups.push(() => hub.close());
     vi.stubGlobal('location', new URL(`http://127.0.0.1:${port}/`));
     await hub.context;
-    const rpc = await connectDevframe({
-      baseURL: `http://127.0.0.1:${port}/__devframes/pangular/`,
-      simpleAuth: false,
-      otpParam: false,
-      webmcp: false,
-    });
-    cleanups.push(() => rpc.close?.());
-    return { rpc, home };
+    const baseURL = `http://127.0.0.1:${port}/__devframes/pangular/`;
+    const connect = async (authToken?: string) => {
+      const client = await connectDevframe({
+        baseURL,
+        ...(authToken ? { authToken } : {}),
+        simpleAuth: false,
+        otpParam: false,
+        webmcp: false,
+      });
+      cleanups.push(() => client.close?.());
+      return client;
+    };
+    const rpc = await connect();
+    return { rpc, home, connect };
   }
+
+  it('trusts no token named after an Object.prototype property', async () => {
+    const { rpc, connect, home } = await serve();
+    expect(await rpc.requestTrustWithCode(getTempAuthCode())).toBeTruthy();
+    for (const token of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      const client = await connect(token);
+      expect(await client.ensureTrusted(500).catch(() => false), token).toBe(false);
+    }
+    const file = join(authStoreDir(process.cwd(), home), 'auth.json');
+    const issued = await vi.waitFor(
+      () => Object.keys(JSON.parse(readFileSync(file, 'utf8')).trusted)[0] as string,
+      { timeout: 3000 },
+    );
+    expect(await (await connect(issued)).ensureTrusted(3000)).toBe(true);
+  });
 
   it('slows down a client that guesses, and stores its token privately per project', async () => {
     const { rpc, home } = await serve();
