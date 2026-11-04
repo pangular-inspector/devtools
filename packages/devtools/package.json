@@ -199,6 +199,7 @@
   },
   "devDependencies": {
     "@angular/common": "^22.1.0",
+    "@angular/compiler": "^22.1.0",
     "@angular/core": "^22.1.0",
     "@capacitor/core": "^8.5.3",
     "hono": "4.13.8",

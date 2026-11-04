@@ -1,25 +1,20 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import * as angularCompiler from '@angular/compiler';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { fixtureDir } from './fixture-dir.ts';
 import {
   lintTemplates,
-  projectCompiler,
   templateLintText,
+  trustedCompiler,
   type TemplateCompiler,
   type TemplateLintFinding,
 } from '../template-lint.ts';
 import { templateLintTool } from '../template-lint-tool.ts';
 
-const REPO = fileURLToPath(new URL('../../../../../', import.meta.url));
-
-let compiler: TemplateCompiler;
+const compiler = angularCompiler as TemplateCompiler;
 beforeAll(async () => {
-  // The workspace's own @angular/compiler, loaded the way the tool loads a project's.
-  const found = await projectCompiler(REPO);
-  if (!found) throw new Error('@angular/compiler is not installed in the workspace');
-  compiler = found;
+  expect(await trustedCompiler()).toBe(compiler);
 });
 
 function project(files: Record<string, string>): string {
@@ -141,6 +136,15 @@ export class V {}
       const old = { ...compiler, VERSION: { major: '16' } } as TemplateCompiler;
       expect(rules(await lint('<div *ngIf="open">a</div>', old))).toEqual([]);
     });
+
+    it('uses the project Angular version when checking for control-flow support', async () => {
+      const dir = project({
+        'package.json': JSON.stringify({ dependencies: { '@angular/core': '^16.2.0' } }),
+        'src/view.ts': component('<div *ngIf="open">a</div>'),
+      });
+
+      expect(rules((await lintTemplates(dir)).findings)).not.toContain('legacy-control-flow');
+    });
   });
 
   describe('track-by-index', () => {
@@ -253,11 +257,31 @@ export class V {}
     expect(rules(findings).sort()).toEqual(['img-missing-alt', 'legacy-control-flow']);
   });
 
-  it('says so when the project has no @angular/compiler', async () => {
+  it('uses the bundled compiler when the project has no @angular/compiler', async () => {
     const dir = project({ 'src/view.ts': component('<p>a</p>') });
     const result = await lintTemplates(dir);
-    expect(result).toEqual({ parsed: false, templates: 0, findings: [] });
-    expect(templateLintText(result)).toContain('no `@angular/compiler`');
+    expect(result).toEqual({ parsed: true, templates: 1, findings: [] });
+    expect(templateLintText(result)).toContain('No template problems found');
+  });
+
+  it('does not execute a compiler selected from the scanned project', async () => {
+    const dir = project({
+      'package.json': JSON.stringify({
+        type: 'module',
+        dependencies: { '@angular/compiler': '1.0.0' },
+      }),
+      'node_modules/@angular/compiler/package.json': JSON.stringify({
+        name: '@angular/compiler',
+        type: 'module',
+        exports: { '.': './index.js' },
+      }),
+      'node_modules/@angular/compiler/index.js':
+        "import { writeFileSync } from 'node:fs';\nwriteFileSync(new URL('../../../compiler-loaded', import.meta.url), 'loaded');\n",
+      'src/view.ts': component('<p>a</p>'),
+    });
+
+    expect((await lintTemplates(dir)).templates).toBe(1);
+    expect(existsSync(join(dir, 'compiler-loaded'))).toBe(false);
   });
 
   it('does not parse an unchanged template again, and parses an edited one', async () => {

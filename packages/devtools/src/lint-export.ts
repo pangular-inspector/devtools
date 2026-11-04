@@ -105,7 +105,6 @@ export async function runSourceLints(
         message: f.message,
         fix: f.fix,
       })),
-      result.parsed ? undefined : 'The project has no @angular/compiler to parse templates with.',
     );
   }
   if (chosen.has('pipes')) {

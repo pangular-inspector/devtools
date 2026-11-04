@@ -231,7 +231,7 @@ npx pangular lint --format sarif --output reports/pangular.sarif --fail-on error
 
 | Lint        | Agent tool                                              | What it checks                                                                                        |
 | ----------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `templates` | [`scan-templates`](../agents/tools.md#scan-templates)   | Component templates, parsed with your project's own `@angular/compiler`. Skipped when it is missing.  |
+| `templates` | [`scan-templates`](../agents/tools.md#scan-templates)   | Component templates, parsed with the compiler bundled with Pangular Inspector.                        |
 | `pipes`     | [`scan-pipe-usage`](../agents/tools.md#scan-pipe-usage) | Pipe use in templates and pipe declarations.                                                          |
 | `analog`    | [`analog-lint`](../agents/tools.md#lint)                | The static Analog checks: routes, API routes, server files, content and prerender. Skipped elsewhere. |
 
