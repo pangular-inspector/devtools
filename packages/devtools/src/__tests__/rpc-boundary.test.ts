@@ -117,6 +117,39 @@ describe('malformed component reports', () => {
       },
     ]);
   });
+
+  it('drops a node whose id the tree already used, with its subtree', () => {
+    const page = toComponentPage({
+      pageId: 'p',
+      count: 3,
+      detail: null,
+      roots: [
+        {
+          id: 'c1',
+          name: 'App',
+          tag: 'app-root',
+          children: [
+            {
+              id: 'c2',
+              name: 'Card',
+              tag: 'app-card',
+              kind: 'directive',
+              children: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+            },
+          ],
+        },
+        { id: 'c2', name: 'Again', tag: 'app-again', children: [] },
+      ] as never,
+    });
+    expect(page.roots).toEqual([
+      {
+        id: 'c1',
+        name: 'App',
+        tag: 'app-root',
+        children: [{ id: 'c2', name: 'Card', tag: 'app-card', kind: 'directive', children: [] }],
+      },
+    ]);
+  });
 });
 
 describe('page requests with no page to answer', () => {

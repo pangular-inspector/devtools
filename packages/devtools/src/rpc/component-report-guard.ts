@@ -40,9 +40,13 @@ const records = (value: unknown): AnyRecord[] =>
 /** The roots with every node that has an `id`, `name` and `tag`; other nodes and their subtrees go. */
 export function guardComponentRoots(value: unknown): LiveComponentNode[] {
   let budget = MAX_NODES;
+  // Ids index the tree in the panel and the tools; a repeated id is dropped with its subtree.
+  const seen = new Set<string>();
   const node = (raw: unknown, depth: number): LiveComponentNode | null => {
     if (budget <= 0 || !isRecord(raw)) return null;
     if (!str(raw['id']) || !raw['id'] || !str(raw['name']) || !str(raw['tag'])) return null;
+    if (seen.has(raw['id'])) return null;
+    seen.add(raw['id']);
     budget--;
     const out: LiveComponentNode = {
       id: raw['id'],
