@@ -18,6 +18,8 @@ const shared = {
   outExtensions: () => ({ js: '.mjs', dts: '.d.mts' }),
 } satisfies UserConfig;
 
+const nodeExternal = [/^@angular\/(?!compiler$)/, /^@nativescript\//, /^rxjs/];
+
 /**
  * The browser build. Its own build, so no chunk is shared with the Node
  * entries, and it fails when an entry reaches a Node builtin.
@@ -34,6 +36,7 @@ export const browserConfig = {
 
 export const nodeConfig = {
   ...shared,
+  external: nodeExternal,
   name: 'node',
   entry: NODE_ENTRIES,
   platform: 'node',

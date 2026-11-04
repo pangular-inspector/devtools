@@ -1,13 +1,9 @@
 // Lints the project's component templates (inline `template:` and
-// `templateUrl` files) with the project's own `@angular/compiler`, so a
-// finding is read from the same AST Angular compiles, not guessed with a
-// regex. The compiler is loaded from the project, never bundled: when the
-// project has none, the tool says so and reports nothing.
+// `templateUrl` files) with the bundled `@angular/compiler`, so a finding is
+// read from Angular's AST, not guessed with a regex or loaded from the project.
 
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { templatesIn, type TemplateSource } from './get-pipes.ts';
 import { sourceRoots, walkFiles } from './source-scan.ts';
 import type { LintSeverity } from './pipe-lint.ts';
@@ -35,8 +31,7 @@ export interface TemplateLintFinding {
 }
 
 export interface TemplateLintResult {
-  /** `false` when the project has no `@angular/compiler` to parse with. */
-  parsed: boolean;
+  parsed: true;
   templates: number;
   findings: TemplateLintFinding[];
 }
@@ -103,27 +98,34 @@ interface ReadNode {
   receiver: unknown;
 }
 
-const compilers = new Map<string, Promise<TemplateCompiler | undefined>>();
+let compiler: Promise<TemplateCompiler> | undefined;
 
-/** The project's own `@angular/compiler`, or `undefined` when it has none. A
- * miss is not remembered, so installing it works without a restart. */
-export function projectCompiler(cwd: string): Promise<TemplateCompiler | undefined> {
-  const known = compilers.get(cwd);
-  if (known) return known;
-  const loading = (async () => {
-    try {
-      const path = createRequire(join(cwd, 'package.json')).resolve('@angular/compiler');
-      const mod = (await import(pathToFileURL(path).href)) as Partial<TemplateCompiler>;
-      return typeof mod.parseTemplate === 'function' ? (mod as TemplateCompiler) : undefined;
-    } catch {
-      return undefined;
-    }
-  })();
-  compilers.set(cwd, loading);
-  void loading.then((found) => {
-    if (!found) compilers.delete(cwd);
-  });
-  return loading;
+/** Loads the compiler bundled with the package, never one selected by the scanned project. */
+export function trustedCompiler(): Promise<TemplateCompiler> {
+  compiler ??= import('./trusted-template-compiler.ts').then((module) => module.templateCompiler);
+  return compiler;
+}
+
+function projectAngularMajor(cwd: string): number | undefined {
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8')) as unknown;
+  } catch {
+    return undefined;
+  }
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) return undefined;
+
+  const fields = manifest as Record<string, unknown>;
+  const sections = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+  for (const section of sections) {
+    const dependencies = fields[section];
+    if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) continue;
+    const version = (dependencies as Record<string, unknown>)['@angular/core'];
+    if (typeof version !== 'string') continue;
+    const major = /^\D*(\d+)(?:\.|$)/.exec(version)?.[1];
+    if (major) return Number(major);
+  }
+  return undefined;
 }
 
 /** Findings per template, keyed by compiler, then project, then the file,
@@ -135,14 +137,13 @@ export async function lintTemplates(
   cwd: string,
   options: { compiler?: TemplateCompiler; rules?: Record<string, boolean> } = {},
 ): Promise<TemplateLintResult> {
-  const compiler = options.compiler ?? (await projectCompiler(cwd));
-  if (!compiler) return { parsed: false, templates: 0, findings: [] };
+  const using = options.compiler ?? (await trustedCompiler());
 
-  const byProject = cache.get(compiler) ?? new Map<string, Map<string, TemplateLintFinding[]>>();
-  cache.set(compiler, byProject);
+  const byProject = cache.get(using) ?? new Map<string, Map<string, TemplateLintFinding[]>>();
+  cache.set(using, byProject);
   const previous = byProject.get(cwd) ?? new Map<string, TemplateLintFinding[]>();
   const next = new Map<string, TemplateLintFinding[]>();
-  const major = Number(compiler.VERSION?.major);
+  const major = projectAngularMajor(cwd) ?? Number(using.VERSION?.major);
   const hasControlFlow = !Number.isFinite(major) || major >= 17;
 
   let templates = 0;
@@ -163,7 +164,7 @@ export async function lintTemplates(
         if (text === undefined) continue;
         templates++;
         const key = `${template.file}\0${template.baseOffset}\0${text}`;
-        const own = next.get(key) ?? previous.get(key) ?? lintTemplate(compiler, template, text);
+        const own = next.get(key) ?? previous.get(key) ?? lintTemplate(using, template, text);
         next.set(key, own);
         for (const finding of own) {
           if (options.rules && options.rules[finding.rule] === false) continue;
@@ -456,9 +457,6 @@ const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
 export function templateLintText(result: TemplateLintResult, args: TemplateLintArgs = {}): string {
-  if (!result.parsed) {
-    return 'Cannot lint templates: this project has no `@angular/compiler` installed to parse them with. Install dependencies and try again.';
-  }
   const rules = Object.keys(TEMPLATE_LINT_RULES);
   if (args.rule && !rules.includes(args.rule)) {
     return `Unknown rule ${JSON.stringify(args.rule)}. Rules: ${rules.map((r) => `\`${r}\``).join(', ')}.`;

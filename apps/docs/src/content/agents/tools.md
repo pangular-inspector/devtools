@@ -285,7 +285,7 @@ Each page lists at most 50 blocks, with a note on how many more are not shown, a
 
 ### scan-templates
 
-Checks the component templates in your source, inline `template` and `templateUrl` files, with the project's own `@angular/compiler`. Reads: source.
+Checks the component templates in your source, inline `template` and `templateUrl` files, with the compiler bundled with Pangular Inspector. The scan does not load compiler code from the project. Reads: source.
 
 | Argument   | Required | Value                                                                  |
 | ---------- | -------- | ---------------------------------------------------------------------- |
@@ -303,7 +303,7 @@ Checks the component templates in your source, inline `template` and `templateUr
 | `legacy-control-flow`  | `info`    | `*ngIf`, `*ngFor`, `*ngSwitchCase` or `*ngSwitchDefault` where `@if`, `@for` or `@switch` would do. Skipped before Angular 17.                                                                                             |
 | `ngclass-ngstyle`      | `info`    | `ngClass` or `ngStyle` where `[class]` or `[style]` bindings would do.                                                                                                                                                     |
 
-Each finding gives its severity, rule, `file:line` and a fix. Errors come first. A template whose text has not changed since the last call is not parsed again. A backtick template built with `${}` is skipped. If the project has no `@angular/compiler` installed, the answer says so and lists nothing.
+Each finding gives its severity, rule, `file:line` and a fix. Errors come first. A template whose text has not changed since the last call is not parsed again. A backtick template built with `${}` is skipped.
 
 ### hydration
 

@@ -1,21 +1,14 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createPangularCli } from '../cli.ts';
 import { failsAt, runSourceLints, toLintJson, toSarif } from '../lint-export.ts';
-import { projectCompiler, type TemplateCompiler } from '../rpc/template-lint.ts';
+import * as angularCompiler from '@angular/compiler';
+import type { TemplateCompiler } from '../rpc/template-lint.ts';
 import { fixtureDir } from '../rpc/__tests__/fixture-dir.ts';
 import { BASE_FILES, BROKEN_FILES, makeProject } from './analog-fixture.ts';
 
-const REPO = fileURLToPath(new URL('../../../../', import.meta.url));
-
-let compiler: TemplateCompiler;
-beforeAll(async () => {
-  const found = await projectCompiler(REPO);
-  if (!found) throw new Error('@angular/compiler is not installed in the workspace');
-  compiler = found;
-});
+const compiler = angularCompiler as TemplateCompiler;
 
 afterEach(() => {
   vi.restoreAllMocks();
