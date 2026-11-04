@@ -656,7 +656,7 @@ export function exportFormText(
   const body =
     form.kind === 'signal'
       ? `const model = signal(${literal(p.raw)});\n// const f = form(model, schema);\n// expect(f().valid()).toBe(${form.root.status === 'VALID'});`
-      : `form.${p.excluded.length ? 'patchValue' : 'setValue'}(${literal(p.raw)});\n${p.excluded.map((path) => `form.get('${path}')?.disable();`).join('\n')}\nexpect(form.status).toBe('${form.root.status}');`;
+      : `form.${p.excluded.length ? 'patchValue' : 'setValue'}(${literal(p.raw)});\n${p.excluded.map((path) => `form.get(${literal(path)})?.disable();`).join('\n')}\nexpect(form.status).toBe(${literal(form.root.status)});`;
   const header = fixtureHeader(form, invalid, state.reportedAt);
   // Header and body share the budget; keep room for the truncation note.
   const room = Math.max(0, FORM_TOOL_MAX_CHARS - header.length - 1 - 200);
@@ -682,8 +682,8 @@ function fixtureHeader(form: CollectedForm, invalid: FormFieldNode[], reportedAt
       ? ` and ${invalid.length - MAX_HEADER_ERRORS} more not shown (call explain-invalid-forms for all)`
       : '';
   return [
-    `// ${line(form.label)} (${form.kind}) captured ${new Date(reportedAt).toISOString()}`,
-    `// status ${form.root.status}${errors.length ? `; errors: ${errors.join(', ')}${more}` : ''}`,
+    `// ${line(form.label)} (${line(form.kind)}) captured ${new Date(reportedAt).toISOString()}`,
+    `// status ${line(form.root.status)}${errors.length ? `; errors: ${errors.join(', ')}${more}` : ''}`,
     '// Secret values are [redacted]; replace them before running.',
   ].join('\n');
 }

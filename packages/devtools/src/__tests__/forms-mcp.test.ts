@@ -459,8 +459,8 @@ describe('forms MCP tools', () => {
     const { call } = await withForms();
     const fixture = await call('export-form', { form: 'Signup', format: 'fixture' });
     expect(fixture).toContain('form.patchValue(');
-    expect(fixture).toContain("form.get('nickname')?.disable();");
-    expect(fixture).toContain("expect(form.status).toBe('INVALID');");
+    expect(fixture).toContain('form.get("nickname")?.disable();');
+    expect(fixture).toContain('expect(form.status).toBe("INVALID");');
     expect(fixture).toContain('[redacted]');
     const snapshot = await call('export-form', { form: 'Profile' });
     expect(snapshot).toContain('"kind": "signal"');
