@@ -478,6 +478,22 @@ const OPTIONAL_TYPES: Record<string, string> = {
   name: 'string',
 };
 
+const FORM_KINDS = new Set(['signal', 'reactive', 'template']);
+const FIELD_TYPES = new Set(['group', 'array', 'control']);
+const FIELD_STATUSES = new Set(['VALID', 'INVALID', 'PENDING', 'DISABLED']);
+const FORM_EVENT_TYPES = new Set([
+  'value',
+  'status',
+  'touched',
+  'dirty',
+  'submit',
+  'reset',
+  'added',
+  'removed',
+  'moved',
+  'validators',
+]);
+
 function optionalOk(node: Record<string, unknown>): boolean {
   for (const [key, type] of Object.entries(OPTIONAL_TYPES)) {
     const value = node[key];
@@ -502,7 +518,9 @@ function isFieldNode(value: unknown, depth = 0): boolean {
     typeof node.key === 'string' &&
     typeof node.path === 'string' &&
     typeof node.type === 'string' &&
+    FIELD_TYPES.has(node.type) &&
     typeof node.status === 'string' &&
+    FIELD_STATUSES.has(node.status) &&
     typeof node.touched === 'boolean' &&
     typeof node.dirty === 'boolean' &&
     typeof node.bound === 'boolean' &&
@@ -522,6 +540,7 @@ function isCollectedForm(value: unknown): boolean {
     typeof form.id === 'string' &&
     typeof form.label === 'string' &&
     typeof form.kind === 'string' &&
+    FORM_KINDS.has(form.kind) &&
     (form.submit === undefined || isRecord(form.submit)) &&
     (form.submitDom === undefined ||
       (isRecord(form.submitDom) &&
@@ -547,6 +566,7 @@ function isFormEvent(value: unknown): boolean {
     typeof event.formId === 'string' &&
     typeof event.path === 'string' &&
     typeof event.type === 'string' &&
+    FORM_EVENT_TYPES.has(event.type) &&
     typeof event.timestamp === 'number'
   );
 }

@@ -323,4 +323,22 @@ describe('answers that must stay parseable', () => {
     expect(code).toContain('items.0.a required, ');
     expect(code).toContain('and 1980 more not shown (call explain-invalid-forms for all)');
   });
+
+  it('exports page-reported fixture strings as literals and single-line comments', () => {
+    const form = bigForm(0);
+    const path = `name'); throw new Error('injected');//`;
+    const status = `VALID\n'); throw new Error('injected');//`;
+    form.kind = `reactive\nthrow new Error('injected');//` as CollectedForm['kind'];
+    form.root.status = status as FormFieldNode['status'];
+    form.root.children = [control(path, { status: 'DISABLED' })];
+
+    const text = exportFormText(stateOf(form), { form: 'Orders', format: 'fixture' });
+    const code = /```ts\n([\s\S]*)\n```/.exec(text)![1];
+
+    expect(code).toContain(`form.get(${JSON.stringify(path)})?.disable();`);
+    expect(code).toContain(`expect(form.status).toBe(${JSON.stringify(status)});`);
+    expect(code).toContain('(reactive throw new Error');
+    expect(code).not.toContain("// status VALID'); throw");
+    expect(code.split('\n').filter((line) => line.startsWith('//'))).toHaveLength(3);
+  });
 });

@@ -447,6 +447,7 @@ describe('isPageReport', () => {
       ...valid,
       forms: [form(control('', { type: 'group', children: [node as FormFieldNode] }))],
     });
+    const firstForm = valid.forms[0]!;
     for (const report of [
       null,
       [],
@@ -457,6 +458,16 @@ describe('isPageReport', () => {
       { ...valid, forms: {} },
       { ...valid, forms: [{ ...valid.forms[0], root: {} }] },
       { ...valid, forms: [{ ...valid.forms[0], label: undefined }] },
+      { ...valid, forms: [{ ...firstForm, kind: 'reactive\\nthrow new Error()' }] },
+      { ...valid, forms: [{ ...firstForm, root: { ...firstForm.root, status: 'VALID\\nthrow' } }] },
+      {
+        ...valid,
+        forms: [{ ...firstForm, root: { ...firstForm.root, type: 'group; throw' } }],
+      },
+      {
+        ...valid,
+        events: [{ ...valid.events[0], type: 'value; throw' }],
+      },
       child({ ...control('email'), errors: undefined }),
       child({ ...control('email'), errors: [{ kind: 'required' }] }),
       child({ ...control('email'), children: 'x' }),
