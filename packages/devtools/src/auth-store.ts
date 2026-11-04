@@ -126,6 +126,36 @@ interface AuthStorage {
   mutate(fn: (state: { trusted: Record<string, TrustedRecord> }) => void): void;
 }
 
+function isTokenRecord(token: string, record: unknown): boolean {
+  if (!record || typeof record !== 'object') return false;
+  const { authToken, timestamp } = record as TrustedRecord & { authToken?: unknown };
+  return typeof timestamp === 'number' && (authToken === undefined || authToken === token);
+}
+
+/**
+ * devframe trusts a token when `trusted[token]` is truthy. With an ordinary
+ * object that includes inherited keys, so `constructor` or `toString` would
+ * pass as a token. This rebuilds `trusted` with no prototype, keeping only
+ * own entries that hold a record for their own token. devframe's storage
+ * copies objects with their prototype, so the store stays prototype-free
+ * through later exchanges and revokes. Returns how many entries it dropped.
+ */
+export function hardenTokenStore(storage: AuthStorage): number {
+  const trusted = storage.value().trusted;
+  const entries = trusted && typeof trusted === 'object' ? Object.entries(trusted) : [];
+  const kept = entries.filter(([token, record]) => isTokenRecord(token, record));
+  if (trusted && Object.getPrototypeOf(trusted) === null && kept.length === entries.length) {
+    return 0;
+  }
+  storage.mutate((state) => {
+    state.trusted = Object.assign(
+      Object.create(null) as Record<string, TrustedRecord>,
+      Object.fromEntries(kept),
+    );
+  });
+  return entries.length - kept.length;
+}
+
 /** Drops tokens older than `ttl`. Returns how many it dropped. */
 export function pruneExpiredTokens(
   storage: AuthStorage,
@@ -146,7 +176,8 @@ export function pruneExpiredTokens(
 const pruning = new WeakSet<object>();
 
 /**
- * Prunes the context's token store now and every hour. Safe to call more
+ * Hardens the context's token store (`hardenTokenStore`), then prunes it now
+ * and every hour. Safe to call more
  * than once per context. Skipped for a static build, which has no tokens.
  */
 export function expireAuthTokens(
@@ -164,6 +195,7 @@ export function expireAuthTokens(
     return;
   }
   // devframe rewrites the file after a change, with the default mode.
+  hardenTokenStore(storage);
   const prune = () => {
     if (pruneExpiredTokens(storage, Date.now(), ttl)) onPruned();
   };
