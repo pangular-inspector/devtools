@@ -47,8 +47,18 @@ const registryPort = Number(process.env.VERIFY_PORT ?? 4873);
 const appPort = registryPort + 1;
 
 const work = mkdtempSync(path.join(tmpdir(), 'pangular-verify-'));
-const { run, start, stopAll, waitFor, startRegistry, pack, publish, registryEnv, newest } =
-  createRegistry({ work, registryPort });
+const {
+  run,
+  start,
+  stopAll,
+  waitFor,
+  startRegistry,
+  pack,
+  publish,
+  verifyInstalled,
+  registryEnv,
+  newest,
+} = createRegistry({ work, registryPort });
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => process.exit(130));
 
 const OVERLAY_VITE = `bootstrapApplication(App, appConfig).then(() => {
@@ -78,6 +88,7 @@ async function angularCli(version) {
   const app = path.join(work, 'web');
   console.log(`installing ${manifest.name}@${version} and devframe from the registry`);
   run('npm', ['install', `${manifest.name}@${version}`, 'devframe'], app);
+  verifyInstalled(app);
 
   const server = path.join(app, 'src/server.ts');
   replaceIn(
@@ -118,6 +129,7 @@ async function analog(version) {
   const app = path.join(work, 'analog');
   console.log(`installing ${manifest.name}@${version} and devframe from the registry`);
   run('npm', ['install', `${manifest.name}@${version}`, 'devframe'], app);
+  verifyInstalled(app);
 
   const config = path.join(app, 'vite.config.ts');
   replaceIn(
@@ -190,7 +202,7 @@ try {
   const given = arg('tarball');
   const tarball = given ? path.resolve(given) : pack();
   await startRegistry();
-  const version = publish(tarball);
+  const version = await publish(tarball);
   const outcome = await SCENARIOS[name](version);
   app = outcome.app;
   console.log(`\nok  ${name}: ${outcome.result}, in ${elapsed()}`);

@@ -6,16 +6,25 @@
  * Nothing reaches npmjs for the package under test: the registry has no uplink for the scope, so a
  * package that failed to publish cannot be quietly satisfied by the real one. Everything else is
  * proxied to npmjs.
+ *
+ * The registry listens on 127.0.0.1, and another local account could hold that port first. So the
+ * port has to be free before Verdaccio starts, Verdaccio has to stay up, and it has to answer with a
+ * per-run secret seeded into its storage (the work folder is private to this account) before any
+ * package command trusts it. The package under test is then checked byte for byte against the
+ * tarball, both as the registry serves it and as each package manager installs it.
  */
 import { execFileSync, spawn } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   appendFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   writeFileSync,
 } from 'node:fs';
+import { createServer } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -90,8 +99,22 @@ export function wireOverlayInMain(file) {
  * Every long-running process it starts is stopped by `stopAll()` and when the process exits.
  */
 export function createRegistry({ work, registryPort }) {
-  const REGISTRY = `http://localhost:${registryPort}`;
+  // 127.0.0.1 rather than localhost, so every client reaches the one socket Verdaccio holds and not
+  // a listener on ::1.
+  const REGISTRY = `http://127.0.0.1:${registryPort}`;
+  const IDENTITY_PACKAGE = '@pangular-inspector/registry-identity';
   const children = new Set();
+  let registryChild;
+  let publishedTarball;
+
+  /** Fails when the registry was started and has stopped, as nothing else may answer its port. */
+  function assertRegistryRunning() {
+    if (registryChild && (registryChild.exitCode !== null || registryChild.signalCode !== null)) {
+      throw new Error(`the local registry exited:\n${tail(registryChild.logFile)}`);
+    }
+  }
+
+  const usesRegistry = (env) => env?.npm_config_registry === REGISTRY;
 
   function stopAll() {
     for (const child of children) {
@@ -142,6 +165,7 @@ export function createRegistry({ work, registryPort }) {
   });
 
   function run(cmd, args, cwd, env = registryEnv(), timeout = 15 * 60_000) {
+    if (usesRegistry(env)) assertRegistryRunning();
     try {
       return execFileSync(cmd, args, {
         cwd,
@@ -161,6 +185,7 @@ export function createRegistry({ work, registryPort }) {
 
   /** A long-running process in its own group, so stopping it also stops what it started. */
   function start(cmd, args, cwd, env, logFile) {
+    if (usesRegistry(env)) assertRegistryRunning();
     const child = spawn(cmd, args, { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     children.add(child);
     const log = (chunk) => appendFileSync(logFile, chunk);
@@ -170,19 +195,74 @@ export function createRegistry({ work, registryPort }) {
     return child;
   }
 
+  /**
+   * Waits for `url` to answer while `child` is running. An answer after `child` exited comes from
+   * something else on the port, so it fails rather than counting as ready.
+   */
   async function waitFor(url, child, logFile, seconds) {
-    for (let tries = 0; tries < seconds; tries++) {
+    const exited = () => child.exitCode !== null || child.signalCode !== null;
+    for (let tries = 0; tries < seconds && !exited(); tries++) {
       const response = await fetch(url).catch(() => undefined);
-      if (response?.ok) return response;
-      if (child.exitCode !== null) break;
+      if (response?.ok && !exited()) return response;
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    throw new Error(`${url} did not answer:\n${tail(logFile)}`);
+    const why = exited() ? 'its process exited' : `it did not answer in ${seconds}s`;
+    throw new Error(`${url} is not ready, ${why}:\n${tail(logFile)}`);
+  }
+
+  /** Fails when something already listens on 127.0.0.1:`port`. */
+  function assertPortFree(port) {
+    return new Promise((resolve, reject) => {
+      const probe = createServer();
+      probe.once('error', (error) =>
+        reject(
+          new Error(`127.0.0.1:${port} is taken (${error.code}); set VERIFY_PORT to a free port`),
+        ),
+      );
+      probe.listen({ port, host: '127.0.0.1', exclusive: true }, () => probe.close(resolve));
+    });
+  }
+
+  /**
+   * Seeds Verdaccio's storage with a package whose readme is a random secret. Only the Verdaccio
+   * this run started reads that storage, so an answer with the secret proves who holds the port.
+   */
+  function seedIdentity(storageDir) {
+    const secret = randomBytes(32).toString('hex');
+    const dir = path.join(storageDir, IDENTITY_PACKAGE);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({
+        name: IDENTITY_PACKAGE,
+        versions: {},
+        'dist-tags': {},
+        time: {},
+        _rev: '0-0',
+        _uplinks: {},
+        _distfiles: {},
+        _attachments: {},
+        readme: secret,
+      }),
+    );
+    return secret;
+  }
+
+  async function checkIdentity(secret) {
+    const url = `${REGISTRY}/${IDENTITY_PACKAGE.replace('/', '%2f')}`;
+    const response = await fetch(url).catch(() => undefined);
+    const body = await response?.json().catch(() => undefined);
+    if (body?.readme !== secret) {
+      throw new Error(
+        `${REGISTRY} answered without this run's secret (${response?.status ?? 'no answer'}): another process may hold the port`,
+      );
+    }
   }
 
   async function startRegistry() {
     const storage = path.join(work, 'registry');
     mkdirSync(storage);
+    const secret = seedIdentity(path.join(storage, 'storage'));
     const config = path.join(storage, 'config.yaml');
     writeFileSync(
       config,
@@ -208,15 +288,19 @@ log: { type: stdout, format: pretty, level: warn }
 `,
     );
     const logFile = path.join(work, 'registry.log');
+    await assertPortFree(registryPort);
     console.log(`starting Verdaccio on ${REGISTRY}`);
     const child = start(
       'pnpm',
-      ['dlx', 'verdaccio@6', '--config', config, '--listen', `localhost:${registryPort}`],
+      ['dlx', 'verdaccio@6', '--config', config, '--listen', `127.0.0.1:${registryPort}`],
       storage,
       process.env,
       logFile,
     );
+    registryChild = child;
     await waitFor(`${REGISTRY}/-/ping`, child, logFile, 180);
+    await checkIdentity(secret);
+    assertRegistryRunning();
 
     // Publishing needs a user. Verdaccio creates one on this request and returns its token.
     const response = await fetch(`${REGISTRY}/-/user/org.couchdb.user:verify`, {
@@ -228,7 +312,7 @@ log: { type: stdout, format: pretty, level: warn }
     if (!token) throw new Error(`Verdaccio returned no token (${response.status})`);
     writeFileSync(
       path.join(work, '.npmrc'),
-      `registry=${REGISTRY}\n//localhost:${registryPort}/:_authToken=${token}\n`,
+      `registry=${REGISTRY}\n//127.0.0.1:${registryPort}/:_authToken=${token}\n`,
     );
     return child;
   }
@@ -265,11 +349,67 @@ log: { type: stdout, format: pretty, level: warn }
     return published.version;
   }
 
-  function publish(tarball) {
+  /** Publishes `tarball`, then checks the registry serves exactly that file for the version. */
+  async function publish(tarball) {
     const version = checkTarball(tarball);
     console.log(`publishing ${manifest.name}@${version} to ${REGISTRY}`);
     run('npm', ['publish', tarball, '--registry', REGISTRY, '--access', 'public'], work);
+    const bytes = readFileSync(tarball);
+    const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
+    const packument = await (
+      await fetch(`${REGISTRY}/${manifest.name.replace('/', '%2f')}`)
+    ).json();
+    const dist = packument.versions?.[version]?.dist;
+    if (dist?.integrity !== integrity) {
+      throw new Error(
+        `${REGISTRY} lists ${manifest.name}@${version} as ${dist?.integrity}, not the tarball's ${integrity}`,
+      );
+    }
+    const served = Buffer.from(await (await fetch(dist.tarball)).arrayBuffer());
+    if (!served.equals(bytes)) {
+      throw new Error(`${dist.tarball} is not the tarball that was published`);
+    }
+    assertRegistryRunning();
+    publishedTarball = tarball;
     return version;
+  }
+
+  const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
+
+  /**
+   * Checks every file of the published tarball is in `dir/node_modules/<package>` with the same
+   * content, so a package manager installed the archive this run selected and nothing else.
+   */
+  function verifyInstalled(dir) {
+    if (!publishedTarball) throw new Error('verifyInstalled runs after publish');
+    const expected = path.join(work, 'published');
+    if (!existsSync(expected)) {
+      mkdirSync(expected);
+      run('tar', ['-xzf', publishedTarball, '-C', expected], work, process.env);
+    }
+    const installed = path.join(dir, 'node_modules', manifest.name);
+    if (!existsSync(installed)) throw new Error(`${manifest.name} is not in ${dir}/node_modules`);
+    const installedRoot = realpathSync(installed);
+    const packageRoot = path.join(expected, 'package');
+    const differ = [];
+    const walk = (from) => {
+      for (const entry of readdirSync(from, { withFileTypes: true })) {
+        const file = path.join(from, entry.name);
+        if (entry.isDirectory()) {
+          walk(file);
+          continue;
+        }
+        const relative = path.relative(packageRoot, file);
+        const target = path.join(installedRoot, relative);
+        if (!existsSync(target) || sha256(target) !== sha256(file)) differ.push(relative);
+      }
+    };
+    walk(packageRoot);
+    if (differ.length) {
+      throw new Error(
+        `${installedRoot} does not match the published tarball:\n  ${differ.slice(0, 20).join('\n  ')}`,
+      );
+    }
   }
 
   /** The newest version of `name` inside `range`, from npmjs through the registry's proxy. */
@@ -293,6 +433,7 @@ log: { type: stdout, format: pretty, level: warn }
     readTarball,
     checkTarball,
     publish,
+    verifyInstalled,
     newest,
   };
 }
