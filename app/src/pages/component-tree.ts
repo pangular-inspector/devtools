@@ -178,6 +178,17 @@ function bare(name: string): string {
   return name.replace(/^_(?=[A-Z])/, '');
 }
 
+/** The ids above `id`, nearest first; stops at a repeated id so a bad map cannot loop. */
+export function ancestors(parents: ReadonlyMap<string, string>, id: string): string[] {
+  const out: string[] = [];
+  const seen = new Set([id]);
+  for (let parent = parents.get(id); parent && !seen.has(parent); parent = parents.get(parent)) {
+    seen.add(parent);
+    out.push(parent);
+  }
+  return out;
+}
+
 const DIRECTIVE_HOSTS_KEY = 'pangular:components:directive-hosts';
 
 /** Whether this viewer last chose to show directive hosts; shown unless they hid them. */
@@ -1822,6 +1833,8 @@ export class ComponentTree {
     const parents = new Map<string, string>();
     const walk = (nodes: LiveNode[], parent: string | null) => {
       for (const node of nodes) {
+        // The first row with an id wins, so `parents` can never loop.
+        if (map.has(node.id)) continue;
         map.set(node.id, node);
         if (parent) parents.set(node.id, parent);
         walk(node.children, node.id);
@@ -2401,7 +2414,7 @@ export class ComponentTree {
   /** The nearest component above a row, such as the one whose template renders a directive host. */
   ownerOf(id: string): LiveNode | null {
     const { map, parents } = this.index();
-    for (let parent = parents.get(id); parent; parent = parents.get(parent)) {
+    for (const parent of ancestors(parents, id)) {
       const node = map.get(parent);
       if (node && node.kind !== 'directive') return node;
     }
@@ -2447,7 +2460,7 @@ export class ComponentTree {
     const { parents } = this.index();
     this.collapsed.update((set) => {
       const next = new Set(set);
-      for (let parent = parents.get(id); parent; parent = parents.get(parent)) next.delete(parent);
+      for (const parent of ancestors(parents, id)) next.delete(parent);
       return next;
     });
     if (!this.rows().some((row) => row.node.id === id)) this.setFilter('');
