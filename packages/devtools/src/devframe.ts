@@ -229,6 +229,7 @@ import { analogPages, nameServerFns, registerAnalog } from './rpc/analog-registe
 import { clearCalls } from './analog-server-log.ts';
 import { createPageHeartbeats } from './rpc/page-heartbeats.ts';
 import { createPageVisibility } from './rpc/page-ttl.ts';
+import { guardPangularSharedStateWrites } from './rpc/shared-state-write-guard.ts';
 import {
   createAngularPages,
   sanitizeAngularReport,
@@ -377,6 +378,7 @@ const pangular = defineDevframe({
   dock: { visibility: 'false' },
 
   async setup(ctx, info?: SetupInfo) {
+    guardPangularSharedStateWrites(ctx.rpc);
     const config = info?.config ?? resolvePangularConfig();
     const pageTools = info?.pageTools ?? true;
     const agentExposed = (entry: { id: string }) =>
