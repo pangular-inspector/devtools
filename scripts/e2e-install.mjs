@@ -472,7 +472,7 @@ async function newAngularApp(cell, { ssr }) {
   return app;
 }
 
-/** Checks the package manager installed the version this run published. */
+/** Checks the package manager installed the version and the tarball this run published. */
 function checkInstalled(cell, app) {
   const file = path.join(app, 'node_modules', manifest.name, 'package.json');
   if (!existsSync(file)) throw new Error(`${manifest.name} is not in ${app}/node_modules`);
@@ -480,6 +480,7 @@ function checkInstalled(cell, app) {
   if (installed !== cell.version) {
     throw new Error(`installed ${manifest.name}@${installed}, expected ${cell.version}`);
   }
+  registry.verifyInstalled(app);
 }
 
 const ngBin = (app) => path.join(app, 'node_modules/.bin/ng');
@@ -839,6 +840,9 @@ async function packageAudit(tarball, version) {
         pmEnv(),
       ),
     );
+    await step(result, 'the installed package is the published tarball', () =>
+      registry.verifyInstalled(dir),
+    );
     const subpaths = Object.keys(published.exports).filter(
       (subpath) => subpath !== './package.json',
     );
@@ -1126,7 +1130,7 @@ try {
   const given = arg('tarball');
   report.tarball = given ? path.resolve(given) : registry.pack();
   await registry.startRegistry();
-  report.version = registry.publish(report.tarball);
+  report.version = await registry.publish(report.tarball);
   for (const pm of PACKAGE_MANAGERS) report.packageManagers[pm] = pmVersion(pm) ?? 'not installed';
 
   let port = registryPort + 1;
