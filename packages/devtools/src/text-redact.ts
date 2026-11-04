@@ -1,5 +1,5 @@
 import { redactCredentials } from './credential-redact.ts';
-import { JWT, REDACTED, isRedactedKey, wordsOf } from './forms-privacy.ts';
+import { REDACTED, isRedactedKey, redactJwt, wordsOf } from './forms-privacy.ts';
 
 /**
  * Masking for free text and URLs, shared by `serialize`, the router collector
@@ -193,11 +193,11 @@ export function redactText(
       if (isSecretKey(decode(key))) return `${sep}${key}${eq}${REDACTED}`;
       return nested(match, `${sep}${key}${eq}`, value, secrets, mode, depth);
     });
-    out = out.replace(JWT, REDACTED).replace(BEARER, `Bearer ${REDACTED}`);
+    out = redactJwt(out).replace(BEARER, `Bearer ${REDACTED}`);
     out = out.replace(LONG_TOKEN, (token) => (isOpaqueToken(token) ? REDACTED : token));
   } else {
     // Bearer tokens and JWTs first, so `token: Bearer abc` can't keep `abc` once `Bearer` is hidden.
-    out = out.replace(JWT, REDACTED).replace(BEARER, `Bearer ${REDACTED}`);
+    out = redactJwt(out).replace(BEARER, `Bearer ${REDACTED}`);
     const pair = (
       match: string,
       quote: string,
