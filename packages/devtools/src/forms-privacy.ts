@@ -122,8 +122,40 @@ const SECRET_AUTOCOMPLETE = /password|one-time-code|cc-/i;
 /** Elements whose content never leaves the page (also blacked out in component screenshots). */
 export const MASK_MARKERS = '.sentry-mask, .rr-mask, [data-private], [data-pangular="mask"]';
 export const UNMASK_MARKER = '[data-pangular="unmask"]';
-/** A JWT, including an unsigned (`alg: none`) one with an empty signature. */
-export const JWT = /eyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]*/g;
+function jwtCharacter(code: number): boolean {
+  return (
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    (code >= 48 && code <= 57) ||
+    code === 95 ||
+    code === 45
+  );
+}
+
+/** Masks JWTs, including unsigned ones, without retrying every prefix in a segment. */
+export function redactJwt(text: string): string {
+  let search = 0;
+  let last = 0;
+  const parts: string[] = [];
+  while (search < text.length) {
+    const start = text.indexOf('eyJ', search);
+    if (start < 0) break;
+    let headerEnd = start + 3;
+    while (jwtCharacter(text.charCodeAt(headerEnd))) headerEnd++;
+    // Later prefixes in this segment have the same end and a shorter header.
+    search = headerEnd;
+    if (headerEnd - start < 7 || text[headerEnd] !== '.') continue;
+    let payloadEnd = headerEnd + 1;
+    while (jwtCharacter(text.charCodeAt(payloadEnd))) payloadEnd++;
+    if (payloadEnd - headerEnd - 1 < 4 || text[payloadEnd] !== '.') continue;
+    let end = payloadEnd + 1;
+    while (jwtCharacter(text.charCodeAt(end))) end++;
+    parts.push(text.slice(last, start), REDACTED);
+    last = end;
+    search = end;
+  }
+  return parts.length ? parts.join('') + text.slice(last) : text;
+}
 const BEARER = /\bBearer\s+[\w.~+/=-]+/gi;
 
 interface PrivacyConfig {
@@ -300,9 +332,7 @@ export function longestFirst(secrets: Iterable<string>): string[] {
 
 /** `redactMessage` with secrets `longestFirst` already prepared, for many texts in a row. */
 export function redactMessageWith(text: string, ordered: readonly string[]): string {
-  let out = redactCredentials(text, REDACTED)
-    .replace(JWT, REDACTED)
-    .replace(BEARER, `Bearer ${REDACTED}`);
+  let out = redactJwt(redactCredentials(text, REDACTED)).replace(BEARER, `Bearer ${REDACTED}`);
   for (const secret of ordered) out = out.split(secret).join(REDACTED);
   return out;
 }

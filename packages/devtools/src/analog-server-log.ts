@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { redactCredentials } from './credential-redact.ts';
-import { JWT, isRedactedKey } from './forms-privacy.ts';
+import { isRedactedKey, redactJwt } from './forms-privacy.ts';
 import { redactJsonText } from './json-text-redact.ts';
 
 const BEARER = /\bBearer\s+[\w.~+/=-]+/gi;
@@ -19,8 +19,7 @@ function queryKey(key: string): string {
 }
 
 export function redactMessage(text: string): string {
-  return redactCredentials(text, '[redacted]')
-    .replace(JWT, '[redacted]')
+  return redactJwt(redactCredentials(text, '[redacted]'))
     .replace(BEARER, 'Bearer [redacted]')
     .replace(QUERY_PAIR, (whole, sep: string, key: string) => {
       const name = queryKey(key);
