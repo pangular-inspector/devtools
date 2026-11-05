@@ -1,4 +1,4 @@
-import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, symlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {imageSize, readImageSizes} from './image-sizes';
@@ -42,6 +42,22 @@ describe('imageSize', () => {
 });
 
 describe('readImageSizes', () => {
+  it('reads a directory whose path has a space', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'image sizes '));
+    writeFileSync(join(dir, 'a.png'), png(2, 1));
+    expect(readImageSizes(dir)).toEqual({'/a.png': [2, 1]});
+  });
+
+  it('returns nothing when there is no public directory', () => {
+    expect(readImageSizes(join(tmpdir(), 'image-sizes-missing-dir'))).toEqual({});
+  });
+
+  it('fails when an image cannot be read, instead of leaving it out', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'image-sizes-'));
+    symlinkSync(join(dir, 'gone.png'), join(dir, 'broken.png'));
+    expect(() => readImageSizes(dir)).toThrow(/ENOENT/);
+  });
+
   it('keys the sizes by URL path', () => {
     const dir = mkdtempSync(join(tmpdir(), 'image-sizes-'));
     mkdirSync(join(dir, 'images/panel'), {recursive: true});

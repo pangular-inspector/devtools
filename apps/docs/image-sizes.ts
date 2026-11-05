@@ -1,4 +1,4 @@
-import {readFileSync, readdirSync, statSync} from 'node:fs';
+import {existsSync, readFileSync, readdirSync, statSync} from 'node:fs';
 import {join, relative, sep} from 'node:path';
 
 /**
@@ -9,7 +9,11 @@ import {join, relative, sep} from 'node:path';
  */
 export type ImageSizes = Record<string, [number, number]>;
 
-/** The sizes of the PNG and JPEG files under `dir`, keyed by their URL path. */
+/**
+ * The sizes of the PNG and JPEG files under `dir`, keyed by their URL path.
+ * A missing `dir` gives none; a file that cannot be read fails the build
+ * rather than leaving its image without a size.
+ */
 export function readImageSizes(dir: string): ImageSizes {
   const sizes: ImageSizes = {};
   const walk = (current: string) => {
@@ -22,11 +26,7 @@ export function readImageSizes(dir: string): ImageSizes {
       }
     }
   };
-  try {
-    walk(dir);
-  } catch {
-    // no public/ directory
-  }
+  if (existsSync(dir)) walk(dir);
   return sizes;
 }
 
