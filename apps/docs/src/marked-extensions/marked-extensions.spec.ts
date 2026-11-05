@@ -1,6 +1,6 @@
 import {Marked} from 'marked';
 import {findFences, getAttr, hasFlag} from './fences';
-import {ngmdImageExtension} from './ngmd-image';
+import {createNgmdImageExtension, ngmdImageExtension} from './ngmd-image';
 import {ngmdKeywordsExtension} from './ngmd-keywords';
 import {ngmdVideoExtension} from './ngmd-video';
 import {ngmdRuntimeExtensions} from './runtime';
@@ -14,14 +14,24 @@ function render(markdown: string): string {
 }
 
 describe('ngmd-image', () => {
-  it('escapes every attribute it writes', () => {
+  it('renders the figure and escapes every attribute it writes', () => {
     const html = render(
       '<ngmd-image src="/a.png?x=1&y=2" alt="<b" caption="Tom & Jerry" width="3<"></ngmd-image>',
     );
-    expect(html).toContain('data-image-src="/a.png?x=1&amp;y=2"');
-    expect(html).toContain('data-image-alt="&lt;b"');
-    expect(html).toContain('data-image-caption="Tom &amp; Jerry"');
-    expect(html).toContain('data-image-width="3&lt;"');
+    expect(html).toContain('<figure class="ngmd-image" style="max-width: 3&lt;">');
+    expect(html).toContain(
+      '<img src="/a.png?x=1&amp;y=2" alt="&lt;b" loading="lazy" decoding="async">',
+    );
+    expect(html).toContain('<figcaption>Tom &amp; Jerry</figcaption>');
+  });
+
+  it('gives the image its width and height when its size is known', () => {
+    const html = new Marked({
+      extensions: [createNgmdImageExtension({'/images/a.png': [1280, 800]})],
+    }).parse('<ngmd-image src="/images/a.png" alt="A" width="600"></ngmd-image>') as string;
+    expect(html).toBe(
+      '<figure class="ngmd-image" style="max-width: 600px"><img src="/images/a.png" alt="A" width="1280" height="800" loading="lazy" decoding="async"></figure>',
+    );
   });
 });
 

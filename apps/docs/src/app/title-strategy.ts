@@ -2,6 +2,7 @@ import {Injectable, inject} from '@angular/core';
 import {Title} from '@angular/platform-browser';
 import {TitleStrategy, type RouterStateSnapshot} from '@angular/router';
 import siteConfig, {navItems, navLabels} from '../ngmd.config';
+import {PageMetaService} from './services/page-meta/page-meta.service';
 import {stripUrl} from './services/route-url/route-url.service';
 
 /**
@@ -15,11 +16,13 @@ import {stripUrl} from './services/route-url/route-url.service';
  *   4. `siteConfig.site.tagline` for the homepage.
  *
  * Replaces Angular's `DefaultTitleStrategy`, which would otherwise overwrite
- * our format with just the raw frontmatter title.
+ * our format with just the raw frontmatter title. It also points the
+ * canonical URL and the social tags at the page (see `PageMetaService`).
  */
 @Injectable({providedIn: 'root'})
 export class NgmdTitleStrategy extends TitleStrategy {
   private readonly title = inject(Title);
+  private readonly pageMeta = inject(PageMetaService);
 
   override updateTitle(snapshot: RouterStateSnapshot): void {
     const name = siteConfig.site.name;
@@ -28,7 +31,7 @@ export class NgmdTitleStrategy extends TitleStrategy {
     // Homepage uses the tagline in place of a page title.
     if (url === '/' || url === '') {
       const tagline = siteConfig.site.tagline;
-      this.title.setTitle(tagline ? `${name} | ${tagline}` : name);
+      this.setTitle(url, tagline ? `${name} | ${tagline}` : name);
       return;
     }
 
@@ -43,6 +46,11 @@ export class NgmdTitleStrategy extends TitleStrategy {
           .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
           .join(' ');
     }
-    this.title.setTitle(pageTitle ? `${name} | ${pageTitle}` : name);
+    this.setTitle(url, pageTitle ? `${name} | ${pageTitle}` : name);
+  }
+
+  private setTitle(url: string, title: string): void {
+    this.title.setTitle(title);
+    this.pageMeta.setPage(url, title);
   }
 }

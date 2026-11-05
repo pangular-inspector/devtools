@@ -5,6 +5,9 @@
   // The site is fully prerendered, so it is served as static assets only.
   "assets": {
     "directory": "../../dist/apps/docs/analog/public",
+    // Serve `/guide` from `guide/index.html` and redirect `/guide/` to it, so
+    // the URLs in links and the sitemap answer without a redirect.
+    "html_handling": "drop-trailing-slash",
     "not_found_handling": "404-page",
   },
 }
