@@ -25,6 +25,13 @@ describe('ngmd-image', () => {
     expect(html).toContain('<figcaption>Tom &amp; Jerry</figcaption>');
   });
 
+  it('finds the size of an image whose src has a query or fragment', () => {
+    const html = new Marked({
+      extensions: [createNgmdImageExtension({'/images/a.png': [1280, 800]})],
+    }).parse('<ngmd-image src="/images/a.png?v=2#x" alt="A"></ngmd-image>') as string;
+    expect(html).toContain('<img src="/images/a.png?v=2#x" alt="A" width="1280" height="800"');
+  });
+
   it('gives the image its width and height when its size is known', () => {
     const html = new Marked({
       extensions: [createNgmdImageExtension({'/images/a.png': [1280, 800]})],

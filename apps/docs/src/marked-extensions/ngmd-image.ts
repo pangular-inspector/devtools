@@ -50,7 +50,8 @@ export function createNgmdImageExtension(sizes: NgmdImageSizes = {}) {
       const width = token.width?.trim() ?? '';
       const maxWidth = /^\d+(\.\d+)?$/.test(width) ? `${width}px` : width;
       const style = maxWidth ? ` style="max-width: ${escapeHtml(maxWidth)}"` : '';
-      const size = sizes[token.src];
+      // A query or fragment (`/a.png?v=2`) still names the file `/a.png`.
+      const size = sizes[token.src.split(/[?#]/)[0]];
       const dimensions = size ? ` width="${size[0]}" height="${size[1]}"` : '';
       const caption = token.caption ? `<figcaption>${escapeHtml(token.caption)}</figcaption>` : '';
       return `<figure class="ngmd-image"${style}><img src="${escapeHtml(token.src)}" alt="${escapeHtml(token.alt)}"${dimensions} loading="lazy" decoding="async">${caption}</figure>`;

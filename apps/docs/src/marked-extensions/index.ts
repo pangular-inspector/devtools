@@ -37,9 +37,7 @@ export async function getBuildExtensions(): Promise<MarkedExtension[]> {
   ]);
   return [
     // The pages are rendered here, so `<ngmd-image>` gets the sizes of the files in public/.
-    ...createNgmdRuntimeExtensions(
-      readImageSizes(new URL('../../public', import.meta.url).pathname),
-    ),
+    ...createNgmdRuntimeExtensions(readImageSizes(`${import.meta.dirname}/../../public`)),
     ngmdCodeImportExtension,
     ngmdCodeGroupExtension,
     ngmdCodeHighlightExtension,
