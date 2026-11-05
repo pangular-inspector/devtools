@@ -1,5 +1,5 @@
 import type {MarkedExtension} from 'marked';
-import {ngmdRuntimeExtensions} from './runtime.ts';
+import {createNgmdRuntimeExtensions, ngmdRuntimeExtensions} from './runtime.ts';
 
 export {ngmdRuntimeExtensions};
 
@@ -27,14 +27,19 @@ export async function getBuildExtensions(): Promise<MarkedExtension[]> {
     {ngmdCodeGroupExtension},
     {ngmdCodeHighlightExtension},
     {substituteMdVars},
+    {readImageSizes},
   ] = await Promise.all([
     import('./ngmd-code-import.ts'),
     import('./ngmd-code-group.ts'),
     import('./ngmd-code-highlight.ts'),
     import('../../vars.plugin.ts'),
+    import('../../image-sizes.ts'),
   ]);
   return [
-    ...ngmdRuntimeExtensions,
+    // The pages are rendered here, so `<ngmd-image>` gets the sizes of the files in public/.
+    ...createNgmdRuntimeExtensions(
+      readImageSizes(new URL('../../public', import.meta.url).pathname),
+    ),
     ngmdCodeImportExtension,
     ngmdCodeGroupExtension,
     ngmdCodeHighlightExtension,

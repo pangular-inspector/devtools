@@ -1,10 +1,17 @@
-import {statSync} from 'node:fs';
+import {readFileSync, statSync} from 'node:fs';
 import {join} from 'node:path';
 import type {Plugin, ViteDevServer} from 'vite';
-import {gitDate, routeFromPagePath, walkContentFiles, walkPageFiles} from './plugin-utils.ts';
+import {
+  gitDate,
+  isNoIndex,
+  parseFrontmatter,
+  routeFromPagePath,
+  walkContentFiles,
+  walkPageFiles,
+} from './plugin-utils.ts';
 
 /**
- * Build-time map of page URL → { editUrl, lastUpdated }.
+ * Build-time map of page URL → { editUrl, lastUpdated, description, noIndex }.
  *
  * Walks `src/app/pages` (for `.page.ts` routes) and `src/content/**\/*.md`
  * (each markdown file's path under content/ becomes its route, matching the
@@ -14,11 +21,16 @@ import {gitDate, routeFromPagePath, walkContentFiles, walkPageFiles} from './plu
  *
  * If the file is uncommitted, lastUpdated falls back to its mtime in ISO
  * date form so dev iteration still shows something.
+ *
+ * A markdown page also carries its frontmatter `description` and `noIndex`,
+ * which `PageMetaService` writes into the page's head tags.
  */
 
 export interface PageMeta {
   editUrl: string;
   lastUpdated: string;
+  description?: string;
+  noIndex?: boolean;
 }
 
 const VIRTUAL_ID = 'virtual:ngmd/page-meta';
@@ -73,10 +85,15 @@ export function pageMetaPlugin(opts: {repoUrl: string; branch?: string; dir?: st
         for (const [rel, route] of walkContentFiles(contentDir, root)) {
           const date = gitDate(rel, root);
           if (!date) continue;
+          const {attributes} = parseFrontmatter(readFileSync(join(root, rel), 'utf8'));
           // .md edit URL wins when present (more useful for prose pages)
           map[route] = {
             editUrl: `${opts.repoUrl}/edit/${branch}/${dir}${rel}`,
             lastUpdated: date,
+            ...(typeof attributes['description'] === 'string'
+              ? {description: attributes['description']}
+              : {}),
+            ...(isNoIndex(attributes) ? {noIndex: true} : {}),
           };
         }
       } catch {

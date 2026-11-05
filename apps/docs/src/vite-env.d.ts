@@ -4,6 +4,8 @@ declare module 'virtual:ngmd/page-meta' {
   export interface PageMeta {
     editUrl: string;
     lastUpdated: string;
+    description?: string;
+    noIndex?: boolean;
   }
   export const pageMeta: Record<string, PageMeta>;
 }
