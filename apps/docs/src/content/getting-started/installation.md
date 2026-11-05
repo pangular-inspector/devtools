@@ -240,7 +240,7 @@ An app created with `ng new --ssr=false` only runs `ng serve`. Run the standalon
     Run <code>npx pangular dev --port 9999 --proxy-origin http://localhost:4200</code> from the root of your workspace. It serves the panel, the connection and the WebSocket at the root of port 9999. <code>--proxy-origin</code> names the origin of <code>ng serve</code>, so the CLI prints its links for <code>http://localhost:4200/__pangular/</code>.
   </ngmd-step>
   <ngmd-step title="Add the proxy config">
-    Save the <code>proxy.conf.json</code> above next to <code>angular.json</code>. It strips the <code>/__pangular</code> prefix, and <code>"ws": true</code> forwards the WebSocket the overlay and the panel connect over.
+    Save the <code>proxy.conf.json</code> below next to <code>angular.json</code>. It strips the <code>/__pangular</code> prefix, and <code>"ws": true</code> forwards the WebSocket the overlay and the panel connect over.
   </ngmd-step>
   <ngmd-step title="Point ng serve at it">
     Set <code>proxyConfig</code> in the <code>serve</code> options of <code>angular.json</code>, or run <code>ng serve --proxy-config proxy.conf.json</code>.
@@ -252,6 +252,18 @@ An app created with `ng new --ssr=false` only runs `ng serve`. Run the standalon
     When your app connects, the CLI prints a code and a link like <code>http://localhost:4200/__pangular/#devframe_otp=123456</code>. Open the link, then reload your app if the panel was already open. Without <code>--proxy-origin</code>, the link points at port 9999, which only trusts port 9999. Then open the same code on your app's origin instead.
   </ngmd-step>
 </ngmd-workflow>
+
+Save this as `proxy.conf.json` next to `angular.json`:
+
+```json
+{
+  "/__pangular": {
+    "target": "http://localhost:9999",
+    "pathRewrite": {"^/__pangular": ""},
+    "ws": true
+  }
+}
+```
 
 Point the dev server at the proxy file in `angular.json` (excerpt):
 
