@@ -2,7 +2,6 @@ import { defineRpcFunction } from 'devframe';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
 import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
 import {
   ANNOTATION,
   classScopes,
@@ -11,6 +10,7 @@ import {
   sourceRoots,
   stripComments,
   walkFiles,
+  relativeFile,
 } from './source-scan.ts';
 
 const SignalEntrySchema = v.object({
@@ -77,7 +77,7 @@ function scanSignals(cwd: string): SignalEntry[] {
     walkFiles(root, (full, item) => {
       if (!item.endsWith('.ts') || item.endsWith('.spec.ts') || item.endsWith('.d.ts')) return;
       try {
-        entries.push(...signalsIn(readFileSync(full, 'utf-8'), relative(cwd, full)));
+        entries.push(...signalsIn(readFileSync(full, 'utf-8'), relativeFile(cwd, full)));
       } catch {
         // skip
       }

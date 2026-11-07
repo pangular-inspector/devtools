@@ -53,6 +53,8 @@ This builds the devtools UI (`pnpm devtools:build`), then replaces `extension/ui
   <code>extension/ui</code> is committed. If you change <code>app/</code>, run <code>pnpm extension:build</code> and commit the result. CI builds the extension and fails when <code>extension/ui</code> is stale.
 </ngmd-callout>
 
+If you change `panel.html`, `panel-bridge.js` or a status message, run `pnpm test:axe`, then `pnpm test:axe:extension`. It loads `panel.html` with a stand-in for the `chrome` APIs and runs axe on each status the panel shows and on the connected panel. See [Run the checks](./development.md#run-the-checks).
+
 ## Load in Chrome
 
 <ngmd-workflow>
@@ -79,6 +81,8 @@ pnpm extension:zip
 ```
 
 This runs `extension:build`, then writes `dist/pangular-inspector-extension.zip`. The zip leaves out `.DS_Store` files and drops `key` from the manifest, because the Chrome Web Store refuses a manifest with a `key`.
+
+CI builds the same zip, without a key, on every pull request and push to `main`. Download it from the run's `chrome-extension` artifact to try a branch without building it.
 
 For the first upload of a new store item, give the script the private key so the store keeps the ID `dcogniffeelebaolkkfbopmjcblhblfk`:
 

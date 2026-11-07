@@ -21,5 +21,14 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
     setupFiles: ['src/test-setup.ts'],
     execArgv: ['--no-experimental-webstorage'],
+    // Used only with `--coverage` (`pnpm test:coverage`): a report, with no threshold to meet.
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/__tests__/**', 'src/**/*.test.ts', 'src/test-setup.ts'],
+      reporter: ['text-summary', 'html', 'json-summary', 'lcov'],
+      reportOnFailure: true,
+      reportsDirectory: '../dist/coverage/panel',
+    },
   },
 });

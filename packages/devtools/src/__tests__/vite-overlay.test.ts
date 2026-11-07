@@ -1,6 +1,6 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { createServer, resolveConfig, type InlineConfig, type ViteDevServer } from 'vite';
 import { afterEach, describe, expect, it } from 'vitest';
 import pangularVite, { type PangularViteOptions } from '../vite.ts';
@@ -86,7 +86,7 @@ describe('pangularVite overlay injection', () => {
     expect(src).toBeDefined();
     expect(more).toEqual([]);
     const code = (await server.transformRequest(src!))?.code ?? '';
-    expect(code).toContain(stub.split('/').pop());
+    expect(code).toContain(basename(stub));
   });
 
   it('shares one overlay module with an import in main.ts, so it runs once', async () => {

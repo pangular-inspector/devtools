@@ -551,6 +551,20 @@ export function escapes(rel: string): boolean {
   return rel === '..' || rel.startsWith('..' + sep);
 }
 
+/**
+ * `path` with `/` between its parts. `relative()` joins with `\` on Windows,
+ * and a file name sent to the panel or an agent should read the same on every
+ * platform, as the page and the route scans already report it.
+ */
+export function toPosixPath(path: string, separator: string = sep): string {
+  return separator === '/' ? path : path.split(separator).join('/');
+}
+
+/** `to` relative to `from`, with `/` between its parts: the file name a scan reports. */
+export function relativeFile(from: string, to: string): string {
+  return toPosixPath(relative(from, to));
+}
+
 /** The path with symlinks resolved, or the path itself when it does not exist. */
 export function realPath(path: string): string {
   try {
