@@ -528,27 +528,34 @@ const SEEDS = {
   'pangular:forms': FORMS_SEED,
 };
 
+/**
+ * `route.fetch()`, retried: the static report server can reset a connection under load.
+ * After the last attempt it aborts the request, marks the run failed and returns null,
+ * so one reset neither crashes the run with an unhandled rejection nor lets it pass.
+ */
+async function fetchWithRetry(route, attempts = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await route.fetch();
+    } catch (error) {
+      if (attempt >= attempts) {
+        console.error(`seed fetch failed for ${route.request().url()}: ${error.message}`);
+        process.exitCode = 1;
+        await route.abort('failed');
+        return null;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+    }
+  }
+}
+
 /** Serves the seeded pages in place of the report's empty state for the `SEEDS` keys. */
 async function seedPages(context) {
   await context.route(
     '**/__rpc-dump/devframe~rpc~server-state~get.record.*.json',
     async (route) => {
-      // The static report server can reset a connection under load; retry
-      // before giving up, so one reset doesn't crash the run with an unhandled rejection.
-      let response;
-      for (let attempt = 1; !response; attempt++) {
-        try {
-          response = await route.fetch();
-        } catch (error) {
-          if (attempt >= 3) {
-            // Still a failed run, but one that finishes and reports the other views.
-            console.error(`seed fetch failed for ${route.request().url()}: ${error.message}`);
-            process.exitCode = 1;
-            return route.abort('failed');
-          }
-          await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
-        }
-      }
+      const response = await fetchWithRetry(route);
+      if (!response) return;
       const body = await response.text();
       const key = Object.keys(SEEDS).find((name) => body.includes(`"${name}"`));
       if (!key) return route.fulfill({ response });
@@ -857,7 +864,8 @@ const HTTP_PAYLOADS_SEED = {
 async function seedAnalog(context) {
   const names = Object.keys(ANALOG_ANSWERS);
   await context.route('**/__connection.json', async (route) => {
-    const response = await route.fetch();
+    const response = await fetchWithRetry(route);
+    if (!response) return;
     const meta = await response.json();
     meta.jsonSerializableMethods = [
       ...new Set([...(meta.jsonSerializableMethods ?? []), ...names.map((n) => `pangular:${n}`)]),
@@ -865,7 +873,8 @@ async function seedAnalog(context) {
     return route.fulfill({ response, body: JSON.stringify(meta) });
   });
   await context.route('**/__rpc-dump/index.json', async (route) => {
-    const response = await route.fetch();
+    const response = await fetchWithRetry(route);
+    if (!response) return;
     const index = await response.json();
     for (const name of names) {
       index[`pangular:${name}`] = {
@@ -887,7 +896,8 @@ async function seedAnalog(context) {
   await context.route(
     '**/__rpc-dump/devframe~rpc~server-state~get.record.*.json',
     async (route) => {
-      const response = await route.fetch();
+      const response = await fetchWithRetry(route);
+      if (!response) return;
       const body = await response.text();
       const seeds = {
         'pangular:analog': ANALOG_STATE,
