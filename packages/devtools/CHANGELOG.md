@@ -167,7 +167,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Injectors:** a truncated tree carries the server's `limits`, and the notice names them.
 - **Signals:** a node's details link it to its declaration in the source scan, or list the candidates when the name matches several.
 - **Signals:** a history entry shows what changed from the entry before, path by path.
-- **Signals:** **Restore** works on signal fields of services in root and route graphs.
+- **Signals:** **Restore** works on writable signal fields (`signal()`, `linkedSignal()`, `model()`) of services in root and route graphs, not on computed ones.
 - **Signals:** hosts with directives but no component have a graph, in the **Graph of** picker and in `inspect-signals`, which also takes an element injector id such as `inj-12`.
 - **Signals:** effect run counts and times, where Angular's profiler reports effect runs. No Angular version up to 22.1 does, so the line stays hidden there.
 - **Signals:** the unnamed signal hint says that the compiler names signals from Angular 20.1.
