@@ -130,6 +130,7 @@ interface PangularConfig {
     httpCalls?: number;
     changeLog?: number;
     cdCycles?: number;
+    cdSlowMs?: number;
     capacitorCalls?: number;
     idleAfterMs?: number;
   };
@@ -215,6 +216,7 @@ Values outside the bounds are clamped to the nearest one.
 | `limits.httpCalls`      | `200`   | 10 to 2000  | HTTP calls kept per page and on the server.                                                                                        |
 | `limits.changeLog`      | `200`   | 10 to 2000  | NgRx change log entries kept per page, and the actions kept per page for [other stores](../inspectors/ngrx-store.md#other-stores). |
 | `limits.cdCycles`       | `200`   | 10 to 2000  | Change detection cycles kept per page while recording.                                                                             |
+| `limits.cdSlowMs`       | `16`    | 1 to 1000   | A [change detection](../inspectors/components.md#change-detection) cycle longer than this, in ms, counts as slow.                  |
 | `limits.capacitorCalls` | `200`   | 10 to 2000  | [Capacitor](../inspectors/capacitor.md) plugin calls kept per page and on the server.                                              |
 | `limits.idleAfterMs`    | `60000` | 0 to 600000 | How long pages keep sending after an agent's last call while no panel is open. `0` keeps them sending.                             |
 

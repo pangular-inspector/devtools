@@ -8,6 +8,7 @@ import {
   listenerName,
   type RawSpan,
 } from './cd-timing.ts';
+import { PANGULAR_LIMITS } from './config.ts';
 import type {
   CdAfterRenderStat,
   CdCheck,
@@ -120,11 +121,14 @@ const ctorOf = (instance: unknown): Ctor | null => {
  */
 export function createCdRecorder(options: {
   maxCycles: number;
+  /** Cycles longer than this, in ms, are flagged `slow` (`limits.cdSlowMs`). Default 16. */
+  slowMs?: number;
   now?: () => number;
   clock?: () => number;
 }) {
   const now = options.now ?? (() => performance.now());
   const clock = options.clock ?? Date.now;
+  const slowMs = options.slowMs ?? PANGULAR_LIMITS.cdSlowMs.default;
   let recording = false;
   let startedAt: number | null = null;
   let seq = 0;
@@ -472,6 +476,7 @@ export function createCdRecorder(options: {
         recording,
         startedAt,
         dropped,
+        slowMs,
         ...(droppedClasses ? { droppedClasses } : {}),
         ...(untrackedHostCount ? { droppedHosts: untrackedHostCount } : {}),
         hosts,
@@ -495,6 +500,7 @@ export function createCdRecorder(options: {
             ...(cycle.outputMs ? { outputMs: round(cycle.outputMs) } : {}),
             ...(cycle.spans.length ? { spans: cycle.spans.map(spanNames.tuple) } : {}),
             ...(cycle.droppedSpans ? { droppedSpans: cycle.droppedSpans } : {}),
+            ...(cycle.ms > slowMs ? { slow: true } : {}),
           };
         }),
         components: [...totals]

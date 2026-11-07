@@ -16,7 +16,9 @@ import {
 import { hostPageId } from '../page-id';
 import { injectorTreeFor, signalGraphFor } from '../live-pages';
 import { pageOf } from './forms-types';
-import { isStaticReport, rpcCall } from '../rpc';
+import { isStaticReport, rpcCall, rpcTry } from '../rpc';
+import { securityItems, type SecurityItem } from './security-summary';
+import type { SecurityStatus } from '@pangular-inspector/devtools/internal/config';
 import { panelConfig, tabEnabled, withRedaction } from '../devtools-config';
 import { TabIcon } from './tab-icon';
 
@@ -307,6 +309,20 @@ export function httpCard(state: HttpSnapshot | null, hostPageId: string | null):
         <p>Defaults</p>
       }
     </section>
+
+    @if (security(); as items) {
+      <section class="config" aria-labelledby="security-title">
+        <h2 id="security-title">Security</h2>
+        <dl>
+          @for (item of items; track item.label) {
+            <div>
+              <dt>{{ item.label }}</dt>
+              <dd>{{ item.value }}</dd>
+            </div>
+          }
+        </dl>
+      </section>
+    }
   `,
   styles: `
     @use 'mixins' as m;
@@ -601,6 +617,8 @@ export class Dashboard {
   staticReport = computed(() => isStaticReport(this.rpc()));
 
   meta = signal<BuildMeta | null>(null);
+  /** The server's auth and access settings (`security-status`); a static report has none. */
+  protected readonly security = signal<SecurityItem[] | null>(null);
   /** The server's answer to `redaction-config`; a static report has none. */
   private readonly redaction = signal<unknown>(null);
   private readonly config = computed(() =>
@@ -714,6 +732,15 @@ export class Dashboard {
       .catch(() => {});
   }
 
+  /** Asks the server how it lets clients in. Older servers and static reports have no answer. */
+  private loadSecurity(client: DevframeRpcClient) {
+    this.security.set(null);
+    if (isStaticReport(client)) return;
+    void rpcTry<SecurityStatus>(client, 'security-status').then((status) => {
+      if (this.rpc() === client && status) this.security.set(securityItems(status, Date.now()));
+    });
+  }
+
   constructor() {
     effect(() => {
       const client = this.rpc();
@@ -726,6 +753,7 @@ export class Dashboard {
       this.httpState.set(null);
       this.loadMeta(client);
       this.loadRedaction(client);
+      this.loadSecurity(client);
       const config = panelConfig(client);
       const on = (tab: StatTab) => tabEnabled(tab, config);
       if (on('components')) this.load(my.rpc.call('get-components'), 'components');

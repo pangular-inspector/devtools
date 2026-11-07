@@ -182,6 +182,13 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
           logger?.warn(message),
         ),
         serverPlugins: options.serverPlugins,
+        security: {
+          auth: authOn,
+          originCheck: true,
+          allowedOrigins: policy.allowedOrigins ?? [],
+          ...(policy.allowedHosts === undefined ? {} : { allowedHosts: policy.allowedHosts }),
+          network: policy.lan === true,
+        },
       });
       httpServer?.on('upgrade', hubUpgradeListener(base, policy, devtools.handleUpgrade, blocked));
       server.middlewares.use(devtools.nodeMiddleware);
