@@ -383,7 +383,14 @@ The page title, the hydration warnings and mismatch details, and the TransferSta
 
 ### Redaction counts
 
-Where the panel shows masked data, a line above it says how many values were masked, such as **3 values masked by redaction**: a call's response preview in the [SSR & HTTP tab](./inspectors/ssr-http.md), the TransferState payload, the NgRx state tree, the fields of the selected form and the inputs and properties of the selected component. The panel counts the `[redacted]` and `[email]` marks in what it shows, once per new value. For a very large value it stops after 20,000 strings and keys, and the line starts with **At least**.
+Where the panel shows masked data, a line above it says how many values were masked, such as **3 values masked by redaction**. It shows above:
+
+- a call's response preview in the [SSR & HTTP tab](./inspectors/ssr-http.md), and the TransferState payload
+- the NgRx state tree
+- the fields of the selected form
+- the inputs and properties of the selected component
+
+The panel counts the `[redacted]` and `[email]` marks in what it shows, once per new value. It reads at most 20,000 strings and keys of one value. Past that, the line starts with **At least**.
 
 An agent answer that holds masked values ends with a line such as `_Redaction masked 3 values in this answer._`. When the answer ends with a file to copy, such as an export, the line comes just before the file. Answers that are JSON get no line, so a client can still parse them.
 

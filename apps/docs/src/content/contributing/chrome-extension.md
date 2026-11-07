@@ -87,12 +87,12 @@ pnpm extension:build:firefox
 
 This runs `extension:build`, then copies `extension/` to `dist/extension-firefox` with a Firefox manifest. Nothing else in the copy changes. `scripts/extension-firefox.mjs` makes these changes to the manifest:
 
-| Change                                           | Why                                                                                                    |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| Drops `key` and `minimum_chrome_version`         | Only Chrome reads them.                                                                                |
-| Adds `browser_specific_settings.gecko`           | Firefox needs the add-on ID (`pangular-inspector@pangular-inspector.dev`) and the oldest version, 140. |
-| Declares `data_collection_permissions: ["none"]` | Firefox asks every add-on what it collects. The extension sends data only to the devtools server.      |
-| Turns `background.service_worker` into `scripts` | Firefox runs background scripts, not a service worker. The manifest has no background today.           |
+| Change                                                         | Why                                                                                                    |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Drops `key` and `minimum_chrome_version`                       | Only Chrome reads them.                                                                                |
+| Adds `browser_specific_settings.gecko`                         | Firefox needs the add-on ID (`pangular-inspector@pangular-inspector.dev`) and the oldest version, 140. |
+| Declares `data_collection_permissions: { required: ["none"] }` | Firefox asks every add-on what it collects. The extension sends data only to the devtools server.      |
+| Turns `background.service_worker` into `scripts`               | Firefox runs background scripts, not a service worker. The manifest has no background today.           |
 
 `dist/` is not committed, and CI does not build the Firefox copy. `extension-firefox.test.ts` checks the manifest it writes.
 

@@ -177,7 +177,7 @@ Every tool has one of three safety tiers. The server sends the tier to your clie
 | `destructive` | Can lose data: it erases recordings or Store DevTools history, deletes the Nitro cache, or sends writes to your own API routes.                                                                               | `clear-recordings`, `analog-run-api`, `analog-purge-nitro-cache` and `ngrx-store-devtools`                                                                                                                                                                                                                                                                                                                                     |
 
 <ngmd-alert severity="important">
-  The twenty-five <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
+  The twenty-six <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
 When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `record-change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, and `audit` only when it runs axe. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
