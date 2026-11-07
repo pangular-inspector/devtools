@@ -9,6 +9,7 @@ import { setRedaction } from './forms-privacy.ts';
 import { legacyRedaction, serverRedaction } from './overlay-redaction.ts';
 import { hostBySelector } from './host-tree.ts';
 import { collectInjectorTree } from './injector-tree.ts';
+import { gateInjectorProfilerInReactNativeDev } from './injector-profiler-gate.ts';
 import { attachNativeDiagnostics, errorUtilsTarget, nativeDebugApi } from './native-diagnostics.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
 import { installReduxDevtoolsHook, uninstallReduxDevtoolsHook } from './redux-devtools-hook.ts';
@@ -35,6 +36,9 @@ import { registerSignalPeek } from './signal-peek.ts';
 import { claimPageOnServer, newPageId, newPageKey } from './page-id.ts';
 
 export type { AngularNativeNode } from './overlay-angular-native-views.ts';
+
+// Before `mount()` creates the platform, so Angular wires its injector profiler.
+gateInjectorProfilerInReactNativeDev();
 
 type DebugNg = SignalDebugNg<AngularNativeNode> & ComponentDebugNg<AngularNativeNode>;
 
