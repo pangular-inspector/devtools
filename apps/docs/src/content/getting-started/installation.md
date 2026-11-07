@@ -31,7 +31,7 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`. It contain
 
 ## Supported setups
 
-Every setup has a server part, which serves the panel, and the [overlay](./overlay.md), which sends live data from your page. Find your app in the table, then follow its page.
+Every setup has a server part, which serves the panel. To see live data from a page, the page also runs the [overlay](./overlay.md). The standalone CLI on its own reads only your source files and needs no overlay. Find your app in the table, then follow its page.
 
 | Your app                                       | Dev server or builder                                 | Server part                                                       | Steps  | Install check |
 | ---------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------- | ------ | ------------- |

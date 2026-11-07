@@ -58,7 +58,30 @@ bun add @pangular-inspector/devtools
 
 The overlay needs a `WebSocket` global and a standards-compliant `URL`. React Native provides `WebSocket`, and Expo provides `URL`, so an Expo app needs nothing more.
 
-React Native's own `URL` is read-only, and the client sets the `protocol` of the socket URL. In a bare React Native app, add a polyfill such as `react-native-url-polyfill` and import it first in `src/main.ts`.
+React Native's own `URL` is read-only, and the client sets the `protocol` of the socket URL. In a bare React Native app, install a polyfill such as `react-native-url-polyfill`:
+
+```bash group="url-polyfill" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220" active
+pnpm add react-native-url-polyfill
+```
+
+```bash group="url-polyfill" name="npm" image="https://cdn.simpleicons.org/npm/CB3837"
+npm install react-native-url-polyfill
+```
+
+```bash group="url-polyfill" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
+yarn add react-native-url-polyfill
+```
+
+```bash group="url-polyfill" name="bun" image="https://bun.sh/logo.svg"
+bun add react-native-url-polyfill
+```
+
+Then import it first in `src/main.ts`, above the imports of the next sample:
+
+```ts
+// src/main.ts
+import 'react-native-url-polyfill/auto';
+```
 
 ### Start the overlay
 

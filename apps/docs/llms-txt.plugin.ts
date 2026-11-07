@@ -116,9 +116,13 @@ export function llmsTxtPlugin(config: NgmdConfig): Plugin {
       server.middlewares.use((req, res, next) => {
         const path = req.url?.split('?')[0];
         if (path !== '/llms.txt' && path !== '/llms-full.txt') return next();
-        const {index, full} = buildLlmsTxt(root, config);
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.end(path === '/llms.txt' ? index : full);
+        try {
+          const {index, full} = buildLlmsTxt(root, config);
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          res.end(path === '/llms.txt' ? index : full);
+        } catch (err) {
+          next(err);
+        }
       });
     },
     generateBundle() {

@@ -12,13 +12,21 @@ export interface BadgedItem {
   until?: string;
 }
 
-/** `major.minor.patch` as numbers. A prerelease or build suffix is ignored. */
+/** `major.minor.patch` as numbers. A build suffix (`+...`) is ignored. */
 export function parseVersion(value: string): [number, number, number] | null {
-  const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(value.trim());
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+.*)?$/.exec(value.trim());
   return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
 }
 
-/** Negative when `a` is older than `b`, 0 when equal, positive when newer. */
+/** The prerelease part of a version, such as `rc.1` in `1.2.0-rc.1`, or `''`. */
+function prerelease(value: string): string {
+  return /^[^-+]*-([^+]*)/.exec(value.trim())?.[1] ?? '';
+}
+
+/**
+ * Negative when `a` is older than `b`, 0 when equal, positive when newer.
+ * A prerelease is older than its release: `1.2.0-rc.1` comes before `1.2.0`.
+ */
 export function compareVersions(a: string, b: string): number {
   const left = parseVersion(a);
   const right = parseVersion(b);
@@ -26,7 +34,11 @@ export function compareVersions(a: string, b: string): number {
   for (let i = 0; i < 3; i++) {
     if (left[i] !== right[i]) return left[i] - right[i];
   }
-  return 0;
+  const [preA, preB] = [prerelease(a), prerelease(b)];
+  if (preA === preB) return 0;
+  if (!preA) return 1;
+  if (!preB) return -1;
+  return preA.localeCompare(preB, 'en', {numeric: true});
 }
 
 /** Whether the badge is an announcement (`new`, `updated`) that needs an `until`. */

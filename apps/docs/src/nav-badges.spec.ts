@@ -12,12 +12,15 @@ describe('nav badges', () => {
     expect(compareVersions('1.0.0', '1.2.0')).toBeLessThan(0);
     expect(compareVersions('1.2.0', '1.2.0')).toBe(0);
     expect(compareVersions('1.10.0', '1.2.0')).toBeGreaterThan(0);
-    expect(compareVersions('1.2.0-rc.1', '1.2.0')).toBe(0);
+    expect(compareVersions('1.2.0-rc.1', '1.2.0')).toBeLessThan(0);
+    expect(compareVersions('1.2.0-rc.2', '1.2.0-rc.10')).toBeLessThan(0);
+    expect(compareVersions('1.2.0+build.5', '1.2.0')).toBe(0);
     expect(compareVersions('next', '1.2.0')).toBeNaN();
   });
 
   it('shows a badge while the package version is older than until', () => {
     expect(activeBadge({status: 'new', until: '1.2.0'}, '1.1.4')).toBe('new');
+    expect(activeBadge({status: 'new', until: '1.2.0'}, '1.2.0-rc.1')).toBe('new');
     expect(activeBadge({status: 'new', until: '1.2.0'}, '1.2.0')).toBeNull();
     expect(activeBadge({status: 'updated', until: '1.2.0'}, '2.0.0')).toBeNull();
   });

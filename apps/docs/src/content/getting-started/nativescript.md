@@ -67,16 +67,30 @@ import '@valor/nativescript-websockets';
 
 ### Start the overlay
 
-```ts {2,4-6}
+```ts {7,11-13}
 // src/main.ts
+import {
+  bootstrapApplication,
+  provideNativeScriptRouter,
+  runNativeScriptAngularApp,
+} from '@nativescript/angular';
 import {initNativeScriptOverlay} from '@pangular-inspector/devtools/overlay-nativescript';
+import {routes} from './app/app.routes';
+import {AppComponent} from './app/app.component';
 
 if (__DEV__) {
   initNativeScriptOverlay();
 }
+
+runNativeScriptAngularApp({
+  appModuleBootstrap: () =>
+    bootstrapApplication(AppComponent, {
+      providers: [provideNativeScriptRouter(routes)],
+    }),
+});
 ```
 
-Call it before `runNativeScriptAngularApp()`. The injector inspector relies on *Angular's injector profiler, which *Angular only wires while it creates the platform. See [Options](#options) for `baseURL`, `intervalMs` and `retryMs`.
+Call it before `runNativeScriptAngularApp()`, as above. The injector inspector relies on *Angular's injector profiler, which *Angular only wires while it creates the platform. See [Options](#options) for `baseURL`, `intervalMs` and `retryMs`.
 
 ### Where the overlay connects
 
@@ -206,10 +220,17 @@ The demo maps `@pangular-inspector/devtools/*` to the package's build output in 
 ```bash
 pnpm devtools:build-pkg
 pnpm devtools:nativescript
-cd examples/nativescript && npm install && ns debug ios --no-hmr
 ```
 
-`pnpm devtools:nativescript` starts the devtools server on `localhost`, scanning `examples/nativescript/src`. For a physical device, `pnpm devtools:nativescript:device` listens on every interface instead, with the same warning as above.
+`pnpm devtools:nativescript` starts the devtools server on `localhost`, scanning `examples/nativescript/src`, and keeps running. In a second terminal, install and start the app:
+
+```bash
+cd examples/nativescript
+npm install
+ns debug ios --no-hmr
+```
+
+For a physical device, `pnpm devtools:nativescript:device` listens on every interface instead, with the same warning as above.
 
 ## Troubleshooting
 

@@ -1,6 +1,6 @@
 ---
 title: Features
-description: A tour of every tab in the panel, with a screenshot and what to open it for, plus what works outside the panel.
+description: A tour of every tab in the panel and what to open it for, with screenshots of most tabs, plus what works outside the panel.
 ---
 
 <ngmd-hero title="Features" gradient>

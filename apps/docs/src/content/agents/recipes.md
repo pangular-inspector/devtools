@@ -9,7 +9,7 @@ description: Prompts to paste into Claude Code, Cursor or Copilot for common deb
 
 # Recipes for agents
 
-Each recipe is a prompt you paste into your coding agent, the agent tools it leads to, and what to check in the answer. The prompts work in any client that is connected to the [MCP server](./mcp-server.md), such as Claude Code, Cursor or VS Code with Copilot. Clients see the tools as `pangular_<name>`. See [Names](./tools.md#names).
+Each recipe is a prompt you paste into your coding agent, the agent tools it leads to, and what to check in the answer. The prompts work in any client that is connected to the HTTP endpoint of the [MCP server](./mcp-server.md), such as Claude Code, Cursor or VS Code with Copilot. The stdio server leaves out the tools that read the running app, so these recipes need HTTP. See [What stdio can answer](./mcp-server.md#what-stdio-can-answer). Clients see the tools as `pangular_<name>`. See [Names](./tools.md#names).
 
 Keep the app open in a development build with the overlay loaded while the agent works. The live tools read the pages that report to the server. If several tabs are open, ask the agent to call `list-pages` first and name the tab.
 
@@ -24,12 +24,13 @@ The checkout form won't submit. Use the Pangular tools to find which fields make
 invalid and why, fix the cause in the code, then show me the form is valid.
 ```
 
-| Step                        | Tool                                                          |
-| --------------------------- | ------------------------------------------------------------- |
-| Find the invalid fields     | `explain-invalid-forms`                                       |
-| Look at one field           | `explain-field` with `form` and `path`                        |
-| See why submit does nothing | `explain-submit`                                              |
-| Prove the fix               | `list-form-changes` for a marker, then `explain-form-changes` |
+| Step                         | Tool                                                  |
+| ---------------------------- | ----------------------------------------------------- |
+| Keep a marker before the fix | `list-form-changes`, which returns the current marker |
+| Find the invalid fields      | `explain-invalid-forms`                               |
+| Look at one field            | `explain-field` with `form` and `path`                |
+| See why submit does nothing  | `explain-submit`                                      |
+| Prove the fix                | `explain-form-changes` with the marker as `after`     |
 
 Check that the answer names the failing validator and its message for each field, not only that the form is invalid. Values that look secret stay redacted. See [Forms](./tools.md#forms).
 
@@ -62,7 +63,7 @@ Angular looked for it and why no injector provided it, then fix the providers.
 | Walk the lookup path          | `explain-injection` with the owner as `injector` and the token |
 | Read the providers at a level | `inspect-providers`                                            |
 
-`explain-error` adds the missing provider explainer, and its owner id works as the `injector` of `explain-injection`. Check that the answer marks each injector on the path as **provides it**, **not provided** or **hidden**. See [explain-injection](./tools.md#explain-injection).
+`explain-error` adds the missing provider explainer, and its owner id works as the `injector` of `explain-injection`. If it says **Component: not found**, for example when a routed component fails before it is in the tree, read the stack of the error for the class that injects the token, pass that class name as `injector`, and call `scan-providers` to see where the source provides the token. Check that the answer marks each injector on the path as **provides it**, **not provided** or **hidden**. See [explain-injection](./tools.md#explain-injection).
 
 ## Find wasted change detection
 
@@ -86,7 +87,7 @@ Before you change anything, take a Pangular audit of this page as a baseline. Af
 fix, repeat the same steps, run the audit again and compare the two.
 ```
 
-The agent calls `audit` with `session: "before"`, makes the change, repeats the same steps in the app and calls `audit` with `session: "after"`, which compares the two. [Inspect, fix and verify](../guides/inspect-fix-verify.md) walks through the loop, and the `verify-fix` prompt asks for it in one step.
+The agent calls `audit` with `session: "before"`, makes the change, repeats the same steps in the app and calls `audit` with `session: "after"`, which compares the two. [Inspect, fix and verify](../guides/inspect-fix-verify.md) walks through the loop. The `verify-fix` prompt is a lighter check without the audit: it repeats the calls that showed the problem, compares the answers and looks for new errors.
 
 ## Where to next
 

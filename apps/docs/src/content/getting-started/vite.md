@@ -232,7 +232,13 @@ export const appConfig: ApplicationConfig = {
 
 ## Trace server renders
 
-To fill the **SSR requests** table in the **SSR & HTTP** tab, add a Nitro server middleware that traces each page render. Analog runs files in `src/server/middleware` before it renders the page, on the dev server too:
+To fill the **SSR requests** table in the **SSR & HTTP** tab, add a Nitro server middleware that traces each page render. Analog runs files in `src/server/middleware` before it renders the page, on the dev server too. The middleware imports `h3`, so add `h3` 1 to your app first, the version Analog's server uses:
+
+```bash
+pnpm add h3@^1.15.0
+```
+
+Then add the middleware:
 
 ```ts
 // src/server/middleware/pangular-ssr.ts
