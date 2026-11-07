@@ -17,6 +17,9 @@ export interface NativeView {
   isLoaded?: boolean;
   borderWidth?: unknown;
   borderColor?: unknown;
+  /** Where the view is in the window, in device-independent pixels (undefined before layout). */
+  getLocationInWindow?(): { x: number; y: number } | undefined;
+  getActualSize?(): { width: number; height: number } | undefined;
 }
 
 /** The subset of the `ng` global the NativeScript tree reads. */

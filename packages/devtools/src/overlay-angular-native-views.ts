@@ -1,5 +1,6 @@
 import type { HostTree } from './host-tree.ts';
 import { HIGHLIGHT_SAFETY_MS } from './page-highlight.ts';
+import { isOverlayNode } from './overlay-angular-native-surface.ts';
 
 /**
  * The part of an `@ng-native/fabric` engine node the overlay reads. Structural,
@@ -40,7 +41,9 @@ export function componentSelector(component: unknown): string | null {
 }
 
 function elementSiblings(node: AngularNativeNode): readonly AngularNativeNode[] {
-  return node.parent ? node.parent.children.filter((child) => child.kind === 'element') : [node];
+  return node.parent
+    ? node.parent.children.filter((child) => child.kind === 'element' && !isOverlayNode(child))
+    : [node];
 }
 
 /**
@@ -48,7 +51,8 @@ function elementSiblings(node: AngularNativeNode): readonly AngularNativeNode[] 
  * out, and `@if`, `@for` and `<ng-container>` anchors are hosts named
  * `ng-container`, as comments are in the DOM. The root node is named by the
  * selector of the component it hosts, and a selector is a path of
- * `name:nth-child(n)` steps from it.
+ * `name:nth-child(n)` steps from it. The highlight box the overlay adds is
+ * left out (`isOverlayNode`).
  */
 export function angularNativeTree(
   getRoot: () => AngularNativeNode | null | undefined,
@@ -89,7 +93,9 @@ export function angularNativeTree(
       return root ? [root] : [];
     },
     children: (node) =>
-      node.kind === 'element' ? node.children.filter((child) => child.kind !== 'text') : [],
+      node.kind === 'element'
+        ? node.children.filter((child) => child.kind !== 'text' && !isOverlayNode(child))
+        : [],
     parent: (node) => (node === getRoot() ? null : node.parent),
     tag,
     connected,
