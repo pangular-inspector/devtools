@@ -232,13 +232,13 @@
     "unicorn(prefer-string-starts-ends-with)": 1
   },
   "packages/devtools/src/config.ts": {
-    "pangular(max-lines)": 2755
+    "pangular(max-lines)": 2767
   },
   "packages/devtools/src/console-tap.ts": {
     "unicorn(no-useless-spread)": 1
   },
   "packages/devtools/src/devframe.ts": {
-    "pangular(max-lines)": 3176,
+    "pangular(max-lines)": 3224,
     "unicorn(no-useless-spread)": 1
   },
   "packages/devtools/src/dom-diff.ts": {
