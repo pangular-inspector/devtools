@@ -12,11 +12,13 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { connectDevframe } from 'devframe/client';
-import { getTempAuthCode } from 'devframe/node/auth';
+import { getTempAuthCode, verifyAuthToken } from 'devframe/node/auth';
+import { getInternalContext } from 'devframe/node/hub-internals';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CodeGuard, guardedExchange } from '../auth-guard.ts';
 import {
   authStoreDir,
+  expireAuthTokens,
   hardenTokenStore,
   pruneExpiredTokens,
   AUTH_TOKEN_TTL_MS,
@@ -121,6 +123,53 @@ describe('guardedExchange', () => {
     expect(onTrusted).toHaveBeenCalledOnce();
   });
 
+  describe("with devframe's exchange", () => {
+    // devframe's one-time code lives 5 minutes.
+    const CODE_TTL_MS = 5 * 60_000;
+    let dir = '';
+    afterEach(() => {
+      vi.useRealTimers();
+      if (dir) rmSync(dir, { recursive: true, force: true });
+    });
+
+    function devframeContext(meta: object) {
+      dir = mkdtempSync(join(tmpdir(), 'pangular-code-'));
+      return { ...context(meta), host: { getStorageDir: () => dir } };
+    }
+
+    it('does not count a right code that expired before it arrived as a wrong guess', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const meta = {};
+      const guard = new CodeGuard({ warn: vi.fn() });
+      const handler = guardedExchange(devframeContext(meta) as never, guard);
+      // A slow developer types the code just after it expires, more often than the lock allows.
+      for (let i = 0; i < 60; i++) {
+        const code = getTempAuthCode();
+        vi.setSystemTime(Date.now() + CODE_TTL_MS + 1);
+        expect(handler({ code, ua: '', origin: '' }).authToken).toBeNull();
+      }
+      expect(guard.locked).toBe(false);
+      expect(guard.check(meta)).toBe('ok');
+      expect(handler({ code: getTempAuthCode(), ua: '', origin: '' }).authToken).toBeTruthy();
+    });
+
+    it('still counts a wrong code, also one sent after the code expired', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const meta = {};
+      const guard = new CodeGuard({ warn: vi.fn() });
+      const handler = guardedExchange(devframeContext(meta) as never, guard);
+      const wrong = (code: string) => (code === '000000' ? '000001' : '000000');
+      handler({ code: wrong(getTempAuthCode()), ua: '', origin: '' });
+      for (let i = 0; i < 2; i++) {
+        const code = getTempAuthCode();
+        vi.setSystemTime(Date.now() + CODE_TTL_MS + 1);
+        handler({ code: wrong(code), ua: '', origin: '' });
+      }
+      // Three wrong guesses start the wait.
+      expect(guard.check(meta)).toBe('backoff');
+    });
+  });
+
   it('answers null for a call without a session or a code', () => {
     const exchange = vi.fn(() => 'tok');
     const ctx = { rpc: { ...context({}).rpc, getCurrentRpcSession: () => undefined } };
@@ -170,6 +219,78 @@ describe('pruneExpiredTokens', () => {
     const dir = authStoreDir('/work/secret-project', '/home/me');
     expect(dir).toMatch(/^\/home\/me\/\.pangular-inspector\/auth\/[0-9a-f]{16}$/);
     expect(authStoreDir('/work/other', '/home/me')).not.toBe(dir);
+  });
+});
+
+describe('expireAuthTokens', () => {
+  let dir = '';
+  afterEach(() => {
+    vi.useRealTimers();
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  function fakeContext(meta: Record<string, unknown>) {
+    dir = mkdtempSync(join(tmpdir(), 'pangular-expiry-'));
+    return {
+      mode: 'dev',
+      host: { getStorageDir: () => dir },
+      // devframe's RPC host: the live connections, each with its session meta.
+      rpc: { _rpcGroup: { clients: [{ $meta: meta }] }, broadcast: vi.fn(async () => undefined) },
+    };
+  }
+
+  it('drops a token at its exact expiry and untrusts the connections that use it', () => {
+    vi.useFakeTimers();
+    const start = Date.UTC(2026, 0, 1);
+    vi.setSystemTime(start);
+    const meta: Record<string, unknown> = { id: 'a', isTrusted: true, clientAuthToken: 'tok' };
+    const ctx = fakeContext(meta);
+    const storage = getInternalContext(ctx as never).storage.auth;
+    const onPruned = vi.fn();
+    expireAuthTokens(ctx, onPruned);
+    // Issued half an hour after the server started, so off the hourly beat.
+    vi.advanceTimersByTime(30 * 60_000);
+    const issuedAt = Date.now();
+    storage.mutate((state) => {
+      state.trusted['tok'] = { authToken: 'tok', ua: '', origin: '', timestamp: issuedAt };
+    });
+
+    vi.advanceTimersByTime(AUTH_TOKEN_TTL_MS - 1);
+    expect(storage.value().trusted['tok']).toBeDefined();
+    expect(meta['isTrusted']).toBe(true);
+
+    vi.advanceTimersByTime(1);
+    expect(Date.now()).toBe(issuedAt + AUTH_TOKEN_TTL_MS);
+    expect(storage.value().trusted['tok']).toBeUndefined();
+    expect(verifyAuthToken('tok', { meta: {} } as never, storage)).toBe(false);
+    expect(meta['isTrusted']).toBe(false);
+    expect(meta['clientAuthToken']).toBeUndefined();
+    expect(ctx.rpc.broadcast).toHaveBeenCalledOnce();
+    expect(onPruned).toHaveBeenCalledOnce();
+  });
+
+  it('untrusts a live connection once the prune has dropped its token', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.UTC(2026, 0, 1));
+    const meta: Record<string, unknown> = { id: 'a', isTrusted: true, clientAuthToken: 'tok' };
+    const other: Record<string, unknown> = { id: 'b', isTrusted: true, clientAuthToken: 'kept' };
+    const ctx = fakeContext(meta);
+    ctx.rpc._rpcGroup.clients.push({ $meta: other });
+    const storage = getInternalContext(ctx as never).storage.auth;
+    storage.mutate((state) => {
+      state.trusted['tok'] = { authToken: 'tok', ua: '', origin: '', timestamp: Date.now() };
+    });
+    expireAuthTokens(ctx);
+    vi.advanceTimersByTime(3 * 60 * 60_000);
+    storage.mutate((state) => {
+      state.trusted['kept'] = { authToken: 'kept', ua: '', origin: '', timestamp: Date.now() };
+    });
+    // Two hours past the first token's expiry, so any schedule has pruned it by now.
+    vi.advanceTimersByTime(AUTH_TOKEN_TTL_MS - 60 * 60_000);
+    expect(storage.value().trusted['kept']).toBeDefined();
+    expect(storage.value().trusted['tok']).toBeUndefined();
+    expect(meta['isTrusted']).toBe(false);
+    expect(other['isTrusted']).toBe(true);
   });
 });
 
@@ -257,6 +378,26 @@ describe('initPangularHub one-time code', () => {
     expect(Object.keys(JSON.parse(readFileSync(file, 'utf8')).trusted)).toHaveLength(1);
     expect(existsSync(join(home, '.devframes', 'devframe', 'auth.json'))).toBe(false);
   });
+
+  it('stops trusting a connected client when its token expires', async () => {
+    // The token has four seconds left, room for the hub to start and the client to be trusted.
+    const issuedAt = Date.now() - AUTH_TOKEN_TTL_MS + 4000;
+    const { connect } = await serve((home) => {
+      const dir = authStoreDir(process.cwd(), home);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, 'auth.json'),
+        JSON.stringify({
+          trusted: { 'expiring-token': { authToken: 'expiring-token', timestamp: issuedAt } },
+        }),
+      );
+    });
+    const client = await connect('expiring-token');
+    expect(await client.ensureTrusted(1000)).toBe(true);
+    await vi.waitFor(() => expect(client.isTrusted).toBe(false), { timeout: 6000 });
+    const again = await connect('expiring-token');
+    expect(await again.ensureTrusted(500).catch(() => false)).toBe(false);
+  }, 15_000);
 
   it('drops expired tokens at startup and keeps the rewritten file private', async () => {
     const old = Date.now() - AUTH_TOKEN_TTL_MS - 1000;

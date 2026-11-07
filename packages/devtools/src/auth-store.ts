@@ -10,7 +10,10 @@
 // - `~/.pangular-inspector/auth/<project hash>/`, in a folder only the user
 //   can read (`0700`), with the file itself kept at `0600`. One project's
 //   tokens don't open another project's server.
-// - Tokens older than `AUTH_TOKEN_TTL_MS` are dropped at startup and every hour.
+// - Tokens older than `AUTH_TOKEN_TTL_MS` are dropped at startup and at the
+//   moment they expire, and connections that used them stop being trusted.
+//   devframe's `verifyAuthToken` only checks that a token is in the store, so
+//   removing it on time is what ends it.
 //
 // The "global" scope only holds `auth.json` (and settings stored under the
 // `devframe:settings:global:` keys, which Pangular Inspector doesn't use), so
@@ -19,13 +22,19 @@ import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { revokeActiveConnectionsForToken } from 'devframe/node/auth';
 import { getInternalContext, internalContextMap } from 'devframe/node/hub-internals';
 
 type StorageScope = 'workspace' | 'project' | 'global';
 
 /** How long a token from the one-time code stays trusted: 7 days. */
 export const AUTH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const PRUNE_EVERY_MS = 60 * 60 * 1000;
+/**
+ * The longest wait between two prunes. The next prune runs when the oldest
+ * token expires, but no later than this: Node's timers don't count time the
+ * machine sleeps, so a long wait could end well after the expiry.
+ */
+const MAX_PRUNE_WAIT_MS = 60 * 1000;
 
 /** The folder that holds every project's token store. */
 export function authStoreRoot(home: string = homedir()): string {
@@ -124,6 +133,8 @@ interface TrustedRecord {
 interface AuthStorage {
   value(): { trusted?: Record<string, TrustedRecord> };
   mutate(fn: (state: { trusted: Record<string, TrustedRecord> }) => void): void;
+  /** devframe's storage is a shared state, which emits `updated` after each change. */
+  on?(event: 'updated', fn: () => void): unknown;
 }
 
 function isTokenRecord(token: string, record: unknown): boolean {
@@ -156,29 +167,54 @@ export function hardenTokenStore(storage: AuthStorage): number {
   return entries.length - kept.length;
 }
 
-/** Drops tokens older than `ttl`. Returns how many it dropped. */
+function isExpired(record: TrustedRecord | undefined, now: number, ttl: number): boolean {
+  return typeof record?.timestamp !== 'number' || now - record.timestamp >= ttl;
+}
+
+/** Drops tokens that are `ttl` old or older, and ones without a time. Returns the dropped tokens. */
+function dropExpiredTokens(storage: AuthStorage, now: number, ttl: number): string[] {
+  const trusted = storage.value().trusted ?? {};
+  const expired = Object.entries(trusted)
+    .filter(([, record]) => isExpired(record, now, ttl))
+    .map(([token]) => token);
+  if (!expired.length) return expired;
+  storage.mutate((state) => {
+    for (const token of expired) delete state.trusted[token];
+  });
+  return expired;
+}
+
+/** Drops tokens that are `ttl` old or older. Returns how many it dropped. */
 export function pruneExpiredTokens(
   storage: AuthStorage,
   now = Date.now(),
   ttl = AUTH_TOKEN_TTL_MS,
 ): number {
-  const trusted = storage.value().trusted ?? {};
-  const expired = Object.entries(trusted)
-    .filter(([, record]) => typeof record?.timestamp !== 'number' || now - record.timestamp > ttl)
-    .map(([token]) => token);
-  if (!expired.length) return 0;
-  storage.mutate((state) => {
-    for (const token of expired) delete state.trusted[token];
-  });
-  return expired.length;
+  return dropExpiredTokens(storage, now, ttl).length;
+}
+
+/** How long until the next token expires, at most `MAX_PRUNE_WAIT_MS`. */
+function nextPruneDelay(storage: AuthStorage, now = Date.now(), ttl = AUTH_TOKEN_TTL_MS): number {
+  let delay = MAX_PRUNE_WAIT_MS;
+  for (const record of Object.values(storage.value().trusted ?? {})) {
+    if (typeof record?.timestamp === 'number') {
+      delay = Math.min(delay, record.timestamp + ttl - now);
+    }
+  }
+  return Math.max(1, delay);
 }
 
 const pruning = new WeakSet<object>();
 
 /**
- * Hardens the context's token store (`hardenTokenStore`), then prunes it now
- * and every hour. Safe to call more
- * than once per context. Skipped for a static build, which has no tokens.
+ * Hardens the context's token store (`hardenTokenStore`), then prunes it now,
+ * when each token expires and at least every minute. A pruned token's live
+ * connections stop being trusted (devframe's `revokeActiveConnectionsForToken`,
+ * which also tells their clients). Safe to call more than once per context.
+ * Skipped for a static build, which has no tokens.
+ *
+ * devframe gives the context no dispose hook, so the timer is `unref`'d and
+ * holds the context weakly: once the context is gone, the timer stops.
  */
 export function expireAuthTokens(
   ctx: unknown,
@@ -196,10 +232,47 @@ export function expireAuthTokens(
   }
   // devframe rewrites the file after a change, with the default mode.
   hardenTokenStore(storage);
-  const prune = () => {
-    if (pruneExpiredTokens(storage, Date.now(), ttl)) onPruned();
+  const ref = new WeakRef(context);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let busy = false;
+  const schedule = (store: AuthStorage) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(run, nextPruneDelay(store, Date.now(), ttl));
+    timer.unref?.();
   };
-  prune();
-  const timer = setInterval(prune, PRUNE_EVERY_MS);
-  timer.unref?.();
+  const prune = (live: object, store: AuthStorage) => {
+    let dropped: string[] = [];
+    busy = true;
+    try {
+      dropped = dropExpiredTokens(store, Date.now(), ttl);
+    } finally {
+      busy = false;
+      // Even if this prune failed, the next one runs.
+      schedule(store);
+    }
+    for (const token of dropped) {
+      // Flips `isTrusted` off synchronously, then tells the clients.
+      void revokeActiveConnectionsForToken(live as never, token).catch(() => undefined);
+    }
+    if (dropped.length) onPruned();
+  };
+  function run() {
+    timer = undefined;
+    const live = ref.deref();
+    if (!live) return;
+    let store: AuthStorage;
+    try {
+      store = getInternalContext(live as never).storage.auth as unknown as AuthStorage;
+    } catch {
+      return;
+    }
+    prune(live, store);
+  }
+  // A new token, or one revoked elsewhere, moves the next expiry.
+  storage.on?.('updated', () => {
+    if (busy) return;
+    const live = ref.deref();
+    if (live) schedule(getInternalContext(live as never).storage.auth as unknown as AuthStorage);
+  });
+  prune(context, storage);
 }
