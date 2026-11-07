@@ -115,6 +115,11 @@ export interface PerfEnv {
   observe(type: string, onEntries: (entries: PerfEntry[]) => void): (() => void) | null;
   /** Entries the browser already has, such as the navigation entry. */
   entries(type: string): PerfEntry[];
+  /**
+   * Every interaction on the page so far, fast ones included
+   * (`performance.interactionCount`), where the browser counts them.
+   */
+  interactionCount?(): number | undefined;
 }
 
 const round = (value: number, digits = 0) => {
@@ -124,6 +129,10 @@ const round = (value: number, digits = 0) => {
 
 function browserEnv(): PerfEnv {
   return {
+    interactionCount() {
+      const count = (performance as { interactionCount?: unknown }).interactionCount;
+      return typeof count === 'number' && Number.isFinite(count) ? count : undefined;
+    },
     observe(type, onEntries) {
       if (typeof PerformanceObserver === 'undefined') return null;
       const types = (PerformanceObserver as { supportedEntryTypes?: readonly string[] })
@@ -190,6 +199,9 @@ export function attachPerformance(
   let sessionStart = -Infinity;
   let lastShift = -Infinity;
   const interactions = new Map<number, PerfInteraction>();
+  /** Interactions seen so far, kept when the map is trimmed; ids only grow. */
+  let interactionsSeen = 0;
+  let highestInteractionId = 0;
   const longTasks: PerfLongTask[] = [];
   let longTaskCount = 0;
   let totalBlockingMs = 0;
@@ -249,6 +261,10 @@ export function attachPerformance(
     event: (entries) => {
       for (const entry of entries) {
         if (!entry.interactionId) continue;
+        if (entry.interactionId > highestInteractionId) {
+          highestInteractionId = entry.interactionId;
+          interactionsSeen++;
+        }
         const known = interactions.get(entry.interactionId);
         if (known && known.durationMs >= entry.duration) continue;
         const target = describeElement(entry.target);
@@ -317,8 +333,10 @@ export function attachPerformance(
   const inp = (): PerfMetric | undefined => {
     const all = [...interactions.values()].sort((a, b) => b.durationMs - a.durationMs);
     if (!all.length) return undefined;
-    // The 98th percentile: skip one of the slowest per 50 interactions.
-    const worst = all[Math.min(all.length - 1, Math.floor(interactions.size / 50))]!;
+    // The 98th percentile: skip one of the slowest per 50 interactions, counting
+    // every interaction, not only the slow ones the map keeps.
+    const total = Math.max(env.interactionCount?.() ?? 0, interactionsSeen);
+    const worst = all[Math.min(all.length - 1, Math.floor(total / 50))]!;
     return {
       value: worst.durationMs,
       rating: perfRating('INP', worst.durationMs),

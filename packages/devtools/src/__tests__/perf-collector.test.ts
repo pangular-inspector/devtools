@@ -143,6 +143,37 @@ describe('attachPerformance', () => {
     expect(perf.report().metrics.INP!.value).toBe(159);
   });
 
+  it('counts fast interactions the browser reports but the 40 ms observer never sends', () => {
+    const { env, emit } = fakeEnv(ALL);
+    // 10 slow interactions observed, 140 in all: skip the slowest 2 of them.
+    env.interactionCount = () => 140;
+    const perf = attachPerformance(rpc().my, 'tab1', () => undefined, { env });
+    emit(
+      'event',
+      Array.from({ length: 10 }, (_, i) => ({
+        name: 'click',
+        interactionId: i + 1,
+        duration: 100 + i,
+      })),
+    );
+    expect(perf.report().metrics.INP!.value).toBe(107);
+  });
+
+  it('keeps counting interactions after the map is trimmed', () => {
+    const { env, emit } = fakeEnv(ALL);
+    const perf = attachPerformance(rpc().my, 'tab1', () => undefined, { env });
+    // 250 interactions, so the map keeps only the slowest 100: still skip 5.
+    emit(
+      'event',
+      Array.from({ length: 250 }, (_, i) => ({
+        name: 'click',
+        interactionId: i + 1,
+        duration: 40 + i,
+      })),
+    );
+    expect(perf.report().metrics.INP!.value).toBe(284);
+  });
+
   it('counts long tasks and their blocking time, and prefers long animation frames', () => {
     const tasks = fakeEnv(ALL);
     const perf = attachPerformance(rpc().my, 'tab1', () => undefined, { env: tasks.env });
