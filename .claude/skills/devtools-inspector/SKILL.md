@@ -21,6 +21,7 @@ Read `docs/contributing/coding-standards.md` ("Reading data from the page") befo
 
 - Put collection logic in its own module (`<area>-collector.ts`) and keep `overlay.ts` changes to wiring: import, attach, push, `leave()` and the returned cleanup.
 - Read Angular through the debug APIs on `window.ng` and verify each field against `node_modules/@angular/core/fesm2022` (or the library's fesm build). Known helpers:
+  - `debug-api.ts`: `NgDebugApi`, the typed `window.ng` with `@since` notes, and `pageDebugApi()`. Add a function there (and to `NG_DEBUG_FUNCTIONS`) before a collector reads it.
   - `element-id.ts`: stable `WeakMap` ids for elements (`elementId`, `elementById`).
   - `injector-tree.ts`: `className()` strips bundler `_` prefixes, `tokenName()`, `dependenciesOf()`, environment injector walk.
   - `serialize.ts`: safe, size-limited serialization.

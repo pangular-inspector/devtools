@@ -103,6 +103,7 @@ import {
 } from './change-detection.ts';
 import { attachChangeDetection } from './cd-overlay.ts';
 import { attachAngularInfo } from './ng-capabilities.ts';
+import { pageDebugApi, type NgDebugApi } from './debug-api.ts';
 import { createScanBackoff } from './router-attach.ts';
 import { DEVTOOLS_BASES, SETUP_URL } from './panel-frame.ts';
 import { overlayStarts } from './overlay-start.ts';
@@ -1175,6 +1176,6 @@ function read<T>(fn: () => T, fallback: T): T {
   }
 }
 
-function getNg(): any {
-  return (window as any).ng;
+function getNg(): NgDebugApi | undefined {
+  return pageDebugApi();
 }

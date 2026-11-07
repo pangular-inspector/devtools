@@ -271,9 +271,6 @@
   "packages/devtools/src/overlay-link.ts": {
     "typescript(no-explicit-any)": 1
   },
-  "packages/devtools/src/overlay.ts": {
-    "typescript(no-explicit-any)": 2
-  },
   "packages/devtools/src/page-lease.ts": {
     "typescript(no-explicit-any)": 1
   },

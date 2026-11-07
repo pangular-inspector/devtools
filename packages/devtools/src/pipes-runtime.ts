@@ -2,7 +2,7 @@ import { callerFrom } from './forms-instrument.ts';
 
 type AnyRecord = Record<string, any>;
 
-export interface NgDebugApi {
+export interface PipeDebugNg {
   getComponent(el: Element): unknown;
   getOwningComponent?(el: Element): unknown;
   getDirectives?(el: Element): unknown[];
@@ -173,7 +173,7 @@ export interface PipeScan {
  * embedded views, so views holding only text nodes (which Angular never
  * patches with `__ngContext__`) are found too. Usages are attributed to the
  * component whose template declares them. */
-export function scanPipeViews(ng: NgDebugApi, elements: Iterable<Element>): PipeScan {
+export function scanPipeViews(ng: PipeDebugNg, elements: Iterable<Element>): PipeScan {
   const seen = new Set<AnyRecord[]>();
   const usages: PipeUsage[] = [];
   const entries: Element[] = [];
@@ -208,7 +208,7 @@ export function scanPipeViews(ng: NgDebugApi, elements: Iterable<Element>): Pipe
   return { usages, entries };
 }
 
-export function findPipeUsages(ng: NgDebugApi, elements: Iterable<Element>): PipeUsage[] {
+export function findPipeUsages(ng: PipeDebugNg, elements: Iterable<Element>): PipeUsage[] {
   return scanPipeViews(ng, elements).usages;
 }
 

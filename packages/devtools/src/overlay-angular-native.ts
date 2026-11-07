@@ -14,7 +14,7 @@ import { attachNativeDiagnostics, errorUtilsTarget, nativeDebugApi } from './nat
 import { attachNgrx } from './ngrx-overlay.ts';
 import { installReduxDevtoolsHook, uninstallReduxDevtoolsHook } from './redux-devtools-hook.ts';
 import { attachPipes } from './pipes-collector.ts';
-import type { NgDebugApi } from './pipes-runtime.ts';
+import type { PipeDebugNg } from './pipes-runtime.ts';
 import {
   angularNativeTree,
   clearOutline,
@@ -343,7 +343,7 @@ async function startSession(
     : null;
 
   const pipes = on.pipes
-    ? attachPipes(my, pageId, () => angularDebugApi() as NgDebugApi | undefined, { tree })
+    ? attachPipes(my, pageId, () => angularDebugApi() as PipeDebugNg | undefined, { tree })
     : null;
 
   const collectors = [
