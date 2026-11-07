@@ -115,10 +115,13 @@ import { domTree } from './host-tree.ts';
 import { LEASED_PUSH_MS, createPageLease, throttle } from './page-lease.ts';
 import { setTimeoutOutside } from './outside-angular.ts';
 import { createPageHeartbeat, keepaliveAfter } from './page-heartbeat.ts';
+import { selectedComponentSummary } from './element-sidebar.ts';
 
 declare global {
   interface Window {
     __pangularComponentOf?: (el: unknown) => string | null;
+    /** The masked summary of the component that owns an element, for the extension's Elements sidebar. */
+    __pangularComponentDetail?: (el: unknown) => ReturnType<typeof selectedComponentSummary>;
     __pangularPageId?: string;
   }
 }
@@ -1056,6 +1059,11 @@ async function startOverlay(
     window.__pangularComponentOf = componentOf;
     own(() => {
       if (window.__pangularComponentOf === componentOf) delete window.__pangularComponentOf;
+    });
+    const detailOf = (el: unknown) => selectedComponentSummary(getNg(), el);
+    window.__pangularComponentDetail = detailOf;
+    own(() => {
+      if (window.__pangularComponentDetail === detailOf) delete window.__pangularComponentDetail;
     });
     own(installSourceHelpers(pageId, getNg));
   }

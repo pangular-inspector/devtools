@@ -1,5 +1,6 @@
 // Bridge between the Chrome DevTools panel and the inspected Angular page.
 // Finds the devframe connection, then loads the SPA scoped to the inspected page.
+// Loaded after connection-probe.js (findConnection) and frames.js (findAngularFrame).
 
 const frame = document.getElementById('devtools-frame');
 const status = document.getElementById('status');
@@ -15,15 +16,8 @@ const REFUSED_DOCS = {
   text: 'Why the devtools server refuses requests',
 };
 
-// Where devframe may be mounted.
-const PATHS = ['/__pangular/', '/__devframes/pangular/', '/__devframe/', '/'];
-const CONNECTION_FILES = ['__devframe/__connection.json', '__connection.json'];
-const PROBE_TIMEOUT_MS = 1500;
-// The first path gets this long on its own before the rest are sent.
-const PROBE_HEAD_START_MS = 150;
 // Keep in step with PANGULAR_EXTENSION_IDS in packages/devtools/src/extension-origin.ts.
 const PINNED_ORIGINS = ['chrome-extension://dcogniffeelebaolkkfbopmjcblhblfk'];
-const REFUSED_TEXT_LIMIT = 200;
 const PAGE_ID_WAIT_MS = 5000;
 const PAGE_ID_POLL_MS = 250;
 const OPEN_RESOURCE_TIMEOUT_MS = 3000;
@@ -34,6 +28,8 @@ const PAGE_READ_RETRY_MS = 300;
 // A page blocked by a dialog, such as the overlay's prompt for the one-time
 // code, never answers until the dialog closes.
 const EVAL_TIMEOUT_MS = 2000;
+// How long the search for Angular in the page's frames may take before the top frame is used.
+const FRAME_SEARCH_MS = 3000;
 const BUSY_RETRY_MS = 2000;
 // While no server answers, or it refuses, the panel looks again on its own, so it
 // connects once the dev server starts, like the panel does.
@@ -52,6 +48,9 @@ const STORED_PAGE_ID = `(() => {
 })()`;
 
 let detection = 0;
+// The frame Angular runs in, when it is not the top frame: every read of the page goes there,
+// and the server is searched on its origin.
+let frameURL = null;
 let busyRetry;
 let serverRetry;
 let themeName = chrome.devtools.panels.themeName || 'dark';
@@ -75,7 +74,7 @@ chrome.devtools.panels.setThemeChangeHandler?.((name) => {
 function evalPage(expression, timeoutMs = EVAL_TIMEOUT_MS) {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve({ ok: false, reason: 'timeout' }), timeoutMs);
-    chrome.devtools.inspectedWindow.eval(expression, (result, error) => {
+    evalInFrame(expression, frameURL, (result, error) => {
       clearTimeout(timer);
       resolve(error ? { ok: false, reason: 'error' } : { ok: true, value: result });
     });
@@ -112,6 +111,7 @@ async function detectConnection({ quiet = false } = {}) {
   const run = ++detection;
   clearTimeout(busyRetry);
   clearTimeout(serverRetry);
+  frameURL = null;
   if (!quiet) showStatus(DETECTING, { help: false });
   const answer = await readPageOrigin(run);
   if (run !== detection) return;
@@ -126,7 +126,15 @@ async function detectConnection({ quiet = false } = {}) {
     }
     return;
   }
-  const page = toURL(answer.value);
+  // An app in a frame (Storybook, a micro-frontend shell) is read in that frame, and its
+  // server is searched on the frame's origin.
+  const angular = await Promise.race([
+    findAngularFrame(),
+    wait(FRAME_SEARCH_MS).then(() => ({ found: false })),
+  ]);
+  if (run !== detection) return;
+  if (angular.found && angular.frameURL) frameURL = angular.frameURL;
+  const page = toURL(frameURL ?? answer.value);
   if (!page || !['http:', 'https:'].includes(page.protocol)) {
     showStatus('Pangular Inspector connects to pages served over http or https.', {
       retry: true,
@@ -148,10 +156,7 @@ async function detectConnection({ quiet = false } = {}) {
     return;
   }
 
-  const candidates = PATHS.flatMap((base) =>
-    CONNECTION_FILES.map((file) => ({ base, url: new URL(base + file, page).href })),
-  ).filter((candidate, index, all) => all.findIndex(({ url }) => url === candidate.url) === index);
-  const { found, probes } = await findConnection(candidates);
+  const { found, probes } = await findConnection(connectionCandidates(page));
   if (run !== detection) return;
   if (!found) {
     const refused = probes.find(({ status }) => status === 401 || status === 403);
@@ -200,58 +205,6 @@ async function waitForPageId(run) {
     busy = false;
     if (Date.now() >= deadline) return evalInPage(STORED_PAGE_ID);
     await wait(PAGE_ID_POLL_MS);
-  }
-}
-
-// The first candidate, in PATHS order, that answers with a connection file, and the
-// status of each probe. The first candidate gets a short head start; then the rest run at
-// once, so a missing server costs one timeout. Probes still running once a winner is
-// known are aborted.
-async function findConnection(candidates) {
-  const probes = candidates.map((candidate) => ({ url: candidate.url, status: null, text: '' }));
-  const losers = new AbortController();
-  const answers = [probe(candidates[0], probes[0], losers.signal)];
-  const headStart = await Promise.race([
-    answers[0],
-    new Promise((resolve) => setTimeout(() => resolve(null), PROBE_HEAD_START_MS)),
-  ]);
-  if (headStart) return { found: candidates[0], probes: probes.slice(0, 1) };
-  for (let index = 1; index < candidates.length; index++) {
-    answers.push(probe(candidates[index], probes[index], losers.signal));
-  }
-  try {
-    for (const [index, answer] of answers.entries()) {
-      if (await answer) {
-        return { found: candidates[index], probes: probes.slice(0, index + 1) };
-      }
-    }
-    return { found: null, probes };
-  } finally {
-    losers.abort();
-  }
-}
-
-// Whether `candidate` answers with a connection file; records its status in `result`.
-async function probe(candidate, result, cancel) {
-  try {
-    const response = await fetch(candidate.url, {
-      credentials: 'omit',
-      cache: 'no-store',
-      redirect: 'error',
-      signal: AbortSignal.any([cancel, AbortSignal.timeout(PROBE_TIMEOUT_MS)]),
-    });
-    result.status = response.status;
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        result.text = (await response.text()).trim().slice(0, REFUSED_TEXT_LIMIT);
-      }
-      return false;
-    }
-    await response.json();
-    return true;
-  } catch {
-    // Not mounted here.
-    return false;
   }
 }
 
