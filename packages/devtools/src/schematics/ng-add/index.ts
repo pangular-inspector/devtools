@@ -66,7 +66,8 @@ export const CLI_STEPS = [
 
 /** The setup found in the workspace and the files the edits go to. */
 export interface Setup {
-  kind: 'vite' | 'express' | 'server' | 'cli';
+  /** `unreadable`: angular.json is there but could not be parsed, so nothing is changed. */
+  kind: 'vite' | 'express' | 'server' | 'cli' | 'unreadable';
   project?: string;
   main?: string;
   server?: string;
@@ -87,6 +88,38 @@ function readText(tree: Tree, path: string): string | undefined {
 }
 
 type Json = Record<string, unknown>;
+
+/**
+ * Parses JSON the way the Angular CLI reads angular.json: `//` and block
+ * comments and trailing commas are allowed. Returns undefined when the text
+ * still is not JSON. Strings are copied as they are, so a `//` inside a URL stays.
+ */
+export function parseWorkspaceJson(text: string): unknown {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
+      out += text.slice(i, j + 1);
+      i = j;
+    } else if (ch === '/' && text[i + 1] === '/') {
+      while (i < text.length && text[i] !== '\n') i++;
+      out += '\n';
+    } else if (ch === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      if (end < 0) return undefined;
+      i = end + 1;
+    } else {
+      out += ch;
+    }
+  }
+  try {
+    return JSON.parse(out.replace(/,(\s*[}\]])/g, '$1'));
+  } catch {
+    return undefined;
+  }
+}
 const isObject = (value: unknown): value is Json =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
@@ -116,8 +149,17 @@ export function detectSetup(tree: Tree, options: NgAddOptions = {}): Setup {
   let server: string | undefined;
   let project: string | undefined;
   const workspaceText = readText(tree, 'angular.json');
-  if (workspaceText) {
-    const picked = pickProject(JSON.parse(workspaceText) as Json, options.project);
+  const workspace = workspaceText ? parseWorkspaceJson(workspaceText) : undefined;
+  if (workspaceText && !isObject(workspace)) {
+    if (options.project) {
+      throw new Error(
+        `[pangular] Could not read angular.json: it is not valid JSON, even with comments and trailing commas allowed. Fix it, then run ng add again for project "${options.project}".`,
+      );
+    }
+    return { kind: 'unreadable' };
+  }
+  if (isObject(workspace)) {
+    const picked = pickProject(workspace, options.project);
     if (picked) {
       project = picked.name;
       root = typeof picked.project['root'] === 'string' ? picked.project['root'] : '';
@@ -371,6 +413,11 @@ export function ngAdd(options: NgAddOptions = {}): Rule {
       case 'cli':
         apply(tree, context, setup.main, wireOverlay, 'the overlay', OVERLAY_SNIPPET);
         context.logger.info(`[pangular] ${CLI_STEPS.join('\n')}`);
+        break;
+      case 'unreadable':
+        context.logger.warn(
+          `[pangular] Could not read angular.json: it is not valid JSON, even with comments and trailing commas allowed. Nothing was changed. Add the overlay to main.ts by hand:\n\n${OVERLAY_SNIPPET}\n\nSee ${DOCS}/installation`,
+        );
         break;
     }
     return tree;

@@ -7,6 +7,8 @@ import { build } from 'tsdown';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import {
   detectSetup,
+  OVERLAY_SNIPPET,
+  parseWorkspaceJson,
   ngAdd,
   wireExpressServer,
   wireOverlay,
@@ -159,6 +161,42 @@ describe('detectSetup', () => {
       expect.objectContaining({ kind: 'vite', viteConfig: 'projects/shop/vite.config.mts' }),
     );
     expect(() => detectSetup(tree, { project: 'nope' })).toThrow(/No project "nope"/);
+  });
+
+  it('reads an angular.json with comments and trailing commas, as the Angular CLI does', () => {
+    const tree = workspace({ 'src/main.ts': MAIN }, null);
+    tree.create(
+      'angular.json',
+      `{
+  // The CLI allows comments.
+  "projects": {
+    /* and block comments */
+    "shop": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src", // trailing comma next
+      "architect": {"build": {"options": {"browser": "src/main.ts", "baseHref": "http://x//y"}}},
+    },
+  },
+}`,
+    );
+    expect(detectSetup(tree)).toEqual(
+      expect.objectContaining({ kind: 'cli', project: 'shop', main: 'src/main.ts' }),
+    );
+    expect(parseWorkspaceJson('{"url": "http://a//b", }')).toEqual({ url: 'http://a//b' });
+  });
+
+  it('changes nothing and prints the snippet when angular.json cannot be read', () => {
+    const tree = workspace({ 'src/main.ts': MAIN }, null);
+    tree.create('angular.json', '{ "projects": ');
+    expect(detectSetup(tree)).toEqual({ kind: 'unreadable' });
+    const { logs } = run(tree);
+    expect(logs()).toMatch(/Could not read angular\.json/);
+    expect(logs()).toContain(OVERLAY_SNIPPET);
+    expect(tree.readText('src/main.ts')).toBe(MAIN);
+    expect(() => detectSetup(tree, { project: 'shop' })).toThrow(
+      /Could not read angular\.json.*project "shop"/,
+    );
   });
 
   it('works without angular.json', () => {
