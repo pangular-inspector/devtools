@@ -275,7 +275,7 @@ Every tool answers with one plain text block, the answer as written: markdown fo
 
 ### Read and action tools
 
-Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty-one tools act on the app, so the server does not mark them read-only:
+Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty-three tools act on the app, so the server does not mark them read-only:
 
 | Tool                       | Tier          | Reference                                                                     |
 | -------------------------- | ------------- | ----------------------------------------------------------------------------- |
