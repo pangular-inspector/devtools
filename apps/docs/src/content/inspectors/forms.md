@@ -37,10 +37,16 @@ A Signal Form that sets `experimentalWebMcpTool` (with `provideExperimentalWebMc
 | Blocking fields  | When Angular could not infer a schema, each field that is `null`, `undefined`, an empty array or an unsupported type.            |
 | Required changed | Fields whose `required` changed after registration. Angular reads `required` once, so agents still see the old one.              |
 | Recent calls     | The last 5 agent calls with time, duration, the input names and the result (submitted, submit failed or threw).                  |
+| Input schema     | The JSON schema agents see, under **Input schema**. Properties with secret-looking names show as `[redacted]`.                   |
+| Try this tool    | A JSON input, prefilled with a sample of the schema, and **Try this tool**. Only in the block of a form.                         |
 
-Agent calls set the value and submit the form. Those changes show in the timeline with the **agent** origin. While a call's submit is still running, only changes to that form count as the agent's, and typing in any form, that one included, shows as **user**.
+Agent calls set the value and submit the form. Those changes show in the timeline with the **agent** origin. While a call's submit is still running, only its outcome in that form (status and submit changes) counts as the agent's. A value that app code writes meanwhile is not tagged **agent**, and typing in any form, that one included, shows as **user**.
 
 If the app provides `provideExperimentalWebMcpForms()` but the browser has no `modelContext`, Angular registers no tool. The block says so instead.
+
+#### Try a tool from the panel
+
+Edit the **Tool input (JSON)** and click **Try this tool**, then **Confirm try**. The panel runs the tool in the app the way an agent call does, so the tool fills the form and submits it. The answer of the tool shows under the button, and the call shows in **Recent calls** as **tried from the panel**. Changes it makes show in the timeline with the **devtools** origin. **Try this tool** is turned off when [`actions.forms`](../getting-started/configuration.md#actions) is `false`. A tool registered before the inspector attached can be tried only when the browser offers `modelContextTesting.executeTool`. Agents run it with `pangular:run-form-action` and `action: "try-webmcp"`.
 
 A tool the overlay cannot link to a form, such as a tool the app registers with `modelContext.registerTool` itself, shows under **Other WebMCP tools** below the forms, with the same parts. The section appears only when the page has such a tool, and it follows the **All pages** setting.
 
@@ -52,6 +58,12 @@ Each field shows its value, status, touched and dirty state, and errors. Extra f
 - **Reactive and template-driven**: whether validators and async validators are attached, the value `reset()` goes back to, `updateOn`, and the bound `ControlValueAccessor`.
 
 Filter by path, or with the **Invalid**, **Dirty**, **Touched**, **Disabled** and **Error not shown** chips. If the filters hide every field, click **Clear filters** to reset the path filter and the chips. Focus returns to the path filter. Hover a field to highlight its input in the page.
+
+### Edit a field in its row
+
+Click **Edit** next to a control's value to open an editor under its row. Type a value and press Enter or click **Set value**. The value is read as the current value's type, so `42` sets a number on a number field. Tick or untick **Touched** and **Dirty** to mark the control touched or untouched, dirty or pristine. The page answers in a status line under the editor. If it refuses, the checkbox goes back to the reported state. Press Escape or click **Done** to close the editor. Focus returns to **Edit**.
+
+A redacted field keeps its value hidden and has no value editor, but you can still change **Touched** and **Dirty**. **Edit** is turned off when [`actions.forms`](../getting-started/configuration.md#actions) is `false`, like the other form writes. Agents make the same changes with `pangular:run-form-action` (`set-value`, `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`).
 
 ### Error sources
 
@@ -72,9 +84,21 @@ Each error says where it comes from:
 
 Click a field to open its details below the table. Click the field again, or **Close**, to hide them. From there, set a value, or click **Focus**, **Touch**, **Revalidate** or **Store as global**. **Store as global** stores the form as `$form`, and the field as `$control`, in the page console. If the page defined `$form` or `$control` itself, it refuses and leaves them as they are.
 
+### Schema view
+
+A Signal Form has a **Schema** view. It lists each field the schema function of `form()` sets a rule on, with:
+
+| Column          | What it shows                                                                                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Rules**       | `required`, and how many validators, cross-field rules (`validateTree`), async validators, hidden, disabled and readonly rules and metadata entries the field has. |
+| **Constraints** | `min`, `max`, `minLength`, `maxLength` and `pattern`, and the metadata values.                                                                                     |
+| **State now**   | Whether the field is hidden or readonly (by itself or by a parent), its disabled reasons and a pending debounce.                                                   |
+
+The counts come from Angular's logic tree, so a rule shows on the field it applies to. Fields without a rule are left out, and a group stays when one of its fields has a rule. Reactive and template-driven forms have no Schema view. Agents read the same rule counts with `pangular:explain-field`.
+
 ### Timeline view
 
-Recent changes, newest first, each tagged with its origin: user, code, agent (a WebMCP tool call) or devtools. The timeline tracks array items by identity, so moves show as moves. Async validation times show as **pending** tags. The page keeps the last 200 events, set with [`limits.formTimeline`](../getting-started/configuration.md#limits). Once older events are dropped, the timeline and `list-form-changes` say how many.
+Recent changes, newest first, each tagged with its origin: user, code, agent (a WebMCP tool call) or devtools. Origins are per form: typing in one form tags changes in that form as user, and a change that app code makes in another form at the same time stays code. A panel or agent action tags only the form it acts on. When the overlay cannot tell which form an input belongs to, such as a custom control rendered in an overlay outside the form, the input counts for every form. The timeline tracks array items by identity, so moves show as moves. Async validation times show as **pending** tags. The page keeps the last 200 events, set with [`limits.formTimeline`](../getting-started/configuration.md#limits). Once older events are dropped, the timeline and `list-form-changes` say how many.
 
 Narrow the list with three filters. An event shows only when it passes all of them.
 
@@ -85,6 +109,18 @@ Narrow the list with three filters. An event shows only when it passes all of th
 | Origin (**All**, **User** and so on) | Events from one origin.                                                               |
 
 The list shows the latest 100 matching events. When more match, the count next to the filters says so, for example "Showing the latest 100 of 240 events". If the filters hide every event, click **Clear filters** to reset all three.
+
+#### Export the history as a Playwright test
+
+Above the timeline, **Copy Playwright test** copies a test that replays the form's history, and **Download test** saves it as a `.spec.ts` file. The test opens the page the form is on, replays the values typed, the submits and the resets that came from you, an agent or the panel, and checks the values and status the form ended with. Changes from app code are left out, and typing in one field becomes one `fill()` with its last value.
+
+| Form kind       | Selector the test uses                                                   |
+| --------------- | ------------------------------------------------------------------------ |
+| Reactive        | `formcontrolname`, inside its `formgroupname` and `formarrayname` groups |
+| Template-driven | `name`, inside its `ngmodelgroup` groups                                 |
+| Signal Forms    | The `name` the field gives its input                                     |
+
+A field with no such attribute, such as an array item bound with `[formControlName]="i"`, gets a `TODO` comment instead of a step. Secret fields are read from environment variables named after the field, such as `FORM_PASSWORD`, because their values are not recorded. Check the selectors and the `TODO` lines before you run the test. Agents get the same test from `pangular:export-form` with `format: "playwright"`.
 
 Check **Record details** to add the calling code of each change, validator changes, and component renders per keystroke. It is off by default and applies to the whole page.
 
@@ -106,6 +142,21 @@ Messages go through the same redaction as field values.
 ### Lint view
 
 Form bugs and model-aware accessibility checks, each with a fix. For generic accessibility checks, run axe on the page.
+
+The accessibility checks compare the form model with the element each field binds:
+
+| Rule                            | Severity | What it finds                                                                                                         |
+| ------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| `missing-label`                 | warning  | An input with no accessible name.                                                                                     |
+| `aria-invalid-desync`           | warning  | `aria-invalid` that disagrees with the field state.                                                                   |
+| `required-not-exposed`          | warning  | A field the model requires whose element has no `required` or `aria-required`.                                        |
+| `error-not-shown`               | info     | An invalid, touched field with no visible error text near it.                                                         |
+| `error-not-described`           | info     | Visible error text that `aria-describedby` or `aria-errormessage` does not link to the input.                         |
+| `missing-autocomplete`          | info     | An input whose type or name says it collects personal data, such as `email` or `postal-code`, with no `autocomplete`. |
+| `submit-disabled-while-invalid` | info     | Every submit button disabled while the form is invalid.                                                               |
+| `no-focus-on-invalid-submit`    | info     | Focus that stayed put after an invalid submit.                                                                        |
+
+Turn a rule off with [`lint.rules`](../getting-started/configuration.md#lint-rules), such as `lint: { rules: { 'missing-autocomplete': false } }`.
 
 A finding about one field shows its path, such as `at address.zip`. Click the path to open that field, the same way an **Error summary** entry does: the tab switches to the **Fields** view, opens the field's [details](#field-details) and moves focus to them. Findings about the whole form have no path.
 
@@ -134,6 +185,8 @@ The actions bar works on the selected form:
 ### When the page reports
 
 The overlay reads the forms after change detection and pushes them when they change. It also pushes shortly after each `input`, `change`, `focusout`, `submit` or `reset` event. Reactive and template-driven forms also report each change through `control.events`, which Angular has from 18.0. On older versions the timeline comes from comparing the forms between reads.
+
+After change detection, the overlay skips the read when nothing changed since the last one: no form event, no input, no DOM change, no WebMCP call or panel action, and no Signal Form whose value, errors or root flags moved. A form with a pending field, a debounce or a submit in flight is read every time, and every form is read again at least every 5 seconds, so a change that slips past these checks, such as code that marks one more field touched, shows within 5 seconds.
 
 ### Validators run only when needed
 
@@ -211,7 +264,7 @@ You can also open a form from its component in the [Components tab](./components
 | `pangular:explain-form-changes`   | The net change since a marker.                                                                                                        |
 | `pangular:lint-forms`             | Form bugs and accessibility checks.                                                                                                   |
 | `pangular:explain-custom-control` | How a field binds to its element, and what is wrong with the binding.                                                                 |
-| `pangular:export-form`            | A JSON snapshot or a test fixture.                                                                                                    |
+| `pangular:export-form`            | A JSON snapshot, a test fixture or a Playwright test.                                                                                 |
 | `pangular:wait-for`               | With `condition: "form"`, waits until the form is settled, valid, not pending or submitted.                                           |
 
 ### Write tools
@@ -231,7 +284,7 @@ Agents can loop: inspect, act, `wait-for` with `condition: "form"`, then `explai
 
 ### Reset, submit and restore ask first
 
-In the tab, the button turns into **Confirm reset**, **Confirm submit** or **Confirm restore**. Click again to run it. If the selected form changes first, for example because the page destroyed it, the confirmation, the snapshot and the open field are cleared. Agents pass `confirm: true` for the same actions, and for `fill-form` with `submit`.
+In the tab, the button turns into **Confirm reset**, **Confirm submit** or **Confirm restore**. Click again to run it. If the selected form changes first, for example because the page destroyed it, the confirmation, the snapshot and the open field are cleared. **Try this tool** asks the same way, with **Confirm try**. Agents pass `confirm: true` for the same actions, for `try-webmcp`, and for `fill-form` with `submit`.
 
 ### Fields that are not written
 

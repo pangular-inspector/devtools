@@ -401,9 +401,53 @@ const QUERIES_SEED = {
   },
 };
 
-// A reactive form with an invalid field, so the Forms tab has fields to filter.
+// A reactive form with an invalid field, so the Forms tab has fields to filter, and a Signal
+// Form with schema rules and a WebMCP tool, for its Schema view and Try this tool.
 const FORMS_SEED = {
   forms: [
+    {
+      id: 'f2@tab1',
+      kind: 'signal',
+      owner: 'ProfileForm',
+      label: 'profile',
+      webMcp: {
+        name: 'update_profile',
+        description: 'Update the profile',
+        status: 'registered',
+        seen: 'register',
+        inputs: ['nick: string'],
+        required: ['nick'],
+        schema: { type: 'object', properties: { nick: { type: 'string' } }, required: ['nick'] },
+        calls: [{ at: 0, ms: 12, outcome: 'submitted', fields: ['nick'], tried: true }],
+      },
+      root: {
+        key: '',
+        path: '',
+        type: 'group',
+        status: 'VALID',
+        touched: false,
+        dirty: false,
+        bound: true,
+        errors: [],
+        rules: { tree: 1 },
+        children: [
+          {
+            key: 'nick',
+            path: 'nick',
+            type: 'control',
+            status: 'VALID',
+            touched: false,
+            dirty: false,
+            bound: true,
+            required: true,
+            rules: { sync: 2 },
+            constraints: { minLength: 2 },
+            value: 'ada',
+            errors: [],
+          },
+        ],
+      },
+    },
     {
       id: 'f1@tab1',
       kind: 'reactive',
@@ -991,6 +1035,39 @@ async function waitForState(page, label, selector, state) {
   }
 }
 
+/** The Forms views a seeded page adds: the inline editor, Schema, WebMCP and the test export. */
+async function checkFormViews(page, name) {
+  await page.locator('main .form-item', { hasText: 'signup' }).click();
+  const edit = page.locator('main button.edit').first();
+  if (await edit.isEnabled()) {
+    await edit.click();
+    await page.locator('#forms-inline-editor').waitFor();
+    await check(page, `${name} inline editor`);
+    await noOverflow(page, `${name} inline editor`);
+  }
+  await page.locator('main .form-item', { hasText: 'profile' }).click();
+  await page.locator('main details.schema summary').click();
+  await check(page, `${name} WebMCP tool with its schema`);
+  await noOverflow(page, `${name} WebMCP tool with its schema`);
+  await page.locator('#forms-tab-schema').click();
+  await page.locator('main app-forms-schema table').waitFor();
+  await check(page, `${name} Schema view`);
+  await noOverflow(page, `${name} Schema view`);
+  await page.locator('#forms-tab-timeline').click();
+  await page.locator('main app-forms-export-test').waitFor();
+  await check(page, `${name} Timeline with the test export`);
+  await noOverflow(page, `${name} Timeline with the test export`);
+}
+
+/** Fails when the page scrolls sideways at a 360px wide viewport. */
+async function noOverflow(page, name) {
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: 800 });
+  const wide = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  if (wide) failures.push(`${name}: scrolls sideways at 360px`);
+  if (size) await page.setViewportSize(size);
+}
+
 async function check(page, name, { idle = true } = {}) {
   if (idle) await page.waitForLoadState('networkidle');
   const { violations } = await new AxeBuilder({ page }).analyze();
@@ -1123,6 +1200,7 @@ try {
           await live.locator(shown).first().waitFor({ timeout: 15_000 });
           await check(live, `${colorScheme} ${label} with a page reporting`);
           await mustFilter(live, `${colorScheme} ${label}`);
+          if (tab === 'forms') await checkFormViews(live, `${colorScheme} ${label}`);
         } catch (error) {
           failures.push(`${colorScheme} ${label}: the seeded page did not show (${error.message})`);
         }
