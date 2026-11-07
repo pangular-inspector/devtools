@@ -629,6 +629,8 @@ Stores that report through the Redux DevTools extension API, such as NGXS, Elf a
 
 All router tools read the page, except `scan-render-mode`, which also reads your `*.routes.server.ts` files.
 
+On a page that runs more than one Angular app with a Router, `inspect-route`, `explain-navigation`, `diff-navigations`, `preview-navigation`, `list-routes`, `lint-routes` and `router-config` take an optional `app`: the app's id (the tag of its root, such as `app-root`) or its root component name. Without `app` they answer for the first app, and the answer ends with a line that names the other apps. An unknown `app` is refused with the list of apps. See [Several apps on one page](../inspectors/router.md#several-apps-on-one-page).
+
 ### Read the current route
 
 | Tool                 | What it answers                                                                                                                                                                                                                                                                                                                                                                                                | Arguments                                                                     |
