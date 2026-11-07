@@ -1658,7 +1658,9 @@ async function runActions(state) {
     r.markdown.slice(0, 300),
   );
 
-  // watch-signal
+  // watch-signal, back on the signals page after the defer example
+  await app.go('/examples/signals');
+  await sleep(800);
   const graph = jsonBlock(await read('inspect-signals', { component: 'app-signals-example' }));
   const countNode = graph?.nodes?.find((node) => node.label === 'count');
   r = await act('watch-signal', { node: countNode?.id ?? 'count', stacks: true });
@@ -2155,6 +2157,7 @@ const ACTION_VALID = {
   'record-change-detection': () => ({ record: 'stop' }),
   'track-subscriptions': () => ({ action: 'stop' }),
   'record-pipes': () => ({ action: 'stop' }),
+  'load-defer-block': () => ({ block: 'd0' }),
   'clear-recordings': () => ({ target: 'router' }),
   'set-component-property': () => ({ component: 'NoSuch', property: 'x', value: 1 }),
   'set-signal': () => ({ component: 'NoSuch', property: 'x', value: 1 }),
@@ -3006,6 +3009,7 @@ function runDocs(state) {
     'params',
     'replaceurl',
     'skiplocationchange',
+    'block',
   ]);
   // Library tools are documented but not listed for the demo, which uses none of the libraries.
   docs.phantomTools = [...documented].filter(
