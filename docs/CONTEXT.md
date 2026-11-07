@@ -53,7 +53,7 @@ A library's own view in the panel and its own agent tools, through the public pl
 _Avoid_: extension (the Chrome extension), add-on, inspector
 
 **Devframe**:
-The framework the devtools are built on (`devframe`). One definition, `packages/devtools/src/devframe.ts`, declares the RPC functions, shared state and agent tools, and Devframe serves it as the embedded panel, the standalone CLI, the static report and the MCP server.
+The framework the devtools are built on (`devframe`). One definition, `packages/devtools/src/devframe.ts` (with the `devframe-*-tools.ts` and `rpc/*-register.ts` modules it calls), declares the RPC functions, shared state and agent tools, and Devframe serves it as the embedded panel, the standalone CLI, the static report and the MCP server.
 _Avoid_: framework, runtime, backend
 
 **Hub**:

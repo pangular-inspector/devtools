@@ -241,7 +241,7 @@
     "unicorn(no-useless-spread)": 1
   },
   "packages/devtools/src/devframe.ts": {
-    "pangular(max-lines)": 4876,
+    "pangular(max-lines)": 2934,
     "unicorn(no-useless-spread)": 1
   },
   "packages/devtools/src/dom-diff.ts": {

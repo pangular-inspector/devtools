@@ -32,6 +32,8 @@ Read `docs/contributing/coding-standards.md` ("Reading data from the page") befo
 
 ## Server side (`devframe.ts`, `rpc/`)
 
+- `devframe.ts` wires the setup. A new inspector goes in its own `rpc/<area>-register.ts` (see `rpc/errors-register.ts`), and agent tools of an existing area live in `devframe-<area>-tools.ts`, which take the setup values they read as an `env` object typed through `devframe-env.ts`. Keep `devframe.ts` under the line ratchet of `pnpm lint`.
+
 - Keep a `Map<pageId, report>` with `reportedAt`, drop pages older than `ttl(pageId)` (from `visibility.ttl()`, so a page with a current heartbeat never expires) in the shared expiry interval, and write the combined value into the shared state.
 - Page actions that the panel triggers (restore, highlight, run) go panel -> `request-<area>-action` -> broadcast `<area>-action` to the page -> `<area>-action-result`, keyed by `requestId`, with a timeout.
 - Source scans in `rpc/` enrich or stand in for live data. They must return a `kind` for anything the Dashboard counts.
@@ -46,7 +48,7 @@ Read `docs/contributing/coding-standards.md` ("Reading data from the page") befo
 
 - Describe what the tool returns, where the data comes from and what an empty answer means. Answer in markdown.
 - Give each new tool or resource one entry in `AGENT_ENTRIES` (`packages/devtools/src/config.ts`): its inspector, safety tier, the `actions` it writes for and whether it needs a page. `AGENT_INSPECTOR`, `AGENT_SAFETY`, `ACTION_TOOLS`, `PAGE_AGENT_ENTRIES` and the tags derive from it. `packages/devtools/src/__tests__/agent-metadata.test.ts` fails on a registered tool without an entry; update `packages/devtools/src/__tests__/fixtures/agent-metadata-derived.json` with it.
-- Update descriptions in `devframe.ts` when data shapes change, and the tool list on the docs site (apps/docs/src/content/agents/tools.md). Use the `devtools-docs` skill for that edit.
+- Update tool descriptions (in `devframe.ts`, `devframe-<area>-tools.ts` or the inspector's register module) when data shapes change, and the tool list on the docs site (apps/docs/src/content/agents/tools.md). Use the `devtools-docs` skill for that edit.
 
 ## Tests
 
