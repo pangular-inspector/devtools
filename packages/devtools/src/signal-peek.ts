@@ -50,10 +50,16 @@ export function toPeekRequest(request: unknown, pageId: string): SignalPeekReque
 
 /** Whether the collected graph is the one the request asked for, not a fallback. */
 function answers(graph: SignalGraph, request: SignalPeekRequest): boolean {
-  if ('env' in request) return !!graph.injector && injectorMatches(graph.injector, request.env);
-  // `selected` means the target resolved to a component host; anything else is a fallback.
-  if (graph.source !== 'selected' || !graph.component) return false;
-  return 'id' in request ? graph.component.id === request.id : true;
+  if ('env' in request) {
+    if (graph.injector) return injectorMatches(graph.injector, request.env);
+    // An element injector id from the injector tree (`inj-N`).
+    return graph.source === 'selected' && graph.element?.injectorId === request.env.trim();
+  }
+  // `selected` means the target resolved to a host; anything else is a fallback.
+  if (graph.source !== 'selected') return false;
+  const id = graph.component?.id ?? graph.element?.id;
+  if (!id) return false;
+  return 'id' in request ? id === request.id : true;
 }
 
 function targetOf(request: SignalPeekRequest): SignalTarget {
