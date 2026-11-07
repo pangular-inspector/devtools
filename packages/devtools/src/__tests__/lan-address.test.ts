@@ -49,6 +49,18 @@ describe('resolveLanAddress', () => {
     expect(resolveLanAddress('192.168.1.20')).toEqual({ on: true, address: '192.168.1.20' });
   });
 
+  it('warns about a bigint or a cyclic value without throwing', () => {
+    const warn = vi.fn();
+    const cyclic: Record<string, unknown> = {};
+    cyclic['self'] = cyclic;
+    expect(resolveLanAddress(10n, warn)).toEqual({ on: false });
+    expect(resolveLanAddress(cyclic, warn)).toEqual({ on: false });
+    expect(warn.mock.calls.map(([m]) => m)).toEqual([
+      expect.stringContaining('got a bigint'),
+      expect.stringContaining('got a object'),
+    ]);
+  });
+
   it('refuses loopback, unspecified and malformed values with a warning', () => {
     for (const value of ['127.0.0.1', '0.0.0.0', 'localhost', '192.168.1', 1, {}]) {
       const warn = vi.fn();

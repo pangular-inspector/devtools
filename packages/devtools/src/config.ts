@@ -1035,7 +1035,7 @@ export function resolveLanAddress(
     return { on: true, address: value };
   }
   warn(
-    `[pangular] Ignoring lanAddress: ${JSON.stringify(value)}. Pass true, or your machine's LAN address such as 192.168.1.20.`,
+    `[pangular] Ignoring lanAddress: got ${describe(value)}. Pass true, or your machine's LAN address such as 192.168.1.20.`,
   );
   return { on: false };
 }
