@@ -226,6 +226,36 @@ describe('detectSetup', () => {
     );
   });
 
+  it('leaves a workspace-root Vite config to the root app when the nested project does not use Vite', () => {
+    const angular = {
+      projects: {
+        site: { projectType: 'application', root: '', sourceRoot: 'src' },
+        admin: {
+          projectType: 'application',
+          root: 'projects/admin',
+          sourceRoot: 'projects/admin/src',
+          architect: { build: { options: { browser: 'projects/admin/src/main.ts' } } },
+        },
+      },
+    };
+    const tree = workspace(
+      { 'vite.config.ts': VITE, 'projects/admin/src/main.ts': MAIN, 'src/main.ts': MAIN },
+      angular,
+    );
+    expect(detectSetup(tree, { project: 'site' })).toEqual(
+      expect.objectContaining({ kind: 'vite', viteConfig: 'vite.config.ts' }),
+    );
+    expect(detectSetup(tree, { project: 'admin' })).toEqual(
+      expect.objectContaining({ kind: 'cli', main: 'projects/admin/src/main.ts' }),
+    );
+    const before = tree.readText('vite.config.ts');
+    run(tree, { project: 'admin' });
+    expect(tree.readText('vite.config.ts')).toBe(before);
+    // A root config that names the nested project's folder belongs to it.
+    const named = workspace({ 'vite.config.ts': `${VITE}\n// root: 'projects/admin'\n` }, angular);
+    expect(detectSetup(named, { project: 'admin' }).kind).toBe('vite');
+  });
+
   it('works without angular.json', () => {
     expect(detectSetup(workspace({ 'vite.config.ts': VITE }, null))).toEqual(
       expect.objectContaining({ kind: 'vite', main: 'src/main.ts' }),

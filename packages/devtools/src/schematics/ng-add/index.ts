@@ -156,6 +156,16 @@ function pickProject(workspace: Json, name: string | undefined) {
   return chosen ? { name: chosen[0], project: chosen[1] } : undefined;
 }
 
+/** Whether a config file names one of `folders` as a quoted path, such as `root: 'projects/shop'`. */
+function namesFolder(text: string, folders: string[]): boolean {
+  return folders
+    .filter((folder) => !!folder)
+    .some((folder) => {
+      const escaped = folder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`['"\`](?:\\./)?${escaped}/?['"\`]`).test(text);
+    });
+}
+
 /** Reads the setup from `angular.json`, the Vite config and `server.ts`. */
 export function detectSetup(tree: Tree, options: NgAddOptions = {}): Setup {
   let root = '';
@@ -200,9 +210,16 @@ export function detectSetup(tree: Tree, options: NgAddOptions = {}): Setup {
       tree.exists(path),
     );
   }
-  const viteConfig = [root, '']
-    .flatMap((dir) => VITE_CONFIGS.map((file) => join(dir, file)))
-    .find((path) => tree.exists(path));
+  const own = VITE_CONFIGS.map((file) => join(root, file)).find((path) => tree.exists(path));
+  // A workspace-root Vite config belongs to the project only when the project
+  // lives at the workspace root, or when the config names the project's folder.
+  // Otherwise it serves another app, and editing it would wire the wrong one.
+  const shared = own
+    ? undefined
+    : VITE_CONFIGS.filter((file) => tree.exists(file)).find(
+        (file) => !root || namesFolder(readText(tree, file) ?? '', [root, sourceRoot]),
+      );
+  const viteConfig = own ?? shared;
   if (viteConfig) return { kind: 'vite', project, main, viteConfig };
   if (server) {
     const text = readText(tree, server) ?? '';
