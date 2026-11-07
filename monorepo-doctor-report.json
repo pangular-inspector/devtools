@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "generatedAt": "2026-10-10T21:02:02.903Z",
+  "workspace": {
+    "root": "/Users/santosh/devtools",
+    "packageManager": "pnpm",
+    "orchestrators": [
+      {
+        "name": "nx",
+        "installed": true
+      }
+    ],
+    "packageCount": 3
+  },
+  "summary": {
+    "critical": 0,
+    "high": 0,
+    "medium": 1,
+    "low": 6
+  },
+  "checks": [
+    {
+      "check": "boundaries",
+      "status": "ok",
+      "reason": "knip reported 18 unused dependencies; 17 were false positives (used in Angular/Analog sources, CSS @plugin, Nx/Angular schematics or the root SSR server) and were dropped",
+      "findingCount": 6
+    },
+    {
+      "check": "circular-deps",
+      "status": "ok",
+      "reason": "No package cycles in the Nx graph. 4 file cycles were reported in apps/docs/.analog/ssr (gitignored build output, .gitignore:6) and dropped as false positives.",
+      "findingCount": 0
+    },
+    {
+      "check": "caching",
+      "status": "ok",
+      "reason": "Resolved targets (including plugin-inferred docs build/test) read from nx graph. All build outputs are declared or match Nx defaults; only env reads are import.meta.env.DEV and gitignored build output.",
+      "findingCount": 1
+    },
+    {
+      "check": "ci-coverage",
+      "status": "ok",
+      "reason": "ci.yml checks out with fetch-depth: 0 and runs nrwl/nx-set-shas before nx affected; test inputs include ^production; devtools tests run via test:devtools, docs via @nx/vitest. The 2 undeclared imports the scan reported were a self-reference (packages/devtools/bin.mjs) and a code sample inside a string (apps/docs/src/app/pages/index.page.ts:774), so both were dropped.",
+      "findingCount": 0
+    },
+    {
+      "check": "prod-leakage",
+      "status": "ok",
+      "reason": "npm pack --dry-run of @pangular-inspector/devtools lists 43 files, none are tests; dist has no compiled tests; no test libraries in any dependencies; publint 0.3.25: All good.",
+      "findingCount": 0
+    }
+  ],
+  "findings": [
+    {
+      "id": "boundaries/nx-missing-module-boundaries-rule",
+      "severity": "medium",
+      "title": "No @nx/enforce-module-boundaries rule (no ESLint config in the workspace)",
+      "location": {
+        "file": "nx.json"
+      },
+      "evidence": "Checked eslint.config.{js,mjs,cjs,ts}, .eslintrc{,.json,.js,.cjs} in the root and in packages/devtools, apps/docs, examples/analog: none exist.",
+      "fix": "With only 4 projects this is optional. If wanted, add an ESLint flat config with @nx/enforce-module-boundaries and depConstraints on scope/type tags (e.g. type:app may depend on type:lib; packages/devtools depends on nothing in the workspace).",
+      "check": "boundaries"
+    },
+    {
+      "id": "boundaries/nx-untagged-project",
+      "severity": "low",
+      "title": "Nx project pangular-inspector-docs has no tags",
+      "location": {
+        "file": "apps/docs/project.json",
+        "package": "pangular-inspector-docs"
+      },
+      "evidence": "apps/docs/project.json has no \"tags\" field; no module-boundaries rule exists.",
+      "fix": "Add \"tags\": [\"type:app\"] if you adopt module boundaries.",
+      "check": "boundaries"
+    },
+    {
+      "id": "boundaries/nx-untagged-project",
+      "severity": "low",
+      "title": "Nx project analog-demo has no tags",
+      "location": {
+        "file": "examples/analog/package.json",
+        "package": "analog-demo"
+      },
+      "evidence": "examples/analog/package.json has no nx.tags; no module-boundaries rule exists.",
+      "fix": "Add \"nx\": { \"tags\": [\"type:example\"] } if you adopt module boundaries.",
+      "check": "boundaries"
+    },
+    {
+      "id": "boundaries/nx-untagged-project",
+      "severity": "low",
+      "title": "Nx project @pangular-inspector/devtools has no tags",
+      "location": {
+        "file": "packages/devtools/package.json",
+        "package": "@pangular-inspector/devtools"
+      },
+      "evidence": "package.json#nx has targets but no \"tags\"; no module-boundaries rule exists.",
+      "fix": "Add \"nx\": { \"tags\": [\"type:lib\"] } if you adopt module boundaries.",
+      "check": "boundaries"
+    },
+    {
+      "id": "boundaries/nx-untagged-project",
+      "severity": "low",
+      "title": "Nx project pangular-inspector has no tags",
+      "location": {
+        "file": "project.json",
+        "package": "pangular-inspector"
+      },
+      "evidence": "project.json has no \"tags\" field and no module-boundaries rule exists.",
+      "fix": "Add \"tags\": [\"type:app\"] if you adopt module boundaries.",
+      "check": "boundaries"
+    },
+    {
+      "id": "boundaries/unused-dependency",
+      "severity": "low",
+      "title": "h3 is an unused dependency of @pangular-inspector/devtools",
+      "location": {
+        "file": "packages/devtools/package.json",
+        "line": 84,
+        "package": "@pangular-inspector/devtools"
+      },
+      "evidence": "knip: dependencies packages/devtools/package.json h3 (line 84)\nNo .ts/.mjs file in packages/devtools mentions h3. Its deps bring their own: @devframes/hub, @devframes/agentic and devframe each depend on h3 ^2.0.1, while this package declares h3 ^1.15.11, so users install an extra unused h3 v1.",
+      "fix": "Remove \"h3\" from packages/devtools/package.json dependencies (keep the h3 packageExtension for @analogjs/vite-plugin-nitro in pnpm-workspace.yaml, which is separate).",
+      "check": "boundaries"
+    },
+    {
+      "id": "caching/build-inputs-include-tests",
+      "severity": "low",
+      "title": "Nx \"production\" named input does not exclude test files",
+      "location": {
+        "file": "nx.json",
+        "line": 10
+      },
+      "evidence": "\"namedInputs\": { \"default\": [\"{projectRoot}/**/*\", \"sharedGlobals\"], \"production\": [\"default\"] }\n\"targetDefaults\": { \"build\": { \"inputs\": [\"production\", \"^production\"] } }\npackages/devtools has 132 test files and apps/docs 22, so editing any spec invalidates their build cache (and dependants via ^production).",
+      "fix": "\"production\": [\"default\", \"!{projectRoot}/**/*.spec.ts\", \"!{projectRoot}/**/*.test.ts\", \"!{projectRoot}/**/__tests__/**\", \"!{projectRoot}/vitest*.config.ts\"]",
+      "check": "caching"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "monorepo-doctor": {
+      "source": "santoshyadavdev/monorepo-doctor",
+      "sourceType": "github",
+      "skillPath": "skills/monorepo-doctor/SKILL.md",
+      "computedHash": "1789427ac67d29c4cad433c33cf07dd3a28e7b53f062523609546fda21418a60"
+    }
+  }
+}
