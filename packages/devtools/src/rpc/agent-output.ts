@@ -34,7 +34,10 @@ export function answerText(result: unknown): unknown {
  * and an answer that ends with a fenced file gets the line above the file.
  */
 export function withRedactionNote(text: string): string {
-  const body = text.startsWith(UNTRUSTED) ? text.slice(UNTRUSTED.length).trimStart() : text;
+  // Any leading notice paragraphs (`_..._`), such as a plugin's or a resource's, come off first.
+  const body = (text.startsWith(UNTRUSTED) ? text.slice(UNTRUSTED.length) : text)
+    .trimStart()
+    .replace(/^(?:_[^\n]*_\n\n+)+/, '');
   if (body.startsWith('{') || body.startsWith('[')) return text;
   const count = countRedactedText(text);
   if (!count) return text;
