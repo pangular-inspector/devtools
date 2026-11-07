@@ -116,7 +116,12 @@ The line above the list counts the changes, for example **3 changes recorded, ne
 
 ### Restore a past value
 
-Each entry but the newest has a **Restore** button when the signal is a `signal()`, `linkedSignal()` or `model()` field of the shown component, or, in a root or route graph, a field of a service that injector already created. The page ties a graph node to a field only when the field's own reactive node is that node, and checks it again on every read, so a service signal with the same name and value as a field never gets the field's button. Click it to set the signal back to that entry's value with `.set()`, the same write `pangular:set-signal` makes. A line above the list says what was restored, or why the page refused.
+Each entry but the newest has a **Restore** button if the signal is one of these:
+
+- A `signal()`, `linkedSignal()` or `model()` field of the shown component.
+- In a root or route graph, a field of a service that injector already created.
+
+The page ties a graph node to a field only when the field's own reactive node is that node. It checks this again on every read. A service signal with the same name and value as a field never gets the field's button. Click **Restore** to set the signal back to that entry's value with `.set()`, the same write `pangular:set-signal` makes. A line above the list says what was restored, or why the page refused.
 
 The page writes the value it kept when it recorded the entry, not the copy the panel shows. A value the history cut to fit, or showed with masked secrets, comes back whole, and the value never leaves the page.
 
