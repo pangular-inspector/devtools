@@ -102,6 +102,28 @@ describe('RouteTree What happens', () => {
     expect(el(fixture).querySelector('app-route-preview')).toBeNull();
   });
 
+  it('leaves out the step count when none are listed and says why the preview stopped', async () => {
+    const stopped = '/lazy loads its children lazily and has not loaded yet.';
+    const fixture = mount(() =>
+      Promise.resolve({
+        ...preview,
+        hops: [],
+        matched: false,
+        chain: [{ path: '/lazy' }],
+        steps: [],
+        renderMode: undefined,
+        stopped,
+      }),
+    );
+    await settle(fixture);
+    typeUrl(fixture, '/lazy/x');
+    whatHappens(fixture);
+    await settle(fixture);
+    const message = el(fixture).querySelector('p.message[role="status"]')?.textContent ?? '';
+    expect(message).toContain(`Stops at /lazy. ${stopped}`);
+    expect(message).not.toContain('steps listed');
+  });
+
   it('says why when there is no preview', async () => {
     const fixture = mount(() => Promise.resolve({ error: 'Give a URL, such as /users/42.' }));
     await settle(fixture);

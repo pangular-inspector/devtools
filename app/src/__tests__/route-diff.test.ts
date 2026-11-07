@@ -95,4 +95,18 @@ describe('RouteDiff', () => {
     expect(calls).toEqual([{ pageId: 'p1', a: 1, b: 2 }]);
     expect((fixture.nativeElement as HTMLElement).querySelector('.message')?.textContent).toBe('x');
   });
+
+  it('compares nothing when the asked-for navigation has no earlier one', async () => {
+    const calls: unknown[] = [];
+    const fixture = mount(
+      page([nav(1), nav(2), nav(3)]),
+      (name, arg) => {
+        calls.push(arg);
+        return Promise.resolve({ error: 'x' });
+      },
+      1,
+    );
+    await settle(fixture);
+    expect(calls).toEqual([]);
+  });
 });

@@ -204,7 +204,8 @@ export class RouteDiff {
       }
       const index = navigations.findIndex((nav) => String(nav.id) === b);
       const before = index > 0 ? navigations[index - 1] : undefined;
-      return before ? String(before.id) : defaults(navigations).a;
+      // No earlier navigation: show no comparison rather than a later one as "Earlier".
+      return before ? String(before.id) : null;
     },
   });
 

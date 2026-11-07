@@ -637,11 +637,11 @@ export class RouteTree {
     }
     this.match.set(null);
     this.preview.set(result);
-    this.message.set(
-      result.chain.length
-        ? `${result.matched ? 'Matches' : 'Stops at'} ${result.chain.map((r) => r.path).join(' then ')}, ${result.steps.length} steps listed.`
-        : `${url} matches no route.`,
-    );
+    const steps = result.steps.length ? `, ${plural(result.steps.length, 'step')} listed` : '';
+    const head = result.chain.length
+      ? `${result.matched ? 'Matches' : 'Stops at'} ${result.chain.map((r) => r.path).join(' then ')}${steps}.`
+      : `${url} matches no route.`;
+    this.message.set(result.stopped ? `${head} ${result.stopped}` : head);
   }
 
   async probe() {
