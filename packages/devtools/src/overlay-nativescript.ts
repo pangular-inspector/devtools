@@ -414,6 +414,7 @@ async function startSession(
       const wanted = typeof request === 'string' ? { selector: request } : request;
       if (wanted?.pageId && wanted.pageId !== pageId) return;
       clearFlash();
+      clearNativeHighlight();
       if (!wanted) return;
       const host =
         typeof wanted.id === 'string'
