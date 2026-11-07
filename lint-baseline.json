@@ -12,31 +12,28 @@
     "eslint(no-setter-return)": 1
   },
   "app/src/app.ts": {
-    "pangular(max-lines)": 1912
+    "pangular(max-lines)": 1970
   },
   "app/src/pages/analog-inspector.ts": {
-    "pangular(max-lines)": 2648
+    "pangular(max-lines)": 2743
   },
   "app/src/pages/component-tree.ts": {
-    "pangular(max-lines)": 2750
+    "pangular(max-lines)": 2974
   },
   "app/src/pages/di-inspector.ts": {
-    "pangular(max-lines)": 2235
-  },
-  "app/src/pages/forms-inspector.ts": {
-    "pangular(max-lines)": 1791
+    "pangular(max-lines)": 2742
   },
   "app/src/pages/network-inspector.ts": {
-    "pangular(max-lines)": 2923
+    "pangular(max-lines)": 3033
   },
   "app/src/pages/pipes-inspector.ts": {
-    "pangular(max-lines)": 1545
+    "pangular(max-lines)": 1612
   },
   "app/src/pages/signal-inspector.ts": {
-    "pangular(max-lines)": 2341
+    "pangular(max-lines)": 2547
   },
   "app/src/pages/store-inspector.ts": {
-    "pangular(max-lines)": 2449
+    "pangular(max-lines)": 2836
   },
   "app/src/pages/store-types.ts": {
     "typescript(no-explicit-any)": 1
@@ -106,7 +103,7 @@
     "typescript(no-explicit-any)": 12
   },
   "packages/devtools/src/__tests__/forms-collector.test.ts": {
-    "typescript(no-explicit-any)": 12
+    "typescript(no-explicit-any)": 9
   },
   "packages/devtools/src/__tests__/forms-dotted-keys.test.ts": {
     "typescript(no-explicit-any)": 10
@@ -130,7 +127,7 @@
     "typescript(no-explicit-any)": 2
   },
   "packages/devtools/src/__tests__/forms-webmcp.test.ts": {
-    "typescript(no-explicit-any)": 16
+    "typescript(no-explicit-any)": 3
   },
   "packages/devtools/src/__tests__/forms.test.ts": {
     "typescript(no-explicit-any)": 6
@@ -235,13 +232,13 @@
     "unicorn(prefer-string-starts-ends-with)": 1
   },
   "packages/devtools/src/config.ts": {
-    "pangular(max-lines)": 2390
+    "pangular(max-lines)": 2755
   },
   "packages/devtools/src/console-tap.ts": {
     "unicorn(no-useless-spread)": 1
   },
   "packages/devtools/src/devframe.ts": {
-    "pangular(max-lines)": 2934,
+    "pangular(max-lines)": 3176,
     "unicorn(no-useless-spread)": 1
   },
   "packages/devtools/src/dom-diff.ts": {
@@ -289,7 +286,7 @@
     "unicorn(no-useless-spread)": 2
   },
   "packages/devtools/src/ngrx-collector.ts": {
-    "pangular(max-lines)": 1618,
+    "pangular(max-lines)": 1958,
     "typescript(no-explicit-any)": 1,
     "unicorn(no-useless-fallback-in-spread)": 1,
     "unicorn(no-useless-spread)": 3
@@ -317,6 +314,9 @@
   },
   "packages/devtools/src/plugins-collector.ts": {
     "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/popup.ts": {
+    "pangular(max-lines)": 1517
   },
   "packages/devtools/src/push-delta.ts": {
     "typescript(no-explicit-any)": 4
@@ -359,9 +359,6 @@
   },
   "packages/devtools/src/rpc/errors-register.ts": {
     "typescript(no-explicit-any)": 1
-  },
-  "packages/devtools/src/rpc/get-pipes.ts": {
-    "eslint(no-unused-vars)": 1
   },
   "packages/devtools/src/rpc/get-routes.ts": {
     "unicorn(prefer-string-starts-ends-with)": 2
