@@ -33,6 +33,7 @@ import { HttpHeadersView } from './http-headers';
 import { NetworkWaterfall } from './network-waterfall';
 import { CallCopy } from './network/call-copy';
 import { HarExport } from './network/har-export';
+import { PayloadInsights } from './network/payload-insights';
 import { RuleMatchCount } from './network/rule-match-count';
 import { RulePresets } from './network/rule-presets';
 import { presetRules } from '@pangular-inspector/devtools/internal/http-data';
@@ -323,6 +324,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     HttpHeadersView,
     LimitNote,
     NetworkWaterfall,
+    PayloadInsights,
     RovingList,
     RuleMatchCount,
     RulePresets,
@@ -1303,6 +1305,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             @if (payload.error) {
               <p class="bad" role="alert">{{ payload.error }}</p>
             }
+            <app-payload-insights [size]="payload.size" [entries]="payload.entries" />
             <div class="entries">
               @for (entry of payload.entries; track entry.key) {
                 <details>

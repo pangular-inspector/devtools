@@ -10,6 +10,7 @@ All notable changes to `@pangular-inspector/devtools` are listed here. The forma
 - **Fault rule presets: Offline, Slow 3G and Flaky.** Each adds plain rules for every browser request: a network error, a 2000 ms delay, or a 503 for 30% of requests. Two rule fields make them possible and work on any rule: status `0` fails a request as a network error (an `HttpErrorResponse` with status 0), and `chance` (1 to 99) applies a rule to that share of matching requests. `set-http-rule` takes both.
 - **HAR export.** **Export HAR** in the SSR & HTTP tab saves the timeline as a HAR 1.2 file: the SSR request that served the page, then its server and client calls, with headers and response previews. Values are masked as in the panel.
 - **Copy as fetch and Copy as cURL.** The response preview copies the open call as a `fetch()` statement or a `curl` command, built from the masked copy, so secrets stay `[redacted]`. Nothing is sent.
+- **TransferState payload checks.** The payload section shows the size against a 100 KB budget, the largest entries with size bars, and URLs the transfer cache stored under more than one key. `inspect-transfer-state` adds the same warnings to its key list.
 
 ## 1.0.0
 

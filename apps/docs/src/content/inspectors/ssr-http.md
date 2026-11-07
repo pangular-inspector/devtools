@@ -199,7 +199,13 @@ The Prerender fallback mode can't be forced. The engine reads render modes from 
 
 ### TransferState payload
 
-Each entry in the page's `{APP_ID}-state` script, with its size. The tab decodes HttpClient and Analog cache entries to status, URL and body. It labels `__nghData__` and `__nghDeferData__` as hydration annotations, and Analog server function results seeded during server rendering by function name.
+Each entry in the page's `{APP_ID}-state` script, with its size. Above the entries:
+
+- The payload size against a 100 KB budget. Over it, a warning says that the payload is inlined in the HTML and delays the first render.
+- **Largest entries**: the five biggest entries, by request URL or key, each with its size, its share of the payload and a bar of that share.
+- **Same URL stored more than once**: HttpClient entries that cached one URL under several keys, because their headers, params or body differ, with the key count and total size. Check whether one request could serve them all.
+
+These views only read what the page reported. Nothing is fetched again. The tab decodes HttpClient and Analog cache entries to status, URL and body. It labels `__nghData__` and `__nghDeferData__` as hydration annotations, and Analog server function results seeded during server rendering by function name.
 
 Open an entry to see its cache key, even when the row shows the request URL. **Copy** puts the key on the clipboard. If the `actions.http` write action is on, **Edit in SSR overrides** opens the [SSR overrides](#ssr-overrides) form for that key. The button is hidden for keys longer than 200 characters, the most an override keeps, and for keys with spaces at either end, which an override would trim.
 

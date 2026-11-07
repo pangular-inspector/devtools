@@ -418,3 +418,69 @@ export function curlSnippet(call: SnippetCall, origin?: string): string {
   }
   return [...snippetNotes(call, url, '#'), parts.join(' \\\n  ')].join('\n');
 }
+
+/** The fields of a TransferState entry the payload views read. */
+export interface PayloadEntryLike {
+  key: string;
+  size: number;
+  http?: { url?: string };
+}
+
+/** A TransferState script over this many bytes gets a budget warning: it is inlined in the HTML. */
+export const PAYLOAD_BUDGET_BYTES = 100 * 1024;
+
+export interface PayloadInsights {
+  size: number;
+  budget: number;
+  overBudget: boolean;
+  /** The biggest entries, largest first, each with its share of all entries in percent. */
+  largest: { key: string; label: string; size: number; share: number }[];
+  /** HttpClient entries that cached the same URL under more than one key. */
+  sameUrl: { url: string; keys: string[]; size: number }[];
+}
+
+/**
+ * Size and repeat checks for a page's TransferState payload: whether it is
+ * over the budget, its largest entries, and URLs the transfer cache stored
+ * more than once (other headers, params or bodies give other keys). Only
+ * reads what the page reported; nothing is fetched.
+ */
+export function payloadInsights(
+  payload: { size: number; entries: readonly PayloadEntryLike[] },
+  options: { budget?: number; top?: number } = {},
+): PayloadInsights {
+  const budget = options.budget ?? PAYLOAD_BUDGET_BYTES;
+  const total = payload.entries.reduce((sum, e) => sum + Math.max(e.size, 0), 0);
+  const largest = [...payload.entries]
+    .filter((e) => e.size > 0)
+    .sort((a, b) => b.size - a.size)
+    .slice(0, options.top ?? 5)
+    .map((e) => ({
+      key: e.key,
+      label: e.http?.url ?? e.key,
+      size: e.size,
+      share: total ? Math.round((e.size / total) * 1000) / 10 : 0,
+    }));
+  const byUrl = new Map<string, PayloadEntryLike[]>();
+  for (const entry of payload.entries) {
+    const url = entry.http?.url;
+    if (!url) continue;
+    byUrl.set(url, [...(byUrl.get(url) ?? []), entry]);
+  }
+  const sameUrl = [...byUrl]
+    .filter(([, entries]) => entries.length > 1)
+    .map(([url, entries]) => ({
+      url,
+      keys: entries.map((e) => e.key),
+      size: entries.reduce((sum, e) => sum + e.size, 0),
+    }))
+    .sort((a, b) => b.size - a.size);
+  return { size: payload.size, budget, overBudget: payload.size > budget, largest, sameUrl };
+}
+
+/** A byte count for people: `812 B`, `14.2 KB`, `1.3 MB`. */
+export function byteText(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Number((bytes / 1024).toFixed(1))} KB`;
+  return `${Number((bytes / 1024 / 1024).toFixed(1))} MB`;
+}
