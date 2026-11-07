@@ -56,6 +56,23 @@ describe('NavigationStream', () => {
     expect(stream.cursor).toBe(3);
   });
 
+  it('still lists a page whose entries were displaced, so clearing it drops its signatures', () => {
+    const stream = new NavigationStream();
+    stream.record('a', [nav(1)]);
+    stream.record(
+      'b',
+      Array.from({ length: MAX_STREAM_ENTRIES }, (_, i) => nav(i + 1)),
+    );
+    expect(stream.read(0, 'a').entries).toEqual([]);
+    // The displaced navigation's signature is still kept, so the same report is not new.
+    expect(stream.record('a', [nav(1)])).toBe(0);
+    expect(stream.pageIds()).toContain('a');
+    stream.clear('a');
+    expect(stream.pageIds()).not.toContain('a');
+    // With the signature gone, the page's navigation counts as new again.
+    expect(stream.record('a', [nav(1)])).toBe(1);
+  });
+
   it('starts over for a cursor from before the server started', () => {
     const stream = new NavigationStream();
     stream.record('a', [nav(1)]);

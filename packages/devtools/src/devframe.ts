@@ -1032,7 +1032,7 @@ const pangular = defineDevframe({
     const routerPages = new Map<string, RouterPage>();
     /** Every navigation the pages report, numbered, for pangular:follow-navigations. */
     const navigationStream = new NavigationStream();
-    /** Drops the stream entries of pages that expired or were forgotten. */
+    /** Drops the stream entries and signatures of pages that expired or were forgotten. */
     const dropGoneStreamPages = () => {
       for (const id of navigationStream.pageIds()) {
         if (!routerPages.has(id)) navigationStream.clear(id);

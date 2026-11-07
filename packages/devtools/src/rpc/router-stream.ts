@@ -99,9 +99,14 @@ export class NavigationStream {
     }
   }
 
-  /** The pages that have navigations in the stream. */
+  /**
+   * The pages the stream holds anything for: navigations, or the signatures of
+   * navigations that later entries displaced, which still hold their URLs.
+   */
   pageIds(): Set<string> {
-    return new Set(this.entries.map((entry) => entry.pageId));
+    const ids = new Set(this.entries.map((entry) => entry.pageId));
+    for (const key of this.signatures.keys()) ids.add(key.slice(0, key.indexOf('\u0000')));
+    return ids;
   }
 
   /** The latest cursor: what an agent passes to start following from now. */
