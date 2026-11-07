@@ -1,13 +1,4 @@
-import {
-  Component,
-  computed,
-  ElementRef,
-  input,
-  output,
-  signal,
-  untracked,
-  viewChild,
-} from '@angular/core';
+import { Component, computed, input, output, signal, untracked, viewChild } from '@angular/core';
 import { time } from '../format';
 import { Select, type SelectOption } from '../ui/select';
 import { FORMS_STYLES, type FormEvent } from './forms-types';
