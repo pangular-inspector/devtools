@@ -265,6 +265,16 @@ The server plugins themselves go in `serverPlugins`, an option of the Express hu
 
 It is off by default because it starts processes on your machine. A value other than `true` or `false` prints a warning and keeps it off.
 
+### LAN address
+
+`lanAddress` is an option of the Vite plugin only, and `--lan-address` the matching flag of `pangular dev`. Like `terminals`, it is not part of `PangularConfig`, so `createPangular()` and the CLI config file don't take it.
+
+| Option       | Default | What it does                                                                                                                                                                                                                                                        |
+| ------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lanAddress` | `false` | `true` injects the dev server's devtools URL on this machine's first private IPv4 address as `__PANGULAR_LAN_URL__`. An address such as `'192.168.1.20'` uses that one. Needs `allowLan` in effect. See [Inject the LAN address](./vite.md#inject-the-lan-address). |
+
+A loopback address, `0.0.0.0` or any other value prints a warning and keeps it off. The CLI flag only prints the URL and the define for your build. See [Inject the LAN address](./cli.md#inject-the-lan-address).
+
 ### Lint rules
 
 | Option              | Default | What it does                                                                                                                |

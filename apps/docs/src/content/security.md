@@ -53,6 +53,8 @@ Other requests get `403` with the message "Pangular Inspector only answers reque
 
 With `allowLan: true`, the plugin also answers other machines, such as a phone on Wi-Fi, whose origin is in `allowedOrigins`. It needs the one-time code on, and ignores `allowLan` with `auth: false`. See [Other devices on your network](./getting-started/vite.md#other-devices-on-your-network).
 
+`lanAddress` injects the dev server's address on your network into the app's development build, for a phone app. It is off by default and grants no access: the plugin injects an address only when `allowLan` is in effect and `server.host` puts Vite on the network, so the gate, the one-time code and `allowedOrigins` decide who connects, as without it. A production build gets no address. See [Inject the LAN address](./getting-started/vite.md#inject-the-lan-address).
+
 If you open the dev server through another hostname that points to your machine (for example `myapp.test`), list it in Vite's `server.allowedHosts` and the devtools trust it too, as `Host` and as origin. Add other origins with `allowedOrigins`:
 
 ```ts {7-8}
@@ -137,7 +139,7 @@ A list keeps loopback origins and the Pangular Inspector extension. So does a cu
 
 ### Standalone CLI
 
-The CLI server binds to `localhost` and asks for a one-time code. `--host` changes the bind address and `--no-auth` turns the code off. `--allowed-origin` adds an origin to the loopback origins it accepts, and `--auth-token` adds [pairing tokens](#pairing-tokens). See [Standalone CLI](./getting-started/cli.md).
+The CLI server binds to `localhost` and asks for a one-time code. `--host` changes the bind address and `--no-auth` turns the code off. `--allowed-origin` adds an origin to the loopback origins it accepts, and `--auth-token` adds [pairing tokens](#pairing-tokens). `--lan-address` only prints the server's network URL for a device build, and changes none of these. See [Standalone CLI](./getting-started/cli.md).
 
 It runs the same request gate as the Vite plugin and the Express hub in front of every route, the panel and `__connection.json` included: a foreign `Origin`, `Origin: null`, a `Host` that is not this machine and a cross-site request without `Origin` get a `403`. With `--host` set to a network address, other machines get through when their `Origin` is allowed or they send none, such as a device app, and their `Host` is an IP address, a `.local` name or an allowed host.
 
