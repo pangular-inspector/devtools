@@ -776,6 +776,11 @@ const READ_PLAN = [
   ['lint-routes', '/examples/routes/details', () => ({})],
   ['router-config', '/examples/routes/details', () => ({})],
   ['explain-navigation', '/examples/routes/details', () => ({ format: 'repro' })],
+  ['diff-navigations', '/examples/routes/details', () => ({})],
+  ['follow-navigations', '/examples/routes/details', () => ({})],
+  ['follow-navigations', '/examples/routes/details', () => ({ since: 0, waitMs: 0 })],
+  ['preview-navigation', '/examples/routes/details', () => ({ url: '/destinations/kyoto' })],
+  ['preview-navigation', '/examples/routes/details', () => ({ url: '/trips' })],
 
   ['inspect-forms', '/examples/forms', () => ({})],
   ['inspect-forms', '/examples/forms', (ctx) => ({ form: ctx.formIds[0] })],

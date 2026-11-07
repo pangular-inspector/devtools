@@ -361,6 +361,31 @@ describe('ssrRequestStory', () => {
     expect(text).toContain('POST `/api/quote`');
   });
 
+  it('names a mismatch by its component class only when the page read one', () => {
+    const pages = [
+      page({
+        hydration: {
+          enabled: true,
+          nodes: { hydrated: 4, skipped: 0, mismatched: 3 },
+          mismatches: [
+            { component: 'ProductCard', isClass: true },
+            { component: 'app-card' },
+            { component: '#text' },
+          ],
+          skipHydrationHosts: [],
+          warnings: [],
+          warningsCaptured: true,
+        },
+      }),
+    ];
+    const text = explainSsrRequestText([ssrRequest()], [], pages, {});
+    expect(text).toContain('Mismatch in component `ProductCard`');
+    expect(text).toContain('Mismatch at element `<app-card>`');
+    expect(text).toContain('Mismatch at a `#text` node');
+    expect(text).not.toContain('Mismatch in `app-card`');
+    expect(text).not.toContain('Mismatch in `#text`');
+  });
+
   it('explains an unknown id and an empty list', () => {
     expect(explainSsrRequestText([], [], [], {})).toContain('devtools.ssrMiddleware');
     expect(explainSsrRequestText([ssrRequest()], [], [], { id: 'nope' })).toContain(
