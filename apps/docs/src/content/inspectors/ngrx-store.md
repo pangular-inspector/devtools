@@ -290,7 +290,7 @@ Use `provideStore()` or `StoreModule.forRoot()`. The overlay stops looking after
 
 ### State changed in place
 
-The tab rereads a store only when its state object is a new one, as NgRx creates on every change. Code that changes a nested object in place, without `patchState` or a reducer, leaves the tab on the old values until the next real change.
+The tab can miss a change made in place to a nested object, without `patchState` or a reducer. It may show the old values until something else rebuilds the report, such as the next real change or a recorded action. Use `patchState`, or a reducer that returns new objects.
 
 ### Redaction
 
