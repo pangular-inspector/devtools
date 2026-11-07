@@ -131,6 +131,7 @@ function isTree(value: unknown): value is InjectorNode[] {
   selector: 'app-di-inspector',
   imports: [
     SearchField,
+    Splitter,
     AngularUnavailable,
     NgTemplateOutlet,
     ProviderValue,

@@ -296,6 +296,28 @@ describe('injector tree page selection', () => {
   });
 });
 
+describe('injector detail splitter', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    localStorage.clear();
+  });
+
+  it('puts a keyboard splitter between the tree and the detail that sizes the detail', async () => {
+    localStorage.setItem('pangular-pref:pane:injectors', '500');
+    const fixture = await render({ roots: [node('shared')], environment: [] });
+    const host = fixture.nativeElement as HTMLElement;
+    const bar = host.querySelector<HTMLElement>('.layout > app-splitter')!;
+    expect(bar.getAttribute('role')).toBe('separator');
+    expect(bar.getAttribute('aria-label')).toBe('Resize the injector detail');
+    expect(bar.getAttribute('aria-valuenow')).toBe('500');
+    const layout = host.querySelector<HTMLElement>('.layout')!;
+    expect(layout.style.getPropertyValue('--detail-size')).toBe('500px');
+    bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    await fixture.whenStable();
+    expect(layout.style.getPropertyValue('--detail-size')).toBe('516px');
+  });
+});
+
 describe('injector search box focus', () => {
   afterEach(() => {
     document.body.innerHTML = '';

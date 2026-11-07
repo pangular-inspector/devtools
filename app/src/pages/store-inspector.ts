@@ -108,6 +108,7 @@ const CLASSIC_KINDS = new Set([
   selector: 'app-store-inspector',
   imports: [
     SearchField,
+    Splitter,
     AngularUnavailable,
     LimitNote,
     RovingList,
