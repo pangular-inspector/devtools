@@ -37,6 +37,8 @@ export function createFlagStore(definitions: Record<string, FlagDefinition>): Fl
   const listeners = new Set<() => void>();
   const known = (name: string) => Object.hasOwn(definitions, name);
   const notify = () => {
+    // A copy: a listener may unsubscribe while it runs.
+    // oxlint-disable-next-line unicorn/no-useless-spread
     for (const listener of [...listeners]) listener();
   };
   const valueOf = (name: string) => overrides.get(name) ?? definitions[name]!.default;

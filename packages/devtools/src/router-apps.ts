@@ -124,6 +124,8 @@ export class RouterApps {
     const found = findRouterRoots(ng, live).slice(0, MAX_ROUTER_APPS);
     const main = found.find((entry) => entry.router === primary);
     if (!main) {
+      // A copy: drop() removes each app from this.others.
+      // oxlint-disable-next-line unicorn/no-useless-spread
       for (const app of [...this.others]) this.drop(app);
       this.primary = null;
       return;
