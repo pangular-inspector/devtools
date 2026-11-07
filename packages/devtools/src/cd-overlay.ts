@@ -49,14 +49,17 @@ export function attachChangeDetection(
   my: RpcScope,
   pageId: string,
   getNg: () => unknown,
-  maxCycles: number,
+  /** `limits.cdCycles`, or it with `limits.cdSlowMs`. */
+  cdLimits: number | { cdCycles: number; cdSlowMs?: number },
   tickMs: () => number = () => 0,
   /** Whether a panel or an agent watches (`page-lease.ts`); an idle page only keeps itself alive. */
   active: () => boolean = () => true,
   /** Set on a platform without a DOM: no live views, and no DOM updates to tell wasted checks by. */
   platform?: CdPlatform,
 ) {
-  const recorder = createCdRecorder({ maxCycles });
+  const maxCycles = typeof cdLimits === 'number' ? cdLimits : cdLimits.cdCycles;
+  const slowMs = typeof cdLimits === 'number' ? undefined : cdLimits.cdSlowMs;
+  const recorder = createCdRecorder({ maxCycles, ...(slowMs ? { slowMs } : {}) });
   const diagnosis = createCdDiagnosis({
     getNg,
     maxCycles,

@@ -2,7 +2,7 @@ import type { AngularPageInfo } from '../config.ts';
 import { unsupportedToolText } from './angular-pages.ts';
 import type { CdReport } from '../cd-overlay.ts';
 import type { CdOptions } from '../config.ts';
-import { cdCauseText, sanitizeCdRecording, toCdOptions } from '../cd-data.ts';
+import { cdCauseText, cdSlowMs, sanitizeCdRecording, toCdOptions } from '../cd-data.ts';
 import { redactCdCause, redactCdDiagnosis } from './cd-redact.ts';
 import type { CdComponentStat, CdCycle } from '../cd-recorder.ts';
 import { droppedNote } from '../timeline-limits.ts';
@@ -306,11 +306,13 @@ export function changeDetectionText(
   const slowest = [...page.components].sort((a, b) => b.ms - a.ms).slice(0, limit);
   const busiest = [...page.components].sort((a, b) => b.checks - a.checks).slice(0, limit);
   const totalMs = page.cycles.reduce((sum, c) => sum + c.ms, 0);
+  const slowMs = cdSlowMs(page.slowMs);
+  const slowCount = page.cycles.filter((c) => c.slow).length;
   const recent = page.cycles.slice(-limit).reverse();
   const line = (c: CdComponentStat) =>
     `- ${code(c.name)}: ${c.checks} check(s) in ${c.cycles} cycle(s), ${ms(c.ms)} in its own template and hooks (slowest ${ms(c.maxMs)})`;
   const cycleLine = (c: CdCycle) =>
-    `- #${c.id}: ${ms(c.ms)}, ${c.checks} component check(s), ${c.passes} pass(es)${c.cause ? `, started by ${code(cdCauseText(c.cause))}` : ''}${c.unchanged ? `, ${c.unchanged} of ${c.refreshed ?? c.unchanged} refreshed check(s) changed nothing` : ''}${c.trigger ? `, after output in ${code(c.trigger)}${c.outputMs ? ` (${ms(c.outputMs)})` : ''}` : ''}${c.hookMs ? `, hooks ${ms(c.hookMs)}` : ''}${c.afterRenderMs ? `, afterRender ${ms(c.afterRenderMs)}` : ''}${
+    `- #${c.id}: ${ms(c.ms)}${c.slow ? ' (slow)' : ''}, ${c.checks} component check(s), ${c.passes} pass(es)${c.cause ? `, started by ${code(cdCauseText(c.cause))}` : ''}${c.unchanged ? `, ${c.unchanged} of ${c.refreshed ?? c.unchanged} refreshed check(s) changed nothing` : ''}${c.trigger ? `, after output in ${code(c.trigger)}${c.outputMs ? ` (${ms(c.outputMs)})` : ''}` : ''}${c.hookMs ? `, hooks ${ms(c.hookMs)}` : ''}${c.afterRenderMs ? `, afterRender ${ms(c.afterRenderMs)}` : ''}${
       c.components.length
         ? `; slowest ${c.components
             .slice(0, 3)
@@ -318,5 +320,5 @@ export function changeDetectionText(
             .join(', ')}`
         : ''
     }`;
-  return `${UNTRUSTED}\n\n${status} Page ${code(page.pageId)}: ${page.cycles.length} cycle(s) kept, ${ms(totalMs)} in total. Times are self times from Angular's profiler in a development build, so they are higher than in production.\n\n**Slowest components**\n${slowest.map(line).join('\n')}\n\n**Most often checked**\n${busiest.map(line).join('\n')}${cdTimingText(page, limit)}\n\n**Latest cycles**, newest first\n${recent.map(cycleLine).join('\n')}${droppedNote(page.dropped, 'cycles', 'cdCycles')}${cdCapsNote(page)}`;
+  return `${UNTRUSTED}\n\n${status} Page ${code(page.pageId)}: ${page.cycles.length} cycle(s) kept, ${ms(totalMs)} in total, ${slowCount} slow (over ${ms(slowMs)}, \`limits.cdSlowMs\`). Times are self times from Angular's profiler in a development build, so they are higher than in production.\n\n**Slowest components**\n${slowest.map(line).join('\n')}\n\n**Most often checked**\n${busiest.map(line).join('\n')}${cdTimingText(page, limit)}\n\n**Latest cycles**, newest first\n${recent.map(cycleLine).join('\n')}${droppedNote(page.dropped, 'cycles', 'cdCycles')}${cdCapsNote(page)}`;
 }

@@ -60,6 +60,7 @@ export const PANGULAR_LIMITS = {
   httpCalls: { default: 200, min: 10, max: 2000 },
   changeLog: { default: 200, min: 10, max: 2000 },
   cdCycles: { default: 200, min: 10, max: 2000 },
+  cdSlowMs: { default: 16, min: 1, max: 1000 },
   capacitorCalls: { default: 200, min: 10, max: 2000 },
   idleAfterMs: { default: 60_000, min: 0, max: 600_000 },
 } as const;
@@ -204,6 +205,12 @@ export interface PangularConfig {
     changeLog?: number;
     /** Change detection cycles kept per page while recording. Default 200. */
     cdCycles?: number;
+    /**
+     * A change detection cycle longer than this, in ms, counts as slow: the
+     * recording flags it and the chart draws it over the line. Default 16
+     * (about one frame at 60 frames per second), from 1 to 1000.
+     */
+    cdSlowMs?: number;
     /** Capacitor plugin calls kept per page and on the server. Default 200. */
     capacitorCalls?: number;
     /**
@@ -1778,6 +1785,7 @@ const LIMIT_LABEL: Record<PangularLimit, (value: number) => string> = {
   httpCalls: (value) => `${value} HTTP calls`,
   changeLog: (value) => `${value} NgRx changes`,
   cdCycles: (value) => `${value} change detection cycles`,
+  cdSlowMs: (value) => `slow cycles over ${value} ms`,
   capacitorCalls: (value) => `${value} Capacitor plugin calls`,
   idleAfterMs: (value) =>
     value ? `idle ${value / 1000} s after the last agent call` : 'never idle',
@@ -1881,6 +1889,8 @@ export interface CdCycle {
   refreshed?: number;
   /** Refreshed checks where nothing the component renders changed. */
   unchanged?: number;
+  /** True when the cycle took longer than the recording's `slowMs`. */
+  slow?: boolean;
 }
 
 /**
@@ -2044,6 +2054,8 @@ export interface CdRecording {
   cycles: CdCycle[];
   /** Older cycles removed at `limits.cdCycles`. */
   dropped: number;
+  /** Cycles longer than this, in ms, are slow (`limits.cdSlowMs`). Missing from older pages: read it as 16. */
+  slowMs?: number;
   components: CdComponentStat[];
   /**
    * Component classes checked but left out of `components`: past the 100

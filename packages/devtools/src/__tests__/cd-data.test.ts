@@ -170,7 +170,7 @@ describe('change detection recording files', () => {
     if (!parsed.ok) return;
     expect(parsed.pageId).toBe('p1');
     expect(parsed.exportedAt).toBe(5);
-    expect(parsed.recording).toEqual({ ...recording(), recording: false, hosts: {} });
+    expect(parsed.recording).toEqual({ ...recording(), recording: false, hosts: {}, slowMs: 16 });
   });
 
   it('refuses a file over the limit in UTF-8 bytes, not string length', () => {

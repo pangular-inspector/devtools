@@ -2,6 +2,12 @@
 
 All notable changes to `@pangular-inspector/devtools` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com).
 
+## Unreleased
+
+### Features
+
+- `limits.cdSlowMs` (default 16 ms) sets when a change detection cycle counts as slow. The recording flags cycles over it, the `change-detection` agent tool counts and marks them, and the panel chart draws its budget line there instead of at a fixed 16.6 ms.
+
 ## 1.0.0
 
 Most setups need changes when they come from 0.0.7, so read **Upgrading from 0.0.7** first.
