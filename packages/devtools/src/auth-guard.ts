@@ -69,7 +69,7 @@ export class CodeGuard {
   private readonly options: Required<Omit<CodeGuardOptions, 'now' | 'warn'>>;
   private readonly now: () => number;
   private readonly warn: (message: string) => void;
-  private readonly clients = new WeakMap<object, ClientState>();
+  private clients = new WeakMap<object, ClientState>();
   private recent: number[] = [];
   private failures = 0;
   private warnedWindowAt = -Infinity;
@@ -126,6 +126,14 @@ export class CodeGuard {
     this.clients.delete(client);
     this.failures = 0;
     this.recent = [];
+  }
+
+  /** Forgets every wrong code and unlocks the exchange: the user rotated the tokens and the code. */
+  reset(): void {
+    this.clients = new WeakMap();
+    this.failures = 0;
+    this.recent = [];
+    this.locked = false;
   }
 }
 
@@ -214,6 +222,14 @@ const guards = new WeakMap<object, CodeGuard>();
  */
 export function codeGuardLocked(ctx: unknown): boolean {
   return guards.get(ctx as object)?.locked ?? false;
+}
+
+/**
+ * Unlocks the context's code guard. Only `pangular token --rotate` calls it,
+ * which the user runs on this machine, so a guesser can't unlock it.
+ */
+export function resetCodeGuard(ctx: unknown): void {
+  guards.get(ctx as object)?.reset();
 }
 
 /**

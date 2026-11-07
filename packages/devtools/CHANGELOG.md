@@ -10,6 +10,7 @@ All notable changes to `@pangular-inspector/devtools` are listed here. The forma
 - The server keeps at most 256 KB of JSON for each NgRx store's state. Past it, the largest slices show `[too large: N KB]`, so one huge slice can't fill the server's memory or the panel.
 - `withPangular({ transferCache })` takes Angular's `HttpTransferCacheOptions` and passes them to the transfer cache that `provideClientHydration()` sets up. The SSR & HTTP tab uses them to explain each transfer cache outcome, including a new **Filter** reason.
 - The Dashboard has a **Security** block: whether the one-time code is on or locked, how many trusted tokens there are and when they expire, how many pairing tokens the server accepts, and who may reach the server (reach, allowed origins and hosts). The panel reads it with the `security-status` RPC, which answers trusted clients only and never carries a token or the code.
+- `pangular token --rotate` drops every trusted token of the project and prints a new one-time code from the running server (the CLI, the Vite plugin or the Express hub), which also ends a lock after too many wrong codes. `pangular token` prints how many tokens there are.
 
 ## 1.0.0
 

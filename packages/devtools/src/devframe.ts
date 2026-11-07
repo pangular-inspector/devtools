@@ -300,6 +300,7 @@ import { registerAuthTokens } from './auth-tokens.ts';
 import { registerCodeGuard } from './auth-guard.ts';
 import { expireAuthTokens, protectAuthFile, scopeAuthStore } from './auth-store.ts';
 import { securityStatusHandler, type PangularSecurityHost } from './security-status.ts';
+import { watchTokenRotation } from './auth-rotate.ts';
 import {
   BROWSER_TOOLS_CHANGED,
   BROWSER_TOOLS_STATE,
@@ -4851,6 +4852,8 @@ function guardAuth(ctx: Parameters<typeof pangular.setup>[0]): void {
     console.warn('[pangular] The one-time code guard could not be registered.');
   }
   expireAuthTokens(ctx, protect);
+  // `pangular token --rotate` asks through the token folder (`auth-rotate.ts`).
+  if (dir) watchTokenRotation(ctx, dir);
 }
 
 /**
