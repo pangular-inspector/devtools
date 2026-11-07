@@ -284,7 +284,6 @@ Each tool has a safety tier: `read`, `action` or `destructive`. The server marks
 | `record-guards`           | `action`      | [Act on the router](./tools.md#act-on-the-router)                                 |
 | `ngrx-dispatch`           | `action`      | [Dispatch an action](./tools.md#dispatch-an-action)                               |
 | `ngrx-restore`            | `action`      | [Restore a state](./tools.md#restore-a-state)                                     |
-| `ngrx-store-devtools`     | `action`      | [Change the Store DevTools history](./tools.md#change-the-store-devtools-history) |
 | `tanstack-run-query`      | `action`      | [Invalidate or refetch a query](./tools.md#invalidate-or-refetch-a-query)         |
 | `run-form-action`         | `action`      | [Act on a form](./tools.md#act-on-a-form)                                         |
 | `fill-form`               | `action`      | [Act on a form](./tools.md#act-on-a-form)                                         |
@@ -301,6 +300,7 @@ Each tool has a safety tier: `read`, `action` or `destructive`. The server marks
 | `audit`                   | `action`      | [audit](./tools.md#audit)                                                         |
 | `clear-recordings`        | `destructive` | [Clear recordings](./tools.md#clear-recordings)                                   |
 | `analog-run-api`          | `destructive` | [Call a server route](./tools.md#call-a-server-route)                             |
+| `ngrx-store-devtools`     | `destructive` | [Change the Store DevTools history](./tools.md#change-the-store-devtools-history) |
 
 Your client can ask you before it runs them. To drop them from the server, set `agent.readOnly`, which keeps only the `read` tools. `audit` stays without its `axe` argument, as a `read` tool. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 

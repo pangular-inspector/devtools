@@ -119,7 +119,7 @@
     "navigate": "action",
     "ngrx-dispatch": "action",
     "ngrx-restore": "action",
-    "ngrx-store-devtools": "action",
+    "ngrx-store-devtools": "destructive",
     "probe-route": "action",
     "record-change-detection": "action",
     "record-guards": "action",

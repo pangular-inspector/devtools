@@ -1128,10 +1128,11 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
     page: true,
   },
   // Toggle, jump, commit, reset and pause in the Store DevTools history.
+  // Destructive: commit and reset erase the history they act on.
   'ngrx-store-devtools': {
     kind: 'tool',
     inspectors: ['ngrx'],
-    safety: 'action',
+    safety: 'destructive',
     actions: ['ngrx'],
     page: true,
   },
