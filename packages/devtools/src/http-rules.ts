@@ -52,6 +52,8 @@ export interface HttpCall {
   requestHeaders?: HeaderRecord;
   /** The response headers the app could read, redacted before they leave the page. */
   responseHeaders?: HeaderRecord;
+  /** Made with the page's `fetch()` directly, not through `HttpClient` (`fetch-collector.ts`). */
+  nativeFetch?: true;
 }
 
 export interface HttpRegistry {
@@ -72,6 +74,14 @@ export interface HttpRegistry {
   rulesOff?: boolean;
   /** Browser only: navigation start until the app first became stable. */
   stableMs?: number;
+  /**
+   * Browser only: `METHOD url` of the `HttpClient` requests `withPangular()`
+   * is recording, so the native fetch watcher skips the `fetch()` that
+   * Angular's `FetchBackend` makes for them.
+   */
+  clientPending?: Map<string, number>;
+  /** Browser only: the page's `fetch` before the native fetch watcher wrapped it. */
+  nativeFetch?: typeof fetch;
 }
 
 export const MAX_CALLS = 200;
@@ -197,6 +207,7 @@ export function sanitizeCalls(input: unknown, max = MAX_CALLS): HttpCall[] {
       error: str(c.error, 500),
       preview: str(c.preview, 2001),
       ...headerFields(c.requestHeaders, c.responseHeaders),
+      ...(c.nativeFetch === true ? { nativeFetch: true as const } : {}),
     });
   }
   return calls;

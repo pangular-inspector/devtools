@@ -262,3 +262,26 @@ describe('redirected calls', () => {
     expect(text).toMatch(/redirected to `\/login\?token=[^`]*`/);
   });
 });
+
+describe('list-http-calls with native fetch calls', () => {
+  it('flags a native fetch() call and not an HttpClient call', () => {
+    const text = listHttpCallsText(
+      {
+        serverCalls: [],
+        pages: [
+          page({
+            calls: [
+              call({ id: 'n1', url: '/api/native', nativeFetch: true }),
+              call({ id: 'h1', url: '/api/client' }),
+            ],
+          }),
+        ],
+      },
+      { page: 'p1' },
+      NOW,
+    );
+    const line = (url: string) => text.split('\n').find((l) => l.includes(url)) ?? '';
+    expect(line('/api/native')).toContain('native fetch');
+    expect(line('/api/client')).not.toContain('native fetch');
+  });
+});

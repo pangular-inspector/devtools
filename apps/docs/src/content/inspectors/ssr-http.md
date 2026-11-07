@@ -118,8 +118,9 @@ The tab checks the TransferState after each server response, so **cached** is wh
 
 ### HTTP timeline
 
-Every `HttpClient` request, tagged **SSR** or **Client**. Each row shows the method, the URL, the page that made it, the status, the time, and notes:
+Every `HttpClient` request, tagged **SSR** or **Client**, and the page's own `fetch()` calls. Each row shows the method, the URL, the page that made it, the status, the time, and notes:
 
+- **fetch()**: the page called `fetch()` itself, not through `HttpClient`, for example a library or a plain `await fetch(...)`. See [Native fetch calls](#native-fetch-calls).
 - **transfer cache**: the TransferState cache answered it. Only client requests get it, because the server never reads the cache; a server call shows its [transfer cache outcome](#transfer-cache-outcome) instead. A client request counts as a hit only when its method, response type, URL, body and params match the entry Angular stored, and Angular would cache it: no `transferCache: false`, auth headers, credentials or no-cache request.
 - **delayed N ms**: a fault rule held it back.
 - **mocked**: a fault rule answered it with a status below 400.
@@ -141,6 +142,12 @@ If nothing matches, **Clear filters** resets all three. While the filters hide t
 **Table** and **Waterfall** above the timeline switch its view. **Table** lists every call. **Waterfall** shows the page's client calls grouped by navigation, newest first. A navigation starts each time the page URL a call was made on changes. Each row has the method and path, a bar that starts at the call's offset in its navigation and spans its duration, and the status, offset and duration, such as `503 · +10 ms · 8 ms`. The status reads `ERR` for a network error, `cancelled` for a cancelled call, and adds `cache` for a transfer cache hit; failed calls and cache hits get a tinted label. The bar is the accent color for a network call, green for a transfer cache hit, red for a failed call and gray for a cancelled one. The count above the view reads how many client calls the waterfall shows out of all calls, such as **3 client calls of 7**. The rows are one `Tab` stop, and the arrow keys, `Home` and `End` move between them. The filters apply to both views, and the waterfall leaves out SSR calls. Click a row to open the same preview as in the table.
 
 Click a row for a response preview. The preview opens under the timeline and takes focus. A JSON body is indented by 2 spaces. Other text, and a body clipped at 2000 characters, shows as recorded. The preview is redacted before it reaches the panel, so masked values stay masked. Under the body, **Request headers** and **Response headers** list the call's headers. Request headers are the ones the call had when it reached `withPangular()`, so headers that later interceptors add are not in the list. Response headers are the ones the app could read; a cross-origin response shows only the headers CORS exposes. `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` are always masked, whatever `redaction.unmask` says. Names that look secret or match `redaction.secretNames`, and JWTs and bearer tokens in any value, are masked too. The interceptor keeps only a reference to the headers Angular already built. The overlay reads and masks them when it sends the call, so a page without the devtools copies nothing. **Copy** puts the shown preview on the clipboard. **Mock this request** fills in the [fault rule form](#fault-injection) from the call. **Close** or `Escape` returns focus to the row. A long timeline scrolls inside its own box. The timeline shows the page's client calls and the SSR calls made while rendering its first URL. **Clear timeline** empties it.
+
+### Native fetch calls
+
+The overlay also records the page's own `fetch()` calls, marked **fetch()** in the timeline and `native fetch` in `list-http-calls`. It wraps `window.fetch` once and only looks: the app gets the original response, and the body is never read, so these calls have no response preview. Their headers are captured and masked like those of `HttpClient` calls. `providePangularHttp()` starts recording at bootstrap; without it, recording starts when the overlay connects, so calls made before then are missing.
+
+An `HttpClient` request on `withFetch()` that `withPangular()` records is listed once, as an `HttpClient` call: while it is in flight, a `fetch()` with the same method and URL is taken as Angular's own. A plain `fetch()` to that URL at the same moment is left out too. Calls to the devtools' own paths (`/__devframes/`) and Vite's module requests are never recorded. Fault rules and SSR overrides don't apply to native calls, and the server's own `fetch()` calls during a render are not recorded.
 
 ### Fault injection
 
@@ -205,17 +212,17 @@ Open an entry to see its cache key, even when the row shows the request URL. **C
 
 ### What each part needs
 
-| Part                  | Needs                                                                                                                   |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| SSR requests          | `ssrMiddleware` or `withPangularSsr()`, plus `withPangular()` for the server calls and the overlay for the linked page. |
-| Router timings        | `ssrMiddleware` and `providePangularHttp()`.                                                                            |
-| HTTP timeline         | `withPangular()` and the overlay.                                                                                       |
-| Fault injection       | `withPangular()`.                                                                                                       |
-| Hydration stats       | The overlay.                                                                                                            |
-| Hydration warnings    | `providePangularHttp()`.                                                                                                |
-| App stable after      | `providePangularHttp()`.                                                                                                |
-| SSR overrides         | `ssrMiddleware` and `actions.http`. See [SSR overrides](#ssr-overrides) for each kind.                                  |
-| TransferState payload | The overlay, on a server-rendered page.                                                                                 |
+| Part                  | Needs                                                                                                                      |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| SSR requests          | `ssrMiddleware` or `withPangularSsr()`, plus `withPangular()` for the server calls and the overlay for the linked page.    |
+| Router timings        | `ssrMiddleware` and `providePangularHttp()`.                                                                               |
+| HTTP timeline         | `withPangular()` and the overlay. Native `fetch()` calls need the overlay only, or `providePangularHttp()` from bootstrap. |
+| Fault injection       | `withPangular()`.                                                                                                          |
+| Hydration stats       | The overlay.                                                                                                               |
+| Hydration warnings    | `providePangularHttp()`.                                                                                                   |
+| App stable after      | `providePangularHttp()`.                                                                                                   |
+| SSR overrides         | `ssrMiddleware` and `actions.http`. See [SSR overrides](#ssr-overrides) for each kind.                                     |
+| TransferState payload | The overlay, on a server-rendered page.                                                                                    |
 
 ### Development builds
 

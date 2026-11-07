@@ -27,10 +27,11 @@ import { redactMessage } from './forms-privacy.ts';
 import { transferCacheKeys } from './http-cache-key.ts';
 import { cacheSkipReason, requestSkipReason, type CacheSkip } from './http-cache-reason.ts';
 import { isHydrationMessage } from './http-hydration.ts';
-import { captureHeaders, withCapturedHeaders, type HeaderSource } from './http-headers.ts';
+import { captureHeaders, type HeaderSource } from './http-headers.ts';
+import { notePendingClientRequest, recordHttpCall } from './http-record.ts';
+import { watchNativeFetch } from './fetch-collector.ts';
 
 import {
-  MAX_CALLS,
   MAX_DELAY_MS,
   clientRules,
   httpRegistry,
@@ -85,19 +86,6 @@ function errorBody(body: unknown): unknown {
 function optionalPreview(body: unknown): { preview?: string } {
   const text = preview(body);
   return text === undefined ? {} : { preview: text };
-}
-
-function record(call: HttpCall) {
-  const registry = httpRegistry();
-  // The devframe server takes the call right away, so its headers are read now.
-  if (registry.record) return registry.record(withCapturedHeaders(call));
-  const calls = (registry.calls ??= []);
-  calls.push(call);
-  const extra = calls.length - (registry.maxCalls ?? MAX_CALLS);
-  if (extra > 0) {
-    calls.splice(0, extra);
-    registry.dropped = (registry.dropped ?? 0) + extra;
-  }
 }
 
 let seq = 0;
@@ -196,7 +184,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     };
     // Only references: the headers are read when the call is reported.
     captureHeaders(call, req.headers, responseHeaders);
-    record(call);
+    recordHttpCall(call);
   };
 
   let source: Observable<HttpEvent<unknown>>;
@@ -245,10 +233,14 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     // arrives before subscribe() returns came from the SSR payload.
     let sync = true;
     let settled = false;
+    // The `fetch()` Angular's FetchBackend makes for this request is not a native call.
+    const endPending =
+      side === 'client' && !mocked ? notePendingClientRequest(req.method, url) : () => {};
     const inner = source.subscribe({
       next: (event) => {
         if (event instanceof HttpResponse) {
           settled = true;
+          endPending();
           const fromPayload = claimable && claimTransferEntry(req);
           done(
             {
@@ -268,6 +260,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
         const failed = error instanceof HttpErrorResponse;
         const message = failed ? error.message : String(error);
         settled = true;
+        endPending();
         done(
           {
             status: failed ? error.status : 0,
@@ -286,6 +279,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     });
     sync = false;
     return () => {
+      endPending();
       if (!settled) {
         settled = true;
         done({ status: 0, cacheHit: false, cancelled: true, error: 'cancelled' });
@@ -371,7 +365,8 @@ function watchServerNavigations() {
 }
 
 /**
- * Captures hydration warnings (NG05xx) before the overlay loads. During a
+ * Captures hydration warnings (NG05xx) and the page's native `fetch()` calls
+ * before the overlay loads. During a
  * server render traced by `ssrMiddleware`, it also records the router's guard
  * and resolver timings and applies render-error overrides from the panel.
  * Add it next to `provideHttpClient(withPangular())`.
@@ -381,7 +376,15 @@ export function providePangularHttp(): EnvironmentProviders {
     provideEnvironmentInitializer(captureHydrationWarnings),
     provideEnvironmentInitializer(watchServerNavigations),
     provideEnvironmentInitializer(timeUntilStable),
+    provideEnvironmentInitializer(watchNativeFetchEarly),
   ]);
+}
+
+/** Records the page's own `fetch()` calls from bootstrap on, before the overlay connects. */
+function watchNativeFetchEarly() {
+  const platform = inject(PLATFORM_ID, { optional: true });
+  if (!devMode() || !platform || isPlatformServer(platform)) return;
+  watchNativeFetch();
 }
 
 /** Milliseconds from navigation start until the app first became stable, the point hydration finishes. */

@@ -13,6 +13,7 @@ import { attachAnalog } from './analog-runtime.ts';
 import { attachForms } from './forms-collector.ts';
 import { attachPipes } from './pipes-collector.ts';
 import { attachHttp } from './http-overlay.ts';
+import { watchNativeFetch } from './fetch-collector.ts';
 import { attachCapacitor } from './capacitor-overlay.ts';
 import { attachErrors } from './errors-collector.ts';
 import { attachLeaks } from './leaks-collector.ts';
@@ -554,6 +555,8 @@ async function startOverlay(
   const pipes = on.pipes ? attachPipes(my, pageId, getNg) : null;
   const http = on.http ? attachHttp(my, pageId, tickMs) : null;
   if (http) own(http.stop);
+  // The page's own fetch() calls, next to the HttpClient ones (no-op when providePangularHttp did it).
+  if (http) own(watchNativeFetch());
   const capacitor = on.capacitor
     ? attachCapacitor(my, pageId, {
         maxCalls: limits.capacitorCalls,

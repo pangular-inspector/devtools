@@ -1549,7 +1549,7 @@ const pangular = defineDevframe({
       id: 'pangular:list-http-calls',
       title: 'List HTTP calls',
       description:
-        'HttpClient calls recorded by withPangular(), newest first: side, method, URL, status, duration, rule and cache flags, and the response preview. `view: "waterfall"` draws a page\'s client calls per navigation instead. `headers` adds headers. Masked. Empty without the interceptor.',
+        'HttpClient calls recorded by withPangular() and the page\'s own fetch() calls (flag `native fetch`), newest first: side, method, URL, status, duration, rule and cache flags, and the response preview. `view: "waterfall"` draws a page\'s client calls per navigation instead. `headers` adds headers. Masked. Empty without the interceptor or a page.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -147,7 +147,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Injectors:** a page picker, a created provider's value, startup timing and the slowest providers.
 - **NgRx Store:** full state for every entry still in the log, session export and import, generated tests, and NGXS, Elf and MiniRx through their Redux DevTools integration.
 - **TanStack Query:** a tab for queries and mutations, with invalidate and refetch.
-- **SSR & HTTP:** a network waterfall, search and filters on the timeline, response preview format, copy and mock, TransferState keys and edits in SSR overrides, and SSR tracing for fetch handlers such as Hono, h3 and Nitro.
+- **SSR & HTTP:** the page's own `fetch()` calls next to the `HttpClient` ones (#369), a network waterfall, search and filters on the timeline, response preview format, copy and mock, TransferState keys and edits in SSR overrides, and SSR tracing for fetch handlers such as Hono, h3 and Nitro.
 - **Errors:** a tab for `ErrorHandler` errors, uncaught errors, unhandled rejections and the console, with NG0xxx codes and explainers for NG0100, hydration mismatches and missing providers.
 - **Timeline:** one time axis with layers for the router, HTTP, NgRx, change detection, forms and signals.
 - **Audit:** one ranked list of findings across the inspectors, an axe pass, and before and after sessions.

@@ -68,6 +68,8 @@ interface HttpCall {
   preview?: string;
   requestHeaders?: Record<string, string>;
   responseHeaders?: Record<string, string>;
+  /** Made with the page's own `fetch()`, not through `HttpClient`. */
+  nativeFetch?: true;
 }
 
 interface SsrNavigation {
@@ -689,6 +691,13 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                     <td class="num">{{ entry.durationMs }} ms</td>
                     <td>
                       <div class="notes">
+                        @if (entry.nativeFetch) {
+                          <span
+                            class="tag"
+                            title="Made with fetch() directly, not through HttpClient"
+                            >fetch()</span
+                          >
+                        }
                         @if (entry.cacheHit) {
                           <span class="tag">transfer cache</span>
                         }
