@@ -25,6 +25,7 @@ import type { Subscription } from 'rxjs';
 
 import { isFailingRuleStatus } from './config.ts';
 import { redactMessage } from './forms-privacy.ts';
+import { redactText } from './text-redact.ts';
 import { transferCacheKeys } from './http-cache-key.ts';
 import { cacheSkipReason, requestSkipReason, type CacheSkip } from './http-cache-reason.ts';
 import { isHydrationMessage } from './http-hydration.ts';
@@ -187,7 +188,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     responseHeaders?: HeaderSource | null,
   ) => {
     const durationMs = Date.now() - started;
-    if (requestId) noteSsrFetch(requestId, durationMs);
+    if (requestId) noteSsrFetch(requestId, durationMs, timingLabel(req.method, url));
     const call: HttpCall = {
       id: `${side[0]}${Date.now().toString(36)}${++seq}`,
       at: started,
@@ -313,6 +314,20 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     };
   });
 };
+
+/**
+ * A server call as its `Server-Timing` description: the method and the path,
+ * masked, without the origin or the query, which can carry secrets.
+ */
+export function timingLabel(method: string, url: string): string {
+  let path: string;
+  try {
+    path = new URL(url, 'http://x').pathname;
+  } catch {
+    path = url.replace(/[?#].*$/, '');
+  }
+  return `${method} ${redactText(path, [], 'url')}`;
+}
 
 /**
  * The error a request gets when the connection drops: status 0, statusText

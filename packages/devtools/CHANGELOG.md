@@ -12,6 +12,7 @@ All notable changes to `@pangular-inspector/devtools` are listed here. The forma
 - **Copy as fetch and Copy as cURL.** The response preview copies the open call as a `fetch()` statement or a `curl` command, built from the masked copy, so secrets stay `[redacted]`. Nothing is sent.
 - **TransferState payload checks.** The payload section shows the size against a 100 KB budget, the largest entries with size bars, and URLs the transfer cache stored under more than one key. `inspect-transfer-state` adds the same warnings to its key list.
 - **HTTP lint and the `lint-http` agent tool.** A new HTTP lint section flags the same GET fired again within 2000 ms, chains of 3 or more calls that ran one after another and could start together, and server calls the browser made again. `lint-http` returns the same findings with call ids.
+- **A Server-Timing entry per server HttpClient call.** Traced renders add `fetch-1;desc="GET /api/products";dur=12` and so on, for the first 20 calls, so Chrome's Timing tab shows each call. The description is the method and the masked path, without the query.
 
 ## 1.0.0
 
