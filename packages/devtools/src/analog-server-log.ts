@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { redactCredentials } from './credential-redact.ts';
 import { isRedactedKey, redactJwt } from './forms-privacy.ts';
 import { redactJsonText } from './json-text-redact.ts';
+import { maskEmails } from './text-redact.ts';
 
 const BEARER = /\bBearer\s+[\w.~+/=-]+/gi;
 const QUERY_PAIR = /([?&])([^=&#\s"'\\]*)=([^&#\s"'\\]*)/g;
@@ -250,8 +251,8 @@ export function analogMiddleware(apiPrefix = 'api') {
         at: Date.now(),
         kind: match.kind,
         method: req.method ?? 'GET',
-        url: redactMessage(url),
-        route: match.route,
+        url: maskEmails(redactMessage(url)),
+        route: match.route && maskEmails(match.route),
         status: res.statusCode,
         ms: Math.round(performance.now() - start),
         bytes,
@@ -278,7 +279,7 @@ export function analogMiddleware(apiPrefix = 'api') {
           call.outcome = actionOutcome(res.statusCode, !!res.getHeader('x-analog-errors'));
           const location = res.getHeader('location');
           if (call.outcome === 'redirect' && location)
-            call.location = redactMessage(String(location));
+            call.location = maskEmails(redactMessage(String(location)));
         }
         const preview = previewOf(
           Buffer.concat(chunks).toString('utf8'),

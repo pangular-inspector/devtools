@@ -48,12 +48,14 @@ describe('URL passwords', () => {
       'ssh://git@github.com/org/repo.git',
       'https://example.com/users/@alice',
       'http://localhost:4200/a:b@c',
-      'mailto:alice@example.com',
       'https://example.com:8443/path',
     ]) {
       expect(redactUrl(text), text).toBe(text);
       expect(redactMessage(text), text).toBe(text);
     }
+    // An address is masked in URLs (`[email]`) but left alone in messages.
+    expect(redactUrl('mailto:alice@example.com')).toBe('mailto:[email]');
+    expect(redactMessage('mailto:alice@example.com')).toBe('mailto:alice@example.com');
   });
 });
 

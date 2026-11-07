@@ -289,12 +289,19 @@ Some credentials are hidden wherever they appear in a string, whatever the key i
 
 The URL user stays visible, so you can tell which account a call uses. Ordinary words are left alone: `Basic plan`, `Token expired` and `Digest of the week` don't match.
 
+### Email addresses in URLs
+
+An email address in a URL is replaced with `[email]`, in a path segment, a query value, a matrix param or the fragment, also when its `@` is encoded as `%40`. So `/invite/ada@example.com?to=bob%40example.org` shows as `/invite/[email]?to=[email]`. This holds for every URL that is redacted like router URLs: router navigations and link targets, SSR & HTTP request and page URLs, TransferState request URLs, the NgRx page URL, `httpResource` request URLs, Capacitor and Analog URLs, and the URLs agent tools answer with.
+
+An `@` that isn't part of an address stays, as in `/@angular/core`, `lodash@4.17.21` or `/users/@alice`. The user in a URL's authority, such as `git` in `ssh://git@github.com`, stays visible like the user before a URL password. Inside an encoded URL in a query value (`?next=https%3A%2F%2Fbob%40example.com`) there is no authority to tell apart, so the address is masked, host included. The router lint (`lint-routes` and the [Lint](./inspectors/router.md#lint) view) still reports the `email-in-url` rule for a navigation whose address was masked.
+
 ### Router
 
 These are replaced with `[redacted]` in URLs, params, data and messages:
 
 - query, matrix and fragment keys that look secret (token, password, api key, code, code verifier, sig, session, jwt and similar), including inside encoded return URLs,
 - URL passwords, `Authorization` credentials, JWTs, bearer tokens and long opaque tokens,
+- email addresses, which show as `[email]` (see [Email addresses in URLs](#email-addresses-in-urls)),
 - route params with secret-looking names.
 
 A secret route param is known from the route config before a navigation is recognized, so link targets and a navigation that was already running when the overlay attached are masked too. This covers routes in every outlet, so the token in `/(side:reset/:token)` is masked like the one in `/reset/:token`. A navigation that fails before that (for example inside a lazy route that failed to load) can still show it in its URL. JWTs are masked before long values are cut, so a long token never leaves a readable start behind.
