@@ -23,6 +23,8 @@ const HEARTBEAT_MS = 5000;
 export interface NgrxPageOptions<H extends object> {
   tree?: HostTree<H>;
   describe?: () => { url: string; title: string };
+  /** `ngrx.trace`: record a redacted call stack per entry. */
+  trace?: boolean;
 }
 
 export function attachNgrx<H extends object = Element>(
@@ -36,6 +38,8 @@ export function attachNgrx<H extends object = Element>(
   let sentSeq = 0;
   let sentLost = 0;
   let sentMasked = 0;
+  /** The stats version last sent; the server keeps the stats it has until they change. */
+  let sentStats = -1;
   /** The collector's report version last sent, or null when nothing was (or the send failed). */
   let sentVersion: number | null = null;
   let lastPushAt = 0;
@@ -58,6 +62,7 @@ export function attachNgrx<H extends object = Element>(
     () => schedule(),
     options.tree ?? documentTree<H>(),
     maxLog,
+    { trace: options.trace },
   );
 
   const push = async (rediscover = true) => {
@@ -68,6 +73,7 @@ export function attachNgrx<H extends object = Element>(
       const log = collector.logSince(sentSeq);
       const lost = collector.unrestorableSince(sentLost);
       const masked = collector.argsRedactedSince(sentMasked);
+      const stats = collector.stats();
       if (!stores.length && !classic && !log.length && sentVersion === null) return;
       const quiet = !log.length && !lost.updates.length && !masked.seqs.length;
       // The version goes up only when a store's report changed, so an unchanged
@@ -89,6 +95,7 @@ export function attachNgrx<H extends object = Element>(
         since: sentSeq,
         ...(lost.updates.length ? { unrestorable: lost.updates } : {}),
         ...(masked.seqs.length ? { argsRedacted: masked.seqs } : {}),
+        ...(stats.version !== sentStats ? { stats: stats.stats } : {}),
       };
       const answer = (await my.rpc.call('push-ngrx-state', report)) as
         { seq?: unknown } | undefined;
@@ -96,10 +103,12 @@ export function attachNgrx<H extends object = Element>(
       sentSeq = typeof answer?.seq === 'number' ? answer.seq : collector.lastSeq();
       sentLost = lost.last;
       sentMasked = masked.last;
+      sentStats = stats.version;
       // A lower seq means the server lost this page: resend the held log.
       if (sentSeq < previous) {
         sentLost = 0;
         sentMasked = 0;
+        sentStats = -1;
         schedule();
       }
     } catch {

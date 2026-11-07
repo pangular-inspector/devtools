@@ -1078,7 +1078,7 @@ describe('ngrx collector with a classic store', () => {
 });
 
 describe('ngrx collector with Store DevTools', () => {
-  function setupDevtools() {
+  function setupDevtools(signalStore?: SignalStore) {
     document.body.innerHTML = '<app-root ng-version="22"></app-root>';
     const root = document.querySelector('app-root')!;
     const reducer = (s: { n: number }, a: { type: string }) =>
@@ -1131,7 +1131,12 @@ describe('ngrx collector with Store DevTools', () => {
     ]);
     const rootEnv = {
       scopes: new Set(['root']),
-      records: new Map([...values.keys()].map((k) => [k, { value: undefined }])),
+      records: new Map<unknown, { value: unknown }>([
+        ...[...values.keys()].map((k): [unknown, { value: unknown }] => [k, { value: undefined }]),
+        ...(signalStore
+          ? [[SignalStore, { value: signalStore }] as [unknown, { value: unknown }]]
+          : []),
+      ]),
     };
     const node = { get: (token: unknown) => values.get(token) ?? null };
     const ng = {
@@ -1147,6 +1152,19 @@ describe('ngrx collector with Store DevTools', () => {
     collector.collect();
     return { store, collector, current, ng, lifted };
   }
+
+  it('refuses a Store DevTools jump to a signal store entry and leaves the store as it was', () => {
+    const signal = new SignalStore();
+    const { collector } = setupDevtools(signal);
+    signal.setQuery('a');
+    signal.setQuery('b');
+    const entry = collector.logSince(0).find((e) => e.type === 'setQuery')!;
+    expect(entry).toBeDefined();
+    expect(collector.run({ type: 'devtools', op: 'jump', seq: entry.seq })).toEqual({
+      error: 'Only @ngrx/store entries can be used for a Store DevTools jump.',
+    });
+    expect((signal as any)[STATE_SOURCE].query()).toBe('b');
+  });
 
   it('logs a restore with its diff so the next action is not blamed for it', () => {
     const { store, collector } = setupDevtools();

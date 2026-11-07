@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  One hundred and eleven tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  One hundred and thirteen tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -59,7 +59,7 @@ Some calls name their page another way:
 | `highlight`, `inspect-component` given `component`       | Every tab is searched for the instance, default page first              |
 | `defer-blocks`, `for-blocks`, `hydration`                | Every tab is listed                                                     |
 
-Tools that change app state never pick one of several tabs on their own: `navigate`, `probe-route`, `record-guards`, `ngrx-dispatch`, `ngrx-restore`, `tanstack-run-query`, `set-signal` and `set-component-property` refuse and list the tabs when more than one could take the call. The tables below leave `page` out.
+Tools that change app state never pick one of several tabs on their own: `navigate`, `probe-route`, `record-guards`, `ngrx-dispatch`, `ngrx-restore`, `ngrx-store-devtools`, `tanstack-run-query`, `set-signal` and `set-component-property` refuse and list the tabs when more than one could take the call. The tables below leave `page` out.
 
 If `page` names a tab that doesn't report that data, the tool answers `No page <id> is reporting ...` and lists the tabs that do. It never falls back to another tab. A `page` that is not a string, such as a number, is refused the same way, and an empty string counts as left out. `page` is the only page argument: a call that sends `pageId` is refused.
 
@@ -174,10 +174,10 @@ Every tool has one of three safety tiers. The server sends the tier to your clie
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                                                                                                                    | Every other tool, and every resource                                                                                                                                                                                                                                                                                                                                                                 |
 | `action`      | Changes the running page, the server's fault rules and SSR overrides, or what the page records, or runs a Nitro task. A reload or the next call undoes most of it, but a Nitro task can change data for good. | `navigate`, `probe-route`, `record-guards`, `ngrx-dispatch`, `ngrx-restore`, `tanstack-run-query`, `run-form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `load-defer-block`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection`, `analog-run-nitro-task` and `audit` |
-| `destructive` | Can lose data: it erases recordings, deletes the Nitro cache, or sends writes to your own API routes.                                                                                                         | `clear-recordings`, `analog-run-api` and `analog-purge-nitro-cache`                                                                                                                                                                                                                                                                                                                                  |
+| `destructive` | Can lose data: it erases recordings or Store DevTools history, deletes the Nitro cache, or sends writes to your own API routes.                                                                               | `clear-recordings`, `analog-run-api`, `analog-purge-nitro-cache` and `ngrx-store-devtools`                                                                                                                                                                                                                                                                                                           |
 
 <ngmd-alert severity="important">
-  The twenty-four <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
+  The twenty-five <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
 When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `record-change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, and `audit` only when it runs axe. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
@@ -589,7 +589,7 @@ With `store`, the full state of one store: state, computed values, `withEntities
 
 ### ngrx-history
 
-The change log for a page's stores, oldest first: `@ngrx/signals` state diffs (method calls and `patchState` writes, each with a per-key diff), classic `@ngrx/store` actions, and `@ngrx/signals/events` dispatched events. A method-call entry carries a duration in milliseconds. With `watchState` registered, it is the time from the start of the method to that patch; without it, the time the whole call took. A signal-store entry carries the event that caused it when the change happened while that event was being dispatched. Each entry lists up to 50 changes; when there were more, it ends with how many were left out, such as `12 more changes not shown`.
+The change log for a page's stores, oldest first: `@ngrx/signals` state diffs (method calls and `patchState` writes, each with a per-key diff), classic `@ngrx/store` actions, and `@ngrx/signals/events` dispatched events. A method-call entry carries a duration in milliseconds. With `watchState` registered, it is the time from the start of the method to that patch; without it, the time the whole call took. A signal-store entry carries the event that caused it when the change happened while that event was being dispatched. Each entry lists up to 50 changes; when there were more, it ends with how many were left out, such as `12 more changes not shown`. With [`ngrx.trace`](../getting-started/configuration.md#ngrx) on, an entry names the closest app frame it came from.
 
 | Argument | Required | Value                                                                                                                                                            |
 | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -637,6 +637,17 @@ A Vitest spec that replays a range of entries: the state before the range, the r
 | `to`      | no       | The last entry number to replay.                     |
 | `page`    | no       | The tab to read.                                     |
 | `session` | no       | An imported session id, to generate from it instead. |
+
+### ngrx-explain-change
+
+Why a state value changed. With `path`, the newest entries in the kept log (up to 5) whose diff wrote that path, a path inside it or one around it, newest first. Each lists what ran (the action, the method, a `patchState` outside a method, or an event), its arguments or action, its origin, the event that caused it, its duration, the changes to that path, and, with [`ngrx.trace`](../getting-started/configuration.md#ngrx) on, the app frames it was called from. With `seq`, that one entry with its whole diff. Without call sites, the answer says how to turn `ngrx.trace` on. It reads the newest page that matches; a change older than the kept log ([`limits.changeLog`](../getting-started/configuration.md#limits)) is not found.
+
+| Argument | Required     | Value                                                                                                                                                                   |
+| -------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`   | without seq  | A state path as the diff writes it, from the state root (`cart.items`, `items[0].done`) or a signal store field (`filter`). **Copy path** in the state tree copies one. |
+| `seq`    | without path | An entry number, to explain that entry instead.                                                                                                                         |
+| `store`  | no           | Only entries of that store, by id or name. `store` is the `@ngrx/store` Store.                                                                                          |
+| `page`   | no           | The tab to read. Defaults to the newest page that reports NgRx.                                                                                                         |
 
 ### redux-inspect-stores
 
@@ -747,6 +758,20 @@ Without `page`, the tool uses the one page that has an `@ngrx/store` Store. If m
 | `latest` | `true` sends Store DevTools back to the latest state. Use it instead of `seq`. |
 
 Without `page`, the tool uses the one page that reports NgRx state. With several, it restores nothing and lists them. Set [`actions.ngrx`](../getting-started/configuration.md#actions) to `false` to drop the tool.
+
+### Change the Store DevTools history <ngmd-badge variant="destructive">Destructive</ngmd-badge>
+
+`ngrx-store-devtools` runs an operation on the `@ngrx/store` Store DevTools history of the running app, in development only, like the **Store DevTools history** controls on the [NgRx Store](../inspectors/ngrx-store.md#store-devtools-history) page. It needs `provideStoreDevtools()`. Every operation but `pause` adds an entry to the log: `jump` with `seq` adds `Restore #N`, as `ngrx-restore` does, and the others add `Store DevTools: …`. Reads: page.
+
+| `op`     | What it does                                                                                                                          | Other arguments                                                 |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `toggle` | Skips the action of an entry, so the state is computed without it, or includes a skipped one again.                                   | `seq`: the entry of an `@ngrx/store` action.                    |
+| `jump`   | Shows the state after an entry, like `ngrx-restore`, or a Store DevTools state by its index. The store stays on it until you go back. | `seq`, or `index`: 0 is the committed state.                    |
+| `commit` | Makes the current state the new starting point. Earlier entries can no longer be restored.                                            | none                                                            |
+| `reset`  | Puts the store back on its initial state and empties the history. Earlier entries can no longer be restored.                          | none                                                            |
+| `pause`  | Stops recording new actions, which still change the state but cannot be restored, or starts recording again.                          | `paused`: `true` stops, `false` starts. Without it, it toggles. |
+
+Without `page`, the tool uses the one page that has an `@ngrx/store` Store. With several, it changes nothing and lists them. Set [`actions.ngrx`](../getting-started/configuration.md#actions) to `false` to drop the tool.
 
 ## TanStack Query
 

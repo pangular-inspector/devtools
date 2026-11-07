@@ -259,6 +259,15 @@ export interface PangularConfig {
      */
     contentSchema?: string;
   };
+  ngrx?: {
+    /**
+     * Record where each NgRx change log entry came from: the app frames of the
+     * dispatch, method call or `patchState`, with origins and query strings
+     * removed and secrets masked. Off by default, since taking a stack on every
+     * write costs time.
+     */
+    trace?: boolean;
+  };
 }
 
 /** What a `plugins` entry can turn off; each is on when left out. */
@@ -298,6 +307,7 @@ export interface ResolvedPangularConfig {
   };
   /** `contentSchema` is left out when it is not set. */
   analog: { contentSchema?: string };
+  ngrx: { trace: boolean };
 }
 
 /** The switches of one plugin under `config`, whether or not it has a `plugins` entry. */
@@ -686,6 +696,7 @@ export function resolvePangularConfig(config?: unknown): ResolvedPangularConfig 
     plugins: pluginEntries(input['plugins']),
     lint: { rules: lintRules(input['lint']) },
     analog: analogOptions(input['analog']),
+    ngrx: { trace: flag(record(input['ngrx'])['trace'], false) },
   };
 }
 
@@ -789,6 +800,7 @@ const CONFIG_KEYS = [
   'plugins',
   'lint',
   'analog',
+  'ngrx',
 ] as const;
 
 /**
@@ -937,6 +949,8 @@ export function pangularConfigProblems(config: unknown): string[] {
       `\`analog.contentSchema\` should be the path of a JSON Schema file, got ${describe(contentSchema)}. It was ignored.`,
     );
   }
+  const ngrx = object('ngrx', input['ngrx'], ['trace']);
+  boolean('ngrx.trace', ngrx['trace'], 'off');
   return problems;
 }
 
@@ -971,10 +985,21 @@ export function configFromConnection(
 export function pickPangularConfig<T extends PangularConfig>(
   options: T,
 ): { config: PangularConfig; rest: Omit<T, keyof PangularConfig> } {
-  const { inspectors, agent, actions, redaction, limits, popup, plugins, lint, analog, ...rest } =
-    options;
+  const {
+    inspectors,
+    agent,
+    actions,
+    redaction,
+    limits,
+    popup,
+    plugins,
+    lint,
+    analog,
+    ngrx,
+    ...rest
+  } = options;
   return {
-    config: { inspectors, agent, actions, redaction, limits, popup, plugins, lint, analog },
+    config: { inspectors, agent, actions, redaction, limits, popup, plugins, lint, analog, ngrx },
     rest,
   };
 }
@@ -1156,6 +1181,16 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
     actions: ['ngrx'],
     page: true,
   },
+  // Toggle, jump, commit, reset and pause in the Store DevTools history.
+  // Destructive: commit and reset erase the history they act on.
+  'ngrx-store-devtools': {
+    kind: 'tool',
+    inspectors: ['ngrx'],
+    safety: 'destructive',
+    actions: ['ngrx'],
+    page: true,
+  },
+  'ngrx-explain-change': { kind: 'tool', inspectors: ['ngrx'], page: true },
   'redux-inspect-stores': { kind: 'tool', inspectors: ['ngrx'], page: true },
 
   // tanstackQuery
@@ -1399,7 +1434,7 @@ export function actionBlockedMessage(action: PangularAction): string {
   const what = {
     forms: 'Writing to forms',
     router: 'Navigating and clearing navigations',
-    ngrx: 'Restoring NgRx state and dispatching actions',
+    ngrx: 'Restoring NgRx state, dispatching actions and changing the Store DevTools history',
     http: 'Changing HTTP mock rules and SSR overrides, and clearing HTTP calls',
     analog:
       'Calling API routes, clearing server calls, running Nitro tasks and purging the Nitro cache',
@@ -1869,7 +1904,7 @@ const INSPECTOR_LABEL: Record<PangularInspector, string> = {
 const ACTION_LABEL: Record<PangularAction, string> = {
   forms: 'Form writes',
   router: 'Navigation',
-  ngrx: 'NgRx restore and dispatch',
+  ngrx: 'NgRx restore, dispatch and Store DevTools',
   http: 'HTTP mocking',
   analog: 'Analog API calls',
   components: 'Component edits',
