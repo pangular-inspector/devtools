@@ -29,6 +29,7 @@ The **Graph of** picker at the top selects whose graph you see. It appears when 
 - **Root services** shows the effects registered on the root injector, such as an `effect()` in a `providedIn: 'root'` service, and the signals they read.
 - **Route: path** entries show the effects registered on the injector of a route with `providers`, on the active route chain. A route with an empty `path` is named by the path of its parent routes, such as **Route: review**, or **Route: /** at the top. Other environment injectors on that chain, such as the one of a lazy `loadChildren`, show as **Environment**.
 - Pick any live component to pin the graph to it. The picker numbers duplicates, for example `#2`.
+- **Show in Signals** in the [Components tab](./components.md#detail-header) pins the graph to the selected instance the same way. From a signal property, it also selects that signal's node. A `#tab=signals&id=<component id>&page=<pageId>` [deep link](../getting-started/popup-and-hub.md#link-to-an-item) does the same.
 - A host with directives but no component, such as `<button tooltip>`, is listed with a **directive** hint. Its graph holds the effects its directives created, and the line under the picker says **directives, no component**.
 - Without a routed component, the tab shows the first component that has signals, among the first 50 on the page.
 

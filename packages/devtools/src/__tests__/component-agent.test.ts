@@ -299,6 +299,35 @@ describe('component pick', () => {
     expect(await selectedId()).toBe('c3');
   });
 
+  it('passes a keyboard move to the page and returns what it shows, without selecting it', async () => {
+    const { ctx, push, selectedId } = await boot();
+    await push('push-component-tree', { pageId: 'p1', roots, count: 3, detail: null });
+    const sent: Record<string, unknown>[] = [];
+    vi.spyOn(ctx.rpc, 'broadcast').mockImplementation((async (options: Broadcast) => {
+      if (!options.method.endsWith('component-pick')) return;
+      sent.push(options.args[0]);
+      await push('component-pick-result', {
+        requestId: options.args[0]['requestId'],
+        pageId: 'p1',
+        result: { moved: true, id: 'c3', name: 'Card', tag: 'app-card' },
+      });
+    }) as never);
+    const before = await selectedId();
+    expect(await push('request-component-pick-move', { pageId: 'p1', key: 'next' })).toEqual({
+      moved: true,
+      id: 'c3',
+      name: 'Card',
+      tag: 'app-card',
+    });
+    expect(sent).toEqual([{ requestId: expect.any(String), pageId: 'p1', move: 'next' }]);
+    expect(await selectedId()).toBe(before);
+    expect(await push('request-component-pick-move', { pageId: 'p1', key: 'jump' })).toEqual({
+      moved: false,
+      error: 'Unknown key.',
+    });
+    expect(sent).toHaveLength(1);
+  });
+
   it('passes a cancel to the page and returns its answer', async () => {
     const { ctx, push } = await boot();
     await push('push-component-tree', { pageId: 'p1', roots, count: 3, detail: null });
