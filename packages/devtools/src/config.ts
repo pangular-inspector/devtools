@@ -1162,6 +1162,9 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   router: { kind: 'resource', inspectors: ['router'], page: true },
   'inspect-route': { kind: 'tool', inspectors: ['router'], page: true },
   'explain-navigation': { kind: 'tool', inspectors: ['router'], page: true },
+  'diff-navigations': { kind: 'tool', inspectors: ['router'], page: true },
+  'follow-navigations': { kind: 'tool', inspectors: ['router'], page: true },
+  'preview-navigation': { kind: 'tool', inspectors: ['router'], page: true },
   'list-routes': { kind: 'tool', inspectors: ['router'], page: true },
   'lint-routes': { kind: 'tool', inspectors: ['router'], page: true },
   'router-config': { kind: 'tool', inspectors: ['router'], page: true },
@@ -1189,6 +1192,8 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'scan-pipe-usage': { kind: 'tool', inspectors: ['pipes'] },
   'explain-pipe': { kind: 'tool', inspectors: ['pipes'] },
   'record-pipes': { kind: 'tool', inspectors: ['pipes'], safety: 'action', page: true },
+  'suggest-pipe-migrations': { kind: 'tool', inspectors: ['pipes'] },
+  'pipe-usages': { kind: 'resource', inspectors: ['pipes'] },
 
   // http
   'list-ssr-requests': { kind: 'tool', inspectors: ['http'], page: true },
@@ -1476,6 +1481,9 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'router-lint': 'router',
   'router-match': 'router',
   'router-export': 'router',
+  'router-diff': 'router',
+  'router-http': 'router',
+  'router-preview': 'router',
   'forget-router-page': 'router',
   'clear-router-navigations': 'router',
   'get-pipes': 'pipes',

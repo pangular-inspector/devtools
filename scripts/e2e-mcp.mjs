@@ -741,6 +741,8 @@ const READ_PLAN = [
 
   ['explain-pipe', '/examples/pipes', () => ({ name: 'appTimeAgo' })],
   ['explain-pipe', '/examples/pipes', () => ({ name: 'date' })],
+  ['suggest-pipe-migrations', '/examples/pipes', () => ({})],
+  ['suggest-pipe-migrations', '/examples/pipes', () => ({ name: 'appTimeAgo' })],
 
   ['list-ssr-requests', '/examples/http', () => ({ limit: 5 })],
   [
@@ -772,6 +774,11 @@ const READ_PLAN = [
   ['lint-routes', '/examples/routes/details', () => ({})],
   ['router-config', '/examples/routes/details', () => ({})],
   ['explain-navigation', '/examples/routes/details', () => ({ format: 'repro' })],
+  ['diff-navigations', '/examples/routes/details', () => ({})],
+  ['follow-navigations', '/examples/routes/details', () => ({})],
+  ['follow-navigations', '/examples/routes/details', () => ({ since: 0, waitMs: 0 })],
+  ['preview-navigation', '/examples/routes/details', () => ({ url: '/destinations/kyoto' })],
+  ['preview-navigation', '/examples/routes/details', () => ({ url: '/trips' })],
 
   ['inspect-forms', '/examples/forms', () => ({})],
   ['inspect-forms', '/examples/forms', (ctx) => ({ form: ctx.formIds[0] })],

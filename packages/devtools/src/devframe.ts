@@ -38,9 +38,12 @@ import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
+import { pipeMigrationsText } from './rpc/pipe-migrations.ts';
+import { scanPipes } from './rpc/get-pipes.ts';
 import { templateLintTool } from './rpc/template-lint-tool.ts';
 import {
   explainPipeOnPage,
+  pipePageFor,
   pipeRecordRequest,
   pipeRecordTargets,
   pipeRecordText,
@@ -332,6 +335,10 @@ import {
 } from './rpc/default-page.ts';
 import { namingPageRead } from './rpc/page-read-scope.ts';
 import { routerActionAnswer } from './rpc/router-action-answer.ts';
+import { diffNavigationsText, navigationDiffResult } from './rpc/router-diff.ts';
+import { callsForNavigation, nextNavigation } from './rpc/router-http.ts';
+import { MAX_WAIT_MS, NavigationStream, streamText } from './rpc/router-stream.ts';
+import { previewNavigationText, routePreviewResult } from './rpc/router-preview.ts';
 import { nameStoreTokens } from './rpc/store-tokens.ts';
 import { notAProjectText, readsSource, refusingTool } from './rpc/project-root.ts';
 import { STATE_READ_BY, stateReadTool } from './rpc/state-read-tool.ts';
@@ -1029,6 +1036,14 @@ const pangular = defineDevframe({
       : null;
 
     const routerPages = new Map<string, RouterPage>();
+    /** Every navigation the pages report, numbered, for pangular:follow-navigations. */
+    const navigationStream = new NavigationStream();
+    /** Drops the stream entries and signatures of pages that expired or were forgotten. */
+    const dropGoneStreamPages = () => {
+      for (const id of navigationStream.pageIds()) {
+        if (!routerPages.has(id)) navigationStream.clear(id);
+      }
+    };
     const routerState = await my.rpc.sharedState('router', {
       initialValue: { pages: [] } as RouterState,
     });
@@ -1061,6 +1076,12 @@ const pangular = defineDevframe({
           applyRouter(currentRouter(routerPages));
         }
         feed.navigations(report.pageId, report.navigations);
+        // Merging a report expires stale pages too.
+        dropGoneStreamPages();
+        // A report that failed to merge left no page, so its navigations stay out of the stream.
+        if (routerPages.has(report.pageId)) {
+          navigationStream.record(report.pageId, report.navigations);
+        }
         return { hasConfig: !!routerPages.get(report.pageId)?.config };
       },
     });
@@ -1163,7 +1184,11 @@ const pangular = defineDevframe({
       name: 'router-lint',
       type: 'query',
       jsonSerializable: true,
-      handler: (pageId: unknown) => routerLintResult(pageFor(pageId), { rules: config.lint.rules }),
+      handler: (pageId: unknown) =>
+        routerLintResult(pageFor(pageId), {
+          rules: config.lint.rules,
+          httpFor: routerHttpCalls,
+        }),
     });
 
     register({
@@ -1175,6 +1200,73 @@ const pangular = defineDevframe({
         if (!page?.config || typeof message?.url !== 'string') return null;
         return matchUrl(page.config, message.url.slice(0, 2000));
       },
+    });
+
+    /** The HTTP inspector's calls of a page, for the router's per-navigation HTTP join. */
+    const routerHttpCalls = (pageId: string) =>
+      on.http ? httpPages.get(pageId)?.calls : undefined;
+
+    register({
+      name: 'router-http',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; id?: unknown }) => {
+        const page = pageFor(message?.pageId);
+        const nav = page?.navigations.find((n) => n.id === message?.id);
+        if (!page || !nav) return null;
+        return callsForNavigation(
+          nav,
+          nextNavigation(page.navigations, nav),
+          routerHttpCalls(page.pageId),
+        );
+      },
+    });
+
+    /** The source routes and ServerRoute entries a preview names, empty when the scan fails. */
+    const previewScans = () => {
+      let sources: ReturnType<typeof extractRoutes> = [];
+      let serverRoutes: ReturnType<typeof scanServerRoutes> = [];
+      try {
+        sources = extractRoutes(ctx.cwd);
+      } catch {
+        sources = [];
+      }
+      try {
+        serverRoutes = scanServerRoutes(ctx.cwd);
+      } catch {
+        serverRoutes = [];
+      }
+      return { sources, serverRoutes };
+    };
+
+    register({
+      name: 'router-preview',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; url?: unknown }) => {
+        const { sources, serverRoutes } = previewScans();
+        return routePreviewResult(
+          routerState.value() as RouterState,
+          {
+            page: typeof message?.pageId === 'string' ? message.pageId : undefined,
+            url: typeof message?.url === 'string' ? message.url : undefined,
+          },
+          sources,
+          serverRoutes,
+        );
+      },
+    });
+
+    register({
+      name: 'router-diff',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; a?: unknown; b?: unknown }) =>
+        navigationDiffResult(routerState.value() as RouterState, {
+          page: typeof message?.pageId === 'string' ? message.pageId : undefined,
+          a: typeof message?.a === 'number' ? message.a : undefined,
+          b: typeof message?.b === 'number' ? message.b : undefined,
+        }),
     });
 
     register({
@@ -1196,6 +1288,7 @@ const pangular = defineDevframe({
         if (!config.actions.router) throw new Error(actionBlockedMessage('router'));
         if (typeof pageId !== 'string') throw new Error('Give the id of the page to clear.');
         if (clearRouterNavigations(routerPages, pageId)) applyRouter(currentRouter(routerPages));
+        navigationStream.clear(pageId);
         void my.rpc.broadcast({ method: 'router-clear', args: [{ pageId }], optional: true });
       },
     });
@@ -1207,6 +1300,7 @@ const pangular = defineDevframe({
       handler: (pageId: string) => {
         if (mayForget(pageId) && routerPages.delete(pageId)) {
           applyRouter(currentRouter(routerPages));
+          navigationStream.clear(pageId);
         }
       },
     });
@@ -1472,7 +1566,10 @@ const pangular = defineDevframe({
       const next = expirePages(formPages, now, limits.formTimeline, liveTtl);
       if (next) applyForms(next);
       const nextRouter = expireRouterPages(routerPages, now, liveTtl);
-      if (nextRouter) applyRouter(nextRouter);
+      if (nextRouter) {
+        applyRouter(nextRouter);
+        dropGoneStreamPages();
+      }
       const nextPipes = expirePipePages(pipePages, now, liveTtl);
       if (nextPipes) applyPipes(nextPipes);
       if (expireNgrxPages(ngrxPages, now, liveTtl)) applyNgrx();
@@ -1811,6 +1908,7 @@ const pangular = defineDevframe({
               if (clearRouterNavigations(routerPages, pageId)) {
                 applyRouter(currentRouter(routerPages));
               }
+              navigationStream.clear(pageId);
               void my.rpc.broadcast({ method: 'router-clear', args: [{ pageId }], optional: true });
               cleared.push(`router navigations for page "${pageId}"`);
             } else {
@@ -1823,6 +1921,7 @@ const pangular = defineDevframe({
                 });
               }
               applyRouter(currentRouter(routerPages));
+              navigationStream.clear();
               cleared.push('router navigations');
             }
           }
@@ -2887,6 +2986,24 @@ const pangular = defineDevframe({
       read: () => ({ text: routerResourceText(routerState.value() as RouterState) }),
     });
 
+    agent.registerResource({
+      id: 'pangular:pipe-usages',
+      name: 'Angular Pipe Usages',
+      description:
+        'Pipes as JSON: `source` has each pipe with purity and template uses; `pipes`/`async` the live page usage, with churn and stale findings while recording. ' +
+        LIVE_RESOURCE_NOTE,
+      mimeType: 'application/json',
+      read: () => {
+        const live = currentPipes(pipePages);
+        return {
+          text: liveResourceText(
+            { source: scanPipes(ctx.cwd), ...live },
+            'pangular:scan-pipes and pangular:explain-pipe',
+          ),
+        };
+      },
+    });
+
     // The same states one page at a time, for the MCP resource templates (`agent-mcp.ts`).
     providePageResources(
       ctx,
@@ -3507,6 +3624,7 @@ const pangular = defineDevframe({
               clear: record === 'clear',
             }),
           acks: cdAcks,
+          angularOf: angularPages.get,
         });
         if ('refused' in answer) return answer;
         const next = answer.markdown;
@@ -3831,7 +3949,99 @@ const pangular = defineDevframe({
           if (args.perf) return { markdown: refusal('Pass either `perf` or `format: "repro"`.') };
           return { markdown: exportNavigationText(state, { page: args.page, id: args.id }) };
         }
-        return { markdown: explainNavigationText(state, args, Date.now(), limits.navigations) };
+        return {
+          markdown: explainNavigationText(
+            state,
+            args,
+            Date.now(),
+            limits.navigations,
+            routerHttpCalls,
+          ),
+        };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:diff-navigations',
+      title: 'Diff two navigations',
+      description:
+        'What changed between two recorded navigations: URL, outcome, query params, route params and data, the component in each outlet, guard and resolver verdicts and timing. `b` defaults to the newest finished navigation, `a` to the last earlier one to the same path.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: pageProperty,
+          a: { type: 'integer', description: 'Id of the earlier navigation.' },
+          b: { type: 'integer', description: 'Id of the later navigation.' },
+        },
+      },
+      handler: async (args: { page?: string; a?: number; b?: number }) => {
+        const state = routerState.value() as RouterState;
+        if (!state.pages.length) return { markdown: noRouter };
+        return { markdown: diffNavigationsText(state, args) };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:follow-navigations',
+      title: 'Follow navigations',
+      description: `New and changed navigations since a cursor, oldest first, to follow a login or redirect flow without polling. Without \`since\`, the latest 5 and a cursor; pass it back as \`since\`, with \`waitMs\` (up to ${MAX_WAIT_MS}) to wait for the next one.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: pageProperty,
+          since: {
+            type: 'integer',
+            minimum: 0,
+            description: 'The cursor a previous call returned. Without it, the last 5 navigations.',
+          },
+          waitMs: {
+            type: 'integer',
+            minimum: 0,
+            maximum: MAX_WAIT_MS,
+            description:
+              'With `since`: how long to wait for a navigation when none came yet (default 0).',
+          },
+        },
+      },
+      handler: async (args: { page?: string; since?: number; waitMs?: number }) => {
+        const state = routerState.value() as RouterState;
+        if (args.page && !state.pages.some((p) => p.pageId === args.page)) {
+          return { markdown: noPage(args.page, state) };
+        }
+        if (typeof args.since !== 'number' || !Number.isFinite(args.since)) {
+          const all = navigationStream.read(0, args.page);
+          const read = { ...all, entries: all.entries.slice(-5) };
+          delete read.reset;
+          return { markdown: streamText(read, { waited: false }) };
+        }
+        const since = Math.floor(args.since);
+        const wait = typeof args.waitMs === 'number' && args.waitMs > 0 ? args.waitMs : 0;
+        const read = await navigationStream.wait(since, wait, args.page);
+        return { markdown: streamText(read, { since, waited: wait > 0 }) };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:preview-navigation',
+      title: 'Preview a navigation',
+      description:
+        'What going to a URL would do, predicted from the live route config without navigating: redirects, the route chain and params, then in order the guards, lazy chunks, resolvers and components that run, with source files and the render mode.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: pageProperty,
+          url: { type: 'string', description: 'A path such as /admin/users?tab=roles.' },
+        },
+        required: ['url'],
+      },
+      handler: async (args: { page?: string; url?: string }) => {
+        const state = routerState.value() as RouterState;
+        if (!state.pages.length) return { markdown: noRouter };
+        if (typeof args.url !== 'string' || !args.url) {
+          return { markdown: refusal('Pass `url`, such as /users/42.') };
+        }
+        const { sources, serverRoutes } = previewScans();
+        return { markdown: previewNavigationText(state, args, sources, serverRoutes) };
       },
     });
 
@@ -3901,7 +4111,12 @@ const pangular = defineDevframe({
       handler: async (args: { page?: string }) => {
         const state = routerState.value() as RouterState;
         if (!state.pages.length) return { markdown: noRouter };
-        return { markdown: lintRoutesText(state, args, undefined, { rules: config.lint.rules }) };
+        return {
+          markdown: lintRoutesText(state, args, undefined, {
+            rules: config.lint.rules,
+            httpFor: routerHttpCalls,
+          }),
+        };
       },
     });
 
@@ -4425,6 +4640,30 @@ const pangular = defineDevframe({
         if (!args?.name) return { markdown: 'Pass a pipe `name`.' };
         return {
           markdown: explainPipeOnPage(args.name, ctx.cwd, pipePages, pageArgument(args), {
+            rules: config.lint.rules,
+          }),
+        };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:suggest-pipe-migrations',
+      title: 'Suggest pipe migrations',
+      description:
+        'Read-only suggestions for moving pipes to signals, with the file and line of each use: `| async` to toSignal(), impure or signal-reading custom pipes to computed(), and, while recording, churning or stale pipes. Changes no file.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Only this pipe, by the name used after `|`.' },
+          page: PAGE_ARGUMENT,
+        },
+      },
+      handler: async (args: { name?: string; page?: string }) => {
+        const picked = pipePageFor(pipePages, pageArgument(args));
+        if ('markdown' in picked) return picked;
+        return {
+          markdown: pipeMigrationsText(ctx.cwd, picked.pageId ? picked.state : undefined, {
+            name: args?.name || undefined,
             rules: config.lint.rules,
           }),
         };

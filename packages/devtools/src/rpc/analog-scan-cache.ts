@@ -12,6 +12,8 @@ interface ScanVersion {
   version: number;
   /** Whether a Vite watcher is bumping `version`. */
   watched: boolean;
+  /** The folder the Vite watcher covers, when the plugin named it. */
+  root?: string;
 }
 
 function scanVersion(): ScanVersion {
@@ -27,9 +29,10 @@ const SKIP = /[\\/](node_modules|\.git|\.nx|\.angular|\.cache)([\\/]|$)/;
  * For the Vite plugin: marks the scan as watched and returns the listener to
  * pass to `server.watcher.on('all', ...)`.
  */
-export function viteScanWatcher(): (event: string, file: string) => void {
+export function viteScanWatcher(root?: string): (event: string, file: string) => void {
   const shared = scanVersion();
   shared.watched = true;
+  if (root) shared.root = root;
   return (_event, file) => {
     if (!SKIP.test(String(file))) shared.version++;
   };
@@ -40,6 +43,12 @@ export function resetScanVersion(): void {
   const shared = scanVersion();
   shared.version = 0;
   shared.watched = false;
+  delete shared.root;
+}
+
+/** The Vite watcher's change counter, for other source scans that keep a result until a file changes. */
+export function viteWatchVersion(): Readonly<ScanVersion> {
+  return scanVersion();
 }
 
 export type WatchFn = (
