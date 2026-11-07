@@ -205,7 +205,8 @@ export function attachHttp(
           result = { error: redactMessage(fetched.error) };
         } else {
           shownPayload = fetched.payload;
-          maskedPayload = sanitizePayload(shownPayload);
+          // Every later full push carries the mark, so the panel keeps showing it.
+          maskedPayload = { ...sanitizePayload(shownPayload), refetchedAt: Date.now() };
           payloadSent = false;
           await push().catch(() => {});
           result = {

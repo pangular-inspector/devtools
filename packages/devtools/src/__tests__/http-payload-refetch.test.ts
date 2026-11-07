@@ -93,6 +93,7 @@ describe('the page side of a refetch', () => {
       expect(last).not.toContain('"old"');
       expect(last).not.toContain('PW-SECRET-9');
       expect(last).not.toContain(JWT);
+      expect(pushes.at(-1)).toMatchObject({ payload: { refetchedAt: expect.any(Number) } });
       const [, result] = calls.find(([name]) => name === 'http-payload-refetch-result')!;
       expect(result).toEqual({
         requestId: 'p1-r',
@@ -170,6 +171,17 @@ describe('refetch on the server', () => {
       size: 20,
       refetchedAt: expect.any(Number),
     });
+  });
+
+  it('keeps the Refetched mark when the page sends its payload again', async () => {
+    const { push, payloads } = await boot();
+    await push('push-http', report('tab1', { found: true, size: 2, entries: [], refetchedAt: 7 }));
+    expect((await payloads()).pages['tab1']).toMatchObject({ refetchedAt: 7 });
+    await push(
+      'push-http',
+      report('tab1', { found: true, size: 2, entries: [], refetchedAt: 'x' }),
+    );
+    expect((await payloads()).pages['tab1']).not.toHaveProperty('refetchedAt');
   });
 
   it('refuses when actions.http is off, from the panel RPC as well', async () => {

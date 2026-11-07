@@ -119,6 +119,7 @@ export function sanitizePayload(input: unknown): PayloadSummary {
     size: num(p.size) ?? 0,
     entries,
     error: masked(p.error, 500),
+    ...(num(p.refetchedAt) !== undefined && { refetchedAt: num(p.refetchedAt) }),
   };
 }
 
