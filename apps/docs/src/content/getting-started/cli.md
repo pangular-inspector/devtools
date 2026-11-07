@@ -237,9 +237,9 @@ New one-time code: 482913 (expires in 5 min)
 Enter it in the panel to connect again.
 ```
 
-Run it in the project folder, or pass `--root`. It works with every server that runs the project: the standalone CLI, the Vite plugin and the Express hub. The running server drops the tokens it holds, stops trusting the panels and pages that used them, and makes the new code, which also ends a lock after too many wrong codes. Each panel then asks for the code again. If no server runs, the command still drops the tokens and says so. The server prints a new code when it starts.
+Run it in the project folder, or pass `--root`. It works with every server that runs the project: the standalone CLI, the Vite plugin and the Express hub. The running server drops the tokens it holds, stops trusting the panels and pages that used them, and makes the new code, which also ends a lock after too many wrong codes. Each panel then asks for the code again. If no server runs, the command still drops the tokens and says so. The server prints a new code when it starts. When several servers run the project, such as the Vite plugin and `pangular dev`, the command waits for each of them and prints the code of each. A server that doesn't answer within 3 seconds is counted in the output, and it keeps its tokens until you run the command again or restart it.
 
-The command and the server pass the request and the code through two files in the project's private token folder (`~/.pangular-inspector/auth/<project>/`, readable by you only). The command deletes the file with the code once it printed it. See [Security](../security.md) for how the tokens are stored.
+The command and the servers pass the request and the codes through files in the project's private token folder (`~/.pangular-inspector/auth/<project>/`, readable by you only): a request, one answer per server, and a heartbeat per running server. The command deletes the request and the answers, which hold the codes, once it printed them. See [Security](../security.md) for how the tokens are stored.
 
 ## Lint export
 

@@ -1,4 +1,12 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import cac from 'cac';
@@ -6,13 +14,15 @@ import { getTempAuthCode, verifyAuthToken } from 'devframe/node/auth';
 import { getInternalContext } from 'devframe/node/hub-internals';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  ROTATE_ANSWER_FILE,
   ROTATE_REQUEST_FILE,
   answerRotateRequest,
+  beatTokenRotation,
   clearTokenFile,
   pollTokenRotation,
+  rotateAnswerFile,
   rotateText,
   rotateTokens,
+  rotateWatcherFile,
   tokenFileSummary,
 } from '../auth-rotate.ts';
 import { codeGuardLocked, registerCodeGuard } from '../auth-guard.ts';
@@ -78,14 +88,35 @@ describe('token file', () => {
   });
 });
 
+/** A trusted token on a server context, with the live connection that used it. */
+function trustToken(ctx: ReturnType<typeof serverContext>, token: string) {
+  const storage = getInternalContext(ctx as never).storage.auth;
+  storage.mutate((state) => {
+    state.trusted[token] = { authToken: token, ua: '', origin: '', timestamp: Date.now() };
+  });
+  return storage;
+}
+
+/** Runs the server's poll for each context every 10 ms, as `watchTokenRotation` does every second. */
+function serve(contexts: ReturnType<typeof serverContext>[], dir: string, log = vi.fn()) {
+  const tick = () => {
+    for (const ctx of contexts) pollTokenRotation(ctx, dir, log);
+  };
+  tick();
+  const timer = setInterval(tick, 10);
+  return () => clearInterval(timer);
+}
+
+const REQUEST_ID = 'abcdef0123456789';
+
 describe('pangular token --rotate', () => {
-  it('drops the file tokens and says so when no server answers', async () => {
+  it('drops the file tokens and says so when no server runs', async () => {
     const home = temp('pangular-home-');
     const root = temp('pangular-root-');
     const dir = privateAuthStoreDir(root, home);
     seedFile(dir, { a: { timestamp: Date.now() } });
     const result = await rotateTokens(root, { home, waitMs: 50, pollMs: 10 });
-    expect(result).toEqual({ server: false, dropped: 1 });
+    expect(result).toEqual({ dropped: 1, answers: [], missing: 0 });
     // The request is gone, so a server started later doesn't rotate.
     expect(existsSync(join(dir, ROTATE_REQUEST_FILE))).toBe(false);
     expect(rotateText(result)).toContain('No running devtools server answered');
@@ -97,30 +128,106 @@ describe('pangular token --rotate', () => {
     const dir = privateAuthStoreDir(root, home);
     const meta: Record<string, unknown> = { id: 'a', isTrusted: true, clientAuthToken: 'tok' };
     const ctx = serverContext(dir, meta);
-    const storage = getInternalContext(ctx as never).storage.auth;
-    storage.mutate((state) => {
-      state.trusted['tok'] = { authToken: 'tok', ua: '', origin: '', timestamp: Date.now() };
-    });
+    const storage = trustToken(ctx, 'tok');
     const before = getTempAuthCode();
-    // The server looks for requests while the command waits.
-    const timer = setInterval(() => answerRotateRequest(ctx, dir), 10);
+    const stop = serve([ctx], dir);
+    let result;
     try {
-      const result = await rotateTokens(root, { home, waitMs: 2000, pollMs: 10 });
-      expect(result.server).toBe(true);
-      if (!result.server) return;
-      expect(result.dropped).toBe(1);
-      expect(result.code).toMatch(/^\d+$/);
-      expect(result.code).toBe(getTempAuthCode());
-      expect(result.code).not.toBe(before);
-      expect(result.expiresAt).toBeGreaterThan(Date.now());
-      expect(rotateText(result, Date.now())).toContain(`New one-time code: ${result.code}`);
+      result = await rotateTokens(root, { home, waitMs: 2000, pollMs: 10 });
     } finally {
-      clearInterval(timer);
+      stop();
     }
+    expect(result.missing).toBe(0);
+    expect(result.dropped).toBe(1);
+    expect(result.answers).toHaveLength(1);
+    const [{ code, expiresAt }] = result.answers;
+    expect(code).toMatch(/^\d+$/);
+    expect(code).toBe(getTempAuthCode());
+    expect(code).not.toBe(before);
+    expect(expiresAt).toBeGreaterThan(Date.now());
+    expect(rotateText(result, Date.now())).toContain(`New one-time code: ${code}`);
     expect(verifyAuthToken('tok', { meta: {} } as never, storage)).toBe(false);
     expect(meta['isTrusted']).toBe(false);
-    // The answer, which holds the code, is deleted once read.
-    expect(existsSync(join(dir, ROTATE_ANSWER_FILE))).toBe(false);
+    // The request and the answer, which holds the code, are deleted once read.
+    expect(readdirSync(dir).filter((name) => name.startsWith('rotate-answer.'))).toEqual([]);
+    expect(existsSync(join(dir, ROTATE_REQUEST_FILE))).toBe(false);
+  });
+
+  it('rotates every server that shares the token folder, not only the first to see the request', async () => {
+    const home = temp('pangular-home-');
+    const root = temp('pangular-root-');
+    const dir = privateAuthStoreDir(root, home);
+    const metaA: Record<string, unknown> = { id: 'a', isTrusted: true, clientAuthToken: 'tokA' };
+    const metaB: Record<string, unknown> = { id: 'b', isTrusted: true, clientAuthToken: 'tokB' };
+    const a = serverContext(dir, metaA);
+    const b = serverContext(dir, metaB);
+    const storageA = trustToken(a, 'tokA');
+    const storageB = trustToken(b, 'tokB');
+    const stop = serve([a, b], dir);
+    let result;
+    try {
+      result = await rotateTokens(root, { home, waitMs: 2000, pollMs: 10 });
+    } finally {
+      stop();
+    }
+    expect(result.missing).toBe(0);
+    expect(result.answers).toHaveLength(2);
+    // One process has one code: the second context answers with the first one's.
+    expect(new Set(result.answers.map((answer) => answer.code)).size).toBe(1);
+    expect(verifyAuthToken('tokA', { meta: {} } as never, storageA)).toBe(false);
+    expect(verifyAuthToken('tokB', { meta: {} } as never, storageB)).toBe(false);
+    expect(metaA['isTrusted']).toBe(false);
+    expect(metaB['isTrusted']).toBe(false);
+  });
+
+  it('does not let one server delete the request before another answered', () => {
+    const dir = temp('pangular-shared-');
+    const a = serverContext(dir, {});
+    const b = serverContext(dir, {});
+    writeFileSync(
+      join(dir, ROTATE_REQUEST_FILE),
+      JSON.stringify({ id: REQUEST_ID, at: Date.now() }),
+    );
+    const first = answerRotateRequest(a, dir);
+    expect(first?.id).toBe(REQUEST_ID);
+    expect(existsSync(join(dir, ROTATE_REQUEST_FILE))).toBe(true);
+    expect(answerRotateRequest(b, dir)?.id).toBe(REQUEST_ID);
+    expect(existsSync(rotateAnswerFile(dir, REQUEST_ID, first!.watcher))).toBe(true);
+    // Each server answers a request once.
+    expect(answerRotateRequest(a, dir)).toBeNull();
+  });
+
+  it('says which running servers did not answer in time, and keeps no code for them', async () => {
+    const home = temp('pangular-home-');
+    const root = temp('pangular-root-');
+    const dir = privateAuthStoreDir(root, home);
+    const live = serverContext(dir, {});
+    // A server with a fresh heartbeat that never answers, such as one that is busy.
+    writeFileSync(rotateWatcherFile(dir, 'deadbeefdeadbeef'), JSON.stringify({ at: Date.now() }));
+    // A heartbeat from a server that stopped long ago is not waited for.
+    writeFileSync(rotateWatcherFile(dir, 'cafecafecafecafe'), JSON.stringify({ at: 0 }));
+    const stop = serve([live], dir);
+    let result;
+    try {
+      result = await rotateTokens(root, { home, waitMs: 200, pollMs: 10 });
+    } finally {
+      stop();
+    }
+    expect(result.answers).toHaveLength(1);
+    expect(result.missing).toBe(1);
+    const text = rotateText(result, Date.now());
+    expect(text).toContain('New one-time code:');
+    expect(text).toContain('1 running devtools server(s) did not answer in time');
+    expect(existsSync(rotateWatcherFile(dir, 'cafecafecafecafe'))).toBe(false);
+  });
+
+  it('keeps a heartbeat file per server', () => {
+    const dir = temp('pangular-beat-');
+    const ctx = serverContext(dir, {});
+    beatTokenRotation(ctx, dir, 1234);
+    const beats = readdirSync(dir).filter((name) => name.startsWith('rotate-watcher.'));
+    expect(beats).toHaveLength(1);
+    expect(JSON.parse(readFileSync(join(dir, beats[0]), 'utf8'))).toEqual({ at: 1234 });
   });
 
   it('unlocks a code guard locked by wrong guesses', () => {
@@ -141,8 +248,11 @@ describe('pangular token --rotate', () => {
     registerCodeGuard(ctx2, { lockAfter: 1, warn });
     handlers[0].handler({ code: 'not-the-code', ua: '', origin: '' });
     expect(codeGuardLocked(ctx2)).toBe(true);
-    writeFileSync(join(dir, ROTATE_REQUEST_FILE), JSON.stringify({ id: 'r1', at: Date.now() }));
-    expect(answerRotateRequest(ctx2, dir)?.id).toBe('r1');
+    writeFileSync(
+      join(dir, ROTATE_REQUEST_FILE),
+      JSON.stringify({ id: REQUEST_ID, at: Date.now() }),
+    );
+    expect(answerRotateRequest(ctx2, dir)?.id).toBe(REQUEST_ID);
     expect(codeGuardLocked(ctx2)).toBe(false);
   });
 
@@ -150,39 +260,41 @@ describe('pangular token --rotate', () => {
     const dir = temp('pangular-fail-');
     const meta: Record<string, unknown> = { id: 'a', isTrusted: true, clientAuthToken: 'tok' };
     const ctx = serverContext(dir, meta);
-    const storage = getInternalContext(ctx as never).storage.auth;
-    storage.mutate((state) => {
-      state.trusted['tok'] = { authToken: 'tok', ua: '', origin: '', timestamp: Date.now() };
-    });
-    writeFileSync(join(dir, ROTATE_REQUEST_FILE), JSON.stringify({ id: 'r1', at: Date.now() }));
+    const storage = trustToken(ctx, 'tok');
+    writeFileSync(
+      join(dir, ROTATE_REQUEST_FILE),
+      JSON.stringify({ id: REQUEST_ID, at: Date.now() }),
+    );
     const lines: string[] = [];
     const failingWrite = () => {
       throw new Error('ENOSPC: no space left on device');
     };
-    expect(() =>
+    const poll = () =>
       pollTokenRotation(
         ctx,
         dir,
         (line) => lines.push(line),
         (c, d) => answerRotateRequest(c, d, Date.now(), failingWrite),
-      ),
-    ).not.toThrow();
+      );
+    expect(poll).not.toThrow();
     expect(lines.join('')).toContain('failed, so every trusted token is kept: ENOSPC');
     expect(verifyAuthToken('tok', { meta: {} } as never, storage)).toBe(true);
     expect(meta['isTrusted']).toBe(true);
-    // The request is gone, so the failure is not retried every second.
-    expect(existsSync(join(dir, ROTATE_REQUEST_FILE))).toBe(false);
-    expect(existsSync(join(dir, ROTATE_ANSWER_FILE))).toBe(false);
+    // The server tries a request once, so the failure is not retried every second.
+    lines.length = 0;
+    poll();
+    expect(lines).toEqual([]);
+    expect(readdirSync(dir).filter((name) => name.startsWith('rotate-answer.'))).toEqual([]);
   });
 
   it('ignores a stale or broken request', () => {
     const dir = temp('pangular-stale-');
     const ctx = serverContext(dir, {});
-    writeFileSync(join(dir, ROTATE_REQUEST_FILE), JSON.stringify({ id: 'old', at: 0 }));
+    writeFileSync(join(dir, ROTATE_REQUEST_FILE), JSON.stringify({ id: REQUEST_ID, at: 0 }));
     expect(answerRotateRequest(ctx, dir)).toBeNull();
-    expect(existsSync(join(dir, ROTATE_REQUEST_FILE))).toBe(false);
+    writeFileSync(join(dir, ROTATE_REQUEST_FILE), JSON.stringify({ id: '../x', at: Date.now() }));
+    expect(answerRotateRequest(ctx, dir)).toBeNull();
     writeFileSync(join(dir, ROTATE_REQUEST_FILE), '{not json');
-    expect(answerRotateRequest(ctx, dir)).toBeNull();
     expect(answerRotateRequest(ctx, dir)).toBeNull();
   });
 

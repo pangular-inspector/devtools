@@ -180,7 +180,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `pangular dev` takes `--proxy-origin`, `--allowed-origin` and `--auth-token`.
 - `pangular build` refuses an `--outDir` that would delete files that are not a previous report, unless `--force` is passed.
 - The source scan reads Nx projects.
-- `pangular token --rotate` drops every trusted token of the project and prints a new one-time code from the running server (the CLI, the Vite plugin or the Express hub), which also ends a lock after too many wrong codes. `pangular token` prints how many tokens there are.
+- `pangular token --rotate` drops every trusted token of the project and prints a new one-time code from each running server (the CLI, the Vite plugin or the Express hub, several at once when they share the project), which also ends a lock after too many wrong codes. `pangular token` prints how many tokens there are.
 - The CLI start-up output names the NativeScript setup view (`?view=nativescript`) next to the Angular Native one.
 
 ### Performance
