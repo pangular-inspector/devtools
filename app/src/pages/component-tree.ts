@@ -61,6 +61,7 @@ import { LeaksSection, type LeaksPage } from './leaks-section';
 import { VirtualWindow } from '../ui/virtual-window';
 import { keepBelowSticky, stickyClearance } from '../ui/sticky-clearance';
 import { SearchField } from '../ui/search-field';
+import { RedactionCount } from '../ui/redaction-count';
 
 interface SourceComponent {
   selector: string;
@@ -228,6 +229,7 @@ function storedDirectiveHosts(): boolean {
   selector: 'app-component-tree',
   imports: [
     SearchField,
+    RedactionCount,
     NgTemplateOutlet,
     Select,
     CdRecording,
@@ -604,6 +606,7 @@ function storedDirectiveHosts(): boolean {
               </div>
 
               @if (shownValues(); as v) {
+                <app-redaction-count [value]="v" />
                 @if (propQuery() && !v.count) {
                   <div class="state compact">
                     <p class="state-title">

@@ -40,6 +40,7 @@ import { PayloadInsights } from './network/payload-insights';
 import { RuleMatchCount } from './network/rule-match-count';
 import { RulePresets } from './network/rule-presets';
 import { presetRules } from '@pangular-inspector/devtools/internal/http-data';
+import { RedactionCount } from '../ui/redaction-count';
 
 type HttpSide = 'client' | 'server';
 
@@ -335,6 +336,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     LimitNote,
     NetworkWaterfall,
     PayloadInsights,
+    RedactionCount,
     RovingList,
     RuleMatchCount,
     RulePresets,
@@ -835,6 +837,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 Matched rule <code>{{ pattern }}</code>
               </p>
             }
+            <app-redaction-count [value]="detail" />
             <!-- A named region, so the focusable scroll box says what it holds. -->
             <pre
               class="preview-body"
@@ -1337,6 +1340,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             @if (payload.error) {
               <p class="bad" role="alert">{{ payload.error }}</p>
             }
+            <app-redaction-count [value]="payload.entries" />
             <app-payload-insights [size]="payload.size" [entries]="payload.entries" />
             <div class="entries">
               @for (entry of payload.entries; track entry.key) {

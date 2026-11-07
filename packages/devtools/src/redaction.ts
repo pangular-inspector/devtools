@@ -6,7 +6,8 @@
  * page report. They build on the shared text masking (`text-redact.ts`, via
  * `redactText` and `redactUrl`), the secret key rules (`forms-privacy.ts`) and
  * `serialize`, so `redaction.secretNames`, JWTs and bearer tokens are masked
- * the same way everywhere.
+ * the same way everywhere. `countRedacted` and `countRedactedText` count the
+ * masks they left, for the counts the panel and agent answers show.
  */
 import type { AnalogRuntimeReport } from './analog-runtime.ts';
 import { REDACTED, isRedactedKey } from './forms-privacy.ts';
@@ -15,6 +16,8 @@ import type { HttpCall } from './http-rules.ts';
 import { redactText, redactUrl } from './router.ts';
 import { serialize } from './serialize.ts';
 import { clip } from './text.ts';
+
+export { countRedacted, countRedactedText, redactionNote } from './redaction-count.ts';
 
 // JSON text
 
