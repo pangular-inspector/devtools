@@ -1,7 +1,7 @@
 import { componentHosts, hostPath, type ComponentDebugNg } from './component-tree.ts';
 import { elementById, elementId } from './element-id.ts';
 import { domTree, hostBySelector, type HostTree } from './host-tree.ts';
-import { className, injectorRef } from './injector-tree.ts';
+import { className, createdServices, injectorKeyById, injectorRef } from './injector-tree.ts';
 import { serializeNamed } from './serialize.ts';
 import { frameworkNodes, type OwnSignal } from './signal-framework.ts';
 import { locateWritable, setRawValue } from './signal-locator.ts';
@@ -10,6 +10,7 @@ import { cleanValue, groupResources, rawNodeOf, type RawNode } from './signal-re
 import type {
   SignalGraph,
   SignalGraphEdge,
+  SignalGraphElement,
   SignalGraphInjector,
   SignalGraphNode,
   SignalNodeKind,
@@ -221,18 +222,46 @@ function markFramework<H extends object>(
 
 type RawGraph = NonNullable<ReturnType<NonNullable<SignalDebugNg['ɵgetSignalGraph']>>>;
 
+/** The services of an environment injector, whose writable fields can be restored. */
+interface ServiceOwners {
+  injectorId: string;
+  instances: object[];
+}
+
+type LocatedField = ReturnType<typeof locateWritable> extends Map<number, infer F> ? F : never;
+
+/** The writable fields of the services behind graph nodes, by node index; first service wins. */
+function locateServices<H extends object>(
+  ng: SignalDebugNg<H>,
+  owners: ServiceOwners,
+  raw: RawGraph,
+): Map<number, { field: LocatedField; service: string }> {
+  const out = new Map<number, { field: LocatedField; service: string }>();
+  for (const instance of owners.instances) {
+    const found = locateWritable(ng, instance, raw.nodes, raw.edges);
+    const service = className((instance as { constructor: new () => unknown }).constructor);
+    for (const [index, field] of found) {
+      if (!out.has(index)) out.set(index, { field, service });
+    }
+  }
+  return out;
+}
+
 function buildGraph<H extends object>(
   raw: RawGraph,
   instance: object | null,
   ng: SignalDebugNg<H>,
   secrets: ReadonlySet<string>,
   componentId?: string,
+  services?: ServiceOwners,
 ) {
   const value = (label: string | undefined, raw: unknown) => graphValue(label, raw, secrets);
   let linked: LinkedReader[] | null = null;
   const kept = raw.nodes.slice(0, MAX_NODES);
   const located =
     instance && componentId ? locateWritable(ng, instance, raw.nodes, raw.edges) : new Map();
+  const serviceFields =
+    !instance && services?.instances.length ? locateServices(ng, services, raw) : null;
   const twins = new Map<string, number>();
   for (const n of kept) {
     if (n.kind !== 'linkedSignal' || 'value' in n) continue;
@@ -246,8 +275,16 @@ function buildGraph<H extends object>(
       epoch: n.epoch ?? 0,
     };
     if (n.label) node.label = n.label;
-    const field = located.get(index);
-    if (field) node.locator = { id: componentId!, key: field.key };
+    const owned = serviceFields?.get(index);
+    const field = located.get(index) ?? owned?.field;
+    if (owned) {
+      node.locator = {
+        id: services!.injectorId,
+        key: owned.field.key,
+        owner: 'service',
+        service: owned.service,
+      };
+    } else if (field) node.locator = { id: componentId!, key: field.key };
     // Angular sends no value for linkedSignal nodes; the matched field holds it.
     const fieldValue = field && !('value' in n) ? cleanValue(field.node) : null;
     if ('value' in n) {
@@ -323,6 +360,64 @@ function graphFor<H extends object>(
   };
 }
 
+/**
+ * The graph of any host with an element injector: a component host as
+ * `graphFor` reads it, or a host with directives but no component, whose
+ * graph holds the effects its directives created. `injectorId` is the element
+ * injector id the graph was asked for by, if any.
+ */
+function graphForHost<H extends object>(
+  ng: SignalDebugNg<H>,
+  el: H,
+  source: NonNullable<SignalGraph['source']>,
+  tree: HostTree<H>,
+  injectorId?: string,
+): SignalGraph | null {
+  const directives = read(() => ng.getDirectives?.(el) ?? [], [] as unknown[]).filter(
+    (d): d is object => !!d && typeof d === 'object',
+  );
+  const names = directives.map((d) =>
+    className((d as { constructor: new () => unknown }).constructor),
+  );
+  const tag = tree.tag(el);
+  const element = (id: string): SignalGraphElement => ({
+    id,
+    tag,
+    directives: names,
+    ...(injectorId ? { injectorId } : {}),
+  });
+  if (isComponentHost(ng, el)) {
+    const graph = graphFor(ng, el, source, tree);
+    if (graph && !graph.unsupported && injectorId && graph.component) {
+      graph.element = element(graph.component.id);
+    }
+    return graph;
+  }
+  if (!directives.length) return null;
+  const injector = read(() => ng.getInjector?.(el), null);
+  if (!injector) return null;
+  const raw = rawGraph(ng, injector);
+  if (!raw) return null;
+  if (!hasIds(raw)) return UNSUPPORTED;
+  const id = elementId(el);
+  return {
+    // No `componentId`: a directive's fields are not restored, so no locators.
+    ...buildGraph(raw, directives[0]!, ng, signalSecrets(ng, el, directives[0]!)),
+    componentSelector: tag,
+    element: element(id),
+    source,
+  };
+}
+
+/** The host element behind an element injector id from the injector tree. */
+function elementInjectorHost<H extends object>(id: string, tree: HostTree<H>): H | null {
+  if (!/^inj-\d+$/.test(id)) return null;
+  const found = injectorKeyById(id);
+  if (!found?.element) return null;
+  const host = found.key as H;
+  return tree.isHost(host) && tree.connected(host) ? host : null;
+}
+
 interface Environment extends SignalGraphInjector {
   injector: object;
 }
@@ -382,7 +477,10 @@ function graphForEnvironment<H extends object>(
   if (!raw) return null;
   if (!hasIds(raw)) return UNSUPPORTED;
   return {
-    ...buildGraph(raw, null, ng, signalSecrets(ng, null, null)),
+    ...buildGraph(raw, null, ng, signalSecrets(ng, null, null), undefined, {
+      injectorId: env.id,
+      instances: createdServices(env.injector),
+    }),
     injector: { id: env.id, name: env.name },
     source: 'selected',
   };
@@ -421,10 +519,16 @@ function pickGraph<H extends object>(
     const env = environments.find((e) => injectorMatches(e, target.env));
     const graph = env ? graphForEnvironment(ng, env) : null;
     if (graph) return graph;
+    // An element injector id from the injector tree reads that element's graph.
+    const host = elementInjectorHost(target.env.trim(), source.tree);
+    const hostGraph = host
+      ? graphForHost(ng, host, 'selected', source.tree, target.env.trim())
+      : null;
+    if (hostGraph) return hostGraph;
   }
   const picked = resolveTarget(target, source);
-  if (isComponentHost(ng, picked)) {
-    const graph = graphFor(ng, picked, 'selected', source.tree);
+  if (picked) {
+    const graph = graphForHost(ng, picked, 'selected', source.tree);
     if (graph) return graph;
   }
   const routed = source.routed(ng);
@@ -442,17 +546,25 @@ function pickGraph<H extends object>(
 }
 
 /** The component or environment injector a graph belongs to; node ids are only unique within it. */
-export function signalOwner(graph: Pick<SignalGraph, 'component' | 'injector'>): string {
-  return graph.component?.id ?? graph.injector?.id ?? '';
+export function signalOwner(
+  graph: Pick<SignalGraph, 'component' | 'injector' | 'element'>,
+): string {
+  return graph.component?.id ?? graph.injector?.id ?? graph.element?.id ?? '';
 }
 
 export function graphKey(graph: SignalGraph): string {
   const nodes = graph.nodes
-    .map((n) => `${n.id}:${n.epoch}${n.locator ? `=${n.locator.key}` : ''}`)
+    .map(
+      (n) =>
+        `${n.id}:${n.epoch}${n.locator ? `=${n.locator.key}` : ''}${n.runs ? `#${n.runs}` : ''}`,
+    )
     .join(',');
   const edges = graph.edges.map((e) => `${e.consumer}>${e.producer}`).join(',');
   const owner =
-    graph.component?.id ?? graph.injector?.id ?? (graph.unsupported ? 'unsupported' : '');
+    graph.component?.id ??
+    graph.injector?.id ??
+    graph.element?.id ??
+    (graph.unsupported ? 'unsupported' : '');
   const envs = (graph.environments ?? []).map((e) => e.id).join(',');
   const watch = graph.watch ? `${graph.watch.stacks ? 's' : ''}:${graph.watch.ids.join(',')}` : '';
   return `${owner}|${graph.source ?? ''}|${nodes}|${edges}|${envs}|${watch}`;

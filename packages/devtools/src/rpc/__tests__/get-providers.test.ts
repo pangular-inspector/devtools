@@ -288,4 +288,28 @@ class Settings {}`,
       ['AlsoLocal', undefined],
     ]);
   });
+
+  it('lists a provide*() helper it cannot resolve as an unresolved helper', async () => {
+    const providers = await providersFor(`
+      export function provideFeature(): EnvironmentProviders {
+        return makeEnvironmentProviders([]);
+      }
+      class Builder {
+        provideThing(): Provider[] {
+          return [];
+        }
+      }
+      export const appConfig = {
+        providers: [provideRouter(routes), provideFeature({ on: true }), lib.provideOther()],
+      };
+    `);
+    expect(providers.map((p) => [p.token, p.type])).toEqual([
+      ['Router', 'root-provider'],
+      ['provideFeature()', 'helper'],
+    ]);
+    expect(providers[1]).toEqual(
+      expect.objectContaining({ source: 'provideFeature()', line: 11, file: 'src/app.ts' }),
+    );
+    expect(providers[1]!.providedIn).toBeUndefined();
+  });
 });

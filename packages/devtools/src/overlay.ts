@@ -27,6 +27,8 @@ import { attachReduxStores } from './redux-stores-collector.ts';
 import { uninstallReduxDevtoolsHook } from './redux-devtools-hook.ts';
 import { attachTanstackQuery } from './query-collector.ts';
 import { collectInjectorTree } from './injector-tree.ts';
+import { registerInjectorRefresh } from './injector-refresh.ts';
+import { trackEffectRuns } from './effect-runs.ts';
 import { registerProviderValues } from './provider-values.ts';
 import {
   clearNavigations,
@@ -443,6 +445,10 @@ async function startOverlay(
   if (!own(restoreSignalHook ?? (() => {}))) return;
   const writeHookMissing = on.signals && !restoreSignalHook;
 
+  // Effect run counts, where the page's Angular profiler reports effect runs.
+  const effectRuns = on.signals ? trackEffectRuns(getNg) : null;
+  if (effectRuns) own(effectRuns.stop);
+
   let signalTarget: SignalTarget = null;
   let lastSignalKey = '';
   let signalSentAt = 0;
@@ -452,6 +458,7 @@ async function startOverlay(
   async function pushSignalGraph(force = false) {
     const graph = signalWatch.attach(collectSignalGraph(getNg(), signalTarget));
     if (!graph) return;
+    effectRuns?.attach(graph.nodes);
     const key = graphKey(graph);
     if (!force && key === lastSignalKey) {
       if (!keepaliveDue(signalSentAt, tickMs())) return;
@@ -531,6 +538,8 @@ async function startOverlay(
   const injectorChannel = channel('push-injector-tree', 'ping-injector-tree', INJECTOR_TREE_SHAPE);
   // Reads the value of a provider the injectors already created, for the Injectors view.
   if (on.injectors) registerProviderValues(my.rpc, pageId, getNg);
+  // Re-reads the element injector the panel selected, or every injector on Refresh.
+  if (on.injectors) registerInjectorRefresh(my.rpc, pageId, () => pushInjectorTree(true));
   // Wakes up with a push of every leased report when a panel or an agent looks again.
   const lease = createPageLease(my, pageId, {
     wake: () =>
