@@ -407,3 +407,39 @@ export const FORMS_STYLES = `
     animation: spin 0.8s linear infinite;
   }
 `;
+
+/** Status badges (VALID, INVALID, PENDING, DISABLED) shared by the form summary and the field table. */
+export const BADGE_STYLES = `
+  /* Opaque tints so a selected or hovered row behind the badge cannot lower its contrast. */
+  .badge {
+    display: inline-block;
+    padding: 0 8px;
+    border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
+    border-radius: 99px;
+    background: color-mix(in srgb, var(--ok) 12%, var(--surface));
+    color: var(--ok-text);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 20px;
+    white-space: nowrap;
+  }
+  .summary > .badge {
+    line-height: 22px;
+  }
+  .badge[data-status='INVALID'] {
+    border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+    background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+    color: var(--danger-text);
+  }
+  .badge[data-status='PENDING'] {
+    border-color: color-mix(in srgb, var(--warn) 30%, transparent);
+    background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+    color: var(--warn-text);
+  }
+  .badge[data-status='DISABLED'] {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+    color: var(--text-2);
+  }
+`;
