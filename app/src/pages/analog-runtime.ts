@@ -1,4 +1,14 @@
-import { Component, computed, effect, input, signal, untracked } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  computed,
+  effect,
+  inject,
+  Injector,
+  input,
+  signal,
+  untracked,
+} from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { actionAllowed, actionBlockedMessage } from '../devtools-config';
 import { rpcTry as call } from '../rpc';
@@ -357,6 +367,7 @@ interface PurgeResult {
 export class AnalogRuntime {
   readonly rpc = input<DevframeRpcClient | null>(null);
   readonly config = signal<RuntimeConfigView | null>(null);
+  private readonly injector = inject(Injector);
   readonly nitro = signal<NitroInternals | null>(null);
   readonly loading = signal(true);
   readonly failed = signal(false);
@@ -419,7 +430,7 @@ export class AnalogRuntime {
   askTask(name: string) {
     this.taskConfirm.set(name);
     this.taskPayload.set('');
-    queueMicrotask(() => document.getElementById('task-run-confirm')?.focus());
+    this.focusAfterRender('task-run-confirm');
   }
 
   async runTask(name: string) {
@@ -454,11 +465,16 @@ export class AnalogRuntime {
     }
   }
 
+  /** Moves focus to a confirm button once it is rendered; a microtask can run before that without zone.js. */
+  private focusAfterRender(id: string) {
+    afterNextRender(() => document.getElementById(id)?.focus(), { injector: this.injector });
+  }
+
   ask(files: string[] | null) {
     const all = this.nitro()?.entries.map((e) => e.file) ?? [];
     this.confirming.set(files ?? all);
     this.message.set('');
-    queueMicrotask(() => document.getElementById('nitro-confirm')?.focus());
+    this.focusAfterRender('nitro-confirm');
   }
 
   async purge(files: string[]) {
