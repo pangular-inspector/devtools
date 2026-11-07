@@ -53,6 +53,12 @@ Each field shows its value, status, touched and dirty state, and errors. Extra f
 
 Filter by path, or with the **Invalid**, **Dirty**, **Touched**, **Disabled** and **Error not shown** chips. If the filters hide every field, click **Clear filters** to reset the path filter and the chips. Focus returns to the path filter. Hover a field to highlight its input in the page.
 
+### Edit a field in its row
+
+Click **Edit** next to a control's value to open an editor under its row. Type a value and press Enter or click **Set value**. The value is read as the current value's type, so `42` sets a number on a number field. Tick or untick **Touched** and **Dirty** to mark the control touched or untouched, dirty or pristine. The page answers in a status line under the editor. If it refuses, the checkbox goes back to the reported state. Press Escape or click **Done** to close the editor. Focus returns to **Edit**.
+
+A redacted field keeps its value hidden and has no value editor, but you can still change **Touched** and **Dirty**. **Edit** is turned off when [`actions.forms`](../getting-started/configuration.md#actions) is `false`, like the other form writes. Agents make the same changes with `pangular:run-form-action` (`set-value`, `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`).
+
 ### Error sources
 
 Each error says where it comes from:

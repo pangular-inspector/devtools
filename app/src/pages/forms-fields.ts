@@ -1,11 +1,26 @@
-import { Component, input, model, output } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  inject,
+  input,
+  linkedSignal,
+  model,
+  output,
+  signal,
+} from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
+import { actionAllowed } from '../devtools-config';
 import { FormsFieldDetail } from './forms-field-detail';
 import {
   BADGE_STYLES,
   FORMS_STYLES,
   SOURCE_LABELS,
+  actionMessage,
+  formAction,
   redactLabel,
   type CollectedForm,
   type FormFieldError,
@@ -34,6 +49,17 @@ export function matchesChip(node: FormFieldNode, chip: Chip): boolean {
       return node.status === 'DISABLED';
     case 'hidden-error':
       return node.dom?.errorShown === false;
+  }
+}
+
+/** The text the inline editor starts with: a string as it is, anything else as JSON. */
+export function draftOf(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === undefined) return '';
+  try {
+    return JSON.stringify(value) ?? '';
+  } catch {
+    return '';
   }
 }
 
@@ -118,6 +144,22 @@ export interface FieldRow {
               <td class="value">
                 @if (row.node.type === 'control') {
                   <code>{{ row.node.value | json }}</code>
+                  @if (row.node.materialized !== false) {
+                    <button
+                      type="button"
+                      class="edit"
+                      [attr.aria-label]="'Edit ' + (row.node.path || 'the form')"
+                      [attr.aria-expanded]="editing() === row.node.path"
+                      [attr.aria-controls]="
+                        editing() === row.node.path ? 'forms-inline-editor' : null
+                      "
+                      [disabled]="!canWrite()"
+                      [attr.aria-describedby]="canWrite() ? null : 'forms-writes-off'"
+                      (click)="toggleEdit(row.node)"
+                    >
+                      Edit
+                    </button>
+                  }
                   @if (row.node.uncommitted !== undefined) {
                     <div class="muted">
                       typed <code>{{ row.node.uncommitted | json }}</code
@@ -214,6 +256,63 @@ export interface FieldRow {
                 }
               </td>
             </tr>
+            @if (editing() === row.node.path) {
+              <tr class="edit-row">
+                <td colspan="5" [style.padding-left.px]="28 + row.depth * 16">
+                  <div
+                    id="forms-inline-editor"
+                    class="inline-editor"
+                    role="group"
+                    [attr.aria-label]="'Edit ' + (row.node.path || 'the form')"
+                  >
+                    @if (!row.node.redacted) {
+                      <label class="sr-only" for="forms-inline-value"
+                        >New value for {{ row.node.path }}</label
+                      >
+                      <input
+                        id="forms-inline-value"
+                        class="filter inline-input"
+                        type="text"
+                        autocomplete="off"
+                        spellcheck="false"
+                        [value]="draft()"
+                        (input)="draft.set($any($event.target).value)"
+                        (keydown.enter)="saveValue(row.node)"
+                        (keydown.escape)="stopEdit($event)"
+                      />
+                      <button type="button" class="small primary" (click)="saveValue(row.node)">
+                        Set value
+                      </button>
+                    } @else {
+                      <span class="muted"
+                        >The value is redacted ({{ redactLabel(row.node.redacted) }}), so it cannot
+                        be edited here.</span
+                      >
+                    }
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [checked]="row.node.touched"
+                        (change)="mark(row.node, 'touched', $event)"
+                        (keydown.escape)="stopEdit($event)"
+                      />
+                      Touched
+                    </label>
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [checked]="row.node.dirty"
+                        (change)="mark(row.node, 'dirty', $event)"
+                        (keydown.escape)="stopEdit($event)"
+                      />
+                      Dirty
+                    </label>
+                    <button type="button" class="small" (click)="stopEdit()">Done</button>
+                  </div>
+                  <p class="status" role="status">{{ editMessage() }}</p>
+                </td>
+              </tr>
+            }
             @if (row.node.truncated) {
               <tr>
                 <td
@@ -494,6 +593,79 @@ export interface FieldRow {
     .status-cell {
       white-space: nowrap;
     }
+    .edit {
+      min-width: 24px;
+      height: 24px;
+      margin-left: 8px;
+      padding: 0 8px;
+      border: 1px solid var(--control-border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text);
+      font: inherit;
+      font-size: 12px;
+      line-height: 22px;
+      vertical-align: middle;
+      cursor: pointer;
+      transition:
+        background-color 150ms var(--ease),
+        border-color 150ms var(--ease);
+    }
+    .edit:hover {
+      background: var(--surface-3);
+    }
+    .edit[aria-expanded='true'] {
+      background: var(--accent-soft);
+      border-color: var(--accent-line);
+      color: var(--text-strong);
+    }
+    .edit:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    .edit:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .fields tbody tr.edit-row,
+    .fields tbody tr.edit-row:hover {
+      background: var(--surface-2);
+    }
+    .inline-editor {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: center;
+    }
+    .inline-input {
+      flex: 1 1 200px;
+      min-width: 0;
+    }
+    .check {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      min-height: 24px;
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .check input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--accent);
+    }
+    .check input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .edit-row .status {
+      margin: 6px 0 0;
+    }
+    .edit-row .status:empty {
+      display: none;
+    }
     .flags {
       min-width: 160px;
     }
@@ -575,6 +747,80 @@ export class FormsFields {
 
   protected readonly chips = CHIPS;
   protected readonly redactLabel = redactLabel;
+  readonly canWrite = computed(() => actionAllowed(this.rpc(), 'forms'));
+  private readonly formId = computed(() => this.form().id);
+  /** The path of the control whose inline editor is open; closes when the form changes. */
+  readonly editing = linkedSignal<string, string | null>({
+    source: this.formId,
+    computation: () => null,
+  });
+  readonly draft = signal('');
+  readonly editMessage = linkedSignal({ source: this.editing, computation: () => '' });
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+
+  /** Opens the inline editor of a control with its current value, or closes it. */
+  toggleEdit(node: FormFieldNode) {
+    if (this.editing() === node.path) {
+      this.stopEdit();
+      return;
+    }
+    this.draft.set(draftOf(node.value));
+    this.editing.set(node.path);
+    afterNextRender(
+      () =>
+        this.host.nativeElement.querySelector<HTMLElement>('#forms-inline-editor input')?.focus(),
+      { injector: this.injector },
+    );
+  }
+
+  /** Closes the inline editor and hands focus back to its Edit button. */
+  stopEdit(event?: Event) {
+    event?.stopPropagation();
+    const path = this.editing();
+    if (path === null) return;
+    const host = this.host.nativeElement;
+    const button = host
+      .querySelector('#forms-inline-editor')
+      ?.closest('tr')
+      ?.previousElementSibling?.querySelector<HTMLElement>('button.edit');
+    this.editing.set(null);
+    button?.focus();
+  }
+
+  async saveValue(node: FormFieldNode) {
+    const formId = this.form().id;
+    const result = await formAction(this.rpc(), {
+      action: 'set-value',
+      formId,
+      path: node.path,
+      value: this.draft(),
+      coerce: true,
+      mode: 'user',
+    });
+    if (this.form().id !== formId || this.editing() !== node.path) return;
+    this.editMessage.set(actionMessage(result));
+  }
+
+  /** Marks a control touched or untouched, dirty or pristine, from its checkbox. */
+  async mark(node: FormFieldNode, flag: 'touched' | 'dirty', event: Event) {
+    const box = event.target as HTMLInputElement;
+    const on = box.checked;
+    const action =
+      flag === 'touched'
+        ? on
+          ? 'mark-touched'
+          : 'mark-untouched'
+        : on
+          ? 'mark-dirty'
+          : 'mark-pristine';
+    const formId = this.form().id;
+    const result = await formAction(this.rpc(), { action, formId, path: node.path });
+    // A refused write changed nothing, so the checkbox goes back to the reported state.
+    if (!result.ok) box.checked = !on;
+    if (this.form().id !== formId || this.editing() !== node.path) return;
+    this.editMessage.set(actionMessage(result));
+  }
 
   toggleChip(chip: Chip) {
     this.active.update((set) => {

@@ -1055,3 +1055,98 @@ describe('FormsTimeline', () => {
     expect(box.checked).toBe(true);
   });
 });
+
+describe('FormsFields inline editing', () => {
+  function client(call: Call, meta: Record<string, unknown> = {}): DevframeRpcClient {
+    const rpc = {
+      call,
+      callEvent: () => Promise.resolve(),
+      sharedState: () => Promise.resolve({ value: () => ({ forms: [form] }), on: () => () => {} }),
+    };
+    return { connectionMeta: meta, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
+  }
+
+  it('edits the value, touched and dirty of a control in its row, then hands focus back', async () => {
+    const calls: Record<string, unknown>[] = [];
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      client((name, arg) => {
+        if (name === 'request-form-action') calls.push(arg);
+        return Promise.resolve({ ok: true, message: 'Done.' });
+      }),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const edit = button(fixture, 'Edit email');
+    expect(edit.getAttribute('aria-expanded')).toBe('false');
+
+    edit.click();
+    await settle(fixture);
+    expect(edit.getAttribute('aria-expanded')).toBe('true');
+    const input = host.querySelector<HTMLInputElement>('#forms-inline-value')!;
+    expect(input.value).toBe('x');
+    expect(document.activeElement).toBe(input);
+
+    input.value = 'a@b.c';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    await settle(fixture);
+    expect(calls.at(-1)).toEqual({
+      action: 'set-value',
+      formId: form.id,
+      path: 'email',
+      value: 'a@b.c',
+      coerce: true,
+      mode: 'user',
+    });
+    expect(host.querySelector('.edit-row [role="status"]')?.textContent).toContain('Done.');
+
+    const [touched, dirty] = Array.from(
+      host.querySelectorAll<HTMLInputElement>('.edit-row input[type="checkbox"]'),
+    );
+    touched.click();
+    await settle(fixture);
+    expect(calls.at(-1)).toEqual({ action: 'mark-touched', formId: form.id, path: 'email' });
+    dirty.click();
+    await settle(fixture);
+    expect(calls.at(-1)).toEqual({ action: 'mark-dirty', formId: form.id, path: 'email' });
+
+    button(fixture, 'Done').click();
+    await settle(fixture);
+    expect(host.querySelector('#forms-inline-editor')).toBeNull();
+    expect(document.activeElement).toBe(edit);
+  });
+
+  it('puts a checkbox back when the page refuses the write', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      client(() => Promise.resolve({ ok: false, error: 'No field at email.' })),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    button(fixture, 'Edit email').click();
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const touched = host.querySelector<HTMLInputElement>('.edit-row input[type="checkbox"]')!;
+    touched.click();
+    await settle(fixture);
+    expect(touched.checked).toBe(false);
+    expect(text(fixture)).toContain('No field at email.');
+  });
+
+  it('turns Edit off when form writes are off', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      client(fail, { configs: { pangular: { actions: { forms: false } } } }),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const edit = button(fixture, 'Edit email');
+    expect(edit.disabled).toBe(true);
+    expect(edit.getAttribute('aria-describedby')).toBe('forms-writes-off');
+  });
+});
