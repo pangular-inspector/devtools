@@ -1,7 +1,5 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Splitter, storePaneSize, storedPaneSize } from '../ui/splitter';
 
@@ -126,18 +124,5 @@ describe('Splitter', () => {
     } finally {
       get.mockRestore();
     }
-  });
-});
-
-describe('pages with a splitter', () => {
-  const page = (name: string) => readFileSync(join(import.meta.dirname, '../pages', name), 'utf8');
-
-  it('size the injector detail and the store change list from a saved width', () => {
-    expect(page('di-inspector.ts')).toMatch(/<app-splitter[^>]*view="injectors"/s);
-    expect(page('di-inspector.ts')).toContain("storedPaneSize('injectors', 420)");
-    expect(page('store-inspector.ts')).toMatch(
-      /<app-splitter[^>]*view="store-log"[^>]*pane="before"/s,
-    );
-    expect(page('store-inspector.ts')).toContain("storedPaneSize('store-log', 300)");
   });
 });

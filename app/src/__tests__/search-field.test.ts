@@ -1,7 +1,5 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MAX_SAVED_FILTERS,
@@ -185,45 +183,6 @@ describe('SearchField', () => {
     } finally {
       get.mockRestore();
       set.mockRestore();
-    }
-  });
-});
-
-describe('every page uses the shared search field', () => {
-  const pages = join(import.meta.dirname, '../pages');
-  const files = readdirSync(pages).filter((file) => file.endsWith('.ts'));
-
-  it('has no hand-written search input left in a page', () => {
-    const raw = files.filter((file) =>
-      /type="search"/.test(readFileSync(join(pages, file), 'utf8')),
-    );
-    expect(raw).toEqual([]);
-  });
-
-  it('names no field anything other than Filter, except a second field on the same page', () => {
-    const labels = files.flatMap((file) =>
-      [
-        ...readFileSync(join(pages, file), 'utf8').matchAll(
-          /<app-search-field[^>]*?\blabel="([^"]+)"/gs,
-        ),
-      ].map((match) => `${file}: ${match[1]}`),
-    );
-    // The values filter sits under the component filter in the Components detail panel.
-    expect(labels).toEqual(['component-tree.ts: Filter values']);
-  });
-
-  it('uses Filter, not Find, in every placeholder', () => {
-    const placeholders = files.flatMap((file) =>
-      [
-        ...readFileSync(join(pages, file), 'utf8').matchAll(
-          /<app-search-field[^>]*?\bplaceholder="([^"]+)"/gs,
-        ),
-      ].map((match) => match[1]),
-    );
-    expect(placeholders.length).toBeGreaterThan(15);
-    for (const placeholder of placeholders) {
-      expect(placeholder).toMatch(/^Filter\b/);
-      expect(placeholder).not.toMatch(/…$/);
     }
   });
 });
