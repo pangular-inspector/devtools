@@ -98,7 +98,19 @@ export function beginSsrTrace(url: string, id = newSsrRequestId()): SsrTrace | u
   return { id, at, active };
 }
 
-/** The `Server-Timing` entries for a render that took `renderMs`. */
+/**
+ * A `Server-Timing` description as a quoted string: printable ASCII only,
+ * with `"` and `\` escaped, at most 100 characters.
+ */
+export function timingText(text: string): string {
+  const safe = text
+    .replace(/[^\x20-\x7e]/g, '?')
+    .slice(0, 100)
+    .replace(/["\\]/g, (c) => `\\${c}`);
+  return `"${safe}"`;
+}
+
+/** The `Server-Timing` entries for a render that took `renderMs`, with one `fetch-<n>` entry per server call. */
 export function ssrTimingEntries(trace: SsrTrace, renderMs: number): string[] {
   const { id, active } = trace;
   const timing = [
@@ -106,6 +118,9 @@ export function ssrTimingEntries(trace: SsrTrace, renderMs: number): string[] {
     `render;dur=${renderMs}`,
     `fetch;desc="${active.fetches} calls";dur=${active.fetchMs}`,
   ];
+  for (const [i, call] of (active.timedFetches ?? []).entries()) {
+    timing.push(`fetch-${i + 1};desc=${timingText(call.label)};dur=${call.durationMs}`);
+  }
   const navs = active.navigations ?? [];
   const sum = (pick: (n: (typeof navs)[number]) => number | undefined) =>
     navs.reduce((total, n) => total + (pick(n) ?? 0), 0);

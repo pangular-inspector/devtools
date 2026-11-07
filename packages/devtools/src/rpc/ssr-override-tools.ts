@@ -1,4 +1,5 @@
 import { actionBlockedMessage, type ResolvedPangularConfig } from '../config.ts';
+import { byteText, payloadInsights } from '../http-data.ts';
 import { redactPreview } from '../http-redact.ts';
 import type { PayloadEntry, PayloadSummary } from '../http-payload.ts';
 import { redactText, redactUrl } from '../router.ts';
@@ -319,10 +320,32 @@ export function transferStateText(
       : '';
   return capped(
     untrusted(
-      `${header} Pass \`key\` to read one value.\n\n| Key | Kind | Bytes | Response or value |\n| --- | --- | --- | --- |\n${rows.join('\n')}${more}`,
+      `${header} Pass \`key\` to read one value.${payloadNotes(payload)}\n\n| Key | Kind | Bytes | Response or value |\n| --- | --- | --- | --- |\n${rows.join('\n')}${more}`,
     ),
     'pass `key`, `search` or a smaller `limit`',
   );
+}
+
+/** The budget warning and the URLs stored under more than one key, as the panel shows them. */
+function payloadNotes(payload: PayloadSummary): string {
+  const info = payloadInsights(payload, { top: 3 });
+  const notes: string[] = [];
+  if (info.overBudget) {
+    const largest = info.largest
+      .map((e) => `${code(clip(e.label, 120))} (${byteText(e.size)})`)
+      .join(', ');
+    notes.push(
+      `Over the ${byteText(info.budget)} budget: the payload is inlined in the HTML and delays the first render. Largest entries: ${largest}.`,
+    );
+  }
+  if (info.sameUrl.length) {
+    const urls = info.sameUrl
+      .slice(0, 5)
+      .map((g) => `${code(clip(g.url, 120))} (${g.keys.length} keys)`)
+      .join(', ');
+    notes.push(`Same URL stored under more than one key (other headers, params or body): ${urls}.`);
+  }
+  return notes.length ? `\n\n${notes.map((n) => `- ${n}`).join('\n')}` : '';
 }
 
 export interface SsrOverrideToolDeps {

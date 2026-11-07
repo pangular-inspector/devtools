@@ -1,4 +1,4 @@
-import { isRedactedKey, REDACTED } from './forms-privacy.ts';
+import { isRedactedKey, REDACTED, redactMessage } from './forms-privacy.ts';
 import { redactText } from './serialize.ts';
 import { clip, overflowKey } from './text.ts';
 import type { NgrxEntryDetail, NgrxSession } from './ngrx-session.ts';
@@ -401,8 +401,10 @@ export function serialize(value: unknown, options: SerializeOptions = {}): unkno
       const out: Record<string, unknown> = {};
       const keys = Object.keys(obj);
       for (const key of keys.slice(0, maxKeys)) {
+        // A token used as a key (`{ [jwt]: … }`) is masked like a value.
+        const shown = shownKey(key, out);
         if (isRedactedKey(key)) {
-          out[key] = REDACTED;
+          out[shown] = REDACTED;
           continue;
         }
         let item: unknown;
@@ -411,7 +413,7 @@ export function serialize(value: unknown, options: SerializeOptions = {}): unkno
         } catch {
           item = '[Unreadable]';
         }
-        out[key] = walk(item, depth + 1);
+        out[shown] = walk(item, depth + 1);
       }
       if (keys.length > maxKeys) out[overflowKey(out)] = `${keys.length - maxKeys} more keys`;
       return out;
@@ -421,6 +423,19 @@ export function serialize(value: unknown, options: SerializeOptions = {}): unkno
   };
 
   return walk(value, 0);
+}
+
+const MIN_TOKEN_KEY = 8;
+
+/** `key` with tokens masked, and a ` (2)` suffix when another key already masked to it. */
+function shownKey(key: string, taken: Record<string, unknown>): string {
+  // Every shape the masks know is longer than this, so a plain state key costs no regex.
+  if (key.length < MIN_TOKEN_KEY) return key;
+  const safe = redactMessage(key);
+  if (safe === key) return key;
+  let shown = safe;
+  for (let n = 2; Object.prototype.hasOwnProperty.call(taken, shown); n++) shown = `${safe} (${n})`;
+  return shown;
 }
 
 export function serializeSlice(
