@@ -819,9 +819,30 @@ async function startOverlay(
     plugins && paced(() => void plugins.push().catch(() => {})),
     startup && paced(() => void startup.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
-  const pushAll = () => collectors.forEach((run) => run());
+  // The counts on the launcher pill (`popup.ts`), handed over when they change.
+  let renders = 0;
+  let shownCounts = '';
+  const showCounts = () => {
+    const counts = { renders, errors: errors?.errorCount() ?? 0 };
+    const key = `${counts.renders}|${counts.errors}`;
+    if (key === shownCounts) return;
+    shownCounts = key;
+    void overlayPopup()
+      ?.then((m) => m.setLauncherCounts(counts))
+      .catch(() => {});
+  };
+  const pushAll = () => {
+    collectors.forEach((run) => run());
+    showCounts();
+  };
   pushAll();
-  const watch = () => watchChangeDetection({ getNg, refresh: pushAll, pollMs: limits.refreshMs });
+  const watch = () =>
+    watchChangeDetection({
+      getNg,
+      refresh: pushAll,
+      onRender: () => renders++,
+      pollMs: limits.refreshMs,
+    });
   refresher = watch();
 
   // A tab in the background runs its timers about once a minute, so it stops

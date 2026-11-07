@@ -34,6 +34,8 @@ export function keepaliveDue(sentAt: number, tickMs: number, now = Date.now()): 
 export interface RefreshOptions {
   getNg: () => unknown;
   refresh: () => void;
+  /** Called on every component template update the profiler reports, before the debounce. */
+  onRender?: () => void;
   doc?: Document;
   debounceMs?: number;
   pollMs?: number;
@@ -164,7 +166,9 @@ export function watchChangeDetection(options: RefreshOptions): RefreshScheduler 
   };
 
   const profiler: Profiler = (event) => {
-    if (pending !== undefined || stopped) return;
+    if (stopped) return;
+    if (event === TEMPLATE_UPDATE_START) options.onRender?.();
+    if (pending !== undefined) return;
     if (event !== TEMPLATE_UPDATE_START && event !== TEMPLATE_CREATE_START) return;
     pending = outsideAngular(() => setTimeout(fire, debounceMs));
   };

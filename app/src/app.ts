@@ -76,8 +76,10 @@ import {
   popoutOpener,
   returnFromPopout,
   storePassive,
+  storePill,
   storeTabLayout,
   storedPassive,
+  storedPill,
   storedTabLayout,
   type TabLayout,
   type ThemePreference,
@@ -492,6 +494,8 @@ function readView(): View | null {
           (themeChange)="setTheme($event)"
           [passive]="passive()"
           (passiveChange)="setPassive($event)"
+          [pill]="pill()"
+          (pillChange)="setPill($event)"
           [hotkey]="popupHotkey()"
           [paletteShortcut]="paletteShortcut"
           [rpc]="rpc()"
@@ -1485,6 +1489,7 @@ export class App implements OnInit, OnDestroy {
   protected readonly paletteShortcut = isMacPlatform() ? '⌘K' : 'Ctrl+K';
   readonly themePreference = computed(() => this.themeService.preference());
   readonly passive = signal(storedPassive());
+  readonly pill = signal(storedPill());
   /** The popup shortcut from the config, as the platform writes it. */
   readonly popupHotkey = computed(() => {
     const hotkey = this.config().popup.hotkey;
@@ -1605,6 +1610,12 @@ export class App implements OnInit, OnDestroy {
     this.passive.set(passive);
     storePassive(passive);
     this.postToPopup({ type: 'pangular:popup-passive', passive });
+  }
+
+  setPill(pill: boolean) {
+    this.pill.set(pill);
+    storePill(pill);
+    this.postToPopup({ type: 'pangular:popup-pill', pill });
   }
 
   /** Sends a message to the popup on the app's page, which checks it came from its panel. */
