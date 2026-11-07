@@ -8,12 +8,11 @@ import {
   sourceRoots,
   stripComments,
   walkFiles,
+  relativeFile,
 } from './source-scan.ts';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
 import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
-
 const ProviderEntrySchema = v.object({
   token: v.string(),
   source: v.string(),
@@ -97,7 +96,7 @@ function scanFile(full: string, cwd: string, out: ProviderEntry[]) {
     // providers, so match against masked source. Masking keeps the length,
     // so offsets still line up.
     const code = maskRegexes(maskStrings(source));
-    const relPath = relative(cwd, full);
+    const relPath = relativeFile(cwd, full);
     const lineAt = lineCounter(code);
 
     // @Injectable({ ... }) or @Service, matched in two steps: the decorator

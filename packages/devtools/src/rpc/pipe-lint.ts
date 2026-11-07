@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
 import { BUILTIN_PIPES, pipeUsesIn, templatesIn, type TemplateSource } from './get-pipes.ts';
 import {
   classScopes,
@@ -10,6 +9,7 @@ import {
   sourceRoots,
   stripComments,
   walkFiles,
+  relativeFile,
 } from './source-scan.ts';
 
 export type LintSeverity = 'error' | 'warning' | 'info';
@@ -57,7 +57,7 @@ export function lintPipes(
       try {
         files.push({
           content: readFileSync(full, 'utf-8'),
-          relPath: relative(cwd, full),
+          relPath: relativeFile(cwd, full),
           fullPath: full,
         });
       } catch {

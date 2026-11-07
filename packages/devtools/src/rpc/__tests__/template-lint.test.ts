@@ -54,7 +54,7 @@ describe('lintTemplates', () => {
       expect(findings[0]).toMatchObject({
         rule: 'template-parse-error',
         severity: 'error',
-        file: join('src', 'view.ts'),
+        file: 'src/view.ts',
         line: 7,
       });
       expect(findings[0]!.message).not.toMatch(/@\d+:\d+$/);
@@ -82,7 +82,7 @@ export class Card {}
       expect(findings).toEqual([
         expect.objectContaining({
           rule: 'template-parse-error',
-          file: join('src', 'card.html'),
+          file: 'src/card.html',
           line: 3,
         }),
       ]);

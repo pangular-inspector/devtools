@@ -16,6 +16,8 @@ import {
   sourceRoots,
   stripComments,
   walkFiles,
+  relativeFile,
+  toPosixPath,
 } from './source-scan.ts';
 
 const UsageSiteSchema = v.object({
@@ -98,7 +100,7 @@ export function scanPipes(cwd: string): PipeInfo[] {
       if (!entry.endsWith('.ts') || entry.endsWith('.spec.ts')) return;
       try {
         const content = readFileSync(full, 'utf-8');
-        const relPath = relative(cwd, full);
+        const relPath = relativeFile(cwd, full);
         pipes.push(...pipesIn(content, relPath, major));
         collectUsages(content, relPath, full, cwd, usagesByName);
       } catch {
@@ -259,7 +261,7 @@ function templateFromUrl(url: string, fullPath: string, cwd: string): TemplateSo
     // call that would mix a real path with an unresolved `cwd` and produce a
     // long, wrong `../../` chain wherever `cwd` sits behind a symlink itself
     // (e.g. macOS's /var -> /private/var).
-    return { text, file: inside, lineAt: lineCounter(text), baseOffset: 0 };
+    return { text, file: toPosixPath(inside), lineAt: lineCounter(text), baseOffset: 0 };
   } catch {
     // templateUrl does not resolve to a readable file
     return null;

@@ -151,6 +151,8 @@ pnpm exec nx affected -t test build # Test and build affected projects
 pnpm test:devtools                  # Devtools package tests (Vitest)
 pnpm test:panel                     # Devtools UI tests (Vitest)
 pnpm test:axe                       # axe check of every panel page (needs Chromium)
+pnpm test:axe:extension             # axe check of the extension panel (after pnpm test:axe)
+pnpm test:coverage                  # Package and panel tests with v8 coverage, into dist/coverage
 pnpm extension:build                # Chrome extension
 pnpm skills:check                   # Agent skills and roles in .claude/
 pnpm commit:check                   # Commit messages on your branch
@@ -158,7 +160,13 @@ pnpm commit:check                   # Commit messages on your branch
 
 `pnpm typecheck` runs `ngc` on `app/tsconfig.json` and `examples/analog/tsconfig.app.json`, so template errors fail it. `app/tsconfig.json` turns on `strictTemplates`.
 
+The mobile overlays (NativeScript, Angular Native and the Capacitor collector) have no browser or device in the package tests. `packages/devtools/src/__tests__/native-harness.ts` stands in for one in plain Node.js: a fake `connectDevframe` that records each session's calls, the globals of a native runtime (a `WebSocket`, a `fetch` for `__connection.json` and no DOM), NativeScript views, Angular Native nodes and a Capacitor WebView with its bridge. `native-overlays-smoke.test.ts` starts each overlay in it and checks the first report and the clean-up. Point a test file's `devframe/client` mock at the harness with `vi.mock('devframe/client', async () => (await import('./native-harness.ts')).devframeModule())`.
+
 `pnpm test:panel` runs the tests in `app/src/__tests__` in jsdom, with the Analog Angular plugin compiling the components. `pnpm test:axe` builds the package, writes a static report of Angular Travel to `dist/panel-axe`, serves it, and runs axe on every tab and on each hub view (`?view=ngrx`, `analog`, `nativescript`, `capacitor`) in both dark and light color schemes. It also checks each tab's states: a filter that matches nothing in every search box, a project whose source scans come back empty, a server that answers every call with an error, and a server that has not answered yet. Seeded pages stand in for a live app on the Capacitor, Errors, Plugins, Queries and Forms tabs, and for long lists on Components and **SSR & HTTP**. It fails on any violation, page error or state that does not show. Run `pnpm exec playwright install chromium` once before the first run.
+
+`pnpm test:axe:extension` checks the Chrome extension's own page. It serves `extension/` over http with a stand-in for the `chrome` APIs, opens `panel.html` and runs axe on every status the panel bridge shows before it connects: a page that doesn't answer or can't be read, a page not served over http, a host the extension may not reach yet, no devtools server and a server that refuses. Then it serves the report from `pnpm test:axe` on the same origin and checks the connected panel, the committed `extension/ui` in the panel's frame. Both color schemes, at 1280 and 360 px. Run `pnpm test:axe` first, or pass another report folder to `node scripts/extension-axe.mjs`.
+
+`pnpm test:coverage` runs `pnpm test:devtools --coverage`, then `pnpm test:panel --coverage`, each with `--testTimeout=20000`: v8 instrumentation slows every test, and the slowest ones went over the default 5 seconds. The v8 provider writes an HTML report, `coverage-summary.json` and `lcov.info` to `dist/coverage/devtools` and `dist/coverage/panel`, also when a test fails. There is no threshold: the report shows what the tests reach and nothing fails on a low number. Open `dist/coverage/devtools/index.html` to read it.
 
 `pnpm skills:check` validates the frontmatter of every skill and role and checks that the files and links they mention exist. `pnpm commit:check` checks every commit on your branch that is not on `main` (it compares with `upstream/main`, then `origin/main`, then `main`).
 
@@ -182,12 +190,15 @@ pnpm commit:check                   # Commit messages on your branch
   <ngmd-step title="Build the extension and check it is committed">
     <code>pnpm extension:build</code>. The job fails when <code>extension/ui</code> differs from the committed copy.
   </ngmd-step>
+  <ngmd-step title="Zip the extension">
+    The zip step of <code>pnpm extension:zip</code>, kept for 14 days as the <code>chrome-extension</code> artifact of the run. It has no <code>key.pem</code> and nothing uploads it to the Chrome Web Store.
+  </ngmd-step>
   <ngmd-step title="Smoke-test the CLI">
     <code>node bin.mjs --help</code>.
   </ngmd-step>
 </ngmd-workflow>
 
-A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`. A `node-22` job runs `pnpm test:devtools` on the newest Node.js 22, the oldest major `engines.node` (`>=22.12.0`) allows.
+A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`, then `pnpm test:axe:extension`. A `coverage` job (**Test coverage**) runs both test suites with `--coverage` and keeps `dist/coverage` as the `coverage` artifact for 14 days. It is marked `continue-on-error`, so it never blocks a pull request: the build job is the test gate. A `node-22` job runs `pnpm test:devtools` on the newest Node.js 22, the oldest major `engines.node` (`>=22.12.0`) allows. A `windows` job (**Package tests on Windows**) runs `pnpm test:devtools` on `windows-latest`, so a path built with `/` or a file name reported with `\` fails there. It runs package scripts with Git Bash, because pnpm uses `cmd.exe` on Windows and the root `prepare` script needs a POSIX shell. In a test, build expected paths with `join()` or `resolve()` from `node:path`, and in a source scan, report file names with `relativeFile()` from `packages/devtools/src/rpc/source-scan.ts`.
 
 The source tests can't run on Node.js 22.12 itself: Node.js runs `.ts` files only from 22.18, and the build tools need newer versions too. So when a pull request or push changes `packages/devtools`, `app`, the root manifests, the lockfile, `.nvmrc` or the CI setup, the `engines-floor` job (**Packed package on Node.js 22.12**) packs the package on the `.nvmrc` version, switches to Node.js 22.12.0 and installs the tarball into an empty project with npm. It then runs `npx pangular --version`, imports the `cli`, `hub`, `ssr` and `vite` entry points, and loads the `hub` entry with `require()`. When `engines.node` changes, change the version in that job too.
 
@@ -197,13 +208,16 @@ Two more jobs run when a pull request or push changes `packages/devtools`, `app`
 
 The `e2e:*` scripts drive real apps in Playwright's Chromium. Run `pnpm exec playwright install chromium` once first.
 
-| Script                | What it checks                                                                                                     | Needs                                                                                                                    | Runs                                     |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| `pnpm e2e:security`   | Secrets planted in a fixture app never reach the panel, agents, logs or the static report; the access gates hold.  | `pnpm devtools:build-pkg`. Ports 5231 to 5236.                                                                           | Pull requests                            |
-| `pnpm e2e:mcp`        | Every agent tool, resource and prompt over HTTP and stdio, with bad arguments and config variants.                 | Builds what it needs. Ports 5150 to 5154.                                                                                | Pull requests                            |
-| `pnpm e2e:panel`      | Every panel view in both themes at 1280 and 360 px: axe, overflow and page errors.                                 | A running app, such as the SSR demo on 4000 (`--base`) started with `PANGULAR_AUTH=false`, or `--auth-log` with its log. | Weekly                                   |
-| `pnpm e2e:resilience` | `multitab`, `expiry`, `lifecycle` and `stress`: tabs that close, crash or hide, server restarts and a large app.   | `pnpm devtools:build-pkg` and the development build. Port 5401.                                                          | Weekly                                   |
-| `pnpm e2e:install`    | A packed tarball installed into fresh apps per setup, package manager and Angular version, plus the package audit. | Network for npm. A local registry on 4873 and the ports after it.                                                        | Weekly, and a few cells on every release |
+| Script                | What it checks                                                                                                                                                          | Needs                                                                                                                    | Runs                                     |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| `pnpm e2e:security`   | Secrets planted in a fixture app never reach the panel, agents, logs or the static report; the access gates hold.                                                       | `pnpm devtools:build-pkg`. Ports 5231 to 5236.                                                                           | Pull requests                            |
+| `pnpm e2e:mcp`        | Every agent tool, resource and prompt over HTTP and stdio, with bad arguments and config variants.                                                                      | Builds what it needs. Ports 5150 to 5154.                                                                                | Pull requests                            |
+| `pnpm e2e:panel`      | Every panel view in both themes at 1280 and 360 px: axe, overflow and page errors.                                                                                      | A running app, such as the SSR demo on 4000 (`--base`) started with `PANGULAR_AUTH=false`, or `--auth-log` with its log. | Weekly                                   |
+| `pnpm e2e:extension`  | The unpacked extension in headless Chromium with DevTools open on the app: the panel finds the server, loads `extension/ui` for the page and lists the `App` component. | A running app, such as the SSR demo on 4000 (`--base`) started with `PANGULAR_AUTH=false`.                               | Weekly                                   |
+| `pnpm e2e:resilience` | `multitab`, `expiry`, `lifecycle` and `stress`: tabs that close, crash or hide, server restarts and a large app.                                                        | `pnpm devtools:build-pkg` and the development build. Port 5401.                                                          | Weekly                                   |
+| `pnpm e2e:install`    | A packed tarball installed into fresh apps per setup, package manager and Angular version, plus the package audit.                                                      | Network for npm. A local registry on 4873 and the ports after it.                                                        | Weekly, and a few cells on every release |
+
+`pnpm e2e:extension` loads `extension/` with `--load-extension` in Playwright's Chromium in the new headless mode, which runs extensions, and opens DevTools on each tab with `--auto-open-devtools-for-tabs`. Playwright has no handle on DevTools, so the script selects the panel through the DevTools front end and reads `panel.html` over the Chrome DevTools Protocol. Set `HEADED=1` to watch it. The weekly `Panel views` job runs it after `pnpm e2e:panel`, against the same demo.
 
 `.github/workflows/e2e.yml` runs the weekly ones on Mondays and opens an issue when one fails. In `e2e:resilience`, a check that fails on an open issue is marked as a known failure with the issue number: it prints `XFAIL` and does not fail the run, and it prints `XPASS` once it passes, so the mark can go. The `soak` check of `e2e:resilience` runs by hand only.
 

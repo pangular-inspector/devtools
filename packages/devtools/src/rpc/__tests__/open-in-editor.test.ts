@@ -11,7 +11,9 @@ import {
 import { fixtureDir } from './fixture-dir.ts';
 
 function project() {
-  const base = realpathSync(fixtureDir('pangular-open-'));
+  // `.native` gives the long name Windows resolves to (`C:\Users\runneradmin`), where the
+  // temp folder's own path is the 8.3 short name (`C:\Users\RUNNER~1`) that `realpathSync` keeps.
+  const base = realpathSync.native(fixtureDir('pangular-open-'));
   const root = join(base, 'app');
   const outside = join(base, 'secret');
   mkdirSync(join(root, 'src/app'), { recursive: true });
