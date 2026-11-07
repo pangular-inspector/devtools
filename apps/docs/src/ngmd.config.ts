@@ -191,6 +191,7 @@ const config: NgmdConfig = {
         {label: 'Chrome extension', href: '/getting-started/chrome-extension'},
         {label: 'Angular Native', href: '/getting-started/angular-native'},
         {label: 'NativeScript', href: '/getting-started/nativescript'},
+        {label: 'Platforms', href: '/getting-started/platforms'},
         {label: 'Troubleshooting', href: '/getting-started/troubleshooting'},
       ],
     },

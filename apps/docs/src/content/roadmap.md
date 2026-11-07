@@ -17,12 +17,12 @@ Plans follow feedback. To ask for something, or to move an item up, comment on i
 
 ### Inspection and agents
 
-| Feature                                   | Read more                                                                                                                                        |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Agent tools over MCP for the live app     | [Tools](./agents/tools.md)                                                                                                                       |
-| NgRx and SignalStore time travel          | [Restore an earlier state](./inspectors/ngrx-store.md#restore-an-earlier-state)                                                                  |
-| Why a form is invalid, for you and agents | [Forms agent tools](./inspectors/forms.md#agent-tools)                                                                                           |
-| Mobile apps                               | [Capacitor](./inspectors/capacitor.md), [NativeScript](./getting-started/nativescript.md), [Angular Native](./getting-started/angular-native.md) |
+| Feature                                   | Read more                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------- |
+| Agent tools over MCP for the live app     | [Tools](./agents/tools.md)                                                      |
+| NgRx and SignalStore time travel          | [Restore an earlier state](./inspectors/ngrx-store.md#restore-an-earlier-state) |
+| Why a form is invalid, for you and agents | [Forms agent tools](./inspectors/forms.md#agent-tools)                          |
+| Mobile apps                               | [Platforms](./getting-started/platforms.md)                                     |
 
 ### Setup and workflow
 
@@ -85,6 +85,8 @@ These items remain from phase 3, [#342](https://github.com/pangular-inspector/de
 | `ng add`         | One command sets up the overlay and the hub in an Angular CLI app.                  | [#342](https://github.com/pangular-inspector/devtools/issues/342) |
 | Extension stores | The Chrome extension in the Chrome Web Store and Edge Add-ons, and a Firefox build. | [#342](https://github.com/pangular-inspector/devtools/issues/342) |
 | Ionic support    | Ionic apps, on top of the Capacitor support.                                        | [#307](https://github.com/pangular-inspector/devtools/issues/307) |
+
+[Platforms](./getting-started/platforms.md#planned) lists the planned platforms and extension stores together.
 
 ## Fixes and improvements per inspector
 

@@ -175,6 +175,8 @@ The Analog, Angular Native and Capacitor docks open setup steps when their tool 
 | Angular Native | `Angular Native: no app connected` | An Angular Native app reports        |
 | Capacitor      | `Capacitor: no app connected`      | A Capacitor app reports              |
 
+The setup steps of the Angular Native, NativeScript and Capacitor docks end with a **Supported and planned platforms** link to [Platforms](./platforms.md).
+
 The tooltip comes back when the app stops reporting and its data expires. The Angular and NgRx docks always have data. The NativeScript dock always shows setup steps, because a NativeScript app's data shows in the Angular dock, so its tooltip stays **NativeScript**.
 
 ### Messages and badges
