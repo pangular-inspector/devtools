@@ -26,6 +26,7 @@ import type { Subscription } from 'rxjs';
 import { isFailingRuleStatus } from './config.ts';
 import { redactMessage } from './forms-privacy.ts';
 import { redactText } from './text-redact.ts';
+import { currentCallOrigin } from './http-origin.ts';
 import { transferCacheKeys } from './http-cache-key.ts';
 import { cacheSkipReason, requestSkipReason, type CacheSkip } from './http-cache-reason.ts';
 import { isHydrationMessage } from './http-hydration.ts';
@@ -165,6 +166,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     pageUrl = location.pathname + location.search;
   }
   const url = req.urlWithParams;
+  const origin = currentCallOrigin();
   const registry = httpRegistry();
   const rules = side === 'client' ? clientRules() : registry.record && registry.rules;
   const rule = matchRule(url, req.method, rules, side);
@@ -178,6 +180,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     side,
     pageUrl,
     ...(requestId ? { requestId } : {}),
+    ...(origin ? { origin } : {}),
     faulted: mocked && isFailingRuleStatus(status),
     ...(mocked && !isFailingRuleStatus(status) ? { mocked: true } : {}),
     ...(delay ? { delayMs: delay } : {}),

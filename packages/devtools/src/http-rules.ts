@@ -1,6 +1,7 @@
 import { CACHE_SKIP_TEXT, HTTP_RULE_CHANCE, isHttpRuleStatus, type CacheSkip } from './config.ts';
 import { sanitizeHeaders, type HeaderRecord } from './http-headers.ts';
 import { ruleScopeMatches } from './http-data.ts';
+import { sanitizeOrigin, type CallOrigin } from './http-origin.ts';
 
 export type HttpSide = 'client' | 'server';
 
@@ -49,6 +50,8 @@ export interface HttpCall {
   pageUrl?: string;
   /** The SSR request this server call belongs to, set when `ssrMiddleware` traced the render. */
   requestId?: string;
+  /** The Angular API that likely started the call, read from the stack (`http-origin.ts`). */
+  origin?: CallOrigin;
   /** Server calls only: the transfer cache stored the response for hydration. */
   cacheStored?: boolean;
   /** Server calls only: why the transfer cache did not store it. */
@@ -207,6 +210,7 @@ export function sanitizeCalls(input: unknown, max = MAX_CALLS): HttpCall[] {
       rulePattern: str(c.rulePattern, 500),
       pageUrl: str(c.pageUrl, 2000),
       ...(str(c.requestId, 40) ? { requestId: str(c.requestId, 40) } : {}),
+      ...(sanitizeOrigin(c.origin) ? { origin: sanitizeOrigin(c.origin) } : {}),
       ...(typeof c.cacheStored === 'boolean' ? { cacheStored: c.cacheStored } : {}),
       ...(typeof c.cacheSkip === 'string' && Object.hasOwn(CACHE_SKIP_TEXT, c.cacheSkip)
         ? { cacheSkip: c.cacheSkip as CacheSkip }

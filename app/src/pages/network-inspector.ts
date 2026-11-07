@@ -32,6 +32,7 @@ import { VirtualWindow } from '../ui/virtual-window';
 import { HttpHeadersView } from './http-headers';
 import { NetworkWaterfall } from './network-waterfall';
 import { CallCopy } from './network/call-copy';
+import { CallOriginTag } from './network/call-origin';
 import { HarExport } from './network/har-export';
 import { HttpLint } from './network/http-lint';
 import { PayloadInsights } from './network/payload-insights';
@@ -69,6 +70,8 @@ interface HttpCall {
   rulePattern?: string;
   pageUrl?: string;
   requestId?: string;
+  /** The Angular API that likely started the call, from a stack heuristic. */
+  origin?: 'httpResource' | 'resource' | 'defer';
   cacheStored?: boolean;
   cacheSkip?: CacheSkip;
   at: number;
@@ -320,6 +323,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
   selector: 'app-network-inspector',
   imports: [
     CallCopy,
+    CallOriginTag,
     HarExport,
     JsonPipe,
     HttpHeadersView,
@@ -731,6 +735,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                     <td class="num">{{ entry.durationMs }} ms</td>
                     <td>
                       <div class="notes">
+                        @if (entry.origin) {
+                          <app-call-origin [origin]="entry.origin" />
+                        }
                         @if (entry.cacheHit) {
                           <span class="tag">transfer cache</span>
                         }

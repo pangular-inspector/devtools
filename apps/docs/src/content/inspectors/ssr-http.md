@@ -125,6 +125,7 @@ Every `HttpClient` request, tagged **SSR** or **Client**. Each row shows the met
 - **mocked**: a fault rule answered it with a status below 400.
 - **faulted**: a fault rule failed it with a status of 400 or more, or with a network error (status 0, shown as **ERR**).
 - **rule**: the pattern of the fault rule that matched it.
+- **likely httpResource()**, **likely resource()** or **likely @defer**: the Angular API that most likely started the call. See [Call origin](#call-origin).
 
 A request that was unsubscribed before its response, for example by `switchMap`, a route change or a destroyed component, shows **cancelled** as its status. **ERR** marks a request that failed without a status, such as when the browser is offline or CORS blocks it.
 
@@ -143,6 +144,18 @@ If nothing matches, **Clear filters** resets all three. While the filters hide t
 Click a row for a response preview. The preview opens under the timeline and takes focus. A JSON body is indented by 2 spaces. Other text, and a body clipped at 2000 characters, shows as recorded. The preview is redacted before it reaches the panel, so masked values stay masked. Under the body, **Request headers** and **Response headers** list the call's headers. Request headers are the ones the call had when it reached `withPangular()`, so headers that later interceptors add are not in the list. Response headers are the ones the app could read; a cross-origin response shows only the headers CORS exposes. `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` are always masked, whatever `redaction.unmask` says. Names that look secret or match `redaction.secretNames`, and JWTs and bearer tokens in any value, are masked too. The interceptor keeps only a reference to the headers Angular already built. The overlay reads and masks them when it sends the call, so a page without the devtools copies nothing. **Copy** puts the shown preview on the clipboard. **Copy as fetch** and **Copy as cURL** put the call on the clipboard as a `fetch()` statement or a `curl` command, with its method, URL and request headers. They are built from the masked copy the panel holds, so `[redacted]` stays where a secret was, and a comment at the top says to fill those values in. Request bodies are not recorded, so a `POST`, `PUT`, `PATCH` or `DELETE` gets a comment that says so. Relative client URLs get the panel's origin, as in **Export HAR**. The panel only copies text: it never sends the request. **Mock this request** fills in the [fault rule form](#fault-injection) from the call. **Close** or `Escape` returns focus to the row. A long timeline scrolls inside its own box. The timeline shows the page's client calls and the SSR calls made while rendering its first URL. **Clear timeline** empties it.
 
 **Export HAR** saves the timeline as a HAR 1.2 file, named after the page path, such as `pangular-shop.har`. It holds the SSR request that served the page, with its kept response headers such as `Server-Timing`, then the server and client calls, oldest first, each with its method, URL, status, time, headers and response preview. Notes such as transfer cache, mocked, failed by a fault rule or cancelled go in each entry's `comment`. The file is written from the masked copy the panel holds, so secrets stay `[redacted]`. Request bodies are not recorded, and response bodies are the previews, clipped at 2000 characters. Relative client URLs get the panel's origin, which is the app's when the app's dev server serves the panel; in the Chrome extension they stay relative. Open the file in Chrome's Network panel, or attach it to a bug report.
+
+### Call origin
+
+The interceptor reads the call stack when a request reaches it and looks for Angular's own frames:
+
+| Tag                       | Frames it looks for                                                                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **likely httpResource()** | `HttpResourceImpl`, the class behind `httpResource()`.                                                                 |
+| **likely resource()**     | `loadEffect` of a plain resource: a `resource()` loader or an `rxResource()` stream that calls HttpClient.             |
+| **likely @defer**         | `applyDeferBlockState` or `renderDeferBlockState`: the call started while the content of a `@defer` block was created. |
+
+It is a guess, so the tag says **likely**. It needs readable function names, which development builds keep. A loader that awaits something before it calls HttpClient can lose the resource frames, and a deferred component that fetches in `ngOnInit` rather than in its constructor or a field runs after the block rendered, so it gets no **@defer** tag. A call with none of these frames gets no tag. Agents see the same guess in `list-http-calls` flags, and **Export HAR** writes it into each entry's comment.
 
 ### HTTP lint
 

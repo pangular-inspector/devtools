@@ -137,6 +137,8 @@ export interface RecordedCall extends CallLike {
   pageUrl?: string;
   requestId?: string;
   ruleId?: string;
+  /** The Angular API that likely started the call: `httpResource`, `resource` or `defer`. */
+  origin?: 'httpResource' | 'resource' | 'defer';
   error?: string;
   preview?: string;
   requestHeaders?: Record<string, string>;
@@ -252,6 +254,8 @@ function callNotes(call: RecordedCall): string[] {
   if (call.delayMs) notes.push(`delayed ${call.delayMs} ms by a fault rule`);
   if (call.cancelled) notes.push('cancelled');
   if (call.requestId) notes.push(`SSR request ${call.requestId}`);
+  if (call.origin)
+    notes.push(`likely started by ${call.origin === 'defer' ? '@defer' : `${call.origin}()`}`);
   return notes;
 }
 
