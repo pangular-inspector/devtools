@@ -77,7 +77,7 @@ describe('the router timeline live controls', () => {
     return { id, url, trigger: 'imperative', startedAt: id, endedAt: id + 1, outcome: 'succeeded' };
   }
   function page(navigations: NavigationRecord[]): RouterPage {
-    return { pageId: 'p1', reportedAt: 1, snapshot: null, navigations };
+    return { pageId: 'p1', reportedAt: 1, changedAt: 1, snapshot: null, navigations };
   }
   async function settle(fixture: ComponentFixture<unknown>) {
     for (let i = 0; i < 3; i++) {
