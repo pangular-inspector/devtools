@@ -130,7 +130,9 @@ When the page uses Ionic, the tab shows an **Ionic page stacks** section with a 
 
 Each row shows the page's component and, with `@ionic/angular`, the URL Ionic stored for it. Hover or focus a row to outline the page in the app, and select it to scroll to it. A page Ionic hid in the stack can show no outline. An outlet inside `ion-tabs` shows its tab URL, and a named outlet shows its name.
 
-The overlay reads the stack through the `IonRouterOutlet` directive of `@ionic/angular`, from `ng.getDirectives()`, so it needs a development build. Without the directive, the card reads the outlet's `.ion-page` children from the DOM: the active page is the last one without `ion-page-hidden`, and there are no URLs. The direction comes from the outlet's `stackDidChange` output, which the overlay listens to without changing it. Before the first event, the overlay infers it from how the stack changed. It changes nothing in the app.
+The overlay reads the stack through the `IonRouterOutlet` directive of `@ionic/angular`, from `ng.getDirectives()`, so it needs a development build. On this path the direction comes from the outlet's `stackDidChange` output, which the overlay listens to without changing it. Before the first event, the overlay infers it from how the stack changed.
+
+Without the directive, the card reads the outlet's `.ion-page` children from the DOM: the active page is the last one without `ion-page-hidden`, and there are no URLs. Here the direction is always inferred from how the stack changed. Either way, the overlay changes nothing in the app.
 
 The section shows when the page the tab shows has an `ion-app` or an `ion-router-outlet`. It lists up to 20 outlets with up to 50 pages each, and says how many it left out. URLs are masked like router URLs.
 

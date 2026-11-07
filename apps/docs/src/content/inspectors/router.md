@@ -175,7 +175,7 @@ The overlay reads the helper `provideRouter()` publishes (`ng.ɵgetRouterInstanc
 
 A page can bootstrap more than one Angular app, with several `bootstrapApplication()` calls or micro-frontends. Each app root (an element with `ng-version`) that has its own Router counts as an app. Roots that share one Router count once.
 
-When a page has more than one, the **Live router** heading shows an **App** picker. Each app is listed by its root component and tag, such as `ShellApp <app-root>`. The first app is the one the router views showed before: the router that has routes or has navigated, else the first root. Pick another app to see its route, navigations, config, setup and lint. The buttons that act on the router (**Go**, **Read lazy**, **Abort**, **Probe in app** and **Replay**) run on the app you picked. A page with one app shows no picker.
+When a page has more than one, the **Live router** heading shows an **App** picker. Each app is listed by its root component and tag, such as `ShellApp <app-root>`. The first app is the router that has routes or has navigated, else the first root. Pick another app to see its route, navigations, config, setup and lint. The buttons that act on the router (**Go**, **Read lazy**, **Abort**, **Probe in app** and **Replay**) run on the app you picked. A page with one app shows no picker.
 
 Each app has an id: the tag of its root, with `-2`, `-3` and so on for a second root with the same tag. The id stays the same while the root is on the page, and a root that replaces a removed one with the same tag gets the same id back. The router agent tools take that id, or the root component name, as `app`.
 
