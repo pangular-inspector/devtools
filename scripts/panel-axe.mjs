@@ -1210,19 +1210,20 @@ try {
       // A seeded Analog app, at full width and at 360px.
       for (const width of [1280, 360]) {
         const analog = await newPanel(colorScheme, seedAnalog);
-        const analogPage = await analog.newPage();
-        await analogPage.setViewportSize({ width, height: 800 });
-        analogPage.on('pageerror', (error) =>
-          failures.push(`${colorScheme} Analog ${width}px: page error ${error.message}`),
-        );
         try {
+          const analogPage = await analog.newPage();
+          await analogPage.setViewportSize({ width, height: 800 });
+          analogPage.on('pageerror', (error) =>
+            failures.push(`${colorScheme} Analog ${width}px: page error ${error.message}`),
+          );
           await analogPage.goto(`${base}?view=analog`);
           await analogPage.locator('.status.connected').waitFor();
           await checkAnalog(analogPage, `${colorScheme} Analog ${width}px`);
         } catch (error) {
           failures.push(`${colorScheme} Analog ${width}px: did not show (${error.message})`);
+        } finally {
+          await analog.close();
         }
-        await analog.close();
       }
 
       // A project whose source declares nothing: the empty state of the source scans.
