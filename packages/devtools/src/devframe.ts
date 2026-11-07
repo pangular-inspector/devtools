@@ -34,7 +34,7 @@ import { registerAudit } from './rpc/audit-register.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { TOKEN_ID_ARGUMENT } from './rpc/token-match.ts';
 import { registerInjectionExplain } from './rpc/injection-explain.ts';
-import { sanitizeInjectorTree } from './rpc/injector-report.ts';
+import { INJECTOR_TREE_LIMITS, sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
@@ -69,6 +69,7 @@ import { injectorMatches, isEnvironmentRequest, signalOwner } from './signal-gra
 import { scanNgrxStore } from './rpc/get-ngrx-store.ts';
 import { createNgrxHistory } from './rpc/ngrx-session-tools.ts';
 import { createProviderValues } from './rpc/provider-values.ts';
+import { requestInjectorRefresh } from './rpc/injector-refresh.ts';
 import {
   dispatchResultText,
   expireNgrxPages,
@@ -2727,7 +2728,9 @@ const pangular = defineDevframe({
           pageId,
           roots: tree.roots,
           environment: tree.environment,
-          ...(report?.truncated === true || tree.truncated ? { truncated: true } : {}),
+          ...(report?.truncated === true || tree.truncated
+            ? { truncated: true, limits: INJECTOR_TREE_LIMITS }
+            : {}),
           ...(zone ? { zone } : {}),
           reportedAt: Date.now(),
         };
@@ -2784,6 +2787,20 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: (message: { pageId?: unknown; request?: unknown } | null) =>
         providerValues.request(message?.pageId, message?.request),
+    });
+
+    // The panel asks the page to read an element injector again (the one it
+    // selected), or every injector (Refresh). The page pushes a fresh tree.
+    register({
+      name: 'request-injector-refresh',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; injectorId?: unknown } | null) =>
+        requestInjectorRefresh(
+          message,
+          injectorPages.keys(),
+          (method, args) => void my.rpc.broadcast({ method, args: [args], optional: true }),
+        ),
     });
 
     register({
@@ -3743,7 +3760,14 @@ const pangular = defineDevframe({
         }
         const matches = (g: PageGraph) =>
           !bySelector &&
-          ([g.componentSelector, g.component?.name, g.component?.id].includes(wanted) ||
+          ([
+            g.componentSelector,
+            g.component?.name,
+            g.component?.id,
+            g.element?.id,
+            g.element?.injectorId,
+          ].includes(wanted) ||
+            (!!g.element && g.element.directives.includes(wanted)) ||
             (!!g.injector && injectorMatches(g.injector, wanted)));
         const latestMatch = () =>
           byRecency(
@@ -3830,7 +3854,7 @@ const pangular = defineDevframe({
       id: 'pangular:inspect-providers',
       title: 'Inspect injectors and providers',
       description:
-        'DI injectors on the page: without arguments the injector tree with providers; `injector` narrows to one injector (component, Root, Platform, Route: x); `token` finds where a token is provided and injected.',
+        'DI injectors on the page: without arguments the injector tree with providers; `injector` narrows to one injector (component, Root, Platform, Route: x); `token` finds where a token is provided and injected. `inactive: true` marks a lazy route injector off the rendered path.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -170,6 +170,19 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The server keeps at most 256 KB of JSON for each NgRx store's state. Past it, the largest slices show `[too large: N KB]`, so one huge slice can't fill the server's memory or the panel.
 - `withPangular({ transferCache })` takes Angular's `HttpTransferCacheOptions` and passes them to the transfer cache that `provideClientHydration()` sets up. The SSR & HTTP tab uses them to explain each transfer cache outcome, including a new **Filter** reason.
 - The Dashboard has a **Security** block: whether the one-time code is on or locked, how many trusted tokens there are and when they expire, how many pairing tokens the server accepts, and who may reach the server (reach, allowed origins and hosts). The panel reads it with the `security-status` RPC, which answers trusted clients only and never carries a token or the code.
+- **Injectors:** selecting an element injector reads it again on the page, and **Refresh** in the toolbar reads every injector again. Element injectors are still cached between updates, since reading what they inject is costly.
+- **Injectors:** the Environment view lists lazy route injectors the router already loaded but no rendered element uses, with an **inactive** chip. `inspect-providers` and the `injector-tree` resource mark them `inactive: true`.
+- **Injectors:** a collapsed **Hint** above the live tree lists providers your source declares that nothing on the page injected so far. It is a hint, not an error.
+- **Injectors:** source mode lists `provide*()` calls it can't resolve to tokens, such as your own provider functions, under a collapsed **Helpers (unresolved)** group instead of dropping them. `scan-providers` gives them `type: "helper"`.
+- **Injectors:** each **Injected here** row has a **Resolution** button that draws the lookup path for that token: asked, provides it, not asked, skipped, or the null injector.
+- **Injectors:** live provider rows say where the source scan declares the token, with links.
+- **Injectors:** a truncated tree carries the server's `limits`, and the notice names them.
+- **Signals:** a node's details link it to its declaration in the source scan, or list the candidates when the name matches several.
+- **Signals:** a history entry shows what changed from the entry before, path by path.
+- **Signals:** **Restore** works on writable signal fields (`signal()`, `linkedSignal()`, `model()`) of services in root and route graphs, not on computed ones.
+- **Signals:** hosts with directives but no component have a graph, in the **Graph of** picker and in `inspect-signals`, which also takes an element injector id such as `inj-12`.
+- **Signals:** effect run counts and times, where Angular's profiler reports effect runs. No Angular version up to 22.1 does, so the line stays hidden there.
+- **Signals:** the unnamed signal hint says that the compiler names signals from Angular 20.1.
 
 #### SSR & HTTP tools
 
