@@ -135,7 +135,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - A **Terminals** dock that runs the project's build and test commands (opt in with `terminals: true`).
 - Hub messages and toasts, a dock group with badges, and an **All tools** dock.
 - New entry points: `/overlay-manual` (starts nothing on import), `/plugin`, `/capacitor-hook`, `/store-hook`, `/startup-hook`, `/ssr` and `/cd-data`.
-- New config options: `agent.browserTools`, `limits.capacitorCalls`, `limits.idleAfterMs`, `popup` and `plugins`.
+- New config options: `agent.browserTools`, `limits.capacitorCalls`, `limits.idleAfterMs`, `popup`, `plugins` and `redaction.entropy`.
+- `redaction.entropy`, off by default, masks long high-entropy strings that no name or shape rule catches, such as an opaque token in a harmless field. `true` masks runs of 24 characters or more; `{minLength, threshold}` sets other limits. Hex values, UUIDs, ULIDs and camelCase identifiers stay readable, and known shapes keep their prefix. It applies on every redaction path, on the page and on the devtools server, and shows as **Entropy masking** on the Dashboard.
 - After pairing, focus moves to the active tab with a **Connected** note.
 
 #### Inspectors

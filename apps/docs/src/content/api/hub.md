@@ -84,6 +84,14 @@ interface PangularConfig {
     secretNames?: string[];
     /** Field names to show even when they look secret, like `window.__PANGULAR_FORMS__.unmask`. */
     unmask?: string[];
+    /**
+     * Also mask high-entropy strings that no name or shape rule catches, such
+     * as an opaque token in a harmless-looking field. Off by default. Hex
+     * values (hashes, UUIDs), ULIDs and camelCase identifiers stay readable.
+     * `true` uses runs of 24 characters or more and 4.5 bits per character;
+     * an object sets `minLength` (16 to 512) and `threshold` (2 to 6 bits).
+     */
+    entropy?: boolean | {minLength?: number; threshold?: number};
   };
   limits?: {
     /**
