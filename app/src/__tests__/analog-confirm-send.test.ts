@@ -162,5 +162,10 @@ describe('Analog request playground', () => {
     await settle(fixture);
     fixture.componentInstance.tryApi({ method: 'ANY', path: '/api/v1/hello', file: 'h.ts' });
     expect(fixture.componentInstance.tryTarget()).toMatchObject({ nonce: 1 });
+    fixture.componentInstance.view.set('render');
+    expect(fixture.componentInstance.tryTarget()).toBeNull();
+    fixture.componentInstance.view.set('server');
+    fixture.componentInstance.tryApi({ method: 'GET', path: '/api/v1/hello', file: 'h.ts' });
+    expect(fixture.componentInstance.tryTarget()).toMatchObject({ nonce: 2 });
   });
 });

@@ -490,7 +490,9 @@ export function contentFiles(root: string, schema?: ContentSchema): AnalogConten
     const out: AnalogContentFile = { file, slug, attributes: parsed.attributes };
     if (parsed.error) out.error = parsed.error;
     else if (schema) {
-      const errors = validateFrontmatter(typedFrontmatter(source).values, schema);
+      // A block the typed reader can't read would give false schema errors; skip the check.
+      const typed = typedFrontmatter(source);
+      const errors = typed.error ? [] : validateFrontmatter(typed.values, schema);
       if (errors.length) out.schemaErrors = errors;
     }
     return out;

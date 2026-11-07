@@ -87,7 +87,7 @@ The **API routes** table lists your server routes. Click **Try**, or pick a rout
 | **Cookies**                         | Sent as one `cookie` header.                                                                                 |
 | **Copy as curl**, **Copy as fetch** | Copy the request as a command, with the dev server origin.                                                   |
 | Response                            | Status, total time, time to the headers, size, content type, the **Response headers** (masked) and the body. |
-| **History for** the route           | The last 10 requests of that route pattern while the panel stays open. **Load** puts one back in the form.   |
+| **History for** the route           | The last 10 requests of that route pattern while you stay on **Server**. **Load** puts one back in the form. |
 
 While a request runs, **Send** is off and the old response is cleared. For POST, PUT, PATCH and DELETE, **Send** stays off until you tick **This request can change data on the dev server**. The tick covers one request. It clears after you send, when you change the method or URL, and when you click **Try** on another route.
 
@@ -140,7 +140,9 @@ The schema is a JSON Schema file inside the project. The check reads `type`, `re
 
 Secret names, tokens and the names in `redaction.secretNames` are masked. Values `vite.config` computes show as **code**.
 
-Click **Purge** on a cache entry, or **Purge all**, then **Delete**, to delete cache entry files so the next request renders the route again. Purging needs `actions.analog`. Only `fs` cache storage is on disk: the tab looks in `.nitro/cache`, `node_modules/.nitro/cache`, `node_modules/.cache/nitro`, `dist/.nitro/cache`, `.data/cache` and the `base` of an `fs` `cache` mount.
+Click **Run** on a task, optionally give a JSON payload, then **Run task** to run it on the dev server through Nitro's task route, which needs `nitro.experimental.tasks`. The task's answer shows below it, masked, and the run stops waiting after 30 seconds.
+
+Click **Purge** on a cache entry, or **Purge all**, then **Delete**, to delete cache entry files so the next request renders the route again. Running tasks and purging need `actions.analog`. Only `fs` cache storage is on disk: the tab looks in `.nitro/cache`, `node_modules/.nitro/cache`, `node_modules/.cache/nitro`, `dist/.nitro/cache`, `.data/cache` and the `base` of a `cache` mount with the `fs` or `fs-lite` driver.
 
 ### Lint
 
@@ -269,6 +271,7 @@ If an option comes from a variable, a spread (`...`), a template string or a com
 | `pangular:analog-lint`                  | `page`                                                               | The Analog checks.                                                                                                 |
 | `pangular:analog-scan-build`            |                                                                      | The build analysis: chunk sizes per page and lazy chunks.                                                          |
 | `pangular:analog-scan-nitro`            |                                                                      | Nitro plugins, tasks, storage mounts, cached routes and cache entries.                                             |
+| `pangular:analog-run-nitro-task`        | `name` (required), `confirm` (required), `payload`                   | Runs a Nitro task on the dev server. Needs `actions.analog`.                                                       |
 | `pangular:analog-purge-nitro-cache`     | `confirm` (required), `files`                                        | Deletes Nitro cache entry files. Needs `actions.analog`.                                                           |
 | `pangular:analog-scan-runtime-config`   |                                                                      | `import.meta.env`, Nitro `runtimeConfig` and the `analog()` options, masked.                                       |
 | `pangular:analog-inspect-transform`     | `file` (required), `ssr`                                             | The Vite transform stack of a page, layout or `.server.ts` file.                                                   |

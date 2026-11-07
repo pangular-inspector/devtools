@@ -6,6 +6,7 @@ import {
   effect,
   inject,
   input,
+  linkedSignal,
   signal,
   untracked,
 } from '@angular/core';
@@ -2296,7 +2297,12 @@ export class AnalogInspector {
   /** Dev server render checks by route. */
   readonly checks = signal<Record<string, RenderCheck | 'running'>>({});
   /** The route the last Try button handed to the playground. */
-  readonly tryTarget = signal<PlaygroundTarget | null>(null);
+  // Cleared when the view changes, so coming back to Server doesn't load the last Try again.
+  readonly tryTarget = linkedSignal<View, PlaygroundTarget | null>({
+    source: this.view,
+    computation: () => null,
+  });
+  private tryNonce = 0;
 
   private unsubscribe: (() => void) | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -2663,7 +2669,7 @@ export class AnalogInspector {
   }
 
   tryApi(api: ApiRoute) {
-    this.tryTarget.update((last) => ({ route: api, nonce: (last?.nonce ?? 0) + 1 }));
+    this.tryTarget.set({ route: api, nonce: ++this.tryNonce });
   }
 
   /** A failed call answered with 400 or more, never answered, or ended in an error outcome. */

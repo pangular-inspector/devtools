@@ -330,9 +330,12 @@ export class AnalogData {
   async loadFull() {
     const page = this.page();
     if (!page) return;
+    const key = this.pageKey();
     this.loading.set(true);
     try {
       const data = await call<LoadData>(this.rpc(), 'analog-load-data', page.pageId);
+      // The page navigated or another one took over while the page answered: drop the answer.
+      if (key !== this.pageKey()) return;
       this.full.set(data ?? { found: false, error: 'No answer from the devtools server.' });
     } finally {
       this.loading.set(false);

@@ -21,18 +21,31 @@ const MAX_BLOCKS = 400;
 
 /** Inline markdown as parts: `code`, **strong**, *em*; links and images keep their text. */
 export function inline(text: string): InlinePart[] {
-  const plain = text
+  const parts: InlinePart[] = [];
+  // Code spans first, so `<b>` or `[a](b)` inside backticks stays as written.
+  for (const [i, piece] of text.split(/(`[^`]+`)/).entries()) {
+    if (!piece) continue;
+    if (i % 2 === 1) parts.push({ text: piece.slice(1, -1), code: true });
+    else parts.push(...emphasis(stripMarkup(piece)));
+  }
+  return parts;
+}
+
+function stripMarkup(text: string): string {
+  return text
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/<[^>]+>/g, '');
+}
+
+function emphasis(plain: string): InlinePart[] {
   const parts: InlinePart[] = [];
-  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g;
+  const pattern = /(\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g;
   let last = 0;
   for (const match of plain.matchAll(pattern)) {
     if (match.index > last) parts.push({ text: plain.slice(last, match.index) });
     const token = match[0];
-    if (token.startsWith('`')) parts.push({ text: token.slice(1, -1), code: true });
-    else if (token.startsWith('**') || token.startsWith('__')) {
+    if (token.startsWith('**') || token.startsWith('__')) {
       parts.push({ text: token.slice(2, -2), strong: true });
     } else parts.push({ text: token.slice(1, -1), em: true });
     last = match.index + token.length;
