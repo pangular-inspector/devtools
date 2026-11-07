@@ -84,7 +84,7 @@ declare module '@pangular-inspector/devtools/overlay';
 
 ### Tested versions
 
-The peer range is `@angular/core` and `@angular/common` `>=12.2.0 <23.0.0`. The overlay reads Angular's private debug APIs, so each new major is tested before the range takes it in. CI tests these versions:
+The Vite plugin needs Vite 6 or later (`vite` `>=6`). The peer range is `@angular/core` and `@angular/common` `>=12.2.0 <23.0.0`. The overlay reads Angular's private debug APIs, so each new major is tested before the range takes it in. CI tests these versions:
 
 | Angular                 | Node.js | What runs                                                                 | When                                  |
 | ----------------------- | ------- | ------------------------------------------------------------------------- | ------------------------------------- |

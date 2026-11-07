@@ -96,6 +96,8 @@ This runs `pnpm --filter @pangular-inspector/devtools publish --access public`. 
 
 Each entry point exports only what these docs describe, and only that is covered by semver. The files in `packages/devtools/src/entries` choose those exports, and `public-api.test.ts` lists them, so a new export is a deliberate change. Code shared between the server, the overlay and the panel, such as most of `config.ts`, stays internal: the panel imports it as `@pangular-inspector/devtools/internal/config`, a workspace-only export that `publishConfig.exports` leaves out. Mark a declaration that has to be exported for the package's own modules with `@internal`, and the published types leave it out.
 
+The mobile entry points (`overlay-manual`, `capacitor-hook`, `overlay-angular-native` and `overlay-nativescript`) stay in this package through 1.x. Moving one to its own package is a breaking change, so it waits for a major release.
+
 ## Supported versions
 
 The Angular peer range has an upper bound, `>=12.2.0 <23.0.0`, because the overlay reads Angular's private debug APIs. Raise it in the release after the new major passes the [compatibility jobs](./development.md#angular-compatibility), and update the tested versions in [Installation](../getting-started/installation.md#tested-versions). `engines.node` is `>=22.12.0`, the first Node.js 22 that can `require()` the ES modules the Express hub loads.

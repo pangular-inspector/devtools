@@ -45,6 +45,8 @@ In detail, a request to the devtools must:
 - have an origin that is a loopback host, the [Pangular Inspector extension](#chrome-extension), an entry in `allowedOrigins`, or a host listed in Vite's `server.allowedHosts`, or
 - have no `Origin` header, and a `Sec-Fetch-Site` header of `same-origin`, `same-site` or `none`, or no `Sec-Fetch-Site` header at all.
 
+A loopback origin means any port on a loopback host, so a page served by another dev server on this machine passes the origin check. It still needs the one-time code or a session token, which are on by default.
+
 The `Host` check stops DNS rebinding: a website that points its own name at `127.0.0.1` still sends that name as the `Host`. Clients that send neither `Origin` nor `Sec-Fetch-Site`, such as curl or a native app, are not browsers, so they pass the last check. A request without a `Host` header passes the `Host` check, since browsers always send one. The emulator addresses are IP literals, which DNS rebinding cannot send, and the emulator forwards them to your machine's loopback interface, so only the emulator can send them from a loopback address.
 
 Other requests get `403` with the message "Pangular Inspector only answers requests from this machine." A request from another machine also gets the fix: set `allowLan: true` and list its origin in `allowedOrigins`. WebSocket upgrades follow the same rules.

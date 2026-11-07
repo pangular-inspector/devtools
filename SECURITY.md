@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-Pangular Inspector is in early development. Only the latest published release of
-`@pangular-inspector/devtools` is supported. There are no older release lines to backport a fix to.
+Security fixes go into the latest 1.x release of `@pangular-inspector/devtools`. Older 1.x
+releases and the 0.0.x releases get no backports: update to the latest 1.x release to get a fix.
 
 ## Reporting a vulnerability
 

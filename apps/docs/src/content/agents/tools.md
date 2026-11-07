@@ -1022,7 +1022,7 @@ Use it for data that has no dedicated tool, such as hydration data and TransferS
 
 ## Renamed tools
 
-Tools and arguments were renamed after 0.0.7 so that each name follows one pattern: an optional library prefix (`ngrx-`, `redux-`, `tanstack-`, `capacitor-`, `analog-`), then a verb that says whether the tool reads source (`scan`), reads the page (`list`, `inspect`, `explain`, `lint`) or writes (`run`, `set`, `record`). The old names are not accepted.
+Tools and arguments were renamed in 1.0.0 so that each name follows one pattern: an optional library prefix (`ngrx-`, `redux-`, `tanstack-`, `capacitor-`, `analog-`), then a verb that says whether the tool reads source (`scan`), reads the page (`list`, `inspect`, `explain`, `lint`) or writes (`run`, `set`, `record`). The old names are not accepted.
 
 | Before                                                                                   | Now                                                                                                             |
 | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
