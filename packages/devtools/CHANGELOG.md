@@ -2,17 +2,6 @@
 
 All notable changes to `@pangular-inspector/devtools` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com).
 
-## Unreleased
-
-### Features
-
-- `limits.cdSlowMs` (default 16 ms) sets when a change detection cycle counts as slow. The recording flags cycles over it, the `change-detection` agent tool counts and marks them, and the panel chart draws its budget line there instead of at a fixed 16.6 ms.
-- The server keeps at most 256 KB of JSON for each NgRx store's state. Past it, the largest slices show `[too large: N KB]`, so one huge slice can't fill the server's memory or the panel.
-- `withPangular({ transferCache })` takes Angular's `HttpTransferCacheOptions` and passes them to the transfer cache that `provideClientHydration()` sets up. The SSR & HTTP tab uses them to explain each transfer cache outcome, including a new **Filter** reason.
-- The Dashboard has a **Security** block: whether the one-time code is on or locked, how many trusted tokens there are and when they expire, how many pairing tokens the server accepts, and who may reach the server (reach, allowed origins and hosts). The panel reads it with the `security-status` RPC, which answers trusted clients only and never carries a token or the code.
-- `pangular token --rotate` drops every trusted token of the project and prints a new one-time code from the running server (the CLI, the Vite plugin or the Express hub), which also ends a lock after too many wrong codes. `pangular token` prints how many tokens there are.
-- The CLI start-up output names the NativeScript setup view (`?view=nativescript`) next to the Angular Native one.
-
 ## 1.0.0
 
 Most setups need changes when they come from 0.0.7, so read **Upgrading from 0.0.7** first.
@@ -147,6 +136,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Hub messages and toasts, a dock group with badges, and an **All tools** dock.
 - New entry points: `/overlay-manual` (starts nothing on import), `/plugin`, `/capacitor-hook`, `/store-hook`, `/startup-hook`, `/ssr` and `/cd-data`.
 - New config options: `agent.browserTools`, `limits.capacitorCalls`, `limits.idleAfterMs`, `popup` and `plugins`.
+- `limits.cdSlowMs` (default 16 ms) sets when a change detection cycle counts as slow. The recording flags cycles over it, the `change-detection` agent tool counts and marks them, and the panel chart draws its budget line there instead of at a fixed 16.6 ms.
 - After pairing, focus moves to the active tab with a **Connected** note.
 
 #### Inspectors
@@ -167,6 +157,9 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Plugin API:** a library can add its own tab, agent tools and shared state.
 - Angular Native and NativeScript pages report change detection, leaks, errors, stores, TanStack Query, provider values, plugins and startup timing too (#407).
 - Angular features are detected at runtime, and the panel says what an older version lacks.
+- The server keeps at most 256 KB of JSON for each NgRx store's state. Past it, the largest slices show `[too large: N KB]`, so one huge slice can't fill the server's memory or the panel.
+- `withPangular({ transferCache })` takes Angular's `HttpTransferCacheOptions` and passes them to the transfer cache that `provideClientHydration()` sets up. The SSR & HTTP tab uses them to explain each transfer cache outcome, including a new **Filter** reason.
+- The Dashboard has a **Security** block: whether the one-time code is on or locked, how many trusted tokens there are and when they expire, how many pairing tokens the server accepts, and who may reach the server (reach, allowed origins and hosts). The panel reads it with the `security-status` RPC, which answers trusted clients only and never carries a token or the code.
 
 #### Agents and MCP
 
@@ -187,6 +180,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `pangular dev` takes `--proxy-origin`, `--allowed-origin` and `--auth-token`.
 - `pangular build` refuses an `--outDir` that would delete files that are not a previous report, unless `--force` is passed.
 - The source scan reads Nx projects.
+- `pangular token --rotate` drops every trusted token of the project and prints a new one-time code from the running server (the CLI, the Vite plugin or the Express hub), which also ends a lock after too many wrong codes. `pangular token` prints how many tokens there are.
+- The CLI start-up output names the NativeScript setup view (`?view=nativescript`) next to the Angular Native one.
 
 ### Performance
 
