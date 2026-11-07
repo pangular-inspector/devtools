@@ -56,13 +56,13 @@ Type a URL into **Test a URL** and click **Explain** to see which files render i
 
 Page renders (server rendered or client only), `load()` fetches, form actions, server functions and API calls, newest first. Each row shows the status, the time, who called it, and a redacted response preview.
 
-| Control                                 | What it does                                                                                           |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Kind filter                             | Show one kind of call. Each choice counts the listed calls of that kind.                               |
-| **Find a URL, path or function** search | Keeps calls whose URL, route path, server function name or file contains the text. `Escape` clears it. |
-| **Failed only**                         | Keeps calls with a status of 400 or more, no status, or a form action that failed.                     |
-| **All tabs (including untagged)**       | Shows the calls of every tab, and calls the dev server could not tie to a tab. Off by default.         |
-| **Clear calls**                         | Empties the list on the dev server. The tab says **Calls cleared.** or **Could not clear the calls.**  |
+| Control                                 | What it does                                                                                                         |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Kind filter                             | Show one kind of call. Each choice counts the listed calls of that kind.                                             |
+| **Find a URL, path or function** search | Keeps calls whose URL, route path, server function name or file contains the text. `Escape` clears it.               |
+| **Failed only**                         | Keeps calls with a status of 400 or more, no status, or a form action that failed.                                   |
+| **All tabs (including untagged)**       | Shows the calls of every tab, and calls the dev server could not tie to a tab. Off by default.                       |
+| **Clear calls**                         | Empties the list on the dev server, for every tab. The tab says **Calls cleared.** or **Could not clear the calls.** |
 
 The list shows the calls of the tab the panel belongs to (with no page id, the tab that reported last). **All tabs (including untagged)** appears while a page reports. See [Which tab a call belongs to](#which-tab-a-call-belongs-to).
 

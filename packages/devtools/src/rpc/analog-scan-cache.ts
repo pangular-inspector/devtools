@@ -118,8 +118,9 @@ export function createScanCache<T extends { root: string }>(
           watch(path, { recursive }, (file) => {
             if (SKIP.test(join(path, file))) return;
             dirty = true;
-            // A folder the scan reads appeared or went away (a build wrote dist): watch it anew.
-            if (!recursive && WATCHED_DIRS.includes(file)) rewatch = true;
+            // A watcher error (no file name), or a folder the scan reads appeared or went
+            // away (a build wrote dist): watch anew.
+            if (!file || (!recursive && WATCHED_DIRS.includes(file))) rewatch = true;
           }),
         );
       } catch {
@@ -146,10 +147,7 @@ export function createScanCache<T extends { root: string }>(
     return value;
   };
 
-  const refresh = () => {
-    scheduled = false;
-    if (!stale()) return;
-    const next = rescan();
+  const notify = (next: T) => {
     for (const listener of listeners) {
       try {
         listener(next);
@@ -159,8 +157,21 @@ export function createScanCache<T extends { root: string }>(
     }
   };
 
+  const refresh = () => {
+    scheduled = false;
+    if (!stale()) return;
+    notify(rescan());
+  };
+
   return {
-    get: () => (stale() ? rescan() : value!),
+    get: () => {
+      if (!stale()) return value!;
+      // Whichever call rescans tells the listeners, or the open pages keep the old scan.
+      const first = !value;
+      const next = rescan();
+      if (!first) notify(next);
+      return next;
+    },
     peek: () => {
       if (!value) return rescan();
       if (stale() && !scheduled) {
