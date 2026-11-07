@@ -135,6 +135,9 @@ export function registerBuild(host: BuildHost): void {
     name: 'get-build-graph',
     type: 'query',
     jsonSerializable: true,
+    // A static report keeps the chunks of the build it was made next to.
+    snapshot: true,
+    args: [],
     handler: () => read(),
   });
 

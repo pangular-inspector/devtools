@@ -70,7 +70,7 @@ export const BUILD_ROWS = 25;
     </p>
     <div class="toolbar">
       <button type="button" class="small" (click)="refresh()" [disabled]="loading()">
-        {{ loading() ? 'Reading…' : 'Refresh' }}
+        {{ loading() ? 'Loading…' : 'Refresh' }}
       </button>
       <p class="sr-only" role="status">{{ status() }}</p>
     </div>
@@ -235,7 +235,7 @@ export const BUILD_ROWS = 25;
         }
       </section>
     } @else {
-      <p class="state" role="status">Reading the build…</p>
+      <p class="state" role="status">Loading the build…</p>
     }
   `,
   styles: `
