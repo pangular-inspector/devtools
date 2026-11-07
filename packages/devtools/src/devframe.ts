@@ -200,6 +200,7 @@ import { createComponentScreenshots } from './rpc/component-screenshots.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import { listHttpCallsText } from './rpc/http-tools.ts';
 import { httpWaterfallText } from './rpc/http-waterfall.ts';
+import { lintHttpText } from './rpc/http-lint.ts';
 import {
   httpRulesText,
   removeHttpRule,
@@ -1617,6 +1618,17 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
+      id: 'pangular:lint-http',
+      title: 'Lint HTTP calls',
+      description:
+        "Checks a page's recorded HttpClient calls for duplicate GETs, waterfalls (calls run one after another that could start together) and server calls the browser repeated. Each finding lists call ids and a fix. Masked.",
+      inputSchema: { type: 'object', properties: { page: PAGE_ARGUMENT } },
+      handler: async (args: { page?: string }) => ({
+        markdown: lintHttpText(httpSnapshot(), { page: pageArgument(args) }),
+      }),
+    });
+
+    agent.registerTool({
       id: 'pangular:capacitor-list-calls',
       title: 'List Capacitor plugin calls',
       description:
@@ -1666,9 +1678,14 @@ const pangular = defineDevframe({
       status: {
         type: 'integer',
         description:
-          'Status to answer with: 400 or more fails the request, below 400 returns `body`.',
+          'Status to answer with: 400 or more fails the request, 0 fails it as a network error, others return `body`.',
       },
       delayMs: { type: 'integer', description: `Hold the request back (0-${MAX_DELAY_MS} ms).` },
+      chance: {
+        type: 'integer',
+        description:
+          'Apply to this percent of matching requests (1-99), rolled per request; the rest go on to the next rule. Every request when left out.',
+      },
       body: { description: 'Mock response body: JSON text or a JSON value. Alone it answers 200.' },
       enabled: { type: 'boolean', description: 'Default true.' },
     };

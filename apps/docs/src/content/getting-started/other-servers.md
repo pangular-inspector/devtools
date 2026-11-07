@@ -96,7 +96,7 @@ The hook runs before Fastify parses the body, so the MCP endpoint at `<base>__mc
 The **SSR requests** table in [SSR & HTTP](../inspectors/ssr-http.md#ssr-requests) needs each page render traced. The Express hub's `ssrMiddleware` wraps a Node response. For a web-standard handler, `@pangular-inspector/devtools/ssr` has `withPangularSsr()`, which wraps any `(request: Request) => Promise<Response>` and records the same data:
 
 - The request gets an id in the `x-pangular-ssr-id` header, so `withPangular()` tags each server call with it.
-- The response gets a `Server-Timing` header with the id and the render, fetch, guard and resolver times, so the overlay links the page to its render.
+- The response gets a `Server-Timing` header with the id and the render, fetch, guard and resolver times, plus one `fetch-<n>` entry per server HttpClient call, so the overlay links the page to its render.
 - The render is recorded once the body has been sent, with its status, render mode, size and kept headers.
 - SSR overrides from the panel apply: render errors, forced Client renders and TransferState edits.
 
