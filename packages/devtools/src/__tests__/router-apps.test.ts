@@ -121,6 +121,31 @@ describe('router apps on one page', () => {
     expect(cartRouter.listeners.size).toBe(0);
   });
 
+  it('finds a second app that bootstraps into a root already on the page when forced', () => {
+    document.body.innerHTML =
+      '<app-root ng-version="22.0.0"></app-root><cart-widget ng-version="22.0.0"></cart-widget>';
+    const [shell, cart] = Array.from(document.querySelectorAll('[ng-version]'));
+    const shellRouter = fakeRouter('/home', ['home']);
+    const routers = new Map<Element, unknown>([[shell, shellRouter]]);
+    const ng = fakeNg(
+      routers,
+      new Map<Element, unknown>([
+        [shell, new ShellApp()],
+        [cart, new CartWidget()],
+      ]),
+    );
+    const apps = new RouterApps(() => undefined);
+    apps.scan(ng, [shell, cart], shellRouter);
+    expect(apps.count).toBe(1);
+    // The cart app bootstraps later, into the same root element.
+    routers.set(cart, fakeRouter('/cart', ['cart']));
+    apps.scan(ng, [shell, cart], shellRouter);
+    expect(apps.count).toBe(1);
+    apps.scan(ng, [shell, cart], shellRouter, true);
+    expect(apps.count).toBe(2);
+    apps.reset();
+  });
+
   it('reports no app list on a page with one app', () => {
     document.body.innerHTML = '<app-root ng-version="22.0.0"></app-root><aside></aside>';
     const shell = document.querySelector('app-root')!;
