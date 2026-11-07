@@ -31,6 +31,7 @@ import { Select, type SelectOption } from '../ui/select';
 import { VirtualWindow } from '../ui/virtual-window';
 import { HttpHeadersView } from './http-headers';
 import { NetworkWaterfall } from './network-waterfall';
+import { RuleMatchCount } from './network/rule-match-count';
 
 type HttpSide = 'client' | 'server';
 
@@ -296,7 +297,15 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
 
 @Component({
   selector: 'app-network-inspector',
-  imports: [JsonPipe, HttpHeadersView, LimitNote, NetworkWaterfall, RovingList, Select],
+  imports: [
+    JsonPipe,
+    HttpHeadersView,
+    LimitNote,
+    NetworkWaterfall,
+    RovingList,
+    RuleMatchCount,
+    Select,
+  ],
   template: `
     <p class="page-intro">
       HttpClient calls made while rendering on the server and in the browser, from the live page and
@@ -828,6 +837,12 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               placeholder="e.g. /api/products"
             />
           </label>
+          <app-rule-match-count
+            [calls]="timeline()"
+            [pattern]="draft().pattern"
+            [method]="draft().method"
+            [target]="draft().target"
+          />
           <div class="row">
             <div class="field-group">
               <span id="rule-method-label">Method</span>

@@ -147,6 +147,7 @@ Click a row for a response preview. The preview opens under the timeline and tak
 Add a rule with these fields:
 
 - **URL pattern**: a substring, or a glob where `*` matches anything. `/api/*` matches both relative and absolute URLs. The pattern can match anywhere in the URL, so `/api` also matches `/apiv2` and `/search?next=/api`. Start it with `^` to anchor it at the start of the path: `^/api/` matches `/api/heroes` and `http://localhost:4000/api/heroes`, but not `/v1/api/heroes`.
+  Under the field, a live count says how many of the timeline's calls the pattern matches with the current **Method** and **Apply on**, such as **Matches 3 of the 12 recorded calls**. It counts the calls the timeline holds for the selected page and the server render that served it. Recorded URLs are masked, so a pattern that names a secret query value can match fewer calls here than it does live.
 - **Method**: any, or one method.
 - **Apply on**: SSR + client, SSR only, or client only.
 - **Status**: **None**, or a status from the list. The list has the standard 2xx to 5xx statuses, plus `499` (nginx) and `520` to `524` (Cloudflare). Type the code, for example `503`, to jump to it.

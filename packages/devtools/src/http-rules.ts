@@ -1,6 +1,6 @@
 import { CACHE_SKIP_TEXT, isHttpRuleStatus, type CacheSkip } from './config.ts';
 import { sanitizeHeaders, type HeaderRecord } from './http-headers.ts';
-import { urlGlobMatch } from './url-glob.ts';
+import { ruleScopeMatches } from './http-data.ts';
 
 export type HttpSide = 'client' | 'server';
 
@@ -136,13 +136,7 @@ export function matchRule(
   side: HttpSide,
 ): HttpRule | undefined {
   return rules?.find(
-    (rule) =>
-      rule.enabled &&
-      !!rule.pattern &&
-      ruleHasEffect(rule) &&
-      (rule.target === 'both' || rule.target === side) &&
-      (!rule.method || rule.method.toUpperCase() === method.toUpperCase()) &&
-      urlGlobMatch(url, rule.pattern),
+    (rule) => rule.enabled && ruleHasEffect(rule) && ruleScopeMatches(rule, { url, method, side }),
   );
 }
 
