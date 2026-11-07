@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pangular Inspector site access</title>
+    <link rel="stylesheet" href="extension-page.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Site access</h1>
+      <p class="hint">
+        Pangular Inspector reaches the devtools server on <code>localhost</code>,
+        <code>127.0.0.1</code> and <code>[::1]</code> without asking. These are the other sites you
+        allowed from the panel. Remove one to take its access away; the panel asks again the next
+        time you inspect it.
+      </p>
+      <ul id="hosts" class="hosts" aria-label="Allowed sites" hidden></ul>
+      <p id="empty" class="hint" tabindex="-1" hidden>No other sites are allowed.</p>
+      <p id="status" class="visually-hidden" role="status"></p>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

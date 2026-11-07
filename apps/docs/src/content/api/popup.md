@@ -35,6 +35,31 @@ Removes the popup, waiting for one that is still being created.
 async function hideDevtools(): Promise<void>;
 ```
 
+## LauncherCounts
+
+Interface. Source: [`packages/devtools/src/popup.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/popup.ts).
+
+What the launcher pill shows, as the overlay last counted it.
+
+```ts
+interface LauncherCounts {
+  /** Component template updates since the page loaded. */
+  renders: number;
+  /** Errors the errors inspector caught, each repeat included. */
+  errors: number;
+}
+```
+
+## shortCount
+
+Function. Source: [`packages/devtools/src/popup.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/popup.ts).
+
+A count short enough for the pill: 999, 1.2k, 12k, 1.2M.
+
+```ts
+function shortCount(value: number): string;
+```
+
 ## showDevtools
 
 Function. Source: [`packages/devtools/src/popup.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/popup.ts).

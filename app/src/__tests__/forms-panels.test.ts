@@ -340,7 +340,7 @@ describe('FormsInspector fields', () => {
     fixture.componentRef.setInput('rpc', fakeClient(fail, [form]));
     await settle(fixture);
     const box = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
-      'input[aria-label="Filter fields by path"]',
+      '.filters input[type="search"]',
     )!;
     box.value = 'email';
     box.dispatchEvent(new Event('input'));
@@ -367,7 +367,7 @@ describe('FormsInspector field filters', () => {
 
   function search(fixture: ComponentFixture<FormsInspector>): HTMLInputElement {
     return (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
-      'input.filter[type="search"]',
+      '.filters input[type="search"]',
     )!;
   }
 
@@ -1023,9 +1023,7 @@ describe('FormsInspector timeline', () => {
     expect(text(fixture)).toContain('Showing the latest 100 of 300 events');
 
     const host = fixture.nativeElement as HTMLElement;
-    const search = host.querySelector<HTMLInputElement>(
-      'input[aria-label="Filter by field path"]',
-    )!;
+    const search = host.querySelector<HTMLInputElement>('app-forms-timeline input[type="search"]')!;
     search.value = 'name';
     search.dispatchEvent(new Event('input'));
     await settle(fixture);

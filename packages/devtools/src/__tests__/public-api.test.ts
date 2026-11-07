@@ -34,7 +34,7 @@ const PUBLIC_VALUES: Record<string, string[]> = {
   ],
   hub: ['PANGULAR_HUB_BASE', 'hubEnabled', 'initPangularHub'],
   vite: ['default'],
-  cli: ['createPangularCli'],
+  cli: ['DEFAULT_REPORT_DIR', 'buildReport', 'createPangularCli'],
   http: ['providePangularHttp', 'withPangular'],
 };
 
