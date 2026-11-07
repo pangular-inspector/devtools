@@ -786,6 +786,35 @@ describe('pipes collector', () => {
     expect(join.churn).toBeUndefined();
   });
 
+  it('does not flag a pure pipe whose input changes while its result stays the same', async () => {
+    class BucketPipe implements PipeTransform {
+      transform(value: number): string {
+        return value < 100 ? 'low' : 'high';
+      }
+    }
+    Pipe({ ...STANDALONE, name: 'bucket' })(BucketPipe);
+    class Rising {
+      progress = writableSignal(0);
+    }
+    Component({
+      ...STANDALONE,
+      selector: 'app-rising',
+      imports: [BucketPipe],
+      template: `<p>{{ progress() | bucket }}</p>`,
+    })(Rising);
+    const fixture = await mount(Rising);
+    const h = harness();
+    h.handlers.get('instrument-pipes')!(true);
+    // A new input each time with the same result: the rerun was needed, not churn.
+    for (let i = 1; i <= 30; i++) {
+      fixture.componentInstance.progress.set(i);
+      fixture.detectChanges();
+    }
+    const bucket = (await report(h)).pipes.find((p) => p.name === 'bucket')!;
+    expect(bucket.call?.callCount).toBe(30);
+    expect(bucket.churn).toBeUndefined();
+  });
+
   it('flags an impure pipe that returns an equal new array, not one that returns the same value', async () => {
     class FreshPipe implements PipeTransform {
       transform(value: number): number[] {

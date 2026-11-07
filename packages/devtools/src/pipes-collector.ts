@@ -217,13 +217,22 @@ function boundedEqual(a: unknown, b: unknown, depth = 0): boolean {
 
 /**
  * Whether a call that returned `next` after `prev` was wasted work: a pure
- * pipe that ran (its input changed) but returned an equal result, or an impure
+ * pipe that ran because its input changed reference while its contents stayed
+ * equal, and returned an equal result, or an impure
  * pipe that returned an equal object or array as a new reference, which makes
  * the bindings below it update for nothing. An impure pipe returning the same
  * reference or primitive is how impure pipes normally run, so it never counts.
  */
-function equalCall(prev: unknown, next: unknown, isPure: boolean | undefined): boolean {
-  if (isPure) return boundedEqual(prev, next);
+function equalCall(
+  prev: unknown,
+  next: unknown,
+  isPure: boolean | undefined,
+  prevArgs: unknown,
+  nextArgs: unknown,
+): boolean {
+  // A pure pipe whose input really changed may return the same value (a
+  // rounded number, say); only an input equal in contents is wasted work.
+  if (isPure) return boundedEqual(prev, next) && boundedEqual(prevArgs, nextArgs);
   return !Object.is(prev, next) && boundedEqual(prev, next);
 }
 
@@ -527,7 +536,10 @@ export function attachPipes<H extends object = Element>(
         longestStreak: 0,
       };
       stats.set(call.instance, s);
-    } else if (!call.error && equalCall(s.lastResult, call.result, call.isPure)) {
+    } else if (
+      !call.error &&
+      equalCall(s.lastResult, call.result, call.isPure, s.lastArgs, call.args)
+    ) {
       s.equalStreak++;
       if (s.equalStreak > s.longestStreak) s.longestStreak = s.equalStreak;
       if (s.equalStreak >= CHURN_STREAK && s.churnAt === undefined) s.churnAt = at;
