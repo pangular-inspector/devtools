@@ -34,4 +34,4 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-        run: node scripts/commit-message.mjs --range "$BASE..$HEAD" --warn
+        run: node scripts/commit-message.mjs --range "$BASE..$HEAD"

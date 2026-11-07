@@ -2,8 +2,10 @@ import { keepaliveDue } from './change-detection.ts';
 import { watchDeferHydration } from './defer-hydration-watch.ts';
 import { appIdOf, scanHydration, type HydrationScanNg } from './http-hydration.ts';
 import { decodePayload, sanitizePayload, type PayloadSummary } from './http-payload.ts';
+import { refetchPayload, type RefetchEnv } from './http-payload-refetch.ts';
+import { outsideAngular } from './outside-angular.ts';
 import { withCapturedHeaders } from './http-headers.ts';
-import { redactCall } from './http-redact.ts';
+import { redactCall } from './redaction.ts';
 import { httpRegistry, sanitizeRules, storeRules, type HttpCall } from './http-rules.ts';
 import { redactMessage, redactUrl } from './router.ts';
 import { readSsrRequestId } from './ssr-registry.ts';
@@ -97,8 +99,16 @@ function hydrationStats(
  * The payload and the full call list go out once; later pushes carry only new
  * calls, and a ping keeps the page alive while nothing changes.
  */
-export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = () => 0) {
+export function attachHttp(
+  my: RpcScope,
+  pageId: string,
+  tickMs: () => number = () => 0,
+  refetchEnv: RefetchEnv = {},
+) {
+  // The payload the page was served with: hydration stats always read this one.
   const payload = decodePayload(document, appIdOf(document));
+  // What the panel shows: the served payload, or the last refetched one.
+  let shownPayload = payload;
   // TransferState holds whatever the server rendered with, so it is masked here, before it
   // leaves the page, with the same rules the server applies to it.
   let maskedPayload: PayloadSummary | undefined;
@@ -146,7 +156,7 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
       full,
     };
     const sent = full
-      ? { ...report, payload: (maskedPayload ??= sanitizePayload(payload)) }
+      ? { ...report, payload: (maskedPayload ??= sanitizePayload(shownPayload)) }
       : report;
     const answer = (await my.rpc.call('push-http', sent)) as
       { needPayload?: boolean } | null | undefined;
@@ -176,6 +186,41 @@ export function attachHttp(my: RpcScope, pageId: string, tickMs: () => number = 
       registry.calls = [];
       registry.dropped = 0;
       push().catch(() => {});
+    },
+  });
+
+  // A user's Refetch in the panel, or an agent's `refetch-transfer-state`: render the page's
+  // URL again on the server and show the payload it sends now, without reloading the tab.
+  my.rpc.register({
+    name: 'http-payload-refetch',
+    type: 'event',
+    jsonSerializable: true,
+    handler: (message: { requestId?: unknown; pageId?: unknown } | undefined) => {
+      if (message?.pageId !== pageId || typeof message.requestId !== 'string') return;
+      const requestId = message.requestId;
+      void outsideAngular(async () => {
+        const fetched = await refetchPayload(location.href, refetchEnv);
+        let result: Record<string, unknown>;
+        if ('error' in fetched) {
+          result = { error: redactMessage(fetched.error) };
+        } else {
+          shownPayload = fetched.payload;
+          // Every later full push carries the mark, so the panel keeps showing it.
+          maskedPayload = { ...sanitizePayload(shownPayload), refetchedAt: Date.now() };
+          payloadSent = false;
+          await push().catch(() => {});
+          result = {
+            ok: true,
+            status: fetched.status,
+            found: maskedPayload.found,
+            entries: maskedPayload.entries.length,
+            size: maskedPayload.size,
+          };
+        }
+        await my.rpc
+          .call('http-payload-refetch-result', { requestId, pageId, result })
+          .catch(() => {});
+      });
     },
   });
 

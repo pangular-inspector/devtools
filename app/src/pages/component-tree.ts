@@ -61,6 +61,7 @@ import { LeaksSection, type LeaksPage } from './leaks-section';
 import { VirtualWindow } from '../ui/virtual-window';
 import { keepBelowSticky, stickyClearance } from '../ui/sticky-clearance';
 import { SearchField } from '../ui/search-field';
+import { RedactionCount } from '../ui/redaction-count';
 
 interface SourceComponent {
   selector: string;
@@ -228,6 +229,7 @@ function storedDirectiveHosts(): boolean {
   selector: 'app-component-tree',
   imports: [
     SearchField,
+    RedactionCount,
     NgTemplateOutlet,
     Select,
     CdRecording,
@@ -317,20 +319,18 @@ function storedDirectiveHosts(): boolean {
             </svg>
             <span class="label">Collapse all</span>
           </button>
-          @if (!native()) {
-            <button
-              type="button"
-              class="pick"
-              [class.on]="picking()"
-              [attr.title]="pickLabel()"
-              (click)="picking() ? cancelPick() : pick()"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 4l6.5 16 2.3-6.7L19.5 11z" />
-              </svg>
-              <span class="label">{{ pickLabel() }}</span>
-            </button>
-          }
+          <button
+            type="button"
+            class="pick"
+            [class.on]="picking()"
+            [attr.title]="pickLabel()"
+            (click)="picking() ? cancelPick() : pick()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 4l6.5 16 2.3-6.7L19.5 11z" />
+            </svg>
+            <span class="label">{{ pickLabel() }}</span>
+          </button>
         </div>
       </div>
       <p class="sr-only" role="status">{{ announcement() }}</p>
@@ -604,6 +604,7 @@ function storedDirectiveHosts(): boolean {
               </div>
 
               @if (shownValues(); as v) {
+                <app-redaction-count [value]="v" />
                 @if (propQuery() && !v.count) {
                   <div class="state compact">
                     <p class="state-title">
@@ -1907,7 +1908,13 @@ export class ComponentTree {
   readonly focusId = signal<string | null>(null);
   /** The full text of the focused row when its name or tag is cut off, shown below the row. */
   readonly nameTip = signal<{ text: string; top: number } | null>(null);
-  readonly pickLabel = computed(() => (this.picking() ? 'Cancel pick' : 'Pick component on page'));
+  readonly pickLabel = computed(() =>
+    this.picking()
+      ? 'Cancel pick'
+      : this.native()
+        ? 'Pick component on device'
+        : 'Pick component on page',
+  );
   private readonly bridge = inject(ExtensionBridge);
   readonly actionMessage = linkedSignal<string | null, string>({
     source: this.selectedId,
@@ -2300,8 +2307,7 @@ export class ComponentTree {
       }
       if (command.kind === 'pick') {
         untracked(() => {
-          if (this.native()) this.say('Picking needs a page in a browser.');
-          else if (!this.picking()) void this.pick();
+          if (!this.picking()) void this.pick();
           this.commandHandled.emit();
         });
         return;
@@ -2615,7 +2621,9 @@ export class ComponentTree {
     this.pickPageId = this.page()?.pageId ?? null;
     this.picking.set(true);
     this.say(
-      'Click a component in the app, or use the arrow keys to move between components and Enter to pick one. Press Escape to cancel.',
+      this.native()
+        ? 'Tap a component on the device, or use the arrow keys to move between components and Enter to pick one. Press Escape to cancel.'
+        : 'Click a component in the app, or use the arrow keys to move between components and Enter to pick one. Press Escape to cancel.',
     );
     const result = (await client
       .scope('pangular')

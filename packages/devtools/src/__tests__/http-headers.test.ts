@@ -23,7 +23,7 @@ import {
   type HeaderSource,
 } from '../http-headers.ts';
 import { attachHttp } from '../http-overlay.ts';
-import { redactCall, redactHeaders } from '../http-redact.ts';
+import { redactCall, redactHeaders } from '../redaction.ts';
 import { httpRegistry, sanitizeCalls, type HttpCall } from '../http-rules.ts';
 import { listHttpCallsText } from '../rpc/http-tools.ts';
 import { httpWaterfallText, waterfallGroups } from '../rpc/http-waterfall.ts';

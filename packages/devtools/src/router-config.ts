@@ -9,30 +9,9 @@ import {
   resolversOf,
   WRAPPED,
   type AnyRecord,
-  type RouteGuards,
 } from './router.ts';
-
-export interface RouteNode {
-  id: string;
-  path: string;
-  fullPath: string;
-  kind: 'component' | 'redirect' | 'children' | 'lazy' | 'componentless';
-  component?: string;
-  redirectTo?: string;
-  pathMatch?: string;
-  outlet?: string;
-  lazy?: 'unloaded' | 'loaded';
-  matcher?: string;
-  guards?: RouteGuards;
-  resolvers?: string[];
-  title?: string;
-  dataKeys?: string[];
-  providers?: number;
-  runGuardsAndResolvers?: string;
-  inputs?: string[];
-  classGuards?: string[];
-  children?: RouteNode[];
-}
+import type { RouteNode } from './router-types.ts';
+export type { RouteNode } from './router-types.ts';
 
 const MAX_NODES = 1000;
 const MAX_SIBLINGS = 200;

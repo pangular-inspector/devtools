@@ -20,6 +20,8 @@ import {
 import { hopText, loopChain, loopTitle, redirectCycles } from './router-loops.ts';
 import type { HttpCall } from '../http-rules.ts';
 import { callsForNavigation, nextNavigation } from './router-http.ts';
+import type { LintFinding, RouterLintResult } from '../router-types.ts';
+export type { LintFinding, RouterLintResult } from '../router-types.ts';
 
 export interface SourceRoute {
   path: string;
@@ -36,15 +38,6 @@ export interface MatchResult {
   params: Record<string, string>;
   notes: string[];
   nearest: string[];
-}
-
-export interface LintFinding {
-  rule: string;
-  severity: 'error' | 'warning' | 'info';
-  route: string;
-  message: string;
-  fix: string;
-  angular: 'throws' | 'warns' | 'silent';
 }
 
 const MAX_LIST = 400;
@@ -312,10 +305,6 @@ export interface RouterLintOptions {
   /** The HTTP inspector's calls of a page, for `resolver-refetch`. */
   httpFor?: (pageId: string) => readonly HttpCall[] | undefined;
 }
-
-export type RouterLintResult =
-  | { checked: true; findings: LintFinding[] }
-  | { checked: false; reason: 'no-page' | 'events-only' | 'no-config' };
 
 /** Lint findings for the panel, or why no check could run. */
 export function routerLintResult(

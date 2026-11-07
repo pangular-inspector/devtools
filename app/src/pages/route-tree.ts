@@ -704,8 +704,9 @@ export class RouteTree {
   }
 
   guardList(node: RouteNode) {
-    return Object.entries(node.guards ?? {}).flatMap(([kind, names]) =>
-      names.map((name) => `${kind} ${name}`),
+    return Object.entries(node.guards ?? {}).flatMap(
+      ([kind, names]: [string, string[] | undefined]) =>
+        (names ?? []).map((name) => `${kind} ${name}`),
     );
   }
 

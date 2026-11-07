@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { redactMessage as serverLogMessage } from '../analog-server-log.ts';
 import { REDACTED, isRedactedKey, isSecretKey, redactMessage } from '../forms-privacy.ts';
 import type { HttpCall } from '../http-rules.ts';
-import { redactCall, redactPreview } from '../http-redact.ts';
+import { redactCall, redactPreview } from '../redaction.ts';
 import { serialize as ngrxSerialize } from '../ngrx-shared.ts';
 import {
   isSecretKey as isRouterSecretKey,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { curlSnippet, fetchSnippet } from '../http-data.ts';
-import { redactCall } from '../http-redact.ts';
+import { redactCall } from '../redaction.ts';
 import type { HttpCall } from '../http-rules.ts';
 
 const call = (overrides: Partial<HttpCall> = {}): HttpCall => ({

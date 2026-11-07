@@ -26,13 +26,8 @@ import {
   type RouterDebugApi,
   WRAPPED,
 } from './router.ts';
-
-export interface PreloadRecord {
-  path: string;
-  startedAt: number;
-  ms?: number;
-  failed?: boolean;
-}
+import type { PreloadRecord } from './router-types.ts';
+export type { PreloadRecord } from './router-types.ts';
 
 export type RouterAction =
   | {

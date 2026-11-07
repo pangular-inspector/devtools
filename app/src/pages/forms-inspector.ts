@@ -40,6 +40,7 @@ import {
   type WebMcpPage,
 } from './forms-types';
 import { rememberSelection } from '../view-memory';
+import { RedactionCount } from '../ui/redaction-count';
 
 type Tab = 'fields' | 'schema' | 'timeline' | 'submit' | 'lint';
 
@@ -72,6 +73,7 @@ function countFields(node: FormFieldNode): number {
 @Component({
   selector: 'app-forms-inspector',
   imports: [
+    RedactionCount,
     FormsActionBar,
     FormsExportTest,
     FormsFields,
@@ -249,6 +251,7 @@ function countFields(node: FormFieldNode): number {
             >
               @switch (tab_()) {
                 @case ('fields') {
+                  <app-redaction-count [value]="form" />
                   <app-forms-fields
                     [form]="form"
                     [rows]="rows()"

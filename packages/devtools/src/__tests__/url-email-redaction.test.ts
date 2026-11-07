@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it } from 'vitest';
 import { analogMiddleware, clearCalls, recentCalls } from '../analog-server-log.ts';
 import type { HttpCall } from '../http-rules.ts';
-import { redactCall } from '../http-redact.ts';
+import { redactCall } from '../redaction.ts';
 import { applyRouterEvent, redactUrl, type NavigationRecord } from '../router.ts';
 import { explainNavigationText, type RouterPage } from '../rpc/router-tools.ts';
 import { listHttpCallsText } from '../rpc/http-tools.ts';

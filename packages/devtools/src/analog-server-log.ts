@@ -4,7 +4,7 @@ import { beginRender, bindRender, tagRequest } from './analog-call-pages.ts';
 import { runInAnalogRender } from './ssr-context.ts';
 import { redactHighEntropy } from './entropy-redact.ts';
 import { REDACTED, isRedactedKey, redactTokens } from './forms-privacy.ts';
-import { redactJsonText } from './json-text-redact.ts';
+import { redactJsonText } from './redaction.ts';
 import { maskEmails } from './text-redact.ts';
 
 // A fragment (`#access_token=…`) and matrix params (`;sid=…`) carry pairs like a query.

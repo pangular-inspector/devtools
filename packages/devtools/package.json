@@ -53,7 +53,8 @@
     "./vite": "./src/entries/vite.ts",
     "./internal/config": "./src/config.ts",
     "./internal/types": "./src/panel-types.ts",
-    "./internal/http-data": "./src/http-data.ts"
+    "./internal/http-data": "./src/http-data.ts",
+    "./internal/redaction-count": "./src/redaction-count.ts"
   },
   "publishConfig": {
     "main": "./dist/devframe.mjs",

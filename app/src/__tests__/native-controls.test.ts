@@ -100,11 +100,12 @@ describe('browser-only controls', () => {
   });
 
   it.each(['angular-native', 'nativescript'])(
-    'hides the picker and the live views for a %s page, and keeps recording and the tree',
+    'offers the device picker, hides the live views for a %s page, and keeps recording and the tree',
     async (platform) => {
       const fixture = await render(platform);
       const host = fixture.nativeElement as HTMLElement;
       expect(buttons(fixture)).not.toContain('Pick component on page');
+      expect(buttons(fixture)).toContain('Pick component on device');
       expect(buttons(fixture)).toContain('Record');
       expect(host.querySelector('#cd-heading')).not.toBeNull();
       expect(buttons(fixture)).not.toContain('Flash checks');

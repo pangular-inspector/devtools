@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { argsToJsonSchema, stringifyForMcp } from 'devframe/internal';
 import { toAgentToolName } from 'devframe/utils/agent-tool-name';
-import { redactJsonText } from '../json-text-redact.ts';
+import { redactJsonText } from '../redaction.ts';
 import { isSecretName, redactText } from '../serialize.ts';
 import { setCallerPageReader } from './page-scope.ts';
 import { ToolRefusal } from './refusal.ts';

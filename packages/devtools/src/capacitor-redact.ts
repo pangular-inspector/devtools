@@ -3,7 +3,7 @@
 // `redaction` config, so a call logged before the page knew that config (or by
 // a page without it) is masked the same way.
 import { REDACTED, redactReason } from './forms-privacy.ts';
-import { redactPreview } from './http-redact.ts';
+import { redactPreview } from './redaction.ts';
 import { redactText, redactUrl } from './router.ts';
 import { isSecretName, serialize, type SerializeLimits } from './serialize.ts';
 import { clip } from './text.ts';

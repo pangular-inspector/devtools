@@ -19,22 +19,49 @@ function filesUnder(dir: string, out: string[] = []): string[] {
 describe('panel types entry', () => {
   const entry = readFileSync(join(src, 'panel-types.ts'), 'utf-8').replace(/\/\*[\s\S]*?\*\//g, '');
 
-  it('holds type-only re-exports of names types.ts declares', () => {
-    const statements = entry
-      .split(';')
-      .map((part) => part.trim())
-      .filter(Boolean);
-    expect(statements.length).toBeGreaterThan(0);
-    const types = readFileSync(join(src, 'types.ts'), 'utf-8');
-    for (const statement of statements) {
-      const match = /^export type \{([^}]*)\} from '\.\/types\.ts'$/.exec(statement);
-      expect(match, statement).not.toBeNull();
-      for (const name of match![1]!
+  const statements = entry
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const reExports = statements.map((statement) => {
+    const match = /^export type \{([^}]*)\} from '\.\/((?:router-)?types)\.ts'$/.exec(statement);
+    return {
+      statement,
+      file: match ? `${match[2]}.ts` : undefined,
+      names: (match?.[1] ?? '')
         .split(',')
         .map((n) => n.trim())
-        .filter(Boolean)) {
+        .filter(Boolean),
+    };
+  });
+
+  it('holds type-only re-exports of names types.ts and router-types.ts declare', () => {
+    expect(statements.length).toBeGreaterThan(0);
+    for (const { statement, file, names } of reExports) {
+      expect(file, statement).toBeDefined();
+      const types = readFileSync(join(src, file!), 'utf-8');
+      for (const name of names) {
         expect(types, name).toMatch(new RegExp(`export (?:interface|type) ${name}\\b`));
       }
+    }
+  });
+
+  it('keeps router-types.ts free of runtime imports', () => {
+    const router = readFileSync(join(src, 'router-types.ts'), 'utf-8');
+    const imports = [...router.matchAll(/^import\s+(type\s+)?/gm)];
+    for (const found of imports) expect(found[1], found[0]).toBeTruthy();
+    expect(router).not.toMatch(/^export (?:const|function|class|let|enum)\b/m);
+  });
+
+  it('lets the router panel share the router types instead of copying them', () => {
+    const shared = reExports.filter((r) => r.file === 'router-types.ts').flatMap((r) => r.names);
+    expect(shared).toEqual(
+      expect.arrayContaining(['NavigationRecord', 'RouterPage', 'RouteNode', 'RoutePreview']),
+    );
+    const panel = readFileSync(join(app, 'src', 'pages', 'router-types.ts'), 'utf-8');
+    expect(panel).toContain(ENTRY);
+    for (const name of shared) {
+      expect(panel, name).not.toMatch(new RegExp(`(?:interface|type) ${name}\\b\\s*[={]`));
     }
   });
 
