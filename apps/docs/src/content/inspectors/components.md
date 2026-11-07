@@ -30,7 +30,7 @@ Each row shows the class name and the host tag. Routed components get a chip wit
 
 ### Directive hosts
 
-An element that hosts directives but no component is a row too, so you can see where directives such as `routerLink` or `ngModel` sit. The row shows the tag and the attributes from the directive selectors, as **&lt;a&gt; [routerLink]**, in a lighter style than component rows. When a selector has no attribute, the row shows the directive class names instead. Select the row to see its directives and a button that shows the component whose template renders it. A directive host has no inputs or properties of its own in the detail pane.
+An element that hosts directives but no component is a row too, so you can see where directives such as `routerLink` or `ngModel` sit. The row shows the tag and the attributes from the directive selectors, as **&lt;a&gt; [routerLink]**, in a lighter style than component rows. When a selector has no attribute, the row shows the directive class names instead. Select the row to see its directives and a button that shows the component whose template renders it. Angular gives directives no source location, so each directive shows the file from the source scan with the same class name, marked **Likely**. When several files define the class, it says how many. A directive host has no inputs or properties of its own in the detail pane.
 
 **Directive hosts** in the toolbar hides or shows these rows. The panel remembers the choice in this browser. While they are hidden, their children move up to the nearest shown row, and the filter does not search them. The page lists up to 1000 directive hosts. Past that, the notice names the limit. Directives on an `<ng-container>` or `<ng-template>` are not listed, because the tree walks elements.
 
@@ -79,6 +79,15 @@ When a form exists in the same source file, a **Show … in Forms** button opens
 
 **Show in Injectors** opens the [Injectors tab](./injectors.md#links-to-the-components-tab) with the element injector of the selected instance selected and scrolled into view. The button appears when the Injectors inspector is on.
 
+**Show in Signals** opens the [Signals tab](./signals.md) on the signal graph of the selected instance, through the same `#tab=signals&id=` deep link an agent's `open-in-panel` gives. A signal in **Properties** has its own **Show in Signals** button, which also selects that signal's node once the graph arrives. The buttons appear when the Signals inspector is on.
+
+Two buttons copy the selected instance to the clipboard:
+
+| Button             | What it copies                                                                                                                                                                                                                                                          |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Copy as JSON**   | The class name, host tag, host path and selector, source, change detection, encapsulation, inputs, outputs, properties, DOM listeners, host directives and injected tokens. Values are the ones the panel shows, so secrets stay `[redacted]` and long values stay cut. |
+| **Copy host path** | A CSS selector that finds the host element with `document.querySelector`. A page without a DOM, such as an app on a device, sends no selector, so the button copies the host path from **Facts** instead.                                                               |
+
 **Store as global** stores the selected instance in the page console as `temp1`, then `temp2` and so on, and shows the name it used, for example **Stored as temp1.** See [Console handles](#console-handles).
 
 ### Facts
@@ -100,6 +109,10 @@ A fact shows **Unknown** when Angular does not report it.
 ### Properties
 
 **Properties** lists the component's other own fields: plain fields, state objects, signals and resources. It leaves out inputs, outputs, methods and injected services. Signals show their current value and a **signal** flag. A field that holds a `resource()` or `httpResource()` shows its status, value and error, with a **resource** flag.
+
+When an input, property or directive input changes between two refreshes, its row gets an outline that fades over one second. With reduced motion, the outline shows for one second without fading. Selecting another instance starts over, so nothing flashes on the first read.
+
+When the component's template holds `@defer` blocks, a **Defer blocks** block lists each one with its state and triggers. The [Defer blocks](#defer-blocks) list below the tree has the full rows.
 
 ### Nested values
 
@@ -139,9 +152,13 @@ Set [`actions.components`](../getting-started/configuration.md#actions) to `fals
 
 **Injected** lists each token the component class injects, with its flags and the injector that provided it. The block marks a token nobody provides as **not provided**. The block leaves out tokens that host directives inject. Use the [Injectors tab](./injectors.md) for those.
 
+### Pipes in template
+
+**Pipes in template** lists the pipes the selected component's template uses on the page, from the live data of the [Pipes tab](./pipes.md): each pipe's name, how many times the template uses it, and **impure**, **churning** or **stale?** flags. While recording pipe calls, a row also shows the pipe's call count, which covers every component that uses the pipe. Click a pipe to open it in the Pipes tab. The list follows the component class, since every instance shares its template, and it holds only pipes in the rendered part of the template, so a pipe in an `@if` branch that is not shown is left out. The block is missing when the Pipes inspector is off.
+
 ### Defer blocks
 
-When the page renders `@defer` blocks, a **Defer blocks** list follows the tree. Each row shows the component whose template holds the block, its state (`placeholder`, `loading`, `complete` or `error`) and its triggers. With [incremental hydration](https://angular.dev/guide/incremental-hydration), a row also shows `dehydrated` or `hydrated`, and a **hydrate never** flag marks a block that stays as server HTML.
+When the page renders `@defer` blocks, a **Defer blocks** list follows the tree. Each row shows the component whose template holds the block, its state (`placeholder`, `loading`, `complete` or `error`) and its triggers. With [incremental hydration](https://angular.dev/guide/incremental-hydration), a row also shows `dehydrated` or `hydrated`, and a **hydrate never** flag marks a block that stays as server HTML. A block that hydrated before the devtools attached to the page shows **hydrated before inspection**, because no one saw when it hydrated.
 
 A row also carries the notes the [`defer-blocks`](../agents/tools.md#defer-blocks) tool prints. Hover a note to read it in full.
 
@@ -154,7 +171,9 @@ A row also carries the notes the [`defer-blocks`](../agents/tools.md#defer-block
 
 When the block sets times, the row lists them, such as `placeholder min 500ms · loading after 100ms, min 1s`. Ages are counted on the page's clock, so a page on another device with its clock set wrong still shows the right age. The panel counts on from its own clock, so it assumes the panel and the server agree on the time, as they do when both run on one machine. A screen reader reads the badge as **stuck** or **waiting** without the seconds, so the row's name does not change while the age counts up.
 
-Hover or focus a row to highlight the block in the page. A block with several root elements gets one box around all of them. Click it to select the component that holds it. The list is hidden when the page renders no defer blocks, or when its Angular version has no util to read them.
+Hover or focus a row to highlight the block in the page. A block with several root elements gets one box around all of them. Click it to select the component that holds it.
+
+The arrow button next to a row opens the block's details: its id (the one [`load-defer-block`](../agents/tools.md#load-defer-block) takes), the host tag of its component, when it entered its state and when it hydrated, on the page's clock, how many root elements it rendered and every trigger. **Transitions** lists the state changes the page saw, up to the last six, starting from the state it found when the devtools attached. A **mismatch** badge marks a block whose root element is a component with a [hydration mismatch](#hydration), and the details have a button that selects that component. The list is hidden when the page renders no defer blocks, or when its Angular version has no util to read them.
 
 The list holds the first 500 blocks of a page. When the page has more, the count reads **500+**.
 
@@ -191,10 +210,13 @@ The list needs Angular 22.0 or later in a development build. On an older Angular
 
 Below the tree and the defer blocks, the **Change detection** section records change detection cycles with Angular's profiler. Click **Record**, use the app, then click **Stop recording**. A check is a component whose template Angular ran. A clean OnPush component that Angular only walked past is not a check, and neither is the second pass that development builds run to catch `ExpressionChangedAfterItHasBeenChecked` errors. The flash overlay and the Performance panel track count the same way. **Clear** empties the recording. Each new recording starts empty, but a start sent while the page records, such as an agent's `record-change-detection` call with `record: "start"`, keeps the cycles recorded so far. **Record** and **Stop recording** wait up to 3 seconds for the page to report the recording on or off before they announce it. If no report comes, the status says the page did not confirm, and the button keeps the state the page last reported.
 
+A recording keeps running when the tab reloads, so it catches the next start of the app. The page remembers it in `sessionStorage` for its page id, which a reload keeps, so another tab does not start recording. The cycles from before the reload are gone with the old page. **Stop recording** ends it for the reloads that follow too. An app on a device does not resume a recording.
+
 - **Cycles**: a bar chart with one bar per recorded cycle, its height the cycle's duration. A line marks the 16.6 ms frame budget (one frame at 60 frames per second). A cycle over the budget has a striped bar, a triangle under it, and says "over budget" in its tooltip and in the table. Hover or focus a bar to see the cycle number, duration, output trigger, checks and its three slowest components.
 - **Spans in the picked cycles**: when the page reports timed spans, a flame graph of the picked cycles. Time runs left to right, cycle after cycle with the idle time between them left out, and a span nested in another sits one row lower. Each span is a component check (solid), a lifecycle hook (stripes), an `afterRender` callback (dots) or the output listener that triggered the cycle (lines, drawn before the cycle's start), with a key under the graph. Hover or focus a span to read its total and self time. The arrow keys move along a row, **Up** goes to the enclosing span and **Down** to the first nested one. **Enter** or a click on a component, hook or output selects that component in the tree. **Show the spans as a table** lists the same spans. The graph shows at most 30 cycles; pick a smaller range when more are picked.
 - **Self time by component**: a treemap of each component class's self time in the picked cycles, largest first. The recording has no parent links between components, so the cells are not nested. Click a cell, or press **Enter** on it, to select an instance of that class in the tree (the one checked most often).
 - **Slowest components**: each component class with its check count, its self time (its own template and hooks, children excluded) and its slowest single check.
+- **Most often checked**: the same classes by check count, with the number of cycles that checked them, as the [`change-detection`](../agents/tools.md#change-detection) tool lists them. In both tables, click a class name to select its most checked instance in the tree.
 - **Latest cycles**, newest first: the start time, the duration, how many components Angular checked, how many sync passes it ran, what started the cycle (see [Why it ran and what it wasted](#why-it-ran-and-what-it-wasted)), how many refreshed checks changed nothing, the time in lifecycle hooks and in `afterRender` callbacks, and the slowest component in it. A recording without causes shows the output listener that ran just before the cycle instead (an output that ended more than 50 ms before the cycle is not counted).
 - **Lifecycle hooks**: time per class and hook (`ngOnChanges`, `ngOnInit`, `ngDoCheck`, `ngAfterContentChecked`, `ngAfterViewChecked` and the others Angular calls), with call count and slowest call. A hook's time is also part of the self time of the component whose view runs it.
 - **Output listeners**: time per class and listener, without the time of outputs the listener emitted, with call count and slowest call.
@@ -364,6 +386,18 @@ On Angular 20 and later, the page reads the tree about 250 ms after Angular runs
 
 While picking, presses and clicks in the app don't reach it, so menus and drag handles stay as they are.
 
+You can also pick with the keyboard, from the panel or with focus in the app:
+
+| Key         | What it does                                        |
+| ----------- | --------------------------------------------------- |
+| Down arrow  | Highlights the next component in page order         |
+| Up arrow    | Highlights the previous component                   |
+| Left arrow  | Highlights the component around the highlighted one |
+| Right arrow | Highlights the first component inside it            |
+| Enter       | Picks the highlighted component                     |
+
+The first arrow press starts from the component under the pointer, or from the first component on the page. The page scrolls the highlighted component into view, and the panel announces its name and tag.
+
 Press Escape, in the app or in the panel, or click **Cancel pick** to stop. Picking also stops after 15 seconds.
 
 Hold Alt (Option on macOS) while you click to also open the file of the picked component in your editor, at its class line. The tab still selects the component. This needs the debug info of a development build. Without it, the click only picks.
@@ -467,6 +501,7 @@ Press Escape in the filter box to clear it. When the filter matches nothing, **C
 | `pangular:inspect-component`         | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services. With `path`, reads one nested value instead, with `depth` and `limit`.                                              |
 | `pangular:list-components`           | tool     | Returns the live tree of one page as an indented outline with routed, directive host and hydration markers. Takes a `filter` with the search syntax, a `depth` and `directiveHosts`.                                                            |
 | `pangular:defer-blocks`              | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                                                                            |
+| `pangular:load-defer-block`          | tool     | Makes one `@defer` block fetch its dependencies and show its main content, as if its trigger fired. Leaves dehydrated server HTML alone. An action.                                                                                             |
 | `pangular:for-blocks`                | tool     | Lists the `@for` blocks of each page with their item count, track kind and `@empty` block.                                                                                                                                                      |
 | `pangular:scan-templates`            | tool     | Lints component templates in source with the project's Angular template parser: parse errors, `@for` tracking objects by `$index`, `<img>` without `alt`, `(click)` without a key handler, `*ngIf`-style directives and `ngClass` or `ngStyle`. |
 | `pangular:hydration`                 | tool     | Returns the hydration status of each page rendered on the server, and turns the outline on the page on or off. Turning the outline on or off is an action.                                                                                      |

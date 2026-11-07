@@ -26,6 +26,7 @@ import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
 import { SourceLink } from '../ui/source-link';
 import type { GraphLink } from './signal-graph-layout';
+import type { SignalFocus } from '../types/signal-focus.types';
 import { SignalGraphView } from './signal-graph-view';
 import { SearchField } from '../ui/search-field';
 
@@ -1698,6 +1699,10 @@ const KIND_TOKENS: Record<string, string> = {
 })
 export class SignalInspector {
   rpc = input<DevframeRpcClient | null>(null);
+  /** A component to show, from a deep link or the Components tab's "Show in Signals". */
+  readonly focus = input<SignalFocus | null>(null);
+  /** The signal to select once the focused component's graph arrives. */
+  private readonly focusedSignal = signal<{ componentId: string; key: string } | null>(null);
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -2060,6 +2065,23 @@ export class SignalInspector {
       void this.loadSignalGraph(client);
       void this.loadSourceSignals(client);
     });
+    effect(() => {
+      const focus = this.focus();
+      if (focus) untracked(() => this.showComponent(focus));
+    });
+    // Selects the focused signal once the graph of its component is in.
+    effect(() => {
+      const wanted = this.focusedSignal();
+      const graph = this.graph();
+      if (!wanted || graph?.component?.id !== wanted.componentId) return;
+      const node = graph.nodes.find(
+        (n) => n.locator?.id === wanted.componentId && n.locator.key === wanted.key,
+      );
+      untracked(() => {
+        this.focusedSignal.set(null);
+        if (node) this.jumpTo(node);
+      });
+    });
     this.destroyRef.onDestroy(() => {
       for (const cleanup of this.cleanups.splice(0)) cleanup();
     });
@@ -2132,9 +2154,18 @@ export class SignalInspector {
     this.announcement.set(`Showing the signal graph of ${label}.`);
   }
 
-  pickComponent(value: string | null) {
+  /** Shows the graph of the component a focus names, on its page when it names one. */
+  private showComponent(focus: SignalFocus) {
+    if (focus.pageId && !this.pageId && this.graphPages()[focus.pageId]) {
+      this.chosenPageId.set(focus.pageId);
+    }
+    this.focusedSignal.set(focus.key ? { componentId: focus.componentId, key: focus.key } : null);
+    this.pickComponent(focus.componentId, this.pageId ?? focus.pageId);
+  }
+
+  pickComponent(value: string | null, forPage?: string) {
     const picked = value && value !== FOLLOW ? value : null;
-    const pageId = this.targetPageId() ?? undefined;
+    const pageId = forPage ?? this.targetPageId() ?? undefined;
     this.pickedByPage.update((all) => {
       const next = { ...all };
       if (picked) next[pageId ?? ''] = picked;

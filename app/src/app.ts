@@ -27,6 +27,7 @@ import { PipesInspector } from './pages/pipes-inspector';
 import type { Tab, Tabs } from './types/tab.types';
 import type { ComponentFocus } from './types/component-focus.types';
 import type { InjectorFocus } from './types/injector-focus.types';
+import type { SignalFocus } from './types/signal-focus.types';
 import { AnalogInspector } from './pages/analog-inspector';
 import { NetworkInspector } from './pages/network-inspector';
 import { ComingSoon, type ComingSoonInfo } from './pages/coming-soon';
@@ -548,17 +549,21 @@ function readView(): View | null {
                 [focus]="componentFocus()"
                 [command]="componentCommand()"
                 [canShowInjector]="config().inspectors.injectors"
+                [canShowSignals]="config().inspectors.signals"
+                [canShowPipes]="config().inspectors.pipes"
                 (focusHandled)="componentFocus.set(null)"
                 (commandHandled)="componentCommand.set(null)"
                 (showForm)="showForm($event)"
                 (showInjector)="showInjector($event)"
+                (showSignals)="showSignals($event)"
+                (showPipe)="showPipe($event)"
               />
             }
             @case ('routes') {
               <app-route-inspector [rpc]="rpc()" (showComponent)="showComponent($event)" />
             }
             @case ('signals') {
-              <app-signal-inspector [rpc]="rpc()" />
+              <app-signal-inspector [rpc]="rpc()" [focus]="signalFocus()" />
             }
             @case ('injectors') {
               <app-di-inspector
@@ -586,7 +591,11 @@ function readView(): View | null {
               />
             }
             @case ('pipes') {
-              <app-pipes-inspector [rpc]="rpc()" />
+              <app-pipes-inspector
+                [rpc]="rpc()"
+                [focus]="pipeFocus()"
+                (focusHandled)="pipeFocus.set(null)"
+              />
             }
             @case ('analog') {
               <app-analog-inspector [rpc]="rpc()" />
@@ -1641,6 +1650,7 @@ export class App implements OnInit, OnDestroy {
       const pageId = link.page;
       if (tab === 'components') this.componentFocus.set({ id: link.id, pageId });
       else if (tab === 'injectors') this.injectorFocus.set({ componentId: link.id, pageId });
+      else if (tab === 'signals') this.signalFocus.set({ componentId: link.id, pageId });
       else if (tab === 'forms') this.formFocus.set({ id: link.id });
     }
     history.replaceState(history.state, '', panelLinkHash(link));
@@ -1710,6 +1720,8 @@ export class App implements OnInit, OnDestroy {
     if (tab === 'components') this.componentFocus.set({ id: link.id, pageId: link.page });
     else if (tab === 'injectors') {
       this.injectorFocus.set({ componentId: link.id, pageId: link.page });
+    } else if (tab === 'signals') {
+      this.signalFocus.set({ componentId: link.id, pageId: link.page });
     } else if (tab === 'forms') this.formFocus.set({ id: link.id });
   }
 
@@ -1719,6 +1731,19 @@ export class App implements OnInit, OnDestroy {
     source: this.tab,
     computation: () => null,
   });
+
+  // Belongs to the Pipes tab that received it, like `componentFocus`.
+  readonly pipeFocus = linkedSignal<Tab, string | null>({
+    source: this.tab,
+    computation: () => null,
+  });
+
+  showPipe(name: string) {
+    if (!this.config().inspectors.pipes) return;
+    // Switch first: the focus belongs to the tab, so the switch would clear it.
+    this.switchTab('pipes');
+    this.pipeFocus.set(name);
+  }
 
   showForm(formId: string) {
     this.formFocus.set({ id: formId });
@@ -1730,6 +1755,23 @@ export class App implements OnInit, OnDestroy {
     source: this.tab,
     computation: () => null,
   });
+
+  // Belongs to the Signals tab that received it, like `componentFocus`.
+  readonly signalFocus = linkedSignal<Tab, SignalFocus | null>({
+    source: this.tab,
+    computation: () => null,
+  });
+
+  /**
+   * Opens the Signals tab on a component's graph, through the same deep link
+   * a `#tab=signals&id=` hash opens, then selects the signal `key` names.
+   */
+  showSignals(focus: SignalFocus) {
+    if (!this.config().inspectors.signals) return;
+    const page = focus.pageId ? { page: focus.pageId } : {};
+    if (!this.openLink({ tab: 'signals', id: focus.componentId, ...page })) return;
+    this.signalFocus.set(focus);
+  }
 
   showInjector(focus: InjectorFocus) {
     if (!this.config().inspectors.injectors) return;

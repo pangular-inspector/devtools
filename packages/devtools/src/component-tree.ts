@@ -325,6 +325,8 @@ export function componentDetail<H extends object = Element>(
     dependencies: [],
   };
   markEditable(ng, instance, detail);
+  const selector = read(() => hosts.selector?.(el) ?? null, null);
+  if (selector) detail.selector = selector;
   const source = componentSource(instance);
   if (source) detail.source = source;
   const cd = meta?.changeDetection;

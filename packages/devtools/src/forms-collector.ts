@@ -82,6 +82,8 @@ const DIFFED_FOR_ALL: FormEvent['type'][] = [
   'added',
   'removed',
 ];
+/** What a WebMCP call that is still running (an async submit) causes: its outcome. */
+const RUNNING_CALL_TYPES: FormEvent['type'][] = ['status', 'submit'];
 const USER_EVENTS = ['input', 'change', 'focusout', 'submit', 'reset', 'click', 'keydown'];
 
 function read<T>(fn: () => T, fallback: T): T {
@@ -90,6 +92,19 @@ function read<T>(fn: () => T, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+/** Form ids, `ALL_FORMS` for every form, or null for none. */
+type FormSet = Set<string> | typeof ALL_FORMS | null;
+const ALL_FORMS = 'all' as const;
+
+function touches(set: FormSet, formId: string): boolean {
+  return set === ALL_FORMS || !!set?.has(formId);
+}
+
+function addForms(set: FormSet, more: Exclude<FormSet, null>): Exclude<FormSet, null> {
+  if (set === ALL_FORMS || more === ALL_FORMS) return ALL_FORMS;
+  return new Set([...(set ?? []), ...more]);
 }
 
 function isFieldTarget(target: unknown): target is { formId: string; path: string } {
@@ -172,10 +187,23 @@ export function attachForms(
   let hosts: Element[] | null = null;
   const added = new Set<Element>();
   let lastFullScan = 0;
+  // Whether anything that can change a form happened since the last read: a form event,
+  // user input, a DOM change, a WebMCP call or a devtools action. `sync` skips the read
+  // while nothing did (see `unchanged`).
+  let changed = true;
+  // One more read after a read that changes caused, for what the next render shows.
+  let settleRead = false;
+  let lastRead = 0;
+  let lastReport: Record<string, unknown> | null = null;
+  // The last read had a pending field, a debounce or a submit in flight, which change on
+  // their own, so the next one reads again.
+  let volatile = false;
+  let signalPrints = new Map<object, unknown[]>();
   const observed = new WeakSet<Node>();
   const observer =
     typeof MutationObserver === 'function'
       ? new MutationObserver((records) => {
+          if (records.length) changed = true;
           for (const record of records) {
             for (const node of Array.from(record.addedNodes)) {
               if (node.nodeType === 1) added.add(node as Element);
@@ -216,9 +244,11 @@ export function attachForms(
   let foundById = new Map<string, FoundForm>();
   let fieldElements = new WeakMap<object, Element>();
   let eventSeq = 0;
-  let userActive = false;
-  let userSincePush = false;
-  let devtoolsSincePush = false;
+  // Who touched which form: a set of form ids, or `ALL_FORMS` when the event could not be
+  // placed in a form (a custom control in an overlay, say), so every form counts as touched.
+  let userActive: FormSet = null;
+  let userSincePush: FormSet = null;
+  let devtoolsSincePush: FormSet = null;
   let userTimer: ReturnType<typeof setTimeout> | undefined;
   let pushTimer: ReturnType<typeof setTimeout> | undefined;
   // Sends are paced like the other leased reports; reads go on, so the timeline misses nothing.
@@ -239,13 +269,41 @@ export function attachForms(
   const ownerNames = new Set<string>();
   const webMcp = watchWebMcp(() => schedulePush());
 
-  const originNow = (): EventOrigin =>
-    isDevtoolsAction() ? 'devtools' : webMcp.active() ? 'agent' : userActive ? 'user' : 'code';
+  const originNow = (formId: string): EventOrigin =>
+    isDevtoolsAction()
+      ? 'devtools'
+      : webMcp.active()
+        ? 'agent'
+        : touches(userActive, formId)
+          ? 'user'
+          : 'code';
+
+  /** The forms an event target belongs to: the form element around it, or the field it binds. */
+  function formsOf(target: EventTarget | null | undefined): Set<string> | typeof ALL_FORMS {
+    const el = target instanceof Element ? target : null;
+    if (!el) return ALL_FORMS;
+    const ids = new Set<string>();
+    for (const [formId, found] of foundById) {
+      const box = found.formElement ?? found.element;
+      if (box && box !== document.body && box !== document.documentElement && box.contains(el)) {
+        ids.add(formId);
+      }
+    }
+    if (ids.size) return ids;
+    const ng = getNg();
+    if (!ng?.getDirectives) return ALL_FORMS;
+    const located = read(
+      () =>
+        locateElement({ ng, forms: foundById, elements: fieldElements, all: knownElements }, el),
+      null,
+    );
+    return located?.formId ? new Set([located.formId]) : ALL_FORMS;
+  }
 
   function recordFormEvent(input: FormEvent, infer = true) {
     const event: FormEvent = { ...input, seq: ++eventSeq };
     if (event.detail) event.detail = redactFormText(event.formId, event.detail);
-    if (infer) event.origin ??= originNow();
+    if (infer) event.origin ??= originNow(event.formId);
     const key = `${event.formId}:${event.path}`;
     if (pendingCaller?.formId === event.formId && !event.caller && event.origin !== 'devtools') {
       event.caller = redactFormText(event.formId, pendingCaller.text);
@@ -506,11 +564,62 @@ export function attachForms(
     await channel.send(report);
   }
 
-  async function pushForms(wake = false, paced = false) {
+  /** What changes in a Signal Form show in: the value, the errors and the root flags. */
+  function signalPrint(root: AnyRecord): unknown[] {
+    return ['value', 'errorSummary', 'valid', 'pending', 'touched', 'dirty', 'submitting'].map(
+      (name) => read(() => root[name](), undefined),
+    );
+  }
+
+  function readSignalPrints(): Map<object, unknown[]> {
+    const prints = new Map<object, unknown[]>();
+    for (const form of foundById.values()) {
+      if (form.kind === 'signal') prints.set(form.root, signalPrint(form.root));
+    }
+    return prints;
+  }
+
+  /**
+   * Nothing changed since the last read: no change was signalled, the Signal Forms (which
+   * report no events) still hold the same values, errors and flags, nothing was pending,
+   * and the last read is younger than a heartbeat, the safety net for what slips past.
+   */
+  function unchanged(now: number): boolean {
+    if (changed || settleRead || volatile || !lastReport || now - lastRead >= HEARTBEAT_MS) {
+      return false;
+    }
+    const prints = readSignalPrints();
+    if (prints.size !== signalPrints.size) return false;
+    for (const [root, print] of prints) {
+      const before = signalPrints.get(root);
+      if (!before || print.some((value, i) => !Object.is(value, before[i]))) return false;
+    }
+    return true;
+  }
+
+  function isVolatile(form: CollectedForm): boolean {
+    if (form.submit?.submitting) return true;
+    const visit = (node: FormFieldNode): boolean =>
+      node.status === 'PENDING' ||
+      !!node.debouncing ||
+      !!node.submitting ||
+      (node.children ?? []).some(visit);
+    return visit(form.root);
+  }
+
+  async function pushForms(wake = false, paced = false, skipUnchanged = false) {
     try {
       const ng = getNg();
       if (!ng?.getDirectives) return;
       const now = Date.now();
+      if (skipUnchanged && !wake && unchanged(now)) {
+        const report = lastReport!;
+        await channel.keepalive(() => report);
+        return;
+      }
+      settleRead = changed;
+      changed = false;
+      lastRead = now;
       const full = !hosts || !observer || (added.size > 0 && now - lastFullScan >= HEARTBEAT_MS);
       const found = findForms(ng, full ? scanAll() : knownElements());
       if (full) lastFullScan = now;
@@ -534,14 +643,18 @@ export function attachForms(
         if (!streamed.has(event.formId) || DIFFED_FOR_ALL.includes(event.type)) {
           const caller = signalCallers.get(event.formId);
           // The agent's own write wins; user input wins over a call that is merely running.
+          // While its submit runs, only the outcome (status and submit) is the agent's: a value
+          // that app code writes meanwhile is not.
           const touch = agentTouch(foundById.get(event.formId)?.root);
-          const origin: EventOrigin | undefined = devtoolsSincePush
+          const agentOutcome =
+            touch === 'maybe' || (touch === 'running' && RUNNING_CALL_TYPES.includes(event.type));
+          const origin: EventOrigin | undefined = touches(devtoolsSincePush, event.formId)
             ? 'devtools'
             : touch === 'wrote'
               ? 'agent'
-              : userSincePush
+              : touches(userSincePush, event.formId)
                 ? 'user'
-                : touch
+                : agentOutcome
                   ? 'agent'
                   : caller !== undefined
                     ? 'code'
@@ -553,8 +666,8 @@ export function attachForms(
       }
       lastForms = forms;
       for (const form of forms) ownerNames.add(form.owner);
-      userSincePush = false;
-      devtoolsSincePush = false;
+      userSincePush = null;
+      devtoolsSincePush = null;
       signalCallers.clear();
       attachRenders();
       if (instrumentation) {
@@ -576,6 +689,8 @@ export function attachForms(
       }
       // The read above may have learned secrets that events recorded before it hold.
       remaskEvents(formEvents);
+      signalPrints = readSignalPrints();
+      volatile = pendingSince.size > 0 || forms.some(isVolatile);
       const report = {
         pageId,
         forms,
@@ -585,6 +700,7 @@ export function attachForms(
         instrumented: !!instrumentation,
         ...(droppedEvents ? { dropped: droppedEvents } : {}),
       };
+      lastReport = report;
       if (!wake && options.active && !options.active()) await channel.keepalive(() => report);
       else await deliver(report, paced && !wake);
     } catch {
@@ -593,6 +709,7 @@ export function attachForms(
   }
 
   function schedulePush() {
+    changed = true;
     if (pushTimer) return;
     pushTimer = setTimeoutOutside(() => {
       pushTimer = undefined;
@@ -651,6 +768,7 @@ export function attachForms(
   }
 
   function setInstrumented(on: boolean): FormActionResult {
+    changed = true;
     if (on && !instrumentation) {
       probeEveryTime(true);
       instrumentation = instrumentForms(onInstrumentedCall, ownerNames);
@@ -725,14 +843,15 @@ export function attachForms(
   }
 
   const onUserEvent = (event: Event) => {
-    if (!isDevtoolsAction()) userSincePush = true;
+    const forms = formsOf(event.composedPath?.()[0] ?? event.target);
+    if (!isDevtoolsAction()) userSincePush = addForms(userSincePush, forms);
     if (renders && renderSince === null && (event.type === 'input' || event.type === 'change')) {
       renderSince = eventSeq;
       renders.start();
     }
-    userActive = true;
+    userActive = addForms(userActive, forms);
     clearTimeout(userTimer);
-    userTimer = setTimeoutOutside(() => (userActive = false), 0);
+    userTimer = setTimeoutOutside(() => (userActive = null), 0);
     if (event.type === 'submit') onSubmit(event);
     if (event.type !== 'click' && event.type !== 'keydown') schedulePush();
   };
@@ -850,6 +969,7 @@ export function attachForms(
         forms: foundById,
         elements: fieldElements,
         all: knownElements,
+        runTool: (root, args) => webMcp.run(root, args),
       };
       if (request.action === 'instrument') return respond(setInstrumented(request.value !== false));
       if (request.action === 'pick') {
@@ -861,7 +981,11 @@ export function attachForms(
         active?.();
         return respond({ ok: true, message: active ? 'Picking cancelled.' : 'No pick to cancel.' });
       }
-      devtoolsSincePush = true;
+      changed = true;
+      devtoolsSincePush = addForms(
+        devtoolsSincePush,
+        request.formId ? new Set([request.formId]) : ALL_FORMS,
+      );
       runFormAction(ctx, request).then(
         (result) => {
           respond(result);
@@ -874,8 +998,9 @@ export function attachForms(
 
   return {
     push: (wake = false) => pushForms(wake),
-    sync: () => pushForms(false, true),
+    sync: () => pushForms(false, true, true),
     leave() {
+      changed = true;
       clearTimeout(pushTimer);
       pushTimer = undefined;
       clearTimeout(sendTimer);

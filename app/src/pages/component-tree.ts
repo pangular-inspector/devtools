@@ -14,9 +14,11 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { ExtensionBridge, type SourceLocation } from '../extension-bridge';
 import { hostPageId } from '../page-id';
+import { ComponentPipesSection } from './component-pipes-section';
 import {
   angularVersionAtLeast,
   lacksCapability,
@@ -44,6 +46,9 @@ import { CdRecording, type CdPage } from './cd-recording';
 import type { ComponentFocus } from '../types/component-focus.types';
 import type { ComponentCommand } from '../types/component-command.types';
 import type { InjectorFocus } from '../types/injector-focus.types';
+import type { SignalFocus } from '../types/signal-focus.types';
+import { componentJson, hostPathText } from './component-copy';
+import { ValueFlash, flashKey } from './component-value-flash';
 import { SourceLink } from '../ui/source-link';
 import { actionAllowed } from '../devtools-config';
 import { ValueTree } from './component-value-tree';
@@ -104,6 +109,8 @@ interface Detail {
   name: string;
   tag: string;
   path: string;
+  /** A CSS selector that finds the host with `querySelector`, from a browser page. */
+  selector?: string;
   source?: SourceLocation;
   changeDetection?: string;
   encapsulation?: string;
@@ -197,6 +204,15 @@ export function ancestors(parents: ReadonlyMap<string, string>, id: string): str
   return out;
 }
 
+/** The keys that move a running pick on the page, as the page names them. */
+const PICK_KEY_NAMES: Record<string, string> = {
+  ArrowDown: 'next',
+  ArrowUp: 'previous',
+  ArrowLeft: 'parent',
+  ArrowRight: 'child',
+  Enter: 'pick',
+};
+
 const DIRECTIVE_HOSTS_KEY = 'pangular:components:directive-hosts';
 
 /** Whether this viewer last chose to show directive hosts; shown unless they hid them. */
@@ -212,6 +228,7 @@ function storedDirectiveHosts(): boolean {
   selector: 'app-component-tree',
   imports: [
     SearchField,
+    NgTemplateOutlet,
     Select,
     CdRecording,
     SourceLink,
@@ -222,8 +239,9 @@ function storedDirectiveHosts(): boolean {
     HydrationSection,
     LeaksSection,
     AngularUnavailable,
+    ComponentPipesSection,
   ],
-  host: { '(keydown.escape)': 'cancelPick()' },
+  host: { '(keydown.escape)': 'cancelPick()', '(keydown)': 'pickKey($event)' },
   template: `
     @if (live()) {
       <p class="intro">
@@ -449,7 +467,13 @@ function storedDirectiveHosts(): boolean {
               </h3>
               <ul class="chips">
                 @for (name of host.directives ?? []; track name + $index) {
-                  <li class="chip mono">{{ name }}</li>
+                  <li class="chip mono">
+                    {{ name }}
+                    <ng-container
+                      [ngTemplateOutlet]="directiveSource"
+                      [ngTemplateOutletContext]="{ $implicit: name }"
+                    />
+                  </li>
                 }
               </ul>
             </div>
@@ -517,13 +541,28 @@ function storedDirectiveHosts(): boolean {
                   </div>
                 }
               }
-              @if (canShowInjector() && !staticReport()) {
+              @if ((canShowInjector() || canShowSignals()) && !staticReport()) {
                 <div class="actions">
-                  <button type="button" (click)="openInjector(sel)">
-                    Show in Injectors
-                    <span class="sr-only">: {{ sel.name }}</span>
-                  </button>
+                  @if (canShowInjector()) {
+                    <button type="button" (click)="openInjector(sel)">
+                      Show in Injectors
+                      <span class="sr-only">: {{ sel.name }}</span>
+                    </button>
+                  }
+                  @if (canShowSignals()) {
+                    <button type="button" (click)="openSignals(sel)">
+                      Show in Signals
+                      <span class="sr-only">: {{ sel.name }}</span>
+                    </button>
+                  }
                 </div>
+              }
+              @if (detail(); as d) {
+                <div class="actions" role="group" aria-label="Copy">
+                  <button type="button" (click)="copyJson(d)">Copy as JSON</button>
+                  <button type="button" (click)="copyHostPath(d)">Copy host path</button>
+                </div>
+                <p class="where action-message" role="status">{{ copyMessage() }}</p>
               }
               @if (!staticReport() && !native()) {
                 <app-store-global
@@ -585,7 +624,7 @@ function storedDirectiveHosts(): boolean {
                     @if (v.inputs.length) {
                       <ul class="props">
                         @for (p of v.inputs; track p.name) {
-                          <li class="prop">
+                          <li class="prop" [class.changed]="flashed('input', p.name)">
                             <span class="prop-name mono">
                               {{ p.name }}
                               @if (p.prop !== p.name) {
@@ -640,11 +679,20 @@ function storedDirectiveHosts(): boolean {
                     @if (v.properties.length) {
                       <ul class="props">
                         @for (p of v.properties; track p.name) {
-                          <li class="prop">
+                          <li class="prop" [class.changed]="flashed('property', p.name)">
                             <span class="prop-name mono">
                               {{ p.name }}
                               @if (p.kind) {
                                 <span class="flag">{{ p.kind }}</span>
+                              }
+                              @if (p.kind === 'signal' && canShowSignals() && !staticReport()) {
+                                <button
+                                  type="button"
+                                  class="signal-link"
+                                  (click)="openSignals(sel, p.prop)"
+                                >
+                                  Show in Signals<span class="sr-only">: {{ p.name }}</span>
+                                </button>
                               }
                             </span>
                             <app-value-tree
@@ -678,16 +726,43 @@ function storedDirectiveHosts(): boolean {
                   </div>
                 }
 
+                @if (!propQuery() && ownedDeferBlocks().length) {
+                  <div class="block">
+                    <h3>
+                      Defer blocks <span class="pill">{{ ownedDeferBlocks().length }}</span>
+                    </h3>
+                    <ul class="chips">
+                      @for (block of ownedDeferBlocks(); track block.id) {
+                        <li class="chip">
+                          <span class="mono">{{ block.state }}</span>
+                          <span class="chip-note">{{
+                            block.triggers.join(', ') || 'no triggers'
+                          }}</span>
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                }
+
                 @for (dir of v.directives; track dir.name + dir.index) {
                   <div class="block">
                     <h3>
                       <span class="mono">{{ dir.name }}</span>
                       <span class="flag">directive on host</span>
                     </h3>
+                    <p class="directive-where mono">
+                      <ng-container
+                        [ngTemplateOutlet]="directiveSource"
+                        [ngTemplateOutletContext]="{ $implicit: dir.name }"
+                      />
+                    </p>
                     @if (dir.inputs.length) {
                       <ul class="props">
                         @for (p of dir.inputs; track p.name) {
-                          <li class="prop">
+                          <li
+                            class="prop"
+                            [class.changed]="flashed('directive', p.name, dir.index)"
+                          >
                             <span class="prop-name mono">{{ p.name }}</span>
                             <app-value-tree
                               [prop]="p"
@@ -750,6 +825,16 @@ function storedDirectiveHosts(): boolean {
                   <p class="empty-line">Nothing is injected through the constructor or inject().</p>
                 }
               </div>
+
+              @if (canShowPipes()) {
+                <app-component-pipes
+                  [rpc]="rpc()"
+                  [pageId]="page()?.pageId"
+                  [component]="bareName(sel.name)"
+                  [canShowPipes]="!staticReport()"
+                  (showPipe)="showPipe.emit($event)"
+                />
+              }
             } @else {
               <div class="state compact" role="status">
                 <span class="spinner" aria-hidden="true"></span>
@@ -779,7 +864,9 @@ function storedDirectiveHosts(): boolean {
         [blocks]="deferBlocks()"
         [truncated]="page()?.deferTruncated === true"
         [clockOffset]="page()?.clockOffset ?? 0"
+        [mismatches]="page()?.hydration?.mismatches ?? []"
         (showOwner)="showOwner($event)"
+        (showNode)="revealNode($event)"
         (highlight)="$event ? highlightBlock($event) : highlight(null)"
       />
       @if (deferUnavailable()) {
@@ -959,6 +1046,21 @@ function storedDirectiveHosts(): boolean {
         </ul>
       }
     }
+
+    <!-- A directive's file from the source scan, by class name: the page gives none. -->
+    <ng-template #directiveSource let-name>
+      @let found = directiveSources(name);
+      @if (found.length === 1) {
+        <span class="directive-guess" [title]="guessTitle">
+          <span class="likely">Likely</span><span class="sr-only">, matched by class name: </span
+          ><app-source-link [file]="found[0].file" [line]="found[0].line" />
+        </span>
+      } @else if (found.length > 1) {
+        <span class="chip-note" [title]="guessTitle"
+          >{{ found.length }} source files define {{ bareName(name) }}</span
+        >
+      }
+    </ng-template>
   `,
   styles: `
     @use 'mixins' as m;
@@ -1398,6 +1500,18 @@ function storedDirectiveHosts(): boolean {
       font-size: 12px;
       overflow-wrap: anywhere;
     }
+    .directive-where {
+      margin: -4px 0 8px;
+      font-size: 12px;
+    }
+    .directive-where:empty {
+      display: none;
+    }
+    .directive-guess {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--font-sans);
+    }
     .likely {
       display: inline-block;
       margin-right: 6px;
@@ -1511,6 +1625,37 @@ function storedDirectiveHosts(): boolean {
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       background: var(--bg);
+    }
+    .prop.changed {
+      outline: 2px solid var(--accent);
+      outline-offset: -1px;
+      animation: value-flash 1s var(--ease) forwards;
+    }
+    @keyframes value-flash {
+      from {
+        outline-color: var(--accent);
+      }
+      to {
+        outline-color: transparent;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .prop.changed {
+        animation: none;
+      }
+    }
+    .signal-link {
+      height: auto;
+      min-height: 0;
+      margin-left: 6px;
+      padding: 0 6px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 18px;
+    }
+    .signal-link:focus-visible {
+      @include m.focus-ring(-2px);
     }
     .prop-name {
       display: block;
@@ -1736,7 +1881,14 @@ export class ComponentTree {
   readonly commandHandled = output<void>();
   /** Whether the Injectors tab is on, so "Show in Injectors" can open it. */
   readonly canShowInjector = input(false);
+  /** Whether the Pipes inspector is on, so the detail lists the template's pipes. */
+  readonly canShowPipes = input(false);
+  /** Opens the Pipes tab on the pipe with this name. */
+  readonly showPipe = output<string>();
   readonly showInjector = output<InjectorFocus>();
+  /** Whether the Signals tab is on, so "Show in Signals" can open it. */
+  readonly canShowSignals = input(false);
+  readonly showSignals = output<SignalFocus>();
 
   readonly filter = signal('');
   readonly loading = signal(false);
@@ -1761,6 +1913,13 @@ export class ComponentTree {
     source: this.selectedId,
     computation: () => '',
   });
+  /** What the last copy did, for the selected component only. */
+  readonly copyMessage = linkedSignal<string | null, string>({
+    source: this.selectedId,
+    computation: () => '',
+  });
+  /** Values of the selected component that changed in the last push, outlined for a second. */
+  private readonly flash = new ValueFlash();
   readonly collapsed = signal<ReadonlySet<string>>(new Set());
   /** Elements that host directives but no component show as rows; this viewer can hide them. */
   readonly showDirectiveHosts = signal(storedDirectiveHosts());
@@ -1877,6 +2036,11 @@ export class ComponentTree {
   );
 
   readonly deferBlocks = computed(() => this.page()?.deferBlocks ?? []);
+  /** The defer blocks in the selected component's template. */
+  readonly ownedDeferBlocks = computed(() => {
+    const id = this.selectedId();
+    return id ? this.deferBlocks().filter((block) => block.owner?.id === id) : [];
+  });
 
   readonly countLabel = computed(() =>
     countText(
@@ -2092,6 +2256,18 @@ export class ComponentTree {
       });
     });
     effect(() => {
+      const detail = this.detail();
+      const owner = detail ? `${this.page()?.pageId ?? ''}|${detail.id}` : null;
+      const values = new Map<string, unknown>();
+      for (const p of detail?.inputs ?? []) values.set(flashKey('input', p.name), p.value);
+      for (const p of detail?.properties ?? []) values.set(flashKey('property', p.name), p.value);
+      detail?.directives.forEach((dir, index) => {
+        for (const p of dir.inputs) values.set(flashKey('directive', p.name, index), p.value);
+      });
+      untracked(() => this.flash.update(owner, values));
+    });
+    this.destroyRef.onDestroy(() => this.flash.clear());
+    effect(() => {
       const client = this.rpc();
       if (!client) return;
       void this.refresh();
@@ -2257,6 +2433,44 @@ export class ComponentTree {
     );
   }
 
+  /** Whether a value of the detail changed in the last push, so it shows an outline. */
+  flashed(section: 'input' | 'property' | 'directive', name: string, index?: number): boolean {
+    return this.flash.changed().has(flashKey(section, name, index));
+  }
+
+  /** Opens the Signals tab on this component's graph, with the signal in `key` selected. */
+  openSignals(node: LiveNode, key?: string) {
+    const pageId = this.page()?.pageId;
+    this.showSignals.emit({
+      componentId: node.id,
+      ...(pageId ? { pageId } : {}),
+      ...(key ? { key } : {}),
+    });
+  }
+
+  /** Copies only what the panel holds, which the page serialized and masked already. */
+  async copyJson(detail: Detail) {
+    await this.copy(detail.id, componentJson(detail), `Copied ${detail.name} as JSON.`);
+  }
+
+  async copyHostPath(detail: Detail) {
+    await this.copy(
+      detail.id,
+      hostPathText(detail),
+      detail.selector ? 'Copied the host selector.' : 'Copied the host path.',
+    );
+  }
+
+  private async copy(id: string, text: string, done: string) {
+    let message = done;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      message = 'The clipboard is not available here.';
+    }
+    if (this.selectedId() === id) this.copyMessage.set(message);
+  }
+
   /** Opens the Injectors tab on this component's element injector. */
   openInjector(node: LiveNode) {
     const pageId = this.page()?.pageId;
@@ -2304,6 +2518,14 @@ export class ComponentTree {
     const exact = this.detail()?.source;
     if (exact) return candidates.find((c) => sameSourceFile(c.file, exact.file)) ?? null;
     return candidates.length === 1 ? candidates[0] : null;
+  }
+
+  /**
+   * The source scan directives a directive on the page may be, by class name. Angular gives
+   * directives no debug location, so a match is only likely.
+   */
+  directiveSources(name: string): SourceComponent[] {
+    return (this.sourceByClass().get(bare(name)) ?? []).filter((c) => c.kind === 'directive');
   }
 
   sourceKey(comp: SourceComponent) {
@@ -2392,7 +2614,9 @@ export class ComponentTree {
     const seq = ++this.pickSeq;
     this.pickPageId = this.page()?.pageId ?? null;
     this.picking.set(true);
-    this.say('Click a component in the app. Press Escape to cancel.');
+    this.say(
+      'Click a component in the app, or use the arrow keys to move between components and Enter to pick one. Press Escape to cancel.',
+    );
     const result = (await client
       .scope('pangular')
       .rpc.call('request-component-pick', { pageId: this.pickPageId ?? undefined })
@@ -2408,6 +2632,33 @@ export class ComponentTree {
     this.destroyed.set(null);
     if (this.index().map.has(result.id)) this.reveal(result.id);
     else this.selectedId.set(result.id);
+  }
+
+  /**
+   * Moves a running pick with the keyboard: down and up go through the components in page
+   * order, left to the one around, right to the first one inside, and Enter picks.
+   */
+  pickKey(event: KeyboardEvent) {
+    const key = PICK_KEY_NAMES[event.key];
+    if (!this.picking() || !key || event.altKey || event.ctrlKey || event.metaKey) return;
+    // Enter would press the focused button, which cancels the pick.
+    event.preventDefault();
+    const client = this.rpc();
+    if (!client) return;
+    const seq = this.pickSeq;
+    void client
+      .scope('pangular')
+      .rpc.call('request-component-pick-move', { pageId: this.pickPageId ?? undefined, key })
+      .then((answer) => {
+        const result = answer as { moved?: boolean; name?: string; tag?: string; error?: string };
+        if (seq !== this.pickSeq || !this.picking() || key === 'pick') return;
+        this.say(
+          result?.moved
+            ? `${result.name ?? 'Component'} <${result.tag ?? ''}>. Press Enter to pick it.`
+            : (result?.error ?? 'The page did not move.'),
+        );
+      })
+      .catch(() => {});
   }
 
   cancelPick() {

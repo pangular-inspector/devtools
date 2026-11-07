@@ -148,7 +148,10 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 #### Inspectors
 
 - **Components:** edit inputs, properties and writable signals; `@for` blocks; directive hosts; hydration status per component with an outline on the page; nested values on demand; console handles; expand all and collapse all.
-- **Change detection:** a per-cycle chart, a flame graph, hook timing, export and import of recordings, flash checks on the page, a Pangular track in the Chrome Performance panel, an Angular profiling toggle, and what triggered each check, with wasted checks, OnPush hints and components that need zone.js.
+- **Components:** **Copy as JSON** (the redacted values the panel shows) and **Copy host path** (a CSS selector for `document.querySelector`) in the detail header; an outline that fades over one second on a value that changed since the last refresh; **Show in Signals** for the component and for each signal property, also as a `#tab=signals&id=` deep link and through `open-in-panel`; and the `@defer` blocks of the selected component's template.
+- **Components:** pick a component with the keyboard: the arrow keys move the highlight through the components on the page and Enter picks, from the panel or the page. Directives show a **Likely** source file from the source scan, matched by class name.
+- **Defer blocks:** a block that hydrated before the devtools attached shows **hydrated before inspection** in the panel and in the `defer-blocks` tool. Each row opens its details: id, state and hydration times, root elements, triggers, its last state transitions, and a link to a hydration mismatch inside it, marked with a **mismatch** badge.
+- **Change detection:** a recording that keeps running when the tab reloads (until **Stop recording**), a **Most often checked** table next to **Slowest components** with class names that select an instance, a per-cycle chart, a flame graph, hook timing, export and import of recordings, flash checks on the page, a Pangular track in the Chrome Performance panel, an Angular profiling toggle, and what triggered each check, with wasted checks, OnPush hints and components that need zone.js.
 - **Leaks:** live subscriptions and effects per component, and components that stay alive after they are destroyed.
 - **Signals:** the live signal graph drawn, watched signals, and links from components to injectors.
 - **Injectors:** a page picker, a created provider's value, startup timing and the slowest providers.
@@ -160,21 +163,46 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Audit:** one ranked list of findings across the inspectors, an axe pass, and before and after sessions.
 - **Capacitor:** a tab for the platform, plugins, plugin calls and listeners of a Capacitor app.
 - **Forms, Router, Pipes and Analog:** filters, lint navigation, **Clear filters**, a route count, routed components in the **Components** tab, and search and a failed filter for Analog server calls.
+- **Forms:** a **Schema** view of the rules a Signal Form's schema sets on each field; edit a control's value, touched and dirty state in its row of the **Fields** view (behind `actions.forms`); a WebMCP tool's input schema, and **Try this tool** to run it on its form from the panel (`try-webmcp` in `run-form-action`); a form's history exported as a Playwright test from the **Timeline** view and from `export-form` (`format: "playwright"`); timeline origins worked out per form, so typing in one form no longer tags code changes in another form as user; the `missing-autocomplete` and `submit-disabled-while-invalid` accessibility rules in the forms lint; while a WebMCP call's submit runs, only its status and submit outcome is tagged agent, not values app code writes meanwhile.
 - **Plugin API:** a library can add its own tab, agent tools and shared state.
+- **Pipes:** while recording, a pipe that returns an equal result 20 calls in a row is marked **churning**, in the panel and in `explain-pipe`. **Sort pipes** orders the list by calls or by time in `transform`, and **Called while recording** shows only the recorded pipes (#369).
+- **Components:** a **Pipes in template** block lists the pipes the selected component's template uses on the page, and opens one in the **Pipes** tab (#369).
 - Angular Native and NativeScript pages report change detection, leaks, errors, stores, TanStack Query, provider values, plugins and startup timing too (#407).
 - Angular features are detected at runtime, and the panel says what an older version lacks.
 
+#### SSR & HTTP tools
+
+- **Live match count in the fault rule form.** Under **URL pattern**, the SSR & HTTP tab says how many of the recorded calls the pattern matches with the chosen method and side, as you type.
+- **Fault rule presets: Offline, Slow 3G and Flaky.** Each adds plain rules for every browser request: a network error, a 2000 ms delay, or a 503 for 30% of requests. Two rule fields make them possible and work on any rule: status `0` fails a request as a network error (an `HttpErrorResponse` with status 0), and `chance` (1 to 99) applies a rule to that share of matching requests. `set-http-rule` takes both.
+- **HAR export.** **Export HAR** in the SSR & HTTP tab saves the timeline as a HAR 1.2 file: the SSR request that served the page, then its server and client calls, with headers and response previews. Values are masked as in the panel.
+- **Copy as fetch and Copy as cURL.** The response preview copies the open call as a `fetch()` statement or a `curl` command, built from the masked copy, so values that match the redaction rules stay `[redacted]`. Check a snippet for other secrets, such as a token in a custom header, before you share it. Nothing is sent.
+- **TransferState payload checks.** The payload section shows the size against a 100 KB budget, the largest entries with size bars, and URLs the transfer cache stored under more than one key. `inspect-transfer-state` adds the same warnings to its key list.
+- **HTTP lint and the `lint-http` agent tool.** A new HTTP lint section flags the same GET fired again within 2000 ms, chains of 3 or more calls that ran one after another and could start together, and server calls the browser made again. `lint-http` returns the same findings with call ids.
+- **A Server-Timing entry per server HttpClient call.** Traced renders add `fetch-1;desc="GET /api/products";dur=12` and so on, for the first 20 calls, so Chrome's Timing tab shows each call. The description is the method and the masked path, without the query.
+- **Calls labeled by the API that likely started them.** The interceptor reads the call stack and tags a call **likely httpResource()**, **likely resource()** or **likely @defer** in the timeline, in `list-http-calls` and in the HAR export. It is a guess from Angular's frame names in development builds.
+
 #### Agents and MCP
 
-- 98 agent tools. New tools include `audit`, `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
+- 104 agent tools. New tools include `audit`, `suggest-pipe-migrations` (read-only pipe-to-signal suggestions, #369), `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `load-defer-block` (loads one `@defer` block as if its trigger fired, behind `actions.components`), `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
 - One naming scheme for tools and arguments, and plain markdown answers. See **Agent tools renamed**.
 - Tool titles, inspector tags and safety tiers (`action` and `destructive`).
 - Every answer names the page it read, and one rule picks the default page for every tool.
 - Per-page resource templates and `list_changed` notifications (#417).
+- A `pangular:pipe-usages` resource with the pipes in the source, every template use, and the live pipe usage of the pages (#369).
 - Five MCP prompts for common workflows: `inspect-page`, `debug-error`, `fix-form`, `performance-pass` and `verify-fix` (#416). Server instructions describe the tiers and the tools.
 - Agent skills shipped in the package, installed with `pangular skills install`.
 - Read-only tools for browser agents through WebMCP, off by default (`agent.browserTools`).
 - `pangular mcp --print-config` prints the client config for Claude Code, Cursor and VS Code.
+
+#### Router tools
+
+- **Compare two navigations.** The Routes tab has a **Compare** view, and each navigation a **Compare** button, that list which query params, route params, route data, outlets, components, guard and resolver verdicts and phase timings changed between two recorded navigations. Agents get the same answer from `pangular:diff-navigations`. Each navigation now keeps the routes it activated, with redacted params and data.
+- **Live open redirect check.** A guard, resolver or error handler redirect whose target is the value of a query param, and code that navigates to the value of a return-URL query param, are flagged as they happen: an **open redirect risk** badge in **Navigations**, a warning in the hub's **Messages** dock, a line in `pangular:explain-navigation`, and a `redirect-from-query` lint warning that names the guard or code.
+- **Navigation API and error handler in the router timeline.** Each navigation shows the browser Navigation API event it came with (`push`, `replace`, `reload` or `traverse`, and whether the user started it). Navigation API events the router did not make show as **History changes outside the router** in **Navigations**, `pangular:inspect-route` and `pangular:explain-navigation`, which explains a browser URL that differs from the router's. A `withNavigationErrorHandler()` handler that throws is recorded with its message.
+- **HTTP calls per navigation.** `pangular:explain-navigation` and a new **HTTP calls** button on each navigation list the `HttpClient` calls the SSR & HTTP inspector recorded for it, with status and time: the ones that started while it ran, and the ones that started within 5 seconds after it ended and before the next navigation.
+- **Three router lint rules.** `always-run-parent` flags `runGuardsAndResolvers: 'always'` on a parent route with guards or resolvers. `lazy-component-eager` flags a `loadComponent` route whose component another route already imports eagerly. The `resolver-refetch` rule is a timing heuristic: from the SSR & HTTP inspector's calls, it flags a `GET` the page made while a navigation's resolvers ran and again after the navigation ended, which suggests the routed component fetches what a resolver already loaded. A guard can make the first `GET` too, so the rule does not prove the resolver made it. Turn any of them off with `lint.rules`.
+- **Follow navigations from an agent.** `pangular:follow-navigations` returns the navigations that are new or changed since a cursor, across pages, and can wait up to 30 seconds for the next one, so an agent can follow a login and redirect flow without polling.
+- **What happens if I go to a URL.** The **Config** view has a **What happens** button, and agents a `pangular:preview-navigation` tool, that predict a navigation from the live route config without navigating: the redirects it follows, the route chain and params, and in order the guards, lazy chunks, resolvers and components that run, with each route's source file and the render mode.
 
 #### CLI
 
@@ -190,8 +218,10 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Pages push deltas instead of full snapshots, at most about once a second, and idle pages send only a small heartbeat.
 - NgRx store updates no longer slow down as the store grows (#432).
 - The NgRx collector serializes a signal store or the classic `Store` only when its state, computed values or method stats changed, and the overlay compares a report version instead of the serialized report, so an unchanged store costs no serialization on each check. A change made in place, without a new state object, can show late (#368).
+- The forms collector skips reading and serializing the forms after change detection when nothing changed since the last read (no form event, input, DOM change, WebMCP call or panel action, and the same Signal Form values, errors and root flags), and reads again at least every 5 seconds (#368).
 - Collectors schedule their work outside the Angular zone, so an app that writes a signal or logs during change detection settles again on zone.js.
 - Long lists and trees in the panel render only the visible rows.
+- The pipe source scan behind `scan-pipes`, `explain-pipe`, the pipe lint and the audit keeps each file's result until the file or its `templateUrl` changes, and skips the walk while the Vite watcher saw no change (#369).
 - The agent tool list is much smaller: shorter descriptions, and library tools only for apps that use them.
 
 ### Fixes
@@ -235,8 +265,12 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The **Routes** tab tells screen readers how each outlet in **Outlets** is nested, as it already did for **Active routes** (#370).
 - The **Forms** timeline tags a change as **agent** only when a WebMCP call wrote it, or when it is in the call's own form while the call runs (#368). Typing in any form while a long WebMCP submit is pending is tagged **user**, not **agent**.
 - The **Pipes** tab no longer marks two `| async` usages of a Promise, a Subject, an `asObservable()` view of one or an NgRx store select as duplicates, since their subscribers share one execution (#369). Any other source that two `| async` usages subscribe to shows as **possible duplicate subscription**, and `explain-pipe` says **Possible duplicate subscriptions**, because the page can't see `share()` or `shareReplay()` in a pipe.
+- Recording pipe calls counts a pipe from its first call when it sits in a template branch that renders later, and patches a pipe class that a newly added view brings as soon as the page sees the view, instead of on the next report (#369).
 - Browser DevTools show the app's own line as the caller of a `console` call again. The browser entries ship source maps that list the console tap in `x_google_ignoreList`, so its wrapper frame is skipped (#369).
 - The Angular Native overlay gates the injector profiler like the NativeScript overlay: in a development build with no `window`, importing it defines one until Angular publishes its debug utilities, so the **Providers** lists fill (#371).
+- `record-change-detection` with `record: "start"` passes on why a page that answered could not record, from its capability report: the Angular version it runs, or a profiler hook the recording could not attach to yet. It no longer waits out the 3 seconds and blames the Angular version (#366).
+- `explain-ssr-request` names a hydration mismatch as a component only when the page read its class, and as an element (`<app-card>`) or text node (`#text`) otherwise (#366).
+- Redaction leaks found by a corpus of fake secrets run through every redaction path are closed: a secret pair after another word and a colon (`Error: password: "…"`), the key after `Authorization: ApiKey` in an Analog server body that is not JSON, secret pairs in the fragment or matrix params of an Analog server message, headers with a camelCase secret name such as `newPassword`, and tokens used as NgRx state keys.
 
 ### Docs
 

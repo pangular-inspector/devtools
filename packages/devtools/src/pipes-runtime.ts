@@ -162,8 +162,18 @@ export interface PipeUsage {
   component: unknown;
 }
 
+/** A pipe class a rendered template can use, read from its `TView`'s pipe
+ * registry, so it can be patched before its first instance exists. */
+export interface PipeClass {
+  name: string;
+  isPure: boolean;
+  type: new (...args: unknown[]) => unknown;
+}
+
 export interface PipeScan {
   usages: PipeUsage[];
+  /** Every pipe class the scanned views' templates can use, instantiated or not. */
+  classes: PipeClass[];
   /** The elements that led to a view not reachable from an earlier one: enough
    * to find every view again without walking the whole DOM. */
   entries: Element[];
@@ -177,6 +187,8 @@ export function scanPipeViews(ng: NgDebugApi, elements: Iterable<Element>): Pipe
   const seen = new Set<AnyRecord[]>();
   const usages: PipeUsage[] = [];
   const entries: Element[] = [];
+  const registries = new Set<unknown>();
+  const classes = new Map<Function, PipeClass>();
   for (const el of elements) {
     const owning = read(() => ng.getOwningComponent?.(el) ?? null, null);
     const component = owning ?? read(() => ng.getComponent(el) ?? null, null);
@@ -189,6 +201,7 @@ export function scanPipeViews(ng: NgDebugApi, elements: Iterable<Element>): Pipe
       const [lView, owner] = stack.pop()!;
       if (seen.has(lView)) continue;
       seen.add(lView);
+      collectRegistry(lView, registries, classes);
       for (const slot of pipeSlotsIn(lView)) {
         usages.push({
           name: slot.name,
@@ -205,7 +218,27 @@ export function scanPipeViews(ng: NgDebugApi, elements: Iterable<Element>): Pipe
       }
     }
   }
-  return { usages, entries };
+  return { usages, entries, classes: [...classes.values()] };
+}
+
+/**
+ * Adds the pipe classes of `lView`'s `tView.pipeRegistry` to `out`: the
+ * resolved `PipeDef`s Angular looks pipe names up in (see `getPipeDef` in
+ * `@angular/core`). Embedded views share their component's registry, so each
+ * registry is read once. Read-only; it never calls a `dependencies` factory.
+ */
+function collectRegistry(
+  lView: AnyRecord[],
+  registries: Set<unknown>,
+  out: Map<Function, PipeClass>,
+): void {
+  const registry = read(() => (lView[TVIEW] as { pipeRegistry?: unknown }).pipeRegistry, null);
+  if (!Array.isArray(registry) || registries.has(registry)) return;
+  registries.add(registry);
+  for (const def of registry) {
+    if (!isPipeDef(def) || out.has(def.type)) continue;
+    out.set(def.type, { name: def.name, isPure: def.pure, type: def.type });
+  }
 }
 
 export function findPipeUsages(ng: NgDebugApi, elements: Iterable<Element>): PipeUsage[] {
@@ -222,6 +255,8 @@ export interface PipeCall {
   caller?: string;
   /** How long `transform` ran, in milliseconds. */
   ms: number;
+  /** The pipe's `pure` flag, when the instrumentation knows it. */
+  isPure?: boolean;
   /** Set when `transform` threw; the error is rethrown to the app unchanged. */
   error?: { thrown: unknown };
 }
@@ -230,12 +265,16 @@ export interface PipeCall {
 export interface PipeInstance {
   name: string;
   instance: AnyRecord;
+  isPure?: boolean;
 }
 
 export interface PipeInstrumentation {
   /** Patches `slot`'s prototype once (and its own `transform`, if it has one);
    * a no-op if already patched. */
   addPipe(slot: PipeInstance): void;
+  /** Patches a pipe class's prototype before any instance of it is seen, so
+   * its first calls are counted too; a no-op if already patched. */
+  addPipeClass(pipe: PipeClass): void;
   stop(): void;
 }
 
@@ -267,6 +306,7 @@ export function instrumentPipes(
   // never changes: resolving it once per instance keeps the (costly) stack
   // capture off the hot path of every later `transform` call.
   const callers = new WeakMap<object, string | undefined>();
+  const purity = new WeakMap<object, boolean>();
 
   const callerOf = (instance: AnyRecord): string | undefined => {
     if (callers.has(instance)) return callers.get(instance);
@@ -280,12 +320,14 @@ export function instrumentPipes(
   const report = (
     instance: AnyRecord,
     name: string,
+    isPure: boolean | undefined,
     args: unknown[],
     result: unknown,
     ms: number,
     error?: { thrown: unknown },
   ) => {
     try {
+      const pure = purity.get(instance) ?? isPure;
       onCall({
         name: names.get(instance) ?? name,
         instance,
@@ -293,6 +335,7 @@ export function instrumentPipes(
         result,
         caller: callerOf(instance),
         ms,
+        ...(pure !== undefined ? { isPure: pure } : {}),
         ...(error ? { error } : {}),
       });
     } catch {
@@ -302,7 +345,7 @@ export function instrumentPipes(
 
   /** Replaces `owner.transform` with a timing wrapper; returns false when
    * there is nothing to patch. */
-  const patch = (owner: AnyRecord, name: string): boolean => {
+  const patch = (owner: AnyRecord, name: string, isPure?: boolean): boolean => {
     const original = owner['transform'];
     if (typeof original !== 'function' || (original as any)[WRAPPED]) return false;
     const wrapper = function (this: AnyRecord, ...args: unknown[]) {
@@ -311,10 +354,10 @@ export function instrumentPipes(
       try {
         result = original.apply(this, args);
       } catch (thrown) {
-        report(this, name, args, undefined, now() - start, { thrown });
+        report(this, name, isPure, args, undefined, now() - start, { thrown });
         throw thrown;
       }
-      report(this, name, args, result, now() - start);
+      report(this, name, isPure, args, result, now() - start);
       return result;
     };
     Object.defineProperty(wrapper, WRAPPED, { value: true });
@@ -333,16 +376,23 @@ export function instrumentPipes(
     addPipe(slot) {
       const instance = slot.instance;
       if (!names.has(instance)) names.set(instance, slot.name);
+      if (slot.isPure !== undefined && !purity.has(instance)) purity.set(instance, slot.isPure);
       if (!seenInstances.has(instance)) {
         seenInstances.add(instance);
         if (read(() => Object.prototype.hasOwnProperty.call(instance, 'transform'), false)) {
-          patch(instance, slot.name);
+          patch(instance, slot.name, slot.isPure);
         }
       }
       const proto = Object.getPrototypeOf(instance);
       if (!proto || seenProtos.has(proto)) return;
       seenProtos.add(proto);
-      patch(proto, slot.name);
+      patch(proto, slot.name, slot.isPure);
+    },
+    addPipeClass(pipe) {
+      const proto = read(() => pipe.type.prototype as AnyRecord | undefined, undefined);
+      if (!proto || typeof proto !== 'object' || seenProtos.has(proto)) return;
+      seenProtos.add(proto);
+      patch(proto, pipe.name, pipe.isPure);
     },
     stop() {
       for (const restore of restores.splice(0).reverse()) restore();

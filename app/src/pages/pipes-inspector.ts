@@ -8,7 +8,9 @@ import {
   effect,
   inject,
   input,
+  output,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
@@ -79,6 +81,11 @@ interface StaleFinding {
   detectedAt: number;
 }
 
+interface ChurnFinding {
+  streak: number;
+  detectedAt: number;
+}
+
 interface LivePipeInfo {
   name: string;
   className: string;
@@ -87,6 +94,7 @@ interface LivePipeInfo {
   components: PipeComponentUsage[];
   call?: PipeCallInfo;
   stale?: StaleFinding;
+  churn?: ChurnFinding;
   staleCheck?: 'unavailable';
 }
 
@@ -126,7 +134,7 @@ interface PipesSnapshot {
 
 const RECORD_CONFIRM_MS = 5000;
 
-type PipeKind = 'all' | 'custom' | 'builtin' | 'runtime' | 'impure' | 'live';
+type PipeKind = 'all' | 'custom' | 'builtin' | 'runtime' | 'impure' | 'live' | 'called';
 
 const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
   { value: 'all', label: 'All pipes' },
@@ -135,6 +143,15 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
   { value: 'runtime', label: 'Runtime only' },
   { value: 'impure', label: 'Impure' },
   { value: 'live', label: 'On the page' },
+  { value: 'called', label: 'Called while recording' },
+];
+
+type PipeSort = 'source' | 'calls' | 'time';
+
+const SORT_OPTIONS: readonly SelectOption<PipeSort>[] = [
+  { value: 'source', label: 'Source order' },
+  { value: 'calls', label: 'Most calls' },
+  { value: 'time', label: 'Most time' },
 ];
 
 @Component({
@@ -156,6 +173,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
         [(value)]="filter"
       />
       <app-select ariaLabel="Show pipes" [options]="kindOptions" [(value)]="kind" />
+      <app-select ariaLabel="Sort pipes" [options]="sortOptions" [(value)]="sort" />
       <span class="total" aria-live="polite"
         >{{ filtered().length }} of {{ allPipes().length }}</span
       >
@@ -260,8 +278,17 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                       <span class="sub mono">{{ p.className }}</span>
                     </span>
                     <span class="row-meta">
+                      @if (live?.churn) {
+                        <span class="chip warn">churning</span>
+                      }
                       @if (live?.stale) {
                         <span class="chip warn">stale?</span>
+                      }
+                      @if (live?.call; as call) {
+                        <span class="chip hot">{{ plural(call.callCount, 'call') }}</span>
+                        @if (call.totalMs !== undefined) {
+                          <span class="chip hot">{{ ms(call.totalMs) }}</span>
+                        }
                       }
                       @if (live) {
                         <span class="chip live">{{ live.instanceCount }} live</span>
@@ -369,6 +396,20 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
             <div class="block">
               <h3>Live on the page</h3>
               @if (liveFor(p.name); as live) {
+                @if (live.churn; as churn) {
+                  <p class="warning" role="note">
+                    <span class="chip warn">churning</span>
+                    @if (live.isPure) {
+                      An instance ran {{ churn.streak }} times in a row and returned an equal result
+                      each time: its input changes reference while its contents stay the same. Keep
+                      the input stable, for example in a computed().
+                    } @else {
+                      An instance returned an equal object or array as a new reference
+                      {{ churn.streak }} times in a row, so the bindings that read it update for
+                      nothing. Return the previous result when it is equal, or use a computed().
+                    }
+                  </p>
+                }
                 @if (live.stale) {
                   <p class="warning" role="note">
                     <span class="chip warn">experimental</span>
@@ -885,6 +926,11 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
     .chip.live {
       @include m.tint(ok);
     }
+    .chip.hot {
+      @include m.tint(accent);
+      text-transform: none;
+      font-variant-numeric: tabular-nums;
+    }
     .pill {
       display: inline-flex;
       align-items: center;
@@ -1240,12 +1286,17 @@ export class PipesInspector {
   private readonly filterInput = viewChild<SearchField>('filterInput');
 
   rpc = input<DevframeRpcClient | null>(null);
+  /** A pipe name to select, from another tab such as Components. */
+  readonly focus = input<string | null>(null);
+  readonly focusHandled = output<void>();
 
   protected readonly kindOptions = KIND_OPTIONS;
+  protected readonly sortOptions = SORT_OPTIONS;
 
   pipes = signal<PipeInfo[]>([]);
   filter = signal('');
   kind = signal<PipeKind | null>('all');
+  sort = signal<PipeSort | null>('source');
   loading = signal(false);
   loadFailed = signal(false);
   selected = signal<PipeInfo | null>(null);
@@ -1290,7 +1341,19 @@ export class PipesInspector {
   filtered = computed(() => {
     const q = this.filter();
     const kind = this.kind() ?? 'all';
-    return this.allPipes().filter((p) => this.fitsKind(p, kind) && this.fitsQuery(p, q));
+    const shown = this.allPipes().filter((p) => this.fitsKind(p, kind) && this.fitsQuery(p, q));
+    const sort = this.sort() ?? 'source';
+    if (sort === 'source') return shown;
+    // Hottest first; pipes with no recorded calls keep source order at the end.
+    const weight = (p: PipeInfo) => {
+      const call = this.liveFor(p.name)?.call;
+      if (!call) return -1;
+      return sort === 'calls' ? call.callCount : (call.totalMs ?? 0);
+    };
+    return shown
+      .map((p, index) => ({ p, index, weight: weight(p) }))
+      .sort((a, b) => b.weight - a.weight || a.index - b.index)
+      .map(({ p }) => p);
   });
 
   private readonly pipesByName = computed(() => {
@@ -1308,6 +1371,18 @@ export class PipesInspector {
         this.refresh();
         this.loadLive(client);
       }
+    });
+
+    // Waits for the pipe to be listed: the source scan or the page may answer later.
+    effect(() => {
+      const name = this.focus();
+      if (!name) return;
+      const pipe = this.pipesByName().get(name)?.[0];
+      if (!pipe) return;
+      untracked(() => {
+        this.showPipe(pipe);
+        this.focusHandled.emit();
+      });
     });
 
     this.destroyRef.onDestroy(() => {
@@ -1481,6 +1556,7 @@ export class PipesInspector {
     if (kind === 'runtime') return !!p.runtime;
     if (kind === 'impure') return !p.isPure;
     if (kind === 'live') return this.liveByName().has(p.name);
+    if (kind === 'called') return !!this.liveByName().get(p.name)?.call;
     return true;
   }
 
