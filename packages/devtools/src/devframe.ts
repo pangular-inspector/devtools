@@ -331,6 +331,7 @@ import { namingPageRead } from './rpc/page-read-scope.ts';
 import { routerActionAnswer } from './rpc/router-action-answer.ts';
 import { diffNavigationsText, navigationDiffResult } from './rpc/router-diff.ts';
 import { callsForNavigation, nextNavigation } from './rpc/router-http.ts';
+import { MAX_WAIT_MS, NavigationStream, streamText } from './rpc/router-stream.ts';
 import { nameStoreTokens } from './rpc/store-tokens.ts';
 import { notAProjectText, readsSource, refusingTool } from './rpc/project-root.ts';
 import { STATE_READ_BY, stateReadTool } from './rpc/state-read-tool.ts';
@@ -1028,6 +1029,8 @@ const pangular = defineDevframe({
       : null;
 
     const routerPages = new Map<string, RouterPage>();
+    /** Every navigation the pages report, numbered, for pangular:follow-navigations. */
+    const navigationStream = new NavigationStream();
     const routerState = await my.rpc.sharedState('router', {
       initialValue: { pages: [] } as RouterState,
     });
@@ -1060,6 +1063,7 @@ const pangular = defineDevframe({
           applyRouter(currentRouter(routerPages));
         }
         feed.navigations(report.pageId, report.navigations);
+        navigationStream.record(report.pageId, report.navigations);
         return { hasConfig: !!routerPages.get(report.pageId)?.config };
       },
     });
@@ -3818,6 +3822,46 @@ const pangular = defineDevframe({
         const state = routerState.value() as RouterState;
         if (!state.pages.length) return { markdown: noRouter };
         return { markdown: diffNavigationsText(state, args) };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:follow-navigations',
+      title: 'Follow navigations',
+      description: `New and changed navigations since a cursor, oldest first, to follow a login or redirect flow without polling. Without \`since\`, the latest 5 and a cursor; pass it back as \`since\`, with \`waitMs\` (up to ${MAX_WAIT_MS}) to wait for the next one.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: pageProperty,
+          since: {
+            type: 'integer',
+            minimum: 0,
+            description: 'The cursor a previous call returned. Without it, the last 5 navigations.',
+          },
+          waitMs: {
+            type: 'integer',
+            minimum: 0,
+            maximum: MAX_WAIT_MS,
+            description:
+              'With `since`: how long to wait for a navigation when none came yet (default 0).',
+          },
+        },
+      },
+      handler: async (args: { page?: string; since?: number; waitMs?: number }) => {
+        const state = routerState.value() as RouterState;
+        if (args.page && !state.pages.some((p) => p.pageId === args.page)) {
+          return { markdown: noPage(args.page, state) };
+        }
+        if (typeof args.since !== 'number' || !Number.isFinite(args.since)) {
+          const all = navigationStream.read(0, args.page);
+          const read = { ...all, entries: all.entries.slice(-5) };
+          delete read.reset;
+          return { markdown: streamText(read, { waited: false }) };
+        }
+        const since = Math.floor(args.since);
+        const wait = typeof args.waitMs === 'number' && args.waitMs > 0 ? args.waitMs : 0;
+        const read = await navigationStream.wait(since, wait, args.page);
+        return { markdown: streamText(read, { since, waited: wait > 0 }) };
       },
     });
 

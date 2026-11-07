@@ -1139,6 +1139,7 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'inspect-route': { kind: 'tool', inspectors: ['router'], page: true },
   'explain-navigation': { kind: 'tool', inspectors: ['router'], page: true },
   'diff-navigations': { kind: 'tool', inspectors: ['router'], page: true },
+  'follow-navigations': { kind: 'tool', inspectors: ['router'], page: true },
   'list-routes': { kind: 'tool', inspectors: ['router'], page: true },
   'lint-routes': { kind: 'tool', inspectors: ['router'], page: true },
   'router-config': { kind: 'tool', inspectors: ['router'], page: true },
