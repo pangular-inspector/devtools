@@ -105,6 +105,21 @@ describe('NativeScript overlay connection', () => {
     dispose();
   });
 
+  it('connects to the LAN address the build injected when no baseURL is given', async () => {
+    const { initNativeScriptOverlay } = await import('../overlay-nativescript.ts');
+    vi.stubGlobal('__PANGULAR_LAN_URL__', 'http://192.168.1.20:9999/');
+    const dispose = initNativeScriptOverlay({ intervalMs: 100 });
+    await flush();
+    expect(clients[0].options).toMatchObject({ baseURL: 'http://192.168.1.20:9999/' });
+    dispose();
+    vi.unstubAllGlobals();
+    vi.stubGlobal('WebSocket', class {});
+    const fallback = initNativeScriptOverlay({ intervalMs: 100 });
+    await flush();
+    expect(clients[1].options).toMatchObject({ baseURL: 'http://10.0.2.2:9999/' });
+    fallback();
+  });
+
   it('keeps its page id across a reconnect and forgets nothing on the dropped socket', async () => {
     const { initNativeScriptOverlay } = await import('../overlay-nativescript.ts');
     const dispose = initNativeScriptOverlay({

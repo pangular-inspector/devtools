@@ -19,10 +19,13 @@ import { cliGatePolicy, gatedDevApp } from './cli-gate.ts';
 import pangular, { createPangular } from './devframe.ts';
 import { mcpPrintConfig, printConfigPort } from './mcp-print-config.ts';
 import {
+  resolveLanAddress,
   resolvePangularConfig,
   type PangularConfig,
+  type ResolvedLanAddress,
   type ResolvedPangularConfig,
 } from './config.ts';
+import { cliLanLines, lanUrl } from './lan-address.ts';
 import { pangularMcp } from './agent-mcp.ts';
 import { PANGULAR_MCP_TOKEN_ENV, loadMcpToken } from './mcp-token.ts';
 import { registerSkillsCommand } from './skills-install.ts';
@@ -306,6 +309,7 @@ export function createPangularCli(options: PangularCliOptions = {}) {
   let access: CliAccess = { allowedOrigins: [], authTokens: [] };
   let listenHost = 'localhost';
   let proxyUrl: string | undefined;
+  let lan: ResolvedLanAddress = { on: false };
   const definition = defineDevframe({
     ...pangular,
     cli: { ...pangular.cli, command: 'pangular' },
@@ -357,9 +361,17 @@ export function createPangularCli(options: PangularCliOptions = {}) {
     const defaultCommand = cli.commands.find((command) => command.isDefaultCommand);
     if (defaultCommand) {
       const run = async (
-        flags: PangularCliFlags & { port?: number; host?: string; mcp?: boolean },
+        flags: PangularCliFlags & {
+          port?: number;
+          host?: string;
+          mcp?: boolean;
+          lanAddress?: unknown;
+        },
       ) => {
         prepare('dev', flags);
+        lan = resolveLanAddress(flags.lanAddress, (message) =>
+          console.warn(message.replace('lanAddress', '--lan-address')),
+        );
         requestedPort = flags.port === undefined ? undefined : Number(flags.port);
         mcpOn = flags.mcp !== false;
         listenHost = flags.host ?? 'localhost';
@@ -402,6 +414,10 @@ export function createPangularCli(options: PangularCliOptions = {}) {
           'Serve the MCP route for agents (on by default; --no-mcp turns it off)';
       }
       defaultCommand.option(
+        '--lan-address [address]',
+        'Print the LAN address and the define that injects it into a device build (needs --host on the network; off by default)',
+      );
+      defaultCommand.option(
         '--proxy-origin <origin>',
         "Your app's dev server origin that proxies /__pangular/ to this server, such as http://localhost:4200, so the one-time code link opens there",
       );
@@ -436,6 +452,11 @@ export function createPangularCli(options: PangularCliOptions = {}) {
     log(
       `\n${[...startupLines(origin, port, { mcp: mcpOn, requestedPort, proxyUrl }), ...accessLines(access)].join('\n')}\n`,
     );
+    if (lan.on) {
+      const result = lanUrl({ lan, host: listenHost, port, path: '/' });
+      if ('url' in result) log(`${cliLanLines(result.url).join('\n')}\n`);
+      else console.warn(`[pangular] --lan-address prints nothing: ${result.problem}`);
+    }
     const addresses = networkAddresses(listenHost);
     if (!addresses.length) return;
     // The server's own connection info, so the printed call carries its config.
