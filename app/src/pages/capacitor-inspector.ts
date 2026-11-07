@@ -19,6 +19,7 @@ import { LimitNote } from '../ui/limit-note';
 import { Select, type SelectOption } from '../ui/select';
 import { panelConfig } from '../devtools-config';
 import { CapacitorCallDetail } from './capacitor-call-detail';
+import { CapacitorIonic } from './capacitor-ionic';
 import { CapacitorState, pluginStateCards } from './capacitor-state';
 import {
   SLOW_MS,
@@ -53,7 +54,7 @@ const FILTER_LABELS: Record<CallFilter, string> = {
 
 @Component({
   selector: 'app-capacitor-inspector',
-  imports: [LimitNote, Select, CapacitorCallDetail, CapacitorState],
+  imports: [LimitNote, Select, CapacitorCallDetail, CapacitorIonic, CapacitorState],
   template: `
     @if (!loaded()) {
       <p class="state" role="status">Loading Capacitor data…</p>
@@ -162,6 +163,8 @@ const FILTER_LABELS: Record<CallFilter, string> = {
           <app-capacitor-state [cards]="stateCards()" [now]="now()" />
         </section>
       }
+
+      <app-capacitor-ionic [rpc]="rpc()" [pageId]="page.pageId" />
 
       <section aria-labelledby="cap-calls-title">
         <h2 id="cap-calls-title">Plugin calls</h2>
