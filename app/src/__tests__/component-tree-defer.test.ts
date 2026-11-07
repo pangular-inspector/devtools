@@ -58,6 +58,39 @@ describe('defer blocks', () => {
     expect(badge.classList.contains('defer-state-complete')).toBe(true);
   });
 
+  it('says when a block hydrated before the devtools attached', async () => {
+    const fixture = TestBed.createComponent(ComponentTree);
+    const block = (id: string, hydratedAt?: number) => ({
+      id,
+      state: 'complete',
+      hydration: 'hydrated',
+      triggers: ['hydrate on interaction'],
+      rootIds: [],
+      ...(hydratedAt ? { hydratedAt } : {}),
+    });
+    const page = {
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+      reportedAt: 1000,
+      deferBlocks: [block('d1'), block('d2', 900)],
+    };
+    fixture.componentRef.setInput('rpc', client({ p1: page }));
+    for (let i = 0; i < 3; i++) {
+      await new Promise((resolve) => setTimeout(resolve));
+      await fixture.whenStable();
+    }
+    const flags = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.defer-row'),
+    ).map((row) =>
+      Array.from(row.querySelectorAll('.flag')).map((flag) => flag.textContent?.trim()),
+    );
+    expect(flags[0]).toContain('hydrated before inspection');
+    expect(flags[1]).toContain('hydrated');
+    expect(flags[1]).not.toContain('hydrated before inspection');
+  });
+
   it('keeps a row without an owner focusable, marked aria-disabled', async () => {
     const fixture = TestBed.createComponent(ComponentTree);
     const page = {
@@ -230,5 +263,64 @@ describe('defer blocks', () => {
       null,
     ]);
     fixture.destroy();
+  });
+});
+
+describe('defer block details', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('open below the row with the block id, transitions and mismatches inside it', async () => {
+    const fixture = TestBed.createComponent(ComponentTree);
+    const page = {
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+      reportedAt: 1000,
+      hydration: {
+        hydrated: true,
+        counts: { hydrated: 1, skipped: 0, mismatched: 1, clientOnly: 0, dehydratedBlocks: 0 },
+        mismatches: [{ id: 'e9', name: 'Note', tag: 'app-note' }],
+      },
+      deferBlocks: [
+        {
+          id: 'd4',
+          owner: { id: 'c1', name: 'App', tag: 'app-root' },
+          state: 'complete',
+          hydration: 'not-configured',
+          triggers: ['on idle'],
+          rootIds: ['e9'],
+          since: 2000,
+          transitions: [
+            { state: 'placeholder', hydration: 'not-configured', at: 1000 },
+            { state: 'complete', hydration: 'not-configured', at: 2000 },
+          ],
+        },
+      ],
+    };
+    fixture.componentRef.setInput('rpc', client({ p1: page }));
+    for (let i = 0; i < 3; i++) {
+      await new Promise((resolve) => setTimeout(resolve));
+      await fixture.whenStable();
+    }
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.defer-row')!.textContent).toContain('mismatch');
+    const toggle = el.querySelector<HTMLButtonElement>('.defer-toggle')!;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(el.querySelector('.defer-detail')).toBeNull();
+    toggle.click();
+    await fixture.whenStable();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const detail = el.querySelector('.defer-detail')!;
+    expect(toggle.getAttribute('aria-controls')).toBe(detail.id);
+    expect(detail.textContent).toContain('d4');
+    expect(Array.from(detail.querySelectorAll('.transitions .mono'), (s) => s.textContent)).toEqual(
+      ['placeholder', 'complete'],
+    );
+    const revealed = vi.spyOn(fixture.componentInstance, 'revealNode');
+    detail.querySelector<HTMLButtonElement>('.mismatch-links button')!.click();
+    expect(revealed).toHaveBeenCalledWith('e9');
   });
 });

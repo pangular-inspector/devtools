@@ -1,15 +1,18 @@
-import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
-import { BUILTIN_PIPES, pipeUsesIn, templatesIn, type TemplateSource } from './get-pipes.ts';
+import {
+  BUILTIN_PIPES,
+  pipeUsesIn,
+  templateDeps,
+  templatesIn,
+  type TemplateSource,
+} from './get-pipes.ts';
+import { scanSourceFiles } from './source-file-index.ts';
 import {
   classScopes,
   lineCounter,
   maskStrings,
   matchDelimiter,
   skipString,
-  sourceRoots,
   stripComments,
-  walkFiles,
 } from './source-scan.ts';
 
 export type LintSeverity = 'error' | 'warning' | 'info';
@@ -50,46 +53,41 @@ export function lintPipes(
   cwd: string,
   options?: { rules?: Record<string, boolean> },
 ): PipeLintFinding[] {
-  const files: { content: string; relPath: string; fullPath: string }[] = [];
-  for (const root of sourceRoots(cwd)) {
-    walkFiles(root, (full, entry) => {
-      if (!entry.endsWith('.ts') || entry.endsWith('.spec.ts')) return;
-      try {
-        files.push({
-          content: readFileSync(full, 'utf-8'),
-          relPath: relative(cwd, full),
-          fullPath: full,
-        });
-      } catch {
-        // skip
+  // Everything but the purity lookup is per file, so it is kept with the file.
+  const files = scanSourceFiles(cwd, 'pipe-lint', (file) => {
+    const code = maskStrings(stripComments(file.content));
+    const declared: [string, boolean][] = [];
+    for (const scope of classScopes(code, stripComments(file.content))) {
+      if (scope.kind === 'pipe' && scope.pipeName) {
+        declared.push([scope.pipeName, !/\bpure\s*:\s*false\b/.test(scope.decoratorArgs ?? '')]);
       }
-    });
-  }
+    }
+    const templates = templatesIn(file.content, file.relPath, file.full, cwd);
+    const signals = templates.length ? fieldsMatching(SIGNAL_FIELD, code) : new Set<string>();
+    const own: PipeLintFinding[] = [];
+    for (const template of templates) {
+      own.push(...jsonPipeFindings(template));
+      own.push(...asyncOnCallFindings(template, signals));
+    }
+    own.push(...signalInPurePipeFindings(file.content, file.relPath));
+    return {
+      value: { declared, templates, own },
+      deps: templateDeps(templates, file.relPath, cwd),
+    };
+  });
 
   const purity: PurityMap = new Map();
   for (const [name, meta] of BUILTIN_PIPES) {
     if (!EXEMPT_IN_FOR.has(name)) purity.set(name, meta.isPure);
   }
-  for (const { content } of files) {
-    for (const scope of classScopes(maskStrings(stripComments(content)), stripComments(content))) {
-      if (scope.kind === 'pipe' && scope.pipeName) {
-        purity.set(scope.pipeName, !/\bpure\s*:\s*false\b/.test(scope.decoratorArgs ?? ''));
-      }
-    }
-  }
+  for (const file of files) for (const [name, pure] of file.declared) purity.set(name, pure);
 
   const findings: PipeLintFinding[] = [];
-  for (const { content, relPath, fullPath } of files) {
-    const templates = templatesIn(content, relPath, fullPath, cwd);
-    const signals = templates.length
-      ? fieldsMatching(SIGNAL_FIELD, maskStrings(stripComments(content)))
-      : new Set<string>();
-    for (const template of templates) {
+  for (const file of files) {
+    for (const template of file.templates) {
       findings.push(...impurePipeInForFindings(template, purity));
-      findings.push(...jsonPipeFindings(template));
-      findings.push(...asyncOnCallFindings(template, signals));
     }
-    findings.push(...signalInPurePipeFindings(content, relPath));
+    findings.push(...file.own.map((finding) => ({ ...finding })));
   }
   const rules = options?.rules;
   return rules ? findings.filter((f) => rules[f.rule] !== false) : findings;

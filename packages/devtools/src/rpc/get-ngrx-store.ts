@@ -2,7 +2,6 @@ import { defineRpcFunction } from 'devframe';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
 import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
 import {
   lineCounter,
   maskRegexes,
@@ -11,6 +10,7 @@ import {
   sourceRoots,
   stripComments,
   walkFiles,
+  relativeFile,
 } from './source-scan.ts';
 
 const NgrxStoreEntrySchema = v.object({
@@ -170,7 +170,7 @@ function scanFile(full: string, cwd: string, out: NgrxStoreEntry[]) {
     // the app.
     const content = maskRegexes(maskStrings(stripComments(raw)));
     const lineAt = lineCounter(content);
-    const relPath = relative(cwd, full);
+    const relPath = relativeFile(cwd, full);
 
     for (const { pattern, kind } of NGRX_PATTERNS) {
       pattern.lastIndex = 0;

@@ -23,7 +23,10 @@ import {
 import { Observable, throwError, timer, of } from 'rxjs';
 import type { Subscription } from 'rxjs';
 
+import { isFailingRuleStatus } from './config.ts';
 import { redactMessage } from './forms-privacy.ts';
+import { redactText } from './text-redact.ts';
+import { currentCallOrigin } from './http-origin.ts';
 import { transferCacheKeys } from './http-cache-key.ts';
 import { cacheSkipReason, requestSkipReason, type CacheSkip } from './http-cache-reason.ts';
 import {
@@ -174,6 +177,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     pageUrl = location.pathname + location.search;
   }
   const url = req.urlWithParams;
+  const origin = currentCallOrigin();
   const registry = httpRegistry();
   const rules = side === 'client' ? clientRules() : registry.record && registry.rules;
   const rule = matchRule(url, req.method, rules, side);
@@ -187,8 +191,9 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     side,
     pageUrl,
     ...(requestId ? { requestId } : {}),
-    faulted: mocked && status >= 400,
-    ...(mocked && status < 400 ? { mocked: true } : {}),
+    ...(origin ? { origin } : {}),
+    faulted: mocked && isFailingRuleStatus(status),
+    ...(mocked && !isFailingRuleStatus(status) ? { mocked: true } : {}),
     ...(delay ? { delayMs: delay } : {}),
     ...(rule ? { ruleId: rule.id, rulePattern: rule.pattern } : {}),
   };
@@ -197,7 +202,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     responseHeaders?: HeaderSource | null,
   ) => {
     const durationMs = Date.now() - started;
-    if (requestId) noteSsrFetch(requestId, durationMs);
+    if (requestId) noteSsrFetch(requestId, durationMs, timingLabel(req.method, url));
     const call: HttpCall = {
       id: `${side[0]}${Date.now().toString(36)}${++seq}`,
       at: started,
@@ -211,7 +216,9 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
   };
 
   let source: Observable<HttpEvent<unknown>>;
-  if (status !== undefined) {
+  if (status === 0) {
+    source = throwError(() => networkError(url));
+  } else if (status !== undefined) {
     const body = parseBody(rule?.body, req.responseType);
     const headers = new HttpHeaders({ 'content-type': mockContentType(req.responseType) });
     source =
@@ -322,6 +329,32 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     };
   });
 };
+
+/**
+ * A server call as its `Server-Timing` description: the method and the path,
+ * masked, without the origin or the query, which can carry secrets.
+ */
+export function timingLabel(method: string, url: string): string {
+  let path: string;
+  try {
+    path = new URL(url, 'http://x').pathname;
+  } catch {
+    path = url.replace(/[?#].*$/, '');
+  }
+  return `${method} ${redactText(path, [], 'url')}`;
+}
+
+/**
+ * The error a request gets when the connection drops: status 0, statusText
+ * `Unknown Error` and a `ProgressEvent` as `error`, as Angular's backends report it.
+ */
+function networkError(url: string): HttpErrorResponse {
+  const error =
+    typeof ProgressEvent === 'function'
+      ? new ProgressEvent('error')
+      : new Error('Network error injected by Pangular Inspector');
+  return new HttpErrorResponse({ status: 0, statusText: 'Unknown Error', url, error });
+}
 
 function textOf(value: unknown): string {
   try {

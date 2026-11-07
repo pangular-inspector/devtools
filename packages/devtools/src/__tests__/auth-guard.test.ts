@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { connectDevframe } from 'devframe/client';
 import { getTempAuthCode, verifyAuthToken } from 'devframe/node/auth';
 import { getInternalContext } from 'devframe/node/hub-internals';
@@ -24,6 +24,15 @@ import {
   AUTH_TOKEN_TTL_MS,
 } from '../auth-store.ts';
 import { initPangularHub } from '../hub.ts';
+
+/**
+ * Checks that `path` exists and, on POSIX, that only its owner can read it. Windows has no such
+ * modes: `chmod` there only sets the read-only flag, and `stat` reports 0o666.
+ */
+function expectPrivate(path: string, mode: number) {
+  const actual = statSync(path).mode & 0o777;
+  if (process.platform !== 'win32') expect(actual).toBe(mode);
+}
 
 describe('CodeGuard', () => {
   function guard(now: { t: number }, warn = vi.fn()) {
@@ -219,7 +228,8 @@ describe('pruneExpiredTokens', () => {
 
   it('names the store after a hash of the project, not its path', () => {
     const dir = authStoreDir('/work/secret-project', '/home/me');
-    expect(dir).toMatch(/^\/home\/me\/\.pangular-inspector\/auth\/[0-9a-f]{16}$/);
+    expect(dirname(dir)).toBe(join('/home/me', '.pangular-inspector', 'auth'));
+    expect(basename(dir)).toMatch(/^[0-9a-f]{16}$/);
     expect(authStoreDir('/work/other', '/home/me')).not.toBe(dir);
   });
 });
@@ -315,7 +325,9 @@ describe('initPangularHub one-time code', () => {
 
   async function serve(seed?: (home: string) => void) {
     const home = mkdtempSync(join(tmpdir(), 'pangular-home-'));
+    // `homedir()` reads HOME on POSIX and USERPROFILE on Windows.
     vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
     seed?.(home);
     const hub = initPangularHub({ ws: false, mcp: false });
     const server: Server = createServer((req, res) =>
@@ -375,9 +387,16 @@ describe('initPangularHub one-time code', () => {
 
     const dir = authStoreDir(process.cwd(), home);
     const file = join(dir, 'auth.json');
-    await vi.waitFor(() => expect(statSync(file).mode & 0o777).toBe(0o600), { timeout: 3000 });
-    expect(statSync(dir).mode & 0o777).toBe(0o700);
-    expect(Object.keys(JSON.parse(readFileSync(file, 'utf8')).trusted)).toHaveLength(1);
+    // The store holds an empty `auth.json` from startup and devframe writes the token a moment
+    // later, so wait for the token itself. Only on POSIX does the mode check also wait for it.
+    await vi.waitFor(
+      () => {
+        expect(Object.keys(JSON.parse(readFileSync(file, 'utf8')).trusted)).toHaveLength(1);
+        expectPrivate(file, 0o600);
+      },
+      { timeout: 3000 },
+    );
+    expectPrivate(dir, 0o700);
     expect(existsSync(join(home, '.devframes', 'devframe', 'auth.json'))).toBe(false);
   });
 
@@ -421,7 +440,7 @@ describe('initPangularHub one-time code', () => {
         expect(Object.keys(JSON.parse(readFileSync(file, 'utf8')).trusted)).toEqual([
           'fresh-token',
         ]);
-        expect(statSync(file).mode & 0o777).toBe(0o600);
+        expectPrivate(file, 0o600);
       },
       { timeout: 3000 },
     );

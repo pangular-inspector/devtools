@@ -1,0 +1,123 @@
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import type { DevframeRpcClient } from 'devframe/client';
+import { afterEach, describe, expect, it } from 'vitest';
+import { RouteTimeline } from '../pages/route-timeline';
+import type { NavigationRecord, RouterPage } from '../pages/router-types';
+
+function fakeClient(
+  call: (name: string, arg: unknown) => Promise<unknown> = () => Promise.resolve(undefined),
+): DevframeRpcClient {
+  const rpc = { call, callEvent: () => Promise.resolve() };
+  return { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
+}
+
+async function settle(fixture: ComponentFixture<unknown>) {
+  for (let i = 0; i < 3; i++) {
+    await new Promise((resolve) => setTimeout(resolve));
+    await fixture.whenStable();
+  }
+}
+
+function nav(extra: Partial<NavigationRecord> = {}): NavigationRecord {
+  return {
+    id: 1,
+    url: '/orders/7',
+    trigger: 'imperative',
+    startedAt: 1,
+    endedAt: 2,
+    outcome: 'succeeded',
+    ...extra,
+  };
+}
+
+function mount(page: Partial<RouterPage>, call?: (name: string, arg: unknown) => Promise<unknown>) {
+  const fixture = TestBed.createComponent(RouteTimeline);
+  fixture.componentRef.setInput('page', {
+    pageId: 'p1',
+    reportedAt: 1,
+    snapshot: null,
+    navigations: [],
+    ...page,
+  });
+  fixture.componentRef.setInput('rpc', fakeClient(call));
+  document.body.append(fixture.nativeElement as HTMLElement);
+  return fixture;
+}
+
+function text(fixture: ComponentFixture<unknown>): string {
+  return ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+}
+
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
+describe('RouteTimeline extras', () => {
+  it('marks a navigation whose target came from a query param', async () => {
+    const fixture = mount({
+      navigations: [nav({ queryRedirect: { param: 'returnUrl', by: 'navigateByUrl()' } })],
+    });
+    await settle(fixture);
+    expect(text(fixture)).toContain('open redirect risk');
+    expect(text(fixture)).toContain(
+      'The target came from query param returnUrl (navigateByUrl()).',
+    );
+  });
+
+  it('asks for the Compare view from a row', async () => {
+    const fixture = mount({ navigations: [nav()] });
+    const asked: number[] = [];
+    fixture.componentInstance.compare.subscribe((id) => asked.push(id));
+    await settle(fixture);
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('button[aria-label^="Compare navigation 1"]')!
+      .click();
+    expect(asked).toEqual([1]);
+  });
+
+  it('shows the Navigation API event of a navigation and history changes outside the router', async () => {
+    const fixture = mount({
+      navigations: [nav({ platform: { type: 'traverse', userInitiated: true } })],
+      platformNavigations: [
+        { at: 1, type: 'traverse', url: '/orders/7', navigationId: 1 },
+        { at: 2, type: 'replace', url: '/orders/7#notes', hashChange: true },
+      ],
+    });
+    await settle(fixture);
+    expect(text(fixture)).toContain('Navigation API traverse (started by the user)');
+    expect(text(fixture)).toContain('History changes outside the router');
+    expect(text(fixture)).toContain('replace to /orders/7#notes');
+    expect(text(fixture)).not.toContain('traverse to /orders/7 ');
+  });
+
+  it('loads the HTTP inspector calls of a navigation on demand', async () => {
+    const calls: unknown[] = [];
+    const fixture = mount({ navigations: [nav()] }, (name, arg) => {
+      calls.push([name, arg]);
+      return Promise.resolve({
+        during: [
+          { id: 'c1', url: '/api/orders/7', method: 'GET', status: 200, durationMs: 31.6, at: 1 },
+        ],
+        after: [{ id: 'c2', url: '/api/notes', method: 'POST', status: 500, durationMs: 4, at: 3 }],
+      });
+    });
+    await settle(fixture);
+    const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      'button[aria-label="HTTP calls of navigation 1"]',
+    )!;
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    button.click();
+    await settle(fixture);
+    expect(calls).toEqual([['router-http', { pageId: 'p1', id: 1 }]]);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(text(fixture)).toContain('While it ran');
+    expect(text(fixture)).toContain('GET /api/orders/7 200 32ms');
+    expect(text(fixture)).toContain('After it ended');
+    expect(text(fixture)).toContain('POST /api/notes 500 4ms');
+    button.click();
+    await settle(fixture);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('#nav-http-1')!.hidden,
+    ).toBe(true);
+  });
+});

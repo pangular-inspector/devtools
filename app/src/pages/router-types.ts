@@ -58,6 +58,23 @@ export interface NavigationRecord {
   beforeConnect?: boolean;
   earlier?: number;
   probe?: boolean;
+  routes?: MatchedRoute[];
+  /** The target came from a query param of the URL: a possible open redirect. */
+  queryRedirect?: { param: string; by: string };
+  /** The browser Navigation API event it came with. */
+  platform?: { type: string; userInitiated?: boolean };
+}
+
+/** A browser Navigation API `navigate` event the page recorded. */
+export interface PlatformNavigation {
+  at: number;
+  type: string;
+  url: string;
+  userInitiated?: boolean;
+  hashChange?: boolean;
+  navigationId?: number;
+  result?: 'succeeded' | 'failed';
+  error?: string;
 }
 
 export interface LoopHop {
@@ -189,6 +206,7 @@ export interface RouterPage {
   preloads?: { path: string; startedAt: number; ms?: number; failed?: boolean }[];
   instrumented?: boolean;
   loops?: NavigationLoop[];
+  platformNavigations?: PlatformNavigation[];
 }
 
 export interface LintFinding {
@@ -203,6 +221,73 @@ export interface LintFinding {
 export type LintResult =
   | { checked: true; findings: LintFinding[] }
   | { checked: false; reason: 'no-page' | 'events-only' | 'no-config' };
+
+/** A field that differs between two navigations (`router-diff` RPC). */
+export interface DiffChange {
+  field: string;
+  before?: string;
+  after?: string;
+}
+
+export type NavigationDiffResult =
+  | {
+      a: number;
+      b: number;
+      sections: { title: string; changes: DiffChange[] }[];
+      same: string[];
+      notes: string[];
+    }
+  | { error: string };
+
+/** One activated route kept on a navigation record. */
+export interface MatchedRoute {
+  path: string;
+  outlet?: string;
+  component?: string;
+  params?: Record<string, string>;
+  data?: Record<string, string>;
+}
+
+/** An HttpClient call as the `router-http` RPC returns it. */
+export interface TimelineCall {
+  id: string;
+  url: string;
+  method: string;
+  status: number;
+  durationMs: number;
+  at: number;
+  cancelled?: boolean;
+  error?: string;
+}
+
+/** The HTTP inspector's calls of one navigation (`router-http` RPC). */
+export interface NavigationCalls {
+  during: TimelineCall[];
+  after: TimelineCall[];
+}
+
+/** What going to a URL would do (`router-preview` RPC). */
+export interface RoutePreview {
+  url: string;
+  finalUrl: string;
+  matched: boolean;
+  hops: { from: string; to: string; route: string }[];
+  chain: {
+    path: string;
+    component?: string;
+    outlet?: string;
+    lazy?: string;
+    title?: string;
+    source?: string;
+    active?: boolean;
+  }[];
+  params: Record<string, string>;
+  steps: { phase: string; items: string[] }[];
+  renderMode?: { mode: string; path: string; file: string };
+  stopped?: string;
+  notes: string[];
+  nearest: string[];
+}
 
 export const routerCall = rpcTry;
 

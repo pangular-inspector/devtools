@@ -809,3 +809,56 @@ describe('form action guards', () => {
     }
   });
 });
+
+describe('try-webmcp', () => {
+  it('needs confirm, an object input and a Signal Form, then reports the tool answer', async () => {
+    const fixture = await render(Profile);
+    const runs: unknown[] = [];
+    const ctx: ActionContext = {
+      ...contextFor(fixture.nativeElement),
+      runTool: async (_root, args) => {
+        runs.push(args);
+        return { ok: true, text: 'Form submitted successfully' };
+      },
+    };
+    expect(
+      (await runFormAction(ctx, { action: 'try-webmcp', formId: 'form-1', value: {} })).error,
+    ).toContain('confirm: true');
+    expect(
+      (
+        await runFormAction(ctx, {
+          action: 'try-webmcp',
+          formId: 'form-1',
+          value: ['x'],
+          confirm: true,
+        })
+      ).error,
+    ).toContain('JSON object');
+    const done = await runFormAction(ctx, {
+      action: 'try-webmcp',
+      formId: 'form-1',
+      value: { name: 'Ada' },
+      confirm: true,
+    });
+    expect(done.ok).toBe(true);
+    expect(done.message).toBe('The tool answered: Form submitted successfully');
+    expect(runs).toEqual([{ name: 'Ada' }]);
+
+    const failed = await runFormAction(
+      { ...ctx, runTool: async () => ({ ok: true, text: 'Form submission failed:\nname' }) },
+      { action: 'try-webmcp', formId: 'form-1', value: {}, confirm: true },
+    );
+    expect(failed.ok).toBe(false);
+  });
+
+  it('refuses reactive forms', async () => {
+    const fixture = await render(Signup);
+    const ctx: ActionContext = {
+      ...contextFor(fixture.nativeElement),
+      runTool: async () => ({ ok: true }),
+    };
+    expect(
+      (await runFormAction(ctx, { action: 'try-webmcp', formId: 'form-1', confirm: true })).error,
+    ).toContain('Signal Forms');
+  });
+});

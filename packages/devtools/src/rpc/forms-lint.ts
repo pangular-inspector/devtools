@@ -59,6 +59,21 @@ export function lintForm(
       'Add a type="submit" button inside the <form>, or link it with form="id".',
     );
   }
+  const dom = form.submitDom;
+  if (
+    dom &&
+    dom.buttons > 0 &&
+    dom.disabledButtons === dom.buttons &&
+    form.root.status === 'INVALID'
+  ) {
+    add(
+      'submit-disabled-while-invalid',
+      'info',
+      undefined,
+      'Every submit button is disabled while the form is invalid. A disabled button gives no reason, keyboard users cannot focus it, and the errors stay hidden until each field is touched.',
+      'Keep submit enabled. On an invalid submit, mark the fields touched, show the errors and focus the first invalid field.',
+    );
+  }
   if (form.kind === 'signal' && form.submitDom && form.submit && !form.submit.hasAction) {
     add(
       'formroot-no-submission',
@@ -144,6 +159,15 @@ export function lintForm(
         at,
         'The input has no accessible name.',
         'Add a <label for>, aria-label or aria-labelledby.',
+      );
+    }
+    if (node.dom.autocomplete && !node.hidden && node.status !== 'DISABLED') {
+      add(
+        'missing-autocomplete',
+        'info',
+        at,
+        `The input looks like it collects personal data (${node.dom.autocomplete}) but has no autocomplete attribute, so browsers and assistive tools cannot fill it in (WCAG 1.3.5).`,
+        `Add autocomplete="${node.dom.autocomplete}", or autocomplete="off" if it is not the user's own data.`,
       );
     }
     const invalid = node.status === 'INVALID';

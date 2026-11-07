@@ -102,7 +102,7 @@ The stdio server reads the [devtools options](../getting-started/configuration.m
 
 ### What stdio can answer
 
-Over stdio, the source scan tools work: `scan-routes`, `scan-components`, `scan-signals`, `scan-providers`, `ngrx-scan`, `scan-pipes` and `scan-build`. So do the tools that read files only, like `scan-pipe-usage`, `explain-pipe`, `scan-render-mode`, `analog-scan-routes` and `analog-lint`.
+Over stdio, the source scan tools work: `scan-routes`, `scan-components`, `scan-signals`, `scan-providers`, `ngrx-scan`, `scan-pipes` and `scan-build`. So do the tools that read files only, like `scan-pipe-usage`, `explain-pipe`, `suggest-pipe-migrations`, `scan-render-mode`, `analog-scan-routes` and `analog-lint`.
 
 The stdio server leaves out the tools and resources that need the running app, such as `highlight`, `navigate`, `run-form-action`, `fill-form`, the forms and router tools, `analog-inspect-page`, `analog-list-server-calls` and `analog-run-api`. Use HTTP for those.
 
@@ -275,7 +275,7 @@ Every tool answers with one plain text block, the answer as written: markdown fo
 
 ### Read and action tools
 
-Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty-one tools act on the app, so the server does not mark them read-only:
+Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty-two tools act on the app, so the server does not mark them read-only:
 
 | Tool                      | Tier          | Reference                                                                     |
 | ------------------------- | ------------- | ----------------------------------------------------------------------------- |
@@ -293,6 +293,7 @@ Each tool has a safety tier: `read`, `action` or `destructive`. The server marks
 | `remove-ssr-override`     | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides) |
 | `set-component-property`  | `action`      | [Edit a component](./tools.md#edit-a-component)                               |
 | `set-signal`              | `action`      | [Edit a component](./tools.md#edit-a-component)                               |
+| `load-defer-block`        | `action`      | [load-defer-block](./tools.md#load-defer-block)                               |
 | `watch-signal`            | `action`      | [watch-signal](./tools.md#watch-signal)                                       |
 | `record-pipes`            | `action`      | [Record pipe calls](./tools.md#record-pipe-calls)                             |
 | `track-subscriptions`     | `action`      | [Track subscriptions](./tools.md#track-subscriptions)                         |

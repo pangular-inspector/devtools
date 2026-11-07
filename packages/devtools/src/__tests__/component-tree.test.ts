@@ -392,11 +392,18 @@ describe('componentDetail', () => {
       {
         from: 'Card',
         token: 'Store',
+        tokenId: expect.stringMatching(/^tok-/),
         flags: [],
         providedBy: expect.any(String),
         providedByName: 'Root',
       },
-      { from: 'Card', token: 'Widget', flags: ['optional'], providedBy: null },
+      {
+        from: 'Card',
+        token: 'Widget',
+        tokenId: expect.stringMatching(/^tok-/),
+        flags: ['optional'],
+        providedBy: null,
+      },
     ]);
   });
 
@@ -407,6 +414,17 @@ describe('componentDetail', () => {
       getDirectiveMetadata: () => ({ inputs: { title: 'title' }, outputs: {} }),
     });
     expect(componentDetail(ng, card)!.inputs.map((i) => i.name)).toEqual(['title']);
+  });
+
+  it('sends a selector that finds the host again', () => {
+    document.body.innerHTML = `<main><app-card></app-card><app-card></app-card></main>`;
+    const second = document.querySelectorAll('app-card')[1]!;
+    const { ng } = fakeNg(new Map<Element, object>([[second, new Card()]]), {
+      getDirectiveMetadata: () => ({ inputs: {}, outputs: {} }),
+    });
+    const selector = componentDetail(ng, second)!.selector!;
+    expect(selector).toContain('app-card:nth-child(2)');
+    expect(document.querySelector(selector)).toBe(second);
   });
 });
 

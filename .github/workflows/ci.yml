@@ -61,6 +61,20 @@ jobs:
             exit 1
           fi
 
+      # The zip step of `pnpm extension:zip`, on the bundle built above. Without
+      # PANGULAR_EXTENSION_KEY it holds no key.pem, so the artifact is only for loading and
+      # checking by hand: nothing here uploads it to the Chrome Web Store.
+      - name: Zip the Chrome extension
+        run: node scripts/extension-zip.mjs
+
+      - name: Keep the extension zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-extension
+          path: dist/pangular-inspector-extension.zip
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Smoke-test the CLI
         run: node bin.mjs --help
 
@@ -81,6 +95,61 @@ jobs:
       - name: Test devtools package
         run: pnpm test:devtools
 
+  coverage:
+    name: Test coverage
+    # A report to read, not a gate: there is no threshold, and the build job is what fails a pull
+    # request on a broken test. v8 instrumentation slows every test, so the run gives each one
+    # 20 seconds instead of the default 5, which the slowest agent-tool tests went over.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Package tests with coverage
+        run: pnpm test:devtools --coverage --testTimeout=20000
+
+      - name: Panel tests with coverage
+        if: ${{ !cancelled() }}
+        run: pnpm test:panel --coverage --testTimeout=20000
+
+      # HTML under devtools/ and panel/, plus coverage-summary.json and lcov.info for each.
+      - name: Keep the coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: dist/coverage
+          if-no-files-found: ignore
+          retention-days: 14
+
+  windows:
+    name: Package tests on Windows
+    # The CLI, the hub and the source scans run on developers' Windows machines too, where paths
+    # use `\` and a drive letter.
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      # pnpm runs package scripts with cmd.exe on Windows, and the root `prepare` script is
+      # written for a POSIX shell. Git Bash, not the WSL `bash` that comes first on PATH.
+      npm_config_script_shell: C:\Program Files\Git\bin\bash.exe
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Test devtools package
+        run: pnpm test:devtools
+
   axe:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -96,6 +165,12 @@ jobs:
 
       - name: Check the panel with axe
         run: pnpm test:axe
+
+      # The committed extension/ui in extension/panel.html, reading the report test:axe wrote,
+      # and every status the panel bridge shows before it connects.
+      - name: Check the extension panel with axe
+        if: ${{ !cancelled() }}
+        run: pnpm test:axe:extension
 
   # The e2e jobs below are slow, so they run only when the package, the panel, the SSR demo, the
   # tools docs (e2e:mcp reads them) or the scripts and fixtures they use change. The engines-floor

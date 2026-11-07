@@ -1,0 +1,160 @@
+{
+  "_comment": "Fake secrets in the shapes the redaction rules promise to hide. `shapes` hide themselves wherever they appear; `named` hide under a secret key. `secret` is the part that must never come out. None of these is a real credential. Provider keys that secret scanners flag (Stripe, Slack webhooks, GitLab) are tested in credential-redaction.test.ts instead.",
+  "shapes": [
+    {
+      "name": "JWT",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkFkYSJ9.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+      "secret": "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+    },
+    {
+      "name": "unsigned JWT",
+      "value": "eyJhbGciOiJub25lIn0.eyJzdWIiOiJhZGEtbG92ZWxhY2UifQ.",
+      "secret": "eyJzdWIiOiJhZGEtbG92ZWxhY2UifQ"
+    },
+    {
+      "name": "bearer token",
+      "value": "Bearer 9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c",
+      "secret": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c"
+    },
+    {
+      "name": "Basic credentials",
+      "value": "Basic YWRhOmNvcnJlY3Rob3JzZQ==",
+      "secret": "YWRhOmNvcnJlY3Rob3JzZQ"
+    },
+    {
+      "name": "Digest credentials",
+      "value": "Digest username=\"ada\", response=\"6629fae49393a05397450978507c4ef1\"",
+      "secret": "6629fae49393a05397450978507c4ef1"
+    },
+    {
+      "name": "Token credentials",
+      "value": "Token 9944b09199c62bcf9418ad846dd0e4bbdfc6ee4b",
+      "secret": "9944b09199c62bcf9418ad846dd0e4bbdfc6ee4b"
+    },
+    {
+      "name": "Authorization header",
+      "value": "Authorization: ApiKey Zq7Lm2Pw9Xr4Tn8Vb3Kd",
+      "secret": "Zq7Lm2Pw9Xr4Tn8Vb3Kd"
+    },
+    {
+      "name": "URL password",
+      "value": "https://ada:Tr0ub4dorPw@db.example.com/app",
+      "secret": "Tr0ub4dorPw"
+    },
+    {
+      "name": "Stripe webhook secret",
+      "value": "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw",
+      "secret": "MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
+    },
+    {
+      "name": "GitHub token",
+      "value": "ghp_16C7e42F292c6912E7710c838347Ae178B4a",
+      "secret": "16C7e42F292c6912E7710c838347Ae178B4a"
+    },
+    {
+      "name": "GitHub fine-grained token",
+      "value": "github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJK",
+      "secret": "11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJK"
+    },
+    {
+      "name": "Slack token",
+      "value": "xoxb-2442-1234567890-AbCdEfGhIjKlMnOpQrStUvWx",
+      "secret": "2442-1234567890-AbCdEfGhIjKlMnOpQrStUvWx"
+    },
+    {
+      "name": "AWS access key id",
+      "value": "AKIAIOSFODNN7EXAMPLE",
+      "secret": "IOSFODNN7EXAMPLE"
+    },
+    {
+      "name": "Google API key",
+      "value": "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY",
+      "secret": "SyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY"
+    },
+    {
+      "name": "OpenAI project key",
+      "value": "sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcd",
+      "secret": "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcd"
+    },
+    {
+      "name": "Anthropic key",
+      "value": "sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_abcd",
+      "secret": "api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_abcd"
+    },
+    {
+      "name": "npm token",
+      "value": "npm_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789",
+      "secret": "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"
+    },
+    {
+      "name": "Hugging Face token",
+      "value": "hf_AbCdEfGhIjKlMnOpQrStUvWxYz01234567",
+      "secret": "AbCdEfGhIjKlMnOpQrStUvWxYz01234567"
+    },
+    {
+      "name": "SendGrid key",
+      "value": "SG.AbCdEfGhIjKlMnOpQrStUv.WxYz0123456789AbCdEfGhIjKlMn",
+      "secret": "WxYz0123456789AbCdEfGhIjKlMn"
+    },
+    {
+      "name": "PEM private key",
+      "value": "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA7bq98fakeKeyMaterialLine\n-----END RSA PRIVATE KEY-----",
+      "secret": "MIIEowIBAAKCAQEA7bq98fakeKeyMaterialLine"
+    },
+    {
+      "name": "Sentry DSN",
+      "value": "https://0123456789abcdef0123456789abcdef@o1.ingest.sentry.io/42",
+      "secret": "0123456789abcdef0123456789abcdef"
+    }
+  ],
+  "named": [
+    {
+      "key": "password",
+      "secret": "Tr0ub4dor-3"
+    },
+    {
+      "key": "newPassword",
+      "secret": "C0rrectHorse"
+    },
+    {
+      "key": "apiKey",
+      "secret": "k3y-AbC-998877"
+    },
+    {
+      "key": "client_secret",
+      "secret": "cs-Zz9Yy8Xx7"
+    },
+    {
+      "key": "access_token",
+      "secret": "at-Qq1Ww2Ee3"
+    },
+    {
+      "key": "refreshToken",
+      "secret": "rt-Pp0Oo9Ii8"
+    },
+    {
+      "key": "sessionId",
+      "secret": "sess-Mm4Nn5Bb6"
+    },
+    {
+      "key": "cardNumber",
+      "secret": "4111111111111111"
+    },
+    {
+      "key": "cvv",
+      "secret": "737-cvv"
+    },
+    {
+      "key": "otp",
+      "secret": "otp-482913"
+    },
+    {
+      "key": "privateKey",
+      "secret": "pk-Ll7Kk6Jj5"
+    },
+    {
+      "key": "signature",
+      "secret": "sig-Hh4Gg3Ff2"
+    }
+  ]
+}

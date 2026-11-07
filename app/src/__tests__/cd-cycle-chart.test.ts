@@ -355,8 +355,8 @@ describe('CdRecording with the chart', () => {
     await fixture.whenStable();
     const host = fixture.nativeElement as HTMLElement;
     const table = () =>
-      [...host.querySelectorAll('.cd-grid table tbody tr')].map(
-        (tr) => tr.querySelector('td')!.textContent,
+      [...host.querySelectorAll('.cd-grid table:first-of-type tbody tr')].map((tr) =>
+        tr.querySelector('td')!.textContent!.trim(),
       );
     expect(host.querySelector('app-cd-cycle-chart')).not.toBeNull();
     expect(table()).toEqual(['List', 'Cart']);

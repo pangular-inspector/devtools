@@ -184,7 +184,17 @@ export function captureDiagnostics(router: AnyRecord, navigations: NavigationRec
   const handler = read(() => transitions?.['navigationErrorHandler'] as AnyRecord, null);
   if (transitions && typeof handler === 'function') {
     transitions['navigationErrorHandler'] = function (this: unknown, error: unknown) {
-      const result = (handler as unknown as (e: unknown) => unknown).call(this, error);
+      let result: unknown;
+      try {
+        result = (handler as unknown as (e: unknown) => unknown).call(this, error);
+      } catch (thrown) {
+        noteErrorHandler(
+          navigations,
+          `error handler threw ${redactMessage(read(() => String((thrown as Error)?.message ?? thrown), 'an error'))}`,
+          error,
+        );
+        throw thrown;
+      }
       const redirect = read(() => (result as AnyRecord)?.['redirectTo'], undefined);
       noteErrorHandler(
         navigations,

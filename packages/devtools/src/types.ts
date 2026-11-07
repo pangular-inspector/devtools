@@ -223,6 +223,11 @@ export interface ComponentDetail {
   name: string;
   tag: string;
   path: string;
+  /**
+   * A CSS selector that finds the host again with `querySelector`, for the
+   * panel's "Copy host path". Left out where the host tree has no selectors.
+   */
+  selector?: string;
   source?: ComponentSource;
   changeDetection?: string;
   encapsulation?: string;
@@ -257,6 +262,11 @@ export interface DeferBlockInfo {
   /** Page clock, ms since epoch, when the state or hydration state last changed. */
   since: number;
   hydratedAt?: number;
+  /**
+   * The state changes the overlay saw, oldest first, on the page clock: the
+   * state it found, then each change. Left out until the block changed.
+   */
+  transitions?: { state: string; hydration: DeferBlockInfo['hydration']; at: number }[];
 }
 
 export interface ForBlockInfo {
@@ -344,6 +354,12 @@ export interface InjectorInfo {
 
 export interface ProviderInfo {
   token: string;
+  /**
+   * The page's stable id for the token object (`tok-N`, `token-id.ts`), so
+   * two tokens with the same name stay apart. Missing in reports from older
+   * versions, which then match by `token` name.
+   */
+  tokenId?: string;
   type: 'class' | 'value' | 'factory' | 'existing' | 'unknown';
   isViewProvider: boolean;
   multi?: boolean;
@@ -366,6 +382,8 @@ export interface ProviderInfo {
 export interface DependencyInfo {
   from: string;
   token: string;
+  /** The page's stable id for the token, as on `ProviderInfo.tokenId`. */
+  tokenId?: string;
   flags: string[];
   providedBy: string | null;
   providedByName?: string;

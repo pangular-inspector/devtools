@@ -68,7 +68,12 @@ import {
   componentHostOf,
   selectedComponentDetail,
 } from './component-tree.ts';
-import { startComponentPick } from './component-pick.ts';
+import {
+  PICK_KEYS,
+  startComponentPick,
+  type PickKey,
+  type PickMoveResult,
+} from './component-pick.ts';
 import { registerComponentEdit } from './component-edit-overlay.ts';
 import { registerComponentValues } from './component-values-overlay.ts';
 import type { ScreenshotRequest } from './component-screenshot.ts';
@@ -104,6 +109,11 @@ import {
 import { attachChangeDetection } from './cd-overlay.ts';
 import { attachAngularInfo } from './ng-capabilities.ts';
 import { createScanBackoff } from './router-attach.ts';
+import {
+  capturePlatformNavigations,
+  navigationApi,
+  type PlatformNavigation,
+} from './router-platform-nav.ts';
 import { DEVTOOLS_BASES, SETUP_URL } from './panel-frame.ts';
 import { overlayStarts } from './overlay-start.ts';
 import { clearHighlight, showHighlight } from './page-highlight.ts';
@@ -111,7 +121,8 @@ import { claimPageOnServer, newPageId, newPageKey } from './page-id.ts';
 import { createDeltaChannel } from './delta-channel.ts';
 import { COMPONENT_TREE_SHAPE, INJECTOR_TREE_SHAPE } from './push-delta.ts';
 import { createDomDirty } from './dom-dirty.ts';
-import { domTree } from './host-tree.ts';
+import { angularRoots, domTree } from './host-tree.ts';
+import { angularDeferInternals, loadDeferBlock, registerDeferLoad } from './defer-load.ts';
 import { LEASED_PUSH_MS, createPageLease, throttle } from './page-lease.ts';
 import { setTimeoutOutside } from './outside-angular.ts';
 import { createPageHeartbeat, keepaliveAfter } from './page-heartbeat.ts';
@@ -609,6 +620,7 @@ async function startOverlay(
 
   const navigations: NavigationRecord[] = [];
   const preloads: PreloadRecord[] = [];
+  const platformNavigations: PlatformNavigation[] = [];
   const configTracker = new ConfigTracker();
   let router: Record<string, unknown> | null = null;
   let routerCount = 0;
@@ -687,6 +699,9 @@ async function startOverlay(
     routerCleanup.push(captureCallers(router, navigations, ng));
     routerCleanup.push(captureDiagnostics(router, navigations));
     routerCleanup.push(capturePreloads(preloaderOf(ng, routerRoot), preloads, scheduleRouterPush));
+    routerCleanup.push(
+      capturePlatformNavigations(navigationApi(), navigations, platformNavigations, onRouterChange),
+    );
   }
 
   /** True when the watched router was destroyed or its root left the page (HMR, re-bootstrap). */
@@ -707,6 +722,7 @@ async function startOverlay(
     // A new router counts navigation ids from 1 again, so old records would take its events.
     resetNavigations(navigations);
     preloads.length = 0;
+    platformNavigations.length = 0;
     config = undefined;
     configTruncated = 0;
     setup = undefined;
@@ -758,6 +774,7 @@ async function startOverlay(
         if (linksTruncated) report['linksTruncated'] = linksTruncated;
         if (linksUnchecked) report['linksUnchecked'] = linksUnchecked;
         report['preloads'] = preloads;
+        if (platformNavigations.length) report['platformNavigations'] = platformNavigations;
         report['instrumented'] = instrumented;
       }
       const payload = JSON.stringify(report);
@@ -927,6 +944,7 @@ async function startOverlay(
     handler: (message: { pageId?: unknown } | undefined) => {
       if (!on.router || message?.pageId !== pageId) return;
       clearNavigations(navigations);
+      platformNavigations.length = 0;
       lastRouterPayload = '';
       scheduleRouterPush();
     },
@@ -977,23 +995,43 @@ async function startOverlay(
   });
 
   let cancelComponentPick: (() => void) | null = null;
+  let moveComponentPick: ((key: PickKey) => PickMoveResult) | null = null;
   if (on.components) {
     my.rpc.register({
       name: 'component-pick',
       type: 'event',
       jsonSerializable: true,
-      handler: (request: { requestId?: unknown; pageId?: unknown; cancel?: unknown } | null) => {
+      handler: (
+        request: { requestId?: unknown; pageId?: unknown; cancel?: unknown; move?: unknown } | null,
+      ) => {
         if (!request || (request.pageId && request.pageId !== pageId)) return;
+        // A key from the panel moves the running pick; it never starts or cancels one.
+        if (request.move !== undefined) {
+          const key = PICK_KEYS.find((k) => k === request.move);
+          const result: PickMoveResult = !key
+            ? { moved: false, error: 'Unknown key.' }
+            : (moveComponentPick?.(key) ?? { moved: false, error: 'No pick is running.' });
+          if (typeof request.requestId === 'string') {
+            void my.rpc
+              .call('component-pick-result', { requestId: request.requestId, pageId, result })
+              .catch(() => {});
+          }
+          return;
+        }
         cancelComponentPick?.();
         if (request.cancel === true || typeof request.requestId !== 'string') return;
         const requestId = request.requestId;
         const pick = startComponentPick({
           getNg,
-          highlight: { show: showHighlight, clear: clearHighlight },
+          highlight: { show: (el, reveal) => showHighlight(el, { reveal }), clear: clearHighlight },
         });
         cancelComponentPick = pick.cancel;
+        moveComponentPick = pick.move;
         void pick.result.then((result) => {
-          if (cancelComponentPick === pick.cancel) cancelComponentPick = null;
+          if (cancelComponentPick === pick.cancel) {
+            cancelComponentPick = null;
+            moveComponentPick = null;
+          }
           if (result.ok) {
             componentTarget = result.id;
             consoleGlobals.selectComponent(result.id);
@@ -1015,6 +1053,16 @@ async function startOverlay(
       getNg,
       allowed: devtoolsConfig.actions.components,
       edited: () => void pushTree(true).catch(() => {}),
+    });
+    registerDeferLoad(my.rpc, pageId, {
+      allowed: devtoolsConfig.actions.components,
+      load: (id) => {
+        const ng = getNg();
+        // A fresh read, so the load acts on the block as it is now.
+        deferTracker.collect(ng, document, controlFlowReader(ng));
+        return loadDeferBlock(ng, angularDeferInternals(), deferTracker.find(id), angularRoots());
+      },
+      loaded: () => void pushTree(true).catch(() => {}),
     });
     // Loaded on the first capture, so pages that never take one don't pay for it.
     my.rpc.register({

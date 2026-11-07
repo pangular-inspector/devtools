@@ -85,10 +85,11 @@ function guardProps(value: unknown): ComponentProp[] {
 function guardDependencies(value: unknown): DependencyInfo[] {
   return records(value)
     .filter((dep) => str(dep['token']))
-    .map((dep) => ({
+    .map(({ tokenId, ...dep }) => ({
       ...dep,
       from: str(dep['from']) ? dep['from'] : '',
       token: dep['token'] as string,
+      ...(str(tokenId) ? { tokenId } : {}),
       flags: strings(dep['flags']),
       providedBy: str(dep['providedBy']) ? dep['providedBy'] : null,
     }));
@@ -134,6 +135,9 @@ export function guardClockOffset(pageNow: unknown, now: number): number | undefi
   return page !== undefined && page > 0 ? Math.round(now - page) : undefined;
 }
 
+/** The most state changes kept per defer block, as the overlay sends them. */
+const MAX_GUARDED_TRANSITIONS = 6;
+
 /** The defer blocks that have an `id`, with every field the tools read set to a safe value. */
 export function guardDeferBlocks(value: unknown): DeferBlockInfo[] {
   return records(value)
@@ -155,6 +159,17 @@ export function guardDeferBlocks(value: unknown): DeferBlockInfo[] {
       if (block['hydrateNever'] === true) out.hydrateNever = true;
       const hydratedAt = finite(block['hydratedAt']);
       if (hydratedAt !== undefined) out.hydratedAt = hydratedAt;
+      const transitions = records(block['transitions'])
+        .slice(-MAX_GUARDED_TRANSITIONS)
+        .flatMap((step) => {
+          const at = finite(step['at']);
+          if (at === undefined || !str(step['state'])) return [];
+          const hydration = DEFER_HYDRATION.has(step['hydration'] as DeferBlockInfo['hydration'])
+            ? (step['hydration'] as DeferBlockInfo['hydration'])
+            : 'not-configured';
+          return [{ state: (step['state'] as string).slice(0, 40), hydration, at }];
+        });
+      if (transitions.length) out.transitions = transitions;
       const time = (raw: unknown) => finite(raw) ?? null;
       if (isRecord(block['loading'])) {
         out.loading = {

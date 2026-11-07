@@ -323,6 +323,14 @@ export function redactMessage(text: string, secrets: Iterable<string> = []): str
   return redactMessageWith(text, longestFirst(secrets));
 }
 
+/**
+ * Credentials inside text (`credential-redact.ts`), JWTs and bearer tokens:
+ * the value-shape rules every message and log line goes through.
+ */
+export function redactTokens(text: string): string {
+  return redactJwt(redactCredentials(text, REDACTED)).replace(BEARER, `Bearer ${REDACTED}`);
+}
+
 /** `secrets` as `redactMessageWith` takes them: 3 characters or more, longest first. */
 export function longestFirst(secrets: Iterable<string>): string[] {
   const out = [...secrets].filter((secret) => secret.length >= 3);
@@ -332,7 +340,7 @@ export function longestFirst(secrets: Iterable<string>): string[] {
 
 /** `redactMessage` with secrets `longestFirst` already prepared, for many texts in a row. */
 export function redactMessageWith(text: string, ordered: readonly string[]): string {
-  let out = redactJwt(redactCredentials(text, REDACTED)).replace(BEARER, `Bearer ${REDACTED}`);
+  let out = redactTokens(text);
   for (const secret of ordered) out = out.split(secret).join(REDACTED);
   return out;
 }

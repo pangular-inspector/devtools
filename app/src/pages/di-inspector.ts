@@ -32,6 +32,8 @@ import { StartupSection } from './startup-section';
 
 interface ProviderInfo {
   token: string;
+  /** The page's id for the token object; two tokens can share a name. Missing in older reports. */
+  tokenId?: string;
   type: string;
   isViewProvider: boolean;
   multi?: boolean;
@@ -42,6 +44,7 @@ interface ProviderInfo {
 interface DependencyInfo {
   from: string;
   token: string;
+  tokenId?: string;
   flags: string[];
   providedBy: string | null;
 }
@@ -457,7 +460,10 @@ function isTree(value: unknown): value is InjectorNode[] {
                 }
                 @if (sel.dependencies?.length) {
                   <ul class="deps">
-                    @for (dep of sel.dependencies; track dep.from + dep.token + $index) {
+                    @for (
+                      dep of sel.dependencies;
+                      track dep.from + (dep.tokenId ?? dep.token) + $index
+                    ) {
                       <li class="dep" [class.hit]="matches(dep.token)">
                         <div class="dep-main">
                           <span class="token mono">{{ dep.token }}</span>
@@ -512,7 +518,11 @@ function isTree(value: unknown): value is InjectorNode[] {
               }
               @if (providerCount(sel)) {
                 <ul class="providers">
-                  @for (p of sel.providers; track p.token + $index; let index = $index) {
+                  @for (
+                    p of sel.providers;
+                    track (p.tokenId ?? p.token) + $index;
+                    let index = $index
+                  ) {
                     @if (!isHidden(p)) {
                       <li class="provider" [class.hit]="matches(p.token)">
                         <div class="dep-main">
@@ -541,6 +551,7 @@ function isTree(value: unknown): value is InjectorNode[] {
                             kind: 'provider',
                             injectorId: sel.injector.id,
                             token: p.token,
+                            tokenId: p.tokenId,
                             index: index,
                           }"
                           [label]="p.token + positionSuffix(sel.providers, index)"
@@ -551,6 +562,7 @@ function isTree(value: unknown): value is InjectorNode[] {
                           [pageId]="shownPageId()"
                           [injectorId]="sel.injector.id"
                           [token]="p.token"
+                          [tokenId]="p.tokenId"
                           [index]="index"
                           [position]="tokenPosition(sel.providers, index)"
                         />

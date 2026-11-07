@@ -9,7 +9,7 @@ export const NG_HANDLES = 5;
 /** What "Store as global" stores: a component, a provider or NgRx state. */
 export type ConsoleTarget =
   | { kind: 'component'; id: string }
-  | { kind: 'provider'; injectorId: string; token: string; index: number }
+  | { kind: 'provider'; injectorId: string; token: string; index: number; tokenId?: string }
   | { kind: 'ngrx'; storeId: string };
 
 /** `store` keeps the value as `tempN`; `log` prints it in the page's console instead. */
@@ -41,7 +41,8 @@ export function isConsoleTarget(value: unknown): value is ConsoleTarget {
         !!text('token') &&
         typeof target['index'] === 'number' &&
         Number.isInteger(target['index']) &&
-        target['index'] >= 0
+        target['index'] >= 0 &&
+        (target['tokenId'] === undefined || !!text('tokenId'))
       );
     case 'ngrx':
       return !!text('storeId');
@@ -274,6 +275,7 @@ export function attachConsoleGlobals(my: RpcScope, pageId: string, options: Cons
         target.token,
         target.index,
         mode,
+        target.tokenId,
       );
       if ('error' in found) return fail(found.error);
       const refused = providerRefusal(target.token, found.value, mode);

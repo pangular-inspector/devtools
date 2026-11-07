@@ -94,6 +94,9 @@ const SHOWN_CYCLES = 30;
         of it stops with the recording.
         @if (native()) {
           An app on a device has no DOM, so checks that changed nothing are not counted there.
+        } @else {
+          A recording keeps running when the tab reloads, so it catches the next start of the app.
+          The cycles from before the reload are gone with the old page.
         }
       </p>
       @if (page()?.supported === false) {
@@ -213,7 +216,11 @@ const SHOWN_CYCLES = 30;
               <tbody>
                 @for (c of slowest(); track $index) {
                   <tr>
-                    <td class="mono">{{ c.name }}</td>
+                    <td class="mono">
+                      <button type="button" class="name-link" (click)="showComponent.emit(c.name)">
+                        {{ c.name }}
+                      </button>
+                    </td>
                     <td class="num">{{ c.checks }}</td>
                     <td class="num">{{ ms(c.ms) }}</td>
                     <td class="num">{{ ms(c.maxMs) }}</td>
@@ -225,6 +232,41 @@ const SHOWN_CYCLES = 30;
                 }
               </tbody>
             </table>
+            <h3>
+              {{ range() ? 'Most often checked in the picked cycles' : 'Most often checked' }}
+            </h3>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Component</th>
+                  <th scope="col" class="num">Checks</th>
+                  <th scope="col" class="num">Cycles</th>
+                  <th scope="col" class="num">Self time</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- track $index: two classes can share a name (duplicate-track-keys.test.ts). -->
+                @for (c of busiest(); track $index) {
+                  <tr>
+                    <td class="mono">
+                      <button type="button" class="name-link" (click)="showComponent.emit(c.name)">
+                        {{ c.name }}
+                      </button>
+                    </td>
+                    <td class="num">{{ c.checks }}</td>
+                    <td class="num">{{ c.cycles }}</td>
+                    <td class="num">{{ ms(c.ms) }}</td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="4">No component checks in the picked cycles.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            <p class="hint">
+              Select a component name to show its most checked instance in the tree.
+            </p>
           </div>
           <div>
             <h3>Latest cycles</h3>
@@ -390,6 +432,26 @@ const SHOWN_CYCLES = 30;
     td.mono {
       overflow-wrap: anywhere;
     }
+    .name-link {
+      height: auto;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--text-strong);
+      font: inherit;
+      text-align: left;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+    }
+    .name-link:hover {
+      background: none;
+      text-decoration-thickness: 2px;
+    }
+    .name-link:focus-visible {
+      @include m.focus-ring(-2px);
+    }
     .num {
       text-align: right;
       font-variant-numeric: tabular-nums;
@@ -508,6 +570,10 @@ export class CdRecording {
       : `cycles ${picked[0].id} to ${picked.at(-1)!.id}`;
   });
   readonly slowest = computed(() => this.stats().slice(0, SHOWN));
+  /** The classes Angular checked most often, as the change-detection tool lists them. */
+  readonly busiest = computed(() =>
+    [...this.stats()].sort((a, b) => b.checks - a.checks).slice(0, SHOWN),
+  );
   readonly latest = computed(() => this.cycles().slice(-SHOWN_CYCLES).reverse());
   /** Says when the recording checked more classes or instances than it keeps. */
   readonly capNotes = computed(() => {

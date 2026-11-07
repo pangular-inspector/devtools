@@ -2,7 +2,6 @@ import { defineRpcFunction } from 'devframe';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
 import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
 import { angularMajor } from './angular-version.ts';
 import {
   ANNOTATION,
@@ -14,6 +13,7 @@ import {
   sourceRoots,
   stripComments,
   walkFiles,
+  relativeFile,
 } from './source-scan.ts';
 
 const ComponentSchema = v.object({
@@ -68,7 +68,9 @@ function scanComponents(cwd: string, major: number | undefined): ComponentInfo[]
     walkFiles(root, (full, entry) => {
       if (!entry.endsWith('.ts') || entry.endsWith('.spec.ts')) return;
       try {
-        components.push(...componentsIn(readFileSync(full, 'utf-8'), relative(cwd, full), major));
+        components.push(
+          ...componentsIn(readFileSync(full, 'utf-8'), relativeFile(cwd, full), major),
+        );
       } catch {
         // skip
       }

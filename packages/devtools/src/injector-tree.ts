@@ -7,6 +7,7 @@ import type {
   ProviderInfo,
 } from './types.ts';
 import { elementId } from './element-id.ts';
+import { tokenId } from './token-id.ts';
 import { domTree, type HostTree } from './host-tree.ts';
 import { zoneModeOf } from './zone-mode.ts';
 
@@ -56,7 +57,11 @@ function idFor(key: object): string {
   return id;
 }
 
-/** `injectorId|token` pairs some component or directive injected, from the last collection. */
+/**
+ * `injectorId|tokenId` pairs some component or directive injected, from the
+ * last collection. Keyed by token id, not name, so injecting one
+ * `InjectionToken('config')` does not mark another one with the same name.
+ */
 let injectedPairs = new Set<string>();
 
 export function className(
@@ -157,6 +162,7 @@ function toProviders(injector: unknown, records: RecordReader): ProviderInfo[] {
     .map((record) => {
       const info: ProviderInfo = {
         token: tokenName(record.token),
+        tokenId: tokenId(record.token),
         type: providerKind(record.provider),
         isViewProvider: !!record.isViewProvider,
       };
@@ -340,6 +346,7 @@ export function dependenciesOf<H extends object = Element>(
         const info: DependencyInfo = {
           from: tokenName(owner),
           token: tokenName(dep.token),
+          tokenId: tokenId(dep.token),
           flags,
           providedBy: by?.id ?? null,
         };
@@ -423,7 +430,7 @@ function environmentDependencies<H extends object>(
       known.set(token, deps);
     }
     for (const dep of deps) {
-      const key = `${dep.from}|${dep.token}|${dep.flags.join(',')}|${dep.providedBy}`;
+      const key = `${dep.from}|${dep.tokenId}|${dep.flags.join(',')}|${dep.providedBy}`;
       if (seen.has(key)) continue;
       seen.add(key);
       out.push(dep);
@@ -580,7 +587,7 @@ export function collectInjectorTree<H extends object = Element>(
   const notePairs = (nodes: InjectorTreeNode[]) => {
     for (const node of nodes) {
       for (const dep of node.dependencies ?? []) {
-        if (dep.providedBy) pairs.add(`${dep.providedBy}|${dep.token}`);
+        if (dep.providedBy && dep.tokenId) pairs.add(`${dep.providedBy}|${dep.tokenId}`);
       }
       notePairs(node.children);
     }
@@ -608,8 +615,11 @@ export function collectInjectorTree<H extends object = Element>(
 
 /**
  * The live value of one provider the injector tree listed, for "Store as
- * global", "Log to console" and the provider value reader (`mode` words the errors). `index` is the provider's place in the injector's `providers`, and
- * `token` must still match there. Nothing is created: an environment injector
+ * global", "Log to console" and the provider value reader (`mode` words the
+ * errors). `index` is the provider's place in the injector's `providers`, and
+ * the token must still match there: by `id` (the report's `tokenId`) when the
+ * caller has it, else by `token` name for callers that read an older report.
+ * Nothing is created: an environment injector
  * gives only a value it already holds, and an element injector only a token
  * that some component or directive on the page injected (Angular creates
  * element providers on first use).
@@ -620,6 +630,7 @@ export function providerValue<H extends object = Element>(
   token: string,
   index: number,
   mode: 'store' | 'log' | 'read' = 'store',
+  id?: string,
 ): { value: unknown } | { error: string } {
   const doing = { store: 'storing', log: 'logging', read: 'reading' }[mode];
   const verb = { store: 'Store', log: 'Log', read: 'Read' }[mode];
@@ -642,7 +653,7 @@ export function providerValue<H extends object = Element>(
     list = [];
   }
   const record = list.filter((entry) => !isBuiltInElementToken(entry))[index];
-  if (!record || tokenName(record.token) !== token) {
+  if (!record || (id ? tokenId(record.token) !== id : tokenName(record.token) !== token)) {
     return { error: `${token} is no longer provided there. Refresh and try again.` };
   }
   if (!element) {
@@ -654,7 +665,7 @@ export function providerValue<H extends object = Element>(
     }
     return { value: own.value };
   }
-  if (!injectedPairs.has(`${injectorId}|${token}`)) {
+  if (!injectedPairs.has(`${injectorId}|${tokenId(record.token)}`)) {
     return {
       error: `Nothing on the page has injected ${token} from this element yet, so Angular may not have created it, and ${doing} it would create it.`,
     };
