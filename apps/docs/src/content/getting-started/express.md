@@ -111,7 +111,7 @@ devtools.attach(server);
 
 ### Hub options
 
-`initPangularHub()` accepts the options of `initHub()` from `@devframes/hub`, apart from `devframes` and `ui`. These are the ones you are most likely to set:
+`initPangularHub()` accepts the options of `initHub()` from `@devframes/hub`, apart from `devframes` and `ui`; pass other devframes in `extraDevframes`. These are the ones you are most likely to set:
 
 | Option           | Default                                   | What it does                                                                                                                                                                                                                        |
 | ---------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -122,6 +122,7 @@ devtools.attach(server);
 | `allowedOrigins` | loopback origins and the Chrome extension | Extra origins allowed to reach the hub, such as a tunnel. `false` turns the origin check and the request gate off.                                                                                                                  |
 | `allowLan`       | `false`                                   | Answer other machines, such as a phone on Wi-Fi. Needs the one-time code on.                                                                                                                                                        |
 | `terminals`      | `false`                                   | Add a dock that runs the project's build and test commands. See [Terminals](./terminals.md).                                                                                                                                        |
+| `extraDevframes` | none                                      | Other devframes to mount on the same hub, after Pangular Inspector, the same input as `initHub({ devframes })`. See [Extra devframes](./configuration.md#extra-devframes).                                                          |
 | `mcp`            | a bearer token                            | Mounts the MCP endpoint at `<base>__mcp` and asks for a bearer token. With `auth: false` the default is `'auto'`: it mounts once agent tools exist and asks for no token. See [Send a token](../agents/mcp-server.md#send-a-token). |
 
 The hub also takes the devtools options, such as `inspectors`, `agent`, `actions`, `redaction` and `limits`. See [Configuration](./configuration.md). Pass `browserDistFolder`, the folder that holds `index.csr.html`, to let the **Force Client render** override serve it. See [SSR overrides](../inspectors/ssr-http.md#ssr-overrides).

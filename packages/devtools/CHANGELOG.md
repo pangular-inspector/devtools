@@ -126,7 +126,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 #### Setup and workflow
 
 - The Vite plugin loads the overlay itself, so setup is one line in `vite.config.ts`. New plugin options: `allowLan`, `overlay`, `terminals` and `serverPlugins`.
-- New hub options: `enabled`, `allowLan`, `terminals`, `serverPlugins` and `browserDistFolder`.
+- New hub options: `enabled`, `allowLan`, `terminals`, `serverPlugins`, `extraDevframes` and `browserDistFolder`. The Vite plugin takes `extraDevframes` too, to mount other devframes on the same hub (#373).
 - Open in editor: <kbd>Alt</kbd>+click a component on the page, or a file and line in the panel.
 - A command palette (<kbd>⌘K</kbd> or <kbd>Ctrl+K</kbd>) with a command for every tab and action.
 - A **Settings** page: theme, hidden, pinned and reordered tabs, passive mode, and a **Browser agents** switch.

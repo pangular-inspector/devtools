@@ -5,7 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { hubDefaultOrigins, initPangularHub, type PangularHubOptions } from '../hub.ts';
+import { defineDevframe } from 'devframe';
+import {
+  extraDevframesOf,
+  hubDefaultOrigins,
+  initPangularHub,
+  type PangularHubOptions,
+} from '../hub.ts';
 import { httpRegistry } from '../http-rules.ts';
 import { writeTokenOnce } from '../mcp-token.ts';
 import { BASE_FILES, makeProject } from './analog-fixture.ts';
@@ -264,6 +270,50 @@ async function sseStatus(
   await res.body?.cancel();
   return res.status;
 }
+
+describe('Pangular Inspector hub extraDevframes', () => {
+  const extra = (id: string) =>
+    defineDevframe({
+      id,
+      name: `Extra ${id}`,
+      version: '1.0.0',
+      packageName: `@acme/${id}`,
+      homepage: 'https://example.com',
+      description: 'An extra devframe',
+      setup(ctx) {
+        ctx.rpc.register({ name: `${id}:ping`, type: 'static', handler: () => 'pong' });
+      },
+    });
+
+  it('mounts extra devframes next to Pangular Inspector', async () => {
+    const cwd = makeProject({ 'package.json': '{}' });
+    const hub = initPangularHub({
+      cwd,
+      ws: false,
+      auth: false,
+      allowedOrigins: false,
+      extraDevframes: [extra('acme'), { devframe: extra('beta') }],
+    });
+    hubs.push(hub);
+    await hub.ready;
+    const ctx = await hub.context;
+    expect(ctx.rpc.has('acme:ping')).toBe(true);
+    expect(ctx.rpc.has('beta:ping')).toBe(true);
+    // Pangular Inspector is still there, and its tools still answer.
+    expect((await ctx.agent.invoke('pangular:inspect-forms', {})) as string).toContain('No forms');
+  });
+
+  it('drops an entry with the pangular id and anything that is not an array', () => {
+    const warn = vi.fn();
+    const own = extra('pangular');
+    const other = extra('acme');
+    expect(extraDevframesOf([own, other, { devframe: own }], warn)).toEqual([other]);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(extraDevframesOf({} as never, warn)).toEqual([]);
+    expect(extraDevframesOf(undefined, warn)).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(3);
+  });
+});
 
 describe('Pangular Inspector hub behind a web router', () => {
   it('answers under its base and lets other routes reach the app', async () => {

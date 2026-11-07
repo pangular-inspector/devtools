@@ -265,6 +265,19 @@ The server plugins themselves go in `serverPlugins`, an option of the Express hu
 
 It is off by default because it starts processes on your machine. A value other than `true` or `false` prints a warning and keeps it off.
 
+### Extra devframes
+
+`extraDevframes` is an option of the Express hub and the Vite plugin only. It mounts other devframes on the hub that serves Pangular Inspector, so a team's own devtools or another library's devframe sit next to the Pangular docks without a second server. It takes the same input as `initHub({ devframes })` from `@devframes/hub`: devframe definitions, `{ devframe, dock }` entries to change a dock, promises and functions that return them.
+
+```ts
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
+import {acmeDevframe} from '@acme/devtools';
+
+const devtools = initPangularHub({extraDevframes: [acmeDevframe]});
+```
+
+The extra devframes run behind the same origin check, request gate and one-time code as Pangular Inspector. An entry with the id `pangular` would replace Pangular Inspector, so it is dropped with a warning, and a value that is not an array is ignored with a warning.
+
 ### Lint rules
 
 | Option              | Default | What it does                                                                                                                |

@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { createUi } from '@devframes/hub-ui';
 import { DEVFRAMES_HUB_BASE, initHub } from '@devframes/hub/initiate';
 import { normalizeHubBase } from '@devframes/hub/constants';
-import type { InitHubOptions } from '@devframes/hub/initiate';
+import type { DevframesInput, InitHubOptions } from '@devframes/hub/initiate';
 import type { WsOriginRegistry } from 'devframe/rpc/transports/ws-server';
 import { isAllowedOrigin } from 'devframe/utils/origin';
 import { createPangular } from './devframe.ts';
@@ -66,6 +66,12 @@ export type PangularHubOptions = Partial<Omit<InitHubOptions, 'devframes' | 'ui'
     terminals?: boolean;
     /** Pangular plugins' server sides: their agent tools and shared state. */
     serverPlugins?: readonly PangularServerPlugin[];
+    /**
+     * Other devframes to mount on the same hub, after Pangular Inspector: the
+     * same input as `initHub({ devframes })`. Each gets its own dock and runs
+     * behind the hub's origin check and one-time code.
+     */
+    extraDevframes?: DevframesInput;
   };
 
 function hubUiClientDir(): string | undefined {
@@ -180,6 +186,7 @@ export function startPangularHub(
     auth: authOption,
     terminals: terminalsOn,
     serverPlugins,
+    extraDevframes,
     ...hubOptions
   } = options;
   const { config, rest: picked } = pickPangularConfig(hubOptions);
@@ -206,7 +213,10 @@ export function startPangularHub(
     ...(auth === undefined ? {} : { auth }),
     allowedOrigins: hubAllowedOrigins(rest.allowedOrigins),
     mcp: pangularMcp(hubMcpFor({ ...rest, auth }), resolvePangularConfig(config)),
-    devframes: [createPangular(config, { authTokens, serverPlugins })],
+    devframes: [
+      createPangular(config, { authTokens, serverPlugins }),
+      ...extraDevframesOf(extraDevframes),
+    ],
     ui: hubUi(),
     ...(gate || sharedServer === undefined ? {} : { server: sharedServer }),
   });
@@ -233,6 +243,38 @@ export function startPangularHub(
   hubs.set(hub.base, own);
   void previous?.close();
   return own;
+}
+
+/**
+ * The `extraDevframes` entries to mount. One with Pangular Inspector's own id
+ * would replace it on the hub, so it is dropped with a warning.
+ */
+export function extraDevframesOf(
+  input: DevframesInput | undefined,
+  warn: (message: string) => void = (message) => console.warn(message),
+): DevframesInput {
+  if (input === undefined) return [];
+  if (!Array.isArray(input)) {
+    warn('[pangular] Ignoring extraDevframes: pass an array, as initHub({ devframes }) takes.');
+    return [];
+  }
+  return input.filter((entry) => {
+    const id = devframeIdOf(entry);
+    if (id !== 'pangular') return true;
+    warn(
+      '[pangular] Ignoring an extraDevframes entry with the id "pangular": the hub mounts Pangular Inspector itself.',
+    );
+    return false;
+  });
+}
+
+/** The id of a devframe or a `{ devframe }` entry; `undefined` for lazy entries. */
+function devframeIdOf(entry: unknown): string | undefined {
+  if (!entry || typeof entry !== 'object') return undefined;
+  const definition = 'devframe' in entry ? (entry as { devframe: unknown }).devframe : entry;
+  const id =
+    definition && typeof definition === 'object' ? (definition as { id?: unknown }).id : undefined;
+  return typeof id === 'string' ? id : undefined;
 }
 
 const REFUSED_BODY = 'Pangular Inspector only answers requests from this machine.';

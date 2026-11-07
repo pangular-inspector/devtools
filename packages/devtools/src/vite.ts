@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { isAuthTokens, type PangularAuthTokens } from './auth-tokens.ts';
 import type { Plugin } from 'vite';
+import type { DevframesInput } from '@devframes/hub/initiate';
 import { normalizeHubBase } from '@devframes/hub/constants';
 import type { WsOriginRegistry } from 'devframe/rpc/transports/ws-server';
 import { PANGULAR_HUB_BASE, startPangularHub } from './hub.ts';
@@ -59,6 +60,12 @@ export interface PangularViteOptions extends PangularConfig {
   terminals?: boolean;
   /** Pangular plugins' server sides: their agent tools and shared state. */
   serverPlugins?: readonly PangularServerPlugin[];
+  /**
+   * Other devframes to mount on the same hub, after Pangular Inspector: the
+   * same input as `initHub({ devframes })`. Each gets its own dock and runs
+   * behind the plugin's request gate and one-time code.
+   */
+  extraDevframes?: DevframesInput;
 }
 
 export {
@@ -175,6 +182,7 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
           logger?.warn(message),
         ),
         serverPlugins: options.serverPlugins,
+        extraDevframes: options.extraDevframes,
       });
       httpServer?.on('upgrade', hubUpgradeListener(base, policy, devtools.handleUpgrade, blocked));
       server.middlewares.use(devtools.nodeMiddleware);
