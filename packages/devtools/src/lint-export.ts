@@ -122,7 +122,10 @@ export async function runSourceLints(
     );
   }
   if (chosen.has('analog')) {
-    const project = scanAnalog(cwd);
+    const contentSchema = options.config
+      ? resolvePangularConfig(options.config).analog.contentSchema
+      : undefined;
+    const project = scanAnalog(cwd, { contentSchema });
     if (!project.analog) add('analog', [], 'The project is not an Analog app.');
     else {
       const root = project.root;
