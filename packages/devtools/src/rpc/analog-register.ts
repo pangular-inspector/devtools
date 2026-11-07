@@ -327,6 +327,19 @@ export async function callApi(
 }
 
 const MAX_LOAD_VALUE = 200_000;
+/** Most characters of the load() JSON an agent answer shows, like other tool answers. */
+export const MAX_LOAD_ANSWER_CHARS = 20_000;
+
+/**
+ * The full load() value for an agent answer. JSON past {@link MAX_LOAD_ANSWER_CHARS}
+ * is cut, and a line after the block says so, so a cut answer is never read as whole JSON.
+ */
+export function loadValueText(value: unknown): string {
+  const json = JSON.stringify(value, null, 2) ?? 'undefined';
+  if (json.length <= MAX_LOAD_ANSWER_CHARS)
+    return `### Full load() value\n\n\`\`\`json\n${json}\n\`\`\``;
+  return `### Full load() value\n\n\`\`\`text\n${json.slice(0, MAX_LOAD_ANSWER_CHARS)}\n\`\`\`\n\nTruncated: the value is ${json.length.toLocaleString('en-US')} characters of JSON and this shows the first ${MAX_LOAD_ANSWER_CHARS.toLocaleString('en-US')}, so it is not valid JSON. The Data view in the Analog tab shows all of it.`;
+}
 
 /** Masks strings in a load() value from the page again and caps its size. */
 export function redactLoadValue(value: unknown): unknown {
@@ -770,7 +783,7 @@ export async function registerAnalog(
         data: {
           type: 'boolean',
           description:
-            'Also ask the page for the full load() value (masked, up to 200 KB) instead of the 1000-character preview.',
+            'Also ask the page for the full load() value (masked, up to 200 KB) instead of the 1000-character preview. The answer shows the first 20,000 characters of its JSON and says when it cut it.',
         },
       },
     },
@@ -781,7 +794,7 @@ export async function registerAnalog(
       const full = answer.error
         ? `Full load() value: ${answer.error}`
         : answer.found
-          ? `### Full load() value\n\n\`\`\`json\n${JSON.stringify(answer.value, null, 2).slice(0, 20_000)}\n\`\`\``
+          ? loadValueText(answer.value)
           : 'The page has no load() data.';
       return text(`${summary}\n\n${UNTRUSTED}\n\n${full}`);
     },
