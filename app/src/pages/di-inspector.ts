@@ -61,6 +61,8 @@ interface InjectorNode {
     selector?: string;
     path?: string[];
     framework?: boolean;
+    /** A lazy route's environment injector that no rendered element's lookup path goes through. */
+    inactive?: boolean;
   };
   providers: ProviderInfo[];
   children: InjectorNode[];
@@ -100,6 +102,10 @@ interface InjectorTreeState extends InjectorPage {
 const NULL_ID = 'inj-null';
 const HIDE_FRAMEWORK_PREF = 'injectors.hideFramework';
 const MAX_PROVIDED_BY = 12;
+/** The `type` the source scan gives a provide*() call it can't resolve to tokens. */
+const HELPER_TYPE = 'helper';
+/** Source entries that provide a token, which the orphaned providers hint checks. */
+const PROVIDING_TYPES = new Set(['provider', 'injectable']);
 /** How long typing must pause before the search result is announced. */
 const SEARCH_ANNOUNCE_MS = 600;
 
@@ -243,6 +249,17 @@ function isTree(value: unknown): value is InjectorNode[] {
         @if (zone(); as zone) {
           <span class="total">Change detection: {{ zone }}</span>
         }
+        <button
+          type="button"
+          class="refresh"
+          [attr.aria-disabled]="!shownPageId() || null"
+          (click)="refresh()"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+          </svg>
+          Refresh
+        </button>
       </div>
 
       @if (truncated()) {
@@ -278,6 +295,46 @@ function isTree(value: unknown): value is InjectorNode[] {
         <div class="where muted">
           Nothing here matches “{{ query().trim() }}”.
           <button type="button" class="link" (click)="clearQuery()">Clear filters</button>
+        </div>
+      }
+
+      @if (orphaned().length) {
+        <div class="orphans">
+          <button
+            type="button"
+            class="orphans-toggle"
+            [attr.aria-expanded]="orphansOpen()"
+            aria-controls="di-orphans"
+            (click)="orphansOpen.set(!orphansOpen())"
+          >
+            <svg
+              class="chevron"
+              [class.open]="orphansOpen()"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+            <span class="hint-tag">Hint</span>
+            {{ orphanedText() }}
+          </button>
+          <div id="di-orphans" class="orphans-body" [hidden]="!orphansOpen()">
+            <p class="hint">
+              Provided in your source, but nothing on this page has injected them so far. This is
+              not an error: a guard, an interceptor or code that has not run yet may still use them.
+            </p>
+            <ul class="orphan-list">
+              @for (p of orphaned(); track p.token + p.file + p.line) {
+                <li>
+                  <span class="token mono">{{ p.token }}</span>
+                  @if (p.providedIn) {
+                    <span class="flag">providedIn: {{ p.providedIn }}</span>
+                  }
+                  <app-source-link class="orphan-file" [file]="p.file" [line]="p.line" />
+                </li>
+              }
+            </ul>
+          </div>
         </div>
       }
 
@@ -343,6 +400,9 @@ function isTree(value: unknown): value is InjectorNode[] {
               >
               <span class="sr-only">{{ kind(row.node) }}</span>
               <span class="name mono">{{ label(row.node) }}</span>
+              @if (row.node.injector.inactive) {
+                <span class="flag inactive-flag">inactive</span>
+              }
               @if (row.node.injector.component) {
                 <span class="sub">{{ row.node.injector.component }}</span>
               } @else if (row.node.injector.directives?.length) {
@@ -408,6 +468,12 @@ function isTree(value: unknown): value is InjectorNode[] {
               }
             </header>
 
+            @if (sel.injector.inactive) {
+              <p class="hint inactive-note">
+                Inactive: the router loaded this route's injector, but no element on the page uses
+                it now. It keeps the services it created until the app is reloaded.
+              </p>
+            }
             <div class="block">
               <h3>Lookup path</h3>
               <p class="hint">Angular asks these injectors in order until one has the token.</p>
@@ -656,10 +722,42 @@ function isTree(value: unknown): value is InjectorNode[] {
         <div class="source-providers">
           @for (group of groupedProviders(); track group.type) {
             <section class="provider-group">
-              <h2>
-                {{ group.label }} <span class="section-count">{{ group.items.length }}</span>
-              </h2>
-              <ul class="provider-list" role="list">
+              @if (group.type === helperType) {
+                <h2>
+                  <button
+                    type="button"
+                    class="group-toggle"
+                    [attr.aria-expanded]="helpersShown()"
+                    aria-controls="di-helpers"
+                    (click)="helpersOpen.set(!helpersOpen())"
+                  >
+                    <svg
+                      class="chevron"
+                      [class.open]="helpersShown()"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path d="m9 6 6 6-6 6" />
+                    </svg>
+                    {{ group.label }}
+                    <span class="section-count">{{ group.items.length }}</span>
+                  </button>
+                </h2>
+                <p class="hint helper-hint" [hidden]="!helpersShown()">
+                  provide*() calls the scan can't resolve to the tokens they register, such as your
+                  own provider functions.
+                </p>
+              } @else {
+                <h2>
+                  {{ group.label }} <span class="section-count">{{ group.items.length }}</span>
+                </h2>
+              }
+              <ul
+                class="provider-list"
+                role="list"
+                [attr.id]="group.type === helperType ? 'di-helpers' : null"
+                [hidden]="group.type === helperType && !helpersShown()"
+              >
                 @for (p of group.items; track p.token + p.file + p.line) {
                   <li class="provider-card">
                     <div class="provider-header">
@@ -667,10 +765,17 @@ function isTree(value: unknown): value is InjectorNode[] {
                       @if (p.providedIn) {
                         <span class="provided-in">providedIn: {{ p.providedIn }}</span>
                       }
+                      @if (p.type === helperType) {
+                        <span class="flag">helper (unresolved)</span>
+                      }
                     </div>
                     <div class="provider-meta">
                       <app-source-link class="path" [file]="p.file" [line]="p.line" />
-                      @if (p.source !== 'class' && p.source !== 'providers array') {
+                      @if (
+                        p.source !== 'class' &&
+                        p.source !== 'providers array' &&
+                        p.type !== helperType
+                      ) {
                         <span class="as">as {{ p.source }}</span>
                       }
                     </div>
@@ -1414,6 +1519,147 @@ function isTree(value: unknown): value is InjectorNode[] {
       stroke-width: 2;
       stroke-linecap: round;
     }
+    .refresh {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: var(--control-h);
+      margin-left: auto;
+      padding: 0 12px;
+      border: 1px solid var(--control-border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      transition:
+        background-color 150ms var(--ease),
+        border-color 150ms var(--ease);
+    }
+    .refresh:hover {
+      background: var(--surface-3);
+      border-color: var(--accent-line);
+    }
+    .refresh[aria-disabled='true'] {
+      cursor: default;
+      opacity: 0.6;
+    }
+    .refresh:focus-visible {
+      @include m.focus-ring;
+    }
+    .refresh svg,
+    .chevron {
+      flex: none;
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .chevron {
+      transition: transform 150ms var(--ease);
+    }
+    .chevron.open {
+      transform: rotate(90deg);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .chevron {
+        transition: none;
+      }
+    }
+    .inactive-flag {
+      flex: none;
+    }
+    .inactive-note {
+      margin: 0 0 12px;
+    }
+    .orphans {
+      margin: 0 0 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+    }
+    .orphans-toggle,
+    .provider-group .group-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: var(--control-h);
+      padding: 0 12px;
+      border: 0;
+      border-radius: var(--radius-sm);
+      background: none;
+      color: var(--text-2);
+      font-size: 12px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .provider-group .group-toggle {
+      width: auto;
+      height: auto;
+      min-height: 0;
+      padding: 2px 4px;
+      margin-left: -4px;
+      color: inherit;
+      font: inherit;
+      letter-spacing: inherit;
+      text-transform: inherit;
+    }
+    .orphans-toggle:hover,
+    .provider-group .group-toggle:hover {
+      color: var(--text);
+    }
+    .orphans-toggle:focus-visible,
+    .provider-group .group-toggle:focus-visible {
+      @include m.focus-ring(-2px);
+    }
+    .hint-tag {
+      padding: 0 6px;
+      border-radius: 5px;
+      @include m.tint(accent);
+      font-size: 10px;
+      line-height: 16px;
+    }
+    .orphans-body {
+      padding: 0 12px 12px;
+    }
+    .orphan-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .orphan-list li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 8px;
+      min-width: 0;
+      font-size: 12px;
+    }
+    .orphans-body .hint {
+      margin: 0 0 8px;
+    }
+    .orphan-list .orphan-file {
+      min-width: 0;
+      color: var(--text-3);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
+    .helper-hint {
+      margin: 0 0 8px;
+    }
+    .provider-list[hidden],
+    .orphans-body[hidden],
+    .helper-hint[hidden] {
+      display: none;
+    }
     .source-providers {
       display: flex;
       flex-direction: column;
@@ -1774,6 +2020,7 @@ export class DiInspector {
       { type: 'injectable', label: 'Injectable Services', items: [] },
       { type: 'injection', label: 'inject() Calls', items: [] },
       { type: 'provider', label: 'Component Providers', items: [] },
+      { type: HELPER_TYPE, label: 'Helpers (unresolved)', items: [] },
     ];
     for (const p of filtered) groups.find((g) => g.type === p.type)?.items.push(p);
     return groups.filter((g) => g.items.length > 0);
@@ -1782,6 +2029,51 @@ export class DiInspector {
   readonly sourceMatchCount = computed(() =>
     this.groupedProviders().reduce((sum, g) => sum + g.items.length, 0),
   );
+
+  readonly helperType = HELPER_TYPE;
+  /** The unresolved provide*() helpers start collapsed; a search shows them. */
+  readonly helpersOpen = signal(false);
+  readonly helpersShown = computed(() => this.helpersOpen() || !!this.normalizedQuery());
+
+  /**
+   * Providers the source declares (`providers` entries and injectables) whose
+   * token nothing on the shown page injected: no element injector and no
+   * created service lists it among its dependencies. A `providedIn` service
+   * that an environment injector already created counts as injected. Matched
+   * by name, so this is only a hint.
+   */
+  readonly orphaned = computed<SourceProvider[]>(() => {
+    const roots = this.roots();
+    if (!roots.length) return [];
+    const injected = new Set<string>();
+    const created = new Set<string>();
+    for (const node of this.index().map.values()) {
+      for (const dep of node.dependencies ?? []) injected.add(dep.token);
+      if (node.injector.type !== 'element') {
+        for (const p of node.providers) created.add(p.token);
+      }
+    }
+    const out: SourceProvider[] = [];
+    const seen = new Set<string>();
+    for (const p of this.sourceProviders()) {
+      if (!PROVIDING_TYPES.has(p.type)) continue;
+      // `Feature.Token` in source is the token `Token` on the page.
+      const name = p.token.slice(p.token.lastIndexOf('.') + 1);
+      if (injected.has(name) || (p.providedIn && created.has(name))) continue;
+      const key = `${p.token}|${p.file}|${p.line}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
+    return out;
+  });
+  readonly orphansOpen = signal(false);
+  readonly orphanedText = computed(() => {
+    const count = new Set(this.orphaned().map((p) => p.token)).size;
+    return count === 1
+      ? '1 provider in source is never injected on this page'
+      : `${count} providers in source are never injected on this page`;
+  });
 
   /** What a screen reader hears about the search results. */
   private readonly searchSummary = computed(() => {
@@ -1801,6 +2093,8 @@ export class DiInspector {
   private treeLoad = 0;
 
   private lastSearchMessage = '';
+  /** The page and element injector the panel last asked the page to read again. */
+  private refreshedKey: string | null = null;
 
   constructor() {
     // One summary once typing pauses, instead of a live region that reads every keystroke.
@@ -1822,6 +2116,17 @@ export class DiInspector {
       if (!client) return;
       void this.loadInjectorTree(client);
       void this.loadSourceProviders(client);
+    });
+    // Element injectors are read once and cached on the page, so the selected
+    // one is read again, once each time the selection moves to it.
+    effect(() => {
+      const sel = this.selected();
+      const pageId = this.shownPageId();
+      const id = sel?.injector.type === 'element' ? sel.injector.id : null;
+      const key = id && pageId ? `${pageId}|${id}` : null;
+      if (!key || key === this.refreshedKey) return;
+      this.refreshedKey = key;
+      untracked(() => this.requestRefresh(pageId!, id!));
     });
     // Page titles come from the component tree, and are only needed for the Page picker.
     effect((onCleanup) => {
@@ -1957,6 +2262,23 @@ export class DiInspector {
       },
       { injector: this.injector },
     );
+  }
+
+  /** Asks the shown page to read every injector again, element entries included. */
+  refresh() {
+    const pageId = this.shownPageId();
+    if (!pageId) return;
+    this.requestRefresh(pageId);
+    this.announcement.set('Reading the injectors again.');
+  }
+
+  private requestRefresh(pageId: string, injectorId?: string) {
+    const client = this.rpc();
+    if (!client) return;
+    void client
+      .scope('pangular')
+      .rpc.call('request-injector-refresh', injectorId ? { pageId, injectorId } : { pageId })
+      .catch(() => {});
   }
 
   /** Clears the search from a no-match message and keeps focus on the search box. */
