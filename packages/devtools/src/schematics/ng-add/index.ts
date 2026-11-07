@@ -373,6 +373,8 @@ export function wireVitePlugin(text: string): EditResult {
   } else if (inner.includes('\n')) {
     const last = inner.replace(/\s+$/, '');
     const lines = last.split('\n');
+    // A comma after a line comment would land inside the comment.
+    if ((lines[lines.length - 1] ?? '').includes('//')) return { status: 'unsure' };
     const indent = /^[ \t]*/.exec(lines[lines.length - 1] ?? '')?.[0] ?? '';
     const comma = last.endsWith(',') ? '' : ',';
     const trailing = inner.slice(last.length);

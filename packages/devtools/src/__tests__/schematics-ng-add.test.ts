@@ -399,6 +399,7 @@ describe('wireVitePlugin', () => {
       `export default { plugins };\n`,
       `const a = { plugins: [] };\nconst b = { plugins: [] };\n`,
       `import pangular from './local';\nexport default { plugins: [pangular()] };\n`,
+      `export default defineConfig({\n  plugins: [\n    a() // note\n  ],\n});\n`,
     ]) {
       expect(wireVitePlugin(text)).toEqual({ status: 'unsure' });
     }
