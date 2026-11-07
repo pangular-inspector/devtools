@@ -26,6 +26,8 @@ const INSPECTOR_LABELS: Record<string, string> = {
   analog: 'Analog',
   capacitor: 'Capacitor',
   errors: 'Errors',
+  performance: 'Performance',
+  build: 'Build',
   plugins: 'Plugins',
 };
 
