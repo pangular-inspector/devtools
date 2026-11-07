@@ -9,9 +9,11 @@ import {
   setTabHidden,
   setTabPinned,
   storePassive,
+  storePill,
   storeTabLayout,
   storeThemePreference,
   storedPassive,
+  storedPill,
   storedTabLayout,
   storedThemePreference,
   type TabLayout,
@@ -51,6 +53,12 @@ describe('settings storage', () => {
     expect(storedPassive()).toBe(false);
     storePassive(true);
     expect(storedPassive()).toBe(true);
+
+    expect(storedPill()).toBe(false);
+    storePill(true);
+    expect(storedPill()).toBe(true);
+    storePill(false);
+    expect(localStorage.getItem('pangular-pref:pill')).toBeNull();
   });
 
   it('ignores a stored layout it cannot use', () => {
@@ -189,6 +197,21 @@ describe('Settings page', () => {
     await settle(fixture);
     expect(fixture.componentInstance.layout()).toEqual(DEFAULT_TAB_LAYOUT);
     expect(rows()).toEqual(IDS);
+  });
+
+  it('offers the counts launcher, off by default, and reports a change', async () => {
+    const { fixture, root } = await render();
+    const pill = () =>
+      root.querySelector<HTMLInputElement>('input[aria-describedby="settings-pill-hint"]')!;
+    expect(pill().checked).toBe(false);
+    expect(pill().closest('label')?.textContent).toContain('Counts launcher');
+    pill().click();
+    await settle(fixture);
+    expect(fixture.componentInstance.pill()).toBe(true);
+    // It does not depend on the shortcut, unlike passive mode.
+    fixture.componentRef.setInput('hotkey', false);
+    await settle(fixture);
+    expect(pill().disabled).toBe(false);
   });
 
   it('turns passive mode off when the popup has no shortcut', async () => {

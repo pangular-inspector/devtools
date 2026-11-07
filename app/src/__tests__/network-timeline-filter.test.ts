@@ -21,6 +21,11 @@ const host = () => fixture.nativeElement as HTMLElement;
 const rows = () => [...host().querySelectorAll<HTMLElement>('button[data-call-id]')];
 const rowIds = () => rows().map((b) => b.dataset['callId']);
 const total = () => host().querySelector('.filters .total')!.textContent!.trim();
+/** The filter count status, not the saved filter status of the search field. */
+const pageStatus = () =>
+  [...host().querySelectorAll<HTMLElement>('.filters [role="status"]')].find(
+    (e) => !e.closest('app-search-field'),
+  )!;
 const search = () => host().querySelector<HTMLInputElement>('#timeline-search')!;
 
 async function type(value: string) {
@@ -63,7 +68,7 @@ describe('NetworkInspector timeline filters', () => {
   it('labels every filter control and counts all calls', () => {
     expect(rows()).toHaveLength(6);
     expect(total()).toBe('6 of 6');
-    expect(search().getAttribute('aria-label')).toBe('Find a URL or method');
+    expect(search().getAttribute('aria-label')).toBe('Filter');
     const failed = [...host().querySelectorAll<HTMLLabelElement>('.filters label')].find((l) =>
       l.textContent?.includes('Failed only'),
     );
@@ -152,7 +157,7 @@ describe('NetworkInspector timeline filters', () => {
   });
 
   it('announces the count when a filter changes, not when calls arrive', async () => {
-    const status = () => host().querySelector('.filters [role="status"]')!.textContent!.trim();
+    const status = () => pageStatus().textContent!.trim();
     expect(host().querySelector('.filters .total')!.closest('[aria-live], [role="status"]')).toBe(
       null,
     );
@@ -173,7 +178,7 @@ describe('NetworkInspector timeline filters', () => {
   });
 
   it('announces a filter change again when the counts stay the same', async () => {
-    const raw = () => host().querySelector('.filters [role="status"]')!.textContent!;
+    const raw = () => pageStatus().textContent!;
     await type('products');
     const first = raw();
     expect(first.trim()).toBe('2 of 6');

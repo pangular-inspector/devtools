@@ -17,10 +17,15 @@ The Chrome extension lives in `extension/`. It detects Angular pages, creates th
 extension/
   manifest.json          # Manifest V3, loopback host permissions, optional access to other hosts
   devtools.html
-  devtools.js            # Checks the inspected page for Angular, creates the panel
+  devtools.js            # Checks the inspected page for Angular, creates the panel and the Elements pane
+  frames.js              # Finds Angular in the top frame or one of its frames
   panel.html             # The panel page and its status view
   panel-actions.js       # Answers the UI's reveal and open-source requests
+  connection-probe.js    # Looks for the devframe connection file on an origin
   panel-bridge.js        # Asks for host access, finds the dev server, connects the UI to it
+  popup.html, popup.js   # The toolbar popup: Angular, build, server and overlay on the active tab
+  options.html, options.js # The site access page: granted hosts with Remove
+  extension-page.css     # Styles of the popup and the site access page
   icons/
   ui/                    # The built devtools UI (committed)
 ```
@@ -29,7 +34,7 @@ extension/
 
 | Key                         | Value                                                                                                        |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `permissions`               | Empty.                                                                                                       |
+| `permissions`               | `activeTab` and `scripting`, for the toolbar popup's one read of the clicked tab. Neither warns on install.  |
 | `host_permissions`          | `*.localhost`, `127.0.0.1` and `[::1]`, over HTTP and HTTPS. `*.localhost` also matches `localhost`.         |
 | `optional_host_permissions` | `http://*/*` and `https://*/*`. The panel requests one host at a time, only when you click **Allow access**. |
 | `minimum_chrome_version`    | `111`.                                                                                                       |
@@ -107,7 +112,11 @@ The key goes into the zip as `key.pem`, and the script stops if it doesn't match
 
 ### Angular detection
 
-The extension has no content scripts and no background worker. `devtools.js` runs only while DevTools is open, and checks the inspected page with `chrome.devtools.inspectedWindow.eval()`, which needs no host permission. It checks for an `ng-version` attribute or a `window.ng` global up to 10 times, 500 milliseconds apart, and again after each navigation. It creates the panel the first time a check passes.
+The extension has no content scripts and no background worker. `devtools.js` runs only while DevTools is open, and checks the inspected page with `chrome.devtools.inspectedWindow.eval()`, which needs no host permission. It checks for an `ng-version` attribute or a `window.ng` global up to 10 times, 500 milliseconds apart, and again after each navigation. Each check asks the top frame first, then up to 20 frames from `inspectedWindow.getResources()` with `eval(..., {frameURL})` (`frames.js`). It creates the panel and the **Angular component** sidebar pane the first time a check passes.
+
+`panel-bridge.js` runs the same frame search after it reads the page origin. When Angular runs only in a frame, it keeps that `frameURL` for every later `eval` (page id, Elements selection, reveal and open source) and probes the frame's origin for the server.
+
+The sidebar pane calls `pane.setExpression()` on every Elements selection with an expression that calls `window.__pangularComponentDetail($0)`. The overlay sets that helper when `inspectors.components` is on; it answers with a summary of the masked component detail the panel gets (`element-sidebar.ts`).
 
 ### Host access
 

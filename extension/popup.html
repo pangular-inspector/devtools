@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pangular Inspector</title>
+    <link rel="stylesheet" href="extension-page.css" />
+    <style>
+      body {
+        width: 320px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Pangular Inspector</h1>
+      <p id="summary" role="status">Reading this tab…</p>
+      <dl id="facts" hidden>
+        <div>
+          <dt>Angular</dt>
+          <dd id="fact-angular"></dd>
+        </div>
+        <div>
+          <dt>Build</dt>
+          <dd id="fact-build"></dd>
+        </div>
+        <div>
+          <dt>Devtools server</dt>
+          <dd id="fact-server"></dd>
+        </div>
+        <div>
+          <dt>Overlay</dt>
+          <dd id="fact-overlay"></dd>
+        </div>
+      </dl>
+      <p id="next" class="hint" hidden></p>
+      <p class="actions">
+        <button id="site-access" type="button">Site access</button>
+        <a
+          id="docs"
+          href="https://pangular-inspector.dev/getting-started/chrome-extension/"
+          target="_blank"
+          rel="noreferrer"
+          >Docs<span class="visually-hidden"> (opens in a new tab)</span></a
+        >
+      </p>
+    </main>
+    <script src="connection-probe.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

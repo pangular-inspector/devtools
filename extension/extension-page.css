@@ -1,0 +1,147 @@
+/* The toolbar popup and the site access page. The colors match panel.html. */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+:root {
+  --bg: #0f0f11;
+  --surface: #18181b;
+  --border: #27272a;
+  --control-border: #71717a;
+  --text: #a1a1aa;
+  --text-strong: #e4e4e7;
+  --accent: #f5a524;
+  --accent-ink: #0f0f11;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #ffffff;
+    --surface: #f4f4f6;
+    --border: #e2e2e7;
+    --control-border: #71717a;
+    --text: #52525b;
+    --text-strong: #18181b;
+    --accent: #92400e;
+    --accent-ink: #ffffff;
+    --ok: #166534;
+    --warn: #92400e;
+    color-scheme: light;
+  }
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font:
+    13px/1.5 system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+h1 {
+  color: var(--text-strong);
+  font-size: 15px;
+  font-weight: 600;
+}
+dl {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+dl > div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 8px;
+}
+dt {
+  color: var(--text);
+}
+dd {
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+dd[data-tone='ok']::before,
+dd[data-tone='warn']::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+dd[data-tone='warn']::before {
+  background: var(--warn);
+}
+.hint {
+  color: var(--text);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+button {
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-strong);
+  font: inherit;
+  cursor: pointer;
+}
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+a {
+  color: var(--accent);
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+ul.hosts {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+}
+ul.hosts li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+ul.hosts code {
+  color: var(--text-strong);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

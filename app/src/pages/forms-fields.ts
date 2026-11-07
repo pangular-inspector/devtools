@@ -15,6 +15,7 @@ import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { actionAllowed } from '../devtools-config';
 import { FormsFieldDetail } from './forms-field-detail';
+import { SearchField } from '../ui/search-field';
 import {
   BADGE_STYLES,
   FORMS_STYLES,
@@ -71,27 +72,16 @@ export interface FieldRow {
 /** The Fields tab: the path search, the state chips, the field table and the open field's detail. */
 @Component({
   selector: 'app-forms-fields',
-  imports: [JsonPipe, FormsFieldDetail],
+  imports: [SearchField, JsonPipe, FormsFieldDetail],
   template: `
     <div class="filters">
-      <div class="search">
-        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3.5-3.5" />
-        </svg>
-        <input
-          #fieldFilter
-          class="filter"
-          type="search"
-          placeholder="Filter fields by path"
-          aria-label="Filter fields by path"
-          autocomplete="off"
-          spellcheck="false"
-          [value]="filter()"
-          (input)="onFilter($event)"
-          (keydown.escape)="filter.set('')"
-        />
-      </div>
+      <app-search-field
+        #fieldFilter
+        class="search"
+        placeholder="Filter fields by path"
+        saveKey="forms"
+        [(value)]="filter"
+      />
       <fieldset class="chips">
         <legend class="sr-only">Show only fields that are</legend>
         @for (chip of chips; track chip.id) {
@@ -742,7 +732,7 @@ export class FormsFields {
   readonly active = model(new Set<Chip>());
   readonly toggleField = output<string>();
   readonly closeField = output<void>();
-  readonly clearFilters = output<HTMLInputElement>();
+  readonly clearFilters = output<{ focus(): void }>();
   readonly highlight = output<{ formId: string; path: string } | null>();
 
   protected readonly chips = CHIPS;
@@ -829,10 +819,6 @@ export class FormsFields {
       else next.add(chip);
       return next;
     });
-  }
-
-  onFilter(event: Event) {
-    this.filter.set((event.target as HTMLInputElement).value);
   }
 
   sourceText(error: FormFieldError) {

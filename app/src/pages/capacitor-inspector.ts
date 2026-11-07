@@ -39,6 +39,7 @@ import {
   type CapacitorPage,
   type CapacitorSummary,
 } from './capacitor-types';
+import { SearchField } from '../ui/search-field';
 
 const GUIDE_URL = 'https://pangular-inspector.dev/inspectors/capacitor/#web-calls';
 /** The summary strip is a live region; it changes at most this often. */
@@ -53,7 +54,7 @@ const FILTER_LABELS: Record<CallFilter, string> = {
 
 @Component({
   selector: 'app-capacitor-inspector',
-  imports: [LimitNote, Select, CapacitorCallDetail, CapacitorState],
+  imports: [SearchField, LimitNote, Select, CapacitorCallDetail, CapacitorState],
   template: `
     @if (!loaded()) {
       <p class="state" role="status">Loading Capacitor data…</p>
@@ -185,21 +186,14 @@ const FILTER_LABELS: Record<CallFilter, string> = {
             </p>
           }
           <div class="toolbar">
-            <div class="search">
-              <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
-              <input
-                #search
-                type="search"
-                aria-label="Filter calls by plugin or method"
-                placeholder="Filter by plugin or method"
-                [value]="filter()"
-                (input)="setSearch($any($event.target).value)"
-                (keydown.escape)="setSearch('')"
-              />
-            </div>
+            <app-search-field
+              #search
+              class="search"
+              placeholder="Filter by plugin or method"
+              saveKey="capacitor"
+              [value]="filter()"
+              (valueChange)="setSearch($event)"
+            />
             <app-select
               class="show"
               ariaLabel="Show calls"
